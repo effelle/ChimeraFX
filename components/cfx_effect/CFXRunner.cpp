@@ -17,7 +17,7 @@
 CFXRunner *instance = nullptr;
 
 // Global time provider for FastLED timing functions
-uint32_t get_millis() { return instance ? instance->now : wled_millis(); }
+uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
 
 // Constructor
 CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
@@ -2487,7 +2487,7 @@ void CFXRunner::service() {
   // Ensures effect functions operate on the correct strip context
   instance = this;
 
-  now = wled_millis();
+  now = cfx_millis();
 
   // Calculate frame time (delta) - using member variables, not static
   frame_time = now - _last_frame;
@@ -2533,12 +2533,12 @@ void CFXRunner::service() {
   // === Phase 2 Verification: One-time math benchmark ===
   if (!_diag_bench_done) {
     _diag_bench_done = true;
-    uint32_t bench_start = wled_millis();
+    uint32_t bench_start = cfx_millis();
     volatile uint32_t dummy = 0; // Prevent optimization
     for (int i = 0; i < 10000; i++) {
       dummy += sin8(i & 0xFF); // 10k sin8 calls
     }
-    uint32_t bench_time = wled_millis() - bench_start;
+    uint32_t bench_time = cfx_millis() - bench_start;
     ESP_LOGI("wled_bench",
              "Math benchmark: 10k sin8 calls in %ums (target: <1ms)",
              bench_time);
@@ -2930,7 +2930,7 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
 
   _state = STATE_INTRO;
   _intro_mode = mode;
-  _intro_start_time = wled_millis(); // Force fresh time
+  _intro_start_time = cfx_millis(); // Force fresh time
   now = _intro_start_time;           // Sync member var for consistency
   // Safety check for duration (avoid div/0)
   if (duration_s < 0.1f)
