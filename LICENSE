@@ -1,0 +1,157 @@
+European Union Public Licence v. 1.2
+=====================================
+
+EUPL © the European Union 2007, 2016
+
+ChimeraFX - Copyright (c) 2026 Federico Leoni
+Based on WLED - Copyright (c) 2016 Aircoookie (EUPL-1.2)
+FastLED Library - Copyright (c) 2013 FastLED
+
+Licensed under the EUPL
+
+This European Union Public Licence (the 'EUPL') applies to the Work (as defined
+below) which is provided under the terms of this Licence. Any use of the Work,
+other than as authorised under this Licence is prohibited (to the extent such
+use is covered by a right of the copyright holder of the Work).
+
+The Work is provided under the terms of this Licence when the Licensor (as
+defined below) has placed the following notice immediately following the
+copyright notice for the Work: Licensed under the EUPL or has expressed by any
+other means his willingness to license under the EUPL.
+
+1. Definitions
+
+In this Licence, the following terms have the following meaning:
+- 'The Licence': this Licence.
+- 'The Original Work': the work or software distributed or communicated by the
+  Licensor under this Licence, available as Source Code and also as Executable
+  Code as the case may be.
+- 'Derivative Works': the works or software that could be created by the
+  Licensee, based upon the Original Work or modifications thereof.
+- 'The Work': the Original Work or its Derivative Works.
+- 'The Source Code': the human-readable form of the Work.
+- 'The Executable Code': any code which has been compiled.
+- 'The Licensor': the natural or legal person that distributes or communicates
+  the Work under the Licence.
+- 'Contributor(s)': any natural or legal person who modifies the Work under the
+  Licence, or otherwise contributes to the creation of a Derivative Work.
+- 'The Licensee' or 'You': any natural or legal person who makes any usage of
+  the Work under the terms of the Licence.
+- 'Distribution' or 'Communication': any act of selling, giving, lending,
+  renting, distributing, communicating, transmitting, or otherwise making
+  available, online or offline, copies of the Work.
+
+2. Scope of the rights granted by the Licence
+
+The Licensor hereby grants You a worldwide, royalty-free, non-exclusive,
+sublicensable licence to do the following, for the duration of copyright vested
+in the Original Work:
+- use the Work in any circumstance and for all usage,
+- reproduce the Work,
+- modify the Work, and make Derivative Works based upon the Work,
+- communicate to the public, including the right to make available or display
+  the Work or copies thereof to the public and perform publicly, as the case
+  may be, the Work,
+- distribute the Work or copies thereof,
+- lend and rent the Work or copies thereof,
+- sublicense rights in the Work or copies thereof.
+
+3. Communication of the Source Code
+
+The Licensor may provide the Work either in its Source Code form, or as
+Executable Code. If the Work is provided as Executable Code, the Licensor
+provides in addition a machine-readable copy of the Source Code.
+
+4. Limitations on copyright
+
+Nothing in this Licence is intended to deprive the Licensee of the benefits
+from any exception or limitation to the exclusive rights of the rights owners
+in the Work.
+
+5. Obligations of the Licensee
+
+The grant of the rights mentioned above is subject to some restrictions and
+obligations imposed on the Licensee:
+- Attribution right: The Licensee shall keep intact all copyright, patent or
+  trademarks notices and all notices that refer to the Licence and to the
+  disclaimer of warranties.
+- Copyleft clause: If the Licensee distributes or communicates copies of the
+  Original Works or Derivative Works, this Distribution or Communication will
+  be done under the terms of this Licence.
+- Compatibility clause: If the Licensee Distributes or Communicates Derivative
+  Works based upon both the Work and another work licensed under a Compatible
+  Licence, this Distribution can be done under the terms of this Compatible
+  Licence (GPL v2/v3, LGPL, AGPL, Mozilla Public License, etc.).
+
+6. Chain of Authorship
+
+The original Licensor warrants that the copyright in the Original Work granted
+hereunder is owned by him/her or licensed to him/her.
+
+7. Disclaimer of Warranty
+
+The Work is provided under the Licence on an 'as is' basis and without
+warranties of any kind concerning the Work, including without limitation
+merchantability, fitness for a particular purpose, absence of defects or
+errors, accuracy, non-infringement of intellectual property rights.
+
+8. Disclaimer of Liability
+
+Except in the cases of wilful misconduct or damages directly caused to natural
+persons, the Licensor will in no event be liable for any direct or indirect,
+material or moral, damages of any kind, arising out of the Licence or of the
+use of the Work.
+
+9. Additional agreements
+
+While distributing the Work, You may choose to conclude an additional
+agreement, defining obligations or services consistent with this Licence.
+However, if accepting obligations, You may act only on your own behalf.
+
+10. Acceptance of the Licence
+
+You irrevocably accept this Licence and all of its terms and conditions by
+exercising any rights granted to You by Article 2 of this Licence, such as
+the use of the Work, the creation by You of a Derivative Work or the
+Distribution or Communication by You of the Work or copies thereof.
+
+11. Information to the public
+
+In case of any Distribution of the Work by electronic communication, the
+distribution channel must provide to the public the information regarding
+the Licensor, the Licence and the way it may be accessible.
+
+12. Termination of the Licence
+
+The Licence and the rights granted hereunder will terminate automatically
+upon any breach by the Licensee of the terms of the Licence.
+
+13. Miscellaneous
+
+The Licence represents the complete agreement between the Parties as to the
+Work.
+
+14. Jurisdiction
+
+Any litigation resulting from the interpretation of this License will be
+subject to the exclusive jurisdiction of the competent court where the
+Licensor resides or conducts its primary business.
+
+15. Applicable Law
+
+This Licence shall be governed by the law of the European Union Member State
+where the Licensor has his seat, resides or has his registered office.
+
+Appendix: 'Compatible Licences' according to Article 5 EUPL are:
+- GNU General Public License (GPL) v. 2, v. 3
+- GNU Affero General Public License (AGPL) v. 3
+- Open Software License (OSL) v. 2.1, v. 3.0
+- Eclipse Public License (EPL) v. 1.0
+- CeCILL v. 2.0, v. 2.1
+- Mozilla Public Licence (MPL) v. 2
+- GNU Lesser General Public Licence (LGPL) v. 2.1, v. 3
+- Creative Commons Attribution-ShareAlike v. 3.0 Unported (CC BY-SA 3.0)
+- European Union Public Licence (EUPL) v. 1.1, v. 1.2
+- Québec Free and Open-Source Licence (LiLiQ-R or LiLiQ-R+)
+
+Full license text: https://eupl.eu/1.2/en/

@@ -1,0 +1,26 @@
+{
+    "name": "ChimeraFX",
+    "version": "1.0.0",
+    "description": "WLED effects running natively within ESPHome",
+    "keywords": [
+        "esphome",
+        "wled",
+        "led",
+        "effects",
+        "addressable",
+        "esp32"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/effelle/ChimeraFX"
+    },
+    "authors": [
+        {
+            "name": "Federico Leoni",
+            "maintainer": true
+        }
+    ],
+    "license": "EUPL-1.2",
+    "frameworks": "espidf",
+    "platforms": "espressif32"
+}
