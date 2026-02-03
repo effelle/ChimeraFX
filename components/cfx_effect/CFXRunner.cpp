@@ -7,7 +7,7 @@
  */
 
 #include "CFXRunner.h"
-#include "wled_compat.h"
+#include "cfx_compat.h"
 
 // ESP-IDF heap diagnostics (for production monitoring)
 #include "esp_heap_caps.h"
@@ -2918,8 +2918,7 @@ uint16_t mode_color_sweep(void) { return color_wipe(true, false); }
 
 // --- INTRO IMPLEMENTATION ---
 
-void CFXRunner::startIntro(uint8_t mode, float duration_s,
-                                  uint32_t color) {
+void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
   if (mode == INTRO_NONE) {
     _state = STATE_RUNNING;
     return;
