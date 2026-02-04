@@ -1086,6 +1086,8 @@ uint16_t mode_pacifica() {
 static uint32_t pacifica_native_last_render = 0;
 static uint32_t pacifica_native_last_log = 0;
 static uint32_t pacifica_native_frame_count = 0;
+static uint32_t pacifica_native_virtual_time =
+    0; // Virtual time for beat functions
 
 uint16_t mode_pacifica_native() {
   if (!instance)
@@ -1136,9 +1138,10 @@ uint16_t mode_pacifica_native() {
   if (deltams_scaled < 1 && speed > 0)
     deltams_scaled = 1; // Minimum 1ms when not frozen
 
-  // === ORIGINAL WLED WAVE MATH ===
-  // Use cfx_millis() directly for beat functions (like WLED uses strip.now)
-  uint32_t t = now_ms;
+  // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
+  // Advances only by deltams_scaled, so speed=0 freezes everything
+  pacifica_native_virtual_time += deltams_scaled;
+  uint32_t t = pacifica_native_virtual_time;
 
   // Speedfactors from original WLED
   unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
