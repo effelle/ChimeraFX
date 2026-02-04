@@ -5,8 +5,9 @@
  */
 
 #include "cfx_addressable_light_effect.h"
-#include "esphome/core/log.h"
 #include "cfx_compat.h"
+#include "esphome/core/log.h"
+
 
 namespace esphome {
 namespace chimera_fx {
@@ -120,7 +121,7 @@ void CFXAddressableLightEffect::stop() {
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
-                                       const Color &current_color) {
+                                      const Color &current_color) {
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
 
@@ -161,8 +162,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   this->run_controls_();
 
   // Pass current light color to segment for solid color mode (palette 255/0)
-
-  // Pass current light color to segment for solid color mode (palette 255/0)
   uint32_t color = (uint32_t(current_color.red) << 16) |
                    (uint32_t(current_color.green) << 8) |
                    uint32_t(current_color.blue);
@@ -175,7 +174,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->intro_active_) {
     this->run_intro(it, current_color);
 
-    // Check for Intro Completion
     // Check for Intro Completion
     uint32_t duration_ms = 3000; // Default 3s
 
@@ -541,10 +539,9 @@ void CFXAddressableLightEffect::run_controls_() {
 
 // Intro Routine Implementation
 void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
-                                           const Color &target_color) {
+                                          const Color &target_color) {
   uint32_t elapsed = millis() - this->intro_start_time_;
 
-  // Safety: If mode is NONE, abort immediately and release control
   // Safety: If mode is NONE, abort immediately and release control
   // Ensure we clear the flag so next frame service() runs.
   if (this->active_intro_mode_ == INTRO_NONE) {

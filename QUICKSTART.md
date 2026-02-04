@@ -13,10 +13,10 @@ Add the repository to your `external_components` in your ESPHome config:
 ```yaml
 external_components:
   - source: github://effelle/ChimeraFX@main
-    components: [wled_effect]
+    components: [cfx_effect]
     refresh: always
 
-wled_effect:
+cfx_effect:
 ```
 
 ### Step 2: Configure Your Light
