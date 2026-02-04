@@ -715,7 +715,8 @@ struct AuroraWaveNative {
   void init(uint32_t segment_length, CRGBW color) {
     ttl = hw_random16(500, 1501);
     basecolor = color;
-    basealpha = hw_random8(60, 100) * AW_SCALE / 100;
+    basealpha =
+        hw_random8(50, 100) * AW_SCALE / 100; // High floor reduces voids
     age = 0;
     width =
         hw_random16(segment_length / 20, segment_length / W_WIDTH_FACTOR) + 1;
