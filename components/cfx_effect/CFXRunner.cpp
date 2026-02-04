@@ -1130,13 +1130,17 @@ uint16_t mode_pacifica_native() {
   // Speed 128 = 1.0x, Speed 0 = frozen, Speed 255 = ~2x
   uint8_t speed = instance->_segment.speed;
 
-  // Scale real delta by speed (speed 128 = normal speed)
-  uint32_t deltams = (real_deltams * (speed + 1)) >> 7;
-  if (deltams < 1 && speed > 0)
-    deltams = 1;
+  // Explicit speed=0 freeze
+  uint32_t deltams = 0;
+  if (speed > 0) {
+    // Scale real delta by speed (speed 128 = normal speed)
+    deltams = (real_deltams * (speed + 1)) >> 7;
+    if (deltams < 1)
+      deltams = 1;
+  }
 
   // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
-  // Advances by speed-scaled real delta
+  // Advances by speed-scaled real delta (0 when speed=0)
   pacifica_native_virtual_time += deltams;
   uint32_t t = pacifica_native_virtual_time;
 
@@ -1147,11 +1151,13 @@ uint16_t mode_pacifica_native() {
   uint32_t deltams2 = (deltams * speedfactor2) >> 8;
   uint32_t deltams21 = (deltams1 + deltams2) >> 1;
 
-  // Update wave positions - ORIGINAL WLED MATH (no speed hacks)
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+  // Update wave positions - ONLY if deltams > 0
+  if (deltams > 0) {
+    sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
+    sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
+    sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
+    sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+  }
 
   // Save state back to segment
   instance->_segment.aux0 = sCIStart1;
