@@ -1126,16 +1126,15 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === FRACTIONAL SPEED ACCUMULATOR (like original Pacifica) ===
-  // At low speeds, we accumulate fractional ms until we have a whole ms
-  // This matches original behavior where speed=1 is very slow
+  // === FRACTIONAL SPEED ACCUMULATOR (exactly like original Pacifica) ===
+  // Original just accumulates speed each frame, no deltams multiplication
+  // At speed=128, 56FPS: 7168/sec >> 8 = ~28ms/sec of virtual time
   uint8_t speed = instance->_segment.speed;
 
   uint32_t deltams = 0;
   if (speed > 0) {
-    // Accumulate: (real_deltams * speed) into fractional accumulator
-    // When accumulator >= 256, we extract 1ms of delta
-    pacifica_native_speed_accum += (real_deltams * speed);
+    // EXACTLY like original: just add speed per frame
+    pacifica_native_speed_accum += speed;
     deltams = pacifica_native_speed_accum >> 8; // Integer ms
     pacifica_native_speed_accum &= 0xFF;        // Keep fractional part
   }
