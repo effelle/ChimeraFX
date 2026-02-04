@@ -319,49 +319,53 @@ static void fillSolidPalette(uint32_t color) {
 }
 
 // Palette Lookup Function
+// Index 0 = "Default" is special (use effect preset), handled by caller
+// Actual palettes start at index 1
 static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   switch (palette_index) {
-  case 0:
-    return PaletteAurora;
+  case 0: // "Default" - use effect preset (caller handles this)
+    return PaletteRainbow; // Fallback if caller doesn't handle
   case 1:
-    return PaletteForest;
+    return PaletteAurora;
   case 2:
-    return PaletteOcean;
+    return PaletteForest;
   case 3:
-    return PaletteRainbow;
+    return PaletteOcean;
   case 4:
-    return PaletteFire;
+    return PaletteRainbow;
   case 5:
-    return PaletteSunset;
+    return PaletteFire;
   case 6:
-    return PaletteIce;
+    return PaletteSunset;
   case 7:
-    return PaletteParty;
+    return PaletteIce;
   case 8:
-    return PaletteLava;
+    return PaletteParty;
   case 9:
-    return PalettePastel;
+    return PaletteLava;
   case 10:
-    return PalettePacifica;
+    return PalettePastel;
   case 11:
-    return PaletteHeatColors;
+    return PalettePacifica;
   case 12:
-    return PaletteSakura;
+    return PaletteHeatColors;
   case 13:
-    return PaletteRivendell;
+    return PaletteSakura;
   case 14:
-    return PaletteCyberpunk;
+    return PaletteRivendell;
   case 15:
-    return PaletteOrangeTeal;
+    return PaletteCyberpunk;
   case 16:
-    return PaletteChristmas;
+    return PaletteOrangeTeal;
   case 17:
-    return PaletteRedBlue;
+    return PaletteChristmas;
   case 18:
-    return PaletteMatrix;
+    return PaletteRedBlue;
   case 19:
+    return PaletteMatrix;
+  case 20:
     return PaletteSunnyGold;
-  case 255:
+  case 21:
     // Solid color mode - caller must call fillSolidPalette first
     return PaletteSolid;
   default:
