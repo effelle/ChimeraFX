@@ -247,6 +247,9 @@ class CFXRunner {
 public:
   CFXRunner(esphome::light::AddressableLight *light);
 
+  // Destructor: Release segment data to reclaim RAM
+  ~CFXRunner() { _segment.deallocateData(); }
+
   void service();
   void setMode(uint8_t m) {
     if (_mode != m) {

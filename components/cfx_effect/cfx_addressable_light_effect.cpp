@@ -8,7 +8,6 @@
 #include "cfx_compat.h"
 #include "esphome/core/log.h"
 
-
 namespace esphome {
 namespace chimera_fx {
 
@@ -22,8 +21,8 @@ CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
 void CFXAddressableLightEffect::start() {
   AddressableLightEffect::start();
   // Unconditional log to verify start is called
-  ESP_LOGW(TAG, ">>> CFX effect START CALLED <<<");
-  ESP_LOGI(TAG, "Starting CFX effect %d: %s", this->effect_id_,
+  ESP_LOGD(TAG, ">>> CFX effect START CALLED <<<");
+  ESP_LOGD(TAG, "Starting CFX effect %d: %s", this->effect_id_,
            this->get_name());
 
   // 0. Link Controls first - Critical to find controller
@@ -43,9 +42,9 @@ void CFXAddressableLightEffect::start() {
 
     if (this->intro_active_) {
       this->intro_start_time_ = millis();
-      ESP_LOGW(TAG, ">>> INTRO TRIGGERED (Fresh Turn-On detected) <<<");
+      ESP_LOGD(TAG, ">>> INTRO TRIGGERED (Fresh Turn-On detected) <<<");
     } else {
-      ESP_LOGI(TAG, "Intro Skipped (Effect Change detected)");
+      ESP_LOGD(TAG, "Intro Skipped (Effect Change detected)");
     }
   } else {
     this->intro_active_ = false;
@@ -80,9 +79,9 @@ void CFXAddressableLightEffect::start() {
 
     if (this->active_intro_mode_ == INTRO_NONE) {
       this->intro_active_ = false;
-      ESP_LOGI(TAG, "Intro Skipped (Configured as None or Not Ready)");
+      ESP_LOGD(TAG, "Intro Skipped (Configured as None or Not Ready)");
     } else {
-      ESP_LOGI(TAG, "Intro Active: Mode %d", this->active_intro_mode_);
+      ESP_LOGD(TAG, "Intro Active: Mode %d", this->active_intro_mode_);
     }
   }
 
@@ -113,11 +112,16 @@ void CFXAddressableLightEffect::start() {
 
 void CFXAddressableLightEffect::stop() {
   AddressableLightEffect::stop();
+
+  // Clear intro snapshot vector to reclaim RAM
+  intro_snapshot_.clear();
+  intro_snapshot_.shrink_to_fit();
+
   if (this->runner_ != nullptr) {
-    delete this->runner_;
+    delete this->runner_; // Destructor calls deallocateData()
     this->runner_ = nullptr;
   }
-  ESP_LOGI(TAG, "Stopped CFX effect: %s", this->get_name());
+  ESP_LOGD(TAG, "Stopped CFX effect: %s", this->get_name());
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
@@ -140,7 +144,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Unconditional log once per Second to prove apply is running
   static uint32_t last_alive_log = 0;
   if (millis() - last_alive_log > 1000) {
-    ESP_LOGW(TAG, "CFX effect is ACTIVE (apply running)");
+    ESP_LOGD(TAG, "CFX effect is ACTIVE (apply running)");
     last_alive_log = millis();
   }
 
@@ -188,7 +192,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
     if (millis() - this->intro_start_time_ > duration_ms) {
       this->intro_active_ = false;
-      ESP_LOGW(TAG, ">>> INTRO FINISHED -> Starting Main Effect <<<");
+      ESP_LOGD(TAG, ">>> INTRO FINISHED -> Starting Main Effect <<<");
 
       // Check if Transition is enabled via config
       float trans_dur = (this->transition_duration_ != nullptr &&

@@ -2539,7 +2539,7 @@ void CFXRunner::service() {
       dummy += sin8(i & 0xFF); // 10k sin8 calls
     }
     uint32_t bench_time = cfx_millis() - bench_start;
-    ESP_LOGI("wled_bench",
+    ESP_LOGD("wled_bench",
              "Math benchmark: 10k sin8 calls in %ums (target: <1ms)",
              bench_time);
     (void)dummy; // Suppress unused warning
@@ -2931,7 +2931,7 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
   _state = STATE_INTRO;
   _intro_mode = mode;
   _intro_start_time = cfx_millis(); // Force fresh time
-  now = _intro_start_time;           // Sync member var for consistency
+  now = _intro_start_time;          // Sync member var for consistency
   // Safety check for duration (avoid div/0)
   if (duration_s < 0.1f)
     duration_s = 0.1f;
