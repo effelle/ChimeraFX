@@ -179,11 +179,12 @@ static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
 // Note: color_blend and get_random_wheel_index now come from cfx_utils.h
 
 // ============================================================================
-// PALETTE SYSTEM - 11 Palettes (Default + 10 Standard)
+// PALETTE SYSTEM - 21 Palettes stored in Flash (PROGMEM)
+// Uses CFX_PROGMEM for ESP-IDF/Arduino compatibility (~1.3KB RAM saved)
 // ============================================================================
 
 // Palette 0: Aurora - Green/Teal/Cyan gradient (ideal for Aurora effect)
-static const uint32_t PaletteAurora[16] = {
+static const uint32_t PaletteAurora[16] CFX_PROGMEM = {
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF1E, // Green
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF28, // Green -> slightly Tealer
     0x00FF3C, 0x00FF5A, 0x00FF82, 0x00FFB4, // Teals
@@ -191,105 +192,105 @@ static const uint32_t PaletteAurora[16] = {
 };
 
 // Palette 1: Forest - Earth greens and browns
-static const uint32_t PaletteForest[16] = {
+static const uint32_t PaletteForest[16] CFX_PROGMEM = {
     0x003200, 0x005014, 0x006400, 0x147814, 0x009600, 0x32B41E,
     0x50C832, 0x649600, 0x967800, 0x646400, 0x32B41E, 0x009600,
     0x007814, 0x006400, 0x005014, 0x003C0A};
 
 // Palette 2: Ocean - Deep to light blues
-static const uint32_t PaletteOcean[16] = {
+static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
     0x000032, 0x000050, 0x001464, 0x003296, 0x0050C8, 0x0078DC,
     0x0096FF, 0x32C8FF, 0x64DCFF, 0x96F0FF, 0x64DCFF, 0x32C8FF,
     0x0096FF, 0x0064C8, 0x003296, 0x001464};
 
 // Palette 3: Rainbow - Full spectrum
-static const uint32_t PaletteRainbow[16] = {
+static const uint32_t PaletteRainbow[16] CFX_PROGMEM = {
     0xFF0000, 0xFF5000, 0xFF9600, 0xFFFF00, 0x96FF00, 0x00FF00,
     0x00FF96, 0x00FFFF, 0x0096FF, 0x0000FF, 0x5000FF, 0x9600FF,
     0xFF00FF, 0xFF0096, 0xFF0050, 0xFF0000};
 
 // Palette 4: Fire - Red/orange/yellow
-static const uint32_t PaletteFire[16] = {
+static const uint32_t PaletteFire[16] CFX_PROGMEM = {
     0x320000, 0x640000, 0x960000, 0xC80000, 0xFF0000, 0xFF3200,
     0xFF6400, 0xFF9600, 0xFFC800, 0xFFFF00, 0xFFFF64, 0xFFC800,
     0xFF9600, 0xFF6400, 0xFF3200, 0xC80000};
 
 // Palette 5: Sunset - Purple/red/orange/yellow
-static const uint32_t PaletteSunset[16] = {
+static const uint32_t PaletteSunset[16] CFX_PROGMEM = {
     0x780082, 0xB40078, 0xDC143C, 0xFF3C28, 0xFF6414, 0xFF8C00,
     0xFFB400, 0xFFDC64, 0xFFB400, 0xFF8C00, 0xFF6414, 0xFF3C28,
     0xDC143C, 0xB40078, 0x8C008C, 0x780082};
 
 // Palette 6: Ice - Cool whites and light blues
-static const uint32_t PaletteIce[16] = {0xC8F0FF, 0xB4DCFF, 0x96C8FF, 0x78B4FF,
-                                        0x64A0FF, 0x508CFF, 0xC8F0FF, 0xDCFAFF,
-                                        0xFFFFFF, 0xDCFAFF, 0xC8F0FF, 0xB4DCFF,
-                                        0x96C8FF, 0x78B4FF, 0xB4DCFF, 0xC8F0FF};
+static const uint32_t PaletteIce[16] CFX_PROGMEM = {
+    0xC8F0FF, 0xB4DCFF, 0x96C8FF, 0x78B4FF, 0x64A0FF, 0x508CFF,
+    0xC8F0FF, 0xDCFAFF, 0xFFFFFF, 0xDCFAFF, 0xC8F0FF, 0xB4DCFF,
+    0x96C8FF, 0x78B4FF, 0xB4DCFF, 0xC8F0FF};
 
 // Palette 7: Party - Vibrant mixed colors
-static const uint32_t PaletteParty[16] = {
+static const uint32_t PaletteParty[16] CFX_PROGMEM = {
     0xFF00FF, 0xFF0000, 0xFF8000, 0xFFFF00, 0x00FF00, 0x00FFFF,
     0x0080FF, 0x8000FF, 0xFF0080, 0xFF0000, 0xFFC800, 0x00FF80,
     0x00C8FF, 0xC800FF, 0xFF00C8, 0xFF6400};
 
 // Palette 8: Lava - Black/red/orange gradient
-static const uint32_t PaletteLava[16] = {
+static const uint32_t PaletteLava[16] CFX_PROGMEM = {
     0x000000, 0x320000, 0x640000, 0x960000, 0xC80000, 0xFF1400,
     0xFF3C00, 0xFF6400, 0xFF8C00, 0xFFB400, 0xFFDC00, 0xFFFF64,
     0xFFDC00, 0xFF8C00, 0xFF3C00, 0x960000};
 
 // Palette 9: Pastel - Soft desaturated colors
-static const uint32_t PalettePastel[16] = {
+static const uint32_t PalettePastel[16] CFX_PROGMEM = {
     0xFFB4B4, 0xFFC896, 0xFFFFB4, 0xC8FFB4, 0xB4FFC8, 0xB4E6FF,
     0xC8B4FF, 0xFFB4F0, 0xFFC8C8, 0xFFE6B4, 0xE6FFB4, 0xB4FFE6,
     0xB4C8FF, 0xE6B4FF, 0xFFB4DC, 0xFFBEBE};
 
 // Palette 10: Pacifica - Deep ocean blues with white crests
-static const uint32_t PalettePacifica[16] = {
+static const uint32_t PalettePacifica[16] CFX_PROGMEM = {
     0x000212, 0x000F1E, 0x001937, 0x002850, 0x004678, 0x0064B4,
     0x148CF0, 0x28C8FF, 0x50DCFF, 0x96E6FF, 0xC8F0FF, 0xC8F0FF,
     0x96E6FF, 0x28C8FF, 0x004678, 0x000212};
 
 // Palette 11: HeatColors - For Sunrise effect (black → red → orange → yellow →
 // white)
-static const uint32_t PaletteHeatColors[16] = {
+static const uint32_t PaletteHeatColors[16] CFX_PROGMEM = {
     0x000000, 0x330000, 0x660000, 0x990000, 0xCC0000, 0xFF0000,
     0xFF3300, 0xFF6600, 0xFF9900, 0xFFCC00, 0xFFFF00, 0xFFFF33,
     0xFFFF66, 0xFFFF99, 0xFFFFCC, 0xFFFFFF};
 
 // Palette 12: Sakura - Pink/White cherry blossom gradient
-static const uint32_t PaletteSakura[16] = {
+static const uint32_t PaletteSakura[16] CFX_PROGMEM = {
     0xFFC0CB, 0xFFB7C5, 0xFFADBE, 0xFFA4B8, 0xFF9AB1, 0xFF91AB,
     0xFFD1DC, 0xFFE4EC, 0xFFF5F8, 0xFFFFFF, 0xFFF5F8, 0xFFE4EC,
     0xFFD1DC, 0xFFC0CB, 0xFFADBE, 0xFFC0CB};
 
 // Palette 13: Rivendell - Fantasy green/teal elven forest
-static const uint32_t PaletteRivendell[16] = {
+static const uint32_t PaletteRivendell[16] CFX_PROGMEM = {
     0x003320, 0x004D30, 0x006644, 0x008060, 0x009980, 0x00B399,
     0x00CCB3, 0x33FFCC, 0x66FFDD, 0x99FFEE, 0x66FFDD, 0x33FFCC,
     0x00CCB3, 0x00B399, 0x008060, 0x006644};
 
 // Palette 14: Cyberpunk - Neon pink/cyan
-static const uint32_t PaletteCyberpunk[16] = {
+static const uint32_t PaletteCyberpunk[16] CFX_PROGMEM = {
     0xFF00FF, 0xFF33CC, 0xFF66AA, 0xFF0099, 0x00FFFF, 0x33FFFF,
     0x66FFFF, 0x00CCFF, 0x0099FF, 0x0066FF, 0xFF00FF, 0x00FFFF,
     0xFF33CC, 0x00CCFF, 0xFF00FF, 0x00FFFF};
 
 // Palette 15: Orange & Teal - Cinematic color grading
-static const uint32_t PaletteOrangeTeal[16] = {
+static const uint32_t PaletteOrangeTeal[16] CFX_PROGMEM = {
     0x008B8B, 0x00A0A0, 0x00B5B5, 0x00CCCC, 0x20B2AA, 0xFF8C00,
     0xFFA500, 0xFFB347, 0xFFC87C, 0xFFD700, 0xFF8C00, 0x00CCCC,
     0x20B2AA, 0xFFA500, 0x008B8B, 0xFF8C00};
 
 // Palette 16: Christmas - Red/green/white holiday
-static const uint32_t PaletteChristmas[16] = {
+static const uint32_t PaletteChristmas[16] CFX_PROGMEM = {
     0xFF0000, 0xCC0000, 0x990000, 0x009900, 0x00CC00, 0x00FF00,
     0xFFFFFF, 0xFFFFCC, 0xFFFFFF, 0x00FF00, 0x00CC00, 0x009900,
     0xFF0000, 0xCC0000, 0xFFFFFF, 0xFF0000};
 
 // Palette 17: Red & Blue - Continuous Gradient (No Voids)
 // Approximates WLED's rgi_15_gp without black gaps
-static const uint32_t PaletteRedBlue[16] = {
+static const uint32_t PaletteRedBlue[16] CFX_PROGMEM = {
     0xFF0000, 0xAA0055, 0x5500AA, 0x0000FF, // Red -> Blue
     0x0000FF, 0x5500AA, 0xAA0055, 0xFF0000, // Blue -> Red
     0xFF0000, 0xAA0055, 0x5500AA, 0x0000FF, // Red -> Blue
@@ -297,13 +298,13 @@ static const uint32_t PaletteRedBlue[16] = {
 };
 
 // Palette 18: Matrix - Green digital rain
-static const uint32_t PaletteMatrix[16] = {
+static const uint32_t PaletteMatrix[16] CFX_PROGMEM = {
     0x000000, 0x001100, 0x002200, 0x003300, 0x004400, 0x006600,
     0x008800, 0x00AA00, 0x00CC00, 0x00FF00, 0x33FF33, 0x00FF00,
     0x00CC00, 0x00AA00, 0x006600, 0x003300};
 
 // Palette 19: Sunny/Gold - Warm white/gold gradient
-static const uint32_t PaletteSunnyGold[16] = {
+static const uint32_t PaletteSunnyGold[16] CFX_PROGMEM = {
     0xFFE4B5, 0xFFD39B, 0xFFC87C, 0xFFB347, 0xFFA500, 0xFF8C00,
     0xFFD700, 0xFFE135, 0xFFF68F, 0xFFFACD, 0xFFFFE0, 0xFFFACD,
     0xFFF68F, 0xFFE135, 0xFFD700, 0xFFE4B5};
@@ -366,7 +367,9 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 20:
     return PaletteSunnyGold;
   case 21:
+  case 255:
     // Solid color mode - caller must call fillSolidPalette first
+    // 21 = selector position, 255 = internal constant
     return PaletteSolid;
   default:
     return PaletteRainbow; // Fallback to Rainbow (most generic)
@@ -374,14 +377,15 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
 }
 
 // Simple Linear Interpolation Palette Lookup (Updated for dynamic palettes)
+// Uses cfx_pgm_read_dword for PROGMEM/Flash compatibility
 static CRGBW ColorFromPalette(uint8_t index, uint8_t brightness,
                               const uint32_t *palette) {
   uint8_t i = index >> 4;   // 0-15
   uint8_t f = index & 0x0F; // Fraction 0-15
 
-  // Wrap around
-  uint32_t c1 = palette[i];
-  uint32_t c2 = palette[(i + 1) & 15];
+  // Wrap around - read from Flash using compatibility macro
+  uint32_t c1 = cfx_pgm_read_dword(&palette[i]);
+  uint32_t c2 = cfx_pgm_read_dword(&palette[(i + 1) & 15]);
 
   // Lerp RGB
   uint8_t r1 = (c1 >> 16) & 0xFF;

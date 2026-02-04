@@ -327,53 +327,62 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
     return 0;
   std::string name(option);
 
-  if (name == "Forest")
+  // New indices after adding Aurora to palette list:
+  // 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
+  if (name == "Aurora")
     return 1;
-  if (name == "Ocean")
+  if (name == "Forest")
     return 2;
-  if (name == "Rainbow")
+  if (name == "Ocean")
     return 3;
-  if (name == "Fire")
+  if (name == "Rainbow")
     return 4;
-  if (name == "Sunset")
+  if (name == "Fire")
     return 5;
-  if (name == "Ice")
+  if (name == "Sunset")
     return 6;
-  if (name == "Party")
+  if (name == "Ice")
     return 7;
-  if (name == "Lava")
+  if (name == "Party")
     return 8;
-  if (name == "Pastel")
+  if (name == "Lava")
     return 9;
-  if (name == "Pacifica")
+  if (name == "Pastel")
     return 10;
-  if (name == "HeatColors")
+  if (name == "Pacifica")
     return 11;
-  if (name == "Sakura")
+  if (name == "HeatColors")
     return 12;
-  if (name == "Rivendell")
+  if (name == "Sakura")
     return 13;
-  if (name == "Cyberpunk")
+  if (name == "Rivendell")
     return 14;
-  if (name == "OrangeTeal")
+  if (name == "Cyberpunk")
     return 15;
-  if (name == "Christmas")
+  if (name == "OrangeTeal")
     return 16;
-  if (name == "RedBlue")
+  if (name == "Christmas")
     return 17;
-  if (name == "Matrix")
+  if (name == "RedBlue")
     return 18;
-  if (name == "SunnyGold")
+  if (name == "Matrix")
     return 19;
+  if (name == "SunnyGold")
+    return 20;
   if (name == "None" || name == "Solid")
     return 255;
 
-  return 0; // Default (Aurora)
+  return 0; // Default (use effect preset)
 }
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   // Mapping based on "Natural" palette for each effect
   // Derived from CFXRunner.cpp source inspection & User Feedback
+  // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, 5=Fire,
+  //              6=Sunset, 7=Ice, 8=Party, 9=Lava, 10=Pastel, 11=Pacifica,
+  //              12=HeatColors, 13=Sakura, 14=Rivendell, 15=Cyberpunk,
+  //              16=OrangeTeal, 17=Christmas, 18=RedBlue, 19=Matrix,
+  //              20=SunnyGold, 21=Solid
   switch (effect_id) {
   // Solid Defaults (255)
   case 0:
@@ -391,47 +400,47 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 91:
     return 255; // Bouncing Balls
 
-  // Rainbow Defaults (3)
+  // Rainbow Defaults (4)
   case 7:
-    return 3; // Dynamic
+    return 4; // Dynamic
   case 8:
-    return 3; // Rainbow (ID=8)
+    return 4; // Rainbow (ID=8)
   case 9:
-    return 3; // Rainbow Cycle (Color Loop) (ID=9)
+    return 4; // Rainbow Cycle (Color Loop) (ID=9)
   case 64:
-    return 3; // Juggle
+    return 4; // Juggle
   case 74:
-    return 3; // ColorTwinkle
+    return 4; // ColorTwinkle
   case 79:
-    return 3; // Ripple
+    return 4; // Ripple
   case 105:
-    return 3; // Phased
+    return 4; // Phased
   case 107:
-    return 3; // Noise Pal
+    return 4; // Noise Pal
   case 110:
-    return 3; // Flow
+    return 4; // Flow
 
-  // Party Defaults (7)
+  // Party Defaults (8)
   case 97:
-    return 7; // Plasma (ID=97)
+    return 8; // Plasma (ID=97)
   case 63:
-    return 7; // Pride 2015
+    return 8; // Pride 2015
 
   // Specific Defaults
   case 18:
     return 255; // Dissolve -> Solid (User override)
   case 66:
-    return 4; // Fire 2012 -> Fire
+    return 5; // Fire 2012 -> Fire
   case 76:
-    return 4; // Meteor -> Fire
+    return 5; // Meteor -> Fire
   case 101:
-    return 10; // Pacifica -> Pacifica
+    return 11; // Pacifica -> Pacifica
   case 104:
-    return 11; // Sunrise -> HeatColors
+    return 12; // Sunrise -> HeatColors
 
-  // Default Aurora (0) or specific handling
+  // Default Aurora (1) or specific handling
   default:
-    return 0;
+    return 1; // Aurora is the general default
   }
 }
 
@@ -445,49 +454,52 @@ void CFXAddressableLightEffect::run_controls_() {
 
   if (this->runner_) {
     // Helper lambda for Palette Index Lookup
+    // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
     auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
       if (!sel || !sel->has_state())
         return 0;
       const char *opt = sel->current_option();
       std::string name = opt ? opt : "";
-      if (name == "Forest")
+      if (name == "Aurora")
         return 1;
-      if (name == "Ocean")
+      if (name == "Forest")
         return 2;
-      if (name == "Rainbow")
+      if (name == "Ocean")
         return 3;
-      if (name == "Fire")
+      if (name == "Rainbow")
         return 4;
-      if (name == "Sunset")
+      if (name == "Fire")
         return 5;
-      if (name == "Ice")
+      if (name == "Sunset")
         return 6;
-      if (name == "Party")
+      if (name == "Ice")
         return 7;
-      if (name == "Lava")
+      if (name == "Party")
         return 8;
-      if (name == "Pastel")
+      if (name == "Lava")
         return 9;
-      if (name == "Pacifica")
+      if (name == "Pastel")
         return 10;
-      if (name == "HeatColors")
+      if (name == "Pacifica")
         return 11;
-      if (name == "Sakura")
+      if (name == "HeatColors")
         return 12;
-      if (name == "Rivendell")
+      if (name == "Sakura")
         return 13;
-      if (name == "Cyberpunk")
+      if (name == "Rivendell")
         return 14;
-      if (name == "OrangeTeal")
+      if (name == "Cyberpunk")
         return 15;
-      if (name == "Christmas")
+      if (name == "OrangeTeal")
         return 16;
-      if (name == "RedBlue")
+      if (name == "Christmas")
         return 17;
-      if (name == "Matrix")
+      if (name == "RedBlue")
         return 18;
-      if (name == "SunnyGold")
+      if (name == "Matrix")
         return 19;
+      if (name == "SunnyGold")
+        return 20;
       if (name == "None" || name == "Solid")
         return 255;
       if (name == "Default") {

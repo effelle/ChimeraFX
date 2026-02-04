@@ -22,6 +22,10 @@
 #define CFX_ESP_IDF 1
 #endif
 
+// ============================================================================
+// TIMING FUNCTIONS
+// ============================================================================
+
 inline uint32_t cfx_millis() {
 #ifdef CFX_ARDUINO
   return millis();
@@ -45,3 +49,21 @@ inline void cfx_yield() {
   taskYIELD();
 #endif
 }
+
+// ============================================================================
+// PROGMEM COMPATIBILITY - Store constant data in Flash
+// ============================================================================
+// ESP-IDF: const data is already in flash, but we use rodata section for
+// clarity Arduino: Uses PROGMEM attribute and pgm_read_* functions
+
+#ifdef CFX_ARDUINO
+// Arduino framework - use standard PROGMEM
+#define CFX_PROGMEM PROGMEM
+#define cfx_pgm_read_dword(addr) pgm_read_dword(addr)
+#else
+// ESP-IDF framework - const data is already in flash on ESP32
+// The rodata section ensures it stays in flash
+#define CFX_PROGMEM __attribute__((section(".rodata")))
+// ESP32 can read flash directly without special functions
+#define cfx_pgm_read_dword(addr) (*(const uint32_t *)(addr))
+#endif
