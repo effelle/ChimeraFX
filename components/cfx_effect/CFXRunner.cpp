@@ -1066,6 +1066,143 @@ uint16_t mode_pacifica() {
   return FRAMETIME;
 }
 
+// =============================================================================
+// PacificaNative - 42FPS NATIVE TIMING PROOF OF CONCEPT
+// =============================================================================
+// Hypothesis: Running at native 24ms (42FPS) allows 1:1 WLED math without
+// scaling
+//
+// Key changes from mode_pacifica:
+// 1. Internal 24ms throttle via timestamp comparison (not external
+// update_interval)
+// 2. Real deltams from actual elapsed time (NOT virtual speed accumulator)
+// 3. Speed slider controls deltams scaling like original WLED
+// 4. NO speed hacks: no speed >> 2, no * 0.6, no virtual time accumulator
+//
+// Diagnostic: Logs real FPS of THIS effect (should be ~42FPS if throttle works)
+// =============================================================================
+
+// Static state for native throttle (per-instance would need member vars)
+static uint32_t pacifica_native_last_render = 0;
+static uint32_t pacifica_native_last_log = 0;
+static uint32_t pacifica_native_frame_count = 0;
+
+uint16_t mode_pacifica_native() {
+  if (!instance)
+    return 350;
+
+  // === INTERNAL 24ms THROTTLE ===
+  // NON-BLOCKING: If not enough time has passed, skip this frame
+  uint32_t now_ms = cfx_millis();
+  if (now_ms - pacifica_native_last_render < 24) {
+    return FRAMETIME; // Exit early, will be called again next ESPHome cycle
+  }
+
+  // Time to render! Calculate real delta
+  uint32_t deltams = now_ms - pacifica_native_last_render;
+  pacifica_native_last_render = now_ms;
+  pacifica_native_frame_count++;
+
+  // === DIAGNOSTIC: Log real FPS of this effect ===
+  if (now_ms - pacifica_native_last_log >= 1000) {
+    ESP_LOGD("pacifica_native", "NATIVE FPS: %u | deltams: %u ms",
+             pacifica_native_frame_count, deltams);
+    pacifica_native_frame_count = 0;
+    pacifica_native_last_log = now_ms;
+  }
+
+  // Initialize palette caches on first call
+  pacifica_init_caches();
+
+  int len = instance->_segment.length();
+
+  // Get persistent state from segment
+  unsigned sCIStart1 = instance->_segment.aux0;
+  unsigned sCIStart2 = instance->_segment.aux1;
+  unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
+  unsigned sCIStart4 = (instance->_segment.step >> 16);
+
+  // === ORIGINAL WLED SPEED HANDLING ===
+  // Speed controls deltams scaling like original WLED
+  // Speed 0 = frozen, Speed 255 = fast
+  // WLED uses: deltams = deltams * (SEGMENT.speed >> 3) + 1
+  // Simplified: Just scale deltams by speed/128 (128 = normal speed)
+  uint8_t speed = instance->_segment.speed;
+
+  // Original WLED math: speed affects wave progression rate
+  // At speed 128, deltams is normal. At speed 255, it's 2x. At speed 64, it's
+  // 0.5x
+  uint32_t deltams_scaled = (deltams * (speed + 1)) >> 7; // Divide by 128
+  if (deltams_scaled < 1 && speed > 0)
+    deltams_scaled = 1; // Minimum 1ms when not frozen
+
+  // === ORIGINAL WLED WAVE MATH ===
+  // Use cfx_millis() directly for beat functions (like WLED uses strip.now)
+  uint32_t t = now_ms;
+
+  // Speedfactors from original WLED
+  unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
+  unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
+  uint32_t deltams1 = (deltams_scaled * speedfactor1) >> 8;
+  uint32_t deltams2 = (deltams_scaled * speedfactor2) >> 8;
+  uint32_t deltams21 = (deltams1 + deltams2) >> 1;
+
+  // Update wave positions - ORIGINAL WLED MATH (no speed hacks)
+  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
+  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
+  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
+  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+
+  // Save state back to segment
+  instance->_segment.aux0 = sCIStart1;
+  instance->_segment.aux1 = sCIStart2;
+  instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
+
+  // Whitecap threshold and wave - ORIGINAL WLED values
+  unsigned basethreshold = beatsin8_t(9, 55, 65, t);
+  unsigned wave = beat8(7, t);
+
+  // Wave layer parameters - ORIGINAL WLED values
+  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, t);
+  uint8_t w1_bri = beatsin8_t(10, 70, 130, t);
+  uint16_t w1_off = 0 - beat16(301, t);
+
+  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, t);
+  uint8_t w2_bri = beatsin8_t(17, 40, 80, t);
+  uint16_t w2_off = beat16(401, t);
+
+  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256, t);
+  uint8_t w3_bri = beatsin8_t(13, 50, 100, t);
+  uint16_t w3_off = beat16(503, t);
+
+  // Render loop
+  for (int i = 0; i < len; i++) {
+    // Base color - visible teal
+    CRGB c = CRGB(8, 32, 48);
+
+    // Add wave layers using cached palette lookup
+    pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
+    pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
+    pacifica_one_layer_cached(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
+
+    // Add whitecaps
+    pacifica_add_whitecaps(c, wave, basethreshold);
+
+    // Deepen colors with teal preservation
+    pacifica_deepen_colors_teal(c);
+
+    // Brightness boost
+    c.r = qadd8(c.r, c.r);
+    c.g = qadd8(c.g, c.g);
+    c.b = qadd8(c.b, c.b);
+
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+    wave += 7;
+  }
+
+  return FRAMETIME;
+}
+
 // --- Plasma Effect ---
 // Ported from WLED FX.cpp by Andrew Tuline
 // Smooth, liquid organic effect using wave mixing
@@ -2524,6 +2661,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_PACIFICA: // 101
     mode_pacifica();
+    break;
+  case FX_MODE_PACIFICA_NATIVE: // 200 - Native 42FPS timing PoC
+    mode_pacifica_native();
     break;
   case FX_MODE_PRIDE_2015: // 63
     mode_pride_2015();
