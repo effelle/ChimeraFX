@@ -8,6 +8,7 @@
 
 #include "CFXRunner.h"
 #include "cfx_compat.h"
+#include "cfx_utils.h"
 
 // ESP-IDF heap diagnostics (for production monitoring)
 #include "esp_heap_caps.h"
@@ -150,44 +151,16 @@ struct CRGBW {
       : r(ir), g(ig), b(ib), w(iw) {}
 };
 
-// Math Helpers
-static inline uint16_t hw_random16() { return rand() & 0xFFFF; }
-static inline uint16_t hw_random16(uint16_t min, uint16_t max) {
-  if (min >= max)
-    return min;
-  return min + (rand() % (max - min));
-}
-static inline uint8_t hw_random8() { return rand() % 256; }
-static inline uint8_t hw_random8(uint8_t max) { return rand() % max; }
-static inline uint8_t hw_random8(uint8_t min, uint8_t max) {
-  if (min >= max)
-    return min;
-  return min + (rand() % (max - min));
-}
-static inline uint8_t gamma8inv(uint8_t v) { return v; } // Logic placeholder
+// Math Helpers - use cfx:: namespace from cfx_utils.h
+using cfx::color_blend;
+using cfx::gamma8inv;
+using cfx::get_random_wheel_index;
+using cfx::hw_random16;
+using cfx::hw_random8;
+using cfx::inoise8;
+using cfx::triwave16;
 
-// triwave16: triangle wave, 0-65535 input, 0-65535 output
-static inline uint16_t triwave16(uint16_t in) {
-  if (in < 0x8000) {
-    return in * 2;
-  } else {
-    return 0xFFFF - ((in - 0x8000) * 2);
-  }
-}
-
-// inoise8: Perlin noise (simplified approximation)
-// Returns pseudo-random but smooth noise value based on x,y coordinates
-static inline uint8_t inoise8(uint16_t x, uint16_t y) {
-  // Simple hash-based noise approximation
-  uint32_t hash = x * 374761393 + y * 668265263;
-  hash = (hash ^ (hash >> 13)) * 1274126177;
-  hash = hash ^ (hash >> 16);
-  // Smooth between neighboring values
-  uint8_t base = (hash >> 8) & 0xFF;
-  uint8_t next = ((hash * 7) >> 8) & 0xFF;
-  uint8_t blend = (x + y) & 0xFF;
-  return base + (((int16_t)(next - base) * blend) >> 8);
-}
+// Note: triwave16 and inoise8 now come from cfx_utils.h
 
 // Add support for CRGBW math
 static CRGBW color_add(CRGBW c1, CRGBW c2) {
@@ -203,49 +176,7 @@ static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
       ((uint16_t)c.b * fadeAmount) >> 8, ((uint16_t)c.w * fadeAmount) >> 8);
 }
 
-// Helper: Get random wheel index avoiding previous value
-static uint8_t get_random_wheel_index(uint8_t pos) {
-  uint8_t r = 0;
-  uint8_t x = 0;
-  uint8_t y = 0;
-  uint8_t d = 0;
-  uint8_t loops = 0;
-  while (d < 42 && loops < 15) {
-    r = rand() % 256;
-    x = abs(pos - r);
-    y = 255 - x;
-    d = (x < y) ? x : y;
-    loops++;
-  }
-  if (loops >= 15)
-    r = (pos + 42) % 256; // Fallback to safe shift
-  return r;
-}
-
-// Helper: Blend two colors
-static uint32_t color_blend(uint32_t color1, uint32_t color2, uint8_t blend) {
-  if (blend == 0)
-    return color1;
-  if (blend == 255)
-    return color2;
-
-  uint8_t r1 = (color1 >> 16) & 0xFF;
-  uint8_t g1 = (color1 >> 8) & 0xFF;
-  uint8_t b1 = color1 & 0xFF;
-  uint8_t w1 = (color1 >> 24) & 0xFF;
-
-  uint8_t r2 = (color2 >> 16) & 0xFF;
-  uint8_t g2 = (color2 >> 8) & 0xFF;
-  uint8_t b2 = color2 & 0xFF;
-  uint8_t w2 = (color2 >> 24) & 0xFF;
-
-  uint8_t r3 = ((uint16_t)r1 * (255 - blend) + (uint16_t)r2 * blend) >> 8;
-  uint8_t g3 = ((uint16_t)g1 * (255 - blend) + (uint16_t)g2 * blend) >> 8;
-  uint8_t b3 = ((uint16_t)b1 * (255 - blend) + (uint16_t)b2 * blend) >> 8;
-  uint8_t w3 = ((uint16_t)w1 * (255 - blend) + (uint16_t)w2 * blend) >> 8;
-
-  return ((uint32_t)w3 << 24) | ((uint32_t)r3 << 16) | ((uint32_t)g3 << 8) | b3;
-}
+// Note: color_blend and get_random_wheel_index now come from cfx_utils.h
 
 // ============================================================================
 // PALETTE SYSTEM - 11 Palettes (Default + 10 Standard)
