@@ -1093,20 +1093,23 @@ uint16_t mode_pacifica_native() {
   if (!instance)
     return 350;
 
-  // === ALWAYS RENDER - NO FRAME SKIPPING ===
-  // We render every frame ESPHome gives us, but use a FIXED 24ms virtual delta
-  // to simulate WLED's 42FPS timing. This tests if WLED math works at 42FPS.
+  // === ALWAYS RENDER - USE REAL ELAPSED TIME ===
+  // Use actual elapsed time as delta (like WLED does with strip.now and
+  // deltams) This ensures virtual time advances at 1000ms/sec regardless of
+  // frame rate
   uint32_t now_ms = cfx_millis();
 
-  // Track real frame timing for diagnostics
+  // Calculate real elapsed time since last frame
   uint32_t real_deltams = now_ms - pacifica_native_last_render;
+  if (real_deltams > 100)
+    real_deltams = 100; // Cap to avoid jumps on first frame
   pacifica_native_last_render = now_ms;
   pacifica_native_frame_count++;
 
-  // === DIAGNOSTIC: Log real vs virtual FPS ===
+  // === DIAGNOSTIC: Log real FPS ===
   if (now_ms - pacifica_native_last_log >= 1000) {
-    ESP_LOGD("pacifica_native", "Real FPS: %u | Virtual deltams: 24ms fixed",
-             pacifica_native_frame_count);
+    ESP_LOGD("pacifica_native", "Real FPS: %u | real_deltams: ~%u ms",
+             pacifica_native_frame_count, real_deltams);
     pacifica_native_frame_count = 0;
     pacifica_native_last_log = now_ms;
   }
@@ -1122,21 +1125,18 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === FIXED 24ms VIRTUAL DELTA - SIMULATES WLED 42FPS ===
-  // This is the core hypothesis test: WLED assumes ~24ms between frames
-  // By using a fixed 24ms delta, we replicate WLED's timing assumptions
-  const uint32_t WLED_FRAME_TIME = 24; // ms - WLED's assumed frame interval
-
+  // === SIMPLE SPEED SCALING ===
+  // Use real elapsed time, scaled by speed slider
+  // Speed 128 = 1.0x, Speed 0 = frozen, Speed 255 = ~2x
   uint8_t speed = instance->_segment.speed;
 
-  // Scale the fixed delta by speed (speed 128 = normal)
-  // Speed 0 = frozen, speed 128 = 24ms delta, speed 255 = 48ms delta
-  uint32_t deltams = (WLED_FRAME_TIME * (speed + 1)) >> 7;
+  // Scale real delta by speed (speed 128 = normal speed)
+  uint32_t deltams = (real_deltams * (speed + 1)) >> 7;
   if (deltams < 1 && speed > 0)
     deltams = 1;
 
   // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
-  // Advances by the fixed (speed-scaled) delta each frame
+  // Advances by speed-scaled real delta
   pacifica_native_virtual_time += deltams;
   uint32_t t = pacifica_native_virtual_time;
 
