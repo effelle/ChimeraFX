@@ -1143,8 +1143,8 @@ uint16_t mode_pacifica_native() {
   // Speedfactors from original WLED
   unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
   unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
-  uint32_t deltams1 = (deltams_scaled * speedfactor1) >> 8;
-  uint32_t deltams2 = (deltams_scaled * speedfactor2) >> 8;
+  uint32_t deltams1 = (deltams * speedfactor1) >> 8;
+  uint32_t deltams2 = (deltams * speedfactor2) >> 8;
   uint32_t deltams21 = (deltams1 + deltams2) >> 1;
 
   // Update wave positions - ORIGINAL WLED MATH (no speed hacks)
