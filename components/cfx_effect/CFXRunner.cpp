@@ -692,6 +692,199 @@ uint16_t mode_aurora(void) {
   return FRAMETIME;
 }
 
+// ============================================================================
+// AURORA NATIVE - Proof of Concept for native WLED timing
+// Uses speed accumulator pattern, no frame rate compensation hacks
+// ============================================================================
+
+// Native wave struct matching WLED original formula (no 0.66 speed scaling)
+struct AuroraWaveNative {
+  int32_t center;
+  uint32_t ageFactor_cached;
+  uint16_t ttl;
+  uint16_t age;
+  uint16_t width;
+  uint16_t basealpha;
+  uint16_t speed_factor; // Matches WLED's calculation
+  int16_t wave_start;
+  int16_t wave_end;
+  bool goingleft;
+  bool alive;
+  CRGBW basecolor;
+
+  void init(uint32_t segment_length, CRGBW color) {
+    ttl = hw_random16(500, 1501);
+    basecolor = color;
+    basealpha = hw_random8(60, 100) * AW_SCALE / 100;
+    age = 0;
+    width =
+        hw_random16(segment_length / 20, segment_length / W_WIDTH_FACTOR) + 1;
+    center = (((uint32_t)hw_random8(101) << AW_SHIFT) / 100) * segment_length;
+    goingleft = hw_random8() & 0x01;
+    // WLED original formula: no extra divisors
+    speed_factor = (((uint32_t)hw_random8(10, 31) * W_MAX_SPEED) << AW_SHIFT) /
+                   (100 * 255);
+    alive = true;
+  }
+
+  void updateCachedValues() {
+    if (ttl < 2)
+      return;
+    uint32_t half_ttl = ttl >> 1;
+    if (age < half_ttl) {
+      ageFactor_cached = ((uint32_t)age << AW_SHIFT) / half_ttl;
+    } else {
+      ageFactor_cached = ((uint32_t)(ttl - age) << AW_SHIFT) / half_ttl;
+    }
+    if (ageFactor_cached >= AW_SCALE)
+      ageFactor_cached = AW_SCALE - 1;
+    uint32_t center_led = center >> AW_SHIFT;
+    wave_start = (int16_t)center_led - (int16_t)width;
+    wave_end = (int16_t)center_led + (int16_t)width;
+  }
+
+  CRGBW getColorForLED(int ledIndex) {
+    if (ledIndex < wave_start || ledIndex > wave_end)
+      return CRGBW(0, 0, 0, 0);
+    int32_t ledIndex_scaled = (int32_t)ledIndex << AW_SHIFT;
+    int32_t offset = ledIndex_scaled - center;
+    if (offset < 0)
+      offset = -offset;
+    if (width == 0)
+      return CRGBW(0, 0, 0, 0);
+    uint32_t offsetFactor = offset / width;
+    if (offsetFactor > AW_SCALE)
+      return CRGBW(0, 0, 0, 0);
+    uint32_t brightness_factor = (AW_SCALE - offsetFactor);
+    brightness_factor = (brightness_factor * ageFactor_cached) >> AW_SHIFT;
+    brightness_factor = (brightness_factor * basealpha) >> AW_SHIFT;
+    CRGBW rgb;
+    rgb.r = (basecolor.r * brightness_factor) >> AW_SHIFT;
+    rgb.g = (basecolor.g * brightness_factor) >> AW_SHIFT;
+    rgb.b = (basecolor.b * brightness_factor) >> AW_SHIFT;
+    rgb.w = (basecolor.w * brightness_factor) >> AW_SHIFT;
+    return rgb;
+  }
+
+  // NATIVE: Uses raw speed like WLED original (no 0.66 scaling hack)
+  void update(uint32_t segment_length, uint32_t speed) {
+    int32_t step = speed_factor * speed;
+    center += goingleft ? -step : step;
+    age++;
+    if (age > ttl) {
+      alive = false;
+    } else {
+      uint32_t width_scaled = (uint32_t)width << AW_SHIFT;
+      uint32_t segment_length_scaled = segment_length << AW_SHIFT;
+      if (goingleft) {
+        if (center < -(int32_t)width_scaled)
+          alive = false;
+      } else {
+        if (center > (int32_t)segment_length_scaled + (int32_t)width_scaled)
+          alive = false;
+      }
+    }
+  }
+
+  bool stillAlive() { return alive; }
+};
+
+// Static state for Aurora Native
+static uint32_t aurora_native_speed_accum = 0;
+
+uint16_t mode_aurora_native(void) {
+  AuroraWaveNative *waves;
+
+  // === SPEED ACCUMULATOR (same pattern as PacificaNative) ===
+  uint8_t speed = instance->_segment.speed;
+  uint32_t should_update = 0;
+  if (speed > 0) {
+    aurora_native_speed_accum += speed;
+    should_update = aurora_native_speed_accum >> 8;
+    aurora_native_speed_accum &= 0xFF;
+  }
+
+  // Intensity mapping (same as original)
+  uint8_t selector = instance->_segment.intensity;
+  uint8_t internal_intensity;
+  if (selector <= 128) {
+    internal_intensity = (uint32_t)selector * 175 / 128;
+  } else {
+    internal_intensity = 175 + ((uint32_t)(selector - 128) * 80 / 127);
+  }
+
+  int active_count = 2 + ((internal_intensity * (W_MAX_COUNT - 2)) / 255);
+  instance->_segment.aux1 = active_count;
+
+  if (!instance->_segment.allocateData(sizeof(AuroraWaveNative) *
+                                       W_MAX_COUNT)) {
+    return mode_static();
+  }
+
+  if (instance->_segment.reset) {
+    memset(instance->_segment.data, 0, instance->_segment._dataLen);
+    instance->_segment.reset = false;
+  }
+
+  waves = reinterpret_cast<AuroraWaveNative *>(instance->_segment.data);
+
+  // Service waves - only update if accumulator produced deltams
+  for (int i = 0; i < W_MAX_COUNT; i++) {
+    if (waves[i].ttl == 0)
+      waves[i].alive = false;
+
+    if (waves[i].alive) {
+      if (i >= active_count) {
+        waves[i].basealpha = (waves[i].basealpha * 224) >> 8;
+        if (waves[i].basealpha < 10)
+          waves[i].alive = false;
+      }
+
+      // Update only when accumulator produced an update tick
+      for (uint32_t tick = 0; tick < should_update; tick++) {
+        waves[i].update(instance->_segment.length(), speed);
+      }
+
+      if (!waves[i].stillAlive()) {
+        if (i < active_count) {
+          uint8_t colorIndex = rand() % 256;
+          const uint32_t *active_palette =
+              getPaletteByIndex(instance->_segment.palette);
+          CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+          waves[i].init(instance->_segment.length(), color);
+        }
+      }
+    } else {
+      if (i < active_count) {
+        uint8_t colorIndex = rand() % 256;
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
+        CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+        waves[i].init(instance->_segment.length(), color);
+      }
+    }
+
+    if (waves[i].alive)
+      waves[i].updateCachedValues();
+  }
+
+  // Render
+  CRGBW background(0, 0, 0, 0);
+  for (int i = 0; i < instance->_segment.length(); i++) {
+    CRGBW mixedRgb = background;
+    for (int j = 0; j < W_MAX_COUNT; j++) {
+      if (waves[j].alive) {
+        CRGBW rgb = waves[j].getColorForLED(i);
+        mixedRgb = color_add(mixedRgb, rgb);
+      }
+    }
+    instance->_segment.setPixelColor(
+        i, RGBW32(mixedRgb.r, mixedRgb.g, mixedRgb.b, mixedRgb.w));
+  }
+
+  return FRAMETIME;
+}
+
 // --- Fire2012 Effect ---
 // Exact WLED implementation by Mark Kriegsman
 // Adapted for ESPHome framework
@@ -2670,6 +2863,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_PACIFICA_NATIVE: // 200 - Native 42FPS timing PoC
     mode_pacifica_native();
+    break;
+  case FX_MODE_AURORA_NATIVE: // 201 - Native timing PoC for Aurora
+    mode_aurora_native();
     break;
   case FX_MODE_PRIDE_2015: // 63
     mode_pride_2015();
