@@ -1086,8 +1086,9 @@ uint16_t mode_pacifica() {
 static uint32_t pacifica_native_last_render = 0;
 static uint32_t pacifica_native_last_log = 0;
 static uint32_t pacifica_native_frame_count = 0;
-static uint32_t pacifica_native_virtual_time =
-    0; // Virtual time for beat functions
+static uint32_t pacifica_native_virtual_time = 0;
+static uint32_t pacifica_native_speed_accum =
+    0; // Fractional accumulator for low speeds
 
 uint16_t mode_pacifica_native() {
   if (!instance)
@@ -1125,18 +1126,18 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === SIMPLE SPEED SCALING ===
-  // Use real elapsed time, scaled by speed slider
-  // Speed 128 = 1.0x, Speed 0 = frozen, Speed 255 = ~2x
+  // === FRACTIONAL SPEED ACCUMULATOR (like original Pacifica) ===
+  // At low speeds, we accumulate fractional ms until we have a whole ms
+  // This matches original behavior where speed=1 is very slow
   uint8_t speed = instance->_segment.speed;
 
-  // Explicit speed=0 freeze
   uint32_t deltams = 0;
   if (speed > 0) {
-    // Scale real delta by speed (speed 128 = normal speed)
-    deltams = (real_deltams * (speed + 1)) >> 7;
-    if (deltams < 1)
-      deltams = 1;
+    // Accumulate: (real_deltams * speed) into fractional accumulator
+    // When accumulator >= 256, we extract 1ms of delta
+    pacifica_native_speed_accum += (real_deltams * speed);
+    deltams = pacifica_native_speed_accum >> 8; // Integer ms
+    pacifica_native_speed_accum &= 0xFF;        // Keep fractional part
   }
 
   // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
