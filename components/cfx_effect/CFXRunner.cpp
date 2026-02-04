@@ -182,7 +182,7 @@ static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
 // PALETTE SYSTEM - 11 Palettes (Default + 10 Standard)
 // ============================================================================
 
-// Palette 0: Aurora (Default) - Green/Teal/Cyan gradient
+// Palette 0: Aurora - Green/Teal/Cyan gradient (ideal for Aurora effect)
 static const uint32_t PaletteAurora[16] = {
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF1E, // Green
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF28, // Green -> slightly Tealer
@@ -322,7 +322,7 @@ static void fillSolidPalette(uint32_t color) {
 static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   switch (palette_index) {
   case 0:
-    return PaletteAurora; // Default
+    return PaletteAurora;
   case 1:
     return PaletteForest;
   case 2:

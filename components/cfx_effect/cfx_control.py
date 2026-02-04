@@ -24,9 +24,9 @@ CFXSelect = chimera_fx_ns.class_("CFXSelect", select.Select)
 CFXSwitch = chimera_fx_ns.class_("CFXSwitch", switch.Switch)
 
 PALETTE_OPTIONS = [
-    "Default", "Forest", "Ocean", "Rainbow", "Fire", "Sunset", "Ice", "Party", 
+    "Aurora", "Forest", "Ocean", "Rainbow", "Fire", "Sunset", "Ice", "Party", 
     "Lava", "Pastel", "Pacifica", "HeatColors", "Sakura", "Rivendell", "Cyberpunk", 
-    "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "None"
+    "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid"
 ]
 
 INTRO_OPTIONS = ["None", "Wipe", "Fade", "Center", "Glitter"]
@@ -107,7 +107,7 @@ async def to_code(config):
         }
         palette = cg.new_Pvariable(conf[CONF_ID])
         await select.register_select(palette, conf, options=PALETTE_OPTIONS)
-        cg.add(palette.publish_state("Default")) 
+        cg.add(palette.publish_state("Aurora"))  # Default to Aurora (index 0)
         cg.add(var.set_palette(palette))
 
     # 4. Mirror
