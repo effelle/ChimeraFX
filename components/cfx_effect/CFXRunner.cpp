@@ -1093,22 +1093,20 @@ uint16_t mode_pacifica_native() {
   if (!instance)
     return 350;
 
-  // === INTERNAL 24ms THROTTLE ===
-  // NON-BLOCKING: If not enough time has passed, skip this frame
+  // === ALWAYS RENDER - NO FRAME SKIPPING ===
+  // We render every frame ESPHome gives us, but use a FIXED 24ms virtual delta
+  // to simulate WLED's 42FPS timing. This tests if WLED math works at 42FPS.
   uint32_t now_ms = cfx_millis();
-  if (now_ms - pacifica_native_last_render < 24) {
-    return FRAMETIME; // Exit early, will be called again next ESPHome cycle
-  }
 
-  // Time to render! Calculate real delta
-  uint32_t deltams = now_ms - pacifica_native_last_render;
+  // Track real frame timing for diagnostics
+  uint32_t real_deltams = now_ms - pacifica_native_last_render;
   pacifica_native_last_render = now_ms;
   pacifica_native_frame_count++;
 
-  // === DIAGNOSTIC: Log real FPS of this effect ===
+  // === DIAGNOSTIC: Log real vs virtual FPS ===
   if (now_ms - pacifica_native_last_log >= 1000) {
-    ESP_LOGD("pacifica_native", "NATIVE FPS: %u | deltams: %u ms",
-             pacifica_native_frame_count, deltams);
+    ESP_LOGD("pacifica_native", "Real FPS: %u | Virtual deltams: 24ms fixed",
+             pacifica_native_frame_count);
     pacifica_native_frame_count = 0;
     pacifica_native_last_log = now_ms;
   }
@@ -1124,23 +1122,22 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === ORIGINAL WLED SPEED HANDLING ===
-  // Speed controls deltams scaling like original WLED
-  // Speed 0 = frozen, Speed 255 = fast
-  // WLED uses: deltams = deltams * (SEGMENT.speed >> 3) + 1
-  // Simplified: Just scale deltams by speed/128 (128 = normal speed)
+  // === FIXED 24ms VIRTUAL DELTA - SIMULATES WLED 42FPS ===
+  // This is the core hypothesis test: WLED assumes ~24ms between frames
+  // By using a fixed 24ms delta, we replicate WLED's timing assumptions
+  const uint32_t WLED_FRAME_TIME = 24; // ms - WLED's assumed frame interval
+
   uint8_t speed = instance->_segment.speed;
 
-  // Original WLED math: speed affects wave progression rate
-  // At speed 128, deltams is normal. At speed 255, it's 2x. At speed 64, it's
-  // 0.5x
-  uint32_t deltams_scaled = (deltams * (speed + 1)) >> 7; // Divide by 128
-  if (deltams_scaled < 1 && speed > 0)
-    deltams_scaled = 1; // Minimum 1ms when not frozen
+  // Scale the fixed delta by speed (speed 128 = normal)
+  // Speed 0 = frozen, speed 128 = 24ms delta, speed 255 = 48ms delta
+  uint32_t deltams = (WLED_FRAME_TIME * (speed + 1)) >> 7;
+  if (deltams < 1 && speed > 0)
+    deltams = 1;
 
   // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
-  // Advances only by deltams_scaled, so speed=0 freezes everything
-  pacifica_native_virtual_time += deltams_scaled;
+  // Advances by the fixed (speed-scaled) delta each frame
+  pacifica_native_virtual_time += deltams;
   uint32_t t = pacifica_native_virtual_time;
 
   // Speedfactors from original WLED
