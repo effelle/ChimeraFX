@@ -371,8 +371,16 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
     return 20;
   if (name == "None" || name == "Solid")
     return 255;
+  if (name == "Default") {
+    // Resolve the natural default for this effect
+    if (this->runner_) {
+      uint8_t m = this->runner_->getMode();
+      return this->get_default_palette_id_(m);
+    }
+    return 1; // Fallback to Aurora if no runner
+  }
 
-  return 0; // Default (use effect preset)
+  return 0; // Unknown palette name
 }
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
@@ -506,17 +514,11 @@ void CFXAddressableLightEffect::run_controls_() {
         // Resolve the natural default for this effect
         if (this->runner_) {
           uint8_t m = this->runner_->getMode();
-          uint8_t default_pal = this->get_default_palette_id_(m);
-          // Force 255 (Solid) if that is the intended default (Static, Blink,
-          // etc.) Otherwise, return 0 (Default) and let the Effect handle its
-          // internal defaults
-          if (default_pal == 255) {
-            return 255;
-          }
+          return this->get_default_palette_id_(m);
         }
-        return 0;
+        return 1; // Fallback to Aurora if no runner
       }
-      return 0;
+      return 0; // Unknown palette name
     };
     // 2. Speed
     if (c && c->get_speed())
