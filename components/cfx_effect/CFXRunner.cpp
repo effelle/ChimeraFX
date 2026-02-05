@@ -1385,7 +1385,7 @@ uint16_t mode_pacifica_native() {
                               w4_off); // Palette 3
 
     // === WHITECAPS (EXACT WLED LOGIC) ===
-    unsigned threshold = scale8(sin8_t(wave), 20) + basethreshold;
+    unsigned threshold = scale8(sin8_raw_t(wave), 20) + basethreshold;
     wave += 7;
     unsigned l = (c.r + c.g + c.b) / 3; // getAverageLight()
     if (l > threshold) {
@@ -1397,9 +1397,12 @@ uint16_t mode_pacifica_native() {
     }
 
     // Deepen blues and greens (EXACT WLED)
-    c.blue = scale8(c.blue, 145);
-    c.green = scale8(c.green, 200);
-    c |= CRGB(2, 5, 7); // Minimum floor
+    c.b = scale8(c.b, 145);
+    c.g = scale8(c.g, 200);
+    // Minimum floor (bitwise OR equivalent)
+    c.r = max(c.r, (uint8_t)2);
+    c.g = max(c.g, (uint8_t)5);
+    c.b = max(c.b, (uint8_t)7);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
   }
