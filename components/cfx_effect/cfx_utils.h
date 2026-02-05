@@ -125,4 +125,42 @@ inline uint8_t get_random_wheel_index(uint8_t pos) {
 // Gamma inverse placeholder (can be extended later)
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
+// ============================================================================
+// TIMING HELPERS (WLED-faithful speed scaling)
+// ============================================================================
+
+// Forward declaration for cfx_millis (defined in cfx_compat.h)
+extern uint32_t cfx_millis();
+
+// Result struct for frame timing calculations
+struct FrameTiming {
+  uint32_t deltams;    // Speed-scaled delta for wave position updates
+  uint32_t scaled_now; // Speed-scaled time for beat functions
+};
+
+// Calculate WLED-faithful timing based on speed slider
+// This implements the exact formula from WLED's mode_pacifica:
+//   deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
+//   deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
+//
+// Parameters:
+//   speed: Current effect speed (0-255)
+//   last_millis: Reference to static variable maintained by caller
+//
+// Returns: FrameTiming with deltams and scaled_now
+inline FrameTiming calculate_frame_timing(uint8_t speed,
+                                          uint32_t &last_millis) {
+  uint32_t real_now = cfx_millis();
+  uint32_t frametime = real_now - last_millis;
+  if (frametime > 100)
+    frametime = 16; // Clamp on first call or large gaps
+  last_millis = real_now;
+
+  uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
+  uint64_t deltat =
+      ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
+
+  return {deltams, (uint32_t)deltat};
+}
+
 } // namespace cfx

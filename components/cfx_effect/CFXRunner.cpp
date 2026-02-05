@@ -820,20 +820,13 @@ static uint32_t aurora_native_speed_accum = 0;
 uint16_t mode_aurora_native(void) {
   AuroraWaveNative *waves;
 
-  // === SPEED ACCUMULATOR WITH FPS COMPENSATION ===
-  // WLED runs at ~42 FPS, we run at ~56 FPS
-  // Without compensation: 56fps × 128 = 7168/sec >> 8 = ~28ms/sec (33% faster!)
-  // With compensation: 56fps × (128 × 42/56) = 4800/sec >> 8 = ~19ms/sec ✓
-  uint8_t speed = instance->_segment.speed;
-  uint32_t should_update = 0;
-  if (speed > 0) {
-    // FPS compensation: scale speed by 42/56 = 0.75
-    uint32_t fps_adjusted_speed = (speed * 42) / 56;
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t aurora_native_last_millis = 0;
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            aurora_native_last_millis);
 
-    aurora_native_speed_accum += fps_adjusted_speed;
-    should_update = aurora_native_speed_accum >> 8;
-    aurora_native_speed_accum &= 0xFF;
-  }
+  // Use deltams to determine if we should update wave positions
+  uint32_t should_update = timing.deltams;
 
   // Intensity mapping (same as original)
   uint8_t selector = instance->_segment.intensity;
@@ -860,8 +853,8 @@ uint16_t mode_aurora_native(void) {
   waves = reinterpret_cast<AuroraWaveNative *>(instance->_segment.data);
 
   // Calculate effective speed for wave updates
-  // Accumulator tells us how much "virtual" speed to apply this frame
-  uint32_t effective_speed = should_update > 0 ? speed : 0;
+  // deltams > 0 means we have time to advance; pass actual speed value
+  uint32_t effective_speed = should_update > 0 ? instance->_segment.speed : 0;
 
   // Service waves - ALWAYS update for smooth particle motion
   for (int i = 0; i < W_MAX_COUNT; i++) {
