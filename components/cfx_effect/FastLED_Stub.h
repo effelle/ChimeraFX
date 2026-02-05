@@ -217,24 +217,32 @@ FASTLED_INLINE uint8_t cos8_t(uint8_t theta) {
 }
 
 // --- Timing Helpers (for Pacifica and other effects) ---
-// sin16: returns -32768 to 32767 using sin8 table for smooth output
+// sin16_t: FastLED-exact sin16_C implementation
+// Piecewise linear approximation for 16-bit sine wave
+// Output range: approximately -32137 to +32137 (matches FastLED)
 FASTLED_INLINE int16_t sin16_t(uint16_t theta) {
-  // Use the full-resolution sin8 table to generate sin16
-  // theta: 0-65535 maps to 0-360 degrees
-  // Output: -32768 to 32767
+  // FastLED's exact base values and slopes for piecewise linear approximation
+  static const uint16_t base[] = {0,     6393,  12539, 18204,
+                                  23170, 27245, 30273, 32137};
+  static const uint8_t slope[] = {49, 48, 44, 38, 31, 23, 14, 4};
 
-  uint8_t index = theta >> 8;  // High 8 bits for sin8 lookup
-  uint8_t frac = theta & 0xFF; // Low 8 bits for interpolation
+  uint16_t offset = (theta & 0x3FFF) >> 3; // 0..2047
+  if (theta & 0x4000)
+    offset = 2047 - offset;
 
-  // Get two adjacent sin8 values and interpolate
-  uint8_t s1 = sin8_data[index];
-  uint8_t s2 = sin8_data[(uint8_t)(index + 1)];
+  uint8_t section = offset / 256; // 0..7
+  uint16_t b = base[section];
+  uint8_t m = slope[section];
 
-  // Linear interpolation between s1 and s2
-  uint16_t interp = s1 + (((int16_t)(s2 - s1) * frac) >> 8);
+  uint8_t secoffset8 = (uint8_t)(offset) / 2;
 
-  // Convert 0-255 range to -32768 to 32767
-  return ((int32_t)interp - 128) * 256;
+  uint16_t mx = m * secoffset8;
+  int16_t y = mx + b;
+
+  if (theta & 0x8000)
+    y = -y;
+
+  return y;
 }
 
 // scale16: 16-bit scaling
