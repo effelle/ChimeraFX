@@ -468,11 +468,16 @@ void CFXAddressableLightEffect::run_controls_() {
         return 0;
       const char *opt = sel->current_option();
       std::string name = opt ? opt : "";
+      // Updated indices: 0=Default, 1=Aurora, 2=Forest, 3=Halloween (was
+      // Ocean), 4=Rainbow, 5=Fire, 6=Sunset, 7=Ice, 8=Party, 9=Lava, 10=Pastel,
+      // 11=Ocean (was Pacifica), 12=HeatColors, 13=Sakura, 14=Rivendell,
+      // 15=Cyberpunk, 16=OrangeTeal, 17=Christmas, 18=RedBlue, 19=Matrix,
+      // 20=SunnyGold, 21=Solid, 22=Fairy, 23=Twilight
       if (name == "Aurora")
         return 1;
       if (name == "Forest")
         return 2;
-      if (name == "Ocean")
+      if (name == "Halloween")
         return 3;
       if (name == "Rainbow")
         return 4;
@@ -488,7 +493,7 @@ void CFXAddressableLightEffect::run_controls_() {
         return 9;
       if (name == "Pastel")
         return 10;
-      if (name == "Pacifica")
+      if (name == "Ocean")
         return 11;
       if (name == "HeatColors")
         return 12;
@@ -510,6 +515,10 @@ void CFXAddressableLightEffect::run_controls_() {
         return 20;
       if (name == "None" || name == "Solid")
         return 255;
+      if (name == "Fairy")
+        return 22;
+      if (name == "Twilight")
+        return 23;
       if (name == "Default") {
         // Resolve the natural default for this effect
         if (this->runner_) {

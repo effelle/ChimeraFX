@@ -2516,7 +2516,7 @@ uint16_t mode_rainbow(void) {
   // Get color from palette (Rainbow as default)
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
-          ? getPaletteByIndex(3) // Rainbow palette
+          ? getPaletteByIndex(4) // Rainbow palette
           : getPaletteByIndex(instance->_segment.palette);
 
   CRGBW c = ColorFromPalette(counter, 255, active_palette);
@@ -2560,7 +2560,7 @@ uint16_t mode_rainbow_cycle(void) {
   // Get palette (Rainbow as default)
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
-          ? getPaletteByIndex(3) // Rainbow palette
+          ? getPaletteByIndex(4) // Rainbow palette
           : getPaletteByIndex(instance->_segment.palette);
 
   for (int i = 0; i < len; i++) {
@@ -2601,7 +2601,7 @@ uint16_t mode_colortwinkle(void) {
   // Get palette - use Rainbow (index 3) as default when palette=0
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
-          ? getPaletteByIndex(3) // Rainbow palette default
+          ? getPaletteByIndex(4) // Rainbow palette default
           : getPaletteByIndex(instance->_segment.palette);
 
   // Step 1: Fade ALL pixels toward black using subtraction
