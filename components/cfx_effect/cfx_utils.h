@@ -129,9 +129,6 @@ inline uint8_t gamma8inv(uint8_t v) { return v; }
 // TIMING HELPERS (WLED-faithful speed scaling)
 // ============================================================================
 
-// Forward declaration for cfx_millis (defined in cfx_compat.h)
-extern uint32_t cfx_millis();
-
 // Result struct for frame timing calculations
 struct FrameTiming {
   uint32_t deltams;    // Speed-scaled delta for wave position updates
@@ -150,7 +147,7 @@ struct FrameTiming {
 // Returns: FrameTiming with deltams and scaled_now
 inline FrameTiming calculate_frame_timing(uint8_t speed,
                                           uint32_t &last_millis) {
-  uint32_t real_now = cfx_millis();
+  uint32_t real_now = ::cfx_millis(); // Use global cfx_millis from cfx_compat.h
   uint32_t frametime = real_now - last_millis;
   if (frametime > 100)
     frametime = 16; // Clamp on first call or large gaps
