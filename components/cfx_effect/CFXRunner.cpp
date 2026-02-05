@@ -1385,7 +1385,7 @@ uint16_t mode_pacifica_native() {
                               w4_off); // Palette 3
 
     // === WHITECAPS (EXACT WLED LOGIC) ===
-    unsigned threshold = scale8(sin8_raw_t(wave), 20) + basethreshold;
+    unsigned threshold = scale8(sin8(wave), 20) + basethreshold;
     wave += 7;
     unsigned l = (c.r + c.g + c.b) / 3; // getAverageLight()
     if (l > threshold) {
