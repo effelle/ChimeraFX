@@ -623,7 +623,12 @@ uint16_t mode_blink(void) {
 uint16_t mode_aurora(void) {
   AuroraWave *waves;
 
-  // DEBUG: Log removed per user request
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t aurora_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, aurora_last_millis);
+  // Use deltams to determine effective speed for updates
+  uint32_t effective_speed = timing.deltams > 0 ? instance->_segment.speed : 0;
 
   // Intensity Scaling Boost: 128 selector -> 175 internal
   uint8_t selector = instance->_segment.intensity;
@@ -668,7 +673,8 @@ uint16_t mode_aurora(void) {
           waves[i].alive = false;
       }
 
-      waves[i].update(instance->_segment.length(), instance->_segment.speed);
+      // CRITICAL: Update with effective_speed from timing helper
+      waves[i].update(instance->_segment.length(), effective_speed);
 
       if (!waves[i].stillAlive()) {
         // Wave died naturally. Only re-init if we are below the active
@@ -709,202 +715,6 @@ uint16_t mode_aurora(void) {
       }
     }
 
-    instance->_segment.setPixelColor(
-        i, RGBW32(mixedRgb.r, mixedRgb.g, mixedRgb.b, mixedRgb.w));
-  }
-
-  return FRAMETIME;
-}
-
-// ============================================================================
-// AURORA NATIVE - Proof of Concept for native WLED timing
-// Uses speed accumulator pattern, no frame rate compensation hacks
-// ============================================================================
-
-// Native wave struct matching WLED original formula (no 0.66 speed scaling)
-struct AuroraWaveNative {
-  int32_t center;
-  uint32_t ageFactor_cached;
-  uint16_t ttl;
-  uint16_t age;
-  uint16_t width;
-  uint16_t basealpha;
-  uint16_t speed_factor; // Matches WLED's calculation
-  int16_t wave_start;
-  int16_t wave_end;
-  bool goingleft;
-  bool alive;
-  CRGBW basecolor;
-
-  void init(uint32_t segment_length, CRGBW color) {
-    ttl = hw_random16(500, 1501);
-    basecolor = color;
-    basealpha =
-        hw_random8(50, 100) * AW_SCALE / 100; // High floor reduces voids
-    age = 0;
-    width =
-        hw_random16(segment_length / 20, segment_length / W_WIDTH_FACTOR) + 1;
-    center = (((uint32_t)hw_random8(101) << AW_SHIFT) / 100) * segment_length;
-    goingleft = hw_random8() & 0x01;
-    // WLED original formula: no extra divisors
-    speed_factor = (((uint32_t)hw_random8(10, 31) * W_MAX_SPEED) << AW_SHIFT) /
-                   (100 * 255);
-    alive = true;
-  }
-
-  void updateCachedValues() {
-    if (ttl < 2)
-      return;
-    uint32_t half_ttl = ttl >> 1;
-    if (age < half_ttl) {
-      ageFactor_cached = ((uint32_t)age << AW_SHIFT) / half_ttl;
-    } else {
-      ageFactor_cached = ((uint32_t)(ttl - age) << AW_SHIFT) / half_ttl;
-    }
-    if (ageFactor_cached >= AW_SCALE)
-      ageFactor_cached = AW_SCALE - 1;
-    uint32_t center_led = center >> AW_SHIFT;
-    wave_start = (int16_t)center_led - (int16_t)width;
-    wave_end = (int16_t)center_led + (int16_t)width;
-  }
-
-  CRGBW getColorForLED(int ledIndex) {
-    if (ledIndex < wave_start || ledIndex > wave_end)
-      return CRGBW(0, 0, 0, 0);
-    int32_t ledIndex_scaled = (int32_t)ledIndex << AW_SHIFT;
-    int32_t offset = ledIndex_scaled - center;
-    if (offset < 0)
-      offset = -offset;
-    if (width == 0)
-      return CRGBW(0, 0, 0, 0);
-    uint32_t offsetFactor = offset / width;
-    if (offsetFactor > AW_SCALE)
-      return CRGBW(0, 0, 0, 0);
-    uint32_t brightness_factor = (AW_SCALE - offsetFactor);
-    brightness_factor = (brightness_factor * ageFactor_cached) >> AW_SHIFT;
-    brightness_factor = (brightness_factor * basealpha) >> AW_SHIFT;
-    CRGBW rgb;
-    rgb.r = (basecolor.r * brightness_factor) >> AW_SHIFT;
-    rgb.g = (basecolor.g * brightness_factor) >> AW_SHIFT;
-    rgb.b = (basecolor.b * brightness_factor) >> AW_SHIFT;
-    rgb.w = (basecolor.w * brightness_factor) >> AW_SHIFT;
-    return rgb;
-  }
-
-  // NATIVE: Uses raw speed like WLED original (no 0.66 scaling hack)
-  void update(uint32_t segment_length, uint32_t speed) {
-    int32_t step = speed_factor * speed;
-    center += goingleft ? -step : step;
-    age++;
-    if (age > ttl) {
-      alive = false;
-    } else {
-      uint32_t width_scaled = (uint32_t)width << AW_SHIFT;
-      uint32_t segment_length_scaled = segment_length << AW_SHIFT;
-      if (goingleft) {
-        if (center < -(int32_t)width_scaled)
-          alive = false;
-      } else {
-        if (center > (int32_t)segment_length_scaled + (int32_t)width_scaled)
-          alive = false;
-      }
-    }
-  }
-
-  bool stillAlive() { return alive; }
-};
-
-// Static state for Aurora Native
-static uint32_t aurora_native_speed_accum = 0;
-
-uint16_t mode_aurora_native(void) {
-  AuroraWaveNative *waves;
-
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t aurora_native_last_millis = 0;
-  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
-                                            aurora_native_last_millis);
-
-  // Use deltams to determine if we should update wave positions
-  uint32_t should_update = timing.deltams;
-
-  // Intensity mapping (same as original)
-  uint8_t selector = instance->_segment.intensity;
-  uint8_t internal_intensity;
-  if (selector <= 128) {
-    internal_intensity = (uint32_t)selector * 175 / 128;
-  } else {
-    internal_intensity = 175 + ((uint32_t)(selector - 128) * 80 / 127);
-  }
-
-  int active_count = 2 + ((internal_intensity * (W_MAX_COUNT - 2)) / 255);
-  instance->_segment.aux1 = active_count;
-
-  if (!instance->_segment.allocateData(sizeof(AuroraWaveNative) *
-                                       W_MAX_COUNT)) {
-    return mode_static();
-  }
-
-  if (instance->_segment.reset) {
-    memset(instance->_segment.data, 0, instance->_segment._dataLen);
-    instance->_segment.reset = false;
-  }
-
-  waves = reinterpret_cast<AuroraWaveNative *>(instance->_segment.data);
-
-  // Calculate effective speed for wave updates
-  // deltams > 0 means we have time to advance; pass actual speed value
-  uint32_t effective_speed = should_update > 0 ? instance->_segment.speed : 0;
-
-  // Service waves - ALWAYS update for smooth particle motion
-  for (int i = 0; i < W_MAX_COUNT; i++) {
-    if (waves[i].ttl == 0)
-      waves[i].alive = false;
-
-    if (waves[i].alive) {
-      if (i >= active_count) {
-        waves[i].basealpha = (waves[i].basealpha * 224) >> 8;
-        if (waves[i].basealpha < 10)
-          waves[i].alive = false;
-      }
-
-      // CRITICAL: Update every frame for smooth particle motion
-      // Pass effective_speed which is 0 when accumulator hasn't ticked
-      waves[i].update(instance->_segment.length(), effective_speed);
-
-      if (!waves[i].stillAlive()) {
-        if (i < active_count) {
-          uint8_t colorIndex = rand() % 256;
-          const uint32_t *active_palette =
-              getPaletteByIndex(instance->_segment.palette);
-          CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
-          waves[i].init(instance->_segment.length(), color);
-        }
-      }
-    } else {
-      if (i < active_count) {
-        uint8_t colorIndex = rand() % 256;
-        const uint32_t *active_palette =
-            getPaletteByIndex(instance->_segment.palette);
-        CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
-        waves[i].init(instance->_segment.length(), color);
-      }
-    }
-
-    if (waves[i].alive)
-      waves[i].updateCachedValues();
-  }
-
-  // Render
-  CRGBW background(0, 0, 0, 0);
-  for (int i = 0; i < instance->_segment.length(); i++) {
-    CRGBW mixedRgb = background;
-    for (int j = 0; j < W_MAX_COUNT; j++) {
-      if (waves[j].alive) {
-        CRGBW rgb = waves[j].getColorForLED(i);
-        mixedRgb = color_add(mixedRgb, rgb);
-      }
-    }
     instance->_segment.setPixelColor(
         i, RGBW32(mixedRgb.r, mixedRgb.g, mixedRgb.b, mixedRgb.w));
   }
@@ -1254,153 +1064,6 @@ uint16_t mode_pacifica() {
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     wave += 7;
-  }
-
-  instance->now = nowOld;
-  return FRAMETIME;
-}
-
-// =============================================================================
-// PacificaNative - 42FPS NATIVE TIMING PROOF OF CONCEPT
-// =============================================================================
-// Hypothesis: Running at native 24ms (42FPS) allows 1:1 WLED math without
-// scaling
-//
-// Key changes from mode_pacifica:
-// 1. Internal 24ms throttle via timestamp comparison (not external
-// update_interval)
-// 2. Real deltams from actual elapsed time (NOT virtual speed accumulator)
-// 3. Speed slider controls deltams scaling like original WLED
-// 4. NO speed hacks: no speed >> 2, no * 0.6, no virtual time accumulator
-//
-// Diagnostic: Logs real FPS of THIS effect (should be ~42FPS if throttle works)
-// =============================================================================
-
-// Static state for native throttle (per-instance would need member vars)
-static uint32_t pacifica_native_last_render = 0;
-static uint32_t pacifica_native_last_log = 0;
-static uint32_t pacifica_native_frame_count = 0;
-static uint32_t pacifica_native_virtual_time = 0;
-static uint32_t pacifica_native_speed_accum =
-    0; // Fractional accumulator for low speeds
-
-uint16_t mode_pacifica_native() {
-  if (!instance)
-    return 350;
-
-  // Initialize palette caches on first call
-  pacifica_init_caches();
-
-  int len = instance->_segment.length();
-  uint32_t nowOld = instance->now;
-
-  // Get persistent state (same as WLED SEGENV)
-  unsigned sCIStart1 = instance->_segment.aux0;
-  unsigned sCIStart2 = instance->_segment.aux1;
-  unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
-  unsigned sCIStart4 = (instance->_segment.step >> 16);
-
-  // === WLED's EXACT TIMING ===
-  // WLED uses REAL TIME from strip.now, not an accumulator
-  // FRAMETIME = actual milliseconds since last frame
-  // deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
-  // deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
-
-  uint8_t speed = instance->_segment.speed;
-  uint32_t real_now = cfx_millis(); // Real milliseconds since boot
-
-  // Calculate FRAMETIME (time since last call)
-  static uint32_t last_millis = 0;
-  uint32_t frametime = real_now - last_millis;
-  if (frametime > 100)
-    frametime = 16; // Clamp on first call or large gaps
-  last_millis = real_now;
-
-  // WLED exact deltams formula
-  uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
-
-  // WLED exact deltat formula - speed-scaled REAL time
-  // Beat functions read instance->now via get_millis() - no explicit timebase
-  // needed
-  uint64_t deltat =
-      ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
-  instance->now = (uint32_t)deltat;
-
-  // === SPEEDFACTORS (no explicit time param - they use get_millis() ->
-  // instance->now) ===
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269);
-  uint32_t deltams1 = (deltams * speedfactor1) / 256;
-  uint32_t deltams2 = (deltams * speedfactor2) / 256;
-  uint32_t deltams21 = (deltams1 + deltams2) / 2;
-
-  // === UPDATE WAVE POSITIONS (WLED exact) ===
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));
-
-  // Save state
-  instance->_segment.aux0 = sCIStart1;
-  instance->_segment.aux1 = sCIStart2;
-  instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
-
-  // Whitecap threshold and wave (no explicit timebase)
-  unsigned basethreshold = beatsin8_t(9, 55, 65);
-  unsigned wave = beat8(7);
-
-  // === WLED EXACT 4-LAYER PARAMETERS ===
-  // Layer 1: palette 1, variable scale
-  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256);
-  uint8_t w1_bri = beatsin8_t(10, 70, 130);
-  uint16_t w1_off = 0 - beat16(301);
-
-  // Layer 2: palette 2, variable scale
-  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256);
-  uint8_t w2_bri = beatsin8_t(17, 40, 80);
-  uint16_t w2_off = beat16(401);
-
-  // Layer 3: palette 3, FIXED scale 6*256 (WLED exact!)
-  uint16_t w3_scale = 6 * 256; // Fixed, not beatsin!
-  uint8_t w3_bri = beatsin8_t(9, 10, 38);
-  uint16_t w3_off = 0 - beat16(503);
-
-  // Layer 4: palette 3, FIXED scale 5*256 (WLED exact!)
-  uint16_t w4_scale = 5 * 256; // Fixed, not beatsin!
-  uint8_t w4_bri = beatsin8_t(8, 10, 28);
-  uint16_t w4_off = beat16(601);
-
-  for (int i = 0; i < len; i++) {
-    // WLED exact base color
-    CRGB c = CRGB(2, 6, 10);
-
-    // === ALL 4 LAYERS with correct palettes (1, 2, 3, 3) ===
-    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
-    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
-    pacifica_one_layer_wled(c, i, 3, sCIStart3, w3_scale, w3_bri, w3_off);
-    pacifica_one_layer_wled(c, i, 3, sCIStart4, w4_scale, w4_bri, w4_off);
-
-    // === WLED EXACT WHITECAPS ===
-    unsigned threshold = scale8(sin8(wave), 20) + basethreshold;
-    wave += 7;
-    unsigned l = c.getAverageLight();
-    if (l > threshold) {
-      unsigned overage = l - threshold;
-      unsigned overage2 = qadd8(overage, overage);
-      c.r = qadd8(c.r, overage);
-      c.g = qadd8(c.g, overage2);
-      c.b = qadd8(c.b, qadd8(overage2, overage2));
-    }
-
-    // === WLED EXACT COLOR DEEPENING ===
-    c.b = scale8(c.b, 145);
-    c.g = scale8(c.g, 200);
-    // Minimum floor (equivalent to c |= CRGB(2, 5, 7))
-    c.r = max(c.r, (uint8_t)2);
-    c.g = max(c.g, (uint8_t)5);
-    c.b = max(c.b, (uint8_t)7);
-
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
   }
 
   instance->now = nowOld;
@@ -2865,12 +2528,6 @@ void CFXRunner::service() {
     break;
   case FX_MODE_PACIFICA: // 101
     mode_pacifica();
-    break;
-  case FX_MODE_PACIFICA_NATIVE: // 200 - Native 42FPS timing PoC
-    mode_pacifica_native();
-    break;
-  case FX_MODE_AURORA_NATIVE: // 201 - Native timing PoC for Aurora
-    mode_aurora_native();
     break;
   case FX_MODE_PRIDE_2015: // 63
     mode_pride_2015();
