@@ -796,11 +796,17 @@ static uint32_t aurora_native_speed_accum = 0;
 uint16_t mode_aurora_native(void) {
   AuroraWaveNative *waves;
 
-  // === SPEED ACCUMULATOR (same pattern as PacificaNative) ===
+  // === SPEED ACCUMULATOR WITH FPS COMPENSATION ===
+  // WLED runs at ~42 FPS, we run at ~56 FPS
+  // Without compensation: 56fps × 128 = 7168/sec >> 8 = ~28ms/sec (33% faster!)
+  // With compensation: 56fps × (128 × 42/56) = 4800/sec >> 8 = ~19ms/sec ✓
   uint8_t speed = instance->_segment.speed;
   uint32_t should_update = 0;
   if (speed > 0) {
-    aurora_native_speed_accum += speed;
+    // FPS compensation: scale speed by 42/56 = 0.75
+    uint32_t fps_adjusted_speed = (speed * 42) / 56;
+
+    aurora_native_speed_accum += fps_adjusted_speed;
     should_update = aurora_native_speed_accum >> 8;
     aurora_native_speed_accum &= 0xFF;
   }
@@ -1323,15 +1329,18 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === FRACTIONAL SPEED ACCUMULATOR (exactly like original Pacifica) ===
-  // Original just accumulates speed each frame, no deltams multiplication
-  // At speed=128, 56FPS: 7168/sec >> 8 = ~28ms/sec of virtual time
+  // === FRACTIONAL SPEED ACCUMULATOR WITH FPS COMPENSATION ===
+  // WLED runs at ~42 FPS, we run at ~56 FPS
+  // Without compensation: 56fps × 128 = 7168/sec >> 8 = ~28ms/sec (33% faster!)
+  // With compensation: 56fps × (128 × 42/56) = 4800/sec >> 8 = ~19ms/sec ✓
   uint8_t speed = instance->_segment.speed;
 
   uint32_t deltams = 0;
   if (speed > 0) {
-    // EXACTLY like original: just add speed per frame
-    pacifica_native_speed_accum += speed;
+    // FPS compensation: scale speed by 42/56 = 0.75
+    uint32_t fps_adjusted_speed = (speed * 42) / 56;
+
+    pacifica_native_speed_accum += fps_adjusted_speed;
     deltams = pacifica_native_speed_accum >> 8; // Integer ms
     pacifica_native_speed_accum &= 0xFF;        // Keep fractional part
   }
