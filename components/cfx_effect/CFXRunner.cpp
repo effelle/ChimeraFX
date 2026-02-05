@@ -1197,38 +1197,39 @@ uint16_t mode_pacifica() {
   instance->now = timing.scaled_now;
 
   // Update wave layer positions using WLED's exact logic
-  uint32_t t = instance->now;
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
+  // Beat functions read instance->now via get_millis() - no explicit timebase
+  // needed
+  unsigned speedfactor1 = beatsin16_t(3, 179, 269);
+  unsigned speedfactor2 = beatsin16_t(4, 179, 269);
   uint32_t deltams1 = (deltams * speedfactor1) >> 8;
   uint32_t deltams2 = (deltams * speedfactor2) >> 8;
   uint32_t deltams21 = (deltams1 + deltams2) >> 1;
 
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13));
+  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));
+  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));
+  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));
 
   // Save state
   instance->_segment.aux0 = sCIStart1;
   instance->_segment.aux1 = sCIStart2;
   instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
 
-  unsigned basethreshold = beatsin8_t(9, 55, 65, t);
-  unsigned wave = beat8(7, t);
+  unsigned basethreshold = beatsin8_t(9, 55, 65);
+  unsigned wave = beat8(7);
 
-  // Wave parameters - WLED original
-  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, t);
-  uint8_t w1_bri = beatsin8_t(10, 70, 130, t);
-  uint16_t w1_off = 0 - beat16(301, t);
+  // Wave parameters - WLED original (no explicit timebase, uses get_millis())
+  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256);
+  uint8_t w1_bri = beatsin8_t(10, 70, 130);
+  uint16_t w1_off = 0 - beat16(301);
 
-  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, t);
-  uint8_t w2_bri = beatsin8_t(17, 40, 80, t);
-  uint16_t w2_off = beat16(401, t);
+  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256);
+  uint8_t w2_bri = beatsin8_t(17, 40, 80);
+  uint16_t w2_off = beat16(401);
 
-  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256, t);
-  uint8_t w3_bri = beatsin8_t(13, 50, 100, t);
-  uint16_t w3_off = beat16(503, t);
+  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256);
+  uint8_t w3_bri = beatsin8_t(13, 50, 100);
+  uint16_t w3_off = beat16(503);
 
   for (int i = 0; i < len; i++) {
     // === BRIGHT TEAL BASE COLOR ===
@@ -1319,56 +1320,55 @@ uint16_t mode_pacifica_native() {
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
 
   // WLED exact deltat formula - speed-scaled REAL time
-  // Apply 1/8 correction to match WLED's visual speed (speed=0 should match
-  // WLED speed=128)
-  uint64_t deltat_raw =
+  // Beat functions read instance->now via get_millis() - no explicit timebase
+  // needed
+  uint64_t deltat =
       ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
-  instance->now = (uint32_t)(deltat_raw >> 3); // Slow down by factor of 8
+  instance->now = (uint32_t)deltat;
 
-  // === SPEEDFACTORS (use modified now, NO explicit time param like WLED) ===
-  // In WLED, these are called WITHOUT the time parameter - they use strip.now
-  // directly
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269, instance->now);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269, instance->now);
+  // === SPEEDFACTORS (no explicit time param - they use get_millis() ->
+  // instance->now) ===
+  unsigned speedfactor1 = beatsin16_t(3, 179, 269);
+  unsigned speedfactor2 = beatsin16_t(4, 179, 269);
   uint32_t deltams1 = (deltams * speedfactor1) / 256;
   uint32_t deltams2 = (deltams * speedfactor2) / 256;
   uint32_t deltams21 = (deltams1 + deltams2) / 2;
 
   // === UPDATE WAVE POSITIONS (WLED exact) ===
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, instance->now));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, instance->now));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, instance->now));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, instance->now));
+  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13));
+  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));
+  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));
+  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));
 
   // Save state
   instance->_segment.aux0 = sCIStart1;
   instance->_segment.aux1 = sCIStart2;
   instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
 
-  // Whitecap threshold and wave
-  unsigned basethreshold = beatsin8_t(9, 55, 65, instance->now);
-  unsigned wave = beat8(7, instance->now);
+  // Whitecap threshold and wave (no explicit timebase)
+  unsigned basethreshold = beatsin8_t(9, 55, 65);
+  unsigned wave = beat8(7);
 
   // === WLED EXACT 4-LAYER PARAMETERS ===
   // Layer 1: palette 1, variable scale
-  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, instance->now);
-  uint8_t w1_bri = beatsin8_t(10, 70, 130, instance->now);
-  uint16_t w1_off = 0 - beat16(301, instance->now);
+  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256);
+  uint8_t w1_bri = beatsin8_t(10, 70, 130);
+  uint16_t w1_off = 0 - beat16(301);
 
   // Layer 2: palette 2, variable scale
-  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, instance->now);
-  uint8_t w2_bri = beatsin8_t(17, 40, 80, instance->now);
-  uint16_t w2_off = beat16(401, instance->now);
+  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256);
+  uint8_t w2_bri = beatsin8_t(17, 40, 80);
+  uint16_t w2_off = beat16(401);
 
   // Layer 3: palette 3, FIXED scale 6*256 (WLED exact!)
   uint16_t w3_scale = 6 * 256; // Fixed, not beatsin!
-  uint8_t w3_bri = beatsin8_t(9, 10, 38, instance->now);
-  uint16_t w3_off = 0 - beat16(503, instance->now);
+  uint8_t w3_bri = beatsin8_t(9, 10, 38);
+  uint16_t w3_off = 0 - beat16(503);
 
   // Layer 4: palette 3, FIXED scale 5*256 (WLED exact!)
   uint16_t w4_scale = 5 * 256; // Fixed, not beatsin!
-  uint8_t w4_bri = beatsin8_t(8, 10, 28, instance->now);
-  uint16_t w4_off = beat16(601, instance->now);
+  uint8_t w4_bri = beatsin8_t(8, 10, 28);
+  uint16_t w4_off = beat16(601);
 
   for (int i = 0; i < len; i++) {
     // WLED exact base color

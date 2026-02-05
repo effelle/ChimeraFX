@@ -155,12 +155,11 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
 
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
 
-  // WLED's deltat formula produces values that are too fast for our beat
-  // functions Apply 1/8 correction to match WLED's visual speed (speed=0 should
-  // match WLED speed=128)
-  uint64_t deltat_raw =
+  // WLED exact deltat formula - speed-scaled time for beat functions
+  // When instance->now is set to this value and beat functions are called
+  // WITHOUT explicit timebase, they read instance->now via get_millis()
+  uint64_t deltat =
       ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
-  uint64_t deltat = deltat_raw >> 3; // Slow down by factor of 8
 
   return {deltams, (uint32_t)deltat};
 }
