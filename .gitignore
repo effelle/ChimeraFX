@@ -34,3 +34,7 @@ src/
 
 # Manual Dependencies (IntelliSense)
 .dependencies/
+
+# Development Reference Files
+effects_preset.md
+

@@ -1189,32 +1189,12 @@ uint16_t mode_pacifica() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === WLED-FAITHFUL SPEED HANDLING ===
-  // WLED uses actual deltams from elapsed time, scaled by speed
-  // We simulate this with speed-controlled virtual time
-  uint8_t speed = instance->_segment.speed;
-
-  // Speed 0 = frozen, speed 1 = very slow, speed 128 = normal, speed 255 = fast
-  // Use PER-INSTANCE accumulator for sub-frame precision at low speeds
-  // (Prevents cross-strip interference when multiple strips run Pacifica)
-
-  // Add speed to accumulator each frame (56 FPS)
-  // At speed=1: 56 per second → takes ~4.5 seconds to accumulate 256
-  // At speed=128: 7168 per second → accumulates 256 in ~35ms (fast)
-  // At speed=255: 14280 per second → very fast
-  instance->pacifica_speed_accum += speed;
-
-  // Consume whole units from accumulator for deltams
-  uint32_t deltams = instance->pacifica_speed_accum >> 8; // Integer part
-  instance->pacifica_speed_accum &= 0xFF; // Keep fractional part
-
-  // Virtual time for beat functions (per-instance)
-  instance->pacifica_virtual_time +=
-      deltams; // Only advances when speed accumulates enough
-  if (instance->pacifica_virtual_time < 1)
-    instance->pacifica_virtual_time = 1;
-
-  instance->now = instance->pacifica_virtual_time;
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t pacifica_last_millis = 0;
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            pacifica_last_millis);
+  uint32_t deltams = timing.deltams;
+  instance->now = timing.scaled_now;
 
   // Update wave layer positions using WLED's exact logic
   uint32_t t = instance->now;
