@@ -154,8 +154,14 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
   last_millis = real_now;
 
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
-  uint64_t deltat =
+
+  // WLED's deltat formula produces values that are ~4x too fast for our beat
+  // functions Apply a 1/4 correction to match WLED's visual speed Original:
+  // ((real_now >> 2) + ((real_now * speed) >> 7)) Corrected: divide by 4 to
+  // slow down beat function cycling
+  uint64_t deltat_raw =
       ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
+  uint64_t deltat = deltat_raw >> 2; // Slow down by factor of 4
 
   return {deltams, (uint32_t)deltat};
 }
