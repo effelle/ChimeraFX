@@ -1297,121 +1297,111 @@ uint16_t mode_pacifica_native() {
   if (!instance)
     return 350;
 
-  // === ALWAYS RENDER - USE REAL ELAPSED TIME ===
-  // Use actual elapsed time as delta (like WLED does with strip.now and
-  // deltams) This ensures virtual time advances at 1000ms/sec regardless of
-  // frame rate
-  uint32_t now_ms = cfx_millis();
-
-  // Calculate real elapsed time since last frame
-  uint32_t real_deltams = now_ms - pacifica_native_last_render;
-  if (real_deltams > 100)
-    real_deltams = 100; // Cap to avoid jumps on first frame
-  pacifica_native_last_render = now_ms;
-  pacifica_native_frame_count++;
-
-  // === DIAGNOSTIC: Log real FPS ===
-  if (now_ms - pacifica_native_last_log >= 1000) {
-    ESP_LOGD("pacifica_native", "Real FPS: %u | real_deltams: ~%u ms",
-             pacifica_native_frame_count, real_deltams);
-    pacifica_native_frame_count = 0;
-    pacifica_native_last_log = now_ms;
-  }
-
   // Initialize palette caches on first call
   pacifica_init_caches();
 
   int len = instance->_segment.length();
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
 
-  // Get persistent state from segment
+  // Get persistent state from segment (same as WLED)
   unsigned sCIStart1 = instance->_segment.aux0;
   unsigned sCIStart2 = instance->_segment.aux1;
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === FRACTIONAL SPEED ACCUMULATOR WITH FPS COMPENSATION ===
-  // WLED runs at ~42 FPS, we run at ~56 FPS
-  // Without compensation: 56fps × 128 = 7168/sec >> 8 = ~28ms/sec (33% faster!)
-  // With compensation: 56fps × (128 × 42/56) = 4800/sec >> 8 = ~19ms/sec ✓
-  uint8_t speed = instance->_segment.speed;
+  // === EXACT WLED DELTAMS FORMULA ===
+  // WLED: deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
+  // FRAMETIME is typically 24ms @ 42FPS, we're ~18ms @ 56FPS
+  // Apply FPS compensation: use 24ms as base FRAMETIME equivalent
+  uint32_t frametime_equiv = 24; // WLED's typical FRAMETIME
+  uint32_t deltams = (frametime_equiv >> 2) + ((frametime_equiv * speed) >> 7);
 
-  uint32_t deltams = 0;
-  if (speed > 0) {
-    // FPS compensation: scale speed by 42/56 = 0.75
-    uint32_t fps_adjusted_speed = (speed * 42) / 56;
+  // FPS compensation for the deltams (42/56 = 0.75)
+  deltams = (deltams * 42) / 56;
 
-    pacifica_native_speed_accum += fps_adjusted_speed;
-    deltams = pacifica_native_speed_accum >> 8; // Integer ms
-    pacifica_native_speed_accum &= 0xFF;        // Keep fractional part
-  }
-
-  // === VIRTUAL TIME FOR BEAT FUNCTIONS ===
-  // Advances by speed-scaled real delta (0 when speed=0)
+  // === VIRTUAL TIME (like WLED's deltat approach) ===
+  // WLED: deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
+  // We accumulate virtual time using same scaling
   pacifica_native_virtual_time += deltams;
   uint32_t t = pacifica_native_virtual_time;
 
-  // Speedfactors from original WLED
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
-  uint32_t deltams1 = (deltams * speedfactor1) >> 8;
-  uint32_t deltams2 = (deltams * speedfactor2) >> 8;
-  uint32_t deltams21 = (deltams1 + deltams2) >> 1;
+  // === SPEEDFACTORS - MUST USE REAL TIME (no time param = default
+  // get_millis()) === WLED: beatsin16_t(3, 179, 269) - uses strip.now
+  // internally
+  unsigned speedfactor1 = beatsin16_t(3, 179, 269); // Real time
+  unsigned speedfactor2 = beatsin16_t(4, 179, 269); // Real time
+  uint32_t deltams1 = (deltams * speedfactor1) / 256;
+  uint32_t deltams2 = (deltams * speedfactor2) / 256;
+  uint32_t deltams21 = (deltams1 + deltams2) / 2;
 
-  // Update wave positions - ONLY if deltams > 0
-  // CRITICAL: beatsin88_t must use REAL TIME (default parameter), not virtual
-  // time! Only display beat functions use virtual time 't'
-  if (deltams > 0) {
-    sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13)); // Uses real time
-    sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));  // Uses real time
-    sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));    // Uses real time
-    sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));    // Uses real time
-  }
+  // === UPDATE WAVE POSITIONS - MUST USE REAL TIME ===
+  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13)); // Real time
+  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));  // Real time
+  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));    // Real time
+  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));    // Real time
 
   // Save state back to segment
   instance->_segment.aux0 = sCIStart1;
   instance->_segment.aux1 = sCIStart2;
   instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
 
-  // Whitecap threshold and wave - ORIGINAL WLED values
+  // === WHITECAP THRESHOLD - USES VIRTUAL TIME ===
   unsigned basethreshold = beatsin8_t(9, 55, 65, t);
   unsigned wave = beat8(7, t);
 
-  // Wave layer parameters - ORIGINAL WLED values
+  // === WAVE LAYER PARAMETERS - USES VIRTUAL TIME ===
+  // Layer 1: palette 1
   uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, t);
   uint8_t w1_bri = beatsin8_t(10, 70, 130, t);
   uint16_t w1_off = 0 - beat16(301, t);
 
+  // Layer 2: palette 2
   uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, t);
   uint8_t w2_bri = beatsin8_t(17, 40, 80, t);
   uint16_t w2_off = beat16(401, t);
 
-  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256, t);
-  uint8_t w3_bri = beatsin8_t(13, 50, 100, t);
-  uint16_t w3_off = beat16(503, t);
+  // Layer 3: palette 3 - FIXED SCALE (not beatsin!)
+  uint16_t w3_scale = 6 * 256; // WLED original: fixed, not variable
+  uint8_t w3_bri = beatsin8_t(9, 10, 38, t);
+  uint16_t w3_off = 0 - beat16(503, t);
 
-  // Render loop
+  // Layer 4: palette 3 - FIXED SCALE (WLED has 4 layers!)
+  uint16_t w4_scale = 5 * 256; // WLED original: fixed, not variable
+  uint8_t w4_bri = beatsin8_t(8, 10, 28, t);
+  uint16_t w4_off = beat16(601, t);
+
+  // === RENDER LOOP ===
   for (int i = 0; i < len; i++) {
-    // Base color - visible teal
-    CRGB c = CRGB(8, 32, 48);
+    // WLED base color: CRGB(2, 6, 10)
+    CRGB c = CRGB(2, 6, 10);
 
-    // Add wave layers using cached palette lookup
+    // Add all 4 wave layers using cached palette lookup
     pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
     pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
-    pacifica_one_layer_cached(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
+    pacifica_one_layer_cached(c, i, 3, sCIStart3, w3_scale, w3_bri,
+                              w3_off); // Palette 3
+    pacifica_one_layer_cached(c, i, 3, sCIStart4, w4_scale, w4_bri,
+                              w4_off); // Palette 3
 
-    // Add whitecaps
-    pacifica_add_whitecaps(c, wave, basethreshold);
+    // === WHITECAPS (EXACT WLED LOGIC) ===
+    unsigned threshold = scale8(sin8_t(wave), 20) + basethreshold;
+    wave += 7;
+    unsigned l = (c.r + c.g + c.b) / 3; // getAverageLight()
+    if (l > threshold) {
+      unsigned overage = l - threshold;
+      unsigned overage2 = qadd8(overage, overage);
+      c.r = qadd8(c.r, overage);
+      c.g = qadd8(c.g, overage2);
+      c.b = qadd8(c.b, qadd8(overage2, overage2));
+    }
 
-    // Deepen colors with teal preservation
-    pacifica_deepen_colors_teal(c);
-
-    // Brightness boost
-    c.r = qadd8(c.r, c.r);
-    c.g = qadd8(c.g, c.g);
-    c.b = qadd8(c.b, c.b);
+    // Deepen blues and greens (EXACT WLED)
+    c.blue = scale8(c.blue, 145);
+    c.green = scale8(c.green, 200);
+    c |= CRGB(2, 5, 7); // Minimum floor
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
-    wave += 7;
   }
 
   return FRAMETIME;
