@@ -1358,11 +1358,13 @@ uint16_t mode_pacifica_native() {
   uint32_t deltams21 = (deltams1 + deltams2) >> 1;
 
   // Update wave positions - ONLY if deltams > 0
+  // CRITICAL: beatsin88_t must use REAL TIME (default parameter), not virtual
+  // time! Only display beat functions use virtual time 't'
   if (deltams > 0) {
-    sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
-    sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
-    sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
-    sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+    sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13)); // Uses real time
+    sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));  // Uses real time
+    sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));    // Uses real time
+    sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));    // Uses real time
   }
 
   // Save state back to segment
