@@ -1022,44 +1022,34 @@ static void pacifica_init_caches() {
   pacifica_caches_initialized = true;
 }
 
-// Helper: Add one layer of waves using cached palette lookup with LERP
-// interpolation cache parameter: 1 = palette1, 2 = palette2 OPTIMIZED: Linear
-// interpolation between cache entries eliminates quantization flicker
-static void pacifica_one_layer_cached(CRGB &c, uint16_t i, uint8_t cache_id,
-                                      uint16_t cistart, uint16_t wavescale,
-                                      uint8_t bri, uint16_t ioff) {
-  uint16_t ci = cistart;
-  uint16_t waveangle = ioff;
-  uint16_t wavescale_half = (wavescale >> 1) + 20;
+// Helper: WLED-EXACT wave layer function
+// This matches WLED's pacifica_one_layer() precisely
+static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
+                                    uint16_t cistart, uint16_t wavescale,
+                                    uint8_t bri, uint16_t ioff) {
+  // WLED EXACT: unsigned ci = cistart;
+  unsigned ci = cistart;
+  // WLED EXACT: unsigned waveangle = ioff;
+  unsigned waveangle = ioff;
+  // WLED EXACT: unsigned wavescale_half = (wavescale >> 1) + 20;
+  unsigned wavescale_half = (wavescale >> 1) + 20;
 
-  // FIXED: Use gentler spatial scaling to prevent acceleration at strip end
-  // Original: (120 + intensity) * i = 0-38,000 range at i=265 → too fast!
-  // New: Much smaller base + intensity/4 for subtle control
-  uint16_t spatial_step =
-      32 + (instance->_segment.intensity >> 2); // 32-95 range
-  waveangle += (spatial_step * i);
+  // WLED EXACT: waveangle += ((120 + SEGMENT.intensity) * i);
+  waveangle += ((120 + instance->_segment.intensity) * i);
 
-  uint16_t s16 = sin16_t(waveangle) + 32768;
-  uint16_t cs = scale16(s16, wavescale_half) + wavescale_half;
-  // Add base offset (64) so first pixels (i=0) still get variation
-  // Use >> 4 (divide by 16) for gentler progression across strip
-  // Range: i=0 gives cs*4, i=265 gives cs*20.5 (ratio ~5x, not infinite)
-  // Use uint32_t to prevent overflow: cs * 329 can exceed 65535
-  ci += (uint16_t)(((uint32_t)cs * (i + 64)) >> 4);
+  // WLED EXACT: unsigned s16 = sin16_t(waveangle) + 32768;
+  unsigned s16 = sin16_t(waveangle) + 32768;
+  // WLED EXACT: unsigned cs = scale16(s16, wavescale_half) + wavescale_half;
+  unsigned cs = scale16(s16, wavescale_half) + wavescale_half;
+  // WLED EXACT: ci += (cs * i);
+  ci += (cs * i);
 
-  // Get full 16-bit sine for interpolation
-  uint16_t sindex16_raw = sin16_t(ci) + 32768;
+  // WLED EXACT: unsigned sindex16 = sin16_t(ci) + 32768;
+  unsigned sindex16 = sin16_t(ci) + 32768;
+  // WLED EXACT: unsigned sindex8 = scale16(sindex16, 240);
+  unsigned sindex8 = scale16(sindex16, 240);
 
-  // High byte = cache index, remainder = fractional for LERP
-  uint8_t index_lo = sindex16_raw >> 8; // 0-255 cache index
-  uint8_t frac = sindex16_raw & 0xFF;   // 0-255 fractional
-  uint8_t index_hi = index_lo + 1;      // Wraps naturally at 255→0
-
-  // Scale to 240 range like original (preserves WLED color mapping)
-  index_lo = scale8(index_lo, 240);
-  index_hi = scale8(index_hi, 240);
-
-  // Get adjacent cache entries (support all 3 palettes)
+  // Get color from cache (WLED uses ColorFromPalette directly)
   CRGB *cache;
   if (cache_id == 1)
     cache = pacifica_cache_1;
@@ -1067,33 +1057,21 @@ static void pacifica_one_layer_cached(CRGB &c, uint16_t i, uint8_t cache_id,
     cache = pacifica_cache_2;
   else
     cache = pacifica_cache_3;
-  CRGB lo = cache[index_lo];
-  CRGB hi = cache[index_hi];
 
-  // LERP with SMOOTHSTEP for organic color transitions
-  // Smoothstep formula: 3*t^2 - 2*t^3 creates S-curve (ease-in-out)
-  // Use uint32_t to prevent overflow: 255 * 255 * 258 = 16.7M > 65535
-  uint32_t frac32 = frac;
-  uint32_t smooth32 = (frac32 * frac32 * (768 - 2 * frac32)) >> 16;
-  uint8_t sfrac = (uint8_t)smooth32; // Smoothed fraction 0-255
-
-  CRGB layer;
-  layer.r = lo.r + (((int16_t)(hi.r - lo.r) * sfrac) >> 8);
-  layer.g = lo.g + (((int16_t)(hi.g - lo.g) * sfrac) >> 8);
-  layer.b = lo.b + (((int16_t)(hi.b - lo.b) * sfrac) >> 8);
+  CRGB layer = cache[sindex8];
 
   // Apply brightness scaling
   layer.r = scale8(layer.r, bri);
   layer.g = scale8(layer.g, bri);
   layer.b = scale8(layer.b, bri);
 
-  // Additive blending: qadd8 to existing color components
+  // Additive blending (WLED uses c += layer)
   c.r = qadd8(c.r, layer.r);
   c.g = qadd8(c.g, layer.g);
   c.b = qadd8(c.b, layer.b);
 }
 
-// Helper: Add whitecaps to peaks
+// Helper: Add whitecaps to peaks (WLED exact)
 static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
                                    uint8_t basethreshold) {
   uint8_t threshold = scale8(sin8(wave), 20) + basethreshold;
@@ -1260,10 +1238,10 @@ uint16_t mode_pacifica() {
     // Much brighter to match WLED's visible floor
     CRGB c = CRGB(8, 32, 48); // Visible teal (boosted for ESPHome gamma)
 
-    // Use ORIGINAL cached layer function (intensity handled inside)
-    pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
-    pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
-    pacifica_one_layer_cached(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
+    // Use WLED-exact layer function
+    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
+    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
+    pacifica_one_layer_wled(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
 
     // Add whitecaps
     pacifica_add_whitecaps(c, wave, basethreshold);
@@ -1388,14 +1366,14 @@ uint16_t mode_pacifica_native() {
     CRGB c = CRGB(2, 6, 10);
 
     // === ALL 4 LAYERS with correct palettes (1, 2, 3, 3) ===
-    pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri,
-                              w1_off); // Palette 1
-    pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri,
-                              w2_off); // Palette 2
-    pacifica_one_layer_cached(c, i, 3, sCIStart3, w3_scale, w3_bri,
-                              w3_off); // Palette 3
-    pacifica_one_layer_cached(c, i, 3, sCIStart4, w4_scale, w4_bri,
-                              w4_off); // Palette 3
+    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri,
+                            w1_off); // Palette 1
+    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri,
+                            w2_off); // Palette 2
+    pacifica_one_layer_wled(c, i, 3, sCIStart3, w3_scale, w3_bri,
+                            w3_off); // Palette 3
+    pacifica_one_layer_wled(c, i, 3, sCIStart4, w4_scale, w4_bri,
+                            w4_off); // Palette 3
 
     // === WLED EXACT WHITECAPS ===
     unsigned threshold = scale8(sin8(wave), 20) + basethreshold;
