@@ -24,9 +24,9 @@ CFXSelect = chimera_fx_ns.class_("CFXSelect", select.Select)
 CFXSwitch = chimera_fx_ns.class_("CFXSwitch", switch.Switch)
 
 PALETTE_OPTIONS = [
-    "Default", "Aurora", "Forest", "Ocean", "Rainbow", "Fire", "Sunset", "Ice", "Party", 
-    "Lava", "Pastel", "Pacifica", "HeatColors", "Sakura", "Rivendell", "Cyberpunk", 
-    "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid"
+    "Default", "Aurora", "Forest", "Halloween", "Rainbow", "Fire", "Sunset", "Ice", "Party", 
+    "Lava", "Pastel", "Ocean", "HeatColors", "Sakura", "Rivendell", "Cyberpunk", 
+    "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid", "Fairy", "Twilight"
 ]
 
 INTRO_OPTIONS = ["None", "Wipe", "Fade", "Center", "Glitter"]

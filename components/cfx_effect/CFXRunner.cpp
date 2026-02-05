@@ -197,11 +197,13 @@ static const uint32_t PaletteForest[16] CFX_PROGMEM = {
     0x50C832, 0x649600, 0x967800, 0x646400, 0x32B41E, 0x009600,
     0x007814, 0x006400, 0x005014, 0x003C0A};
 
-// Palette 2: Ocean - Deep to light blues
-static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
-    0x000032, 0x000050, 0x001464, 0x003296, 0x0050C8, 0x0078DC,
-    0x0096FF, 0x32C8FF, 0x64DCFF, 0x96F0FF, 0x64DCFF, 0x32C8FF,
-    0x0096FF, 0x0064C8, 0x003296, 0x001464};
+// Palette 2: Halloween - Orange, Purple, Lime
+static const uint32_t PaletteHalloween[16] CFX_PROGMEM = {
+    0x2E004F, 0x4B0082, 0x6600CC, 0x800080, // Deep Purple
+    0xFF4500, 0xFF8C00, 0xFFA500, 0xFFD700, // Red-Orange to Gold
+    0x32CD32, 0x00FF00, 0xADFF2F, 0x7FFF00, // Lime/Green
+    0x800080, 0x6600CC, 0x4B0082, 0x2E004F  // Purple
+};
 
 // Palette 3: Rainbow - Full spectrum
 static const uint32_t PaletteRainbow[16] CFX_PROGMEM = {
@@ -245,8 +247,8 @@ static const uint32_t PalettePastel[16] CFX_PROGMEM = {
     0xC8B4FF, 0xFFB4F0, 0xFFC8C8, 0xFFE6B4, 0xE6FFB4, 0xB4FFE6,
     0xB4C8FF, 0xE6B4FF, 0xFFB4DC, 0xFFBEBE};
 
-// Palette 10: Pacifica - Deep ocean blues with white crests
-static const uint32_t PalettePacifica[16] CFX_PROGMEM = {
+// Palette 10: Ocean (formerly Pacifica) - Deep ocean blues with white crests
+static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
     0x000212, 0x000F1E, 0x001937, 0x002850, 0x004678, 0x0064B4,
     0x148CF0, 0x28C8FF, 0x50DCFF, 0x96E6FF, 0xC8F0FF, 0xC8F0FF,
     0x96E6FF, 0x28C8FF, 0x004678, 0x000212};
@@ -309,6 +311,23 @@ static const uint32_t PaletteSunnyGold[16] CFX_PROGMEM = {
     0xFFD700, 0xFFE135, 0xFFF68F, 0xFFFACD, 0xFFFFE0, 0xFFFACD,
     0xFFF68F, 0xFFE135, 0xFFD700, 0xFFE4B5};
 
+// Palette 20: Fairy - Magentas, Teals, Pinks (based on fairy_reaf_gp)
+static const uint32_t PaletteFairy[16] CFX_PROGMEM = {
+    0xDC13BB, 0xD017C7, 0xC31BD3, 0xB71FDF, // Magenta/Pinkish
+    0x8050EB, 0x4881F6, 0x11B3FF, 0x0CE1DB, // Transition to Teal
+    0x3EBFE4, 0x709CED, 0xA279F6, 0xD456FF, // Teal to Light Purple
+    0xCBF2DF, 0xD8F5E7, 0xE5F9EF, 0xF2FCF7  // Pale to White
+};
+
+// Palette 21: Twilight - Deep Purples, Magentas, Royal Blues (based on
+// BlacK_Blue_Magenta_White_gp)
+static const uint32_t PaletteTwilight[16] CFX_PROGMEM = {
+    0x000000, 0x00003A, 0x000075, 0x0000B0, // Black -> Dark Blue
+    0x0000EB, 0x1800F3, 0x3000FB, 0x4800FF, // Blue -> Royal Blue
+    0x6600FF, 0x8400FF, 0xA200FF, 0xC000FF, // Purple
+    0xFF00FF, 0xDD33FF, 0xBB66FF, 0x9999FF  // Magenta -> Lighter
+};
+
 // Palette 255: Solid Color - filled dynamically from segment.colors[0]
 static uint32_t PaletteSolid[16] = {0}; // Will be filled at runtime
 
@@ -331,7 +350,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 2:
     return PaletteForest;
   case 3:
-    return PaletteOcean;
+    return PaletteHalloween; // Index 3 (was Ocean) -> Halloween
   case 4:
     return PaletteRainbow;
   case 5:
@@ -347,7 +366,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 10:
     return PalettePastel;
   case 11:
-    return PalettePacifica;
+    return PaletteOcean; // Index 11 (was Pacifica) -> Ocean
   case 12:
     return PaletteHeatColors;
   case 13:
@@ -367,6 +386,11 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 20:
     return PaletteSunnyGold;
   case 21:
+    return PaletteSolid;
+  case 22:
+    return PaletteFairy;
+  case 23:
+    return PaletteTwilight;
   case 255:
     // Solid color mode - caller must call fillSolidPalette first
     // 21 = selector position, 255 = internal constant
