@@ -26,3 +26,11 @@ desktop.ini
 build/
 dist/
 *.egg-info/
+
+# PlatformIO / Local Development
+.pio/
+platformio.ini
+src/
+
+# Manual Dependencies (IntelliSense)
+.dependencies/

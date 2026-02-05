@@ -829,7 +829,11 @@ uint16_t mode_aurora_native(void) {
 
   waves = reinterpret_cast<AuroraWaveNative *>(instance->_segment.data);
 
-  // Service waves - only update if accumulator produced deltams
+  // Calculate effective speed for wave updates
+  // Accumulator tells us how much "virtual" speed to apply this frame
+  uint32_t effective_speed = should_update > 0 ? speed : 0;
+
+  // Service waves - ALWAYS update for smooth particle motion
   for (int i = 0; i < W_MAX_COUNT; i++) {
     if (waves[i].ttl == 0)
       waves[i].alive = false;
@@ -841,10 +845,9 @@ uint16_t mode_aurora_native(void) {
           waves[i].alive = false;
       }
 
-      // Update only when accumulator produced an update tick
-      for (uint32_t tick = 0; tick < should_update; tick++) {
-        waves[i].update(instance->_segment.length(), speed);
-      }
+      // CRITICAL: Update every frame for smooth particle motion
+      // Pass effective_speed which is 0 when accumulator hasn't ticked
+      waves[i].update(instance->_segment.length(), effective_speed);
 
       if (!waves[i].stillAlive()) {
         if (i < active_count) {
