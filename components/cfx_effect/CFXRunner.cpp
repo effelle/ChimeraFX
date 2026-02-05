@@ -981,10 +981,10 @@ uint16_t mode_fire_2012(void) {
 // Gentle ocean waves - December 2019
 // OPTIMIZED: Pre-computed palette caches for fast lookup
 
-// Static palette caches - 256 entries each, initialized once
-// Using only 2 palettes (simplified from 4 layers)
+// Static palette caches - 256 entries each for all 3 WLED palettes
 static CRGB pacifica_cache_1[256];
 static CRGB pacifica_cache_2[256];
+static CRGB pacifica_cache_3[256]; // WLED palette 3 (blue-purple)
 static bool pacifica_caches_initialized = false;
 
 // Initialize palette caches once (called on first frame)
@@ -992,22 +992,31 @@ static void pacifica_init_caches() {
   if (pacifica_caches_initialized)
     return;
 
-  // Palette 1: Deep ocean blues transitioning to cyan-green
+  // Palette 1: Deep ocean blues transitioning to cyan-green (WLED
+  // pacifica_palette_1)
   static const CRGBPalette16 pal1 = {0x000507, 0x000409, 0x00030B, 0x00030D,
                                      0x000210, 0x000212, 0x000114, 0x000117,
                                      0x000019, 0x00001C, 0x000026, 0x000031,
                                      0x00003B, 0x000046, 0x14554B, 0x28AA50};
 
-  // Palette 2: Similar but with different cyan-green highlights
+  // Palette 2: Similar with different cyan-green highlights (WLED
+  // pacifica_palette_2)
   static const CRGBPalette16 pal2 = {0x000507, 0x000409, 0x00030B, 0x00030D,
                                      0x000210, 0x000212, 0x000114, 0x000117,
                                      0x000019, 0x00001C, 0x000026, 0x000031,
                                      0x00003B, 0x000046, 0x0C5F52, 0x19BE5F};
 
+  // Palette 3: Blue-purple (WLED pacifica_palette_3) - used for layers 3 and 4
+  static const CRGBPalette16 pal3 = {0x000208, 0x00030E, 0x000514, 0x00061A,
+                                     0x000820, 0x000927, 0x000B2D, 0x000C33,
+                                     0x000E39, 0x001040, 0x001450, 0x001860,
+                                     0x001C70, 0x002080, 0x1040BF, 0x2060FF};
+
   // Pre-compute all 256 interpolated colors for each palette
   for (int i = 0; i < 256; i++) {
     pacifica_cache_1[i] = ColorFromPalette(pal1, i, 255, LINEARBLEND);
     pacifica_cache_2[i] = ColorFromPalette(pal2, i, 255, LINEARBLEND);
+    pacifica_cache_3[i] = ColorFromPalette(pal3, i, 255, LINEARBLEND);
   }
 
   pacifica_caches_initialized = true;
@@ -1050,8 +1059,14 @@ static void pacifica_one_layer_cached(CRGB &c, uint16_t i, uint8_t cache_id,
   index_lo = scale8(index_lo, 240);
   index_hi = scale8(index_hi, 240);
 
-  // Get adjacent cache entries
-  CRGB *cache = (cache_id == 1) ? pacifica_cache_1 : pacifica_cache_2;
+  // Get adjacent cache entries (support all 3 palettes)
+  CRGB *cache;
+  if (cache_id == 1)
+    cache = pacifica_cache_1;
+  else if (cache_id == 2)
+    cache = pacifica_cache_2;
+  else
+    cache = pacifica_cache_3;
   CRGB lo = cache[index_lo];
   CRGB hi = cache[index_hi];
 
@@ -1303,37 +1318,36 @@ uint16_t mode_pacifica_native() {
   int len = instance->_segment.length();
   uint32_t nowOld = instance->now;
 
-  // Get persistent state
+  // Get persistent state (same as WLED SEGENV)
   unsigned sCIStart1 = instance->_segment.aux0;
   unsigned sCIStart2 = instance->_segment.aux1;
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === SAME AS WORKING PACIFICA BUT WITH FPS COMPENSATION ===
+  // === WLED's EXACT DELTAMS FORMULA ===
+  // WLED: deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
+  // FRAMETIME at 42fps = 24ms
+  // With FPS compensation for our 56fps (multiply by 42/56 = 0.75)
   uint8_t speed = instance->_segment.speed;
+  uint32_t frametime = 24; // WLED's typical FRAMETIME
+  uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
+  deltams = (deltams * 42) / 56; // FPS compensation
 
-  // FPS compensation: scale speed by 42/56 = 0.75 before accumulation
-  uint32_t fps_adjusted_speed = (speed * 42) / 56;
+  // === WLED's VIRTUAL TIME (deltat) ===
+  // WLED: deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
+  // We track virtual time accumulator instead
+  pacifica_native_virtual_time += deltams;
+  uint32_t t = pacifica_native_virtual_time;
+  instance->now = t; // Beat functions use this
 
-  instance->pacifica_speed_accum += fps_adjusted_speed;
-  uint32_t deltams = instance->pacifica_speed_accum >> 8;
-  instance->pacifica_speed_accum &= 0xFF;
-
-  // Virtual time for beat functions (per-instance)
-  instance->pacifica_virtual_time += deltams;
-  if (instance->pacifica_virtual_time < 1)
-    instance->pacifica_virtual_time = 1;
-
-  instance->now = instance->pacifica_virtual_time;
-
-  // Update wave layer positions using WLED's exact logic
-  uint32_t t = instance->now;
+  // === SPEEDFACTORS (use virtual time for beat functions) ===
   unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
   unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
-  uint32_t deltams1 = (deltams * speedfactor1) >> 8;
-  uint32_t deltams2 = (deltams * speedfactor2) >> 8;
-  uint32_t deltams21 = (deltams1 + deltams2) >> 1;
+  uint32_t deltams1 = (deltams * speedfactor1) / 256;
+  uint32_t deltams2 = (deltams * speedfactor2) / 256;
+  uint32_t deltams21 = (deltams1 + deltams2) / 2;
 
+  // === UPDATE WAVE POSITIONS (WLED exact) ===
   sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
   sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
   sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
@@ -1344,44 +1358,66 @@ uint16_t mode_pacifica_native() {
   instance->_segment.aux1 = sCIStart2;
   instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
 
+  // Whitecap threshold and wave
   unsigned basethreshold = beatsin8_t(9, 55, 65, t);
   unsigned wave = beat8(7, t);
 
-  // Wave parameters - WLED original
+  // === WLED EXACT 4-LAYER PARAMETERS ===
+  // Layer 1: palette 1, variable scale
   uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, t);
   uint8_t w1_bri = beatsin8_t(10, 70, 130, t);
   uint16_t w1_off = 0 - beat16(301, t);
 
+  // Layer 2: palette 2, variable scale
   uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, t);
   uint8_t w2_bri = beatsin8_t(17, 40, 80, t);
   uint16_t w2_off = beat16(401, t);
 
-  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256, t);
-  uint8_t w3_bri = beatsin8_t(13, 50, 100, t);
-  uint16_t w3_off = beat16(503, t);
+  // Layer 3: palette 3, FIXED scale 6*256 (WLED exact!)
+  uint16_t w3_scale = 6 * 256; // Fixed, not beatsin!
+  uint8_t w3_bri = beatsin8_t(9, 10, 38, t);
+  uint16_t w3_off = 0 - beat16(503, t);
+
+  // Layer 4: palette 3, FIXED scale 5*256 (WLED exact!)
+  uint16_t w4_scale = 5 * 256; // Fixed, not beatsin!
+  uint8_t w4_bri = beatsin8_t(8, 10, 28, t);
+  uint16_t w4_off = beat16(601, t);
 
   for (int i = 0; i < len; i++) {
-    // Visible teal base color (same as working Pacifica)
-    CRGB c = CRGB(8, 32, 48);
+    // WLED exact base color
+    CRGB c = CRGB(2, 6, 10);
 
-    // Use cached layer function
-    pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
-    pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
-    pacifica_one_layer_cached(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
+    // === ALL 4 LAYERS with correct palettes (1, 2, 3, 3) ===
+    pacifica_one_layer_cached(c, i, 1, sCIStart1, w1_scale, w1_bri,
+                              w1_off); // Palette 1
+    pacifica_one_layer_cached(c, i, 2, sCIStart2, w2_scale, w2_bri,
+                              w2_off); // Palette 2
+    pacifica_one_layer_cached(c, i, 3, sCIStart3, w3_scale, w3_bri,
+                              w3_off); // Palette 3
+    pacifica_one_layer_cached(c, i, 3, sCIStart4, w4_scale, w4_bri,
+                              w4_off); // Palette 3
 
-    // Add whitecaps
-    pacifica_add_whitecaps(c, wave, basethreshold);
+    // === WLED EXACT WHITECAPS ===
+    unsigned threshold = scale8(sin8(wave), 20) + basethreshold;
+    wave += 7;
+    unsigned l = c.getAverageLight();
+    if (l > threshold) {
+      unsigned overage = l - threshold;
+      unsigned overage2 = qadd8(overage, overage);
+      c.r = qadd8(c.r, overage);
+      c.g = qadd8(c.g, overage2);
+      c.b = qadd8(c.b, qadd8(overage2, overage2));
+    }
 
-    // Deepen colors with TEAL preservation
-    pacifica_deepen_colors_teal(c);
-
-    // Brightness boost
-    c.r = qadd8(c.r, c.r);
-    c.g = qadd8(c.g, c.g);
-    c.b = qadd8(c.b, c.b);
+    // === WLED EXACT COLOR DEEPENING ===
+    c.b = scale8(c.b, 145);
+    c.g = scale8(c.g, 200);
+    // Minimum floor (equivalent to c |= CRGB(2, 5, 7))
+    c.r = max(c.r, (uint8_t)2);
+    c.g = max(c.g, (uint8_t)5);
+    c.b = max(c.b, (uint8_t)7);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
-    wave += 7;
   }
 
   instance->now = nowOld;
