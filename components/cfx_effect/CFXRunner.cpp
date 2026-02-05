@@ -1028,18 +1028,19 @@ uint16_t mode_pacifica() {
   unsigned basethreshold = beatsin8_t(9, 55, 65);
   unsigned wave = beat8(7);
 
-  // Wave parameters - WLED original (no explicit timebase, uses get_millis())
-  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256);
+  // Wave parameters - STABILIZED for long strips
+  // Constant scale and offset prevents "accordion effect" speed gradient
+  uint16_t w1_scale = 12 * 256; // Average of 11-14
   uint8_t w1_bri = beatsin8_t(10, 70, 130);
-  uint16_t w1_off = 0 - beat16(301);
+  uint16_t w1_off = 0; // Constant offset
 
-  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256);
+  uint16_t w2_scale = 7 * 256; // Average of 6-9
   uint8_t w2_bri = beatsin8_t(17, 40, 80);
-  uint16_t w2_off = beat16(401);
+  uint16_t w2_off = 0; // Constant offset
 
-  uint16_t w3_scale = beatsin16_t(5, 8 * 256, 12 * 256);
+  uint16_t w3_scale = 10 * 256; // Average of 8-12
   uint8_t w3_bri = beatsin8_t(13, 50, 100);
-  uint16_t w3_off = beat16(503);
+  uint16_t w3_off = 0; // Constant offset
 
   for (int i = 0; i < len; i++) {
     // === BRIGHT TEAL BASE COLOR ===
