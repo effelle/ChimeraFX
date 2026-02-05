@@ -1302,34 +1302,45 @@ uint16_t mode_pacifica_native() {
   unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
   unsigned sCIStart4 = (instance->_segment.step >> 16);
 
-  // === WLED's EXACT DELTAMS FORMULA ===
-  // WLED: deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
-  // FRAMETIME at 42fps = 24ms
-  // With FPS compensation for our 56fps (multiply by 42/56 = 0.75)
+  // === WLED's EXACT TIMING ===
+  // WLED uses REAL TIME from strip.now, not an accumulator
+  // FRAMETIME = actual milliseconds since last frame
+  // deltams = (FRAMETIME >> 2) + ((FRAMETIME * speed) >> 7)
+  // deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
+
   uint8_t speed = instance->_segment.speed;
-  uint32_t frametime = 24; // WLED's typical FRAMETIME
+  uint32_t real_now = cfx_millis(); // Real milliseconds since boot
+
+  // Calculate FRAMETIME (time since last call)
+  static uint32_t last_millis = 0;
+  uint32_t frametime = real_now - last_millis;
+  if (frametime > 100)
+    frametime = 16; // Clamp on first call or large gaps
+  last_millis = real_now;
+
+  // WLED exact deltams formula
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
-  deltams = (deltams * 42) / 56; // FPS compensation
 
-  // === WLED's VIRTUAL TIME (deltat) ===
-  // WLED: deltat = (strip.now >> 2) + ((strip.now * speed) >> 7)
-  // We track virtual time accumulator instead
-  pacifica_native_virtual_time += deltams;
-  uint32_t t = pacifica_native_virtual_time;
-  instance->now = t; // Beat functions use this
+  // WLED exact deltat formula - speed-scaled REAL time
+  // This is the key: use real time, not accumulator!
+  uint64_t deltat =
+      ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
+  instance->now = (uint32_t)deltat; // Beat functions use this
 
-  // === SPEEDFACTORS (use virtual time for beat functions) ===
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269, t);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269, t);
+  // === SPEEDFACTORS (use modified now, NO explicit time param like WLED) ===
+  // In WLED, these are called WITHOUT the time parameter - they use strip.now
+  // directly
+  unsigned speedfactor1 = beatsin16_t(3, 179, 269, instance->now);
+  unsigned speedfactor2 = beatsin16_t(4, 179, 269, instance->now);
   uint32_t deltams1 = (deltams * speedfactor1) / 256;
   uint32_t deltams2 = (deltams * speedfactor2) / 256;
   uint32_t deltams21 = (deltams1 + deltams2) / 2;
 
   // === UPDATE WAVE POSITIONS (WLED exact) ===
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, t));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, t));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, t));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, t));
+  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13, instance->now));
+  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11, instance->now));
+  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7, instance->now));
+  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6, instance->now));
 
   // Save state
   instance->_segment.aux0 = sCIStart1;
@@ -1337,43 +1348,39 @@ uint16_t mode_pacifica_native() {
   instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
 
   // Whitecap threshold and wave
-  unsigned basethreshold = beatsin8_t(9, 55, 65, t);
-  unsigned wave = beat8(7, t);
+  unsigned basethreshold = beatsin8_t(9, 55, 65, instance->now);
+  unsigned wave = beat8(7, instance->now);
 
   // === WLED EXACT 4-LAYER PARAMETERS ===
   // Layer 1: palette 1, variable scale
-  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, t);
-  uint8_t w1_bri = beatsin8_t(10, 70, 130, t);
-  uint16_t w1_off = 0 - beat16(301, t);
+  uint16_t w1_scale = beatsin16_t(3, 11 * 256, 14 * 256, instance->now);
+  uint8_t w1_bri = beatsin8_t(10, 70, 130, instance->now);
+  uint16_t w1_off = 0 - beat16(301, instance->now);
 
   // Layer 2: palette 2, variable scale
-  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, t);
-  uint8_t w2_bri = beatsin8_t(17, 40, 80, t);
-  uint16_t w2_off = beat16(401, t);
+  uint16_t w2_scale = beatsin16_t(4, 6 * 256, 9 * 256, instance->now);
+  uint8_t w2_bri = beatsin8_t(17, 40, 80, instance->now);
+  uint16_t w2_off = beat16(401, instance->now);
 
   // Layer 3: palette 3, FIXED scale 6*256 (WLED exact!)
   uint16_t w3_scale = 6 * 256; // Fixed, not beatsin!
-  uint8_t w3_bri = beatsin8_t(9, 10, 38, t);
-  uint16_t w3_off = 0 - beat16(503, t);
+  uint8_t w3_bri = beatsin8_t(9, 10, 38, instance->now);
+  uint16_t w3_off = 0 - beat16(503, instance->now);
 
   // Layer 4: palette 3, FIXED scale 5*256 (WLED exact!)
   uint16_t w4_scale = 5 * 256; // Fixed, not beatsin!
-  uint8_t w4_bri = beatsin8_t(8, 10, 28, t);
-  uint16_t w4_off = beat16(601, t);
+  uint8_t w4_bri = beatsin8_t(8, 10, 28, instance->now);
+  uint16_t w4_off = beat16(601, instance->now);
 
   for (int i = 0; i < len; i++) {
     // WLED exact base color
     CRGB c = CRGB(2, 6, 10);
 
     // === ALL 4 LAYERS with correct palettes (1, 2, 3, 3) ===
-    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri,
-                            w1_off); // Palette 1
-    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri,
-                            w2_off); // Palette 2
-    pacifica_one_layer_wled(c, i, 3, sCIStart3, w3_scale, w3_bri,
-                            w3_off); // Palette 3
-    pacifica_one_layer_wled(c, i, 3, sCIStart4, w4_scale, w4_bri,
-                            w4_off); // Palette 3
+    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
+    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
+    pacifica_one_layer_wled(c, i, 3, sCIStart3, w3_scale, w3_bri, w3_off);
+    pacifica_one_layer_wled(c, i, 3, sCIStart4, w4_scale, w4_bri, w4_off);
 
     // === WLED EXACT WHITECAPS ===
     unsigned threshold = scale8(sin8(wave), 20) + basethreshold;
