@@ -243,17 +243,20 @@ FASTLED_INLINE uint16_t scale16(uint16_t i, uint16_t scale) {
 }
 
 // beat16: sawtooth wave 0-65535
-// bpm is SIMPLE BPM (1-255), NOT accum88 format
-// FastLED formula: (millis * bpm * 65536) / 60000
-// Simplified: (millis * bpm * 65536) / 60000 ≈ (millis * bpm) / 0.916
-// For efficiency: (millis * bpm * 280) >> 8  (280/256 ≈ 1.094 ≈ 1/0.916)
+// bpm can be simple BPM (1-255) OR Q8.8 format (256+)
+// FastLED: if bpm < 256, converts to Q8.8 first, then uses beat88 with >> 16
+// For bpm >= 256, assumes it's already Q8.8 format
 FASTLED_INLINE uint16_t beat16(uint16_t bpm, uint32_t timebase = 0) {
   extern uint32_t get_millis();
   uint32_t ms = (timebase == 0) ? get_millis() : timebase;
-  // FastLED formula: ((ms * bpm * 65536) / 60000)
-  // Optimized: (ms * bpm * 256) / 60000 * 256 = (ms * bpm) / 234.375 * 256
-  // Even simpler: (ms * bpm * 280) >> 8 gives good approximation
-  return (uint16_t)(((uint32_t)ms * bpm * 280) >> 8);
+
+  // Match FastLED behavior exactly:
+  // If bpm < 256, treat as simple BPM and convert to Q8.8
+  // If bpm >= 256, assume it's already Q8.8 format
+  uint32_t bpm88 = (bpm < 256) ? (bpm << 8) : bpm;
+
+  // beat88 formula: (ms * bpm88 * 280) >> 16
+  return (uint16_t)(((uint32_t)ms * bpm88 * 280) >> 16);
 }
 
 // beat8: sawtooth wave 0-255
