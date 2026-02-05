@@ -1319,11 +1319,11 @@ uint16_t mode_pacifica_native() {
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
 
   // WLED exact deltat formula - speed-scaled REAL time
-  // This is the key: use real time, not accumulator!
-  // Apply 1/4 correction to match WLED's visual speed
+  // Apply 1/8 correction to match WLED's visual speed (speed=0 should match
+  // WLED speed=128)
   uint64_t deltat_raw =
       ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
-  instance->now = (uint32_t)(deltat_raw >> 2); // Slow down by factor of 4
+  instance->now = (uint32_t)(deltat_raw >> 3); // Slow down by factor of 8
 
   // === SPEEDFACTORS (use modified now, NO explicit time param like WLED) ===
   // In WLED, these are called WITHOUT the time parameter - they use strip.now
