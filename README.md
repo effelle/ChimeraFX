@@ -19,9 +19,9 @@ A **Chimera** is a legendary creature composed of three animals. ChimeraFX merge
 
 ## ⚠️ Platform Compatibility
 
-- **Framework:** **ESP-IDF Only** (Arduino is NOT supported)
+- **Framework:** **ESP-IDF** (Recommended) and **Arduino**
 - **Chips:** **ESP32 Classic** and **ESP32-S3** Only
-  - *ESP32-C3 is not supported due to single-core limitations.*
+  - *ESP32-C3/S2/C6 are not supported due to single-core limitations.*
 
 ---
 
