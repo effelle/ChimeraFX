@@ -157,7 +157,7 @@ struct FrameDiagnostics {
   // Call at start of effect service - measures time since last call
   void frame_start() {
 #ifdef CFX_FRAME_DIAGNOSTICS
-    uint32_t now_us = micros();
+    uint32_t now_us = esphome::micros();
     if (last_frame_us > 0) {
       uint32_t delta_us = now_us - last_frame_us;
 
@@ -187,7 +187,7 @@ struct FrameDiagnostics {
   // Call periodically to log statistics
   void maybe_log(const char *effect_name) {
 #ifdef CFX_FRAME_DIAGNOSTICS
-    uint32_t now_ms = millis();
+    uint32_t now_ms = esphome::millis();
     if (now_ms - last_log_time >= LOG_INTERVAL_MS && frame_count > 10) {
       uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
       float fps =
