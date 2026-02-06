@@ -178,11 +178,13 @@ effects:
 Make sure you have added the `external_components` block pointing to `github://effelle/ChimeraFX@main`.
 
 **"Flickering LEDs"**  
-If using ESP-IDF, you must ensure your `rmt_symbols` are set correctly for your chip type:
-- **Classic ESP32**: 512
-- **ESP32-S3**: 192
+If using ESP-IDF, you must ensure your `rmt_symbols` are set correctly. **Counter-intuitively**, shorter strips often require **higher** symbol counts to avoid flickering with complex effects.
 
-Also, set `use_psram: false` in your light config. PSRAM represents external RAM which is significantly slower than the ESP32's internal SRAM. The RMT (Remote Control) peripheral requires high-speed data access to generate accurate timing for addressable LEDs. Using PSRAM can cause timing jitter, resulting in flickering or data corruption.
+- **Classic ESP32 (Short Strips < 100 LEDs)**: Try **256 - 320** symbols
+- **Classic ESP32 (Long Strips)**: 512 is usually safe, but lower values (192) often work fine
+- **ESP32-S3**: Start with **192**
+
+Also, set `use_psram: false` in your light config. PSRAM is significantly slower than internal SRAM. The RMT peripheral requires high-speed data access; using PSRAM can cause timing jitter, resulting in flickering or data corruption.
 
 ---
 
