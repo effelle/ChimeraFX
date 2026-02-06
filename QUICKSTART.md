@@ -178,11 +178,12 @@ effects:
 Make sure you have added the `external_components` block pointing to `github://effelle/ChimeraFX@main`.
 
 **"Flickering LEDs"**  
-If using ESP-IDF, you must ensure your `rmt_symbols` are set correctly. **Counter-intuitively**, shorter strips often require **higher** symbol counts to avoid flickering with complex effects.
+If using ESP-IDF, you must ensure your `rmt_symbols` are set correctly. User testing confirms that **320 symbols** is often the minimum required for stability with complex effects, regardless of strip length.
 
-- **Classic ESP32 (Short Strips < 100 LEDs)**: Try **256 - 320** symbols
-- **Classic ESP32 (Long Strips)**: 512 is usually safe, but lower values (192) often work fine
-- **ESP32-S3**: Start with **192**
+- **Classic ESP32**: Try **320** symbols (Max is 512 per channel, but standard config is often lower)
+- **ESP32-S3**: Try **192** (Hardware limit is tighter)
+
+**Note:** If you run multiple strips, you may hit the total RMT memory limit (512 total on Classic). If you experience flickering and can't increase symbols further, consider switching to `neopixelbus` (Arduino framework) or splitting strips across multiple ESPs.
 
 Also, set `use_psram: false` in your light config. PSRAM is significantly slower than internal SRAM. The RMT peripheral requires high-speed data access; using PSRAM can cause timing jitter, resulting in flickering or data corruption.
 
