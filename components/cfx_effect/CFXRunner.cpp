@@ -621,6 +621,11 @@ uint16_t mode_blink(void) {
 }
 
 uint16_t mode_aurora(void) {
+  // === FRAME DIAGNOSTICS (enabled with CFX_FRAME_DIAGNOSTICS) ===
+  static cfx::FrameDiagnostics aurora_diag;
+  aurora_diag.frame_start();
+  aurora_diag.maybe_log("Aurora");
+
   AuroraWave *waves;
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
@@ -987,6 +992,11 @@ static void pacifica_one_layer_zoomed(CRGB &c, uint16_t i, uint8_t cache_id,
 // Inspired by WLED's Pacifica, optimized for long strips and ambient lighting.
 // Uses bidirectional wave interference with collision-based whitecaps.
 uint16_t mode_ocean() {
+  // === FRAME DIAGNOSTICS (enabled with CFX_FRAME_DIAGNOSTICS) ===
+  static cfx::FrameDiagnostics ocean_diag;
+  ocean_diag.frame_start();
+  ocean_diag.maybe_log("Ocean");
+
   if (!instance)
     return 350;
 

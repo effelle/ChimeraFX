@@ -126,6 +126,92 @@ inline uint8_t get_random_wheel_index(uint8_t pos) {
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
 // ============================================================================
+// FRAME DIAGNOSTICS (enabled with CFX_FRAME_DIAGNOSTICS define)
+// ============================================================================
+
+// Define CFX_FRAME_DIAGNOSTICS in your yaml or code to enable diagnostics
+// Example: build_flags: -DCFX_FRAME_DIAGNOSTICS
+
+struct FrameDiagnostics {
+  uint32_t frame_count = 0;
+  uint32_t last_frame_us = 0; // Last frame timestamp in microseconds
+  uint32_t min_frame_us = UINT32_MAX;
+  uint32_t max_frame_us = 0;
+  uint64_t total_frame_us = 0; // For average calculation
+  uint32_t jitter_count = 0;   // Frames with >50% deviation from target
+  uint32_t gap_count = 0;      // Frames with >50ms gap
+  uint32_t last_log_time = 0;
+
+  static constexpr uint32_t TARGET_FRAME_US = 16666; // 60fps = 16.67ms
+  static constexpr uint32_t LOG_INTERVAL_MS = 5000;  // Log every 5 seconds
+
+  void reset() {
+    frame_count = 0;
+    min_frame_us = UINT32_MAX;
+    max_frame_us = 0;
+    total_frame_us = 0;
+    jitter_count = 0;
+    gap_count = 0;
+  }
+
+  // Call at start of effect service - measures time since last call
+  void frame_start() {
+#ifdef CFX_FRAME_DIAGNOSTICS
+    uint32_t now_us = micros();
+    if (last_frame_us > 0) {
+      uint32_t delta_us = now_us - last_frame_us;
+
+      // Track min/max/total
+      if (delta_us < min_frame_us)
+        min_frame_us = delta_us;
+      if (delta_us > max_frame_us)
+        max_frame_us = delta_us;
+      total_frame_us += delta_us;
+      frame_count++;
+
+      // Detect jitter (>50% deviation from 16.67ms target)
+      if (delta_us < TARGET_FRAME_US / 2 ||
+          delta_us > TARGET_FRAME_US * 3 / 2) {
+        jitter_count++;
+      }
+
+      // Detect gaps (>50ms)
+      if (delta_us > 50000) {
+        gap_count++;
+      }
+    }
+    last_frame_us = now_us;
+#endif
+  }
+
+  // Call periodically to log statistics
+  void maybe_log(const char *effect_name) {
+#ifdef CFX_FRAME_DIAGNOSTICS
+    uint32_t now_ms = millis();
+    if (now_ms - last_log_time >= LOG_INTERVAL_MS && frame_count > 10) {
+      uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
+      float fps =
+          frame_count > 0 ? (1000000.0f * frame_count) / total_frame_us : 0;
+      float jitter_pct =
+          frame_count > 0 ? (100.0f * jitter_count) / frame_count : 0;
+
+      ESP_LOGD("cfx_diag",
+               "[%s] Frames:%lu FPS:%.1f Min:%luus Max:%luus Avg:%luus "
+               "Jitter:%.1f%% Gaps:%lu",
+               effect_name, frame_count, fps, min_frame_us, max_frame_us,
+               avg_frame_us, jitter_pct, gap_count);
+
+      reset();
+      last_log_time = now_ms;
+    }
+#endif
+  }
+};
+
+// Global diagnostics instance for each effect that needs it
+// Effects can instantiate their own or use shared instance
+
+// ============================================================================
 // TIMING HELPERS (WLED-faithful speed scaling)
 // ============================================================================
 
