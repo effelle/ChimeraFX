@@ -1009,32 +1009,28 @@ uint16_t mode_ocean() {
   uint16_t bwd1_pos = -(t * 6); // Slow backward
   uint16_t bwd2_pos = -(t * 9); // Medium backward
 
-  // Pre-compute brightness modulation
-  uint8_t bri1 = 100 + ((sin8((t >> 3) & 0xFF) * 80) >> 8);
-  uint8_t bri2 = 90 + ((sin8((t >> 4) & 0xFF) * 70) >> 8);
-  uint8_t bri3 = 80 + ((sin8((t >> 5) & 0xFF) * 60) >> 8);
-  uint8_t bri4 = 70 + ((sin8((t >> 6) & 0xFF) * 50) >> 8);
+  // BOOSTED layer brightness for low global brightness visibility
+  // Higher values = more visible at low brightness settings
+  uint8_t bri1 = 140 + ((sin8((t >> 3) & 0xFF) * 80) >> 8); // 140-220
+  uint8_t bri2 = 130 + ((sin8((t >> 4) & 0xFF) * 70) >> 8); // 130-200
+  uint8_t bri3 = 120 + ((sin8((t >> 5) & 0xFF) * 60) >> 8); // 120-180
+  uint8_t bri4 = 100 + ((sin8((t >> 6) & 0xFF) * 50) >> 8); // 100-150
 
   // Whitecap base
   uint8_t wave_threshold = (t >> 2) & 0xFF;
 
   for (int i = 0; i < len; i++) {
-    // Spatial position scaled to wave space (each LED = 256 units for smooth
-    // waves)
+    // Spatial position scaled to wave space
     uint16_t spatial = i * 256;
 
     // === CALCULATE 4 WAVE PHASES AT THIS PIXEL ===
-    // Forward wave 1: position + time offset
     uint8_t idx1 = ((spatial >> 1) + fwd1_pos) >> 8;
-    // Forward wave 2: different frequency
     uint8_t idx2 = ((spatial >> 2) + fwd2_pos) >> 8;
-    // Backward wave 1: travels opposite direction
     uint8_t idx3 = ((spatial >> 1) + bwd1_pos) >> 8;
-    // Backward wave 2: different frequency backward
     uint8_t idx4 = ((spatial >> 2) + bwd2_pos) >> 8;
 
-    // Base ocean color
-    CRGB c = CRGB(8, 28, 42);
+    // BRIGHTER base ocean color for low brightness visibility
+    CRGB c = CRGB(16, 48, 64);
 
     // Layer 1 (palette 1, forward)
     CRGB layer1 = pacifica_cache_1[idx1];
@@ -1061,15 +1057,12 @@ uint16_t mode_ocean() {
     c.b = qadd8(c.b, scale8(layer4.b, bri4));
 
     // === COLLISION WHITECAPS (ambient-friendly) ===
-    // Detect when forward and backward waves are both bright (collision)
     uint8_t fwd_bright = (layer1.b + layer2.b) >> 1;
     uint8_t bwd_bright = (layer3.b + layer4.b) >> 1;
 
-    // Whitecap when BOTH forward and backward are bright (collision!)
-    // Scaled down for ambient lighting - softer glow instead of bright spike
     uint8_t collision = (fwd_bright * bwd_bright) >> 8;
-    if (collision > 50) {                        // Raised threshold
-      uint8_t whiteness = (collision - 50) >> 1; // Halved intensity
+    if (collision > 50) {
+      uint8_t whiteness = (collision - 50) >> 1;
       c.r = qadd8(c.r, whiteness >> 1);
       c.g = qadd8(c.g, whiteness);
       c.b = qadd8(c.b, qadd8(whiteness, whiteness >> 1));
@@ -1085,12 +1078,14 @@ uint16_t mode_ocean() {
       c.b = qadd8(c.b, qadd8(overage, overage >> 1));
     }
 
-    // Color deepening (teal character)
-    c.b = scale8(c.b, 200);
-    c.g = scale8(c.g, 220);
-    c.r |= 2;
-    c.g |= 8;
-    c.b |= 12;
+    // Color deepening (teal character) - REDUCED scaling to preserve brightness
+    c.b = scale8(c.b, 220); // Was 200
+    c.g = scale8(c.g, 235); // Was 220
+
+    // Ensure minimum visible floor (preserves animation at low brightness)
+    c.r = (c.r < 8) ? 8 : c.r;
+    c.g = (c.g < 16) ? 16 : c.g;
+    c.b = (c.b < 24) ? 24 : c.b;
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
   }
