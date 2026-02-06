@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Federico Leoni
+ * Copyright (c) 2026 Federico Leoni (effelle)
  *
  * This file is part of the ChimeraFX for ESPHome.
  */

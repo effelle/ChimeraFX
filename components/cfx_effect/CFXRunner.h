@@ -1,6 +1,6 @@
 /*
  * ChimeraFX - WLED Effects for ESPHome
- * Copyright (c) 2026 Federico Leoni
+ * Copyright (c) 2026 Federico Leoni (effelle)
  * Based on WLED by Aircoookie (https://github.com/wled/WLED)
  *
  * Licensed under the EUPL-1.2
@@ -146,7 +146,7 @@
 #define FX_MODE_PERCENT 98
 #define FX_MODE_RIPPLE_RAINBOW 99
 #define FX_MODE_HEARTBEAT 100
-#define FX_MODE_OCEAN 101  // Was Pacifica - optimized for long strips
+#define FX_MODE_OCEAN 101 // Was Pacifica - optimized for long strips
 #define FX_MODE_CANDLE_MULTI 102
 #define FX_MODE_SOLID_GLITTER 103
 #define FX_MODE_SUNRISE 104

@@ -1,6 +1,6 @@
 """
 ChimeraFX - WLED Effects for ESPHome
-Copyright (c) 2026 Federico Leoni
+Copyright (c) 2026 Federico Leoni (effelle)
 Based on WLED by Aircoookie (https://github.com/wled/WLED)
 
 Licensed under the EUPL-1.2
