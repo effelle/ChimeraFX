@@ -993,55 +993,55 @@ uint16_t mode_pacifica() {
   int len = instance->_segment.length();
 
   // === OPTIMIZED TIMING ===
-  // No timing helper manipulation needed - just use real time for smooth flow
   uint32_t now = cfx_millis();
   uint8_t speed = instance->_segment.speed;
 
   // Speed scaling: 0=frozen, 128=normal, 255=fast
-  // Scale to give good range: multiply by speed, shift down
   uint32_t time_scaled = (now * (speed + 1)) >> 7;
 
-  // === PRE-COMPUTE LAYER PHASES (once per frame, not per pixel) ===
-  // Each layer has different speed and spatial frequency for organic look
-  // Layer 1: slow, wide waves
-  uint16_t layer1_phase = (time_scaled * 3) >> 2; // Slowest
-  uint16_t layer1_step = 180;                     // Spatial frequency per LED
+  // === PRE-COMPUTE 4 LAYER PHASES (once per frame, not per pixel) ===
+  // WLED uses 4 layers: palette 1, 2, 3, 3
+  uint16_t layer1_phase = (time_scaled * 3) >> 2;
+  uint16_t layer1_step = 180;
 
-  // Layer 2: medium speed
-  uint16_t layer2_phase = (time_scaled * 5) >> 2; // Medium
+  uint16_t layer2_phase = (time_scaled * 5) >> 2;
   uint16_t layer2_step = 220;
 
-  // Layer 3: fastest, tightest waves
-  uint16_t layer3_phase = (time_scaled * 7) >> 2; // Fastest
+  uint16_t layer3_phase = (time_scaled * 7) >> 2;
   uint16_t layer3_step = 150;
 
-  // Brightness modulation (pre-computed, smooth)
-  uint8_t bri1 = 70 + ((sin8((time_scaled >> 3) & 0xFF) * 60) >> 8);
-  uint8_t bri2 = 50 + ((sin8((time_scaled >> 4) & 0xFF) * 40) >> 8);
-  uint8_t bri3 = 40 + ((sin8((time_scaled >> 5) & 0xFF) * 50) >> 8);
+  uint16_t layer4_phase = (time_scaled * 4) >> 2; // 4th layer
+  uint16_t layer4_step = 190;
+
+  // BOOSTED brightness modulation (WLED uses 70-130, 40-80, 50-100, 10-28)
+  uint8_t bri1 = 100 + ((sin8((time_scaled >> 3) & 0xFF) * 80) >> 8); // 100-180
+  uint8_t bri2 = 80 + ((sin8((time_scaled >> 4) & 0xFF) * 60) >> 8);  // 80-140
+  uint8_t bri3 = 90 + ((sin8((time_scaled >> 5) & 0xFF) * 70) >> 8);  // 90-160
+  uint8_t bri4 = 70 + ((sin8((time_scaled >> 6) & 0xFF) * 50) >> 8);  // 70-120
 
   // Whitecap threshold modulation
   uint8_t basethreshold = 55 + ((sin8((time_scaled >> 4) & 0xFF) * 10) >> 8);
   uint8_t wave = (time_scaled >> 2) & 0xFF;
 
-  // === LINEAR PHASE ACCUMULATION (no per-pixel trig!) ===
+  // === LINEAR PHASE ACCUMULATION ===
   uint16_t phase1 = layer1_phase;
   uint16_t phase2 = layer2_phase;
   uint16_t phase3 = layer3_phase;
+  uint16_t phase4 = layer4_phase;
 
   for (int i = 0; i < len; i++) {
-    // Base ocean color (teal)
-    CRGB c = CRGB(4, 20, 32);
+    // Brighter base ocean color
+    CRGB c = CRGB(8, 32, 48);
 
-    // Layer 1: Direct palette lookup with pre-computed phase
-    uint8_t idx1 = phase1 >> 8; // Use high byte as palette index
+    // Layer 1 (palette 1)
+    uint8_t idx1 = phase1 >> 8;
     CRGB layer1 = pacifica_cache_1[idx1];
     c.r = qadd8(c.r, scale8(layer1.r, bri1));
     c.g = qadd8(c.g, scale8(layer1.g, bri1));
     c.b = qadd8(c.b, scale8(layer1.b, bri1));
-    phase1 += layer1_step; // Linear increment - uniform speed!
+    phase1 += layer1_step;
 
-    // Layer 2
+    // Layer 2 (palette 2)
     uint8_t idx2 = phase2 >> 8;
     CRGB layer2 = pacifica_cache_2[idx2];
     c.r = qadd8(c.r, scale8(layer2.r, bri2));
@@ -1049,13 +1049,21 @@ uint16_t mode_pacifica() {
     c.b = qadd8(c.b, scale8(layer2.b, bri2));
     phase2 += layer2_step;
 
-    // Layer 3
+    // Layer 3 (palette 3)
     uint8_t idx3 = phase3 >> 8;
     CRGB layer3 = pacifica_cache_3[idx3];
     c.r = qadd8(c.r, scale8(layer3.r, bri3));
     c.g = qadd8(c.g, scale8(layer3.g, bri3));
     c.b = qadd8(c.b, scale8(layer3.b, bri3));
     phase3 += layer3_step;
+
+    // Layer 4 (palette 3 again, like WLED)
+    uint8_t idx4 = phase4 >> 8;
+    CRGB layer4 = pacifica_cache_3[idx4];
+    c.r = qadd8(c.r, scale8(layer4.r, bri4));
+    c.g = qadd8(c.g, scale8(layer4.g, bri4));
+    c.b = qadd8(c.b, scale8(layer4.b, bri4));
+    phase4 += layer4_step;
 
     // Whitecaps on bright areas
     uint8_t threshold = scale8(sin8(wave), 20) + basethreshold;
