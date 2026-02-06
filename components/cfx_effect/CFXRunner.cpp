@@ -1001,17 +1001,18 @@ uint16_t mode_pacifica() {
 
   // === PRE-COMPUTE 4 LAYER PHASES (once per frame, not per pixel) ===
   // WLED uses 4 layers: palette 1, 2, 3, 3
+  // Layers 1 & 3 flow forward, layers 2 & 4 flow backward for organic look
   uint16_t layer1_phase = (time_scaled * 3) >> 2;
-  uint16_t layer1_step = 180;
+  int16_t layer1_step = 180; // Forward
 
   uint16_t layer2_phase = (time_scaled * 5) >> 2;
-  uint16_t layer2_step = 220;
+  int16_t layer2_step = -220; // BACKWARD (counter-flow)
 
   uint16_t layer3_phase = (time_scaled * 7) >> 2;
-  uint16_t layer3_step = 150;
+  int16_t layer3_step = 150; // Forward
 
-  uint16_t layer4_phase = (time_scaled * 4) >> 2; // 4th layer
-  uint16_t layer4_step = 190;
+  uint16_t layer4_phase = (time_scaled * 4) >> 2;
+  int16_t layer4_step = -190; // BACKWARD (counter-flow)
 
   // BOOSTED brightness modulation (WLED uses 70-130, 40-80, 50-100, 10-28)
   uint8_t bri1 = 100 + ((sin8((time_scaled >> 3) & 0xFF) * 80) >> 8); // 100-180
@@ -1019,8 +1020,8 @@ uint16_t mode_pacifica() {
   uint8_t bri3 = 90 + ((sin8((time_scaled >> 5) & 0xFF) * 70) >> 8);  // 90-160
   uint8_t bri4 = 70 + ((sin8((time_scaled >> 6) & 0xFF) * 50) >> 8);  // 70-120
 
-  // Whitecap threshold modulation
-  uint8_t basethreshold = 55 + ((sin8((time_scaled >> 4) & 0xFF) * 10) >> 8);
+  // Whitecap threshold - LOWERED for more frequent caps
+  uint8_t basethreshold = 35 + ((sin8((time_scaled >> 4) & 0xFF) * 10) >> 8);
   uint8_t wave = (time_scaled >> 2) & 0xFF;
 
   // === LINEAR PHASE ACCUMULATION ===
