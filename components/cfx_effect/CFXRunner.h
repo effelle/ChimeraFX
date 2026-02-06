@@ -24,10 +24,10 @@
 #define RGBW32(r, g, b, w)                                                     \
   (uint32_t((uint8_t(w) << 24) | (uint8_t(r) << 16) | (uint8_t(g) << 8) |      \
             (uint8_t(b))))
-#define R(c) (uint8_t)((c) >> 16)
-#define G(c) (uint8_t)((c) >> 8)
-#define B(c) (uint8_t)(c)
-#define W(c) (uint8_t)((c) >> 24)
+#define CFX_R(c) (uint8_t)((c) >> 16)
+#define CFX_G(c) (uint8_t)((c) >> 8)
+#define CFX_B(c) (uint8_t)(c)
+#define CFX_W(c) (uint8_t)((c) >> 24)
 
 #define DEFAULT_BRIGHTNESS 127
 #define DEFAULT_MODE 0

@@ -56,7 +56,7 @@ void Segment::setPixelColor(int n, uint32_t c) {
   // pixel set this is acceptable
   if (instance && instance->target_light && global_index >= 0 &&
       global_index < instance->target_light->size()) {
-    esphome::Color esphome_color(R(c), G(c), B(c), W(c));
+    esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
     (*instance->target_light)[global_index] = esphome_color;
   }
 }
@@ -86,7 +86,7 @@ void Segment::fill(uint32_t c) {
 
   // Optimized tight loop: Resolve pointers once
   esphome::light::AddressableLight &light = *instance->target_light;
-  esphome::Color esphome_color(R(c), G(c), B(c), W(c));
+  esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
 
   for (int i = 0; i < len; i++) {
     int global_index = global_start + i;
@@ -2955,10 +2955,10 @@ bool CFXRunner::serviceIntro() {
     uint8_t brightness = (uint8_t)(255.0f * progress);
 
     // Scale color components
-    uint8_t r = (R(_intro_color) * brightness) >> 8;
-    uint8_t g = (G(_intro_color) * brightness) >> 8;
-    uint8_t b = (B(_intro_color) * brightness) >> 8;
-    uint8_t w = (W(_intro_color) * brightness) >> 8;
+    uint8_t r = (CFX_R(_intro_color) * brightness) >> 8;
+    uint8_t g = (CFX_G(_intro_color) * brightness) >> 8;
+    uint8_t b = (CFX_B(_intro_color) * brightness) >> 8;
+    uint8_t w = (CFX_W(_intro_color) * brightness) >> 8;
 
     _segment.fill(RGBW32(r, g, b, w));
   } else if (_intro_mode == INTRO_GLITTER) {
