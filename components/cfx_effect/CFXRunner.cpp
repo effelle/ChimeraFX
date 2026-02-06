@@ -2493,7 +2493,7 @@ void CFXRunner::service() {
     uint32_t max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
 
     // Phase 1 Verification: Log frame time stats (target: 24ms ± 2ms)
-    ESP_LOGD("wled_perf",
+    ESP_LOGV("wled_perf",
              "FPS:%u Frame_ms(min/mean/max):%u/%u/%u Heap:%u/%u MaxBlk:%u", fps,
              _diag_frame_min, frame_mean, _diag_frame_max, heap_internal,
              heap_total, max_block);

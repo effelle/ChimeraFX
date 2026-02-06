@@ -300,7 +300,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     uint32_t avg_render = diag_render_sum_us / diag_count;
     uint32_t avg_schedule = diag_schedule_sum_us / diag_count;
     uint32_t avg_total = diag_total_sum_us / diag_count;
-    ESP_LOGD("wled_timing",
+    ESP_LOGV("wled_timing",
              "apply() interval:%luus render:%luus schedule:%luus total:%luus "
              "skips:%lu",
              apply_interval_us, avg_render, avg_schedule, avg_total,
