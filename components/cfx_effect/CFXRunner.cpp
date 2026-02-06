@@ -983,7 +983,10 @@ static void pacifica_one_layer_zoomed(CRGB &c, uint16_t i, uint8_t cache_id,
   c.b = qadd8(c.b, layer.b);
 }
 
-uint16_t mode_pacifica() {
+// --- Ocean Effect ---
+// Inspired by WLED's Pacifica, optimized for long strips and ambient lighting.
+// Uses bidirectional wave interference with collision-based whitecaps.
+uint16_t mode_ocean() {
   if (!instance)
     return 350;
 
@@ -1057,18 +1060,19 @@ uint16_t mode_pacifica() {
     c.g = qadd8(c.g, scale8(layer4.g, bri4));
     c.b = qadd8(c.b, scale8(layer4.b, bri4));
 
-    // === COLLISION WHITECAPS ===
+    // === COLLISION WHITECAPS (ambient-friendly) ===
     // Detect when forward and backward waves are both bright (collision)
-    uint8_t fwd_bright = (layer1.b + layer2.b) >> 1; // Forward wave intensity
-    uint8_t bwd_bright = (layer3.b + layer4.b) >> 1; // Backward wave intensity
+    uint8_t fwd_bright = (layer1.b + layer2.b) >> 1;
+    uint8_t bwd_bright = (layer3.b + layer4.b) >> 1;
 
     // Whitecap when BOTH forward and backward are bright (collision!)
+    // Scaled down for ambient lighting - softer glow instead of bright spike
     uint8_t collision = (fwd_bright * bwd_bright) >> 8;
-    if (collision > 40) {
-      uint8_t whiteness = collision - 40;
-      c.r = qadd8(c.r, whiteness);
-      c.g = qadd8(c.g, qadd8(whiteness, whiteness));
-      c.b = qadd8(c.b, qadd8(whiteness, qadd8(whiteness, whiteness)));
+    if (collision > 50) {                        // Raised threshold
+      uint8_t whiteness = (collision - 50) >> 1; // Halved intensity
+      c.r = qadd8(c.r, whiteness >> 1);
+      c.g = qadd8(c.g, whiteness);
+      c.b = qadd8(c.b, qadd8(whiteness, whiteness >> 1));
     }
 
     // Additional whitecaps on very bright areas
@@ -2550,8 +2554,8 @@ void CFXRunner::service() {
   case FX_MODE_PLASMA: // 97
     mode_plasma();
     break;
-  case FX_MODE_PACIFICA: // 101
-    mode_pacifica();
+  case FX_MODE_OCEAN: // 101 (was Pacifica)
+    mode_ocean();
     break;
   case FX_MODE_PRIDE_2015: // 63
     mode_pride_2015();
