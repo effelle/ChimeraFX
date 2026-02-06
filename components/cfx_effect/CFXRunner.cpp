@@ -991,83 +991,94 @@ uint16_t mode_pacifica() {
   pacifica_init_caches();
 
   int len = instance->_segment.length();
-  uint32_t nowOld = instance->now;
 
-  // Get persistent state
-  unsigned sCIStart1 = instance->_segment.aux0;
-  unsigned sCIStart2 = instance->_segment.aux1;
-  unsigned sCIStart3 = instance->_segment.step & 0xFFFF;
-  unsigned sCIStart4 = (instance->_segment.step >> 16);
+  // === OPTIMIZED TIMING ===
+  // No timing helper manipulation needed - just use real time for smooth flow
+  uint32_t now = cfx_millis();
+  uint8_t speed = instance->_segment.speed;
 
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t pacifica_last_millis = 0;
-  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
-                                            pacifica_last_millis);
-  uint32_t deltams = timing.deltams;
-  instance->now = timing.scaled_now;
+  // Speed scaling: 0=frozen, 128=normal, 255=fast
+  // Scale to give good range: multiply by speed, shift down
+  uint32_t time_scaled = (now * (speed + 1)) >> 7;
 
-  // Update wave layer positions using WLED's exact logic
-  // Beat functions read instance->now via get_millis() - no explicit timebase
-  // needed
-  unsigned speedfactor1 = beatsin16_t(3, 179, 269);
-  unsigned speedfactor2 = beatsin16_t(4, 179, 269);
-  uint32_t deltams1 = (deltams * speedfactor1) >> 8;
-  uint32_t deltams2 = (deltams * speedfactor2) >> 8;
-  uint32_t deltams21 = (deltams1 + deltams2) >> 1;
+  // === PRE-COMPUTE LAYER PHASES (once per frame, not per pixel) ===
+  // Each layer has different speed and spatial frequency for organic look
+  // Layer 1: slow, wide waves
+  uint16_t layer1_phase = (time_scaled * 3) >> 2; // Slowest
+  uint16_t layer1_step = 180;                     // Spatial frequency per LED
 
-  sCIStart1 += (deltams1 * beatsin88_t(1011, 10, 13));
-  sCIStart2 -= (deltams21 * beatsin88_t(777, 8, 11));
-  sCIStart3 -= (deltams1 * beatsin88_t(501, 5, 7));
-  sCIStart4 -= (deltams2 * beatsin88_t(257, 4, 6));
+  // Layer 2: medium speed
+  uint16_t layer2_phase = (time_scaled * 5) >> 2; // Medium
+  uint16_t layer2_step = 220;
 
-  // Save state
-  instance->_segment.aux0 = sCIStart1;
-  instance->_segment.aux1 = sCIStart2;
-  instance->_segment.step = (sCIStart4 << 16) | (sCIStart3 & 0xFFFF);
+  // Layer 3: fastest, tightest waves
+  uint16_t layer3_phase = (time_scaled * 7) >> 2; // Fastest
+  uint16_t layer3_step = 150;
 
-  unsigned basethreshold = beatsin8_t(9, 55, 65);
-  unsigned wave = beat8(7);
+  // Brightness modulation (pre-computed, smooth)
+  uint8_t bri1 = 70 + ((sin8((time_scaled >> 3) & 0xFF) * 60) >> 8);
+  uint8_t bri2 = 50 + ((sin8((time_scaled >> 4) & 0xFF) * 40) >> 8);
+  uint8_t bri3 = 40 + ((sin8((time_scaled >> 5) & 0xFF) * 50) >> 8);
 
-  // Wave parameters - STABILIZED for long strips
-  // Constant scale and offset prevents "accordion effect" speed gradient
-  uint16_t w1_scale = 12 * 256; // Average of 11-14
-  uint8_t w1_bri = beatsin8_t(10, 70, 130);
-  uint16_t w1_off = 0; // Constant offset
+  // Whitecap threshold modulation
+  uint8_t basethreshold = 55 + ((sin8((time_scaled >> 4) & 0xFF) * 10) >> 8);
+  uint8_t wave = (time_scaled >> 2) & 0xFF;
 
-  uint16_t w2_scale = 7 * 256; // Average of 6-9
-  uint8_t w2_bri = beatsin8_t(17, 40, 80);
-  uint16_t w2_off = 0; // Constant offset
-
-  uint16_t w3_scale = 10 * 256; // Average of 8-12
-  uint8_t w3_bri = beatsin8_t(13, 50, 100);
-  uint16_t w3_off = 0; // Constant offset
+  // === LINEAR PHASE ACCUMULATION (no per-pixel trig!) ===
+  uint16_t phase1 = layer1_phase;
+  uint16_t phase2 = layer2_phase;
+  uint16_t phase3 = layer3_phase;
 
   for (int i = 0; i < len; i++) {
-    // === BRIGHT TEAL BASE COLOR ===
-    // Much brighter to match WLED's visible floor
-    CRGB c = CRGB(8, 32, 48); // Visible teal (boosted for ESPHome gamma)
+    // Base ocean color (teal)
+    CRGB c = CRGB(4, 20, 32);
 
-    // Use WLED-exact layer function
-    pacifica_one_layer_wled(c, i, 1, sCIStart1, w1_scale, w1_bri, w1_off);
-    pacifica_one_layer_wled(c, i, 2, sCIStart2, w2_scale, w2_bri, w2_off);
-    pacifica_one_layer_wled(c, i, 1, sCIStart3, w3_scale, w3_bri, w3_off);
+    // Layer 1: Direct palette lookup with pre-computed phase
+    uint8_t idx1 = phase1 >> 8; // Use high byte as palette index
+    CRGB layer1 = pacifica_cache_1[idx1];
+    c.r = qadd8(c.r, scale8(layer1.r, bri1));
+    c.g = qadd8(c.g, scale8(layer1.g, bri1));
+    c.b = qadd8(c.b, scale8(layer1.b, bri1));
+    phase1 += layer1_step; // Linear increment - uniform speed!
 
-    // Add whitecaps
-    pacifica_add_whitecaps(c, wave, basethreshold);
+    // Layer 2
+    uint8_t idx2 = phase2 >> 8;
+    CRGB layer2 = pacifica_cache_2[idx2];
+    c.r = qadd8(c.r, scale8(layer2.r, bri2));
+    c.g = qadd8(c.g, scale8(layer2.g, bri2));
+    c.b = qadd8(c.b, scale8(layer2.b, bri2));
+    phase2 += layer2_step;
 
-    // Deepen colors with TEAL preservation
-    pacifica_deepen_colors_teal(c);
+    // Layer 3
+    uint8_t idx3 = phase3 >> 8;
+    CRGB layer3 = pacifica_cache_3[idx3];
+    c.r = qadd8(c.r, scale8(layer3.r, bri3));
+    c.g = qadd8(c.g, scale8(layer3.g, bri3));
+    c.b = qadd8(c.b, scale8(layer3.b, bri3));
+    phase3 += layer3_step;
 
-    // Brightness boost
-    c.r = qadd8(c.r, c.r);
-    c.g = qadd8(c.g, c.g);
-    c.b = qadd8(c.b, c.b);
+    // Whitecaps on bright areas
+    uint8_t threshold = scale8(sin8(wave), 20) + basethreshold;
+    uint8_t l = (c.r + c.g + c.b) / 3;
+    if (l > threshold) {
+      uint8_t overage = l - threshold;
+      uint8_t overage2 = qadd8(overage, overage);
+      c.r = qadd8(c.r, overage);
+      c.g = qadd8(c.g, overage2);
+      c.b = qadd8(c.b, qadd8(overage2, overage2));
+    }
+    wave += 7;
+
+    // Color deepening (preserve teal character)
+    c.b = scale8(c.b, 200);
+    c.g = scale8(c.g, 220);
+    c.r |= 2;
+    c.g |= 8;
+    c.b |= 12;
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
-    wave += 7;
   }
 
-  instance->now = nowOld;
   return FRAMETIME;
 }
 
