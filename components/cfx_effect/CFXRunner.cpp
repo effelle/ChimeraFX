@@ -576,25 +576,25 @@ uint16_t mode_blink(void) {
 
   // BLINK (ID 1)
   // Simple periodic On/Off effect.
-  // Speed sets frequency. Intensity sets duty cycle.
+  // Speed sets frequency directly. Intensity sets duty cycle.
 
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t blink_last_millis = 0;
-  auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, blink_last_millis);
-
+  // === TIMING: Speed controls cycle time directly ===
+  // WLED behavior: Speed 0 = slow blink (~2s), Speed 255 = fast strobe (~50ms)
+  uint8_t speed = instance->_segment.speed;
   uint16_t intensity = instance->_segment.intensity;
 
-  // Fixed cycle time - speed is handled by scaled_now
-  // Base period: ~2000ms at speed 0, faster at higher speeds via scaled_now
-  uint32_t cycleTime = 2000;
+  // Cycle time: 2000ms at speed 0, down to ~50ms at speed 255 (strobe)
+  // Formula: cycleTime = 2000 - (speed * 7.6) -> 2000ms to ~62ms
+  uint32_t cycleTime = 2000 - ((uint32_t)speed * 1950 / 255);
+  if (cycleTime < 50)
+    cycleTime = 50; // Minimum 50ms for strobe
 
-  uint32_t prog = timing.scaled_now % cycleTime;
+  uint32_t prog = instance->now % cycleTime;
 
   // Duty cycle threshold:
-  // Intensity 0: Short blip (10%)
+  // Intensity 0: Short blip (~10%)
   // Intensity 128: Square wave (50%)
-  // Intensity 255: Mostly on (90%)
+  // Intensity 255: Mostly on (~90%)
   uint32_t threshold = (cycleTime * (intensity + 25)) / 300;
 
   bool on = (prog < threshold);
@@ -1320,8 +1320,8 @@ uint16_t mode_breath(void) {
   auto timing =
       cfx::calculate_frame_timing(instance->_segment.speed, breath_last_millis);
 
-  // Time-based counter using scaled_now
-  uint32_t counter = (timing.scaled_now * 10) & 0xFFFF;
+  // Time-based counter using scaled_now (multiplied by 20 for proper speed)
+  uint32_t counter = (timing.scaled_now * 20) & 0xFFFF;
   counter = (counter >> 2) + (counter >> 4); // 0-16384 + 0-2048
 
   unsigned var = 0;
@@ -2182,8 +2182,8 @@ uint16_t mode_rainbow(void) {
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
                                             rainbow_last_millis);
 
-  // Speed controls cycling rate via scaled_now
-  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
+  // Speed controls cycling rate via scaled_now (>>4 for 2x slower)
+  uint32_t counter = (timing.scaled_now >> 4) & 0xFF;
 
   // Get color from palette (Rainbow as default)
   const uint32_t *active_palette =
@@ -2219,8 +2219,8 @@ uint16_t mode_rainbow_cycle(void) {
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
                                             rainbow_cycle_last_millis);
 
-  // Speed controls animation flow via scaled_now
-  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
+  // Speed controls animation flow via scaled_now (>>4 for 2x slower)
+  uint32_t counter = (timing.scaled_now >> 4) & 0xFF;
 
   // Intensity controls spatial density (exponential: 16 << (intensity/29))
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
