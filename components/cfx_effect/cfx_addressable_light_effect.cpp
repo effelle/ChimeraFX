@@ -85,15 +85,22 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // Push per-effect presets to control components (if specified in YAML)
-  if (this->speed_preset_.has_value() && this->speed_ != nullptr) {
+  // Push per-effect presets to control components
+  // Use YAML preset if specified, otherwise use per-effect defaults
+  if (this->speed_ != nullptr) {
+    uint8_t target_speed = this->speed_preset_.has_value()
+                               ? this->speed_preset_.value()
+                               : get_default_speed_(this->effect_id_);
     auto call = this->speed_->make_call();
-    call.set_value(this->speed_preset_.value());
+    call.set_value(target_speed);
     call.perform();
   }
-  if (this->intensity_preset_.has_value() && this->intensity_ != nullptr) {
+  if (this->intensity_ != nullptr) {
+    uint8_t target_intensity = this->intensity_preset_.has_value()
+                                   ? this->intensity_preset_.value()
+                                   : get_default_intensity_(this->effect_id_);
     auto call = this->intensity_->make_call();
-    call.set_value(this->intensity_preset_.value());
+    call.set_value(target_intensity);
     call.perform();
   }
   if (this->palette_preset_.has_value() && this->palette_ != nullptr) {
@@ -449,6 +456,32 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   // Default Aurora (1) or specific handling
   default:
     return 1; // Aurora is the general default
+  }
+}
+
+uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
+  // Per-effect speed defaults from effects_preset.md
+  switch (effect_id) {
+  case 38:
+    return 24; // Aurora
+  case 64:
+    return 64; // Juggle
+  case 66:
+    return 64; // Fire 2012
+  case 104:
+    return 60; // Sunrise
+  default:
+    return 128; // WLED default
+  }
+}
+
+uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
+  // Per-effect intensity defaults from effects_preset.md
+  switch (effect_id) {
+  case 66:
+    return 160; // Fire 2012
+  default:
+    return 128; // WLED default
   }
 }
 

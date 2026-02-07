@@ -2639,7 +2639,8 @@ uint16_t mode_bouncing_balls(void) {
     instance->_segment.reset = false;
   }
 
-  instance->_segment.fadeToBlackBy(60);
+  instance->_segment.fadeToBlackBy(
+      160); // Faster fade for shorter trails (WLED-like)
 
   // Physics Constants
   // Gravity -18.0 for snappy "real" feel (less floaty)
