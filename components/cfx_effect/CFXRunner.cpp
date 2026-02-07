@@ -757,7 +757,7 @@ uint16_t mode_fire_2012(void) {
   // Step 1. Cool down every cell a little
   for (int i = 0; i < len; i++) {
     uint8_t cool = (it != instance->_segment.step)
-                       ? random8((((20 + wled_speed / 3) * 10) / len) +
+                       ? random8((((20 + timing.wled_speed / 3) * 10) / len) +
                                  2) // Reduced from 16 to 10 for taller flames
                        : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
