@@ -1985,13 +1985,12 @@ uint16_t mode_meteor(void) {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
 
-  // Meteor position (using step as accumulator)
-  // Precise speed scaling: 128 ESPHome -> 83 WLED (~0.65x)
-  uint8_t user_speed = instance->_segment.speed;
-  uint8_t speed = (user_speed <= 128) ? (user_speed * 83 / 128)
-                                      : (83 + ((user_speed - 128) * 172 / 127));
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t meteor_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, meteor_last_millis);
 
-  uint32_t counter = instance->now * ((speed >> 2) + 8);
+  uint32_t counter = timing.scaled_now * 8;
   int meteorPos = (counter * len) >> 16;
   meteorPos = meteorPos % len;
 
