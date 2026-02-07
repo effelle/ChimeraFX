@@ -1424,42 +1424,39 @@ uint16_t mode_dissolve(void) {
   uint16_t pixel_count = instance->_segment.aux1;
   uint32_t state_start = instance->_segment.step;
 
-  // === DISSOLVE-SPECIFIC SLIDER SCALING ===
-  // Map HA slider defaults (128) to WLED defaults (50 speed, 0 intensity)
-  // Speed:    slider 128 → internal 50 (scale factor 50/128 ≈ 0.39)
-  // Intensity: slider 128 → internal 0 (offset down by 128)
+  // === DISSOLVE CONTROL MAPPING ===
+  // Speed controls hold time between fill/dissolve phases
+  // Intensity controls dissolve rate (probability-based like WLED)
   uint8_t raw_speed = instance->_segment.speed;
   uint8_t raw_intensity = instance->_segment.intensity;
 
-  uint8_t eff_speed = (uint16_t)raw_speed * 50 / 128;
-  if (eff_speed > 255)
-    eff_speed = 255;
-
-  int16_t eff_intensity = (int16_t)raw_intensity - 128;
-  if (eff_intensity < 0)
-    eff_intensity = 0;
-  if (eff_intensity > 255)
-    eff_intensity = 255;
-
-  // === Softer Intensity Scaling ===
-  // Map intensity to 1-8 pixels per frame
-  uint8_t pixels_per_frame = 1 + ((uint8_t)eff_intensity >> 5);
-
-  // === Longer Hold Times ===
-  // Speed 255 = 500ms (fast), Speed 0 = 3050ms (slow)
-  uint32_t hold_ms = 500 + ((255 - eff_speed) * 10);
+  // Hold time: Speed 255 = 500ms (fast cycle), Speed 0 = 3000ms (slow cycle)
+  uint32_t hold_ms = 500 + ((255 - raw_speed) * 10);
 
   // Fill threshold: 100% of strip (ensures full fill)
   uint16_t fill_threshold = len;
 
-  // Timeout safety: 15 seconds max for fill phase
-  uint32_t fill_timeout = 15000;
+  // Timeout safety: 30 seconds max for fill phase at very low intensity
+  uint32_t fill_timeout = 30000;
 
   // === STATE MACHINE (manipulates shadow only) ===
   switch (state) {
-  case 0: { // FILLING - set random OFF pixels to ON
-    for (int n = 0; n < pixels_per_frame && pixel_count < fill_threshold; n++) {
-      // === FIX 1: Linear Fallback for Dead Pixels ===
+  case 0: { // FILLING - set random OFF pixels to ON using probability
+    // Probability-based approach (WLED-style):
+    // At intensity 0: ~0% chance per frame → Very slow fill
+    // At intensity 128: ~50% chance per frame → Medium fill
+    // At intensity 255: ~100% + bonus → Fast fill
+    int pixels_to_spawn = 0;
+    if (hw_random8() <= raw_intensity) {
+      pixels_to_spawn = 1;
+      // At high intensity, chance for extra pixels for faster fill
+      if (raw_intensity > 200 && hw_random8() < (raw_intensity - 200) * 2) {
+        pixels_to_spawn++;
+      }
+    }
+
+    for (int n = 0; n < pixels_to_spawn && pixel_count < fill_threshold; n++) {
+      // Linear Fallback for Dead Pixels
       int target = hw_random16() % len;
       if (SHADOW_GET(target)) {
         // Random hit an ON pixel - linear scan to find next OFF
@@ -1497,9 +1494,18 @@ uint16_t mode_dissolve(void) {
     }
     break;
 
-  case 2: { // DISSOLVING - set random ON pixels to OFF
-    for (int n = 0; n < pixels_per_frame && pixel_count > 0; n++) {
-      // === FIX 1: Linear Fallback for Dead Pixels ===
+  case 2: { // DISSOLVING - set random ON pixels to OFF using probability
+    // Use same probability-based approach as filling
+    int pixels_to_remove = 0;
+    if (hw_random8() <= raw_intensity) {
+      pixels_to_remove = 1;
+      if (raw_intensity > 200 && hw_random8() < (raw_intensity - 200) * 2) {
+        pixels_to_remove++;
+      }
+    }
+
+    for (int n = 0; n < pixels_to_remove && pixel_count > 0; n++) {
+      // Linear Fallback for Dead Pixels
       int target = hw_random16() % len;
       if (!SHADOW_GET(target)) {
         // Random hit an OFF pixel - linear scan to find next ON
@@ -1711,16 +1717,18 @@ uint16_t mode_flow(void) {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
 
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t flow_last_millis = 0;
-  auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, flow_last_millis);
-  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
+  // === WLED-FAITHFUL TIMING ===
+  // WLED: counter = strip.now * ((SEGMENT.speed >> 2) +1); counter = counter >>
+  // 8;
+  unsigned counter = 0;
+  if (instance->_segment.speed != 0) {
+    counter = instance->now * ((instance->_segment.speed >> 2) + 1);
+    counter = counter >> 8;
+  }
 
-  // Calculate zones based on intensity
+  // Calculate zones based on intensity - WLED exact formula
+  // WLED: unsigned maxZones = SEGLEN / 6; (no early clamping!)
   int maxZones = len / 6; // Each zone needs at least 6 LEDs
-  if (maxZones < 2)
-    maxZones = 2;
   int zones = (instance->_segment.intensity * maxZones) >> 8;
   if (zones & 0x01)
     zones++; // Must be even
@@ -1971,26 +1979,22 @@ uint16_t mode_meteor(void) {
   if (len <= 1)
     return mode_static();
 
-  // Get palette
-  const uint32_t *active_palette;
+  // Get palette - WLED default is solid color, not Fire
+  const uint32_t *active_palette = nullptr;
   bool use_solid_color = false;
 
   if (instance->_segment.palette == 0) {
-    // User requested "Fire" as default. ID 4 is Fire.
-    active_palette = getPaletteByIndex(4);
+    // WLED default: Use solid color (primary color)
+    use_solid_color = true;
   } else if (instance->_segment.palette == 255) {
     use_solid_color = true;
-    active_palette = nullptr;
   } else {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
 
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t meteor_last_millis = 0;
-  auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, meteor_last_millis);
-
-  uint32_t counter = cfx_millis() * ((timing.wled_speed >> 2) + 8);
+  // === WLED-FAITHFUL TIMING ===
+  // WLED: counter = strip.now * ((SEGMENT.speed >> 2) + 8);
+  uint32_t counter = instance->now * ((instance->_segment.speed >> 2) + 8);
   int meteorPos = (counter * len) >> 16;
   meteorPos = meteorPos % len;
 
@@ -1998,35 +2002,27 @@ uint16_t mode_meteor(void) {
   int meteorSize = 1 + len / 20;
 
   // --- 1. DECAY LOOP (Before Drawing Head) ---
-  // Fix: Use subtractive decay instead of multiplicative fade.
-  // Map intensity (0-255) to decay amount (e.g. 20-2).
-  // High intensity = Low decay amount = Long trail.
-  // Low intensity = High decay amount = Short trail.
-  // Mapping: 255 -> 2, 0 -> 20.
-  uint8_t decay = 20 - (instance->_segment.intensity * 18 / 255);
-  // Safety clamp? 20 - 18 = 2. 20 - 0 = 20.
-
+  // WLED uses scale8 (multiplicative) with probability check:
+  // if (hw_random8() <= 255 - SEGMENT.intensity) { scale8(trail,
+  // 128+random(127)) } High intensity = fewer pixels decay = longer trail Low
+  // intensity = more pixels decay = shorter trail
   for (int i = 0; i < len; i++) {
-    // Only decay if not part of the *current* head?
-    // Actually, WLED decays everything, then overwrites the head.
-    // This allows the tail to form behind the moving head.
+    // Probability check: higher intensity = fewer pixels decay per frame
+    if (hw_random8() <= 255 - instance->_segment.intensity) {
+      uint32_t c = instance->_segment.getPixelColor(i);
+      uint8_t r = (c >> 16) & 0xFF;
+      uint8_t g = (c >> 8) & 0xFF;
+      uint8_t b = c & 0xFF;
 
-    // Check if we should random decay this pixel
-    // To mimic WLED's randomness:
-    // "subtractFromRGB(random(decay))"
-    uint8_t d = hw_random8(decay);
+      // Multiplicative decay with random factor (WLED style)
+      // Scale factor 128-255 ensures eventual fade to 0
+      uint8_t scale_factor = 128 + hw_random8(127);
+      r = scale8(r, scale_factor);
+      g = scale8(g, scale_factor);
+      b = scale8(b, scale_factor);
 
-    uint32_t c = instance->_segment.getPixelColor(i);
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-
-    // Subtractive decay
-    r = (r > d) ? (r - d) : 0;
-    g = (g > d) ? (g - d) : 0;
-    b = (b > d) ? (b - d) : 0;
-
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+    }
   }
 
   // --- 2. DRAW METEOR HEAD ---
