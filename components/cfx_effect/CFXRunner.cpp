@@ -578,24 +578,24 @@ uint16_t mode_blink(void) {
   // Simple periodic On/Off effect.
   // Speed sets frequency. Intensity sets duty cycle.
 
-  // Remap speed to 0-210 range to prevent irregular beats at high frequencies
-  // as per user request (limits max frequency to avoid aliasing artifacts).
-  uint16_t speed = (instance->_segment.speed * 210) / 255;
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t blink_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, blink_last_millis);
+
   uint16_t intensity = instance->_segment.intensity;
 
-  // Frequency range:
-  // Speed 0: 2000ms period
-  // Speed 255 (mapped to 210): 2000 - (210 * 7) = 530ms period (~2Hz)
-  uint32_t cycleTime = 2000 - (speed * 7);
+  // Fixed cycle time - speed is handled by scaled_now
+  // Base period: ~2000ms at speed 0, faster at higher speeds via scaled_now
+  uint32_t cycleTime = 2000;
 
-  uint32_t prog = instance->now % cycleTime;
+  uint32_t prog = timing.scaled_now % cycleTime;
 
   // Duty cycle threshold:
-  // Inteinsity 0: Short blip (10%)
+  // Intensity 0: Short blip (10%)
   // Intensity 128: Square wave (50%)
   // Intensity 255: Mostly on (90%)
   uint32_t threshold = (cycleTime * (intensity + 25)) / 300;
-  // Map 0..255 -> ~8..93% duty roughly.
 
   bool on = (prog < threshold);
 
@@ -1315,9 +1315,13 @@ uint16_t mode_breath(void) {
   if (len <= 1)
     return mode_static();
 
-  // Time-based counter, speed affects rate (no scaling for matching WLED speed)
-  uint8_t speed = instance->_segment.speed;
-  uint32_t counter = (instance->now * ((speed >> 3) + 10)) & 0xFFFF;
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t breath_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, breath_last_millis);
+
+  // Time-based counter using scaled_now
+  uint32_t counter = (timing.scaled_now * 10) & 0xFFFF;
   counter = (counter >> 2) + (counter >> 4); // 0-16384 + 0-2048
 
   unsigned var = 0;
@@ -2173,15 +2177,13 @@ uint16_t mode_rainbow(void) {
   if (!instance)
     return 350;
 
-  // Speed scaling: 128 ESPHome → 83 WLED internal (60fps → 42fps adjustment)
-  uint8_t user_speed = instance->_segment.speed;
-  uint8_t wled_speed = (user_speed <= 128)
-                           ? (user_speed * 83 / 128)
-                           : (83 + ((user_speed - 128) * 172 / 127));
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t rainbow_last_millis = 0;
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            rainbow_last_millis);
 
-  // Speed controls cycling rate (WLED formula with scaled speed)
-  uint32_t counter = (instance->now * ((wled_speed >> 2) + 2)) & 0xFFFF;
-  counter = counter >> 8;
+  // Speed controls cycling rate via scaled_now
+  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
 
   // Get color from palette (Rainbow as default)
   const uint32_t *active_palette =
@@ -2211,20 +2213,16 @@ uint16_t mode_rainbow_cycle(void) {
     return 350;
 
   int len = instance->_segment.length();
-  // int len = instance->_segment.length();
 
-  // Speed scaling: 128 ESPHome → 83 WLED internal (60fps → 42fps adjustment)
-  uint8_t user_speed = instance->_segment.speed;
-  uint8_t wled_speed = (user_speed <= 128)
-                           ? (user_speed * 83 / 128)
-                           : (83 + ((user_speed - 128) * 172 / 127));
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t rainbow_cycle_last_millis = 0;
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            rainbow_cycle_last_millis);
 
-  // Speed controls animation flow (WLED formula with scaled speed)
-  uint32_t counter = (instance->now * ((wled_speed >> 2) + 2)) & 0xFFFF;
-  counter = counter >> 8;
+  // Speed controls animation flow via scaled_now
+  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
 
   // Intensity controls spatial density (exponential: 16 << (intensity/29))
-  // intensity/29: 0->1x, 29->2x, 58->4x, 87->8x, 116->16x, etc.
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // Get palette (Rainbow as default)
