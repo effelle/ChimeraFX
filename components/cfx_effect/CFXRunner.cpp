@@ -755,19 +755,23 @@ uint16_t mode_fire_2012(void) {
   const uint8_t ignition = max(3, len / 10);
 
   // Step 1. Cool down every cell a little
-  // Dynamic cooling: scale based on actual strip length so flames reach
-  // ~50% height consistently at default intensity regardless of strip size
-  // Formula: Higher cooling per cell for taller flames proportionally
-  // Base cooling scales with speed and inversely with sqrt-like of length
+  // Dynamic cooling using inverse-sqrt-like scaling for consistent flame height
+  // Goal: flames reach ~50% height on any strip length at default intensity
+  // Short strips (58 LEDs): lower base cooling, flames ~29 LEDs
+  // Long strips (265 LEDs): higher base cooling, flames ~132 LEDs
+  //
+  // Formula uses: cooling = raw_cool * 8 / (4 + len/32)
+  // At 58 LEDs: divisor = 4 + 1 = 5, so cooling is higher per-cell
+  // At 265 LEDs: divisor = 4 + 8 = 12, so cooling is lower per-cell (taller
+  // flames)
+  uint16_t raw_cool = 20 + timing.wled_speed / 3;
+  uint16_t len_factor = 4 + len / 32; // 5 for 58 LEDs, 12 for 265 LEDs
+
   for (int i = 0; i < len; i++) {
-    // Dynamic cooling factor: aim for ~50% flame height at intensity 160
-    // Short strips (58): need lower cooling (flames reach ~29 LEDs)
-    // Long strips (265): need higher cooling (flames reach ~132 LEDs)
-    // Use formula that approximates sqrt-like scaling
-    uint8_t base_cool = (20 + timing.wled_speed / 3) * 16 / len + 2;
-    // Ensure minimum cooling to prevent runaway flames
-    if (base_cool < 2)
-      base_cool = 2;
+    uint8_t base_cool = (raw_cool * 8) / len_factor + 2;
+    // Clamp minimum cooling
+    if (base_cool < 3)
+      base_cool = 3;
     uint8_t cool =
         (it != instance->_segment.step) ? random8(base_cool) : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
@@ -2263,14 +2267,14 @@ uint16_t mode_colortwinkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Speed controls fade rate using scale8 (multiplicative, guaranteed zero)
-  // Higher speed = faster fade
+  // Speed controls fade rate using scale8 (multiplicative)
+  // Lower speed = slower fade (higher retention), higher speed = faster fade
   uint8_t speed = instance->_segment.speed;
-  // fade_scale: 220-180 range (faster fade at high speed)
-  // At speed=0: scale=220 (~86% retention = slow fade)
-  // At speed=128: scale=200 (~78% retention = medium fade)
-  // At speed=255: scale=180 (~70% retention = fast fade)
-  uint8_t fade_scale = 220 - (speed >> 3) - (speed >> 4); // 220 to ~180
+  // fade_scale: 248-230 range for calmer twinkle
+  // At speed=0: scale=248 (~97% retention = very slow fade, long trails)
+  // At speed=128: scale=239 (~94% retention = medium fade)
+  // At speed=255: scale=230 (~90% retention = faster fade)
+  uint8_t fade_scale = 248 - (speed >> 4); // 248 to ~232 range
 
   // Get palette - use Rainbow (index 4) as default when palette=0
   const uint32_t *active_palette =
@@ -2278,18 +2282,26 @@ uint16_t mode_colortwinkle(void) {
           ? getPaletteByIndex(4) // Rainbow palette default
           : getPaletteByIndex(instance->_segment.palette);
 
-  // Step 1: Fade ALL pixels toward black using scale8 (multiplicative)
-  // This GUARANTEES reaching 0 (unlike subtraction which can leave residue)
+  // Step 1: Fade ALL pixels toward black using scale8
+  // Force to zero when below threshold to prevent floor lighting
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
     uint8_t r = (cur32 >> 16) & 0xFF;
     uint8_t g = (cur32 >> 8) & 0xFF;
     uint8_t b = cur32 & 0xFF;
 
-    // scale8 multiplicative fade - guaranteed to reach 0
+    // scale8 multiplicative fade
     r = scale8(r, fade_scale);
     g = scale8(g, fade_scale);
     b = scale8(b, fade_scale);
+
+    // Force to black when below threshold (prevents floor lighting)
+    if (r < 4)
+      r = 0;
+    if (g < 4)
+      g = 0;
+    if (b < 4)
+      b = 0;
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
   }
