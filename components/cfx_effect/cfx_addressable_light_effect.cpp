@@ -87,19 +87,28 @@ void CFXAddressableLightEffect::start() {
 
   // Push per-effect presets to control components
   // Use YAML preset if specified, otherwise use per-effect defaults
-  if (this->speed_ != nullptr) {
+  // Must use controller's components (like run_controls_) to update UI
+  CFXControl *c = this->controller_;
+
+  // Get the actual Number component (prefer controller, fallback to direct)
+  number::Number *speed_num =
+      (c && c->get_speed()) ? c->get_speed() : this->speed_;
+  number::Number *intensity_num =
+      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+
+  if (speed_num != nullptr) {
     uint8_t target_speed = this->speed_preset_.has_value()
                                ? this->speed_preset_.value()
                                : get_default_speed_(this->effect_id_);
-    auto call = this->speed_->make_call();
+    auto call = speed_num->make_call();
     call.set_value(target_speed);
     call.perform();
   }
-  if (this->intensity_ != nullptr) {
+  if (intensity_num != nullptr) {
     uint8_t target_intensity = this->intensity_preset_.has_value()
                                    ? this->intensity_preset_.value()
                                    : get_default_intensity_(this->effect_id_);
-    auto call = this->intensity_->make_call();
+    auto call = intensity_num->make_call();
     call.set_value(target_intensity);
     call.perform();
   }
