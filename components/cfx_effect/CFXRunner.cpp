@@ -754,12 +754,18 @@ uint16_t mode_fire_2012(void) {
   // Ignition area: 10% of segment length or minimum 3 pixels
   const uint8_t ignition = max(3, len / 10);
 
+  // Reference strip length for consistent flame height
+  // Flames should look the same proportion on any strip
+  const int ref_len = 144;
+
   // Step 1. Cool down every cell a little
+  // Normalize cooling to reference strip to maintain consistent flame height
+  // Short strips need less cooling, long strips need more cooling
   for (int i = 0; i < len; i++) {
-    uint8_t cool = (it != instance->_segment.step)
-                       ? random8((((20 + timing.wled_speed / 3) * 10) / len) +
-                                 2) // Reduced from 16 to 10 for taller flames
-                       : random8(4);
+    // Calculate cooling normalized to 144-LED reference strip
+    uint8_t base_cool = (20 + timing.wled_speed / 3) * 10 / ref_len + 2;
+    uint8_t cool =
+        (it != instance->_segment.step) ? random8(base_cool) : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
                                      : 0; // don't black out ignition area
     uint8_t temp = qsub8(heat[i], cool);
@@ -1218,10 +1224,10 @@ uint16_t mode_plasma(void) {
   return FRAMETIME;
 }
 
-// --- Pride 2015 Effect (ID 63) ---
+// --- Colorwaves Effect (ID 63, formerly Pride 2015) ---
 // Ported from WLED FX.cpp mode_colorwaves_pride_base(true)
 // Author: Mark Kriegsman
-// Reverse = flip output (pixel 0 ↔ pixel N-1)
+// Modified: Uniform brightness, intensity controls saturation
 uint16_t mode_pride_2015(void) {
   if (!instance)
     return 350;
@@ -1238,10 +1244,7 @@ uint16_t mode_pride_2015(void) {
   uint32_t sPseudotime = instance->_segment.step;
   uint16_t sHue16 = instance->_segment.aux0;
 
-  // WLED beat calculations
-  uint8_t sat8 = beatsin88_t(87, 220, 250);
-  uint16_t brightdepth = beatsin88_t(341, 96, 224);
-  uint16_t brightnessthetainc16 = beatsin88_t(203, (25 * 256), (40 * 256));
+  // Wave timing calculations
   uint16_t msmultiplier = beatsin88_t(147, 23, 60);
   uint16_t hueinc16 = beatsin88_t(113, 1, 3000);
 
@@ -1251,8 +1254,6 @@ uint16_t mode_pride_2015(void) {
   sPseudotime += duration * msmultiplier;
   sHue16 += duration * beatsin88_t(400, 5, 9);
 
-  uint32_t brightnesstheta16 = sPseudotime;
-
   // Get active palette
   const uint32_t *active_palette;
   if (instance->_segment.palette == 0) {
@@ -1261,28 +1262,33 @@ uint16_t mode_pride_2015(void) {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
 
-  // Process all pixels
+  // Intensity controls saturation (same as Colorloop)
+  // 0 = white, 128 = default full saturation, 255 = pure colors
+  uint8_t intensity = instance->_segment.intensity;
+  uint8_t saturation = 255; // Full saturation default
+  if (intensity < 128) {
+    // Blend toward white (desaturate) at low intensity
+    saturation = intensity * 2;
+  }
+
+  // Process all pixels - UNIFORM BRIGHTNESS (no banding)
   for (int i = 0; i < len; i++) {
     // Accumulate hue
     hue16 += hueinc16;
     uint8_t hue8 = hue16 >> 8;
 
-    // Brightness accumulation
-    brightnesstheta16 += brightnessthetainc16;
-    int16_t sin_val = sin16_t(brightnesstheta16 & 0xFFFF);
-    uint16_t b16 = (uint16_t)(sin_val + 32768);
+    // Get color at full brightness
+    CRGBW c = ColorFromPalette(hue8, 255, active_palette);
 
-    // Square for contrast
-    uint32_t bri16 = ((uint32_t)b16 * (uint32_t)b16) / 65536;
+    // Apply saturation (blend toward white at low intensity)
+    if (saturation < 255) {
+      uint8_t white_blend = 255 - saturation;
+      c.r = c.r + ((255 - c.r) * white_blend >> 8);
+      c.g = c.g + ((255 - c.g) * white_blend >> 8);
+      c.b = c.b + ((255 - c.b) * white_blend >> 8);
+    }
 
-    // Apply brightness depth
-    uint8_t bri8 = (uint32_t)(bri16 * brightdepth) / 65536;
-    bri8 += (255 - brightdepth);
-
-    // Get color
-    CRGBW c = ColorFromPalette(hue8, bri8, active_palette);
-
-    // Blend with existing (setPixelColor handles reverse internally)
+    // Blend with existing for smooth transitions
     uint32_t existing = instance->_segment.getPixelColor(i);
     uint8_t er = (existing >> 16) & 0xFF;
     uint8_t eg = (existing >> 8) & 0xFF;
@@ -1297,6 +1303,7 @@ uint16_t mode_pride_2015(void) {
   }
 
   // Save state
+
   instance->_segment.step = sPseudotime;
   instance->_segment.aux0 = sHue16;
 
