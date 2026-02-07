@@ -2014,9 +2014,10 @@ uint16_t mode_meteor(void) {
       uint8_t g = (c >> 8) & 0xFF;
       uint8_t b = c & 0xFF;
 
-      // Multiplicative decay with random factor (WLED style)
-      // Scale factor 128-255 ensures eventual fade to 0
-      uint8_t scale_factor = 128 + hw_random8(127);
+      // Multiplicative decay with random factor
+      // Scale factor 200-255 for longer trail (78-100% retention per frame)
+      // Original WLED uses 128-255 but runs at higher FPS
+      uint8_t scale_factor = 200 + hw_random8(55);
       r = scale8(r, scale_factor);
       g = scale8(g, scale_factor);
       b = scale8(b, scale_factor);
