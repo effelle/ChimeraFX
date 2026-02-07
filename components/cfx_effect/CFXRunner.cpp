@@ -1990,7 +1990,7 @@ uint16_t mode_meteor(void) {
   auto timing =
       cfx::calculate_frame_timing(instance->_segment.speed, meteor_last_millis);
 
-  uint32_t counter = timing.scaled_now * 8;
+  uint32_t counter = cfx_millis() * ((timing.wled_speed >> 2) + 8);
   int meteorPos = (counter * len) >> 16;
   meteorPos = meteorPos % len;
 
