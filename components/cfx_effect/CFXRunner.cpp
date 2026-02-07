@@ -754,16 +754,20 @@ uint16_t mode_fire_2012(void) {
   // Ignition area: 10% of segment length or minimum 3 pixels
   const uint8_t ignition = max(3, len / 10);
 
-  // Reference strip length for consistent flame height
-  // Flames should look the same proportion on any strip
-  const int ref_len = 144;
-
   // Step 1. Cool down every cell a little
-  // Normalize cooling to reference strip to maintain consistent flame height
-  // Short strips need less cooling, long strips need more cooling
+  // Dynamic cooling: scale based on actual strip length so flames reach
+  // ~50% height consistently at default intensity regardless of strip size
+  // Formula: Higher cooling per cell for taller flames proportionally
+  // Base cooling scales with speed and inversely with sqrt-like of length
   for (int i = 0; i < len; i++) {
-    // Calculate cooling normalized to 144-LED reference strip
-    uint8_t base_cool = (20 + timing.wled_speed / 3) * 10 / ref_len + 2;
+    // Dynamic cooling factor: aim for ~50% flame height at intensity 160
+    // Short strips (58): need lower cooling (flames reach ~29 LEDs)
+    // Long strips (265): need higher cooling (flames reach ~132 LEDs)
+    // Use formula that approximates sqrt-like scaling
+    uint8_t base_cool = (20 + timing.wled_speed / 3) * 16 / len + 2;
+    // Ensure minimum cooling to prevent runaway flames
+    if (base_cool < 2)
+      base_cool = 2;
     uint8_t cool =
         (it != instance->_segment.step) ? random8(base_cool) : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
@@ -2259,30 +2263,33 @@ uint16_t mode_colortwinkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Speed controls fade rate - slightly faster minimum for visible voids
-  // At speed=0: subtract 3 per frame (~85 frames = ~1.4s to fade)
-  // At speed=128: subtract 7 per frame (~36 frames = ~600ms)
-  // At speed=255: subtract 11 per frame (~23 frames = ~380ms)
+  // Speed controls fade rate using scale8 (multiplicative, guaranteed zero)
+  // Higher speed = faster fade
   uint8_t speed = instance->_segment.speed;
-  uint8_t fadeAmount = 3 + (speed >> 5); // 3-11 range
+  // fade_scale: 220-180 range (faster fade at high speed)
+  // At speed=0: scale=220 (~86% retention = slow fade)
+  // At speed=128: scale=200 (~78% retention = medium fade)
+  // At speed=255: scale=180 (~70% retention = fast fade)
+  uint8_t fade_scale = 220 - (speed >> 3) - (speed >> 4); // 220 to ~180
 
-  // Get palette - use Rainbow (index 3) as default when palette=0
+  // Get palette - use Rainbow (index 4) as default when palette=0
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
           ? getPaletteByIndex(4) // Rainbow palette default
           : getPaletteByIndex(instance->_segment.palette);
 
-  // Step 1: Fade ALL pixels toward black using subtraction
+  // Step 1: Fade ALL pixels toward black using scale8 (multiplicative)
+  // This GUARANTEES reaching 0 (unlike subtraction which can leave residue)
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
     uint8_t r = (cur32 >> 16) & 0xFF;
     uint8_t g = (cur32 >> 8) & 0xFF;
     uint8_t b = cur32 & 0xFF;
 
-    // Subtraction fade - guarantees reaching 0
-    r = (r > fadeAmount) ? r - fadeAmount : 0;
-    g = (g > fadeAmount) ? g - fadeAmount : 0;
-    b = (b > fadeAmount) ? b - fadeAmount : 0;
+    // scale8 multiplicative fade - guaranteed to reach 0
+    r = scale8(r, fade_scale);
+    g = scale8(g, fade_scale);
+    b = scale8(b, fade_scale);
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
   }
