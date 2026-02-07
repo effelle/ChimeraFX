@@ -743,14 +743,13 @@ uint16_t mode_fire_2012(void) {
     return mode_static();
   uint8_t *heat = instance->_segment.data;
 
-  // Speed scaling: 128 ESPHome → 83 WLED internal (60fps → 42fps adjustment)
-  uint8_t user_speed = instance->_segment.speed;
-  uint8_t wled_speed = (user_speed <= 128)
-                           ? (user_speed * 83 / 128)
-                           : (83 + ((user_speed - 128) * 172 / 127));
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t fire_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
 
   // WLED uses time-based throttling
-  const uint32_t it = instance->now >> 5; // div 32
+  const uint32_t it = timing.scaled_now >> 5; // div 32
 
   // Ignition area: 10% of segment length or minimum 3 pixels
   const uint8_t ignition = max(3, len / 10);
@@ -1712,13 +1711,11 @@ uint16_t mode_flow(void) {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
 
-  // Counter for animation (scale speed by 70%)
-  uint32_t counter = 0;
-  uint8_t speed = instance->_segment.speed * 7 / 10;
-  if (speed != 0) {
-    counter = instance->now * ((speed >> 2) + 1);
-    counter = counter >> 8;
-  }
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t flow_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, flow_last_millis);
+  uint32_t counter = (timing.scaled_now >> 3) & 0xFF;
 
   // Calculate zones based on intensity
   int maxZones = len / 6; // Each zone needs at least 6 LEDs
