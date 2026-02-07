@@ -585,9 +585,9 @@ uint16_t mode_blink(void) {
 
   // Cycle time: 2000ms at speed 0, down to ~50ms at speed 255 (strobe)
   // Formula: cycleTime = 2000 - (speed * 7.6) -> 2000ms to ~62ms
-  uint32_t cycleTime = 2000 - ((uint32_t)speed * 1950 / 255);
-  if (cycleTime < 50)
-    cycleTime = 50; // Minimum 50ms for strobe
+  uint32_t cycleTime = 6000 - ((uint32_t)speed * 5800 / 255);
+  if (cycleTime < 200)
+    cycleTime = 200; // Safe minimum for stable strobing
 
   uint32_t prog = instance->now % cycleTime;
 
