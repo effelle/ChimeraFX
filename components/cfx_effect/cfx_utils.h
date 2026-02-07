@@ -219,6 +219,7 @@ struct FrameDiagnostics {
 struct FrameTiming {
   uint32_t deltams;    // Speed-scaled delta for wave position updates
   uint32_t scaled_now; // Speed-scaled time for beat functions
+  uint8_t wled_speed;  // WLED-scaled speed (128 ESPHome -> 83 WLED)
 };
 
 // Calculate WLED-faithful timing based on speed slider
@@ -247,7 +248,12 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
   uint64_t deltat =
       ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
 
-  return {deltams, (uint32_t)deltat};
+  // WLED speed scaling: 128 ESPHome -> 83 WLED internal (60fps -> 42fps
+  // adjustment)
+  uint8_t wled_speed =
+      (speed <= 128) ? (speed * 83 / 128) : (83 + ((speed - 128) * 172 / 127));
+
+  return {deltams, (uint32_t)deltat, wled_speed};
 }
 
 } // namespace cfx
