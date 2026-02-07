@@ -755,23 +755,21 @@ uint16_t mode_fire_2012(void) {
   const uint8_t ignition = max(3, len / 10);
 
   // Step 1. Cool down every cell a little
-  // Dynamic cooling using inverse-sqrt-like scaling for consistent flame height
-  // Goal: flames reach ~50% height on any strip length at default intensity
-  // Short strips (58 LEDs): lower base cooling, flames ~29 LEDs
-  // Long strips (265 LEDs): higher base cooling, flames ~132 LEDs
+  // Cooling formula: scales inversely with strip length so flames reach ~50%
+  // height Original WLED used: random8((20 + speed/3) * 10 / len + 2) We keep
+  // similar logic: shorter strips need more cooling per cell, longer need less
   //
-  // Formula uses: cooling = raw_cool * 8 / (4 + len/32)
-  // At 58 LEDs: divisor = 4 + 1 = 5, so cooling is higher per-cell
-  // At 265 LEDs: divisor = 4 + 8 = 12, so cooling is lower per-cell (taller
-  // flames)
+  // Target cooling values (at speed 64):
+  // - 58 LEDs: ~7 cooling → flames reach ~30 LEDs
+  // - 265 LEDs: ~2 cooling → flames reach ~130 LEDs
   uint16_t raw_cool = 20 + timing.wled_speed / 3;
-  uint16_t len_factor = 4 + len / 32; // 5 for 58 LEDs, 12 for 265 LEDs
 
   for (int i = 0; i < len; i++) {
-    uint8_t base_cool = (raw_cool * 8) / len_factor + 2;
-    // Clamp minimum cooling
-    if (base_cool < 3)
-      base_cool = 3;
+    // Direct inverse scaling: larger len = smaller cooling per cell
+    uint8_t base_cool = (raw_cool * 10) / len + 2;
+    // Minimum 2 to ensure some cooling always happens
+    if (base_cool < 2)
+      base_cool = 2;
     uint8_t cool =
         (it != instance->_segment.step) ? random8(base_cool) : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
