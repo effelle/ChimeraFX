@@ -825,6 +825,127 @@ uint16_t mode_fire_2012(void) {
   return FRAMETIME;
 }
 
+// --- Fire Dual (ID 53) ---
+// Two flames meeting in the middle
+// Uses same Virtual Resolution (60px) physics as Fire 2012 for consistency
+uint16_t mode_fire_dual(void) {
+  if (!instance)
+    return 350;
+
+  int len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // 1. Define Virtual Grid
+  const int VIRTUAL_HEIGHT = 60;
+
+  // Allocate heat array for Virtual Grid
+  if (!instance->_segment.allocateData(VIRTUAL_HEIGHT))
+    return mode_static();
+  uint8_t *heat = instance->_segment.data;
+
+  // === WLED-FAITHFUL TIMING using centralized helper ===
+  static uint32_t fire_last_millis = 0;
+  auto timing =
+      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
+
+  const uint32_t it = timing.scaled_now >> 5; // div 32
+  const uint8_t ignition = max(3, VIRTUAL_HEIGHT / 10);
+
+  // --- Step 1-3: Run Simulation on Virtual Grid (Same as Fire 2012) ---
+  for (int i = 0; i < VIRTUAL_HEIGHT; i++) {
+    uint8_t cool =
+        (it != instance->_segment.step)
+            ? random8((((20 + timing.wled_speed / 3) * 16) / VIRTUAL_HEIGHT) +
+                      2)
+            : random8(4);
+    uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16 : 0;
+    uint8_t temp = qsub8(heat[i], cool);
+    heat[i] = (temp < minTemp) ? minTemp : temp;
+  }
+
+  if (it != instance->_segment.step) {
+    for (int k = VIRTUAL_HEIGHT - 1; k > 1; k--) {
+      heat[k] = (heat[k - 1] + (heat[k - 2] << 1)) / 3;
+    }
+    if (random8() <= instance->_segment.intensity) {
+      uint8_t y = random8(ignition);
+      uint8_t boost = 17 * (ignition - y / 2) / ignition;
+      heat[y] = qadd8(heat[y], random8(96 + 2 * boost, 207 + boost));
+    }
+    instance->_segment.step = it;
+  }
+
+  // --- Step 4: Map Virtual Heat to Physical LEDs (Mirrored) ---
+  // Vacuum: 2 pixels in center where no fire exists
+  // Each flame covers: (len - vacuum) / 2
+  int vacuum = 2;
+  int half_len = (len - vacuum) / 2;
+  if (half_len < 1)
+    half_len = 1; // Safety for very short strips
+
+  // Scale factor: Virtual -> Physical Half
+  float scale = (float)VIRTUAL_HEIGHT / (float)half_len;
+
+  // Render Left Flame (0 -> half_len)
+  for (int j = 0; j < half_len; j++) {
+    int v_index = (int)(j * scale);
+    if (v_index >= VIRTUAL_HEIGHT)
+      v_index = VIRTUAL_HEIGHT - 1;
+
+    uint8_t t = min(heat[v_index], (uint8_t)240);
+    uint8_t r, g, b;
+    if (t <= 85) {
+      r = t * 3;
+      g = 0;
+      b = 0;
+    } else if (t <= 170) {
+      r = 255;
+      g = (t - 85) * 3;
+      b = 0;
+    } else {
+      r = 255;
+      g = 255;
+      b = (t - 170) * 3;
+    }
+
+    instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
+  }
+
+  // Render Vacuum (Black)
+  for (int j = half_len; j < len - half_len; j++) {
+    instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
+  }
+
+  // Render Right Flame (len-1 -> len-1-half_len) - Mirrored
+  for (int j = 0; j < half_len; j++) {
+    int v_index = (int)(j * scale);
+    if (v_index >= VIRTUAL_HEIGHT)
+      v_index = VIRTUAL_HEIGHT - 1;
+
+    uint8_t t = min(heat[v_index], (uint8_t)240);
+    uint8_t r, g, b;
+    if (t <= 85) {
+      r = t * 3;
+      g = 0;
+      b = 0;
+    } else if (t <= 170) {
+      r = 255;
+      g = (t - 85) * 3;
+      b = 0;
+    } else {
+      r = 255;
+      g = 255;
+      b = (t - 170) * 3;
+    }
+
+    // Mirror to other side: len - 1 - j
+    instance->_segment.setPixelColor(len - 1 - j, RGBW32(r, g, b, 0));
+  }
+
+  return FRAMETIME;
+}
+
 // --- Pacifica Effect ---
 // Exact WLED implementation by Mark Kriegsman
 // Gentle ocean waves - December 2019
@@ -2573,6 +2694,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_FIRE_2012: // 66
     mode_fire_2012();
+    break;
+  case FX_MODE_FIRE_DUAL: // 53
+    mode_fire_dual();
     break;
   case FX_MODE_COLORTWINKLE: // 74
     mode_colortwinkle();
