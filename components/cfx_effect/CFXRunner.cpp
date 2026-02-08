@@ -730,6 +730,9 @@ uint16_t mode_aurora(void) {
 // --- Fire2012 Effect ---
 // Exact WLED implementation by Mark Kriegsman
 // Adapted for ESPHome framework
+// VIRTUAL RESOLUTION UPDATE:
+// Simulates fire on a fixed 60-pixel grid to ensure identical behavior on any
+// strip length, then scales output to actual length.
 uint16_t mode_fire_2012(void) {
   if (!instance)
     return 350;
@@ -738,8 +741,11 @@ uint16_t mode_fire_2012(void) {
   if (len <= 1)
     return mode_static();
 
-  // Allocate heat array
-  if (!instance->_segment.allocateData(len))
+  // 1. Define Virtual Grid
+  const int VIRTUAL_HEIGHT = 60;
+
+  // Allocate heat array for Virtual Grid
+  if (!instance->_segment.allocateData(VIRTUAL_HEIGHT))
     return mode_static();
   uint8_t *heat = instance->_segment.data;
 
@@ -751,27 +757,18 @@ uint16_t mode_fire_2012(void) {
   // WLED uses time-based throttling
   const uint32_t it = timing.scaled_now >> 5; // div 32
 
-  // Ignition area: 10% of segment length or minimum 3 pixels
-  const uint8_t ignition = max(3, len / 10);
+  // Ignition area: 10% of VIRTUAL length or minimum 3 pixels
+  const uint8_t ignition = max(3, VIRTUAL_HEIGHT / 10);
 
-  // Step 1. Cool down every cell a little
-  // Cooling formula: scales inversely with strip length so flames reach ~50%
-  // height Original WLED used: random8((20 + speed/3) * 10 / len + 2) We keep
-  // similar logic: shorter strips need more cooling per cell, longer need less
-  //
-  // Target cooling values (at speed 64):
-  // - 58 LEDs: ~7 cooling → flames reach ~30 LEDs
-  // - 265 LEDs: ~2 cooling → flames reach ~130 LEDs
-  uint16_t raw_cool = 20 + timing.wled_speed / 3;
-
-  for (int i = 0; i < len; i++) {
-    // Direct inverse scaling: larger len = smaller cooling per cell
-    uint8_t base_cool = (raw_cool * 10) / len + 2;
-    // Minimum 2 to ensure some cooling always happens
-    if (base_cool < 2)
-      base_cool = 2;
+  // Step 1. Cool down every cell a little (on Virtual Grid)
+  for (int i = 0; i < VIRTUAL_HEIGHT; i++) {
+    // Standard WLED cooling formula for ~60 pixels
+    // No need for dynamic scaling since we are on fixed grid
     uint8_t cool =
-        (it != instance->_segment.step) ? random8(base_cool) : random8(4);
+        (it != instance->_segment.step)
+            ? random8((((20 + timing.wled_speed / 3) * 16) / VIRTUAL_HEIGHT) +
+                      2)
+            : random8(4);
     uint8_t minTemp = (i < ignition) ? (ignition - i) / 4 + 16
                                      : 0; // don't black out ignition area
     uint8_t temp = qsub8(heat[i], cool);
@@ -779,12 +776,12 @@ uint16_t mode_fire_2012(void) {
   }
 
   if (it != instance->_segment.step) {
-    // Step 2. Heat from each cell drifts 'up' and diffuses
-    for (int k = len - 1; k > 1; k--) {
+    // Step 2. Heat from each cell drifts 'up' and diffuses (Virtual Grid)
+    for (int k = VIRTUAL_HEIGHT - 1; k > 1; k--) {
       heat[k] = (heat[k - 1] + (heat[k - 2] << 1)) / 3; // heat[k-2] * 2
     }
 
-    // Step 3. Randomly ignite new 'sparks' near bottom
+    // Step 3. Randomly ignite new 'sparks' near bottom (Virtual Grid)
     if (random8() <= instance->_segment.intensity) {
       uint8_t y = random8(ignition);
       uint8_t boost = 17 * (ignition - y / 2) / ignition; // WLED default boost
@@ -792,9 +789,18 @@ uint16_t mode_fire_2012(void) {
     }
   }
 
-  // Step 4. Map heat to LED colors using default fire gradient
+  // Step 4. Map Virtual Heat to Physical LED colors (Upscaling)
+  // Scale factor from Virtual -> Physical
+  float scale = (float)VIRTUAL_HEIGHT / (float)len;
+
   for (int j = 0; j < len; j++) {
-    uint8_t t = min(heat[j], (uint8_t)240);
+    // Map physical index 'j' to virtual index 'v_index'
+    // Ensure we don't go out of bounds
+    int v_index = (int)(j * scale);
+    if (v_index >= VIRTUAL_HEIGHT)
+      v_index = VIRTUAL_HEIGHT - 1;
+
+    uint8_t t = min(heat[v_index], (uint8_t)240);
     uint8_t r, g, b;
     // Heat colors: black -> red -> orange -> yellow -> white
     if (t <= 85) {
