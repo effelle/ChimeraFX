@@ -22,7 +22,7 @@ A **Chimera** is a legendary creature composed of three animals. ChimeraFX merge
 This project is **not** a full WLED replacement and it will never be. Choose the right tool for your hardware:
 
 *   **Install [WLED](https://kno.wled.ge/) if:** You want the full experience (Segments, E1.31, 150+ effects) or are dedicating an MCU solely to lighting.
-*   **Use `wled-runner` if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
+*   **Use `ChimeraFX` if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
 ### Reality Check
 
