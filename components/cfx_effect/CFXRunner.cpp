@@ -885,7 +885,10 @@ uint16_t mode_fire_dual(void) {
     half_len = 1; // Safety for very short strips
 
   // Scale factor: Virtual -> Physical Half
-  float scale = (float)VIRTUAL_HEIGHT / (float)half_len;
+  // "Zoom": Map only the bottom 48 pixels of the 60px virtual fire to the strip
+  // This crops the top ~20% (mostly smoke/black) to ensure flames meet in the
+  // middle Fixes "vacuum too big" on long strips
+  float scale = (float)(VIRTUAL_HEIGHT - 12) / (float)half_len;
 
   // Render Left Flame (0 -> half_len)
   for (int j = 0; j < half_len; j++) {
