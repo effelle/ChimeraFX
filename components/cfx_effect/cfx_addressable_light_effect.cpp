@@ -39,9 +39,12 @@ void CFXAddressableLightEffect::start() {
   number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && this->speed_preset_.has_value()) {
-    auto call = speed_num->make_call();
-    call.set_value(this->speed_preset_.value());
-    call.perform();
+    float target = (float)this->speed_preset_.value();
+    if (speed_num->state != target) {
+      auto call = speed_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
   } else if (speed_num != nullptr && !this->speed_preset_.has_value()) {
     // Optional: existing logic for default speed if no preset?
     // For now only applying explicit presets to avoid overriding user manual
@@ -55,15 +58,23 @@ void CFXAddressableLightEffect::start() {
   number::Number *intensity_num =
       (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
   if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
-    auto call = intensity_num->make_call();
-    call.set_value(this->intensity_preset_.value());
-    call.perform();
+    float target = (float)this->intensity_preset_.value();
+    if (intensity_num->state != target) {
+      auto call = intensity_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
   }
 
   // 3. Palette (Fixed: Resolve from controller)
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->palette_;
   if (palette_sel != nullptr && this->palette_preset_.has_value()) {
+    // NOTE: Select uses strings, but we have an index preset.
+    // Optimally we should check index, but Select component typically stores
+    // state as String. We can't easily check 'state != value' without mapping
+    // index to string. For Safety, we SKIP optimization for Dropdowns to ensure
+    // index is enforced.
     auto call = palette_sel->make_call();
     call.set_index(this->palette_preset_.value());
     call.perform();
@@ -73,10 +84,13 @@ void CFXAddressableLightEffect::start() {
   switch_::Switch *mirror_sw =
       (c && c->get_mirror()) ? c->get_mirror() : this->mirror_;
   if (mirror_sw != nullptr && this->mirror_preset_.has_value()) {
-    if (this->mirror_preset_.value()) {
-      mirror_sw->turn_on();
-    } else {
-      mirror_sw->turn_off();
+    bool target = this->mirror_preset_.value();
+    if (mirror_sw->state != target) {
+      if (target) {
+        mirror_sw->turn_on();
+      } else {
+        mirror_sw->turn_off();
+      }
     }
   }
 
@@ -85,6 +99,7 @@ void CFXAddressableLightEffect::start() {
                                   ? c->get_intro_effect()
                                   : this->intro_effect_;
   if (intro_sel != nullptr && this->intro_preset_.has_value()) {
+    // Same as Palette: Force update to be safe with Index->String mapping
     auto call = intro_sel->make_call();
     call.set_index(this->intro_preset_.value());
     call.perform();
@@ -95,9 +110,12 @@ void CFXAddressableLightEffect::start() {
                                       ? c->get_intro_duration()
                                       : this->intro_duration_;
   if (intro_dur_num != nullptr && this->intro_duration_preset_.has_value()) {
-    auto call = intro_dur_num->make_call();
-    call.set_value(this->intro_duration_preset_.value());
-    call.perform();
+    float target = this->intro_duration_preset_.value();
+    if (intro_dur_num->state != target) {
+      auto call = intro_dur_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
   }
 
   // 7. Intro Use Palette
@@ -105,19 +123,25 @@ void CFXAddressableLightEffect::start() {
                                       ? c->get_intro_use_palette()
                                       : this->intro_use_palette_;
   if (intro_pal_sw != nullptr && this->intro_use_palette_preset_.has_value()) {
-    if (this->intro_use_palette_preset_.value()) {
-      intro_pal_sw->turn_on();
-    } else {
-      intro_pal_sw->turn_off();
+    bool target = this->intro_use_palette_preset_.value();
+    if (intro_pal_sw->state != target) {
+      if (target) {
+        intro_pal_sw->turn_on();
+      } else {
+        intro_pal_sw->turn_off();
+      }
     }
   }
 
   // 8. Timer
   number::Number *timer_num = (c) ? c->get_timer() : nullptr;
   if (timer_num != nullptr && this->timer_preset_.has_value()) {
-    auto call = timer_num->make_call();
-    call.set_value(this->timer_preset_.value());
-    call.perform();
+    float target = (float)this->timer_preset_.value();
+    if (timer_num->state != target) {
+      auto call = timer_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
   }
 
   // === END PRESETS ===
@@ -402,53 +426,56 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
   const char *option = s->current_option();
   if (option == nullptr)
     return 0;
-  std::string name(option);
 
-  // New indices after adding Aurora to palette list:
-  // 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
-  if (name == "Aurora")
+  // Optimization: Use strcmp to avoid std::string allocation on every frame
+  if (strcmp(option, "Aurora") == 0)
     return 1;
-  if (name == "Forest")
+  if (strcmp(option, "Forest") == 0)
     return 2;
-  if (name == "Ocean")
+  if (strcmp(option, "Halloween") == 0)
     return 3;
-  if (name == "Rainbow")
+  if (strcmp(option, "Rainbow") == 0)
     return 4;
-  if (name == "Fire")
+  if (strcmp(option, "Fire") == 0)
     return 5;
-  if (name == "Sunset")
+  if (strcmp(option, "Sunset") == 0)
     return 6;
-  if (name == "Ice")
+  if (strcmp(option, "Ice") == 0)
     return 7;
-  if (name == "Party")
+  if (strcmp(option, "Party") == 0)
     return 8;
-  if (name == "Lava")
+  if (strcmp(option, "Lava") == 0)
     return 9;
-  if (name == "Pastel")
+  if (strcmp(option, "Pastel") == 0)
     return 10;
-  if (name == "Pacifica")
+  if (strcmp(option, "Ocean") == 0)
     return 11;
-  if (name == "HeatColors")
+  if (strcmp(option, "HeatColors") == 0)
     return 12;
-  if (name == "Sakura")
+  if (strcmp(option, "Sakura") == 0)
     return 13;
-  if (name == "Rivendell")
+  if (strcmp(option, "Rivendell") == 0)
     return 14;
-  if (name == "Cyberpunk")
+  if (strcmp(option, "Cyberpunk") == 0)
     return 15;
-  if (name == "OrangeTeal")
+  if (strcmp(option, "OrangeTeal") == 0)
     return 16;
-  if (name == "Christmas")
+  if (strcmp(option, "Christmas") == 0)
     return 17;
-  if (name == "RedBlue")
+  if (strcmp(option, "RedBlue") == 0)
     return 18;
-  if (name == "Matrix")
+  if (strcmp(option, "Matrix") == 0)
     return 19;
-  if (name == "SunnyGold")
+  if (strcmp(option, "SunnyGold") == 0)
     return 20;
-  if (name == "None" || name == "Solid")
+  if (strcmp(option, "None") == 0 || strcmp(option, "Solid") == 0)
     return 255;
-  if (name == "Default") {
+  if (strcmp(option, "Fairy") == 0)
+    return 22;
+  if (strcmp(option, "Twilight") == 0)
+    return 23;
+
+  if (strcmp(option, "Default") == 0) {
     // Resolve the natural default for this effect
     if (this->runner_) {
       uint8_t m = this->runner_->getMode();
