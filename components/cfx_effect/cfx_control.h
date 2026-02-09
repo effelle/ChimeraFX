@@ -146,6 +146,7 @@ public:
   esphome::switch_::Switch *get_intro_use_palette() {
     return intro_use_palette_;
   }
+  number::Number *get_timer() { return timer_; }
 
   std::vector<esphome::light::LightState *> get_lights() { return lights_; }
 

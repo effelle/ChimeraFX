@@ -65,6 +65,7 @@ public:
   uint8_t active_intro_mode_{0};
   uint32_t intro_start_time_{0};
 
+  void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
   void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
   void set_intro_duration_preset(float v) { this->intro_duration_preset_ = v; }
   void set_intro_use_palette_preset(bool v) {
