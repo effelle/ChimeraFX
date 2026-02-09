@@ -600,25 +600,16 @@ void CFXAddressableLightEffect::run_controls_() {
           this->get_default_intensity_(this->effect_id_));
     }
 
-    // 4. Palette (with debug logging)
-    ESP_LOGD(TAG,
-             "Palette check: controller=%p, c->get_palette()=%p, "
-             "local_palette=%p, runner=%p",
-             c, c ? (void *)c->get_palette() : nullptr, (void *)this->palette_,
-             (void *)this->runner_);
+    // 4. Palette
     if (c && c->get_palette()) {
       uint8_t pal_idx = get_pal_idx(c->get_palette());
-      ESP_LOGD(TAG, "Palette from controller: %d", pal_idx);
       this->runner_->setPalette(pal_idx);
     } else if (this->palette_) {
       uint8_t pal_idx = get_pal_idx(this->palette_);
-      ESP_LOGD(TAG, "Palette from local select: %d", pal_idx);
       this->runner_->setPalette(pal_idx);
     } else {
       // FALLBACK: No control component - use per-effect default
       uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
-      ESP_LOGD(TAG, "Palette fallback: effect %d -> palette %d",
-               this->effect_id_, default_pal);
       this->runner_->setPalette(default_pal);
     }
 
