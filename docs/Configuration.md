@@ -6,12 +6,7 @@ ESPHome requires you to define your inputs (sliders, dropdowns, switches) explic
 
 The `addressable_cfx` effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.
 
-**Two Ways to Configure: Automatic or Manual**
-
-## **1. Automatic Configuration(Recommended):** 
-Use the `cfx_control` component. It generates all necessary entities for you using core `number`, `select`, and `switch` components.
-
-Add the `cfx_control` component to automatically generate all controls (Speed, Intensity, Palette, Mirror, Intro, Timer) and link them to your light.
+To generate controls automatically, use the `cfx_control` component. It will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro, Timer) for you using core `number`, `select`, and `switch` components and link them to your light.
 
 ```yaml
 cfx_effect:
@@ -24,7 +19,7 @@ cfx_effect:
       # exclude: [timer, intro]  # or IDs [6, 5]
 ```
 
-**Note:** The `light_id` parameter in the `cfx_control` component is used to link the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
+**Note:** The `light_id` parameter in the `cfx_control` component is used to link the controller to a specific light. This is necessary because the `addressable_cfx` effect needs  to know which light it is controlling.
 
 > [!IMPORTANT]
 > **Component Dependencies:** The `cfx_control` component automatically generates entities using ESPHome's standard `number`, `select`, and `switch` components. You do **not** need to manually define them.

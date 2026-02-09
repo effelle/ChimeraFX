@@ -208,6 +208,35 @@ void CFXAddressableLightEffect::start() {
 }
 
 void CFXAddressableLightEffect::stop() {
+  // Check if we are turning OFF (not just switching effects)
+  auto *state = this->get_light_state();
+  if (state != nullptr && !state->current_values.is_on()) {
+    // Reset defaults: Speed=128, Intensity=128, Timer=0
+    // Try to find controller if missing
+    if (this->controller_ == nullptr) {
+      this->controller_ = CFXControl::find(state);
+    }
+
+    CFXControl *c = this->controller_;
+    if (c != nullptr) {
+      if (c->get_speed()) {
+        auto call = c->get_speed()->make_call();
+        call.set_value(128);
+        call.perform();
+      }
+      if (c->get_intensity()) {
+        auto call = c->get_intensity()->make_call();
+        call.set_value(128);
+        call.perform();
+      }
+      if (c->get_timer()) {
+        auto call = c->get_timer()->make_call();
+        call.set_value(0);
+        call.perform();
+      }
+    }
+  }
+
   AddressableLightEffect::stop();
 
   // Clear intro snapshot vector to reclaim RAM
