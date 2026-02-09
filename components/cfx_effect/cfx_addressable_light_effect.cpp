@@ -675,7 +675,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   Color c = target_color;
   auto *state = this->get_light_state();
   if (state) {
-    c = state->remote_values.get_color();
+    auto v = state->remote_values;
+    c = Color((uint8_t)(v.get_red() * 255), (uint8_t)(v.get_green() * 255),
+              (uint8_t)(v.get_blue() * 255), (uint8_t)(v.get_white() * 255));
   }
   if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
     c = Color::WHITE;
