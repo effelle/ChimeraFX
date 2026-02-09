@@ -28,6 +28,100 @@ void CFXAddressableLightEffect::start() {
   // 0. Link Controls first - Critical to find controller
   this->run_controls_();
 
+  // Resolve Controller
+  CFXControl *c = this->controller_;
+
+  // === APPLY PRESETS FIRST ===
+  // Ensure components are in the correct state before we read them for
+  // Intro/Logic
+
+  // 1. Speed
+  number::Number *speed_num =
+      (c && c->get_speed()) ? c->get_speed() : this->speed_;
+  if (speed_num != nullptr && this->speed_preset_.has_value()) {
+    auto call = speed_num->make_call();
+    call.set_value(this->speed_preset_.value());
+    call.perform();
+  } else if (speed_num != nullptr && !this->speed_preset_.has_value()) {
+    // Optional: existing logic for default speed if no preset?
+    // For now only applying explicit presets to avoid overriding user manual
+    // changes if no preset set. But wait, get_default_speed_ was used before.
+    // The previous logic applied default if no preset.
+    // User request was about presets. I will keep explicit preset logic strict
+    // for now to avoid side effects.
+  }
+
+  // 2. Intensity
+  number::Number *intensity_num =
+      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+  if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
+    auto call = intensity_num->make_call();
+    call.set_value(this->intensity_preset_.value());
+    call.perform();
+  }
+
+  // 3. Palette (Fixed: Resolve from controller)
+  select::Select *palette_sel =
+      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+  if (palette_sel != nullptr && this->palette_preset_.has_value()) {
+    auto call = palette_sel->make_call();
+    call.set_index(this->palette_preset_.value());
+    call.perform();
+  }
+
+  // 4. Mirror (Fixed: Resolve from controller)
+  switch_::Switch *mirror_sw =
+      (c && c->get_mirror()) ? c->get_mirror() : this->mirror_;
+  if (mirror_sw != nullptr && this->mirror_preset_.has_value()) {
+    if (this->mirror_preset_.value()) {
+      mirror_sw->turn_on();
+    } else {
+      mirror_sw->turn_off();
+    }
+  }
+
+  // 5. Intro Effect
+  select::Select *intro_sel = (c && c->get_intro_effect())
+                                  ? c->get_intro_effect()
+                                  : this->intro_effect_;
+  if (intro_sel != nullptr && this->intro_preset_.has_value()) {
+    auto call = intro_sel->make_call();
+    call.set_index(this->intro_preset_.value());
+    call.perform();
+  }
+
+  // 6. Intro Duration
+  number::Number *intro_dur_num = (c && c->get_intro_duration())
+                                      ? c->get_intro_duration()
+                                      : this->intro_duration_;
+  if (intro_dur_num != nullptr && this->intro_duration_preset_.has_value()) {
+    auto call = intro_dur_num->make_call();
+    call.set_value(this->intro_duration_preset_.value());
+    call.perform();
+  }
+
+  // 7. Intro Use Palette
+  switch_::Switch *intro_pal_sw = (c && c->get_intro_use_palette())
+                                      ? c->get_intro_use_palette()
+                                      : this->intro_use_palette_;
+  if (intro_pal_sw != nullptr && this->intro_use_palette_preset_.has_value()) {
+    if (this->intro_use_palette_preset_.value()) {
+      intro_pal_sw->turn_on();
+    } else {
+      intro_pal_sw->turn_off();
+    }
+  }
+
+  // 8. Timer
+  number::Number *timer_num = (c) ? c->get_timer() : nullptr;
+  if (timer_num != nullptr && this->timer_preset_.has_value()) {
+    auto call = timer_num->make_call();
+    call.set_value(this->timer_preset_.value());
+    call.perform();
+  }
+
+  // === END PRESETS ===
+
   // State Machine Init: Check if we are turning ON from OFF
   auto *state = this->get_light_state();
   if (state != nullptr) {
@@ -50,17 +144,17 @@ void CFXAddressableLightEffect::start() {
     this->intro_active_ = false;
   }
 
-  // Resolve Intro Mode
+  // Resolve Intro Mode (Now reflecting Presets!)
   this->active_intro_mode_ = INTRO_NONE;
 
   if (this->intro_active_) {
-    select::Select *intro_sel = this->intro_effect_;
-    // Inverse Link check
-    if (intro_sel == nullptr && this->controller_ != nullptr) {
-      intro_sel = this->controller_->get_intro_effect();
-      if (intro_sel)
-        this->intro_effect_ = intro_sel; // Cache it
+    // Re-resolve in case preset changed it
+    if (intro_sel == nullptr && c != nullptr) {
+      intro_sel = c->get_intro_effect();
     }
+    // Also check local member if controller failed
+    if (intro_sel == nullptr)
+      intro_sel = this->intro_effect_;
 
     if (intro_sel != nullptr && intro_sel->has_state()) {
       const char *opt = intro_sel->current_option();
@@ -77,102 +171,14 @@ void CFXAddressableLightEffect::start() {
         this->active_intro_mode_ = INTRO_NONE;
     }
 
+    // Cache for this run
+    this->intro_effect_ = intro_sel;
+
     if (this->active_intro_mode_ == INTRO_NONE) {
       this->intro_active_ = false;
       ESP_LOGD(TAG, "Intro Skipped (Configured as None or Not Ready)");
     } else {
       ESP_LOGD(TAG, "Intro Active: Mode %d", this->active_intro_mode_);
-    }
-  }
-
-  // Push per-effect presets to control components
-  // Use YAML preset if specified, otherwise use per-effect defaults
-  // Must use controller's components (like run_controls_) to update UI
-  CFXControl *c = this->controller_;
-
-  // Get the actual Number component (prefer controller, fallback to direct)
-  number::Number *speed_num =
-      (c && c->get_speed()) ? c->get_speed() : this->speed_;
-  number::Number *intensity_num =
-      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
-
-  if (speed_num != nullptr) {
-    uint8_t target_speed = this->speed_preset_.has_value()
-                               ? this->speed_preset_.value()
-                               : get_default_speed_(this->effect_id_);
-    auto call = speed_num->make_call();
-    call.set_value(target_speed);
-    call.perform();
-  }
-  if (intensity_num != nullptr) {
-    uint8_t target_intensity = this->intensity_preset_.has_value()
-                                   ? this->intensity_preset_.value()
-                                   : get_default_intensity_(this->effect_id_);
-    auto call = intensity_num->make_call();
-    call.set_value(target_intensity);
-    call.perform();
-  }
-  if (this->palette_preset_.has_value() && this->palette_ != nullptr) {
-    auto call = this->palette_->make_call();
-    call.set_index(this->palette_preset_.value());
-    call.perform();
-  }
-  if (this->mirror_preset_.has_value() && this->mirror_ != nullptr) {
-    if (this->mirror_preset_.value()) {
-      this->mirror_->turn_on();
-    } else {
-      this->mirror_->turn_off();
-    }
-  }
-
-  // New Presets: Intro, Intro Duration, Timer
-  // Resolve components via controller if not local
-
-  // 5. Intro Effect
-  if (this->intro_preset_.has_value()) {
-    select::Select *s = this->intro_effect_;
-    if (s == nullptr && c != nullptr)
-      s = c->get_intro_effect();
-    if (s != nullptr) {
-      auto call = s->make_call();
-      call.set_index(this->intro_preset_.value());
-      call.perform();
-    }
-  }
-
-  // 6. Intro Duration
-  if (this->intro_duration_preset_.has_value()) {
-    number::Number *n = this->intro_duration_;
-    if (n == nullptr && c != nullptr)
-      n = c->get_intro_duration();
-    if (n != nullptr) {
-      auto call = n->make_call();
-      call.set_value(this->intro_duration_preset_.value());
-      call.perform();
-    }
-  }
-
-  // 7. Intro Use Palette
-  if (this->intro_use_palette_preset_.has_value()) {
-    switch_::Switch *sw = this->intro_use_palette_;
-    if (sw == nullptr && c != nullptr)
-      sw = c->get_intro_use_palette();
-    if (sw != nullptr) {
-      if (this->intro_use_palette_preset_.value()) {
-        sw->turn_on();
-      } else {
-        sw->turn_off();
-      }
-    }
-  }
-
-  // 8. Timer (Controller only)
-  if (this->timer_preset_.has_value() && c != nullptr) {
-    number::Number *t = c->get_timer();
-    if (t != nullptr) {
-      auto call = t->make_call();
-      call.set_value(this->timer_preset_.value());
-      call.perform();
     }
   }
 }
