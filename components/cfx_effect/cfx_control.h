@@ -99,6 +99,44 @@ public:
     }
   }
 
+  void loop() override {
+    bool is_any_on = false;
+    for (auto *l : lights_) {
+      if (l->remote_values.is_on()) {
+        is_any_on = true;
+        break;
+      }
+    }
+
+    // Detect falling edge (ALL lights went from ON -> OFF)
+    if (was_on_ && !is_any_on) {
+      ESP_LOGD("chimera_fx",
+               "CFXControl: All lights turned off -> Resetting controls");
+
+      // Reset Speed to 128
+      if (speed_) {
+        auto call = speed_->make_call();
+        call.set_value(128);
+        call.perform();
+      }
+
+      // Reset Intensity to 128
+      if (intensity_) {
+        auto call = intensity_->make_call();
+        call.set_value(128);
+        call.perform();
+      }
+
+      // Reset Timer to 0
+      if (timer_) {
+        auto call = timer_->make_call();
+        call.set_value(0);
+        call.perform();
+      }
+    }
+    was_on_ = is_any_on;
+  }
+
   void set_speed(number::Number *n) { speed_ = n; }
   void set_intensity(number::Number *n) { intensity_ = n; }
   void set_palette(select::Select *s) { palette_ = s; }
@@ -162,6 +200,7 @@ protected:
 
   std::vector<esphome::light::LightState *> lights_;
   std::vector<CFXRunner *> runners_; // Registered active runners
+  bool was_on_{false};
 
   void on_timer_tick_() {
     if (timer_ == nullptr || lights_.empty())
