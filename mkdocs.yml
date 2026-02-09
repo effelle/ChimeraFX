@@ -38,7 +38,7 @@ nav:
   - Home: index.md
   - Guide:
     - Installation: Installation.md
-    - Configuration: Configuration.md
+    - Controls: Controls.md
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md
   - Reference:

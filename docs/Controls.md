@@ -1,6 +1,6 @@
-# YAML Configuration Guide
+# Controls Guide
 
-ESPHome requires you to define your inputs (sliders, dropdowns, switches) explicitly at compile-time. This gives you the power to create multiple independent light setups or simplify controls as you see fit.
+User inputs (sliders, dropdowns, switches) adjust behavior in real-time.
 
 ## The Controller Logic
 

@@ -1,6 +1,6 @@
 # Installation & Setup
 
-Retrieving the code and getting it running on your ESP32.
+Building the code and getting it running on your ESP32.
 
 ## Prerequisites
 
@@ -13,9 +13,9 @@ Retrieving the code and getting it running on your ESP32.
     *   **ESP-IDF** (with esp32_rmt_led_strip) — slightly better performance
     *   **Arduino** (with NeoPixelBus) — simpler setup
 
-## Method 1: External Component (Recommended)
+## Declaring the External Component
 
-This is the way! And also the easiest way. ESPHome will download the component directly from GitHub at compile-time.
+This is the way! ESPHome will download the component directly from GitHub at compile-time.
 
 Add this to your `esphome.yaml`:
 
@@ -27,6 +27,18 @@ external_components:
 
 cfx_effect: # Mandatory! Loads the component
 ```
+
+## ⚠️ Versioning & Stability
+
+**About `refresh: always`**
+
+Setting to `always` forces ESPHome to download the absolute latest version of the code every time you compile. 
+
+*   **Pros:** You always get the newest features and bug fixes immediately.
+*   **Cons:** If I break something in the `main` branch, your build might break too!
+
+**For Production Stability:**
+Once you have a working setup, it is safer to remove `refresh: always` or pin to a specific commit hash. This ensures your lights keep working even if the repository changes.
 
 **Note:** `ChimeraFX` controls depend on the `number`, `select`, and `switch` components. If your config doesn't use them, you must add the empty headers `number:`, `select:`, and `switch:` to your YAML to prevent compilation errors:
 
@@ -51,18 +63,12 @@ esp32:
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
-    pin: GPIO16 # Remeber to select the correct pin for your board
-    num_leds: 60
-    chipset: ws2812
+    pin: GPIO16             # Remeber to select the correct pin for your board
+    num_leds: 60            # Number of LEDs in your strip
+    chipset: ws2812         # Set your correct chipset 
     max_refresh_rate: 24ms  # Recommended for clean timing
-    name: "LED Strip"
-    id: led_strip
-    effects:
-      - addressable_cfx:
-          name: "Ocean"
-          effect_id: 101
-      - addressable_cfx:
-          # Add more effects here
+    name: "LED Strip"       # Name of your light
+    id: led_strip           # ID of your light
 ```
 
 ### Option B: Arduino + NeoPixelBus (Simpler)
@@ -76,32 +82,38 @@ esp32:
 light:
   - platform: neopixelbus
     type: GRB
-    variant: WS2812X
-    pin: GPIO16 # Remeber to select the correct pin for your board
-    num_leds: 60
-    name: "LED Strip"
+    variant: WS2812X      # Set your correct chipset 
+    pin: GPIO16           # Remeber to select the correct pin for your board
+    num_leds: 60          # Number of LEDs in your strip
+    name: "LED Strip"     # Name of your light
+    id: led_strip         # ID of your light
+```
+### Add the effect you like
+
+```yaml
     effects:
       - addressable_cfx:
           name: "Ocean"
           effect_id: 101
       - addressable_cfx:
           # Add more effects here
+```
+### Or do a Mass Inclusion
 
+To maintain a clean configuration file, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
+
+1.  **Download** `chimera_fx_effects.yaml` from the repository root.
+2.  **Save** it to your ESPHome configuration folder (e.g. `/config/`).
+3.  **Include** it in your light configuration:
+
+```yaml
+light:
+  - platform: esp32_rmt_led_strip # Or Neopixelbus for Arduino framework
+    # ... your light config ...
+    effects: !include chimera_fx_effects.yaml
 ```
 
 > TIP: ESP-IDF typically provides 5-10% better FPS on longer strips (200+ LEDs).
-
-## ⚠️ Versioning & Stability
-
-**About `refresh: always`**
-
-Setting to `always` forces ESPHome to download the absolute latest version of the code every time you compile. 
-
-*   **Pros:** You always get the newest features and bug fixes immediately.
-*   **Cons:** If I break something in the `main` branch, your build might break too!
-
-**For Production Stability:**
-Once you have a working setup, it is safer to remove `refresh: always` or pin to a specific commit hash. This ensures your lights keep working even if the repository changes.
 
 ## Method 2: Manual Copy (Advanced)
 

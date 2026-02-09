@@ -159,7 +159,7 @@ effects:
 **Behavior:**
 - If `set_speed: 200` is specified → the speed slider jumps to 200 when the effect starts
 - If not specified → the slider stays at its current value (unchanged)
-- Palette uses numeric index (see `docs/Configuration.md` for list)
+- Palette uses numeric index (see `docs/Controls.md` for list)
 
 ---
 
