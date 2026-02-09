@@ -94,6 +94,21 @@ cfx_effect:
 | `105` | Phased | Sine wave interference pattern |
 | `110` | Flow | Smooth color zones animation |
 
+### Mass Inclusion
+
+To maintain a clean configuration file, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
+
+1.  **Download** `chimera_fx_effects.yaml` from the repository root.
+2.  **Save** it to your ESPHome configuration folder (e.g. `/config/`).
+3.  **Include** it in your light configuration:
+
+```yaml
+light:
+  - platform: neopixelbus
+    # ... your light config ...
+    effects: !include chimera_fx_effects.yaml
+```
+
 > [!TIP]
 > **Why aren't all WLED effects here yet?**  
 > Bringing WLED effects to `ChimeraFX` takes time. Each effect is manually rewritten trying to "squeeze" every bit of performance out of the hardware with minimal resources cost. My goal is to maintain the original look while ensuring it runs perfectly on ESPHome. Thank you for your patience as I port them incrementally! (No ETA).
