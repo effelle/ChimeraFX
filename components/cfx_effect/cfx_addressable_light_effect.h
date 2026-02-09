@@ -110,6 +110,9 @@ protected:
   optional<uint8_t> intensity_preset_{};
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
+  optional<std::string> intro_preset_{};
+  optional<float> intro_duration_preset_{};
+  optional<uint16_t> timer_preset_{};
 
   CFXControl *controller_{nullptr};
   void run_controls_();

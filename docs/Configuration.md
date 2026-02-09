@@ -56,21 +56,35 @@ You can exclude specific controls by adding their ID to the `exclude` list (e.g.
 
 That's it! The effects will automatically find this controller and respect eventual exclusions.
 
+
 ## Advanced: Multiple Strips
 
-If you have two or more strips (e.g., `Roof Lights`, `Desk Lights`, etc.), just create one controller for each strip. You can do this by adding multiple sets of controls under the `cfx_control` component, then link them to their respective light IDs:
+### Option 1: Separate Controls (Independent)
+If you want independent control for each strip (e.g., Roof vs Desk), create separate controllers:
 
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: my_first_cfx_controller # The ID of the first controller generator
+    - id: roof_controller
       name: "Roof Lights"
-      light_id: led_strip # The ID of the first light you want to control
+      light_id: led_strip_1
 
-    - id: my_second_cfx_controller # The ID of the second controller generator
+    - id: desk_controller
       name: "Desk Lights"
-      light_id: led_strip_2 # The ID of the second light you want to control
+      light_id: led_strip_2
 ```
+
+### Option 2: Unified Control (Grouped)
+If you want a **single set of controls** to operate multiple lights simultaneously (e.g., "Global Control"), you can pass a list of light IDs:
+
+```yaml
+cfx_effect:
+  cfx_control:
+    - id: global_controller
+      name: "Global"
+      light_id: [led_strip_1, led_strip_2] # Key: Use a list format
+```
+This generates one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
 
 ## Preset Configurations (Hardcoded Defaults)
 
@@ -99,6 +113,9 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
 *   **`set_intensity`**: (0-255) Sets the default intensity.
 *   **`set_palette`**: (0-255) Sets the default palette ID.
 *   **`set_mirror`**: (true/false) Sets the default mirror state.
+*   **`set_intro`**: (String) Sets the default Intro effect (e.g., "Wipe", "Fade").
+*   **`set_intro_dur`**: (Float) Sets the intro duration in seconds.
+*   **`set_timer`**: (Int) Sets the sleep timer in minutes (e.g., `30` for 30min).
 
 > **TIP: Palette IDs can be retreived from [here](Effect-Library.md#palettes):** 0=Default, 1=Aurora, 2=Forest, 3=Halloween, 4=Rainbow, 5=Fire, 6=Sunset, 7=Ice, 8=Party, 9=Lava, 10=Pastel, 11=Ocean, 12=HeatColors, 13=Sakura, 14=Rivendell, 15=Cyberpunk, 16=OrangeTeal, 17=Christmas, 18=RedBlue, 19=Matrix, 20=SunnyGold, 21=Solid, 22=Fairy, 23=Twilight.
 

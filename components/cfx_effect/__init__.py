@@ -47,7 +47,11 @@ CONF_MIRROR = "mirror"
 CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
+CONF_SET_PALETTE = "set_palette"
 CONF_SET_MIRROR = "set_mirror"
+CONF_SET_INTRO = "set_intro"
+CONF_SET_INTRO_DURATION = "set_intro_dur"
+CONF_SET_TIMER = "set_timer"
 
 # Intro Configuration
 CONF_INTRO_EFFECT = "intro_effect"
@@ -86,6 +90,9 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
+        cv.Optional(CONF_SET_INTRO): cv.string,
+        cv.Optional(CONF_SET_INTRO_DURATION): cv.float_range(min=0.0),
+        cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
     },
 )
 async def cfx_effect_to_code(config, effect_id):
@@ -132,5 +139,11 @@ async def cfx_effect_to_code(config, effect_id):
         cg.add(effect.set_palette_preset(config[CONF_SET_PALETTE]))
     if CONF_SET_MIRROR in config:
         cg.add(effect.set_mirror_preset(config[CONF_SET_MIRROR]))
+    if CONF_SET_INTRO in config:
+        cg.add(effect.set_intro_preset(config[CONF_SET_INTRO]))
+    if CONF_SET_INTRO_DURATION in config:
+        cg.add(effect.set_intro_duration_preset(config[CONF_SET_INTRO_DURATION]))
+    if CONF_SET_TIMER in config:
+        cg.add(effect.set_timer_preset(config[CONF_SET_TIMER]))
 
     return effect

@@ -124,6 +124,43 @@ void CFXAddressableLightEffect::start() {
       this->mirror_->turn_off();
     }
   }
+
+  // New Presets: Intro, Intro Duration, Timer
+  // Resolve components via controller if not local
+
+  // 5. Intro Effect
+  if (this->intro_preset_.has_value()) {
+    select::Select *s = this->intro_effect_;
+    if (s == nullptr && c != nullptr)
+      s = c->get_intro_effect();
+    if (s != nullptr) {
+      auto call = s->make_call();
+      call.set_option(this->intro_preset_.value());
+      call.perform();
+    }
+  }
+
+  // 6. Intro Duration
+  if (this->intro_duration_preset_.has_value()) {
+    number::Number *n = this->intro_duration_;
+    if (n == nullptr && c != nullptr)
+      n = c->get_intro_duration();
+    if (n != nullptr) {
+      auto call = n->make_call();
+      call.set_value(this->intro_duration_preset_.value());
+      call.perform();
+    }
+  }
+
+  // 7. Timer (Controller only)
+  if (this->timer_preset_.has_value() && c != nullptr) {
+    number::Number *t = c->get_timer();
+    if (t != nullptr) {
+      auto call = t->make_call();
+      call.set_value(this->timer_preset_.value());
+      call.perform();
+    }
+  }
 }
 
 void CFXAddressableLightEffect::stop() {
