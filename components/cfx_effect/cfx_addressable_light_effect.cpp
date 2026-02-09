@@ -696,7 +696,15 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         // If Effect is using Default (0), resolve its Natural Palette ID
         pal = this->get_default_palette_id_(this->runner_->getMode());
       }
-      use_palette = true;
+
+      // Fix: If resolved palette is Solid (255), ignore the switch and use
+      // direct color This ensures we use the Target Color (c) instead of the
+      // runner's Fading Color
+      if (pal == 255) {
+        use_palette = false;
+      } else {
+        use_palette = true;
+      }
     } else {
       // Switch is OFF or Missing Runner -> Force Solid
       use_palette = false;
