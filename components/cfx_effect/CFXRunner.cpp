@@ -876,9 +876,12 @@ uint16_t mode_fire_dual(void) {
     instance->_segment.step = it;
   }
 
-  // --- Step 4: Map Virtual Heat to Physical LEDs (Mirrored) ---
-  // Vacuum: 2 pixels in center where no fire exists
-  // Each flame covers: (len - vacuum) / 2
+  // --- Step 4: Map Virtual Heat to Physical LEDs ---
+  // Check for mirror mode: flames start from center toward edges
+  bool mirror_mode = instance->_segment.mirror;
+
+  // Vacuum: 2 pixels in center where no fire exists (only in normal mode)
+  // In mirror mode, vacuum is at the edges
   int vacuum = 2;
   int half_len = (len - vacuum) / 2;
   if (half_len < 1)
@@ -890,14 +893,9 @@ uint16_t mode_fire_dual(void) {
   // middle Fixes "vacuum too big" on long strips
   float scale = (float)(VIRTUAL_HEIGHT - 12) / (float)half_len;
 
-  // Render Left Flame (0 -> half_len)
-  for (int j = 0; j < half_len; j++) {
-    int v_index = (int)(j * scale);
-    if (v_index >= VIRTUAL_HEIGHT)
-      v_index = VIRTUAL_HEIGHT - 1;
-
+  // Helper lambda for heat-to-color conversion
+  auto heat_to_rgb = [&heat](int v_index, uint8_t &r, uint8_t &g, uint8_t &b) {
     uint8_t t = min(heat[v_index], (uint8_t)240);
-    uint8_t r, g, b;
     if (t <= 85) {
       r = t * 3;
       g = 0;
@@ -911,39 +909,78 @@ uint16_t mode_fire_dual(void) {
       g = 255;
       b = (t - 170) * 3;
     }
+  };
 
-    instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
-  }
+  if (mirror_mode) {
+    // MIRROR MODE: Flames start from CENTER, expand toward EDGES
+    // Center of strip has the hottest fire (low heat indices), edges have the
+    // coolest (high heat indices)
 
-  // Render Vacuum (Black)
-  for (int j = half_len; j < len - half_len; j++) {
-    instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
-  }
+    // Left half: Center -> Left edge
+    // j=0 should place HOTTEST (v_index near 0) at CENTER, coolest at edge
+    for (int j = 0; j < half_len; j++) {
+      // Reverse the v_index: j=0 gets low heat index (hot), j=half_len-1 gets
+      // high (cool)
+      int v_index = (int)((half_len - 1 - j) * scale);
+      if (v_index >= VIRTUAL_HEIGHT)
+        v_index = VIRTUAL_HEIGHT - 1;
 
-  // Render Right Flame (len-1 -> len-1-half_len) - Mirrored
-  for (int j = 0; j < half_len; j++) {
-    int v_index = (int)(j * scale);
-    if (v_index >= VIRTUAL_HEIGHT)
-      v_index = VIRTUAL_HEIGHT - 1;
+      uint8_t r, g, b;
+      heat_to_rgb(v_index, r, g, b);
 
-    uint8_t t = min(heat[v_index], (uint8_t)240);
-    uint8_t r, g, b;
-    if (t <= 85) {
-      r = t * 3;
-      g = 0;
-      b = 0;
-    } else if (t <= 170) {
-      r = 255;
-      g = (t - 85) * 3;
-      b = 0;
-    } else {
-      r = 255;
-      g = 255;
-      b = (t - 170) * 3;
+      // j=0 goes to left edge (pixel 0), j=half_len-1 goes to center-left
+      instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
     }
 
-    // Mirror to other side: len - 1 - j
-    instance->_segment.setPixelColor(len - 1 - j, RGBW32(r, g, b, 0));
+    // Vacuum in center (between the two halves)
+    for (int j = half_len; j < len - half_len; j++) {
+      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
+    }
+
+    // Right half: Center -> Right edge
+    // Mirror of left half
+    for (int j = 0; j < half_len; j++) {
+      int v_index = (int)((half_len - 1 - j) * scale);
+      if (v_index >= VIRTUAL_HEIGHT)
+        v_index = VIRTUAL_HEIGHT - 1;
+
+      uint8_t r, g, b;
+      heat_to_rgb(v_index, r, g, b);
+
+      // j=0 goes to right edge (len-1), j=half_len-1 goes to center-right
+      instance->_segment.setPixelColor(len - 1 - j, RGBW32(r, g, b, 0));
+    }
+  } else {
+    // NORMAL MODE: Flames start from EDGES, meet in CENTER
+
+    // Render Left Flame (0 -> half_len)
+    for (int j = 0; j < half_len; j++) {
+      int v_index = (int)(j * scale);
+      if (v_index >= VIRTUAL_HEIGHT)
+        v_index = VIRTUAL_HEIGHT - 1;
+
+      uint8_t r, g, b;
+      heat_to_rgb(v_index, r, g, b);
+      instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
+    }
+
+    // Render Vacuum (Black)
+    for (int j = half_len; j < len - half_len; j++) {
+      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
+    }
+
+    // Render Right Flame (len-1 -> len-1-half_len) - Mirrored
+    for (int j = 0; j < half_len; j++) {
+      int v_index = (int)(j * scale);
+      if (v_index >= VIRTUAL_HEIGHT)
+        v_index = VIRTUAL_HEIGHT - 1;
+
+      uint8_t r, g, b;
+      heat_to_rgb(v_index, r, g, b);
+
+      // Mirror to other side: len - 1 - j
+      instance->_segment.setPixelColor(len - 1 - j, RGBW32(r, g, b, 0));
+    }
   }
 
   return FRAMETIME;

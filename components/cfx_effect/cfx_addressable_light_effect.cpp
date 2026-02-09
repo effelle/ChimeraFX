@@ -453,6 +453,10 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   // Specific Defaults
   case 18:
     return 255; // Dissolve -> Solid (User override)
+  case 38:
+    return 1; // Aurora -> Aurora palette
+  case 53:
+    return 5; // Fire Dual -> Fire palette (same as Fire 2012)
   case 66:
     return 5; // Fire 2012 -> Fire
   case 76:
@@ -473,6 +477,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   switch (effect_id) {
   case 38:
     return 24; // Aurora
+  case 53:
+    return 64; // Fire Dual (same as Fire 2012)
   case 64:
     return 64; // Juggle
   case 66:
@@ -487,6 +493,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
+  case 53:
+    return 160; // Fire Dual (same as Fire 2012)
   case 66:
     return 160; // Fire 2012
   default:
@@ -576,18 +584,43 @@ void CFXAddressableLightEffect::run_controls_() {
       this->runner_->setSpeed((uint8_t)c->get_speed()->state);
     else if (this->speed_)
       this->runner_->setSpeed((uint8_t)this->speed_->state);
+    else {
+      // FALLBACK: No control component - use per-effect default
+      this->runner_->setSpeed(this->get_default_speed_(this->effect_id_));
+    }
 
     // 3. Intensity
     if (c && c->get_intensity())
       this->runner_->setIntensity((uint8_t)c->get_intensity()->state);
     else if (this->intensity_)
       this->runner_->setIntensity((uint8_t)this->intensity_->state);
+    else {
+      // FALLBACK: No control component - use per-effect default
+      this->runner_->setIntensity(
+          this->get_default_intensity_(this->effect_id_));
+    }
 
-    // 4. Palette
-    if (c && c->get_palette())
-      this->runner_->setPalette(get_pal_idx(c->get_palette()));
-    else if (this->palette_)
-      this->runner_->setPalette(get_pal_idx(this->palette_));
+    // 4. Palette (with debug logging)
+    ESP_LOGD(TAG,
+             "Palette check: controller=%p, c->get_palette()=%p, "
+             "local_palette=%p, runner=%p",
+             c, c ? (void *)c->get_palette() : nullptr, (void *)this->palette_,
+             (void *)this->runner_);
+    if (c && c->get_palette()) {
+      uint8_t pal_idx = get_pal_idx(c->get_palette());
+      ESP_LOGD(TAG, "Palette from controller: %d", pal_idx);
+      this->runner_->setPalette(pal_idx);
+    } else if (this->palette_) {
+      uint8_t pal_idx = get_pal_idx(this->palette_);
+      ESP_LOGD(TAG, "Palette from local select: %d", pal_idx);
+      this->runner_->setPalette(pal_idx);
+    } else {
+      // FALLBACK: No control component - use per-effect default
+      uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
+      ESP_LOGD(TAG, "Palette fallback: effect %d -> palette %d",
+               this->effect_id_, default_pal);
+      this->runner_->setPalette(default_pal);
+    }
 
     // 5. Mirror (formerly Reverse)
     if (c && c->get_mirror())

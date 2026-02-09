@@ -38,7 +38,7 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 
 - **Framework:** **ESP-IDF** (Recommended) and **Arduino**
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
-  - *ESP32-C3/S2/C6 are not supported due to single-core limitations.*
+  - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
 
 ## Features
 
@@ -48,6 +48,8 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 - **Smooth Transitions** — Professional-grade animations
 - **Dynamic Controls** — Speed, intensity, palette, and mirror direction
 - **Intro Animations** — Wipe, Fade, Center, and Glitter effects on turn-on
+- **Timer** — Turn off after a specified amount of time
+- **Presets** — Save and restore effect configurations
 
 ---
 
@@ -73,7 +75,7 @@ cfx_effect:
 |----|------|-------------|
 | `0` | Static | Solid color with palette support |
 | `2` | Breathe | Apple-style standby breathing LED |
-| `3` | Wipe | Primary/Secondary color wipe |
+| `3` | Wipe | Single color wipe |
 | `6` | Sweep | Ping-pong wipe animation |
 | `8` | Colorloop | Solid color cycling through palette |
 | `9` | Rainbow | Per-pixel rainbow with density control |

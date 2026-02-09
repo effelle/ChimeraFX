@@ -63,7 +63,7 @@ light:
           effect_id: 38
 ```
 
-#### Standard Setup (Recommended)
+### Step 3: Add Controls (Recommended)
 Add the `cfx_control` component to automatically generate all controls (Speed, Intensity, Palette, Mirror, Intro, Timer) and link them to your light.
 
 ```yaml
@@ -128,28 +128,22 @@ light:
 
 ## Per-Effect Presets
 
-You can optionally define preset values (`set_speed`, `set_intensity`, `set_palette`, `set_mirror`) that automatically push to the linked controls when an effect is activated:
+You can optionally define preset values (`set_speed`, `set_intensity`, `set_palette`, `set_mirror`) that automatically push to the controls when an effect is activated:
 
 ```yaml
 effects:
-  # Pacifica: slow, high intensity, uses Pacifica palette (index 10)
+  # Pacifica: slow, high intensity, uses Pacifica palette (index 11)
   - addressable_cfx:
       name: "Pacifica"
       effect_id: 101
-      speed: cfx_speed
-      intensity: cfx_intensity
-      palette: cfx_palette
       set_speed: 50
       set_intensity: 200
-      set_palette: 10
+      set_palette: 11
   
-  # Aurora: medium speed, no preset for intensity (keeps current value)
+  # Aurora: medium speed, mirrors direction (left/right)
   - addressable_cfx:
       name: "Aurora"
       effect_id: 38
-      speed: cfx_speed
-      intensity: cfx_intensity
-      reverse: wled_reverse
       set_speed: 128
       set_mirror: true
   
@@ -157,9 +151,6 @@ effects:
   - addressable_cfx:
       name: "Bouncing Balls"
       effect_id: 91
-      speed: cfx_speed
-      intensity: cfx_intensity
-      palette: cfx_palette
       set_speed: 128
       set_intensity: 140
       set_palette: 0
@@ -168,7 +159,7 @@ effects:
 **Behavior:**
 - If `set_speed: 200` is specified → the speed slider jumps to 200 when the effect starts
 - If not specified → the slider stays at its current value (unchanged)
-- Palette uses numeric index (0-10 based on your options list)
+- Palette uses numeric index (see `docs/Configuration.md` for list)
 
 ---
 

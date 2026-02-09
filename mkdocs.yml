@@ -1,0 +1,55 @@
+site_name:  ChimeraFX
+repo_url: https://github.com/effelle/ChimeraFX
+site_url: https://effelle.github.io/ChimeraFX/
+repo_name: ChimeraFX
+edit_uri: ""
+
+# theme:
+#   name: mkdocs
+#   logo: assets/ChimeraRX_mono_vector.png
+#   user_color_mode_toggle: true
+#   highlightjs: true
+#   hljs_languages:
+#     - yaml
+theme:
+  name: material
+  logo: assets/ChimeraFX_mono_white_vector.png
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    # Light Mode
+    - scheme: default
+      primary: blue grey
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark Mode
+    - scheme: slate
+      primary: blue grey
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+nav:
+  - Home: index.md
+  - Guide:
+    - Installation: Installation.md
+    - Configuration: Configuration.md
+    - Troubleshooting: Troubleshooting.md
+  - Reference:
+    - Effect Library: Effect-Library.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
