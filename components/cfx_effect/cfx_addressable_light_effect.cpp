@@ -444,8 +444,6 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
     return 7;
   if (strcmp(option, "Party") == 0)
     return 8;
-  if (strcmp(option, "Lava") == 0)
-    return 9;
   if (strcmp(option, "Pastel") == 0)
     return 10;
   if (strcmp(option, "Ocean") == 0)

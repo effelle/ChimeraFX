@@ -17,7 +17,6 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 6 | **Sunset** | Purple, red, orange, and yellow gradients. |
 | 7 | **Ice** | Cool whites, blues, and cyans. |
 | 8 | **Party** | Vibrant high-contrast mixed colors. |
-| 9 | **Lava** | Dark blacks, reds, and molten oranges. |
 | 10 | **Pastel** | Soft, desaturated soothing colors. |
 | 11 | **Ocean** | Deep blues, cyans, and white crests. |
 | 12 | **HeatColors** | Traditional heatmap colors. |

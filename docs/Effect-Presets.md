@@ -9,14 +9,16 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
 ```yaml
     effects:
       - addressable_cfx:
-          name: "Slow Ocean"
-          effect_id: 101
-          
-          # Force specific defaults for this effect
-          set_speed: 10       # Very slow (0-255)
-          set_palette: 11     # Force 'Ocean' palette (ID 11)
-          set_intensity: 200  # High brightness (0-255)
-          set_mirror: false   # Disable mirroring
+          name: "Custom Meteor"
+          effect_id: 76
+          set_speed: 70             # Slowing down the animation 
+          set_palette: 12           # Force 'Fire' palette (ID 5), Because everybody loves a good fireball 
+          set_intensity: 170        # Longer tail 
+          set_mirror: True          # Enable mirroring
+          set_intro: 3              # Set Intro to Center
+          set_intro_dur: 2.5        # Set Intro execution time to 2.5 seconds
+          set_intro_palette: True   # Instruct Intro to use the palette we selected with set_palette
+          set_timer: 30             # Set the timer to turn of the light after 30 minutes 
 ```
 
 ## Parameters
