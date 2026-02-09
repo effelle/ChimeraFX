@@ -245,7 +245,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Unconditional log once per Second to prove apply is running
   static uint32_t last_alive_log = 0;
   if (millis() - last_alive_log > 1000) {
-    ESP_LOGD(TAG, "CFX effect is ACTIVE (apply running)");
+    ESP_LOGV(TAG, "CFX effect is ACTIVE (apply running)");
     last_alive_log = millis();
   }
 
