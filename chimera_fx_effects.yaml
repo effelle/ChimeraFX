@@ -1,0 +1,247 @@
+# ChimeraFX - All Effects Package
+# Include this file in your light configuration under 'effects:'
+# Usage:
+# light:
+#   - platform: neopixelbus
+#     ...
+#     effects: !include chimera_fx_effects.yaml
+
+- addressable_cfx:
+    name: "Static"
+    effect_id: 0
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Breathe"
+    effect_id: 2
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Wipe"
+    effect_id: 3
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Sweep"
+    effect_id: 6
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Colorloop"
+    effect_id: 8
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Rainbow"
+    effect_id: 9
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Dissolve"
+    effect_id: 18
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Aurora"
+    effect_id: 38
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Fire Dual"
+    effect_id: 53
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Colorwaves"
+    effect_id: 63
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Juggle"
+    effect_id: 64
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Fire"
+    effect_id: 66
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Colortwinkles"
+    effect_id: 74
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Meteor"
+    effect_id: 76
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Bouncing Balls"
+    effect_id: 91
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Plasma"
+    effect_id: 97
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Ocean"
+    effect_id: 101
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Sunrise"
+    effect_id: 104
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Phased"
+    effect_id: 105
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
+
+- addressable_cfx:
+    name: "Flow"
+    effect_id: 110
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0
