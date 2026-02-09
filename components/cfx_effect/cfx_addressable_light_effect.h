@@ -65,7 +65,12 @@ public:
   uint8_t active_intro_mode_{0};
   uint32_t intro_start_time_{0};
 
-  void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
+  void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
+  void set_intro_duration_preset(float v) { this->intro_duration_preset_ = v; }
+  void set_intro_use_palette_preset(bool v) {
+    this->intro_use_palette_preset_ = v;
+  }
+  void set_timer_preset(uint16_t v) { this->timer_preset_ = v; }
   void set_intensity_preset(uint8_t v) { this->intensity_preset_ = v; }
   void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
   void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
@@ -110,8 +115,9 @@ protected:
   optional<uint8_t> intensity_preset_{};
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
-  optional<std::string> intro_preset_{};
+  optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
+  optional<bool> intro_use_palette_preset_{};
   optional<uint16_t> timer_preset_{};
 
   CFXControl *controller_{nullptr};

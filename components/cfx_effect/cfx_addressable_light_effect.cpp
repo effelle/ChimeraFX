@@ -135,7 +135,7 @@ void CFXAddressableLightEffect::start() {
       s = c->get_intro_effect();
     if (s != nullptr) {
       auto call = s->make_call();
-      call.set_option(this->intro_preset_.value());
+      call.set_index(this->intro_preset_.value());
       call.perform();
     }
   }
@@ -152,7 +152,21 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // 7. Timer (Controller only)
+  // 7. Intro Use Palette
+  if (this->intro_use_palette_preset_.has_value()) {
+    switch_::Switch *sw = this->intro_use_palette_;
+    if (sw == nullptr && c != nullptr)
+      sw = c->get_intro_use_palette();
+    if (sw != nullptr) {
+      if (this->intro_use_palette_preset_.value()) {
+        sw->turn_on();
+      } else {
+        sw->turn_off();
+      }
+    }
+  }
+
+  // 8. Timer (Controller only)
   if (this->timer_preset_.has_value() && c != nullptr) {
     number::Number *t = c->get_timer();
     if (t != nullptr) {
