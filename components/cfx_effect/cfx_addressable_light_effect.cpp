@@ -210,29 +210,43 @@ void CFXAddressableLightEffect::start() {
 void CFXAddressableLightEffect::stop() {
   // Check if we are turning OFF (not just switching effects)
   auto *state = this->get_light_state();
-  if (state != nullptr && !state->current_values.is_on()) {
-    // Reset defaults: Speed=128, Intensity=128, Timer=0
-    // Try to find controller if missing
-    if (this->controller_ == nullptr) {
-      this->controller_ = CFXControl::find(state);
-    }
-
-    CFXControl *c = this->controller_;
-    if (c != nullptr) {
-      if (c->get_speed()) {
-        auto call = c->get_speed()->make_call();
-        call.set_value(128);
-        call.perform();
+  if (state != nullptr) {
+    bool is_on = state->current_values.is_on();
+    ESP_LOGD(TAG, "stop() called. Light is_on: %s", is_on ? "YES" : "NO");
+    
+    if (!is_on) {
+      ESP_LOGD(TAG, "Resetting controls to defaults...");
+      // Reset defaults: Speed=128, Intensity=128, Timer=0
+      // Try to find controller if missing
+      if (this->controller_ == nullptr) {
+        this->controller_ = CFXControl::find(state);
+        ESP_LOGD(TAG, "Controller was null, attempted find: %s", this->controller_ ? "FOUND" : "NOT FOUND");
       }
-      if (c->get_intensity()) {
-        auto call = c->get_intensity()->make_call();
-        call.set_value(128);
-        call.perform();
-      }
-      if (c->get_timer()) {
-        auto call = c->get_timer()->make_call();
-        call.set_value(0);
-        call.perform();
+      
+      CFXControl *c = this->controller_;
+      if (c != nullptr) {
+        if (c->get_speed()) {
+          auto call = c->get_speed()->make_call();
+          call.set_value(128);
+          call.perform();
+          ESP_LOGD(TAG, "Reset Speed to 128");
+        } else {
+           ESP_LOGD(TAG, "Speed control not found");
+        }
+        if (c->get_intensity()) {
+          auto call = c->get_intensity()->make_call();
+          call.set_value(128);
+          call.perform();
+          ESP_LOGD(TAG, "Reset Intensity to 128");
+        }
+        if (c->get_timer()) {
+          auto call = c->get_timer()->make_call();
+          call.set_value(0);
+          call.perform();
+          ESP_LOGD(TAG, "Reset Timer to 0");
+        }
+      } else {
+          ESP_LOGD(TAG, "No controller found to reset controls.");
       }
     }
   }
