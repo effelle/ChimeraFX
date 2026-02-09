@@ -671,7 +671,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   uint8_t mode = this->active_intro_mode_;
 
   // 3. Setup Color/Palette
+  // Use Target Color (remote_values) to ensure visibility during fade-in
   Color c = target_color;
+  auto *state = this->get_light_state();
+  if (state) {
+    c = state->remote_values.get_color();
+  }
   if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
     c = Color::WHITE;
   }
@@ -681,17 +686,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   uint8_t pal = 0;
 
   // New Feature: "Intro Use Palette" - Inherit from Runner's active effect
-  // If enabled, we use whatever palette the main effect uses (Solid/Gradient).
-  // This ensures smoother transition.
-  if (this->intro_use_palette_ && this->intro_use_palette_->state &&
-      this->runner_) {
-    pal = this->runner_->_segment.palette;
-    if (pal == 0) {
-      // If Effect is using Default (0), resolve its Natural Palette ID
-      // so the Intro (which assumes 0=Aurora) uses the correct colors.
-      pal = this->get_default_palette_id_(this->runner_->getMode());
+  // Explicitly handle switch state to avoid fall-through to Legacy auto-mode
+  if (this->intro_use_palette_) {
+    if (this->intro_use_palette_->state && this->runner_) {
+      pal = this->runner_->_segment.palette;
+      if (pal == 0) {
+        // If Effect is using Default (0), resolve its Natural Palette ID
+        pal = this->get_default_palette_id_(this->runner_->getMode());
+      }
+      use_palette = true;
+    } else {
+      // Switch is OFF or Missing Runner -> Force Solid
+      use_palette = false;
     }
-    use_palette = true;
   } else {
     // Legacy Behavior: Use explicit Intro Palette setting (if any)
     pal = this->get_palette_index_();

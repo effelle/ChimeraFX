@@ -124,8 +124,11 @@ public:
       runner->setIntensity((uint8_t)intensity_->state);
     if (mirror_ && mirror_->has_state())
       runner->setMirror(mirror_->state);
-    if (palette_ && palette_->has_state())
-      runner->setPalette(get_palette_index_(palette_->state));
+    if (palette_ && palette_->has_state()) {
+      auto opt = palette_->current_option();
+      if (opt)
+        runner->setPalette(get_palette_index_(opt));
+    }
   }
 
   void unregister_runner(CFXRunner *runner) {
