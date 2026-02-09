@@ -219,7 +219,7 @@ void CFXAddressableLightEffect::stop() {
 
     // Check transition status (if turning off, target might be off even if
     // current is on?)
-    bool target_on = state->target_values.is_on();
+    bool target_on = state->remote_values.is_on();
     ESP_LOGD(TAG, "Target is_on: %s", target_on ? "YES" : "NO");
 
     if (!is_on || !target_on) { // If currently off OR targeting off
