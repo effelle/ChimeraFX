@@ -2697,7 +2697,7 @@ void CFXRunner::service() {
       dummy += sin8(i & 0xFF); // 10k sin8 calls
     }
     uint32_t bench_time = cfx_millis() - bench_start;
-    ESP_LOGD("wled_bench",
+    ESP_LOGV("wled_bench",
              "Math benchmark: 10k sin8 calls in %ums (target: <1ms)",
              bench_time);
     (void)dummy; // Suppress unused warning
