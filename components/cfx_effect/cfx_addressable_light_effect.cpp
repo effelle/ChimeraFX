@@ -222,13 +222,12 @@ void CFXAddressableLightEffect::stop() {
     bool target_on = state->remote_values.is_on();
     ESP_LOGD(TAG, "Target is_on: %s", target_on ? "YES" : "NO");
 
-    const char *effect_name = state->get_effect_name();
-    ESP_LOGD(TAG, "Effect Name: %s", effect_name ? effect_name : "NULL");
+    std::string effect_name = state->get_effect_name();
+    ESP_LOGD(TAG, "Effect Name: %s", effect_name.c_str());
 
     // Strategy 2: If Effect is 'None', assume we are turning off or going to
     // solid, so reset.
-    if (!is_on || !target_on ||
-        (effect_name && strcmp(effect_name, "None") == 0)) {
+    if (!is_on || !target_on || effect_name == "None") {
       ESP_LOGD(TAG, "Resetting controls to defaults...");
       // Reset defaults: Speed=128, Intensity=128, Timer=0
       // Try to find controller if missing
