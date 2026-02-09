@@ -134,9 +134,13 @@ void CFXAddressableLightEffect::stop() {
   intro_snapshot_.shrink_to_fit();
 
   if (this->runner_ != nullptr) {
+    if (this->controller_) {
+      this->controller_->unregister_runner(this->runner_);
+    }
     delete this->runner_; // Destructor calls deallocateData()
     this->runner_ = nullptr;
   }
+  this->controller_ = nullptr;
   ESP_LOGD(TAG, "Stopped CFX effect: %s", this->get_name());
 }
 
@@ -506,6 +510,9 @@ void CFXAddressableLightEffect::run_controls_() {
   // 1. Find controller if not linked
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
+    if (this->controller_ && this->runner_) {
+      this->controller_->register_runner(this->runner_);
+    }
   }
 
   CFXControl *c = this->controller_;

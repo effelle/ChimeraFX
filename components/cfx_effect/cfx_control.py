@@ -44,7 +44,7 @@ EXCLUDE_TIMER = 6
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
-    cv.Required(CONF_LIGHT): cv.use_id(light.LightState),
+    cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
     cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=7)),
 })
 
@@ -52,8 +52,9 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     
-    light_state = await cg.get_variable(config[CONF_LIGHT])
-    cg.add(var.set_light(light_state))
+    for light_id in config[CONF_LIGHT]:
+        light_state = await cg.get_variable(light_id)
+        cg.add(var.add_light(light_state))
     
     name = config[CONF_NAME]
     exclude = [int(x) for x in config[CONF_EXCLUDE]]
