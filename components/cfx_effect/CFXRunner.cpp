@@ -728,13 +728,12 @@ uint16_t mode_fire_2012(void) {
     return mode_static();
   uint8_t *heat = instance->_segment.data;
 
-  // === WLED-FAITHFUL TIMING using centralized helper ===
-  // Use aux0 as per-instance timing state (avoids static variable
-  // cross-contamination)
-  uint32_t fire_timing_state = instance->_segment.aux0;
+  // WLED-FAITHFUL TIMING using centralized helper
+  // NOTE: Static var is acceptable for single-strip. segment.aux0 is
+  // used by the fire iteration logic below, so it cannot be repurposed.
+  static uint32_t fire_last_millis = 0;
   auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, fire_timing_state);
-  instance->_segment.aux0 = fire_timing_state;
+      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
 
   const uint32_t it = timing.scaled_now >> 5; // div 32
 
