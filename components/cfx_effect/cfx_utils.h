@@ -216,11 +216,15 @@ struct FrameDiagnostics {
       max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
 #endif
 
+      float avg_frame_ms = (float)avg_frame_us / 1000.0f;
+      uint32_t free_heap_kb = free_heap / 1024;
+      uint32_t max_block_kb = max_block / 1024;
+
       ESP_LOGI("cfx_diag",
-               "[%s] FPS:%.1f | Frame: %luus (Avg) | Jitter: %.1f%% | Heap: "
-               "%u / %u",
-               effect_name, fps, avg_frame_us, jitter_pct, free_heap,
-               max_block);
+               "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
+               "Free (%ukB Max)",
+               effect_name, fps, avg_frame_ms, jitter_pct, free_heap_kb,
+               max_block_kb);
 
       reset();
       last_log_time = now_ms;
