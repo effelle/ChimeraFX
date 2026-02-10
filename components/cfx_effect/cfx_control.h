@@ -142,6 +142,13 @@ public:
         call.set_value(0);
         call.perform();
       }
+
+      // Reset Palette to Default
+      if (palette_) {
+        auto call = palette_->make_call();
+        call.set_option("Default");
+        call.perform();
+      }
     }
     was_on_ = is_any_on;
   }

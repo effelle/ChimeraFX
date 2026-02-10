@@ -197,6 +197,17 @@ void CFXAddressableLightEffect::start() {
 
     if (this->active_intro_mode_ == INTRO_NONE) {
       this->intro_active_ = false;
+
+      // Use the light's default_transition_length for a smooth fade-in
+      auto *ls = this->get_light_state();
+      if (ls != nullptr) {
+        uint32_t trans_ms = ls->get_default_transition_length();
+        if (trans_ms > 0) {
+          this->fade_in_active_ = true;
+          this->fade_in_start_ms_ = millis();
+          this->fade_in_duration_ms_ = trans_ms;
+        }
+      }
     } else {
     }
   }
@@ -297,7 +308,23 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // Main CFX effect Running
     this->runner_->service();
 
-    // Handle Blending
+    // Handle INTRO_NONE fade-in (brightness ramp 0→1)
+    if (this->fade_in_active_) {
+      uint32_t elapsed = millis() - this->fade_in_start_ms_;
+      if (elapsed >= this->fade_in_duration_ms_) {
+        this->fade_in_active_ = false; // Fade complete
+      } else {
+        float progress = (float)elapsed / (float)this->fade_in_duration_ms_;
+        // Scale all pixel brightness by progress
+        for (int i = 0; i < it.size(); i++) {
+          Color c = it[i].get();
+          it[i] = Color((uint8_t)(c.r * progress), (uint8_t)(c.g * progress),
+                        (uint8_t)(c.b * progress), (uint8_t)(c.w * progress));
+        }
+      }
+    }
+
+    // Handle Intro→Main Blending
     if (this->state_ == TRANSITION_RUNNING) {
       uint32_t trans_elapsed = millis() - this->transition_start_ms_;
       float trans_dur_ms = (this->transition_duration_
