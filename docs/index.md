@@ -19,7 +19,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 
 *   **[Installation Guide](Installation.md)** - Get up and running in minutes.
 *   **[Controls Guide](Controls.md)** - How to set up inputs and switches.
-*   **[Effect Library](Effect-Library.md)** - Browse available effects and palettes.
+*   **[Effect Library](Effects-Library.md)** - Browse available effects and palettes.
 *   **[Troubleshooting](Troubleshooting.md)** - Fix common issues (flickering, memory).
 
 ---

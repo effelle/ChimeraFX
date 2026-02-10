@@ -1,12 +1,13 @@
 # Controls Guide
 
-User inputs (sliders, dropdowns, switches) adjust behavior in real-time.
+Now you have the effect up and running, but how about control them? And what can you control? 
+`ChimeraFX` can create inputs (sliders, dropdowns, switches) to help you tweak the effect for your liking. The `cfx_control` component is optional and only needed (but strongly suggested) if you want to control the effect from Home Assistant or another controller. Whitout it you will still be able to use the effects at default values.
 
-## The Controller Logic
+## Controller Logic
 
 The `addressable_cfx` effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.
 
-To generate controls automatically, use the `cfx_control` component. It will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro, Timer) for you using core `number`, `select`, and `switch` components and link them to your light.
+To generate controls automatically, use the `cfx_control` component. You need to declare it under the `cfx_effect` component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core `number`, `select` and `switch` components, and link them to your light.
 
 ```yaml
 cfx_effect:
@@ -16,13 +17,13 @@ cfx_effect:
       light_id: led_strip # The ID of the light you want to control
 
       # Optional: Exclude controls you don't need
-      # exclude: [timer, intro]  # or IDs [6, 5]
+      # exclude: [5, 6] # This example will exclude Intro Effects and Timer
 ```
 
-**Note:** The `light_id` parameter in the `cfx_control` component is used to link the controller to a specific light. This is necessary because the `addressable_cfx` effect needs  to know which light it is controlling.
+**Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
 
 > [!IMPORTANT]
-> **Component Dependencies:** The `cfx_control` component automatically generates entities using ESPHome's standard `number`, `select`, and `switch` components. You do **not** need to manually define them.
+> **Component Dependencies:** The `cfx_control` component automatically generates entities using ESPHome's standard `number`, `select` and `switch` components. You do **not** need to manually define them.
 
 ### Generated Controls
 The component creates the following entities based on your controller name (e.g., `LED Strip`):
@@ -32,6 +33,7 @@ The component creates the following entities based on your controller name (e.g.
 - `LED Strip_palette` (Select)
 - `LED Strip_mirror` (Switch)
 - `LED Strip_intro` (Select)
+- `LED Strip_use_palette` (Switch)
 - `LED Strip_intro_dur` (Number)
 - `LED Strip_timer` (Number)
 

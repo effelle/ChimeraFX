@@ -41,8 +41,7 @@ nav:
     - Controls: Controls.md
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md
-  - Reference:
-    - Effect Library: Effect-Library.md
+    - Effect Library: Effects-Library.md
 
 markdown_extensions:
   - admonition

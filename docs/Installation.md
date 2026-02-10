@@ -1,7 +1,5 @@
 # Installation & Setup
 
-Building the code and getting it running on your ESP32.
-
 ## Prerequisites
 
 *   **Supported Hardware**:
@@ -13,9 +11,9 @@ Building the code and getting it running on your ESP32.
     *   **ESP-IDF** (with esp32_rmt_led_strip) — slightly better performance
     *   **Arduino** (with NeoPixelBus) — simpler setup
 
-## Declaring the External Component
+## 1. Declaring the External Component
 
-This is the way! ESPHome will download the component directly from GitHub at compile-time.
+ESPHome will download the component directly from GitHub at compile-time.
 
 Add this to your `esphome.yaml`:
 
@@ -52,7 +50,7 @@ switch:
 
 ## Framework-Specific Light Configuration
 
-### Option A: ESP-IDF + RMT Strip (Better Performance)
+### Option A: ESP-IDF + RMT Strip (Better Performance for longer strips)
 
 ```yaml
 esp32:
@@ -71,6 +69,13 @@ light:
     id: led_strip           # ID of your light
 ```
 
+**Note:** ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption, you must ensure your `rmt_symbols` are set correctly for your chip type:
+
+- **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
+- **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
+
+Also, set `use_psram: false` in your light config. PSRAM represents external RAM which is significantly slower than the ESP32's internal SRAM. The RMT (Remote Control) peripheral requires high-speed data access to generate accurate timing for addressable LEDs. Using PSRAM can cause timing jitter, resulting in flickering or data corruption.
+
 ### Option B: Arduino + NeoPixelBus (Simpler)
 
 ```yaml
@@ -88,7 +93,9 @@ light:
     name: "LED Strip"     # Name of your light
     id: led_strip         # ID of your light
 ```
-### Add the effect you like
+### Adding the effects
+
+You can now add the effects you like to your light component. The `effect_id` is the ID of the effect you want to use. You can find the list of effects in the [Effects](Effects-Library.md) section. 
 
 ```yaml
     effects:
@@ -98,9 +105,9 @@ light:
       - addressable_cfx:
           # Add more effects here
 ```
-### Or do a Mass Inclusion
+### Mass Inclusion
 
-To maintain a clean configuration file, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
+Adding every single effect to your device configuration can be a bit of a pain, and you will likely end up with a very long file. To make it easier, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
 
 1.  **Download** `chimera_fx_effects.yaml` from the repository root.
 2.  **Save** it to your ESPHome configuration folder (e.g. `/config/`).
@@ -113,11 +120,11 @@ light:
     effects: !include chimera_fx_effects.yaml
 ```
 
-> TIP: ESP-IDF typically provides 5-10% better FPS on longer strips (200+ LEDs).
+**Note:** Every time a new effect is added, you will need to download the updated `chimera_fx_effects.yaml` file and replace the old one. A small price to pay for convenience.
 
-## Method 2: Manual Copy (Advanced)
+## Advanced Manual Installation
 
-If you are developing or need to modify the code locally:
+If you are developing or need to modify the code locally, or simply you don't like to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
 
 1.  Download the `components/` folder from the repository.
 2.  Place it in your ESPHome config directory (e.g., `config/components/cfx_effect`).
@@ -127,6 +134,8 @@ If you are developing or need to modify the code locally:
 external_components:
   - source: components
     components: [cfx_effect]
+
+cfx_effect: # Mandatory! Loads the component
 ```
 
 **Note:** This method requires you to manually update files when I release improvements or new effects.
@@ -134,6 +143,7 @@ external_components:
 ## Dependencies
 
 The component handles its own dependencies automatically:
+
 - **Arduino**: Uses NeoPixelBus (auto-included)
 - **ESP-IDF**: Uses native RMT driver (built-in)
 

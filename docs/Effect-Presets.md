@@ -25,7 +25,7 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
 
 *   **`set_speed`**: (0-255) Sets the default speed.
 *   **`set_intensity`**: (0-255) Sets the default intensity.
-*   **`set_palette`**: (0-255) Sets the default palette ID. See [here](Effect-Library.md#palettes) for a list of available palettes.
+*   **`set_palette`**: (0-255) Sets the default palette ID. See [here](Effects-Library.md#palettes) for a list of available palettes.
 *   **`set_mirror`**: (true/false) Sets the default mirror state. It will affect both intro and main effect.
 *   **`set_intro`**: (Int) Sets the default Intro effect index (0=None, 1=Wipe, 2=Fade, 3=Center, 4=Glitter).
 *   **`set_intro_dur`**: (Float) Sets the intro duration in seconds with a minimum of 0.5 seconds and a maximum of 10 seconds.
