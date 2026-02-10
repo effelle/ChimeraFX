@@ -1,8 +1,9 @@
 # Performance & Troubleshooting
 
-### DebugLogger
+## DebugLogger
 I cannot stress this enough: **DO NOT** enable the logger on a production device if you don't need it. It will slow down your device, but if, for some reason, you need to debug the component, you can enable it just flipping a switch. You can find it on **Diagnostics** tab in Home Assistant.
 
+```bash
 [15:46:46.362][I][cfx_diag:227]: [CFX] FPS:55.6 | Time: 18.0ms | Jitter: 0% | Heap: 172kB Free (108kB Max)
 ```
 
@@ -11,9 +12,7 @@ I cannot stress this enough: **DO NOT** enable the logger on a production device
 *   **FPS (Frames Per Second)**: Ideally stays around **55-60 FPS**. If this consistently drops below 30, your ESP32 is struggling to keep up.
 *   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. ~18ms corresponds to ~55 FPS.
 *   **Jitter**: The percentage of variation in frame timing. **0-5% is excellent**. Consistently high jitter (>20%) means other components (like WiFi or heavy sensors) are interrupting the LED driver, which causes visible stuttering.
-*   **Heap**: The available RAM on your chip. If this number steadily decreases over time (e.g., drops by 1kB every minute and never recovers), you might have found a memory leak!
-
-
+*   **Heap**: The available RAM on your chip. `172kB Free` is the total free memory, while `108kB Max` is the largest contiguous block. If "Max" is significantly lower than "Free" (< 20kB), memory is fragmented and allocation failures may occur.
 
 ## Common Issues
 
