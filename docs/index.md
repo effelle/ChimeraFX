@@ -14,6 +14,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 *   **Presets**: Create your own effect configurations.
 *   **Timers**: Run an effect for a specific amount of time.
 *   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
+*   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
 
 ## Quick Links
 
