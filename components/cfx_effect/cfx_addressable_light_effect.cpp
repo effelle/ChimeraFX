@@ -209,6 +209,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                       const Color &current_color) {
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
+  // ESP_LOGD(TAG, "Apply called. Intro: %d", this->intro_active_);
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
@@ -225,6 +226,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
+    ESP_LOGD(TAG, "Runner initialized. Mode: %d", this->effect_id_);
   }
 
   // Update speed from Number component
@@ -519,6 +521,11 @@ void CFXAddressableLightEffect::run_controls_() {
     }
   }
 
+  if (this->controller_ && this->runner_) {
+    // Ensure registration happens even if controller was found previously
+    this->controller_->register_runner(this->runner_);
+  }
+
   CFXControl *c = this->controller_;
 
   if (this->runner_) {
@@ -639,6 +646,7 @@ void CFXAddressableLightEffect::run_controls_() {
 // Intro Routine Implementation
 void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                                           const Color &target_color) {
+  // ESP_LOGD(TAG, "run_intro mode: %d", this->active_intro_mode_);
   uint32_t elapsed = millis() - this->intro_start_time_;
 
   // Safety: If mode is NONE, abort immediately and release control
