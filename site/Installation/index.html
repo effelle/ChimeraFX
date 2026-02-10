@@ -14,13 +14,13 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../Configuration/">
+        <link rel="next" href="../Controls/">
       
       
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../assets/ChimeraFX_mono_white_vector.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
@@ -51,6 +51,8 @@
       
     
     
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -67,7 +69,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="purple">
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -88,12 +90,13 @@
     
       
 
-<header class="md-header" data-md-component="header">
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href=".." title="ChimeraFX" class="md-header__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../assets/ChimeraFX_rgb_vector.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -123,21 +126,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
-    
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
-      </label>
-    
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
-    
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
-      </label>
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
     
   
 </form>
@@ -212,76 +201,6 @@
       
         
           
-            
-<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
-  <div class="md-grid">
-    <ul class="md-tabs__list">
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href=".." class="md-tabs__link">
-        
-  
-  
-    
-  
-  Home
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../Effect-Library/" class="md-tabs__link">
-          
-  
-  
-  Reference
-
-        </a>
-      </li>
-    
-  
-
-      
-    </ul>
-  </div>
-</nav>
-          
         
       
       <main class="md-main" data-md-component="main">
@@ -295,15 +214,12 @@
                     
 
 
-  
 
-
-<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href=".." title="ChimeraFX" class="md-nav__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../assets/ChimeraFX_rgb_vector.png" alt="logo">
 
     </a>
     ChimeraFX
@@ -364,9 +280,6 @@
     
       
         
-        
-      
-      
         
       
     
@@ -485,10 +398,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#method-1-external-component-recommended" class="md-nav__link">
+  <a href="#1-declaring-the-external-component" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 1: External Component (Recommended)
+        1. Declaring the External Component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#versioning-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Versioning &amp; Stability
       
     </span>
   </a>
@@ -508,10 +432,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#option-a-arduino-neopixelbus-simpler" class="md-nav__link">
+  <a href="#option-a-esp-idf-rmt-strip-better-performance-for-longer-strips" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option A: Arduino + NeoPixelBus (Simpler)
+        Option A: ESP-IDF + RMT Strip (Better Performance for longer strips)
       
     </span>
   </a>
@@ -519,10 +443,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#option-b-esp-idf-rmt-strip-better-performance" class="md-nav__link">
+  <a href="#option-b-arduino-neopixelbus-simpler" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option B: ESP-IDF + RMT Strip (Better Performance)
+        Option B: Arduino + NeoPixelBus (Simpler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-the-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding the effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mass-inclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mass Inclusion
       
     </span>
   </a>
@@ -535,21 +481,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#versioning-stability" class="md-nav__link">
+  <a href="#2-advanced-manual-installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ⚠️ Versioning &amp; Stability
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#method-2-manual-copy-advanced" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Method 2: Manual Copy (Advanced)
+        2. Advanced Manual Installation
       
     </span>
   </a>
@@ -583,14 +518,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../Configuration/" class="md-nav__link">
+      <a href="../Controls/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Configuration
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Effect-Presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Presets
   
 
     
@@ -632,44 +595,21 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
+              
+                
   
   
   
   
-    
-    
-    
-    
-      
-      
+    <li class="md-nav__item">
+      <a href="../Effects-Library/" class="md-nav__link">
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
-            
   
   
   <span class="md-ellipsis">
     
   
-    Reference
+    Effect Library
   
 
     
@@ -677,19 +617,11 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
+      </a>
+    </li>
   
 
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+              
             
               
                 
@@ -698,14 +630,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../Effect-Library/" class="md-nav__link">
+      <a href="../The-Story/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Effect Library
+    The Story
   
 
     
@@ -764,10 +696,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#method-1-external-component-recommended" class="md-nav__link">
+  <a href="#1-declaring-the-external-component" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 1: External Component (Recommended)
+        1. Declaring the External Component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#versioning-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Versioning &amp; Stability
       
     </span>
   </a>
@@ -787,10 +730,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#option-a-arduino-neopixelbus-simpler" class="md-nav__link">
+  <a href="#option-a-esp-idf-rmt-strip-better-performance-for-longer-strips" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option A: Arduino + NeoPixelBus (Simpler)
+        Option A: ESP-IDF + RMT Strip (Better Performance for longer strips)
       
     </span>
   </a>
@@ -798,10 +741,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#option-b-esp-idf-rmt-strip-better-performance" class="md-nav__link">
+  <a href="#option-b-arduino-neopixelbus-simpler" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option B: ESP-IDF + RMT Strip (Better Performance)
+        Option B: Arduino + NeoPixelBus (Simpler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-the-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding the effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mass-inclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mass Inclusion
       
     </span>
   </a>
@@ -814,21 +779,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#versioning-stability" class="md-nav__link">
+  <a href="#2-advanced-manual-installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ⚠️ Versioning &amp; Stability
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#method-2-manual-copy-advanced" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Method 2: Manual Copy (Advanced)
+        2. Advanced Manual Installation
       
     </span>
   </a>
@@ -864,23 +818,24 @@
 
 
 <h1 id="installation-setup">Installation &amp; Setup</h1>
-<p>Retrieving the code and getting it running on your ESP32.</p>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li><strong>Supported Hardware</strong>:<ul>
 <li><strong>ESP32 (Classic)</strong>: Fully supported.</li>
 <li><strong>ESP32-S3</strong>: Fully supported (and recommended for new builds).</li>
-<li><strong>ESP32-C3</strong>: <strong>NOT RECOMMENDED</strong>. The C3 is single-core, and since WLED effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.</li>
+<li><strong>ESP32-C3</strong>: <strong>NOT RECOMMENDED</strong>. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.</li>
+<li><strong>ESP8266</strong>: <strong>NOT RECOMMENDED</strong>. The old ESP8266 is stuck on the Arduino framework and simply lacks the resources to run ESPHome and ChimeraFX simultaneously. Save yourself the headache and upgrade to an ESP32. Seriously.</li>
 </ul>
 </li>
 <li><strong>Frameworks</strong> (both supported):<ul>
-<li><strong>Arduino</strong> (with NeoPixelBus) — simpler setup</li>
 <li><strong>ESP-IDF</strong> (with esp32_rmt_led_strip) — slightly better performance</li>
+<li><strong>Arduino</strong> (with NeoPixelBus) — simpler setup</li>
 </ul>
 </li>
 </ul>
-<h2 id="method-1-external-component-recommended">Method 1: External Component (Recommended)</h2>
-<p>This is the easiest way. ESPHome will download the component directly from GitHub when you compile.</p>
+<p>You can install the component in two ways:</p>
+<h2 id="1-declaring-the-external-component">1. Declaring the External Component</h2>
+<p>ESPHome will download the component directly from GitHub at compile-time.</p>
 <p>Add this to your <code>esphome.yaml</code>:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">external_components</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github://effelle/ChimeraFX@main</span>
@@ -889,48 +844,6 @@
 
 <span class="nt">cfx_effect</span><span class="p">:</span><span class="w"> </span><span class="c1"># Mandatory! Loads the component</span>
 </code></pre></div>
-<h2 id="framework-specific-light-configuration">Framework-Specific Light Configuration</h2>
-<h3 id="option-a-arduino-neopixelbus-simpler">Option A: Arduino + NeoPixelBus (Simpler)</h3>
-<div class="highlight"><pre><span></span><code><span class="nt">esp32</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">board</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_board_here</span>
-<span class="w">  </span><span class="nt">framework</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arduino</span>
-
-<span class="nt">light</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neopixelbus</span>
-<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GRB</span>
-<span class="w">    </span><span class="nt">variant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WS2812X</span>
-<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span>
-<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span>
-<span class="w">    </span><span class="nt">effects</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Pacifica&quot;</span>
-<span class="w">          </span><span class="nt">effect_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">101</span>
-</code></pre></div>
-<h3 id="option-b-esp-idf-rmt-strip-better-performance">Option B: ESP-IDF + RMT Strip (Better Performance)</h3>
-<div class="highlight"><pre><span></span><code><span class="nt">esp32</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">board</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_board_here</span>
-<span class="w">  </span><span class="nt">framework</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp-idf</span>
-
-<span class="nt">light</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp32_rmt_led_strip</span>
-<span class="w">    </span><span class="nt">rgb_order</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GRB</span>
-<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span>
-<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
-<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws2812</span>
-<span class="w">    </span><span class="nt">max_refresh_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24ms</span><span class="w">  </span><span class="c1"># Recommended for clean timing</span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span>
-<span class="w">    </span><span class="nt">effects</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Pacifica&quot;</span>
-<span class="w">          </span><span class="nt">effect_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">101</span>
-</code></pre></div>
-<blockquote>
-<p>[!TIP]
-ESP-IDF typically provides 5-10% better FPS on longer strips (200+ LEDs).</p>
-</blockquote>
 <h2 id="versioning-stability">⚠️ Versioning &amp; Stability</h2>
 <p><strong>About <code>refresh: always</code></strong></p>
 <p>Setting to <code>always</code> forces ESPHome to download the absolute latest version of the code every time you compile. </p>
@@ -940,8 +853,74 @@ ESP-IDF typically provides 5-10% better FPS on longer strips (200+ LEDs).</p>
 </ul>
 <p><strong>For Production Stability:</strong>
 Once you have a working setup, it is safer to remove <code>refresh: always</code> or pin to a specific commit hash. This ensures your lights keep working even if the repository changes.</p>
-<h2 id="method-2-manual-copy-advanced">Method 2: Manual Copy (Advanced)</h2>
-<p>If you are developing or need to modify the code locally:</p>
+<p><strong>Note:</strong> <code>ChimeraFX</code> controls depend on the <code>number</code>, <code>select</code>, and <code>switch</code> components. If your config doesn't use them, you must add the empty headers <code>number:</code>, <code>select:</code>, and <code>switch:</code> to your YAML to prevent compilation errors:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">number</span><span class="p">:</span>
+<span class="nt">select</span><span class="p">:</span><span class="w"> </span>
+<span class="nt">switch</span><span class="p">:</span><span class="w"> </span>
+</code></pre></div>
+<hr />
+<h2 id="framework-specific-light-configuration">Framework-Specific Light Configuration</h2>
+<h3 id="option-a-esp-idf-rmt-strip-better-performance-for-longer-strips">Option A: ESP-IDF + RMT Strip (Better Performance for longer strips)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">esp32</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">board</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_board_here</span>
+<span class="w">  </span><span class="nt">framework</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp-idf</span>
+
+<span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp32_rmt_led_strip</span>
+<span class="w">    </span><span class="nt">rgb_order</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GRB</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span><span class="w">             </span><span class="c1"># Remember to select the correct pin for your board</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w">            </span><span class="c1"># Number of LEDs in your strip</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws2812</span><span class="w">         </span><span class="c1"># Set your correct chipset </span>
+<span class="w">    </span><span class="nt">max_refresh_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24ms</span><span class="w">  </span><span class="c1"># Recommended for clean timing</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span><span class="w">       </span><span class="c1"># Name of your light</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span><span class="w">           </span><span class="c1"># ID of your light</span>
+</code></pre></div>
+<p><strong>Note:</strong> ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption, you must ensure your <code>rmt_symbols</code> are set correctly for your chip type:</p>
+<ul>
+<li><strong>Classic ESP32</strong>: 512 Total Symbols - Block size 64 symbols </li>
+<li><strong>ESP32-S3</strong>: 192 Total Symbols - Block size 48 symbols </li>
+</ul>
+<p>Also, set <code>use_psram: false</code> in your light config. PSRAM represents external RAM which is significantly slower than the ESP32's internal SRAM. The RMT (Remote Control) peripheral requires high-speed data access to generate accurate timing for addressable LEDs. Using PSRAM can cause timing jitter, resulting in flickering or data corruption.</p>
+<h3 id="option-b-arduino-neopixelbus-simpler">Option B: Arduino + NeoPixelBus (Simpler)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">esp32</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">board</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_board_here</span>
+<span class="w">  </span><span class="nt">framework</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arduino</span>
+
+<span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neopixelbus</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GRB</span>
+<span class="w">    </span><span class="nt">variant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WS2812X</span><span class="w">      </span><span class="c1"># Set your correct chipset </span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span><span class="w">           </span><span class="c1"># Remember to select the correct pin for your board</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w">          </span><span class="c1"># Number of LEDs in your strip</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span><span class="w">     </span><span class="c1"># Name of your light</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span><span class="w">         </span><span class="c1"># ID of your light</span>
+</code></pre></div>
+<h3 id="adding-the-effects">Adding the effects</h3>
+<p>You can now add the effects you like to your light component. The <code>effect_id</code> is the ID of the effect you want to use. You can find the list of effects in the <a href="../Effects-Library/">Effects</a> section. </p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="nt">effects</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Ocean&quot;</span>
+<span class="w">          </span><span class="nt">effect_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">101</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
+<span class="w">          </span><span class="c1"># Add more effects here</span>
+</code></pre></div>
+<h3 id="mass-inclusion">Mass Inclusion</h3>
+<p>Adding every single effect to your device configuration can be a bit of a pain, and you will likely end up with a very long file. To make it easier, you can load all 20+ effects at once using the provided <code>chimera_fx_effects.yaml</code> file.</p>
+<ol>
+<li><strong>Download</strong> <code>chimera_fx_effects.yaml</code> from the repository root.</li>
+<li><strong>Save</strong> it to your ESPHome configuration folder (e.g. <code>/config/</code>).</li>
+<li><strong>Include</strong> it in your light configuration:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp32_rmt_led_strip</span><span class="w"> </span><span class="c1"># Or Neopixelbus for Arduino framework</span>
+<span class="w">    </span><span class="c1"># ... your light config ...</span>
+<span class="w">    </span><span class="nt">effects</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chimera_fx_effects.yaml</span>
+</code></pre></div>
+<p><strong>Note:</strong> Every time a new effect is added, you will need to download the updated <code>chimera_fx_effects.yaml</code> file and replace the old one. A small price to pay for convenience.</p>
+<h2 id="2-advanced-manual-installation">2. Advanced Manual Installation</h2>
+<p>If you are developing or need to modify the code locally, or simply you don't like to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:</p>
 <ol>
 <li>Download the <code>components/</code> folder from the repository.</li>
 <li>Place it in your ESPHome config directory (e.g., <code>config/components/cfx_effect</code>).</li>
@@ -950,12 +929,16 @@ Once you have a working setup, it is safer to remove <code>refresh: always</code
 <div class="highlight"><pre><span></span><code><span class="nt">external_components</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">components</span>
 <span class="w">    </span><span class="nt">components</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">cfx_effect</span><span class="p p-Indicator">]</span>
+
+<span class="nt">cfx_effect</span><span class="p">:</span><span class="w"> </span><span class="c1"># Mandatory! Loads the component</span>
 </code></pre></div>
 <p><strong>Note:</strong> This method requires you to manually update files when I release improvements or new effects.</p>
 <h2 id="dependencies">Dependencies</h2>
-<p>The component handles its own dependencies automatically:
-- <strong>Arduino</strong>: Uses NeoPixelBus (auto-included)
-- <strong>ESP-IDF</strong>: Uses native RMT driver (built-in)</p>
+<p>The component handles its own dependencies automatically:</p>
+<ul>
+<li><strong>Arduino</strong>: Uses NeoPixelBus (auto-included)</li>
+<li><strong>ESP-IDF</strong>: Uses native RMT driver (built-in)</li>
+</ul>
 <p>You don't need to install anything else manually.</p>
 
 
@@ -1012,7 +995,7 @@ Once you have a working setup, it is safer to remove <code>refresh: always</code
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

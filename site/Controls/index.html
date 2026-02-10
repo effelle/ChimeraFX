@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://effelle.github.io/ChimeraFX/Troubleshooting/">
+        <link rel="canonical" href="https://effelle.github.io/ChimeraFX/Controls/">
       
       
-        <link rel="prev" href="../Effect-Presets/">
+        <link rel="prev" href="../Installation/">
       
       
-        <link rel="next" href="../Effects-Library/">
+        <link rel="next" href="../Effect-Presets/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Troubleshooting - ChimeraFX</title>
+        <title>Controls - ChimeraFX</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#performance-troubleshooting" class="md-skip">
+        <a href="#controls-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -113,7 +113,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Troubleshooting
+              Controls
             
           </span>
         </div>
@@ -352,10 +352,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../Controls/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -371,6 +398,198 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#controller-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller Logic
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controller Logic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generated-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exclusion-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exclusion Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-multiple-strips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: Multiple Strips
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced: Multiple Strips">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-1-separate-controls-independent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 1: Separate Controls (Independent)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-2-unified-control-grouped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 2: Unified Control (Grouped)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview-of-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview of Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview of Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#id-1-speed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 1: Speed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-2-intensity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 2: Intensity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-3-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 3: Palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-4-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 4: Mirror
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-5-intro-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 5: Intro Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-6-timer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 6: Timer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-9-debug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 9: Debug
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -408,37 +627,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Troubleshooting
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../Troubleshooting/" class="md-nav__link">
         
   
   
@@ -454,115 +646,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#common-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#my-strip-freezes-or-blinks-random-colors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        "My strip freezes or blinks random colors"
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-effect-is-too-fast" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        "The effect is too fast"
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#colors-look-wrong-red-is-green" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        "Colors look wrong (Red is Green)"
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-tuning-esp-idf" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Tuning (ESP-IDF)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Performance Tuning (ESP-IDF)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#rmt-symbols" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        RMT Symbols
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wifi-latency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        WiFi Latency
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -658,22 +741,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#common-issues" class="md-nav__link">
+  <a href="#controller-logic" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common Issues
+        Controller Logic
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Common Issues">
+    <nav class="md-nav" aria-label="Controller Logic">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#my-strip-freezes-or-blinks-random-colors" class="md-nav__link">
+  <a href="#generated-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "My strip freezes or blinks random colors"
+        Generated Controls
       
     </span>
   </a>
@@ -681,21 +764,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-effect-is-too-fast" class="md-nav__link">
+  <a href="#exclusion-options" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "The effect is too fast"
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#colors-look-wrong-red-is-green" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        "Colors look wrong (Red is Green)"
+        Exclusion Options
       
     </span>
   </a>
@@ -708,22 +780,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#performance-tuning-esp-idf" class="md-nav__link">
+  <a href="#advanced-multiple-strips" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Performance Tuning (ESP-IDF)
+        Advanced: Multiple Strips
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Performance Tuning (ESP-IDF)">
+    <nav class="md-nav" aria-label="Advanced: Multiple Strips">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#rmt-symbols" class="md-nav__link">
+  <a href="#option-1-separate-controls-independent" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RMT Symbols
+        Option 1: Separate Controls (Independent)
       
     </span>
   </a>
@@ -731,10 +803,104 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#wifi-latency" class="md-nav__link">
+  <a href="#option-2-unified-control-grouped" class="md-nav__link">
     <span class="md-ellipsis">
       
-        WiFi Latency
+        Option 2: Unified Control (Grouped)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview-of-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview of Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview of Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#id-1-speed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 1: Speed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-2-intensity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 2: Intensity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-3-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 3: Palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-4-mirror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 4: Mirror
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-5-intro-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 5: Intro Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-6-timer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 6: Timer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#id-9-debug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ID 9: Debug
       
     </span>
   </a>
@@ -763,46 +929,113 @@
 
 
 
-<h1 id="performance-troubleshooting">Performance &amp; Troubleshooting</h1>
-<h2 id="common-issues">Common Issues</h2>
-<h3 id="my-strip-freezes-or-blinks-random-colors">"My strip freezes or blinks random colors"</h3>
-<p>This is almost always a power or memory/timing issue.
-*   <strong>Check Ground</strong>: Ensure your LED strip ground is connected to the ESP32 ground.
-*   <strong>RMT Buffer</strong>: See "RMT Symbols" below.
-*   <strong>PSRAM</strong>: If you are using an ESP32-S3 with PSRAM, verify <code>use_psram: false</code> is set in your light config. RMT does not play well with PSRAM latency.</p>
-<h3 id="the-effect-is-too-fast">"The effect is too fast"</h3>
-<p>ESPHome runs at 60FPS, while WLED targets 42FPS. I have manually tuned most effects, but if one feels "rushed," try lowering the Speed slider.</p>
-<h3 id="colors-look-wrong-red-is-green">"Colors look wrong (Red is Green)"</h3>
-<p>Check your <code>rgb_order</code> in the YAML.
-*   WS2812B usually uses <code>GRB</code>.
-*   WS2811 usually uses <code>RGB</code>.</p>
-<hr />
-<h2 id="performance-tuning-esp-idf">Performance Tuning (ESP-IDF)</h2>
-<h3 id="rmt-symbols">RMT Symbols</h3>
-<p>The ESP32 uses RMT (Remote Control) channels to drive LEDs. Each "symbol" represents a bit of data. Limited memory means you can't buffer infinite URLs.</p>
+<h1 id="controls-guide">Controls Guide</h1>
+<p>Now you have the effects up and running, but how about controlling them? And what can you control? 
+<code>ChimeraFX</code> can create inputs (sliders, dropdowns, switches) to help you tweak the effect for your liking. The <code>cfx_control</code> component is optional and only needed (but strongly suggested) if you want to control the effect from Home Assistant or another controller. Without it you will still be able to use the effects at default values.</p>
+<h2 id="controller-logic">Controller Logic</h2>
+<p>The <code>addressable_cfx</code> effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.</p>
+<p>To generate controls automatically, use the <code>cfx_control</code> component. You need to declare it under the <code>cfx_effect</code> component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core <code>number</code>, <code>select</code> and <code>switch</code> components, and link them to your light automatically.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_effect</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">cfx_control</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_cfx_controller</span><span class="w"> </span><span class="c1"># The ID of the controller generator</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span>
+<span class="w">      </span><span class="nt">light_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span><span class="w"> </span><span class="c1"># The ID of the light you want to control</span>
+
+<span class="w">      </span><span class="c1"># Optional: Exclude controls you don&#39;t need</span>
+<span class="w">      </span><span class="c1"># exclude: [5, 6] # This example will exclude Intro Effects and Timer</span>
+</code></pre></div>
+<p><strong>Note:</strong> The <code>light_id</code> parameter is the magic sauce that links the controller to a specific light. This is necessary because the <code>addressable_cfx</code> effect needs to know which light it is controlling.</p>
+<h3 id="generated-controls">Generated Controls</h3>
+<p>The component creates the following entities based on your controller name (e.g., <code>LED Strip</code>):</p>
+<ul>
+<li><code>LED Strip_speed</code> (Number)</li>
+<li><code>LED Strip_intensity</code> (Number)</li>
+<li><code>LED Strip_palette</code> (Select)</li>
+<li><code>LED Strip_mirror</code> (Switch)</li>
+<li><code>LED Strip_intro</code> (Select)</li>
+<li><code>LED Strip_use_palette</code> (Switch)</li>
+<li><code>LED Strip_intro_dur</code> (Number)</li>
+<li><code>LED Strip_timer</code> (Number)</li>
+</ul>
+<p><strong>Note:</strong> The naming scheme could differ based on how you use ESPHome <code>friendly_name</code>. </p>
+<h3 id="exclusion-options">Exclusion Options</h3>
+<p>You can exclude specific controls by adding their ID to the <code>exclude</code> list (e.g., <code>exclude: [5, 6]</code>).</p>
 <table>
 <thead>
 <tr>
-<th>Chip</th>
-<th>Max rmt_symbols</th>
+<th style="text-align: left;">ID</th>
+<th style="text-align: left;">Control</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Classic ESP32</td>
-<td><strong>512</strong> (Total shared)</td>
+<td style="text-align: left;"><code>1</code></td>
+<td style="text-align: left;">Speed</td>
 </tr>
 <tr>
-<td>ESP32-S3</td>
-<td><strong>192</strong> (Per channel)</td>
+<td style="text-align: left;"><code>2</code></td>
+<td style="text-align: left;">Intensity</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>3</code></td>
+<td style="text-align: left;">Palette</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>4</code></td>
+<td style="text-align: left;">Mirror</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>5</code></td>
+<td style="text-align: left;">Intro Effects (Intro, Duration, Use Palette)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>6</code></td>
+<td style="text-align: left;">Timer</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>9</code></td>
+<td style="text-align: left;">Debug (Diagnostic)</td>
 </tr>
 </tbody>
 </table>
-<p>If you have flickering, try adjusting <code>rmt_symbols</code>.
-*   <strong>Usage</strong>: <code>light: ... rmt_symbols: 512</code></p>
-<h3 id="wifi-latency">WiFi Latency</h3>
-<p>This component runs on <strong>Core 1</strong> of the ESP32, while WiFi runs on <strong>Core 0</strong>.
-*   <strong>Good News</strong>: WiFi activity should NOT cause visible stuttering in effects.</p>
+<p>That's it! The effects will automatically find this controller and respect eventual exclusions.</p>
+<h2 id="advanced-multiple-strips">Advanced: Multiple Strips</h2>
+<h3 id="option-1-separate-controls-independent">Option 1: Separate Controls (Independent)</h3>
+<p>If you want independent control for each strip (e.g., Roof vs Desk), create separate controllers:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_effect</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">cfx_control</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">roof_controller</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Roof</span><span class="nv"> </span><span class="s">Lights&quot;</span>
+<span class="w">      </span><span class="nt">light_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip_1</span><span class="w">  </span><span class="c1"># The ID of the first light you want to control</span>
+
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">desk_controller</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Desk</span><span class="nv"> </span><span class="s">Lights&quot;</span>
+<span class="w">      </span><span class="nt">light_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip_2</span><span class="w">  </span><span class="c1"># The ID of the second light you want to control</span>
+</code></pre></div>
+<h3 id="option-2-unified-control-grouped">Option 2: Unified Control (Grouped)</h3>
+<p>If you want a <strong>single set of controls</strong> to operate multiple lights simultaneously (e.g., "Global Control"), you can pass a list of light IDs:</p>
+<p><div class="highlight"><pre><span></span><code><span class="nt">cfx_effect</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">cfx_control</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">global_controller</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Global&quot;</span>
+<span class="w">      </span><span class="nt">light_id</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">led_strip_1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">led_strip_2</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># Key: Use a list format</span>
+</code></pre></div>
+This generates only one set of entities (e.g. <code>Global Speed</code>) that updates all listed lights at once.</p>
+<h2 id="overview-of-controls">Overview of Controls</h2>
+<h3 id="id-1-speed">ID 1: Speed</h3>
+<p>Control slider to manage the speed of the effect. The higher the value, the faster the effect will run. Range (0-255)</p>
+<h3 id="id-2-intensity">ID 2: Intensity</h3>
+<p>Control slider to manage the intensity of the effect. Intensity can manage different parameters depending on the effect. Range (0-255)</p>
+<h3 id="id-3-palette">ID 3: Palette</h3>
+<p>Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette. List of selectable palettes can be found in the <a href="../Effects-Library/#palettes">Palettes</a> section.</p>
+<h3 id="id-4-mirror">ID 4: Mirror</h3>
+<p>Controls the starting point of an effect. Useful if you can't physically invert the strip. Affect Into Animation too.</p>
+<h3 id="id-5-intro-animation">ID 5: Intro Animation</h3>
+<p>A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support, allow the intro to use the same palette as the main effect. More details can be found in the <a href="../Effects-Library/#intro-animations">Intro Animations</a> section.</p>
+<h3 id="id-6-timer">ID 6: Timer</h3>
+<p>Controls how long a light stays on. From 0 (timer OFF) to 360 minutes</p>
+<h3 id="id-9-debug">ID 9: Debug</h3>
+<p>Controls the debug mode at runtime and is available on Diagnostic tab in Home Assistant. Useful if you have issues with the effect and want to see what's happening. Default to OFF.</p>
 
 
 

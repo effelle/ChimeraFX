@@ -2,22 +2,30 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://effelle.github.io/ChimeraFX/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <lastmod>2026-02-10</lastmod>
     </url>
     <url>
-         <loc>https://effelle.github.io/ChimeraFX/Configuration/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <loc>https://effelle.github.io/ChimeraFX/Controls/</loc>
+         <lastmod>2026-02-10</lastmod>
     </url>
     <url>
-         <loc>https://effelle.github.io/ChimeraFX/Effect-Library/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <loc>https://effelle.github.io/ChimeraFX/Effect-Presets/</loc>
+         <lastmod>2026-02-10</lastmod>
+    </url>
+    <url>
+         <loc>https://effelle.github.io/ChimeraFX/Effects-Library/</loc>
+         <lastmod>2026-02-10</lastmod>
     </url>
     <url>
          <loc>https://effelle.github.io/ChimeraFX/Installation/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <lastmod>2026-02-10</lastmod>
+    </url>
+    <url>
+         <loc>https://effelle.github.io/ChimeraFX/The-Story/</loc>
+         <lastmod>2026-02-10</lastmod>
     </url>
     <url>
          <loc>https://effelle.github.io/ChimeraFX/Troubleshooting/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <lastmod>2026-02-10</lastmod>
     </url>
 </urlset>

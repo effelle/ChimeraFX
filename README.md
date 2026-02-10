@@ -58,7 +58,7 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 
 See the [Wiki](https://effelle.github.io/ChimeraFX/) for installation and configuration.
 
-Add tothe component to your ESPHome YAML:
+Add the component to your ESPHome YAML:
 
 ```yaml
 external_components:
@@ -67,7 +67,7 @@ external_components:
 
 cfx_effect:
 ```
-ANd then the effect to your light:
+And then add the effect to your light:
 
 ```yaml
 light:
