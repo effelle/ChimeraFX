@@ -1,4 +1,4 @@
-![ChimeraFX](media/ChimeraFX_github_wide_banner.png)
+![ChimeraFX](media/ChimeraFX_banner_github.png)
 
 # ChimeraFX: Made for ESPHome
 
