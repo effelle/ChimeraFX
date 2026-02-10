@@ -3,7 +3,7 @@
 # ChimeraFX: Made for ESPHome
 
 
-> **High-performance WLED effects running natively within ESPHome.**
+> **High-performance WLED like effects running natively within ESPHome.**
 
 ---
 
@@ -24,21 +24,21 @@ This project is **not** a full WLED replacement and it will never be. Choose the
 *   **Install [WLED](https://kno.wled.ge/) if:** You want the full experience (Segments, E1.31, 150+ effects) or are dedicating an MCU solely to lighting.
 *   **Use `ChimeraFX` if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
+## Platform Compatibility
+
+- **Framework:** **ESP-IDF** and **Arduino**
+- **Chips:** **ESP32 Classic** and **ESP32-S3**
+  - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
+
 ### Reality Check
 
 **Your mileage may vary.**
 Visual effects are computationally expensive.
-*   **Hardware:** An ESP32 is highly recommended.
+*   **Hardware:** An ESP32 is highly recommended due to its dual-core architecture.
 *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
 *   **Optimization:** This library is optimized for ESP-IDF, but hardware resources are finite. Manage your load accordingly.
 
 This native C++ component brings advanced lighting effects to ESPHome. Unlike the old `addressable_lambda` method, this implementation runs as a proper component optimized for the **ESP-IDF** framework.
-
-## Platform Compatibility
-
-- **Framework:** **ESP-IDF** (Recommended) and **Arduino**
-- **Chips:** **ESP32 Classic** and **ESP32-S3**
-  - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
 
 ## Features
 
@@ -50,14 +50,15 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 - **Intro Animations** — Wipe, Fade, Center, and Glitter effects on turn-on
 - **Timer** — Turn off after a specified amount of time
 - **Presets** — Save and restore effect configurations
+- **Debug Logger** — Turn on/off a logger at runtime level for the component
 
 ---
 
 ## Quick Start
 
-See [QUICKSTART.md](QUICKSTART.md) for installation and configuration.
+See the [Wiki](https://effelle.github.io/ChimeraFX/) for installation and configuration.
 
-Add to your ESPHome YAML:
+Add tothe component to your ESPHome YAML:
 
 ```yaml
 external_components:
@@ -66,7 +67,18 @@ external_components:
 
 cfx_effect:
 ```
+ANd then the effect to your light:
 
+```yaml
+light:
+  - platform: esp32_rmt_led_strip # Or Neopixelbus for Arduino framework
+    # ... your light config ...
+    effects:
+      - addressable_cfx:
+          name: "Aurora"    # The name of the effect, can be customized
+          effect_id: 38     # See the available effects below for the ID
+    # ... Add some other effect ...
+```
 ---
 
 ## Available Effects
@@ -110,12 +122,14 @@ light:
 ```
 
 > **Why aren't all WLED effects here yet?**  
-> Bringing WLED effects to `ChimeraFX` takes time. Each effect is manually rewritten trying to "squeeze" every bit of performance out of the hardware with minimal resources cost. My goal is to maintain the original look while ensuring it runs perfectly on ESPHome. Thank you for your patience as I port them incrementally! (No ETA).
+> Bringing WLED effects to `ChimeraFX` takes time. Each effect needs to be partially rewritten trying to "squeeze" every bit of performance out of the hardware with minimal resources cost. My goal is to maintain the original look while ensuring it runs perfectly on ESPHome side by side with other components. Thank you for your patience as I port them incrementally! (No ETA).
 ---
 
 ## Available Palettes
 
 Aurora, Forest, Halloween, Rainbow, Fire, Sunset, Ice, Party, Lava, Pastel, Ocean, HeatColors, Sakura, Rivendell, Cyberpunk, OrangeTeal, Christmas, RedBlue, Matrix, SunnyGold, Fairy, Twilight, Solid
+
+*(This list could be expanded in the future)*
 
 ---
 

@@ -48,11 +48,6 @@ You can exclude specific controls by adding their ID to the `exclude` list (e.g.
 | `5` | Intro Effects (Intro, Duration, Use Palette) |
 | `6` | Timer |
 | `9` | Debug (Diagnostic) |
-| `2` | Intensity |
-| `3` | Palette |
-| `4` | Mirror |
-| `5` | Intro Effects (Intro & Duration) |
-| `6` | Timer |
 
 That's it! The effects will automatically find this controller and respect eventual exclusions.
 
@@ -104,4 +99,7 @@ Controls the starting point of an effect. Useful if you can't physically invert 
 A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support, allow the intro to use the same palette as the main effect. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
 
 ### ID 6: Timer
-Controls how longer a light stay on. From 0 (timer off) to 360 minutes
+Controls how long a light stays on. From 0 (timer OFF) to 360 minutes
+
+### ID 9: Debug
+Controls the debug mode at runtime and is available on Diagnostic tab in Home Assistant. Useful if you have issues with the effect and want to see what's happening. Default to OFF.

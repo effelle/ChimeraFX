@@ -13,7 +13,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 *   **Intro Effects**: Run a special effect when the light turns on.
 *   **Presets**: Create your own effect configurations.
 *   **Timers**: Run an effect for a specific amount of time.
-*   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or trough presets.
+*   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
 
 ## Quick Links
 

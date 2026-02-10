@@ -63,7 +63,7 @@ esp32:
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
-    pin: GPIO16             # Remeber to select the correct pin for your board
+    pin: GPIO16             # Remember to select the correct pin for your board
     num_leds: 60            # Number of LEDs in your strip
     chipset: ws2812         # Set your correct chipset 
     max_refresh_rate: 24ms  # Recommended for clean timing
@@ -90,7 +90,7 @@ light:
   - platform: neopixelbus
     type: GRB
     variant: WS2812X      # Set your correct chipset 
-    pin: GPIO16           # Remeber to select the correct pin for your board
+    pin: GPIO16           # Remember to select the correct pin for your board
     num_leds: 60          # Number of LEDs in your strip
     name: "LED Strip"     # Name of your light
     id: led_strip         # ID of your light

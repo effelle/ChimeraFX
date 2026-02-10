@@ -46,16 +46,16 @@ So, I built **ChimeraFX**. Why the name? Walk with me...
 
 I love ancient history, and I love the story of the Chimera. It's a symbol of strength, power, and the ability to overcome challenges. It's also a symbol of unity, bringing together different parts to create something new and beautiful (well, not THAT beautiful, but you get the idea).
 
-But what is exactly a Chimera? In Greek mythology, a Chimera is a hybrid creature made up of different animals: the body and head of a lion, a goat’s head rising from its back, and a serpent for a tail.
+But what exactly is a Chimera? In Greek mythology, a Chimera is a hybrid creature made up of different animals: the body and head of a lion, a goat’s head rising from its back, and a serpent for a tail.
 Three parts, three animals, three sources of power.
 
-If fill all the slots:
+It fills all the slots:
 
 - **The Lion (Power):** Raw WLED logic and effects — the proven algorithms that make lights come alive.
 - **The Goat (Structure):** The reliable ESPHome framework — robust, maintainable, and Home Assistant native.
 - **The Serpent (Connection):** My custom abstraction layer — the binding force that seamlessly connects them.
 
-Hard to find another analogy that fit so well.
+It's hard to find another analogy that fits so well.
 
 `ChimeraFX` wasn't easy to build, it was born from a lot of trial, error, and dad-duties but also from a lot of coffee (trust me on this one), and a lot of "why isn't this working?" moments.
 
