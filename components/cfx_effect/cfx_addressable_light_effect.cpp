@@ -35,8 +35,14 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (speed_num != nullptr && !this->speed_preset_.has_value()) {
-    // For now only applying explicit presets to avoid overriding user manual
+  } else if (speed_num != nullptr) {
+    // No YAML preset: apply per-effect code default and sync slider
+    float target = (float)this->get_default_speed_(this->effect_id_);
+    if (speed_num->state != target) {
+      auto call = speed_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
   }
 
   // 2. Intensity
@@ -44,6 +50,14 @@ void CFXAddressableLightEffect::start() {
       (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
   if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
     float target = (float)this->intensity_preset_.value();
+    if (intensity_num->state != target) {
+      auto call = intensity_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+  } else if (intensity_num != nullptr) {
+    // No YAML preset: apply per-effect code default and sync slider
+    float target = (float)this->get_default_intensity_(this->effect_id_);
     if (intensity_num->state != target) {
       auto call = intensity_num->make_call();
       call.set_value(target);
