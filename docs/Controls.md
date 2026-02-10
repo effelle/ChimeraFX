@@ -1,13 +1,13 @@
 # Controls Guide
 
-Now you have the effect up and running, but how about control them? And what can you control? 
-`ChimeraFX` can create inputs (sliders, dropdowns, switches) to help you tweak the effect for your liking. The `cfx_control` component is optional and only needed (but strongly suggested) if you want to control the effect from Home Assistant or another controller. Whitout it you will still be able to use the effects at default values.
+Now you have the effects up and running, but how about controlling them? And what can you control? 
+`ChimeraFX` can create inputs (sliders, dropdowns, switches) to help you tweak the effect for your liking. The `cfx_control` component is optional and only needed (but strongly suggested) if you want to control the effect from Home Assistant or another controller. Without it you will still be able to use the effects at default values.
 
 ## Controller Logic
 
 The `addressable_cfx` effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.
 
-To generate controls automatically, use the `cfx_control` component. You need to declare it under the `cfx_effect` component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core `number`, `select` and `switch` components, and link them to your light.
+To generate controls automatically, use the `cfx_control` component. You need to declare it under the `cfx_effect` component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core `number`, `select` and `switch` components, and link them to your light automatically.
 
 ```yaml
 cfx_effect:
@@ -21,9 +21,6 @@ cfx_effect:
 ```
 
 **Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
-
-> [!IMPORTANT]
-> **Component Dependencies:** The `cfx_control` component automatically generates entities using ESPHome's standard `number`, `select` and `switch` components. You do **not** need to manually define them.
 
 ### Generated Controls
 The component creates the following entities based on your controller name (e.g., `LED Strip`):
@@ -64,11 +61,11 @@ cfx_effect:
   cfx_control:
     - id: roof_controller
       name: "Roof Lights"
-      light_id: led_strip_1
+      light_id: led_strip_1  # The ID of the first light you want to control
 
     - id: desk_controller
       name: "Desk Lights"
-      light_id: led_strip_2
+      light_id: led_strip_2  # The ID of the second light you want to control
 ```
 
 ### Option 2: Unified Control (Grouped)
@@ -81,12 +78,27 @@ cfx_effect:
       name: "Global"
       light_id: [led_strip_1, led_strip_2] # Key: Use a list format
 ```
-This generates one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
+This generates only one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
 
-## Preset Configurations
+## Overview of Controls
 
-> **Moved:** [Click here for Effect Presets documentation](Effect-Presets.md).
+### Speed
+Control slider to manage the speed of the effect. The higher the value, the faster the effect will run. Range (0-255)
 
+### Intensity
+Control slider to manage the intensity of the effect. Intensity change what controls depends on the effect. Range (0-255)
+
+### Palette
+Controls the palette used by the effect. A palette is a set of colors that are used to create the effect and every effect has its own palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette due to the nature of the effect. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
+
+### Mirror
+Controls the mirror of the effect. Use it to invert the direction of the effect. 
+
+### Intro Effects
+Controls the intro animation running before the main effect. TSelectable through a dropdown list. 
+
+### Timer
+Controls the timer of the effect. The higher the value, the brighter the effect will be.
 
 ## Intro & Turn-On Effects
 

@@ -3153,6 +3153,19 @@ bool CFXRunner::serviceIntro() {
       uint16_t pos = rand() % len;
       _segment.setPixelColor(pos, _intro_color);
     }
+  } else if (_intro_mode == INTRO_CENTER) {
+    // Center Wipe: From center to edges
+    uint16_t center = len / 2;
+    uint16_t limit = (uint16_t)((len / 2) * progress);
+
+    for (int i = 0; i < len; i++) {
+      int dist = abs(i - center);
+      if (dist <= limit) {
+        _segment.setPixelColor(i, _intro_color);
+      } else {
+        _segment.setPixelColor(i, 0);
+      }
+    }
   }
 
   return false; // Still running

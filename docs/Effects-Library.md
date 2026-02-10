@@ -62,3 +62,17 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count<br>**Speed**: Flow speed | Yes | - |
 
 *(Note: More effects from the standard WLED library are being ported incrementally.)*
+
+---
+
+## 🚀 Intro Animations
+
+These short animations play once when the light is turned ON.
+
+| ID | Animation Name | Description |
+|:---|:---|:---|
+| 0 | **None** | No intro animation. |
+| 1 | **Wipe** | Linear wipe from start to end (respects Mirror). |
+| 2 | **Fade** | Smooth brightness fade-in. |
+| 3 | **Center** | Wipe from center outwards (or inwards if reversed). |
+| 4 | **Glitter** | Random pixels sparkle as brightness increases. |

@@ -11,6 +11,8 @@
     *   **ESP-IDF** (with esp32_rmt_led_strip) — slightly better performance
     *   **Arduino** (with NeoPixelBus) — simpler setup
 
+You can install the component in two ways:
+
 ## 1. Declaring the External Component
 
 ESPHome will download the component directly from GitHub at compile-time.
@@ -122,7 +124,7 @@ light:
 
 **Note:** Every time a new effect is added, you will need to download the updated `chimera_fx_effects.yaml` file and replace the old one. A small price to pay for convenience.
 
-## Advanced Manual Installation
+## 2. Advanced Manual Installation
 
 If you are developing or need to modify the code locally, or simply you don't like to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
 
