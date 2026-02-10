@@ -212,7 +212,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
-    diag_gate_skips++;
     return; // Not time for update yet
   }
   this->last_run_ = now;

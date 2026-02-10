@@ -91,7 +91,6 @@ protected:
   number::Number *transition_duration_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
-  number::Number *intro_duration_{nullptr};
   switch_::Switch *intro_use_palette_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
 

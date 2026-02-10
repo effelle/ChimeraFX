@@ -9,6 +9,7 @@
 #pragma once
 
 #include "FastLED_Stub.h"
+#include "cfx_utils.h"
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/core/log.h"
 #include <cmath>

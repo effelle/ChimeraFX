@@ -79,6 +79,15 @@ public:
       });
     }
 
+    // --- PUSH: Debug ---
+    if (this->debug_) {
+      this->debug_->add_on_state_callback([this](bool value) {
+        for (auto *r : this->runners_) {
+          r->setDebug(value);
+        }
+      });
+    }
+
     // Note: Palette push requires string mapping, handled by individual effect
     // pull for now or we can duplicate mapping logic here. For strict 1-to-N,
     // pull works fine too if effects update frequently. But prompt asked for
@@ -141,6 +150,7 @@ public:
   void set_intensity(number::Number *n) { intensity_ = n; }
   void set_palette(select::Select *s) { palette_ = s; }
   void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
+  void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
   void set_intro_duration(number::Number *n) { intro_duration_ = n; }
   void set_intro_use_palette(esphome::switch_::Switch *s) {
@@ -162,6 +172,8 @@ public:
       runner->setIntensity((uint8_t)intensity_->state);
     if (mirror_ && mirror_->has_state())
       runner->setMirror(mirror_->state);
+    if (debug_ && debug_->has_state())
+      runner->setDebug(debug_->state);
     if (palette_ && palette_->has_state()) {
       auto opt = palette_->current_option();
       if (opt)
@@ -179,6 +191,7 @@ public:
   number::Number *get_intensity() { return intensity_; }
   select::Select *get_palette() { return palette_; }
   esphome::switch_::Switch *get_mirror() { return mirror_; }
+  esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
   number::Number *get_intro_duration() { return intro_duration_; }
   esphome::switch_::Switch *get_intro_use_palette() {
@@ -193,6 +206,7 @@ protected:
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};
   esphome::switch_::Switch *mirror_{nullptr};
+  esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
   esphome::switch_::Switch *intro_use_palette_{nullptr};
