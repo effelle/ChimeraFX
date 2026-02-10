@@ -479,9 +479,10 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="DebugLogger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#understanding-the-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -489,6 +490,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -677,9 +683,10 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="DebugLogger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#understanding-the-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -687,6 +694,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -786,16 +798,16 @@
 
 
 <h1 id="performance-troubleshooting">Performance &amp; Troubleshooting</h1>
-<h3 id="debuglogger">DebugLogger</h3>
+<h2 id="debuglogger">DebugLogger</h2>
 <p>I cannot stress this enough: <strong>DO NOT</strong> enable the logger on a production device if you don't need it. It will slow down your device, but if, for some reason, you need to debug the component, you can enable it just flipping a switch. You can find it on <strong>Diagnostics</strong> tab in Home Assistant.</p>
-<p>[15:46:46.362][I][cfx_diag:227]: [CFX] FPS:55.6 | Time: 18.0ms | Jitter: 0% | Heap: 172kB Free (108kB Max)
-```</p>
+<div class="highlight"><pre><span></span><code><span class="o">[</span><span class="m">15</span>:46:46.362<span class="o">][</span>I<span class="o">][</span>cfx_diag:227<span class="o">]</span>:<span class="w"> </span><span class="o">[</span>CFX<span class="o">]</span><span class="w"> </span>FPS:55.6<span class="w"> </span><span class="p">|</span><span class="w"> </span>Time:<span class="w"> </span><span class="m">18</span>.0ms<span class="w"> </span><span class="p">|</span><span class="w"> </span>Jitter:<span class="w"> </span><span class="m">0</span>%<span class="w"> </span><span class="p">|</span><span class="w"> </span>Heap:<span class="w"> </span>172kB<span class="w"> </span>Free<span class="w"> </span><span class="o">(</span>108kB<span class="w"> </span>Max<span class="o">)</span>
+</code></pre></div>
 <h3 id="understanding-the-logs">Understanding the Logs</h3>
 <ul>
 <li><strong>FPS (Frames Per Second)</strong>: Ideally stays around <strong>55-60 FPS</strong>. If this consistently drops below 30, your ESP32 is struggling to keep up.</li>
 <li><strong>Time</strong>: How long (in milliseconds) it took to render the last frame. Lower is better. ~18ms corresponds to ~55 FPS.</li>
 <li><strong>Jitter</strong>: The percentage of variation in frame timing. <strong>0-5% is excellent</strong>. Consistently high jitter (&gt;20%) means other components (like WiFi or heavy sensors) are interrupting the LED driver, which causes visible stuttering.</li>
-<li><strong>Heap</strong>: The available RAM on your chip. If this number steadily decreases over time (e.g., drops by 1kB every minute and never recovers), you might have found a memory leak!</li>
+<li><strong>Heap</strong>: The available RAM on your chip. <code>172kB Free</code> is the total free memory, while <code>108kB Max</code> is the largest contiguous block. If "Max" is significantly lower than "Free" (&lt; 20kB), memory is fragmented and allocation failures may occur.</li>
 </ul>
 <h2 id="common-issues">Common Issues</h2>
 <h3 id="my-strip-freezes-or-blinks-random-colors">"My strip freezes or blinks random colors"</h3>
