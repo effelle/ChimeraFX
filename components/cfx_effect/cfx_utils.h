@@ -21,6 +21,7 @@
 #include "esp_system.h"
 #endif
 
+#include "cfx_compat.h"
 #include "esphome/core/log.h"
 
 namespace cfx {
@@ -165,7 +166,7 @@ struct FrameDiagnostics {
     if (!enabled)
       return;
 
-    uint32_t now_us = esphome::micros();
+    uint32_t now_us = cfx_micros();
     if (last_frame_us > 0) {
       uint32_t delta_us = now_us - last_frame_us;
 
@@ -196,7 +197,7 @@ struct FrameDiagnostics {
     if (!enabled)
       return;
 
-    uint32_t now_ms = esphome::millis();
+    uint32_t now_ms = cfx_millis();
     if (now_ms - last_log_time >= LOG_INTERVAL_MS && frame_count > 10) {
       uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
       float fps =

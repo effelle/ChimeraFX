@@ -34,6 +34,14 @@ inline uint32_t cfx_millis() {
 #endif
 }
 
+inline uint32_t cfx_micros() {
+#ifdef CFX_ARDUINO
+  return micros();
+#else
+  return (uint32_t)(esp_timer_get_time());
+#endif
+}
+
 inline void cfx_delay(uint32_t ms) {
 #ifdef CFX_ARDUINO
   delay(ms);
