@@ -203,7 +203,7 @@ async def to_code(config):
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
-            CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_DIAGNOSTIC,
+            CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
             CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
         }
         debug = cg.new_Pvariable(conf[CONF_ID])
