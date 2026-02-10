@@ -829,33 +829,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         it[num_leds - 1 - i] = pixel_c;
       }
     }
-    // Handle odd center pixel for symmetry
     if (symmetry && (num_leds % 2 != 0)) {
-      if (progress >= 1.0f) {
-        if (use_palette) {
+      int mid = num_leds / 2;
+      bool fill_center = (progress >= 1.0f) || (reverse && lead > 0);
+      if (fill_center) {
+        if (use_palette && this->runner_) {
+          uint8_t map_idx = 128; // Center of palette gradient
           uint32_t cp = this->runner_->_segment.color_from_palette(
-              255, false, true, 255, 255);
-          it[num_leds / 2] =
-              Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+              map_idx, false, true, 255, 255);
+          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
         } else {
-          it[num_leds / 2] = c;
+          it[mid] = c;
         }
       } else {
-        // For reverse (Center -> Out), center should be Lit immediately?
-        // Actually, if reverse (Diverging), we start near center.
-        // Let's keep it simple: Odd pixel fills at end of Converging, or start
-        // of Diverging? Current logic: only fills at 100%. Correct logic for
-        // odd pixel is tricky. simpler to leave it black until end for now
-        // unless simple.
-        it[num_leds / 2] =
-            (reverse && (lead > 0)) ? (use_palette ? c : c) : Color::BLACK;
-        if (progress >= 1.0f)
-          it[num_leds / 2] = use_palette ? c : c; // simplified placeholder
-        // Reverting to previous simple behavior for odd pixel to minimize
-        // regression risk
-        if (progress >= 1.0f)
-          it[num_leds / 2] =
-              c; // Rough hack, Palette color calculation missing here
+        it[mid] = Color::BLACK;
       }
     }
     break;
