@@ -1,9 +1,9 @@
-![ChimeraFX](media/CFX_github_banner.png)
+![ChimeraFX](media/ChimeraFX_github_wide_banner.png)
 
 # ChimeraFX: Made for ESPHome
 
 
-> **High-performance WLED like effects running natively within ESPHome.**
+> **High-performance WLED-like effects running natively within ESPHome.**
 
 ---
 
