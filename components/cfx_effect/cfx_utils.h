@@ -44,7 +44,11 @@ inline uint16_t hw_random16(uint16_t min, uint16_t max) {
 inline uint8_t hw_random8() { return rand() % 256; }
 
 // Random 8-bit value in range [0, max)
-inline uint8_t hw_random8(uint8_t max) { return rand() % max; }
+inline uint8_t hw_random8(uint8_t max) {
+  if (max == 0)
+    return 0; // Safety: prevent div/0
+  return rand() % max;
+}
 
 // Random 8-bit value in range [min, max)
 inline uint8_t hw_random8(uint8_t min, uint8_t max) {

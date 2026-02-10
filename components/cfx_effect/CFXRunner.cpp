@@ -403,9 +403,10 @@ static CRGBW ColorFromPalette(uint8_t index, uint8_t brightness,
   uint8_t g2 = (c2 >> 8) & 0xFF;
   uint8_t b2 = c2 & 0xFF;
 
-  uint8_t r = r1 + (((r2 - r1) * f) >> 4);
-  uint8_t g = g1 + (((g2 - g1) * f) >> 4);
-  uint8_t b = b1 + (((b2 - b1) * f) >> 4);
+  // Safety: cast to int to avoid signed truncation when r2 < r1
+  uint8_t r = (uint8_t)std::max(0, (int)r1 + ((((int)r2 - (int)r1) * f) >> 4));
+  uint8_t g = (uint8_t)std::max(0, (int)g1 + ((((int)g2 - (int)g1) * f) >> 4));
+  uint8_t b = (uint8_t)std::max(0, (int)b1 + ((((int)b2 - (int)b1) * f) >> 4));
 
   // Apply brightness
   r = (r * brightness) >> 8;
@@ -608,9 +609,10 @@ uint16_t mode_aurora(void) {
   AuroraWave *waves;
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t aurora_last_millis = 0;
-  auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, aurora_last_millis);
+  // Use segment.step as per-instance timing state (avoids static variable
+  // cross-contamination)
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            instance->_segment.step);
   // Use deltams to determine effective speed for updates
   uint32_t effective_speed = timing.deltams > 0 ? instance->_segment.speed : 0;
 
@@ -727,9 +729,12 @@ uint16_t mode_fire_2012(void) {
   uint8_t *heat = instance->_segment.data;
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t fire_last_millis = 0;
+  // Use aux0 as per-instance timing state (avoids static variable
+  // cross-contamination)
+  uint32_t fire_timing_state = instance->_segment.aux0;
   auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
+      cfx::calculate_frame_timing(instance->_segment.speed, fire_timing_state);
+  instance->_segment.aux0 = fire_timing_state;
 
   const uint32_t it = timing.scaled_now >> 5; // div 32
 
@@ -1458,9 +1463,10 @@ uint16_t mode_breath(void) {
     return mode_static();
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t breath_last_millis = 0;
-  auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, breath_last_millis);
+  // Use segment.step as per-instance timing state (avoids static variable
+  // cross-contamination)
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            instance->_segment.step);
 
   // Time-based counter using scaled_now (multiplied by 20 for proper speed)
   uint32_t counter = (timing.scaled_now * 20) & 0xFFFF;
@@ -1535,24 +1541,19 @@ uint16_t mode_dissolve(void) {
   // Shadow buffer size: 1 bit per pixel, rounded up to bytes
   uint16_t shadow_size = (len + 7) / 8;
 
-  // Allocate shadow buffer if needed (using segment.data)
-  if (instance->_segment.data == nullptr ||
-      instance->_segment._dataLen < shadow_size) {
-    // Free old data if any
-    if (instance->_segment.data != nullptr) {
-      free(instance->_segment.data);
-    }
-    instance->_segment.data = (uint8_t *)malloc(shadow_size);
-    if (instance->_segment.data == nullptr) {
-      return mode_static(); // Allocation failed
-    }
-    instance->_segment._dataLen = shadow_size;
-    // Clear shadow buffer
+  // Allocate shadow buffer using allocateData (proper memory lifecycle
+  // tracking)
+  if (!instance->_segment.allocateData(shadow_size)) {
+    return mode_static(); // Allocation failed
+  }
+
+  // Reset state on fresh allocation (allocateData zeros memory for us)
+  if (instance->_segment.reset) {
     memset(instance->_segment.data, 0, shadow_size);
-    // Reset state
     instance->_segment.aux0 = 0;
     instance->_segment.aux1 = 0;
     instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
   }
 
   uint8_t *shadow = instance->_segment.data;
@@ -2083,10 +2084,12 @@ uint16_t mode_ripple(void) {
         int delta = abs(pos - wave_center);
 
         // Map distance 0-6 to brightness 255-0
-        uint8_t ramp = 255 - (delta * 42);
-        if (ramp > 255)
+        // Safety: use int16_t to avoid unsigned underflow (uint8_t can't be >
+        // 255)
+        int16_t ramp = 255 - (delta * 42);
+        if (ramp < 0)
           ramp = 0;
-        uint8_t bri = cubicwave8(ramp);
+        uint8_t bri = cubicwave8((uint8_t)ramp);
 
         // Apply color (Energy already applied to c)
         CRGBW c_pixel = c;
@@ -2314,9 +2317,10 @@ uint16_t mode_rainbow(void) {
     return 350;
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t rainbow_last_millis = 0;
+  // Use segment.step as per-instance timing state (avoids static variable
+  // cross-contamination)
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
-                                            rainbow_last_millis);
+                                            instance->_segment.step);
 
   // Speed controls cycling rate via scaled_now (>>4 for 2x slower)
   uint32_t counter = (timing.scaled_now >> 4) & 0xFF;
@@ -2351,9 +2355,10 @@ uint16_t mode_rainbow_cycle(void) {
   int len = instance->_segment.length();
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t rainbow_cycle_last_millis = 0;
+  // Use segment.step as per-instance timing state (avoids static variable
+  // cross-contamination)
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
-                                            rainbow_cycle_last_millis);
+                                            instance->_segment.step);
 
   // Speed controls animation flow via scaled_now (>>4 for 2x slower)
   uint32_t counter = (timing.scaled_now >> 4) & 0xFF;

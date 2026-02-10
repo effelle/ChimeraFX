@@ -165,13 +165,21 @@ FASTLED_INLINE uint8_t min(uint8_t a, uint8_t b) { return (a < b) ? a : b; }
 
 // --- Random Helpers (ESP-IDF compatible) ---
 FASTLED_INLINE uint8_t random8() { return rand() & 0xFF; }
-FASTLED_INLINE uint8_t random8(uint8_t lim) { return rand() % lim; }
+FASTLED_INLINE uint8_t random8(uint8_t lim) {
+  if (lim == 0) return 0;  // Safety: prevent div/0
+  return rand() % lim;
+}
 FASTLED_INLINE uint8_t random8(uint8_t min, uint8_t lim) {
+  if (min >= lim) return min;  // Safety: prevent div/0
   return min + (rand() % (lim - min));
 }
 FASTLED_INLINE uint16_t random16() { return rand() & 0xFFFF; }
-FASTLED_INLINE uint16_t random16(uint16_t lim) { return rand() % lim; }
+FASTLED_INLINE uint16_t random16(uint16_t lim) {
+  if (lim == 0) return 0;  // Safety: prevent div/0
+  return rand() % lim;
+}
 FASTLED_INLINE uint16_t random16(uint16_t min, uint16_t lim) {
+  if (min >= lim) return min;  // Safety: prevent div/0
   return min + (rand() % (lim - min));
 }
 

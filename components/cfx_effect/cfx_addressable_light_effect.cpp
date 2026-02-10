@@ -216,15 +216,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   this->last_run_ = now;
 
-  // Sync Debug State
-  if (this->debug_switch_) {
-    this->runner_->setDebug(this->debug_switch_->state);
-  }
-
   // --- Start Runner --- on first apply
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
+  }
+
+  // Sync Debug State (must be AFTER runner creation to avoid null deref)
+  if (this->debug_switch_ && this->runner_) {
+    this->runner_->setDebug(this->debug_switch_->state);
   }
 
   // Update speed from Number component
@@ -533,55 +533,57 @@ void CFXAddressableLightEffect::run_controls_() {
       if (!sel || !sel->has_state())
         return 0;
       const char *opt = sel->current_option();
-      std::string name = opt ? opt : "";
+      if (!opt)
+        return 0;
 
-      if (name == "Aurora")
+      // Use strcmp instead of std::string to avoid heap allocation every frame
+      if (strcmp(opt, "Aurora") == 0)
         return 1;
-      if (name == "Forest")
+      if (strcmp(opt, "Forest") == 0)
         return 2;
-      if (name == "Halloween")
+      if (strcmp(opt, "Halloween") == 0)
         return 3;
-      if (name == "Rainbow")
+      if (strcmp(opt, "Rainbow") == 0)
         return 4;
-      if (name == "Fire")
+      if (strcmp(opt, "Fire") == 0)
         return 5;
-      if (name == "Sunset")
+      if (strcmp(opt, "Sunset") == 0)
         return 6;
-      if (name == "Ice")
+      if (strcmp(opt, "Ice") == 0)
         return 7;
-      if (name == "Party")
+      if (strcmp(opt, "Party") == 0)
         return 8;
-      if (name == "Lava")
+      if (strcmp(opt, "Lava") == 0)
         return 9;
-      if (name == "Pastel")
+      if (strcmp(opt, "Pastel") == 0)
         return 10;
-      if (name == "Ocean")
+      if (strcmp(opt, "Ocean") == 0)
         return 11;
-      if (name == "HeatColors")
+      if (strcmp(opt, "HeatColors") == 0)
         return 12;
-      if (name == "Sakura")
+      if (strcmp(opt, "Sakura") == 0)
         return 13;
-      if (name == "Rivendell")
+      if (strcmp(opt, "Rivendell") == 0)
         return 14;
-      if (name == "Cyberpunk")
+      if (strcmp(opt, "Cyberpunk") == 0)
         return 15;
-      if (name == "OrangeTeal")
+      if (strcmp(opt, "OrangeTeal") == 0)
         return 16;
-      if (name == "Christmas")
+      if (strcmp(opt, "Christmas") == 0)
         return 17;
-      if (name == "RedBlue")
+      if (strcmp(opt, "RedBlue") == 0)
         return 18;
-      if (name == "Matrix")
+      if (strcmp(opt, "Matrix") == 0)
         return 19;
-      if (name == "SunnyGold")
+      if (strcmp(opt, "SunnyGold") == 0)
         return 20;
-      if (name == "None" || name == "Solid")
+      if (strcmp(opt, "None") == 0 || strcmp(opt, "Solid") == 0)
         return 255;
-      if (name == "Fairy")
+      if (strcmp(opt, "Fairy") == 0)
         return 22;
-      if (name == "Twilight")
+      if (strcmp(opt, "Twilight") == 0)
         return 23;
-      if (name == "Default") {
+      if (strcmp(opt, "Default") == 0) {
         // Resolve the natural default for this effect
         if (this->runner_) {
           uint8_t m = this->runner_->getMode();

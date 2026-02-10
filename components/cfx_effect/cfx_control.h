@@ -164,6 +164,12 @@ public:
   }
 
   void register_runner(CFXRunner *runner) {
+    // Safety: Prevent duplicate registration (called every frame from
+    // run_controls_)
+    for (auto *r : this->runners_) {
+      if (r == runner)
+        return; // Already registered
+    }
     this->runners_.push_back(runner);
     // Push current state to new runner
     if (speed_ && speed_->has_state())
