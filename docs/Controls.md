@@ -45,6 +45,12 @@ You can exclude specific controls by adding their ID to the `exclude` list (e.g.
 | `2` | Intensity |
 | `3` | Palette |
 | `4` | Mirror |
+| `5` | Intro Effects (Intro, Duration, Use Palette) |
+| `6` | Timer |
+| `9` | Debug (Diagnostic) |
+| `2` | Intensity |
+| `3` | Palette |
+| `4` | Mirror |
 | `5` | Intro Effects (Intro & Duration) |
 | `6` | Timer |
 
