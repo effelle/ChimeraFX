@@ -61,7 +61,7 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Count<br>**Speed**: Speed | Yes | - |
 | 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count<br>**Speed**: Flow speed | Yes | - |
 
-*(Note: More effects from the standard WLED library are being ported incrementally.)*
+*(Note: More effects are being ported incrementally.)*
 
 ---
 
@@ -71,8 +71,11 @@ These short animations play once when the light is turned ON.
 
 | ID | Animation Name | Description |
 |:---|:---|:---|
-| 0 | **None** | No intro animation. |
+| 0 | **None** | Standard behavior (Main effect starts immediately). |
 | 1 | **Wipe** | Linear wipe from start to end (respects Mirror). |
 | 2 | **Fade** | Smooth brightness fade-in. |
 | 3 | **Center** | Wipe from center outwards (or inwards if reversed). |
 | 4 | **Glitter** | Random pixels sparkle as brightness increases. |
+
+### Transition Behavior
+When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.

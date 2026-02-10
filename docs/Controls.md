@@ -82,53 +82,20 @@ This generates only one set of entities (e.g. `Global Speed`) that updates all l
 
 ## Overview of Controls
 
-### Speed
+### ID 1: Speed
 Control slider to manage the speed of the effect. The higher the value, the faster the effect will run. Range (0-255)
 
-### Intensity
-Control slider to manage the intensity of the effect. Intensity change what controls depends on the effect. Range (0-255)
+### ID 2: Intensity
+Control slider to manage the intensity of the effect. Intensity can manage different parameters depending on the effect. Range (0-255)
 
-### Palette
-Controls the palette used by the effect. A palette is a set of colors that are used to create the effect and every effect has its own palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette due to the nature of the effect. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
+### ID 3: Palette
+Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
 
-### Mirror
-Controls the mirror of the effect. Use it to invert the direction of the effect. 
+### ID 4: Mirror
+Controls the starting point of an effect. Useful if you can't physically invert the strip. Affect Into Animation too.
 
-### Intro Effects
-Controls the intro animation running before the main effect. TSelectable through a dropdown list. 
+### ID 5: Intro Animation
+A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support, allow the intro to use the same palette as the main effect. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
 
-### Timer
-Controls the timer of the effect. The higher the value, the brighter the effect will be.
-
-## Intro & Turn-On Effects
-
-This feature allows a specific effect to run **once** when the light is turned on, before transitioning smoothly to the main effect.
-
-### Options
-*   **None**: Standard behavior (Main effect starts immediately).
-*   **Wipe**: A color wiper from start to end (Color 1).
-*   **Fade**: Fade in from black (Color 1).
-*   **Center**: A "curtain" open effect (Wipe from center to edges).
-*   **Glitter**: Sparkles appearing and fading out.
-
-### Transition Behavior
-When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.
-
-## Alternative: Arduino Framework
-
-While ESP-IDF is the standard for high performance, we also fully support the **Arduino framework**. It is particularly robust for timing stability via NeoPixelBus:
-
-```yaml
-esp32:
-  board: esp32-s3-devkitc-1  # Or your board
-  framework:
-    type: arduino
-```
-
-
-> TIP: The Arduino framework provides more stable NeoPixelBus timing, which is critical for smooth WLED effects. ESP-IDF is still supported but may exhibit slightly higher latency on complex effects.
-
-This is particularly important when:
-- Running multiple LED strips simultaneously
-- Using effects with high per-pixel math (Ocean, Aurora, Plasma)
-
+### ID 6: Timer
+Controls how longer a light stay on. From 0 (timer off) to 360 minutes

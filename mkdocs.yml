@@ -42,6 +42,7 @@ nav:
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md
     - Effect Library: Effects-Library.md
+    - The Story: The-Story.md
 
 markdown_extensions:
   - admonition
