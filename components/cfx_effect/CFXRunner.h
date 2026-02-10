@@ -251,6 +251,8 @@ public:
   // Destructor: Release segment data to reclaim RAM
   ~CFXRunner() { _segment.deallocateData(); }
 
+  void setDebug(bool state) { diagnostics.enabled = state; }
+
   void service();
   void setMode(uint8_t m) {
     if (_mode != m) {
@@ -315,14 +317,8 @@ private:
   static mode_ptr _mode_ptr[];
 
   uint32_t _last_frame = 0;
-  uint32_t _diag_frame_count = 0;
-  uint32_t _diag_last_time = 0;
 
-  uint32_t _diag_frame_min = UINT32_MAX;
-  uint32_t _diag_frame_max = 0;
-  uint32_t _diag_frame_sum = 0;
-
-  bool _diag_bench_done = false;
+  cfx::FrameDiagnostics diagnostics;
 };
 
 extern CFXRunner *instance;

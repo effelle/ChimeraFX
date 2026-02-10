@@ -16,27 +16,17 @@ std::vector<CFXControl *> CFXControl::instances; // Define static vector
 static const char *TAG = "chimera_fx";
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
-    : AddressableLightEffect(name) {}
+    : light::AddressableLightEffect(name) {}
 
 void CFXAddressableLightEffect::start() {
-  AddressableLightEffect::start();
-  // Unconditional log to verify start is called
-  ESP_LOGD(TAG, ">>> CFX effect START CALLED <<<");
-  ESP_LOGD(TAG, "Starting CFX effect %d: %s", this->effect_id_,
-           this->get_name());
+  light::AddressableLightEffect::start();
 
-  // 0. Link Controls first - Critical to find controller
   this->run_controls_();
 
-  // Resolve Controller
   CFXControl *c = this->controller_;
 
-  // === APPLY PRESETS FIRST ===
-  // Ensure components are in the correct state before we read them for
-  // Intro/Logic
-
-  // 1. Speed
   number::Number *speed_num =
+
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && this->speed_preset_.has_value()) {
     float target = (float)this->speed_preset_.value();
@@ -46,12 +36,7 @@ void CFXAddressableLightEffect::start() {
       call.perform();
     }
   } else if (speed_num != nullptr && !this->speed_preset_.has_value()) {
-    // Optional: existing logic for default speed if no preset?
     // For now only applying explicit presets to avoid overriding user manual
-    // changes if no preset set. But wait, get_default_speed_ was used before.
-    // The previous logic applied default if no preset.
-    // User request was about presets. I will keep explicit preset logic strict
-    // for now to avoid side effects.
   }
 
   // 2. Intensity
@@ -80,7 +65,7 @@ void CFXAddressableLightEffect::start() {
     call.perform();
   }
 
-  // 4. Mirror (Fixed: Resolve from controller)
+  // 4. Mirror
   switch_::Switch *mirror_sw =
       (c && c->get_mirror()) ? c->get_mirror() : this->mirror_;
   if (mirror_sw != nullptr && this->mirror_preset_.has_value()) {
@@ -160,9 +145,7 @@ void CFXAddressableLightEffect::start() {
 
     if (this->intro_active_) {
       this->intro_start_time_ = millis();
-      ESP_LOGD(TAG, ">>> INTRO TRIGGERED (Fresh Turn-On detected) <<<");
     } else {
-      ESP_LOGD(TAG, "Intro Skipped (Effect Change detected)");
     }
   } else {
     this->intro_active_ = false;
@@ -200,15 +183,13 @@ void CFXAddressableLightEffect::start() {
 
     if (this->active_intro_mode_ == INTRO_NONE) {
       this->intro_active_ = false;
-      ESP_LOGD(TAG, "Intro Skipped (Configured as None or Not Ready)");
     } else {
-      ESP_LOGD(TAG, "Intro Active: Mode %d", this->active_intro_mode_);
     }
   }
 }
 
 void CFXAddressableLightEffect::stop() {
-  AddressableLightEffect::stop();
+  light::AddressableLightEffect::stop();
 
   // Clear intro snapshot vector to reclaim RAM
   intro_snapshot_.clear();
@@ -222,32 +203,12 @@ void CFXAddressableLightEffect::stop() {
     this->runner_ = nullptr;
   }
   this->controller_ = nullptr;
-  ESP_LOGD(TAG, "Stopped CFX effect: %s", this->get_name());
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                       const Color &current_color) {
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
-
-  // === MICROSECOND TIMING DIAGNOSTIC ===
-  static uint32_t diag_last_apply_us = 0;
-  static uint32_t diag_count = 0;
-  static uint32_t diag_gate_skips = 0;
-  static uint32_t diag_render_sum_us = 0;
-  static uint32_t diag_schedule_sum_us = 0;
-  static uint32_t diag_total_sum_us = 0;
-
-  uint32_t entry_us = micros();
-  uint32_t apply_interval_us = entry_us - diag_last_apply_us;
-  diag_last_apply_us = entry_us;
-
-  // Unconditional log once per Second to prove apply is running
-  static uint32_t last_alive_log = 0;
-  if (millis() - last_alive_log > 1000) {
-    ESP_LOGV(TAG, "CFX effect is ACTIVE (apply running)");
-    last_alive_log = millis();
-  }
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
@@ -256,7 +217,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   this->last_run_ = now;
 
-  // Create runner on first apply
+  // Sync Debug State
+  if (this->debug_switch_) {
+    this->runner_->setDebug(this->debug_switch_->state);
+  }
+
+  // --- Start Runner --- on first apply
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
@@ -271,9 +237,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                    (uint32_t(current_color.green) << 8) |
                    uint32_t(current_color.blue);
   this->runner_->setColor(color);
-
-  // Measure render time
-  uint32_t render_start_us = micros();
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
@@ -293,7 +256,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
     if (millis() - this->intro_start_time_ > duration_ms) {
       this->intro_active_ = false;
-      ESP_LOGD(TAG, ">>> INTRO FINISHED -> Starting Main Effect <<<");
 
       // Check if Transition is enabled via config
       float trans_dur = (this->transition_duration_ != nullptr &&
@@ -380,39 +342,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
-  uint32_t render_end_us = micros();
-
-  // Measure schedule_show time
   it.schedule_show();
-  uint32_t schedule_end_us = micros();
-
-  // Accumulate timing stats
-  uint32_t render_us = render_end_us - render_start_us;
-  uint32_t schedule_us = schedule_end_us - render_end_us;
-  uint32_t total_us = schedule_end_us - entry_us;
-
-  diag_render_sum_us += render_us;
-  diag_schedule_sum_us += schedule_us;
-  diag_total_sum_us += total_us;
-  diag_count++;
-
-  // Log every ~1 second (assuming ~30 FPS = ~30 frames)
-  if (diag_count >= 30) {
-    uint32_t avg_render = diag_render_sum_us / diag_count;
-    uint32_t avg_schedule = diag_schedule_sum_us / diag_count;
-    uint32_t avg_total = diag_total_sum_us / diag_count;
-    ESP_LOGV("wled_timing",
-             "apply() interval:%luus render:%luus schedule:%luus total:%luus "
-             "skips:%lu",
-             apply_interval_us, avg_render, avg_schedule, avg_total,
-             diag_gate_skips);
-    diag_count = 0;
-    diag_gate_skips = 0;
-    diag_render_sum_us = 0;
-    diag_schedule_sum_us = 0;
-    diag_total_sum_us = 0;
-  }
-  // === END DIAGNOSTIC ===
 }
 
 uint8_t CFXAddressableLightEffect::get_palette_index_() {
@@ -486,13 +416,6 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
-  // Mapping based on "Natural" palette for each effect
-  // Derived from CFXRunner.cpp source inspection & User Feedback
-  // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, 5=Fire,
-  //              6=Sunset, 7=Ice, 8=Party, 9=Lava, 10=Pastel, 11=Pacifica,
-  //              12=HeatColors, 13=Sakura, 14=Rivendell, 15=Cyberpunk,
-  //              16=OrangeTeal, 17=Christmas, 18=RedBlue, 19=Matrix,
-  //              20=SunnyGold, 21=Solid
   switch (effect_id) {
   // Solid Defaults (255)
   case 0:
@@ -607,11 +530,7 @@ void CFXAddressableLightEffect::run_controls_() {
         return 0;
       const char *opt = sel->current_option();
       std::string name = opt ? opt : "";
-      // Updated indices: 0=Default, 1=Aurora, 2=Forest, 3=Halloween (was
-      // Ocean), 4=Rainbow, 5=Fire, 6=Sunset, 7=Ice, 8=Party, 9=Lava, 10=Pastel,
-      // 11=Ocean (was Pacifica), 12=HeatColors, 13=Sakura, 14=Rivendell,
-      // 15=Cyberpunk, 16=OrangeTeal, 17=Christmas, 18=RedBlue, 19=Matrix,
-      // 20=SunnyGold, 21=Solid, 22=Fairy, 23=Twilight
+
       if (name == "Aurora")
         return 1;
       if (name == "Forest")
@@ -702,7 +621,7 @@ void CFXAddressableLightEffect::run_controls_() {
       this->runner_->setPalette(default_pal);
     }
 
-    // 5. Mirror (formerly Reverse)
+    // 5. Mirror
     if (c && c->get_mirror())
       this->runner_->setMirror(c->get_mirror()->state);
     else if (this->mirror_)
@@ -711,12 +630,11 @@ void CFXAddressableLightEffect::run_controls_() {
     // 6. Intro Use Palette
     if (c && c->get_intro_use_palette())
       this->intro_use_palette_ = c->get_intro_use_palette();
-  }
 
-  // 6. Intro Effect & Duration (Optional)
-  // These are pulled in run_intro(), but ideally we set them here too?
-  // Actually run_intro pulls directly from members.
-  // We should redirect run_intro to use controller too.
+    // 7. Debug
+    if (c && c->get_debug())
+      this->debug_switch_ = c->get_debug();
+  }
 }
 
 // Intro Routine Implementation
@@ -731,8 +649,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     return;
   }
 
-  // 1. Determine Duration
-  // 1. Determine Duration
   uint32_t duration = 3000;
   number::Number *dur_num = this->intro_duration_;
   if (dur_num == nullptr && this->controller_ != nullptr)

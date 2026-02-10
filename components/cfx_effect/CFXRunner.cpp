@@ -14,7 +14,6 @@
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 
-// Static instance pointer
 CFXRunner *instance = nullptr;
 
 // Global time provider for FastLED timing functions
@@ -37,13 +36,6 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   _segment.colors[0] = DEFAULT_COLOR; // Orange default
 }
 
-// --- helper functions ---
-
-// Simple time-based service loop - Moved to end of file to see effect functions
-
-// --- Segment Implementation ---
-
-// Set Pixel Color (Direct write to ESPHome buffer)
 void Segment::setPixelColor(int n, uint32_t c) {
   if (n < 0 || n >= length())
     return;
@@ -51,9 +43,6 @@ void Segment::setPixelColor(int n, uint32_t c) {
   // Map usage to global buffer - apply mirror (inversion) if enabled
   int global_index = mirror ? (stop - 1 - n) : (start + n);
 
-  // Check bounds against light size
-  // Optimization: Cache instance and light locally if possible, but for single
-  // pixel set this is acceptable
   if (instance && instance->target_light && global_index >= 0 &&
       global_index < instance->target_light->size()) {
     esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
@@ -119,12 +108,7 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
   }
 }
 
-// Stub removed. Implementation moved to end of file to access static palette
-// tables.
-
 // --- Effect Implementations ---
-
-// --- Aurora Effect Dependencies ---
 
 #ifdef ESP8266
 #define W_MAX_COUNT 9
@@ -179,11 +163,11 @@ static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
 // Note: color_blend and get_random_wheel_index now come from cfx_utils.h
 
 // ============================================================================
-// PALETTE SYSTEM - 21 Palettes stored in Flash (PROGMEM)
-// Uses CFX_PROGMEM for ESP-IDF/Arduino compatibility (~1.3KB RAM saved)
+// PALETTE SYSTEM - Palettes stored in Flash (PROGMEM)
+// Uses CFX_PROGMEM for ESP-IDF/Arduino compatibility
 // ============================================================================
 
-// Palette 0: Aurora - Green/Teal/Cyan gradient (ideal for Aurora effect)
+// Palette 0: Aurora - Green/Teal/Cyan gradient
 static const uint32_t PaletteAurora[16] CFX_PROGMEM = {
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF1E, // Green
     0x00FF1E, 0x00FF1E, 0x00FF1E, 0x00FF28, // Green -> slightly Tealer
@@ -450,8 +434,6 @@ struct AuroraWave {
   void init(uint32_t segment_length, CRGBW color) {
     ttl = hw_random16(500, 1501);
     basecolor = color;
-    // FIX: Range must be <= 100 to avoid overflowing uint16_t basealpha with
-    // AW_SCALE High floor > 50 reduces voids.
     basealpha = hw_random8(50, 100) * AW_SCALE / 100;
     age = 0;
     width =
@@ -459,7 +441,6 @@ struct AuroraWave {
     center = (((uint32_t)hw_random8(101) << AW_SHIFT) / 100) * segment_length;
     goingleft = hw_random8() & 0x01;
 
-    // Save random speed variance (10-31)
     speed_factor_byte = hw_random8(10, 31);
     alive = true;
   }
@@ -516,8 +497,6 @@ struct AuroraWave {
     // 128 input -> ~85 effective
     uint32_t effective_speed = (input_speed * 170) >> 8;
 
-    // Calculate step: variance * constants * speed
-    // FIX: Re-introduced Divisor (4) to slow down effect to proper visual speed
     uint32_t step = (uint32_t)speed_factor_byte * W_MAX_SPEED * effective_speed;
     step = (step << AW_SHIFT) / (100 * 255 * 4);
 
@@ -648,7 +627,6 @@ uint16_t mode_aurora(void) {
   int active_count = 2 + ((internal_intensity * (W_MAX_COUNT - 2)) / 255);
   instance->_segment.aux1 = active_count;
 
-  // FIX: Allocation: ALWAYS allocate max count to prevent reallocation/reset
   if (!instance->_segment.allocateData(sizeof(AuroraWave) * W_MAX_COUNT)) {
     return mode_static();
   }
@@ -678,7 +656,6 @@ uint16_t mode_aurora(void) {
           waves[i].alive = false;
       }
 
-      // CRITICAL: Update with effective_speed from timing helper
       waves[i].update(instance->_segment.length(), effective_speed);
 
       if (!waves[i].stillAlive()) {
@@ -754,16 +731,11 @@ uint16_t mode_fire_2012(void) {
   auto timing =
       cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
 
-  // WLED uses time-based throttling
   const uint32_t it = timing.scaled_now >> 5; // div 32
 
-  // Ignition area: 10% of VIRTUAL length or minimum 3 pixels
   const uint8_t ignition = max(3, VIRTUAL_HEIGHT / 10);
 
-  // Step 1. Cool down every cell a little (on Virtual Grid)
   for (int i = 0; i < VIRTUAL_HEIGHT; i++) {
-    // Standard WLED cooling formula for ~60 pixels
-    // No need for dynamic scaling since we are on fixed grid
     uint8_t cool =
         (it != instance->_segment.step)
             ? random8((((20 + timing.wled_speed / 3) * 16) / VIRTUAL_HEIGHT) +
@@ -776,12 +748,10 @@ uint16_t mode_fire_2012(void) {
   }
 
   if (it != instance->_segment.step) {
-    // Step 2. Heat from each cell drifts 'up' and diffuses (Virtual Grid)
     for (int k = VIRTUAL_HEIGHT - 1; k > 1; k--) {
       heat[k] = (heat[k - 1] + (heat[k - 2] << 1)) / 3; // heat[k-2] * 2
     }
 
-    // Step 3. Randomly ignite new 'sparks' near bottom (Virtual Grid)
     if (random8() <= instance->_segment.intensity) {
       uint8_t y = random8(ignition);
       uint8_t boost = 17 * (ignition - y / 2) / ignition; // WLED default boost
@@ -789,13 +759,9 @@ uint16_t mode_fire_2012(void) {
     }
   }
 
-  // Step 4. Map Virtual Heat to Physical LED colors (Upscaling)
-  // Scale factor from Virtual -> Physical
   float scale = (float)VIRTUAL_HEIGHT / (float)len;
 
   for (int j = 0; j < len; j++) {
-    // Map physical index 'j' to virtual index 'v_index'
-    // Ensure we don't go out of bounds
     int v_index = (int)(j * scale);
     if (v_index >= VIRTUAL_HEIGHT)
       v_index = VIRTUAL_HEIGHT - 1;
@@ -825,9 +791,6 @@ uint16_t mode_fire_2012(void) {
   return FRAMETIME;
 }
 
-// --- Fire Dual (ID 53) ---
-// Two flames meeting in the middle
-// Uses same Virtual Resolution (60px) physics as Fire 2012 for consistency
 uint16_t mode_fire_dual(void) {
   if (!instance)
     return 350;
@@ -2645,6 +2608,9 @@ void CFXRunner::service() {
   // Ensures effect functions operate on the correct strip context
   instance = this;
 
+  // Start frame diagnostics (measures time since last call)
+  diagnostics.frame_start();
+
   now = cfx_millis();
 
   // Calculate frame time (delta) - using member variables, not static
@@ -2654,55 +2620,8 @@ void CFXRunner::service() {
   // Increment call counter for effect initialization logic
   _segment.call++;
 
-  // === DIAGNOSTIC: FPS + Frame Time + Heap Monitor (logs every 1 second) ===
-  _diag_frame_count++;
-
-  // Track frame time min/max/sum for Phase 1 verification
-  if (frame_time > 0 && frame_time < 10000) { // Sanity check
-    if (frame_time < _diag_frame_min)
-      _diag_frame_min = frame_time;
-    if (frame_time > _diag_frame_max)
-      _diag_frame_max = frame_time;
-    _diag_frame_sum += frame_time;
-  }
-
-  if (now - _diag_last_time >= 1000) {
-    uint32_t fps = _diag_frame_count;
-    uint32_t frame_mean =
-        _diag_frame_count > 0 ? _diag_frame_sum / _diag_frame_count : 0;
-    uint32_t heap_internal = esp_get_free_internal_heap_size();
-    uint32_t heap_total = esp_get_free_heap_size();
-    uint32_t max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-
-    // Phase 1 Verification: Log frame time stats (target: 24ms ± 2ms)
-    ESP_LOGV("wled_perf",
-             "FPS:%u Frame_ms(min/mean/max):%u/%u/%u Heap:%u/%u MaxBlk:%u", fps,
-             _diag_frame_min, frame_mean, _diag_frame_max, heap_internal,
-             heap_total, max_block);
-
-    // Reset counters
-    _diag_frame_count = 0;
-    _diag_frame_min = UINT32_MAX;
-    _diag_frame_max = 0;
-    _diag_frame_sum = 0;
-    _diag_last_time = now;
-  }
-
-  // === Phase 2 Verification: One-time math benchmark ===
-  if (!_diag_bench_done) {
-    _diag_bench_done = true;
-    uint32_t bench_start = cfx_millis();
-    volatile uint32_t dummy = 0; // Prevent optimization
-    for (int i = 0; i < 10000; i++) {
-      dummy += sin8(i & 0xFF); // 10k sin8 calls
-    }
-    uint32_t bench_time = cfx_millis() - bench_start;
-    ESP_LOGV("wled_bench",
-             "Math benchmark: 10k sin8 calls in %ums (target: <1ms)",
-             bench_time);
-    (void)dummy; // Suppress unused warning
-  }
-  // === END DIAGNOSTIC ===
+  // Perform periodic logging if enabled
+  diagnostics.maybe_log("CFX");
 
   // --- INTRO LOGIC ---
   if (_state == STATE_INTRO) {

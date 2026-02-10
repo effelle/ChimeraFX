@@ -12,7 +12,8 @@ from esphome.components import number, select, switch, light
 from esphome.const import (
     CONF_ID, CONF_NAME, CONF_ICON, CONF_MODE,
     CONF_DISABLED_BY_DEFAULT, CONF_INTERNAL,
-    CONF_RESTORE_MODE
+    CONF_RESTORE_MODE, CONF_ENTITY_CATEGORY,
+    ENTITY_CATEGORY_DIAGNOSTIC
 )
 from . import chimera_fx_ns
 
@@ -40,12 +41,13 @@ EXCLUDE_PALETTE = 3
 EXCLUDE_MIRROR = 4
 EXCLUDE_INTRO = 5
 EXCLUDE_TIMER = 6
+EXCLUDE_DEBUG = 9
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
-    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=7)),
+    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
 })
 
 async def to_code(config):
@@ -189,4 +191,22 @@ async def to_code(config):
         timer = cg.new_Pvariable(conf[CONF_ID])
         await number.register_number(timer, conf, min_value=0, max_value=360, step=1)
         cg.add(timer.publish_state(conf["initial_value"]))
+        cg.add(timer.publish_state(conf["initial_value"]))
         cg.add(var.set_timer(timer))
+
+    # 9. Debug
+    if is_included(EXCLUDE_DEBUG):
+        conf = {
+            CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_debug"),
+            CONF_NAME: f"{name} Debug",
+            CONF_ICON: "mdi:bug",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+            CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_DIAGNOSTIC,
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+        }
+        debug = cg.new_Pvariable(conf[CONF_ID])
+        await switch.register_switch(debug, conf)
+        cg.add(debug.publish_state(False))
+        cg.add(var.set_debug(debug))

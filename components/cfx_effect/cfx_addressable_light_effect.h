@@ -49,6 +49,7 @@ public:
   void set_intro_use_palette(switch_::Switch *s) {
     this->intro_use_palette_ = s;
   }
+  void set_debug(switch_::Switch *s) { this->debug_switch_ = s; }
 
   select::Select *get_intro_effect() { return this->intro_effect_; }
 
@@ -90,7 +91,9 @@ protected:
   number::Number *transition_duration_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
+  number::Number *intro_duration_{nullptr};
   switch_::Switch *intro_use_palette_{nullptr};
+  switch_::Switch *debug_switch_{nullptr};
 
   enum TransitionState {
     TRANSITION_NONE,

@@ -12,7 +12,16 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstdlib>
+#include <vector>
+
+#ifdef ARDUINO
+#include <Arduino.h>
+#else
+#include "esp_heap_caps.h"
+#include "esp_system.h"
+#endif
+
+#include "esphome/core/log.h"
 
 namespace cfx {
 
@@ -126,13 +135,10 @@ inline uint8_t get_random_wheel_index(uint8_t pos) {
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
 // ============================================================================
-// FRAME DIAGNOSTICS (enabled with CFX_FRAME_DIAGNOSTICS define)
-// ============================================================================
-
-// Define CFX_FRAME_DIAGNOSTICS in your yaml or code to enable diagnostics
-// Example: build_flags: -DCFX_FRAME_DIAGNOSTICS
+// Frame Diagnostics (Runtime controllabe)
 
 struct FrameDiagnostics {
+  bool enabled = false;
   uint32_t frame_count = 0;
   uint32_t last_frame_us = 0; // Last frame timestamp in microseconds
   uint32_t min_frame_us = UINT32_MAX;
@@ -143,7 +149,7 @@ struct FrameDiagnostics {
   uint32_t last_log_time = 0;
 
   static constexpr uint32_t TARGET_FRAME_US = 16666; // 60fps = 16.67ms
-  static constexpr uint32_t LOG_INTERVAL_MS = 5000;  // Log every 5 seconds
+  static constexpr uint32_t LOG_INTERVAL_MS = 2000;  // Log every 2 seconds
 
   void reset() {
     frame_count = 0;
@@ -156,7 +162,9 @@ struct FrameDiagnostics {
 
   // Call at start of effect service - measures time since last call
   void frame_start() {
-#ifdef CFX_FRAME_DIAGNOSTICS
+    if (!enabled)
+      return;
+
     uint32_t now_us = esphome::micros();
     if (last_frame_us > 0) {
       uint32_t delta_us = now_us - last_frame_us;
@@ -181,12 +189,13 @@ struct FrameDiagnostics {
       }
     }
     last_frame_us = now_us;
-#endif
   }
 
   // Call periodically to log statistics
   void maybe_log(const char *effect_name) {
-#ifdef CFX_FRAME_DIAGNOSTICS
+    if (!enabled)
+      return;
+
     uint32_t now_ms = esphome::millis();
     if (now_ms - last_log_time >= LOG_INTERVAL_MS && frame_count > 10) {
       uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
@@ -195,16 +204,26 @@ struct FrameDiagnostics {
       float jitter_pct =
           frame_count > 0 ? (100.0f * jitter_count) / frame_count : 0;
 
-      ESP_LOGD("cfx_diag",
-               "[%s] Frames:%lu FPS:%.1f Min:%luus Max:%luus Avg:%luus "
-               "Jitter:%.1f%% Gaps:%lu",
-               effect_name, frame_count, fps, min_frame_us, max_frame_us,
-               avg_frame_us, jitter_pct, gap_count);
+      uint32_t free_heap = 0;
+      uint32_t max_block = 0;
+
+#ifdef ARDUINO
+      free_heap = ESP.getFreeHeap();
+      max_block = ESP.getMaxAllocHeap();
+#else
+      free_heap = esp_get_free_heap_size();
+      max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+#endif
+
+      ESP_LOGI("cfx_diag",
+               "[%s] FPS:%.1f | Frame: %luus (Avg) | Jitter: %.1f%% | Heap: "
+               "%u / %u",
+               effect_name, fps, avg_frame_us, jitter_pct, free_heap,
+               max_block);
 
       reset();
       last_log_time = now_ms;
     }
-#endif
   }
 };
 

@@ -13,7 +13,7 @@ A **Chimera** is a legendary creature composed of three animals. ChimeraFX merge
 
 - **The Lion (Power):** Raw WLED logic and effects — the proven algorithms that make lights come alive.
 - **The Goat (Structure):** The reliable ESPHome framework — robust, maintainable, and Home Assistant native.
-- **The Serpent (Connection):** Our custom abstraction layer — the binding force that seamlessly connects them.
+- **The Serpent (Connection):** My custom abstraction layer — the binding force that seamlessly connects them.
 
 ---
 
