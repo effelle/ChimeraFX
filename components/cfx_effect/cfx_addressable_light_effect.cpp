@@ -510,6 +510,10 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 5; // Fire 2012 -> Fire
   case 76:
     return 255; // Meteor -> Solid (WLED default)
+  case 40:
+    return 255; // Scanner -> Solid
+  case 60:
+    return 255; // Scanner Dual -> Solid
   case 101:
     return 11; // Pacifica -> Pacifica
   case 104:

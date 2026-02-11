@@ -2483,47 +2483,19 @@ uint16_t mode_scanner_internal(bool dualMode) {
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
                                             instance->_segment.step);
 
-  // 3. Fade trail — WLED fade_out(255-intensity)
-  //    WLED's fade_out is NOT multiplicative like fadeToBlackBy.
-  //    It uses delta-based fade with a minimum step of ±1,
-  //    ensuring pixels always reach zero and intensity has visible impact.
+  // 3. Fade trail using fadeToBlackBy with tuned quadratic curve
+  //    WLED's fade_out uses a complex delta formula. We use fadeToBlackBy
+  //    (multiplicative fade) which guarantees pixels reach zero (no floor
+  //    glow). Quadratic mapping gives good visible control range: Intensity 0:
+  //    fadeBy=64  (rapid fade, ~2px trail) Intensity 128: fadeBy=24  (~8px
+  //    trail at default speed) Intensity 204: fadeBy=4   (very long trail)
+  //    Intensity 255: fadeBy=0   (infinite trail / no fade)
   {
-    uint8_t rate = 255 - instance->_segment.intensity;
-    rate = (256 - rate) >> 1;          // WLED: compress range
-    int mappedRate = 256 / (rate + 1); // WLED: compute fade delta factor
-
-    for (int i = 0; i < len; i++) {
-      uint32_t color = instance->_segment.getPixelColor(i);
-      if (color == 0)
-        continue; // already black, skip
-
-      uint8_t r = (color >> 16) & 0xFF;
-      uint8_t g = (color >> 8) & 0xFF;
-      uint8_t b = color & 0xFF;
-      uint8_t w = (color >> 24) & 0xFF;
-
-      // WLED: compute delta toward 0, with minimum step of 1
-      int dr = (0 - (int)r) * mappedRate / 256;
-      int dg = (0 - (int)g) * mappedRate / 256;
-      int db = (0 - (int)b) * mappedRate / 256;
-      int dw = (0 - (int)w) * mappedRate / 256;
-
-      if (dr == 0 && r > 0)
-        dr = -1;
-      if (dg == 0 && g > 0)
-        dg = -1;
-      if (db == 0 && b > 0)
-        db = -1;
-      if (dw == 0 && w > 0)
-        dw = -1;
-
-      r = (uint8_t)(r + dr);
-      g = (uint8_t)(g + dg);
-      b = (uint8_t)(b + db);
-      w = (uint8_t)(w + dw);
-
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-    }
+    uint8_t inv = 255 - instance->_segment.intensity; // 0-255 inverted
+    uint8_t fadeBy = ((uint16_t)inv * inv) >> 10;     // quadratic: 0-63
+    if (inv > 0 && fadeBy == 0)
+      fadeBy = 1; // ensure fade when intensity < 255
+    instance->_segment.fadeToBlackBy(fadeBy);
   }
 
   // 4. Compute head position from speed-scaled time
@@ -2551,12 +2523,12 @@ uint16_t mode_scanner_internal(bool dualMode) {
   }
 
   // 6. Draw head pixel(s)
-  //    Palette=0 ("Default"): use primary segment color (WLED behavior)
+  //    Palette=0 or 255 ("Default"/"Solid"): use primary segment color
   //    Other palettes: use color_from_palette with pixel mapping
+  //    (Matches mode_static pattern)
   for (int i = start; i <= end; i++) {
     uint32_t c;
-    if (instance->_segment.palette == 0) {
-      // WLED: palette=0 returns segment primary color (colors[0])
+    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
       c = instance->_segment.colors[0];
     } else {
       c = instance->_segment.color_from_palette(i, true, true, 0);
