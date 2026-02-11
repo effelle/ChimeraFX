@@ -100,38 +100,6 @@ ChimeraFX currently supports over **20+ effects** optimized for ESP32, like:
 
 #### [👉 Click here to see the full Effect List & Control Guide](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
-
-<details>
-
-## Available Effects
-
-| ID | Name | Description |
-|----|------|-------------|
-| `0` | Static | Solid color with palette support |
-| `2` | Breathe | Apple-style standby breathing LED |
-| `3` | Wipe | Single color wipe |
-| `6` | Sweep | Ping-pong wipe animation |
-| `8` | Colorloop | Solid color cycling through palette |
-| `9` | Rainbow | Per-pixel rainbow with density control |
-| `18` | Dissolve | Random pixel color transitions |
-| `38` | Aurora | Northern lights animation |
-| `40` | Scanner | Single dot moving back and forth (KITT/Cylon) |
-| `53` | Fire Dual | Two flames meeting in the center |
-| `60` | Scanner Dual | Two dots meeting in the center |
-| `63` | Colorwaves | Rainbow flag with breathing motion |
-| `64` | Juggle | Eight bouncing dots with trails |
-| `66` | Fire | Realistic fire simulation |
-| `74` | Colortwinkles | Magical fairy-dust twinkles |
-| `76` | Meteor | Meteor with random decay trail |
-| `91` | Bouncing Balls | Real gravity physics |
-| `97` | Plasma | Smooth plasma animation |
-| `101` | Pacifica | Gentle ocean waves |
-| `104` | Sunrise | Gradual sunrise/sunset simulation |
-| `105` | Phased | Sine wave interference pattern |
-| `110` | Flow | Smooth color zones animation |
-
-</details>
-
 ### Mass Inclusion
 
 To maintain a clean configuration file, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
