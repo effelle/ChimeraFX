@@ -2530,6 +2530,10 @@ uint16_t mode_scanner_internal(bool dualMode) {
       instance->_segment.data[1] = instance->_segment.aux1 & 0xFF;
       instance->_segment.data[2] = (instance->_segment.aux1 >> 8) & 0xFF;
       instance->_segment.data[3] = 1; // old trail is active
+
+      // RESET the old trail age counter (upper 16 bits)
+      instance->_segment.step &= 0xFFFF;
+
       // Reverse
       instance->_segment.aux0 = !instance->_segment.aux0;
       instance->_segment.aux1 = 0;
@@ -2539,16 +2543,16 @@ uint16_t mode_scanner_internal(bool dualMode) {
   }
 
   // 3. Trail length from Intensity
-  //    Intensity 0:   trail=3 pixels
-  //    Intensity 128: trail=10 pixels
-  //    Intensity 204: trail=25 pixels
-  //    Intensity 255: trail=len (infinite)
+  //    mapped to [3 ... len/2], or infinite if 255
   unsigned trail_len;
   uint8_t intensity = instance->_segment.intensity;
   if (intensity >= 255) {
     trail_len = len;
   } else {
-    trail_len = 3 + ((unsigned)intensity * (len > 3 ? len - 3 : 0)) / 255;
+    // scale to max 50% of strip length for better control
+    unsigned max_len = (len > 6) ? (len / 2) : len;
+    trail_len =
+        3 + ((unsigned)intensity * (max_len > 3 ? max_len - 3 : 0)) / 255;
     if (trail_len > (unsigned)len)
       trail_len = len;
   }
@@ -2621,7 +2625,7 @@ uint16_t mode_scanner_internal(bool dualMode) {
         (instance->_segment.step & 0xFFFF) | ((uint32_t)oldAge << 16);
 
     unsigned fadeFrames =
-        trail_len * 3; // old trail fades over this many frames
+        trail_len * 5; // old trail fades over this many frames
     if (oldAge < fadeFrames) {
       uint8_t oldBri = 255 - (oldAge * 255 / fadeFrames);
       drawTrail(oldPos, oldDir, trail_len, oldBri);
