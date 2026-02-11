@@ -2461,7 +2461,7 @@ uint16_t mode_colortwinkle(void) {
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Rewritten for ChimeraFX with calculate_frame_timing + fadeToBlackBy
+// Rewritten for ChimeraFX with calculate_frame_timing + WLED fade_out
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -2483,18 +2483,54 @@ uint16_t mode_scanner_internal(bool dualMode) {
   auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
                                             instance->_segment.step);
 
-  // 3. Fade trail — WLED uses fade_out(255-intensity)
-  //    fadeToBlackBy is the ChimeraFX equivalent (multiplicative: no stuck
-  //    pixels) Intensity=0: fadeBy=255 (no trail), Intensity=255: fadeBy=0
-  //    (infinite trail)
-  instance->_segment.fadeToBlackBy(255 - instance->_segment.intensity);
+  // 3. Fade trail — WLED fade_out(255-intensity)
+  //    WLED's fade_out is NOT multiplicative like fadeToBlackBy.
+  //    It uses delta-based fade with a minimum step of ±1,
+  //    ensuring pixels always reach zero and intensity has visible impact.
+  {
+    uint8_t rate = 255 - instance->_segment.intensity;
+    rate = (256 - rate) >> 1;          // WLED: compress range
+    int mappedRate = 256 / (rate + 1); // WLED: compute fade delta factor
+
+    for (int i = 0; i < len; i++) {
+      uint32_t color = instance->_segment.getPixelColor(i);
+      if (color == 0)
+        continue; // already black, skip
+
+      uint8_t r = (color >> 16) & 0xFF;
+      uint8_t g = (color >> 8) & 0xFF;
+      uint8_t b = color & 0xFF;
+      uint8_t w = (color >> 24) & 0xFF;
+
+      // WLED: compute delta toward 0, with minimum step of 1
+      int dr = (0 - (int)r) * mappedRate / 256;
+      int dg = (0 - (int)g) * mappedRate / 256;
+      int db = (0 - (int)b) * mappedRate / 256;
+      int dw = (0 - (int)w) * mappedRate / 256;
+
+      if (dr == 0 && r > 0)
+        dr = -1;
+      if (dg == 0 && g > 0)
+        dg = -1;
+      if (db == 0 && b > 0)
+        db = -1;
+      if (dw == 0 && w > 0)
+        dw = -1;
+
+      r = (uint8_t)(r + dr);
+      g = (uint8_t)(g + dg);
+      b = (uint8_t)(b + db);
+      w = (uint8_t)(w + dw);
+
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
+  }
 
   // 4. Compute head position from speed-scaled time
   //    scaled_now advances faster at higher speed slider values.
-  //    SPEED_SCALE=15 tuned for ~8px visible trail at default settings
-  //    (speed=128, intensity=128, ~150 LEDs)
-  //    Full back-and-forth cycle: ~3.5s at speed=128
-  constexpr uint32_t SPEED_SCALE = 15;
+  //    SPEED_SCALE=2 gives WLED-matched scan speed:
+  //    Full back-and-forth ~26s at speed=0, ~2.9s at speed=128, ~1.5s at 255
+  constexpr uint32_t SPEED_SCALE = 2;
   uint16_t raw = (uint16_t)((uint32_t)timing.scaled_now * SPEED_SCALE);
   uint16_t tri = cfx::triwave16(raw);
   uint16_t pos = (uint32_t)tri * (len - 1) / 65535;
@@ -2514,10 +2550,17 @@ uint16_t mode_scanner_internal(bool dualMode) {
     end = (last_pos > pos) ? last_pos : pos;
   }
 
-  // 6. Draw head pixel(s) using palette color
-  //    Default palette=255 (Solid) uses primary segment color
+  // 6. Draw head pixel(s)
+  //    Palette=0 ("Default"): use primary segment color (WLED behavior)
+  //    Other palettes: use color_from_palette with pixel mapping
   for (int i = start; i <= end; i++) {
-    uint32_t c = instance->_segment.color_from_palette(i, true, true, 0);
+    uint32_t c;
+    if (instance->_segment.palette == 0) {
+      // WLED: palette=0 returns segment primary color (colors[0])
+      c = instance->_segment.colors[0];
+    } else {
+      c = instance->_segment.color_from_palette(i, true, true, 0);
+    }
     instance->_segment.setPixelColor(i, c);
     if (dualMode) {
       instance->_segment.setPixelColor(len - 1 - i, c);
