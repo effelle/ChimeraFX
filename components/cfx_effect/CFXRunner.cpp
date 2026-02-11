@@ -2461,7 +2461,7 @@ uint16_t mode_colortwinkle(void) {
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Rewritten for ChimeraFX with calculate_frame_timing + WLED fade_out
+// Uses WLED's exact pixel-counting speed algorithm
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -2470,76 +2470,74 @@ uint16_t mode_scanner_internal(bool dualMode) {
   if (len <= 1)
     return mode_static();
 
-  // 1. Reset: clear strip, invalidate last position
+  // State layout:
+  //   aux0  = direction (0=forward, 1=backward)
+  //   aux1  = current pixel position
+  //   step  = frame accumulator (for sub-pixel movement)
+
+  // 1. Reset: clear strip, reset position
   if (instance->_segment.reset) {
     instance->_segment.fill(0);
-    instance->_segment.aux0 = 0xFFFF; // sentinel: no last position yet
-    instance->_segment.aux1 = 0;
+    instance->_segment.aux0 = 0; // direction: forward
+    instance->_segment.aux1 = 0; // position: start
+    instance->_segment.step = 0; // frame counter
     instance->_segment.reset = false;
   }
 
-  // 2. WLED-faithful timing using centralized helper
-  //    step is used as the timing state (last_millis)
-  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
-                                            instance->_segment.step);
+  // 2. Fade trail — simple linear: fadeToBlackBy(255-intensity)
+  //    Intensity 0:   fadeBy=255  (instant, no trail)
+  //    Intensity 128: fadeBy=127  (~8px trail at default speed)
+  //    Intensity 255: fadeBy=0    (infinite trail)
+  //    Multiplicative fade guarantees all pixels reach zero (no floor glow)
+  instance->_segment.fadeToBlackBy(255 - instance->_segment.intensity);
 
-  // 3. Fade trail using fadeToBlackBy with tuned quadratic curve
-  //    WLED's fade_out uses a complex delta formula. We use fadeToBlackBy
-  //    (multiplicative fade) which guarantees pixels reach zero (no floor
-  //    glow). Quadratic mapping gives good visible control range: Intensity 0:
-  //    fadeBy=64  (rapid fade, ~2px trail) Intensity 128: fadeBy=24  (~8px
-  //    trail at default speed) Intensity 204: fadeBy=4   (very long trail)
-  //    Intensity 255: fadeBy=0   (infinite trail / no fade)
-  {
-    uint8_t inv = 255 - instance->_segment.intensity; // 0-255 inverted
-    uint8_t fadeBy = ((uint16_t)inv * inv) >> 10;     // quadratic: 0-63
-    if (inv > 0 && fadeBy == 0)
-      fadeBy = 1; // ensure fade when intensity < 255
-    instance->_segment.fadeToBlackBy(fadeBy);
+  // 3. WLED speed mapping: map(speed, 0, 255, 96, 2)
+  //    speed=0 → factor=96 (slowest), speed=255 → factor=2 (fastest)
+  //    "speed" = FRAMETIME * factor = how many ms per 1 full segment scan
+  //    "pixels" = SEGLEN / speed = how many pixels to advance per frame
+  uint8_t spd = instance->_segment.speed;
+  unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96→2
+  unsigned effective_speed = FRAMETIME * speed_factor;
+  unsigned pixels = len / effective_speed; // pixels per frame
+
+  unsigned index = instance->_segment.aux1 + pixels;
+
+  // Sub-pixel mode: at slow speeds, pixels=0 → count frames per pixel
+  if (pixels == 0) {
+    unsigned frames_per_pixel = effective_speed / len;
+    if (frames_per_pixel == 0)
+      frames_per_pixel = 1;
+    instance->_segment.step++;
+    if (instance->_segment.step < frames_per_pixel) {
+      return FRAMETIME; // not time to advance yet
+    }
+    instance->_segment.step = 0;
+    index = instance->_segment.aux1 + 1;
   }
 
-  // 4. Compute head position from speed-scaled time
-  //    scaled_now advances faster at higher speed slider values.
-  //    SPEED_SCALE=2 gives WLED-matched scan speed:
-  //    Full back-and-forth ~26s at speed=0, ~2.9s at speed=128, ~1.5s at 255
-  constexpr uint32_t SPEED_SCALE = 2;
-  uint16_t raw = (uint16_t)((uint32_t)timing.scaled_now * SPEED_SCALE);
-  uint16_t tri = cfx::triwave16(raw);
-  uint16_t pos = (uint32_t)tri * (len - 1) / 65535;
-
-  // 5. Anti-gap: draw all pixels between last position and current position
-  //    Prevents gaps when head moves >1 pixel per frame at high speed
-  uint16_t last_pos = instance->_segment.aux0;
-  int start, end;
-
-  if (last_pos == 0xFFFF || last_pos >= len ||
-      abs((int)pos - (int)last_pos) > (int)(len / 2)) {
-    // First frame or large jump — draw single pixel
-    start = pos;
-    end = pos;
+  // 4. Check bounds and reverse direction
+  if (index >= len) {
+    instance->_segment.aux0 = !instance->_segment.aux0; // reverse
+    instance->_segment.aux1 = 0;                        // reset position
   } else {
-    start = (last_pos < pos) ? last_pos : pos;
-    end = (last_pos > pos) ? last_pos : pos;
+    // 5. Paint pixels from old position to new position
+    for (unsigned i = instance->_segment.aux1; i < index; i++) {
+      unsigned j = instance->_segment.aux0 ? i : (len - 1 - i);
+      uint32_t c;
+      if (instance->_segment.palette == 0 ||
+          instance->_segment.palette == 255) {
+        c = instance->_segment.colors[0];
+      } else {
+        c = instance->_segment.color_from_palette(j, true, true, 0);
+      }
+      instance->_segment.setPixelColor(j, c);
+      if (dualMode) {
+        instance->_segment.setPixelColor(len - 1 - j, c);
+      }
+    }
+    instance->_segment.aux1 = index;
   }
 
-  // 6. Draw head pixel(s)
-  //    Palette=0 or 255 ("Default"/"Solid"): use primary segment color
-  //    Other palettes: use color_from_palette with pixel mapping
-  //    (Matches mode_static pattern)
-  for (int i = start; i <= end; i++) {
-    uint32_t c;
-    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
-      c = instance->_segment.colors[0];
-    } else {
-      c = instance->_segment.color_from_palette(i, true, true, 0);
-    }
-    instance->_segment.setPixelColor(i, c);
-    if (dualMode) {
-      instance->_segment.setPixelColor(len - 1 - i, c);
-    }
-  }
-
-  instance->_segment.aux0 = pos;
   return FRAMETIME;
 }
 
