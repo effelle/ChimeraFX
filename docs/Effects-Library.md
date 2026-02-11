@@ -18,7 +18,9 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 | 9 | **Rainbow** | Per-pixel rainbow with density control. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
 | 18 | **Dissolve** | Random pixel color transitions. | **Speed**: Dissolve rate | Yes | Aircoookie |
 | 38 | **Aurora** | Northern lights animation. | **Intensity**: Wave width - **Speed**: Drift speed | Yes | Aircoookie |
+| 40 | **Scanner** | Single dot moving back and forth. | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
 | 53 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
+| 60 | **Scanner Dual** | Two dots meeting in the center. | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
 | 63 | **Colorwaves** | Rainbow flag with breathing motion. | **Intensity**: Saturation - **Speed**: Wave speed | Yes | WLED (Pride 2015) |
 | 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail - **Speed**: Speed | Yes | Mark Kriegsman (FastLED) |
 | 66 | **Fire** | Realistic fire simulation. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman |

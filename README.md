@@ -102,7 +102,9 @@ light:
 | `9` | Rainbow | Per-pixel rainbow with density control |
 | `18` | Dissolve | Random pixel color transitions |
 | `38` | Aurora | Northern lights animation |
+| `40` | Scanner | Single dot moving back and forth (Cylon) |
 | `53` | Fire Dual | Two flames meeting in the center |
+| `60` | Scanner Dual | Two dots meeting in the center |
 | `63` | Colorwaves | Rainbow flag with breathing motion |
 | `64` | Juggle | Eight bouncing dots with trails |
 | `66` | Fire | Realistic fire simulation |
