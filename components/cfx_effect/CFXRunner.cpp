@@ -2424,12 +2424,9 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
-  // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
-  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
-  // max ~12 units/frame
-  uint8_t fade_amt = 8 + (instance->_segment.speed > 128
-                              ? (instance->_segment.speed - 128) >> 5
-                              : 0);
+  // level" artifacts Speed controls fade rate: Base 4 (Very Slow) to ~20 (Fast)
+  // - Slower fade allows longer tails
+  uint8_t fade_amt = 4 + (instance->_segment.speed >> 4);
 
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
@@ -2447,10 +2444,15 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 2: Spawn new twinkles
   // Map intensity effectively: 0-255 -> spawn chance
-  // Boost intensity to match WLED visual density (128 -> ~150)
-  // Increase loop count for higher max density (len/40)
+  // Slower fade means pixels live longer, so we don't need artificial boost
   int spawnLoops = (len / 40) + 1;
-  uint8_t intensity = qadd8(instance->_segment.intensity, 22);
+  uint8_t intensity = instance->_segment.intensity;
+
+  // Startup Ramp: Scale brightness 0->255 over first 60 frames (~1.2s)
+  // This solves the "glitch/pop" by forcing a smooth fade-in from black
+  uint8_t ramp = (instance->_segment.call < 60)
+                     ? (instance->_segment.call * 255 / 60)
+                     : 255;
 
   for (int j = 0; j < spawnLoops; j++) {
     // Unconditional spawning based on intensity - no "dark pixel" check to
@@ -2458,11 +2460,13 @@ uint16_t mode_colortwinkle(void) {
     if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
       CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
-      // "Soft Pop": Spawn at reduced brightness (~66%) to make turn-on appear
-      // smoother scaling down prevents the harsh "instant on" effect
-      c.r = scale8(c.r, 170);
-      c.g = scale8(c.g, 170);
-      c.b = scale8(c.b, 170);
+
+      // Combine Soft Pop (170) with Startup Ramp
+      uint8_t bri = scale8(170, ramp);
+
+      c.r = scale8(c.r, bri);
+      c.g = scale8(c.g, bri);
+      c.b = scale8(c.b, bri);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
