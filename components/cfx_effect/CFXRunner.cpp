@@ -2414,19 +2414,14 @@ uint16_t mode_colortwinkle(void) {
           ? getPaletteByIndex(4) // Rainbow palette default
           : getPaletteByIndex(instance->_segment.palette);
 
-  // Reset on start to avoid "quick animation" of old buffer content
-  // Use call==0 as a backup check for first run
-  if (instance->_segment.reset || instance->_segment.call == 0) {
-    instance->_segment.fill(0);
-    instance->_segment.reset = false;
-    return FRAMETIME; // Force a black frame to clear the visual buffer
-  }
-
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
-  // level" artifacts Speed controls fade rate: Base 4 (Very Slow) to ~20 (Fast)
-  // - Slower fade allows longer tails
-  uint8_t fade_amt = 4 + (instance->_segment.speed >> 4);
+  // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
+  // max ~12 units/frame
+  uint8_t fade_amt = 8 + (instance->_segment.speed > 128
+                              ? (instance->_segment.speed - 128) >> 5
+                              : 0);
 
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
@@ -2444,15 +2439,10 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 2: Spawn new twinkles
   // Map intensity effectively: 0-255 -> spawn chance
-  // Slower fade means pixels live longer, so we don't need artificial boost
+  // Boost intensity to match WLED visual density (128 -> ~150)
+  // Increase loop count for higher max density (len/40)
   int spawnLoops = (len / 40) + 1;
-  uint8_t intensity = instance->_segment.intensity;
-
-  // Startup Ramp: Scale brightness 0->255 over first 60 frames (~1.2s)
-  // This solves the "glitch/pop" by forcing a smooth fade-in from black
-  uint8_t ramp = (instance->_segment.call < 60)
-                     ? (instance->_segment.call * 255 / 60)
-                     : 255;
+  uint8_t intensity = qadd8(instance->_segment.intensity, 22);
 
   for (int j = 0; j < spawnLoops; j++) {
     // Unconditional spawning based on intensity - no "dark pixel" check to
@@ -2460,13 +2450,6 @@ uint16_t mode_colortwinkle(void) {
     if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
       CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
-
-      // Combine Soft Pop (170) with Startup Ramp
-      uint8_t bri = scale8(170, ramp);
-
-      c.r = scale8(c.r, bri);
-      c.g = scale8(c.g, bri);
-      c.b = scale8(c.b, bri);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
