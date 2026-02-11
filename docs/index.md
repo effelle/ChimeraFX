@@ -47,15 +47,3 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 *Built with ❤️ by Federico Leoni (effelle)* [![https://www.buymeacoffee.com/effelle](https://img.shields.io/badge/Donate-Buy%20me%20a%20coffee-orange?style=for-the-badge)](https://www.buymeacoffee.com/effelle)
-
-### 🎨 Effects Library
-ChimeraFX currently supports over **20+ high-performance effects** optimized for ESP32.
-
-| | | |
-|:---:|:---:|:---:|
-| 🔥 **Fire** | 🌈 **Rainbow** | ☄️ **Meteor** |
-| 🌊 **Ocean** | 🌌 **Aurora** | 🎾 **Bouncing Balls** |
-
-#### [👉 Click here to see the full Effect List & Control Guide](https://effelle.github.io/ChimeraFX/Effects-Library/)
-
-*Every effect is partially rewritten to ensure minimal CPU impact while maintaining the original WLED look.*

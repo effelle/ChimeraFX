@@ -2446,9 +2446,11 @@ uint16_t mode_colortwinkle(void) {
     // Reduced spawn rate for calmer twinkle: intensity/2
     if (hw_random8() <= (intensity >> 1)) {
       int i = hw_random16(0, len);
-      // Spawn at full brightness (temporarily allowing on any pixel to test)
-      CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
-      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+      // Only spawn on dark pixels to prevent buildup
+      if (instance->_segment.getPixelColor(i) == 0) {
+        CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+      }
     }
   }
 

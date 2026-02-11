@@ -94,10 +94,11 @@ light:
 
 ChimeraFX currently supports over 20+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
 
-#### [👉 Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
+#### [Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
 
-> **Why aren't all WLED effects here yet?**  
-> Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
+
+**Why aren't all WLED effects here yet?**  
+Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
 
 ---
 
@@ -106,9 +107,6 @@ ChimeraFX currently supports over 20+ effects optimized for the ESP32—includin
 - **[WLED](https://github.com/wled/WLED)** by Aircoookie — Original effect algorithms
 - **[ESPHome](https://github.com/esphome/esphome)** by ESPHome — Framework integration
 - **[FastLED](https://github.com/FastLED/FastLED)** by FastLED — Color handling and math utilities
-- **[NeoPixelBus](https://github.com/Makuna/NeoPixelBus)** by Makuna — NeoPixel driver for ESP32
-- **[ESP-IDF](https://github.com/espressif/esp-idf)** by Espressif — ESP32 framework
-- **[Arduino](https://github.com/arduino/Arduino)** by Arduino — ESP32 framework
 
 ---
 
