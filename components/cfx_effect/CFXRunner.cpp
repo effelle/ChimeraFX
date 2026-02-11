@@ -2414,32 +2414,23 @@ uint16_t mode_colortwinkle(void) {
           ? getPaletteByIndex(4) // Rainbow palette default
           : getPaletteByIndex(instance->_segment.palette);
 
-  // Step 1: Fade ALL pixels toward black using scale8
-  // Logic: scale8 for exponential decay + decrement to force zero (prevent
-  // "Zeno's paradox" at low values)
+  // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
+  // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
+  // level" artifacts Speed controls fade rate: Speed 0   -> fade 1 unit/frame
+  // -> ~4.2s to clear full white Speed 128 -> fade 11 units/frame -> ~0.4s to
+  // clear Speed 255 -> fade 22 units/frame -> ~0.2s to clear
+  uint8_t fade_amt = (instance->_segment.speed / 12) + 1;
+
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
     uint8_t r = (cur32 >> 16) & 0xFF;
     uint8_t g = (cur32 >> 8) & 0xFF;
     uint8_t b = cur32 & 0xFF;
 
-    // Robust decrement: if led is lit, scale it AND decrement to ensure it
-    // eventually hits 0
-    if (r > 0) {
-      r = scale8(r, fade_scale);
-      if (r > 0)
-        r--;
-    }
-    if (g > 0) {
-      g = scale8(g, fade_scale);
-      if (g > 0)
-        g--;
-    }
-    if (b > 0) {
-      b = scale8(b, fade_scale);
-      if (b > 0)
-        b--;
-    }
+    // Linear subtractive fade
+    r = qsub8(r, fade_amt);
+    g = qsub8(g, fade_amt);
+    b = qsub8(b, fade_amt);
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
   }
