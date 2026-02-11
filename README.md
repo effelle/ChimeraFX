@@ -90,40 +90,14 @@ light:
 ```
 ---
 
-### 🎨 Available Effects
-ChimeraFX currently supports over **20+ effects** optimized for ESP32, like:
+### Available Effects and Palettes
 
-| | | |
-|:---:|:---:|:---:|
-| 🔥 **Fire** | 🌈 **Rainbow** | ☄️ **Meteor** |
-| 🌊 **Ocean** | 🌌 **Aurora** | 🎾 **Bouncing Balls** |
+ChimeraFX currently supports over 20+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
 
-#### [👉 Click here to see the full Effect List & Control Guide](https://effelle.github.io/ChimeraFX/Effects-Library/)
-
-### Mass Inclusion
-
-To maintain a clean configuration file, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
-
-1.  **Download** `chimera_fx_effects.yaml` from the repository root.
-2.  **Save** it to your ESPHome configuration folder (e.g. `/config/`).
-3.  **Include** it in your light configuration:
-
-```yaml
-light:
-  - platform: esp32_rmt_led_strip # Or Neopixelbus for Arduino framework
-    # ... your light config ...
-    effects: !include chimera_fx_effects.yaml
-```
+#### [👉 Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
 
 > **Why aren't all WLED effects here yet?**  
 > Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
----
-
-## Available Palettes
-
-Aurora, Forest, Halloween, Rainbow, Fire, Sunset, Ice, Party, Pastel, Ocean, HeatColors, Sakura, Rivendell, Cyberpunk, OrangeTeal, Christmas, RedBlue, Matrix, SunnyGold, Fairy, Twilight, Solid.
-
-*(This list could be expanded in the future)*
 
 ---
 
