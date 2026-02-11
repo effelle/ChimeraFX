@@ -2461,7 +2461,7 @@ uint16_t mode_colortwinkle(void) {
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Hybrid: fadeToBlackBy for natural trail + hard cutoff to prevent floor glow
+// Explicit trail rendering — gamma-aware, with direction-change memory
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -2473,7 +2473,9 @@ uint16_t mode_scanner_internal(bool dualMode) {
   // State layout:
   //   aux0  = direction (0=forward, 1=backward)
   //   aux1  = current pixel position (internal 0..len-1)
-  //   step  = frame accumulator (for sub-pixel movement)
+  //   step  = frame counter (sub-pixel mode + old trail fade)
+  //   Upper 16 bits of step: old trail fade counter
+  //   data[0..3]: old_dir(1), old_pos(2), unused(1)
 
   // 1. Reset
   if (instance->_segment.reset) {
@@ -2481,62 +2483,41 @@ uint16_t mode_scanner_internal(bool dualMode) {
     instance->_segment.aux0 = 0;
     instance->_segment.aux1 = 0;
     instance->_segment.step = 0;
+    // Allocate 4 bytes for old trail data
+    if (!instance->_segment.allocateData(4))
+      return mode_static();
+    instance->_segment.data[0] = 0; // old_dir
+    instance->_segment.data[1] = 0; // old_pos low
+    instance->_segment.data[2] = 0; // old_pos high
+    instance->_segment.data[3] = 0; // old trail active (0=no)
     instance->_segment.reset = false;
   }
 
-  // 2. Fade trail — natural multiplicative fade
-  //    fadeBy = (255-intensity)/7:
-  //      Intensity 0:   fadeBy=36 (~4px visible trail)
-  //      Intensity 128: fadeBy=18 (~7px visible trail)
-  //      Intensity 204: fadeBy=7  (~18px visible trail)
-  //      Intensity 255: fadeBy=0  (infinite trail, strip fills at max speed)
-  uint8_t fadeBy = (255 - instance->_segment.intensity) / 7;
-  instance->_segment.fadeToBlackBy(fadeBy);
+  // Ensure data is allocated
+  if (instance->_segment.data == nullptr)
+    return mode_static();
 
-  // 3. Hard cutoff: kill any pixel with max channel < 15
-  //    LEDs at brightness 3-10 are still visible on real hardware,
-  //    causing persistent floor glow. Threshold of 15 eliminates this.
-  if (fadeBy > 0) {
-    int light_size = instance->target_light->size();
-    esphome::light::AddressableLight &light = *instance->target_light;
-    int global_start = instance->_segment.start;
-    for (int i = 0; i < len; i++) {
-      int gi = global_start + i;
-      if (gi < light_size) {
-        esphome::Color c = light[gi].get();
-        uint8_t maxCh = c.r;
-        if (c.g > maxCh)
-          maxCh = c.g;
-        if (c.b > maxCh)
-          maxCh = c.b;
-        if (c.w > maxCh)
-          maxCh = c.w;
-        if (maxCh < 15) {
-          light[gi] = esphome::Color(0, 0, 0, 0);
-        }
-      }
-    }
-  }
-
-  // 4. Movement: WLED speed mapping
+  // 2. Movement: WLED speed mapping
   uint8_t spd = instance->_segment.speed;
   unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96→2
   unsigned effective_speed = FRAMETIME * speed_factor;
   unsigned pixels = len / effective_speed;
 
   bool did_advance = false;
+  uint16_t frame_count = instance->_segment.step & 0xFFFF;
 
   if (pixels == 0) {
-    // Sub-pixel mode: count frames until next pixel advance
     unsigned frames_per_pixel = effective_speed / len;
     if (frames_per_pixel == 0)
       frames_per_pixel = 1;
-    instance->_segment.step++;
-    if (instance->_segment.step >= frames_per_pixel) {
-      instance->_segment.step = 0;
+    frame_count++;
+    if (frame_count >= frames_per_pixel) {
+      frame_count = 0;
       pixels = 1;
       did_advance = true;
     }
+    instance->_segment.step =
+        (instance->_segment.step & 0xFFFF0000) | frame_count;
   } else {
     did_advance = true;
   }
@@ -2544,6 +2525,12 @@ uint16_t mode_scanner_internal(bool dualMode) {
   if (did_advance) {
     unsigned index = instance->_segment.aux1 + pixels;
     if (index >= (unsigned)len) {
+      // Save current trail as "old trail" before reversing
+      instance->_segment.data[0] = instance->_segment.aux0;
+      instance->_segment.data[1] = instance->_segment.aux1 & 0xFF;
+      instance->_segment.data[2] = (instance->_segment.aux1 >> 8) & 0xFF;
+      instance->_segment.data[3] = 1; // old trail is active
+      // Reverse
       instance->_segment.aux0 = !instance->_segment.aux0;
       instance->_segment.aux1 = 0;
     } else {
@@ -2551,18 +2538,56 @@ uint16_t mode_scanner_internal(bool dualMode) {
     }
   }
 
-  // 5. Paint head pixel(s) at full brightness
-  //    Always repaint — prevents fade from dimming head during sub-pixel wait
-  //    Paint from old position to new (anti-gap for fast movement)
-  {
-    unsigned headInternal = instance->_segment.aux1;
-    bool dir = instance->_segment.aux0;
+  // 3. Trail length from Intensity
+  //    Intensity 0:   trail=3 pixels
+  //    Intensity 128: trail=10 pixels
+  //    Intensity 204: trail=25 pixels
+  //    Intensity 255: trail=len (infinite)
+  unsigned trail_len;
+  uint8_t intensity = instance->_segment.intensity;
+  if (intensity >= 255) {
+    trail_len = len;
+  } else {
+    trail_len = 3 + ((unsigned)intensity * (len > 3 ? len - 3 : 0)) / 255;
+    if (trail_len > (unsigned)len)
+      trail_len = len;
+  }
 
-    // Paint current head + any pixels jumped over this frame
-    unsigned paintCount = did_advance ? pixels : 1;
-    for (unsigned p = 0; p < paintCount; p++) {
-      unsigned intPos = (headInternal >= p) ? headInternal - p : 0;
-      unsigned displayPos = dir ? intPos : (len - 1 - intPos);
+  // 4. Clear and render
+  instance->_segment.fill(0);
+
+  // Helper lambda to draw a trail at a given position/direction
+  auto drawTrail = [&](unsigned headPos, bool dir, unsigned tLen,
+                       uint8_t maxBri) {
+    for (unsigned t = 0; t < tLen && t <= headPos; t++) {
+      unsigned internalPos = headPos - t;
+      unsigned displayPos = dir ? internalPos : (len - 1 - internalPos);
+
+      // Gamma-compensated brightness: use sqrt curve
+      // so that after ESPHome's gamma (~2.8), the visible fade is smooth
+      // bri = maxBri * sqrt(1 - t/tLen)
+      uint8_t bri;
+      if (t == 0) {
+        bri = maxBri;
+      } else {
+        // Linear fade 255→0, then sqrt to compensate gamma
+        unsigned linearFade = 255 - (t * 255 / tLen);
+        // Approximate sqrt via lookup: sqrt(x/255)*255
+        // Using integer sqrt: bri = isqrt(linearFade * maxBri)
+        unsigned val = linearFade * maxBri / 255;
+        // Square root approximation using Newton's method (1 iteration)
+        unsigned x = val;
+        if (x > 0) {
+          unsigned s = (x > 128) ? 12 : (x > 32) ? 6 : 3;
+          s = (s + x / s) >> 1;
+          s = (s + x / s) >> 1;
+          bri = (s > 255) ? 255 : s;
+        } else {
+          bri = 0;
+        }
+        if (bri == 0 && t < tLen && maxBri > 0)
+          bri = 1;
+      }
 
       uint32_t c;
       if (instance->_segment.palette == 0 ||
@@ -2571,10 +2596,50 @@ uint16_t mode_scanner_internal(bool dualMode) {
       } else {
         c = instance->_segment.color_from_palette(displayPos, true, true, 0);
       }
-      instance->_segment.setPixelColor(displayPos, c);
+
+      uint8_t r = ((CFX_R(c)) * bri) >> 8;
+      uint8_t g = ((CFX_G(c)) * bri) >> 8;
+      uint8_t b = ((CFX_B(c)) * bri) >> 8;
+      uint8_t w = ((CFX_W(c)) * bri) >> 8;
+
+      // Use max blending so overlapping trails keep the brighter value
+      uint32_t existing = instance->_segment.getPixelColor(displayPos);
+      uint8_t er = CFX_R(existing), eg = CFX_G(existing);
+      uint8_t eb = CFX_B(existing), ew = CFX_W(existing);
+      r = (r > er) ? r : er;
+      g = (g > eg) ? g : eg;
+      b = (b > eb) ? b : eb;
+      w = (w > ew) ? w : ew;
+
+      instance->_segment.setPixelColor(displayPos, RGBW32(r, g, b, w));
       if (dualMode) {
-        instance->_segment.setPixelColor(len - 1 - displayPos, c);
+        instance->_segment.setPixelColor(len - 1 - displayPos,
+                                         RGBW32(r, g, b, w));
       }
+    }
+  };
+
+  // Draw current trail at full brightness
+  drawTrail(instance->_segment.aux1, instance->_segment.aux0, trail_len, 255);
+
+  // Draw old trail (from before direction change) with fading brightness
+  if (instance->_segment.data[3]) {
+    unsigned oldPos = instance->_segment.data[1] |
+                      ((unsigned)instance->_segment.data[2] << 8);
+    bool oldDir = instance->_segment.data[0];
+    // Fade old trail over trail_len frames
+    uint16_t oldAge = (instance->_segment.step >> 16) & 0xFFFF;
+    oldAge++;
+    instance->_segment.step =
+        (instance->_segment.step & 0xFFFF) | ((uint32_t)oldAge << 16);
+
+    unsigned fadeFrames =
+        trail_len * 3; // old trail fades over this many frames
+    if (oldAge < fadeFrames) {
+      uint8_t oldBri = 255 - (oldAge * 255 / fadeFrames);
+      drawTrail(oldPos, oldDir, trail_len, oldBri);
+    } else {
+      instance->_segment.data[3] = 0; // old trail fully faded
     }
   }
 
