@@ -2416,10 +2416,12 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
-  // level" artifacts Speed controls fade rate: Speed 0   -> fade 8 units/frame
-  // -> ~0.5s to clear full white Speed 128 -> fade 12 units/frame -> ~0.3s to
-  // clear Speed 255 -> fade 15 units/frame -> ~0.25s to clear
-  uint8_t fade_amt = 8 + (instance->_segment.speed / 32);
+  // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
+  // max ~12 units/frame
+  uint8_t fade_amt = 8 + (instance->_segment.speed > 128
+                              ? (instance->_segment.speed - 128) >> 5
+                              : 0);
 
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
@@ -2437,9 +2439,10 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 2: Spawn new twinkles
   // Map intensity effectively: 0-255 -> spawn chance
-  // Use WLED-ish logic: if random8 < intensity, spawn.
-  int spawnLoops = (len / 50) + 1;
-  uint8_t intensity = instance->_segment.intensity;
+  // Boost intensity to match WLED visual density (128 -> ~150)
+  // Increase loop count for higher max density (len/40)
+  int spawnLoops = (len / 40) + 1;
+  uint8_t intensity = qadd8(instance->_segment.intensity, 22);
 
   for (int j = 0; j < spawnLoops; j++) {
     // Unconditional spawning based on intensity - no "dark pixel" check to
