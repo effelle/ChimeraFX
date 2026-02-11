@@ -2423,16 +2423,21 @@ uint16_t mode_colortwinkle(void) {
     uint8_t b = cur32 & 0xFF;
 
     // scale8 multiplicative fade
-    r = scale8(r, fade_scale);
-    g = scale8(g, fade_scale);
-    b = scale8(b, fade_scale);
+    // Robustness: ensure strictly monotonic fade so we don't get stuck at
+    // "floor"
+    if (r > 0)
+      r = scale8(r, fade_scale);
+    if (g > 0)
+      g = scale8(g, fade_scale);
+    if (b > 0)
+      b = scale8(b, fade_scale);
 
-    // Force to black when below threshold (prevents floor lighting)
-    if (r < 4)
+    // Force off the low tail (aggressive cleanup)
+    if (r <= 4)
       r = 0;
-    if (g < 4)
+    if (g <= 4)
       g = 0;
-    if (b < 4)
+    if (b <= 4)
       b = 0;
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
@@ -2446,8 +2451,14 @@ uint16_t mode_colortwinkle(void) {
     // Reduced spawn rate for calmer twinkle: intensity/2
     if (hw_random8() <= (intensity >> 1)) {
       int i = hw_random16(0, len);
-      // Only spawn on dark pixels to prevent buildup
-      if (instance->_segment.getPixelColor(i) == 0) {
+
+      // Check brightness level - allow spawning if pixel is "dark enough"
+      // This prevents deadlock if pixels get stuck at low non-zero values
+      uint32_t c_check = instance->_segment.getPixelColor(i);
+      uint16_t total_bright =
+          ((c_check >> 16) & 0xFF) + ((c_check >> 8) & 0xFF) + (c_check & 0xFF);
+
+      if (total_bright < 16) { // Allow if very dark
         CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
         instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
       }
