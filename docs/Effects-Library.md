@@ -1,6 +1,42 @@
-# Available Effects & Palettes
+# Available Effects, Palettes and Intros
 
-This library lists the high-fidelity effects currently optimized for ChimeraFX.
+## 🔥 Effect Library
+
+If you’re wondering why all WLED effects aren't available yet, here is the answer:
+
+Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
+
+### Effect List
+
+| ID | Name | Description | Controls | Palette support | Author |
+|:---|:---|:---|:---|:---:|:---|
+| 0 | **Static** | Solid color with palette support. | **Palette**: Gradient/Solid | Yes | Aircoookie |
+| 2 | **Breathe** | Apple-style standby breathing LED. | **Speed**: Breathe rate | Yes | Aircoookie |
+| 3 | **Wipe** | Primary/Secondary color wipe. | **Speed**: Wipe speed | Yes | Aircoookie |
+| 6 | **Sweep** | Ping-pong wipe animation. | **Speed**: Sweep speed | Yes | Aircoookie |
+| 8 | **Colorloop** | Solid color cycling through palette. | **Intensity**: Saturation - **Speed**: Cycle speed | Yes | Harm Aldick |
+| 9 | **Rainbow** | Per-pixel rainbow with density control. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
+| 18 | **Dissolve** | Random pixel color transitions. | **Speed**: Dissolve rate | Yes | Aircoookie |
+| 38 | **Aurora** | Northern lights animation. | **Intensity**: Wave width - **Speed**: Drift speed | Yes | Aircoookie |
+| 53 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
+| 63 | **Colorwaves** | Rainbow flag with breathing motion. | **Intensity**: Saturation - **Speed**: Wave speed | Yes | WLED (Pride 2015) |
+| 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail - **Speed**: Speed | Yes | Mark Kriegsman (FastLED) |
+| 66 | **Fire** | Realistic fire simulation. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman |
+| 74 | **Colortwinkles** | Magical fairy-dust twinkles. | **Intensity**: Spawn rate - **Speed**: Fade speed | Yes | Mark Kriegsman |
+| 76 | **Meteor** | Meteor with random decay trail. | **Intensity**: Trail length - **Speed**: Fall speed | Yes | Aircoookie |
+| 91 | **Bouncing Balls**| Real gravity physics. | **Intensity**: Count - **Speed**: Gravity | Yes | Tweaking4All |
+| 97 | **Plasma** | Smooth plasma animation. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
+| 101 | **Ocean** | Gentle ocean waves (based on Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Ripple speed | No | Mark Kriegsman |
+| 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | Yes | Aircoookie |
+| 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Count - **Speed**: Speed | Yes | Aircoookie |
+| 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
+
+### A few notes on the credits:
+*   **Aircoookie:** He is the lead developer of WLED. Any effect that doesn't have a clear historical "parent" in the FastLED community is usually his work.
+*   **Tweaking4All:** The "Bouncing Balls" algorithm with gravity is a very famous bit of code from a specific tutorial on the Tweaking4All website that has been used in almost every LED project for the last decade.
+*   **Mark Kriegsman:** Most of the high-quality, math-heavy effects (Fire, Juggle, Pacifica) come from his work on the **FastLED** library. He is widely considered the "godfather" of modern LED animations.
+
+---
 
 ## 🎨 Palettes
 
@@ -34,37 +70,6 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 ---
 
-## 🔥 Effect Library
-
-### Effect List
-
-| ID | Name | Description | Controls | Palette? | Author |
-|:---|:---|:---|:---|:---:|:---|
-| 0 | **Static** | Solid color with palette support. | **Palette**: Gradient/Solid | Yes | - |
-| 2 | **Breathe** | Apple-style standby breathing LED. | **Speed**: Breathe rate | Yes | - |
-| 3 | **Wipe** | Primary/Secondary color wipe. | **Speed**: Wipe speed | Yes | - |
-| 6 | **Sweep** | Ping-pong wipe animation. | **Speed**: Sweep speed | Yes | - |
-| 8 | **Colorloop** | Solid color cycling through palette. | **Intensity**: Saturation<br>**Speed**: Cycle speed | No | Harm Aldick |
-| 9 | **Rainbow** | Per-pixel rainbow with density control. | **Intensity**: Zoom/Density<br>**Speed**: Flow speed | No | Harm Aldick |
-| 18 | **Dissolve** | Random pixel color transitions. | **Speed**: Dissolve rate | No | - |
-| 38 | **Aurora** | Northern lights animation. | **Intensity**: Wave width<br>**Speed**: Drift speed | Yes | Aircoookie |
-| 53 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate<br>**Speed**: Cooling rate | Yes | Mark Kriegsman (Adapt.) |
-| 63 | **Colorwaves** | Rainbow flag with breathing motion. | **Intensity**: Saturation<br>**Speed**: Wave speed | No | WLED (Pride 2015) |
-| 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail<br>**Speed**: Speed | No | Mark Kriegsman (FastLED) |
-| 66 | **Fire** | Realistic fire simulation. | **Intensity**: Sparking rate<br>**Speed**: Cooling rate | Yes | Mark Kriegsman |
-| 74 | **Colortwinkles** | Magical fairy-dust twinkles. | **Intensity**: Spawn rate<br>**Speed**: Fade speed | Yes | Mark Kriegsman |
-| 76 | **Meteor** | Meteor with random decay trail. | **Intensity**: Trail length<br>**Speed**: Fall speed | Yes | - |
-| 91 | **Bouncing Balls**| Real gravity physics. | **Intensity**: Count<br>**Speed**: Gravity | Yes | - |
-| 97 | **Plasma** | Smooth plasma animation. | **Intensity**: Frequency<br>**Speed**: Morph speed | Yes | Jeremy Williams |
-| 101 | **Ocean** | Gentle ocean waves (Pacifica). | **Intensity**: Zoom/Scale<br>**Speed**: Ripple speed | No | Mark Kriegsman |
-| 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | No | - |
-| 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Count<br>**Speed**: Speed | Yes | - |
-| 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count<br>**Speed**: Flow speed | Yes | - |
-
-*(Note: More effects are being ported incrementally.)*
-
----
-
 ## 🚀 Intro Animations
 
 These short animations play once when the light is turned ON.
@@ -79,3 +84,4 @@ These short animations play once when the light is turned ON.
 
 ### Transition Behavior
 When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.
+**Note:** The intro animation runs only when the light is switched from Off to On. If you change the main effect while the light is already on, the intro will not play again. It will only re-trigger the next time the light is toggled on.

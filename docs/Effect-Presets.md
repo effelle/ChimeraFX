@@ -1,6 +1,6 @@
 # Effect Presets (Hardcoded Defaults)
 
-You can hardcode specific settings for each effect directly in the YAML. This is useful if you want an effect to always start with a specific speed, color palette, or intensity, regardless of the global controls.
+You can hardcode specific settings for each effect directly in the YAML. This is useful if you want an effect to always start with a specific speed, color palette, or intensity, regardless of the global controls. 
 
 Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these values.
 
@@ -12,7 +12,7 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
           name: "Custom Meteor"
           effect_id: 76
           set_speed: 70             # Slowing down the animation 
-          set_palette: 12           # Force 'Fire' palette (ID 5), Because everybody loves a good fireball 
+          set_palette: 5            # Force 'Fire' palette (ID 5), Because everybody loves a good fireball 
           set_intensity: 170        # Longer tail 
           set_mirror: true          # Enable mirroring
           set_intro: 3              # Set Intro to Center
@@ -20,6 +20,7 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
           set_intro_palette: true   # Instruct Intro to use the palette we selected with set_palette
           set_timer: 30             # Set the timer to turn off the light after 30 minutes 
 ```
+**Note:** This is particularly useful if you want to use the same effect with different settings. Simply declare the same effect ID with your new parameters and you’re good to go! While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
 
 ## Parameters
 

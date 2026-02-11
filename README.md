@@ -1,9 +1,9 @@
-![ChimeraFX](media/ChimeraFX_banner_github.png)
+![ChimeraFX](media/ChimeraFX_new_banner_github.png)
 
 # ChimeraFX: Made for ESPHome
 
 
-> **High-performance WLED-like effects running natively within ESPHome.**
+> **High-performance WLED-style effects running natively within ESPHome.**
 
 ---
 
@@ -56,7 +56,7 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 
 ## Quick Start
 
-See the [Wiki](https://effelle.github.io/ChimeraFX/) for installation and configuration.
+See the [Wiki](https://effelle.github.io/ChimeraFX/) for a complete and detailed installation and configuration guide.
 
 Add the component to your ESPHome YAML:
 
@@ -66,12 +66,20 @@ external_components:
     components: [cfx_effect]
 
 cfx_effect:
+  cfx_control:
+    - id: my_cfx_controller   # The ID of the controller generator, customizable
+      name: "LED Strip"       # The prefix name of the controller, customizable
+      light_id: led_strip     # The ID of the light you want to control 
 ```
-And then add the effect to your light:
+
+**Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
+
+Add the effects to your light:
 
 ```yaml
 light:
-  - platform: esp32_rmt_led_strip # Or Neopixelbus for Arduino framework
+  - platform: esp32_rmt_led_strip   # Or Neopixelbus for Arduino framework
+    id: led_strip                   # The ID of the light needed for cfx_control
     # ... your light config ...
     effects:
       - addressable_cfx:
@@ -122,12 +130,12 @@ light:
 ```
 
 > **Why aren't all WLED effects here yet?**  
-> Bringing WLED effects to `ChimeraFX` takes time. Each effect needs to be partially rewritten trying to "squeeze" every bit of performance out of the hardware with minimal resources cost. My goal is to maintain the original look while ensuring it runs perfectly on ESPHome side by side with other components. Thank you for your patience as I port them incrementally! (No ETA).
+> Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
 ---
 
 ## Available Palettes
 
-Aurora, Forest, Halloween, Rainbow, Fire, Sunset, Ice, Party, Lava, Pastel, Ocean, HeatColors, Sakura, Rivendell, Cyberpunk, OrangeTeal, Christmas, RedBlue, Matrix, SunnyGold, Fairy, Twilight, Solid
+Aurora, Forest, Halloween, Rainbow, Fire, Sunset, Ice, Party, Pastel, Ocean, HeatColors, Sakura, Rivendell, Cyberpunk, OrangeTeal, Christmas, RedBlue, Matrix, SunnyGold, Fairy, Twilight, Solid.
 
 *(This list could be expanded in the future)*
 

@@ -71,7 +71,7 @@ light:
     id: led_strip           # ID of your light
 ```
 
-**Note:** ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption, you must ensure your `rmt_symbols` are set correctly for your chip type:
+**Note:** ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption and you are sure is not a power or wiring issue, you must ensure your `rmt_symbols` are set correctly for your chip type:
 
 - **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
 - **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 

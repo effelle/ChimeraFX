@@ -7,7 +7,7 @@ I cannot stress this enough: **DO NOT** enable the logger on a production device
 [15:46:46.362][I][cfx_diag:227]: [CFX] FPS:55.6 | Time: 18.0ms | Jitter: 0% | Heap: 172kB Free (108kB Max)
 ```
 
-### Understanding the Logs
+### Understanding the Logs from the example above
 
 *   **FPS (Frames Per Second)**: Ideally stays around **55-60 FPS**. If this consistently drops below 30, your ESP32 is struggling to keep up.
 *   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. ~18ms corresponds to ~55 FPS.
@@ -43,7 +43,17 @@ The ESP32 uses RMT (Remote Control) channels to drive LEDs. Each "symbol" repres
 | Classic ESP32 | **512** (Total shared) |
 | ESP32-S3 | **192** (Per channel) |
 
-If you have flickering, try adjusting `rmt_symbols`.
-*   **Usage**: `light: ... rmt_symbols: 512`
+If you have flickering, try adjusting `rmt_symbols`:
+
+```yaml
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_strip                 
+    rmt_symbols: 512   # Usually 320 is a safe number for an ESP32 Classic
+    # ... your light config ...
+```
+
+On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). However, with multiple strips, this total must be divided among them; for example, a 4-strip setup allows for 128 symbols per strip.
+On an ESP32-S3, the RMT architecture is different: it has dedicated memory for transmission, but the total buffer is smaller. The S3 provides 192 symbols total for all transmit channels. This means if you use 4 strips, you are limited to 48 symbols per strip unless you use DMA.
 
 

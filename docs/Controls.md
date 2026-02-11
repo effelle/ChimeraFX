@@ -12,9 +12,9 @@ To generate controls automatically, use the `cfx_control` component. You need to
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: my_cfx_controller # The ID of the controller generator
-      name: "LED Strip"
-      light_id: led_strip # The ID of the light you want to control
+    - id: my_cfx_controller   # The ID of the controller generator, customizable
+      name: "LED Strip"       # The prefix name of the controller, customizable
+      light_id: led_strip     # The ID of the light you want to control 
 
       # Optional: Exclude controls you don't need
       # exclude: [5, 6] # This example will exclude Intro Effects and Timer
@@ -60,13 +60,13 @@ If you want independent control for each strip (e.g., Roof vs Desk), create sepa
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: roof_controller
-      name: "Roof Lights"
-      light_id: led_strip_1  # The ID of the first light you want to control
+    - id: my_cfx_controller   # The ID of the controller generator, customizable
+      name: "LED Strip"       # The prefix name of the controller, customizable
+      light_id: led_strip     # The ID of the light you want to control, customizable
 
-    - id: desk_controller
-      name: "Desk Lights"
-      light_id: led_strip_2  # The ID of the second light you want to control
+    - id: desk_controller     # The ID of the second controller generator, customizable
+      name: "Desk Lights"     # The prefix name of the second controller, customizable
+      light_id: led_strip_2   # The ID of the second light you want to control, customizable
 ```
 
 ### Option 2: Unified Control (Grouped)
@@ -75,9 +75,9 @@ If you want a **single set of controls** to operate multiple lights simultaneous
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: global_controller
-      name: "Global"
-      light_id: [led_strip_1, led_strip_2] # Key: Use a list format
+    - id: global_controller   # The ID of the controller generator, customizable
+      name: "Global"          # The prefix name of the controller, customizable
+      light_id: [led_strip_1, led_strip_2] # IDs of the lights in a list format
 ```
 This generates only one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
 
@@ -87,19 +87,20 @@ This generates only one set of entities (e.g. `Global Speed`) that updates all l
 Control slider to manage the speed of the effect. The higher the value, the faster the effect will run. Range (0-255)
 
 ### ID 2: Intensity
-Control slider to manage the intensity of the effect. Intensity can manage different parameters depending on the effect. Range (0-255)
+Control slider to manage the intensity of the effect. Depending on the effect, the slider can manage different parameters like saturation, pattern length, etc. Range (0-255)
 
 ### ID 3: Palette
-Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
+Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette this was a deliberate choice by me to make them more realistic. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
 
 ### ID 4: Mirror
-Controls the starting point of an effect. Useful if you can't physically invert the strip. Affect Into Animation too.
+Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro Animation too.
 
 ### ID 5: Intro Animation
-A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support, allow the intro to use the same palette as the main effect. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
+A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support. The latter allows the intro animation to inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
 
 ### ID 6: Timer
-Controls how long a light stays on. From 0 (timer OFF) to 360 minutes
+Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
 
 ### ID 9: Debug
-Controls the debug mode at runtime and is available on Diagnostic tab in Home Assistant. Useful if you have issues with the effect and want to see what's happening. Default to OFF.
+Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** 
+> **Note:** Enabling debug mode may slightly impact animation smoothness due to logging overhead.
