@@ -2543,14 +2543,14 @@ uint16_t mode_scanner_internal(bool dualMode) {
   }
 
   // 3. Trail length from Intensity
-  //    mapped to [3 ... len/2], or infinite if 255
+  //    mapped to [3 ... len/3], or infinite if 255
   unsigned trail_len;
   uint8_t intensity = instance->_segment.intensity;
   if (intensity >= 255) {
     trail_len = len;
   } else {
-    // scale to max 50% of strip length for better control
-    unsigned max_len = (len > 6) ? (len / 2) : len;
+    // scale to max 33% of strip length for better control
+    unsigned max_len = (len > 6) ? (len / 3) : len;
     trail_len =
         3 + ((unsigned)intensity * (max_len > 3 ? max_len - 3 : 0)) / 255;
     if (trail_len > (unsigned)len)
@@ -2618,14 +2618,20 @@ uint16_t mode_scanner_internal(bool dualMode) {
     unsigned oldPos = instance->_segment.data[1] |
                       ((unsigned)instance->_segment.data[2] << 8);
     bool oldDir = instance->_segment.data[0];
-    // Fade old trail over trail_len frames
+    // Fade old trail over frames
     uint16_t oldAge = (instance->_segment.step >> 16) & 0xFFFF;
     oldAge++;
     instance->_segment.step =
         (instance->_segment.step & 0xFFFF) | ((uint32_t)oldAge << 16);
 
-    unsigned fadeFrames =
-        trail_len * 5; // old trail fades over this many frames
+    // Dynamic fade duration based on speed:
+    // Faster speed = shorter duration (trail must clear faster)
+    // Slower speed = longer duration (trail lingers)
+    // Formula: (trail_len * speed_factor) / 3 scales perfectly with travel time
+    unsigned fadeFrames = (trail_len * speed_factor) / 3;
+    if (fadeFrames < 5)
+      fadeFrames = 5;
+
     if (oldAge < fadeFrames) {
       uint8_t oldBri = 255 - (oldAge * 255 / fadeFrames);
       drawTrail(oldPos, oldDir, trail_len, oldBri);
