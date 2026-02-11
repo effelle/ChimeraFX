@@ -1,21 +1,20 @@
 # Controls Guide
 
-Now you have the effects up and running, but how about controlling them? And what can you control? 
-`ChimeraFX` can create inputs (sliders, dropdowns, switches) to help you tweak the effect for your liking. The `cfx_control` component is optional and only needed (but strongly suggested) if you want to control the effect from Home Assistant or another controller. Without it you will still be able to use the effects at default values.
+Now that your effects are up and running, you’ll likely want to customize them. `ChimeraFX` can expose various control entities—such as sliders, dropdowns, and switches—allowing you to fine-tune each effect to your preference.
+While the `cfx_control` component is optional, it is **highly recommended** if you want to manage effects directly from Home Assistant. Without it, effects will run using their default parameters.
 
 ## Controller Logic
 
 The `addressable_cfx` effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.
-
 To generate controls automatically, use the `cfx_control` component. You need to declare it under the `cfx_effect` component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core `number`, `select` and `switch` components, and link them to your light automatically.
 
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: my_cfx_controller   # The ID of the controller generator, customizable
-      name: "LED Strip"       # The prefix name of the controller, customizable
+    - id: my_cfx_controller   # The ID of the controller. Customizable
+      name: "LED Strip"       # The prefix name of the controller. Customizable
       light_id: led_strip     # The ID of the light you want to control 
-
+    
       # Optional: Exclude controls you don't need
       # exclude: [5, 6] # This example will exclude Intro Effects and Timer
 ```
@@ -25,32 +24,31 @@ cfx_effect:
 ### Generated Controls
 The component creates the following entities based on your controller name (e.g., `LED Strip`):
 
-- `LED Strip_speed` (Number)
-- `LED Strip_intensity` (Number)
-- `LED Strip_palette` (Select)
-- `LED Strip_mirror` (Switch)
-- `LED Strip_intro` (Select)
-- `LED Strip_use_palette` (Switch)
-- `LED Strip_intro_dur` (Number)
-- `LED Strip_timer` (Number)
-
-**Note:** The naming scheme could differ based on how you use ESPHome `friendly_name`. 
+- `LED Strip speed` (Number)
+- `LED Strip intensity` (Number)
+- `LED Strip palette` (Select)
+- `LED Strip mirror` (Switch)
+- `LED Strip intro` (Select)
+- `LED Strip use palette` (Switch)
+- `LED Strip intro duration` (Number)
+- `LED Strip timer` (Number)
 
 ### Exclusion Options
-You can exclude specific controls by adding their ID to the `exclude` list (e.g., `exclude: [5, 6]`).
+If you want to keep your dashboard clean, you can exclude specific controls by adding their IDs to the `exclude` list (e.g., `exclude: [5, 6]`).
 
 | ID | Control |
 |:---|:---|
-| `1` | Speed |
-| `2` | Intensity |
-| `3` | Palette |
-| `4` | Mirror |
-| `5` | Intro Effects (Intro, Duration, Use Palette) |
-| `6` | Timer |
-| `9` | Debug (Diagnostic) |
+| 1 | Speed |
+| 2 | Intensity |
+| 3 | Palette |
+| 4 | Mirror |
+| 5 | Intro Effects (Intro, Duration, Use Palette) |
+| 6 | Timer |
+| 9 | Debug (Diagnostic) |
 
-That's it! The effects will automatically find this controller and respect eventual exclusions.
+That’s it! The effects will automatically detect this controller and respect **any** exclusions you have configured.
 
+---
 
 ## Advanced: Multiple Strips
 
@@ -60,13 +58,13 @@ If you want independent control for each strip (e.g., Roof vs Desk), create sepa
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: my_cfx_controller   # The ID of the controller generator, customizable
-      name: "LED Strip"       # The prefix name of the controller, customizable
-      light_id: led_strip     # The ID of the light you want to control, customizable
+    - id: my_cfx_controller   # The ID of the first controller. Customizable
+      name: "LED Strip"       # The prefix name of the controller. Customizable
+      light_id: led_strip     # The ID of the light you want to control
 
-    - id: desk_controller     # The ID of the second controller generator, customizable
-      name: "Desk Lights"     # The prefix name of the second controller, customizable
-      light_id: led_strip_2   # The ID of the second light you want to control, customizable
+    - id: desk_controller     # The ID of the second controller. Customizable
+      name: "Desk Lights"     # The prefix name of the second controller. Customizable
+      light_id: led_strip_2   # The ID of the second light you want to control
 ```
 
 ### Option 2: Unified Control (Grouped)
@@ -75,8 +73,8 @@ If you want a **single set of controls** to operate multiple lights simultaneous
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: global_controller   # The ID of the controller generator, customizable
-      name: "Global"          # The prefix name of the controller, customizable
+    - id: global_controller   # The ID of the controller generator. Customizable
+      name: "Global"          # The prefix name of the controller. Customizable
       light_id: [led_strip_1, led_strip_2] # IDs of the lights in a list format
 ```
 This generates only one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
@@ -102,5 +100,4 @@ A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intr
 Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
 
 ### ID 9: Debug
-Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** 
-> **Note:** Enabling debug mode may slightly impact animation smoothness due to logging overhead.
+Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead.

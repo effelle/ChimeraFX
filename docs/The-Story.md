@@ -42,7 +42,7 @@ Imagine adding three or four effects—you’re looking at a config file with ov
 
 I wanted the structure and integration of ESPHome, but with the amazing visual library of WLED.
 
-So, I built **ChimeraFX**. Why the name? Walk with me...
+So, I built **ChimeraFX**. But how about the component name? 
 
 I love ancient history, and I love the story of the Chimera. It's a symbol of strength, power, and the ability to overcome challenges. It's also a symbol of unity, bringing together different parts to create something new and beautiful (well, not THAT beautiful, but you get the idea).
 

@@ -2456,135 +2456,71 @@ uint16_t mode_colortwinkle(void) {
 }
 
 // --- Scanner Effect (ID 40) ---
-// Also known as "Cylon" or "KITT" - smooth scanning eye with fading tail
-// Speed = Scan frequency, Intensity = Tail length (fade rate)
-// dualMode = if true, paint a second eye on opposite side
-// --- Scanner Effect (ID 40) ---
-// Also known as "Cylon" or "KITT" - linear scanning eye with fading tail
-// Speed = Scan frequency, Intensity = Tail length (fade rate)
-// dualMode = if true, paint a second eye on opposite side
-// --- Scanner Effect (ID 40) ---
-// Also known as "Cylon" or "KITT" - linear scanning eye with fading tail
-// Speed = Scan frequency (BPM 4-30), Intensity = Tail length (fade rate 30-2)
-// dualMode = if true, paint a second eye on opposite side
+// Larson Scanner: linear scanning eye with fading trail
+// Speed = Scan frequency, Intensity = Trail length (fade rate)
+// dualMode = if true, paint a second eye on opposite side (ID 60)
+//
+// Based on WLED mode_larson_scanner() by Aircoookie
+// Rewritten for ChimeraFX with calculate_frame_timing + fadeToBlackBy
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
 
   uint16_t len = instance->_segment.length();
-  if (len < 1)
-    return 350;
+  if (len <= 1)
+    return mode_static();
 
-  // 1. Reset check
+  // 1. Reset: clear strip, invalidate last position
   if (instance->_segment.reset) {
     instance->_segment.fill(0);
+    instance->_segment.aux0 = 0xFFFF; // sentinel: no last position yet
+    instance->_segment.aux1 = 0;
     instance->_segment.reset = false;
   }
 
-  // 2. FADE (The "Tail")
-  // User Feedback: "Intensity broken" (Range too small) & "Stuck pixels".
-  // Solution: ACCUMULATOR SUBTRACTIVE DECAY (Meteor Style).
-  // Allows fractional decay (e.g. 0.8 units per frame) for very long tails.
+  // 2. WLED-faithful timing using centralized helper
+  //    step is used as the timing state (last_millis)
+  auto timing = cfx::calculate_frame_timing(instance->_segment.speed,
+                                            instance->_segment.step);
 
-  // Load state
-  uint32_t decay_accum = instance->_segment.aux1;
+  // 3. Fade trail — WLED uses fade_out(255-intensity)
+  //    fadeToBlackBy is the ChimeraFX equivalent (multiplicative: no stuck
+  //    pixels) Intensity=0: fadeBy=255 (no trail), Intensity=255: fadeBy=0
+  //    (infinite trail)
+  instance->_segment.fadeToBlackBy(255 - instance->_segment.intensity);
 
-  // Rate Mapping:
-  // We want a range from ~8s (Int 255) to ~0.7s (Int 0).
-  // Int 255 -> Rate 200 (~0.78 units/frame).
-  // Int 128 -> Rate ~1200 (~4.7 units/frame).
-  // Int 0   -> Rate 2200 (~8.6 units/frame).
-  // Formula: 2200 - (intensity * 7.8) approx (intensity * 8).
-  int rate_calc = 2200 - (instance->_segment.intensity * 8);
-  if (rate_calc < 200)
-    rate_calc = 200; // Floor at 200 (max tail length)
-  uint32_t rate = (uint32_t)rate_calc;
+  // 4. Compute head position from speed-scaled time
+  //    scaled_now advances faster at higher speed slider values.
+  //    SPEED_SCALE=15 tuned for ~8px visible trail at default settings
+  //    (speed=128, intensity=128, ~150 LEDs)
+  //    Full back-and-forth cycle: ~3.5s at speed=128
+  constexpr uint32_t SPEED_SCALE = 15;
+  uint16_t raw = (uint16_t)((uint32_t)timing.scaled_now * SPEED_SCALE);
+  uint16_t tri = cfx::triwave16(raw);
+  uint16_t pos = (uint32_t)tri * (len - 1) / 65535;
 
-  decay_accum += rate;
-  uint8_t sub = decay_accum >> 8; // Integer part to subtract
-  decay_accum &= 0xFF;            // Keep fractional part
+  // 5. Anti-gap: draw all pixels between last position and current position
+  //    Prevents gaps when head moves >1 pixel per frame at high speed
+  uint16_t last_pos = instance->_segment.aux0;
+  int start, end;
 
-  // Save state
-  instance->_segment.aux1 = decay_accum;
-
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-
-    // Subtractive Decay using qsub8 (saturating subtraction to 0)
-    r = qsub8(r, sub);
-    g = qsub8(g, sub);
-    b = qsub8(b, sub);
-
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
-  }
-
-  // 3. MOVEMENT (The "Head")
-  uint32_t step = instance->_segment.step; // Load state
-
-  // Speed Scaling:
-  // User feedback: "Too fast". Scaling down significantly.
-  // Old: speed + 2. New: (speed / 2) + 1.
-  // Range: Speed 0 -> +1/frame. Speed 255 -> +128/frame.
-  // This matches WLED's typical slower scan feel.
-  uint16_t increment = (instance->_segment.speed >> 1) + 1;
-
-  step += increment;
-  instance->_segment.step = step; // Save state
-
-  // Triangle Wave logic
-  uint16_t pos16 = step & 0xFFFF;
-  if (pos16 > 32767) {
-    pos16 = 65535 - pos16;
-    pos16 = pos16 << 1;
+  if (last_pos == 0xFFFF || last_pos >= len ||
+      abs((int)pos - (int)last_pos) > (int)(len / 2)) {
+    // First frame or large jump — draw single pixel
+    start = pos;
+    end = pos;
   } else {
-    pos16 = pos16 << 1;
+    start = (last_pos < pos) ? last_pos : pos;
+    end = (last_pos > pos) ? last_pos : pos;
   }
 
-  // Map to strip position
-  uint16_t pos = (pos16 * (len - 1)) >> 16;
-
-  // 4. ANTI-GAP / LINE DRAWING
-  int last_pos = instance->_segment.aux0;
-  // Reset if jump is huge (loop end or first run)
-  if (last_pos >= len || abs((int)pos - last_pos) > (len / 2)) {
-    last_pos = pos;
-  }
-  int start = (last_pos < pos) ? last_pos : pos;
-  int end = (last_pos > pos) ? last_pos : pos;
-
-  // 5. DRAW HEAD
-  const uint32_t *active_palette;
-  bool use_red_default = (instance->_segment.palette == 0);
-
-  if (use_red_default) {
-    active_palette = PaletteRainbow;
-  } else {
-    active_palette = getPaletteByIndex(instance->_segment.palette);
-  }
-
+  // 6. Draw head pixel(s) using palette color
+  //    Default palette=255 (Solid) uses primary segment color
   for (int i = start; i <= end; i++) {
-    uint32_t final_color;
-
-    if (use_red_default) {
-      // KITT Default: Solid Red
-      final_color = RGBW32(255, 0, 0, 0);
-    } else {
-      // Dynamic Palette Color + Boost
-      uint8_t index = (i * 255) / len;
-      CRGBW c = ColorFromPalette(index, 255, active_palette);
-      // Boost white/brightness to ensure visibility
-      c.r = qadd8(c.r, 80);
-      c.g = qadd8(c.g, 80);
-      c.b = qadd8(c.b, 80);
-      final_color = RGBW32(c.r, c.g, c.b, c.w);
-    }
-
-    instance->_segment.setPixelColor(i, final_color);
+    uint32_t c = instance->_segment.color_from_palette(i, true, true, 0);
+    instance->_segment.setPixelColor(i, c);
     if (dualMode) {
-      instance->_segment.setPixelColor(len - 1 - i, final_color);
+      instance->_segment.setPixelColor(len - 1 - i, c);
     }
   }
 

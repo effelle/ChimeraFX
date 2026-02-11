@@ -270,18 +270,17 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
 
   uint32_t deltams = (frametime >> 2) + ((frametime * speed) >> 7);
 
-  // WLED exact deltat formula - speed-scaled time for beat functions
-  // When instance->now is set to this value and beat functions are called
-  // WITHOUT explicit timebase, they read instance->now via get_millis()
-  uint64_t deltat =
-      ((uint64_t)real_now >> 2) + (((uint64_t)real_now * speed) >> 7);
+  // WLED exact deltat formula - speed-scaled monotonic time for position/beat
+  // functions. uint32_t wrapping is safe: callers use modular arithmetic
+  // (& 0xFFFF, triwave16, etc.) so only lower bits matter.
+  uint32_t scaled_now = (real_now >> 2) + ((real_now * (uint32_t)speed) >> 7);
 
-  // WLED speed scaling: 128 ESPHome -> 83 WLED internal (60fps -> 42fps
-  // adjustment)
-  uint8_t wled_speed =
-      (speed <= 128) ? (speed * 83 / 128) : (83 + ((speed - 128) * 172 / 127));
+  // WLED speed scaling: 128 ESPHome -> 83 WLED internal
+  // Bit-shift approximation: *83/128 ≈ *83>>7, *172/127 ≈ *173>>7
+  uint8_t wled_speed = (speed <= 128) ? ((speed * 83) >> 7)
+                                      : (83 + (((speed - 128) * 173) >> 7));
 
-  return {deltams, (uint32_t)deltat, wled_speed};
+  return {deltams, scaled_now, wled_speed};
 }
 
 } // namespace cfx

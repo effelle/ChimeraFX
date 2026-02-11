@@ -47,7 +47,6 @@ number:
 select: 
 switch: 
 ```
-
 ---
 
 ## Framework-Specific Light Configuration
@@ -95,8 +94,8 @@ You can now add the effects you like to your light component. The `effect_id` is
 ```yaml
     effects:
       - addressable_cfx:
-          name: "Ocean"
-          effect_id: 101
+          name: "Ocean"   # Name of the effect. Customizable.
+          effect_id: 101  # ID of the effect. Required.
       - addressable_cfx:
           # Add more effects here
 ```

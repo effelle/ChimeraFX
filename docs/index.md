@@ -1,8 +1,20 @@
+
+
 # Welcome to ChimeraFX Docs
 
-**ChimeraFX** is a native C++ custom component for ESPHome that brings the beauty of some of the best WLED effects to your Home Assistant setup, without the complexity.
+**ChimeraFX** is a native C++ custom component for ESPHome that brings the beauty of iconic RGB LED effects to your Home Assistant setup. By integrating these effects directly into your existing ESPHome nodes, you can run premium animations and your sensors on a single MCU, eliminating the need for a separate, dedicated lighting controller.
 
 It allows you to run complex RGB LED effects with high performance on ESP32 devices, completely avoiding the overhead and "spaghetti code" of old YAML lambda implementations.
+
+---
+
+### Is this for me?
+**ChimeraFX** is not intended to be a full WLED replacement. You should choose the tool that best fits your hardware and requirements:
+ 
+*   **Install [WLED](https://kno.wled.ge/) if:** You want the complete WLED experience (Segments, E1.31/DDP support, 150+ effects) and are dedicating an MCU solely to lighting.
+*   **Use `ChimeraFX` if:** You want to consolidate! If you need a single ESP32 to handle sensors, relays, or switches **and** run smooth, high-quality lighting effects simultaneously, ChimeraFX is for you.
+
+---
 
 ## Key Features
 

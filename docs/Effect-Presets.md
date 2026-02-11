@@ -20,7 +20,10 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
           set_intro_palette: true   # Instruct Intro to use the palette we selected with set_palette
           set_timer: 30             # Set the timer to turn off the light after 30 minutes 
 ```
-**Note:** This is particularly useful if you want to use the same effect with different settings. Simply declare the same effect ID with your new parameters and you’re good to go! While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
+
+This is particularly useful if you want to use the same effect with different settings. Simply declare the same effect ID with your new parameters and you’re good to go! While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
+
+**Note:** When a light is turned off and then on again, the effect will reset to its default speed, intensity, and timer settings. This ensures a clean and predictable setup for the light every time. If you are not using a preset, the effect will always revert to its default state.
 
 ## Parameters
 
