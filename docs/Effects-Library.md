@@ -30,7 +30,6 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 | 97 | **Plasma** | Smooth plasma animation. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
 | 101 | **Ocean** | Gentle ocean waves (based on Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Ripple speed | No | Mark Kriegsman |
 | 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | Yes | Aircoookie |
-| 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Count - **Speed**: Speed | Yes | Aircoookie |
 | 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
 
 ### A few notes on the credits:
