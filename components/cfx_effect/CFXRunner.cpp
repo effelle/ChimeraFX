@@ -2415,8 +2415,10 @@ uint16_t mode_colortwinkle(void) {
           : getPaletteByIndex(instance->_segment.palette);
 
   // Reset on start to avoid "quick animation" of old buffer content
-  if (instance->_segment.reset) {
+  // Use call==0 as a backup check for first run
+  if (instance->_segment.reset || instance->_segment.call == 0) {
     instance->_segment.fill(0);
+    instance->_segment.reset = false;
     return FRAMETIME; // Force a black frame to clear the visual buffer
   }
 
@@ -2456,6 +2458,11 @@ uint16_t mode_colortwinkle(void) {
     if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
       CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
+      // "Soft Pop": Spawn at reduced brightness (~66%) to make turn-on appear
+      // smoother scaling down prevents the harsh "instant on" effect
+      c.r = scale8(c.r, 170);
+      c.g = scale8(c.g, 170);
+      c.b = scale8(c.b, 170);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
