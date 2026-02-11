@@ -2563,28 +2563,15 @@ uint16_t mode_scanner_internal(bool dualMode) {
       unsigned internalPos = headPos - t;
       unsigned displayPos = dir ? internalPos : (len - 1 - internalPos);
 
-      // Gamma-compensated brightness: use sqrt curve
-      // so that after ESPHome's gamma (~2.8), the visible fade is smooth
-      // bri = maxBri * sqrt(1 - t/tLen)
+      // Quadratic brightness: (1 - t/trail_len)^2 * maxBri
+      // Quadratic naturally compensates for gamma (~2.8) reasonably well
       uint8_t bri;
       if (t == 0) {
         bri = maxBri;
       } else {
-        // Linear fade 255→0, then sqrt to compensate gamma
-        unsigned linearFade = 255 - (t * 255 / tLen);
-        // Approximate sqrt via lookup: sqrt(x/255)*255
-        // Using integer sqrt: bri = isqrt(linearFade * maxBri)
-        unsigned val = linearFade * maxBri / 255;
-        // Square root approximation using Newton's method (1 iteration)
-        unsigned x = val;
-        if (x > 0) {
-          unsigned s = (x > 128) ? 12 : (x > 32) ? 6 : 3;
-          s = (s + x / s) >> 1;
-          s = (s + x / s) >> 1;
-          bri = (s > 255) ? 255 : s;
-        } else {
-          bri = 0;
-        }
+        unsigned fade = 255 - (t * 255 / tLen);
+        // Quadratic: fade^2 / 255, scaled by maxBri
+        bri = ((fade * fade) >> 8) * maxBri / 255;
         if (bri == 0 && t < tLen && maxBri > 0)
           bri = 1;
       }
