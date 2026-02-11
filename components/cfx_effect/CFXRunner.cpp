@@ -2485,17 +2485,17 @@ uint16_t mode_scanner_internal(bool dualMode) {
   }
 
   // 2. Fade trail — natural multiplicative fade
-  //    fadeBy = (255-intensity)/4:
-  //      Intensity 0:   fadeBy=63 (~3px visible trail)
-  //      Intensity 128: fadeBy=31 (~5px visible trail)
-  //      Intensity 204: fadeBy=12 (~15px visible trail)
+  //    fadeBy = (255-intensity)/7:
+  //      Intensity 0:   fadeBy=36 (~4px visible trail)
+  //      Intensity 128: fadeBy=18 (~7px visible trail)
+  //      Intensity 204: fadeBy=7  (~18px visible trail)
   //      Intensity 255: fadeBy=0  (infinite trail, strip fills at max speed)
-  uint8_t fadeBy = (255 - instance->_segment.intensity) / 4;
+  uint8_t fadeBy = (255 - instance->_segment.intensity) / 7;
   instance->_segment.fadeToBlackBy(fadeBy);
 
-  // 3. Hard cutoff: kill any pixel with max channel < 3
-  //    This eliminates floor-brightness residue from multiplicative fade
-  //    (fadeToBlackBy never truly reaches 0 in practice due to timing)
+  // 3. Hard cutoff: kill any pixel with max channel < 15
+  //    LEDs at brightness 3-10 are still visible on real hardware,
+  //    causing persistent floor glow. Threshold of 15 eliminates this.
   if (fadeBy > 0) {
     int light_size = instance->target_light->size();
     esphome::light::AddressableLight &light = *instance->target_light;
@@ -2505,10 +2505,13 @@ uint16_t mode_scanner_internal(bool dualMode) {
       if (gi < light_size) {
         esphome::Color c = light[gi].get();
         uint8_t maxCh = c.r;
-        if (c.g > maxCh) maxCh = c.g;
-        if (c.b > maxCh) maxCh = c.b;
-        if (c.w > maxCh) maxCh = c.w;
-        if (maxCh < 3) {
+        if (c.g > maxCh)
+          maxCh = c.g;
+        if (c.b > maxCh)
+          maxCh = c.b;
+        if (c.w > maxCh)
+          maxCh = c.w;
+        if (maxCh < 15) {
           light[gi] = esphome::Color(0, 0, 0, 0);
         }
       }
@@ -2526,7 +2529,8 @@ uint16_t mode_scanner_internal(bool dualMode) {
   if (pixels == 0) {
     // Sub-pixel mode: count frames until next pixel advance
     unsigned frames_per_pixel = effective_speed / len;
-    if (frames_per_pixel == 0) frames_per_pixel = 1;
+    if (frames_per_pixel == 0)
+      frames_per_pixel = 1;
     instance->_segment.step++;
     if (instance->_segment.step >= frames_per_pixel) {
       instance->_segment.step = 0;
