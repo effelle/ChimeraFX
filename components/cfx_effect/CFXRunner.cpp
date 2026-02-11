@@ -2417,14 +2417,15 @@ uint16_t mode_colortwinkle(void) {
   // Reset on start to avoid "quick animation" of old buffer content
   if (instance->_segment.reset) {
     instance->_segment.fill(0);
+    return FRAMETIME; // Force a black frame to clear the visual buffer
   }
 
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
-  // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 6
-  // units/frame (Slower fade ~600-800ms) Speed >128  -> increases slightly to
-  // max ~10 units/frame
-  uint8_t fade_amt = 6 + (instance->_segment.speed > 128
+  // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
+  // max ~12 units/frame
+  uint8_t fade_amt = 8 + (instance->_segment.speed > 128
                               ? (instance->_segment.speed - 128) >> 5
                               : 0);
 
