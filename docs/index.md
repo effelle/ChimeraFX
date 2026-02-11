@@ -24,4 +24,9 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 *   **[Troubleshooting](Troubleshooting.md)** - Fix common issues (flickering, memory).
 
 ---
+
+# Legal Disclaimer
+ChimeraFX is an independent project. It is not affiliated with, maintained by, or endorsed by the WLED and ESPHome projects or Nabu Casa. WLED, ESPHome and Nabu Casa are trademarks of their respective owners. This work is a derivative of WLED, licensed under EUPL-1.2.
+
+---
 *Built with ❤️ by Federico Leoni (effelle)*
