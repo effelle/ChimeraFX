@@ -2416,10 +2416,10 @@ uint16_t mode_colortwinkle(void) {
 
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
-  // level" artifacts Speed controls fade rate: Speed 0   -> fade 1 unit/frame
-  // -> ~4.2s to clear full white Speed 128 -> fade 5 units/frame -> ~0.8s to
-  // clear Speed 255 -> fade 8 units/frame -> ~0.5s to clear
-  uint8_t fade_amt = (instance->_segment.speed / 32) + 1;
+  // level" artifacts Speed controls fade rate: Speed 0   -> fade 8 units/frame
+  // -> ~0.5s to clear full white Speed 128 -> fade 12 units/frame -> ~0.3s to
+  // clear Speed 255 -> fade 15 units/frame -> ~0.25s to clear
+  uint8_t fade_amt = 8 + (instance->_segment.speed / 32);
 
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
