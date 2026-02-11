@@ -2585,7 +2585,10 @@ uint16_t mode_scanner_internal(bool dualMode) {
           instance->_segment.palette == 255) {
         c = instance->_segment.colors[0];
       } else {
-        c = instance->_segment.color_from_palette(displayPos, true, true, 0);
+        // Map spatial position to palette index (0-255)
+        // color_from_palette expects 0-255 input
+        uint16_t palIndex = (displayPos * 255) / (len - 1);
+        c = instance->_segment.color_from_palette(palIndex, true, true, 0);
       }
 
       uint8_t r = ((CFX_R(c)) * bri) >> 8;
