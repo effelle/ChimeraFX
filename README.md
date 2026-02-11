@@ -116,6 +116,14 @@ Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is par
 
 ---
 
+## Support the Project
+
+If you find **ChimeraFX** useful and would like to support the time and effort put into porting these effects, donations are never expected but always greatly appreciated!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/effelle)
+
+---
+
 ## Legal Disclaimer
 
 **ChimeraFX** is an independent project. It is not affiliated with, maintained by, or endorsed by the WLED project, the ESPHome project, or Nabu Casa. WLED, ESPHome, and Nabu Casa are trademarks of their respective owners.

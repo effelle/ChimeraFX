@@ -142,3 +142,7 @@ The component handles its own dependencies automatically:
 - **ESP-IDF**: Uses native RMT driver (built-in)
 
 You don't need to install anything else manually.
+
+---
+
+[![https://www.buymeacoffee.com/effelle](https://img.shields.io/badge/Donate-Buy%20me%20a%20coffee-orange?style=for-the-badge)](https://www.buymeacoffee.com/effelle)

@@ -6,6 +6,7 @@ edit_uri: ""
 
 theme:
   name: material
+  custom_dir: overrides
   logo: assets/ChimeraFX_rgb_logo.png
   favicon: assets/ChimeraFX_mono_white_vector.png
   features:
@@ -43,8 +44,21 @@ nav:
     - Troubleshooting: Troubleshooting.md
     - Effect Library: Effects-Library.md
     - The Story: The-Story.md
+    - Buy Me a Coffee!: https://www.buymeacoffee.com/effelle
+extra:
+  generator: false # Hides the "Made with MkDocs" in footer (optional)
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/effelle/ChimeraFX
+    - icon: custom/buymeacoffee  # Points to overrides/.icons/custom/buymeacoffee.svg
+      link: https://www.buymeacoffee.com/effelle
+
 
 markdown_extensions:
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - admonition
   - pymdownx.details
   - pymdownx.superfences

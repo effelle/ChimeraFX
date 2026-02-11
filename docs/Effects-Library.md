@@ -10,7 +10,7 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 0 | **Static** | Solid color with palette support. | **Palette**: Gradient/Solid | Yes | Aircoookie |
+| 0 | **Static** | Solid color with palette and intro support. | **Palette**: Gradient/Solid | Yes | Aircoookie |
 | 2 | **Breathe** | Apple-style standby breathing LED. | **Speed**: Breathe rate | Yes | Aircoookie |
 | 3 | **Wipe** | Primary/Secondary color wipe. | **Speed**: Wipe speed | Yes | Aircoookie |
 | 6 | **Sweep** | Ping-pong wipe animation. | **Speed**: Sweep speed | Yes | Aircoookie |
@@ -88,3 +88,7 @@ These short animations play once when the light is turned ON.
 When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.
 
 **Note:** The intro animation runs only when the light is switched from Off to On. If you change the main effect while the light is already on, the intro will not play again. It will only re-trigger the next time the light is toggled on.
+
+---
+
+[![https://www.buymeacoffee.com/effelle](https://img.shields.io/badge/Donate-Buy%20me%20a%20coffee-orange?style=for-the-badge)](https://www.buymeacoffee.com/effelle)
