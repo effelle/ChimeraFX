@@ -1,13 +1,13 @@
 
-<p align="center">
 ![ChimeraFX](media/ChimeraFX_new_banner_github.png)
 
 # ChimeraFX: Made for ESPHome
 
+
 > **High-performance WLED-style effects running natively within ESPHome.**
-</p>
+
 ---
-<p align="justify">
+
 ## The Lore of the Chimera
 
 A **Chimera** is a legendary creature composed of three animals. ChimeraFX merges three worlds:
@@ -166,5 +166,3 @@ Aurora, Forest, Halloween, Rainbow, Fire, Sunset, Ice, Party, Pastel, Ocean, Hea
 This work incorporates code and logic derived from WLED and is licensed under the **European Union Public Licence v1.2 (EUPL-1.2)**.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-</p>

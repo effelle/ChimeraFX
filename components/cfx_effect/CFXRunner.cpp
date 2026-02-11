@@ -2457,11 +2457,11 @@ uint16_t mode_colortwinkle(void) {
 
 // --- Scanner Effect (ID 40) ---
 // Larson Scanner: linear scanning eye with fading trail
-// Speed = Scan frequency, Intensity = Trail length (fade rate)
+// Speed = Scan frequency, Intensity = Trail length
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Uses WLED's pixel-counting speed, framerate-compensated fade
+// Explicit trail rendering (no fadeToBlackBy — prevents floor brightness)
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -2472,95 +2472,113 @@ uint16_t mode_scanner_internal(bool dualMode) {
 
   // State layout:
   //   aux0  = direction (0=forward, 1=backward)
-  //   aux1  = current pixel position
+  //   aux1  = current pixel position (internal 0..len-1)
   //   step  = frame accumulator (for sub-pixel movement)
 
-  // 1. Reset: clear strip, reset position
+  // 1. Reset
   if (instance->_segment.reset) {
     instance->_segment.fill(0);
-    instance->_segment.aux0 = 0; // direction: forward
-    instance->_segment.aux1 = 0; // position: start
-    instance->_segment.step = 0; // frame counter
+    instance->_segment.aux0 = 0;
+    instance->_segment.aux1 = 0;
+    instance->_segment.step = 0;
     instance->_segment.reset = false;
   }
 
-  // 2. Fade trail — compensated for ~60fps
-  //    WLED runs at ~24fps, its fade_out subtracts ~2-3 brightness/frame.
-  //    Our fadeToBlackBy runs at ~60fps so we need ~2.5x gentler fade.
-  //    fadeBy = (255-intensity) / 5 gives:
-  //      Intensity 0:   fadeBy=51 (~4px trail)
-  //      Intensity 128: fadeBy=25 (~8px trail at default speed)
-  //      Intensity 204: fadeBy=10 (~20px trail)
-  //      Intensity 255: fadeBy=0  (infinite trail)
-  uint8_t fadeBy = (255 - instance->_segment.intensity) / 5;
-  instance->_segment.fadeToBlackBy(fadeBy);
-
-  // 3. WLED speed mapping: map(speed, 0, 255, 96, 2)
-  //    effective_speed = FRAMETIME * factor
-  //    pixels = SEGLEN / effective_speed (how many pixels per frame)
+  // 2. Movement: WLED speed mapping
   uint8_t spd = instance->_segment.speed;
   unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96→2
   unsigned effective_speed = FRAMETIME * speed_factor;
   unsigned pixels = len / effective_speed;
 
-  bool advance = true;
+  bool did_advance = false;
 
-  // Sub-pixel mode: at slow speeds, pixels=0 → count frames per pixel
   if (pixels == 0) {
+    // Sub-pixel mode: count frames until next pixel advance
     unsigned frames_per_pixel = effective_speed / len;
     if (frames_per_pixel == 0)
       frames_per_pixel = 1;
     instance->_segment.step++;
-    if (instance->_segment.step < frames_per_pixel) {
-      advance = false; // not time to advance, but still repaint head below
-    } else {
+    if (instance->_segment.step >= frames_per_pixel) {
       instance->_segment.step = 0;
       pixels = 1;
+      did_advance = true;
     }
+  } else {
+    did_advance = true;
   }
 
-  if (advance) {
+  if (did_advance) {
     unsigned index = instance->_segment.aux1 + pixels;
-
-    // 4. Check bounds and reverse direction
-    if (index >= len) {
-      instance->_segment.aux0 = !instance->_segment.aux0; // reverse
+    if (index >= (unsigned)len) {
+      instance->_segment.aux0 = !instance->_segment.aux0;
       instance->_segment.aux1 = 0;
     } else {
-      // Paint all pixels from old to new position (anti-gap)
-      for (unsigned i = instance->_segment.aux1; i < index; i++) {
-        unsigned j = instance->_segment.aux0 ? i : (len - 1 - i);
-        uint32_t c;
-        if (instance->_segment.palette == 0 ||
-            instance->_segment.palette == 255) {
-          c = instance->_segment.colors[0];
-        } else {
-          c = instance->_segment.color_from_palette(j, true, true, 0);
-        }
-        instance->_segment.setPixelColor(j, c);
-        if (dualMode) {
-          instance->_segment.setPixelColor(len - 1 - j, c);
-        }
-      }
       instance->_segment.aux1 = index;
     }
   }
 
-  // 5. ALWAYS repaint the current head pixel at full brightness
-  //    This prevents the fade from dimming the head during sub-pixel frames
-  {
-    unsigned headPos = instance->_segment.aux0
-                           ? instance->_segment.aux1
-                           : (len - 1 - instance->_segment.aux1);
+  // 3. Render: clear strip, then draw trail + head
+  //    Trail length from Intensity:
+  //      Intensity 0:   trail=2 pixels
+  //      Intensity 128: trail=8 pixels
+  //      Intensity 204: trail=24 pixels
+  //      Intensity 255: trail=len (full strip)
+  unsigned trail_len;
+  uint8_t intensity = instance->_segment.intensity;
+  if (intensity >= 255) {
+    trail_len = len; // infinite trail
+  } else {
+    // Linear map: 2 + intensity * (len-2) / 255
+    trail_len = 2 + ((unsigned)intensity * (len > 2 ? len - 2 : 0)) / 255;
+    if (trail_len > (unsigned)len)
+      trail_len = len;
+  }
+
+  // Clear strip
+  instance->_segment.fill(0);
+
+  // Get head color
+  uint32_t headColor;
+  unsigned headInternal = instance->_segment.aux1;
+
+  // Determine head pixel in display space and draw trail behind it
+  bool dir = instance->_segment.aux0; // 0=forward (right to left), 1=backward
+
+  // Draw trail: from current position backwards along direction of travel
+  for (unsigned t = 0; t < trail_len && t <= headInternal; t++) {
+    unsigned internalPos = headInternal - t;
+    unsigned displayPos = dir ? internalPos : (len - 1 - internalPos);
+
+    // Brightness: 255 at head, fading quadratically along trail
+    uint8_t bri;
+    if (t == 0) {
+      bri = 255;
+    } else {
+      // Quadratic fade: (1 - t/trail_len)^2 * 255
+      unsigned fade = 255 - (t * 255 / trail_len);
+      bri = (fade * fade) >> 8; // quadratic
+      if (bri == 0 && t < trail_len)
+        bri = 1; // keep minimum visibility
+    }
+
+    // Get color from palette or solid
     uint32_t c;
     if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
       c = instance->_segment.colors[0];
     } else {
-      c = instance->_segment.color_from_palette(headPos, true, true, 0);
+      c = instance->_segment.color_from_palette(displayPos, true, true, 0);
     }
-    instance->_segment.setPixelColor(headPos, c);
+
+    // Apply brightness
+    uint8_t r = ((CFX_R(c)) * bri) >> 8;
+    uint8_t g = ((CFX_G(c)) * bri) >> 8;
+    uint8_t b = ((CFX_B(c)) * bri) >> 8;
+    uint8_t w = ((CFX_W(c)) * bri) >> 8;
+
+    instance->_segment.setPixelColor(displayPos, RGBW32(r, g, b, w));
     if (dualMode) {
-      instance->_segment.setPixelColor(len - 1 - headPos, c);
+      instance->_segment.setPixelColor(len - 1 - displayPos,
+                                       RGBW32(r, g, b, w));
     }
   }
 
