@@ -2417,9 +2417,9 @@ uint16_t mode_colortwinkle(void) {
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
   // level" artifacts Speed controls fade rate: Speed 0   -> fade 1 unit/frame
-  // -> ~4.2s to clear full white Speed 128 -> fade 11 units/frame -> ~0.4s to
-  // clear Speed 255 -> fade 22 units/frame -> ~0.2s to clear
-  uint8_t fade_amt = (instance->_segment.speed / 12) + 1;
+  // -> ~4.2s to clear full white Speed 128 -> fade 5 units/frame -> ~0.8s to
+  // clear Speed 255 -> fade 8 units/frame -> ~0.5s to clear
+  uint8_t fade_amt = (instance->_segment.speed / 32) + 1;
 
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
@@ -2444,7 +2444,7 @@ uint16_t mode_colortwinkle(void) {
   for (int j = 0; j < spawnLoops; j++) {
     // Unconditional spawning based on intensity - no "dark pixel" check to
     // avoid deadlocks
-    if (hw_random8() < intensity) {
+    if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
       CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
