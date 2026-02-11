@@ -71,13 +71,6 @@ light:
     id: led_strip           # ID of your light
 ```
 
-**Note:** ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption and you are sure is not a power or wiring issue, you must ensure your `rmt_symbols` are set correctly for your chip type:
-
-- **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
-- **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
-
-Also, set `use_psram: false` in your light config. PSRAM represents external RAM which is significantly slower than the ESP32's internal SRAM. The RMT (Remote Control) peripheral requires high-speed data access to generate accurate timing for addressable LEDs. Using PSRAM can cause timing jitter, resulting in flickering or data corruption.
-
 ### Option B: Arduino + NeoPixelBus (Simpler)
 
 ```yaml
