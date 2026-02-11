@@ -2560,6 +2560,19 @@ uint16_t mode_scanner_internal(bool dualMode) {
   // 4. Clear and render
   instance->_segment.fill(0);
 
+  // Helper: Draw pixel with MAX blending (keep brighter color)
+  auto drawPixelMax = [&](unsigned pos, uint32_t c) {
+    uint32_t existing = instance->_segment.getPixelColor(pos);
+    uint8_t r = CFX_R(c), g = CFX_G(c), b = CFX_B(c), w = CFX_W(c);
+    uint8_t er = CFX_R(existing), eg = CFX_G(existing);
+    uint8_t eb = CFX_B(existing), ew = CFX_W(existing);
+    r = (r > er) ? r : er;
+    g = (g > eg) ? g : eg;
+    b = (b > eb) ? b : eb;
+    w = (w > ew) ? w : ew;
+    instance->_segment.setPixelColor(pos, RGBW32(r, g, b, w));
+  };
+
   // Helper lambda to draw a trail at a given position/direction
   auto drawTrail = [&](unsigned headPos, bool dir, unsigned tLen,
                        uint8_t maxBri) {
@@ -2595,20 +2608,11 @@ uint16_t mode_scanner_internal(bool dualMode) {
       uint8_t g = ((CFX_G(c)) * bri) >> 8;
       uint8_t b = ((CFX_B(c)) * bri) >> 8;
       uint8_t w = ((CFX_W(c)) * bri) >> 8;
+      uint32_t finalColor = RGBW32(r, g, b, w);
 
-      // Use max blending so overlapping trails keep the brighter value
-      uint32_t existing = instance->_segment.getPixelColor(displayPos);
-      uint8_t er = CFX_R(existing), eg = CFX_G(existing);
-      uint8_t eb = CFX_B(existing), ew = CFX_W(existing);
-      r = (r > er) ? r : er;
-      g = (g > eg) ? g : eg;
-      b = (b > eb) ? b : eb;
-      w = (w > ew) ? w : ew;
-
-      instance->_segment.setPixelColor(displayPos, RGBW32(r, g, b, w));
+      drawPixelMax(displayPos, finalColor);
       if (dualMode) {
-        instance->_segment.setPixelColor(len - 1 - displayPos,
-                                         RGBW32(r, g, b, w));
+        drawPixelMax(len - 1 - displayPos, finalColor);
       }
     }
   };
