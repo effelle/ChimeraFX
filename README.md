@@ -90,6 +90,19 @@ light:
 ```
 ---
 
+### 🎨 Available Effects
+ChimeraFX currently supports over **20+ effects** optimized for ESP32, like:
+
+| | | |
+|:---:|:---:|:---:|
+| 🔥 **Fire** | 🌈 **Rainbow** | ☄️ **Meteor** |
+| 🌊 **Ocean** | 🌌 **Aurora** | 🎾 **Bouncing Balls** |
+
+#### [👉 Click here to see the full Effect List & Control Guide](https://effelle.github.io/ChimeraFX/Effects-Library/)
+
+
+<details>
+
 ## Available Effects
 
 | ID | Name | Description |
@@ -102,7 +115,7 @@ light:
 | `9` | Rainbow | Per-pixel rainbow with density control |
 | `18` | Dissolve | Random pixel color transitions |
 | `38` | Aurora | Northern lights animation |
-| `40` | Scanner | Single dot moving back and forth (Cylon) |
+| `40` | Scanner | Single dot moving back and forth (KITT/Cylon) |
 | `53` | Fire Dual | Two flames meeting in the center |
 | `60` | Scanner Dual | Two dots meeting in the center |
 | `63` | Colorwaves | Rainbow flag with breathing motion |
@@ -116,6 +129,8 @@ light:
 | `104` | Sunrise | Gradual sunrise/sunset simulation |
 | `105` | Phased | Sine wave interference pattern |
 | `110` | Flow | Smooth color zones animation |
+
+</details>
 
 ### Mass Inclusion
 
