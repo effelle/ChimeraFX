@@ -2415,53 +2415,48 @@ uint16_t mode_colortwinkle(void) {
           : getPaletteByIndex(instance->_segment.palette);
 
   // Step 1: Fade ALL pixels toward black using scale8
-  // Force to zero when below threshold to prevent floor lighting
+  // Logic: scale8 for exponential decay + decrement to force zero (prevent
+  // "Zeno's paradox" at low values)
   for (int i = 0; i < len; i++) {
     uint32_t cur32 = instance->_segment.getPixelColor(i);
     uint8_t r = (cur32 >> 16) & 0xFF;
     uint8_t g = (cur32 >> 8) & 0xFF;
     uint8_t b = cur32 & 0xFF;
 
-    // scale8 multiplicative fade
-    // Robustness: ensure strictly monotonic fade so we don't get stuck at
-    // "floor"
-    if (r > 0)
+    // Robust decrement: if led is lit, scale it AND decrement to ensure it
+    // eventually hits 0
+    if (r > 0) {
       r = scale8(r, fade_scale);
-    if (g > 0)
+      if (r > 0)
+        r--;
+    }
+    if (g > 0) {
       g = scale8(g, fade_scale);
-    if (b > 0)
+      if (g > 0)
+        g--;
+    }
+    if (b > 0) {
       b = scale8(b, fade_scale);
-
-    // Force off the low tail (aggressive cleanup)
-    if (r <= 4)
-      r = 0;
-    if (g <= 4)
-      g = 0;
-    if (b <= 4)
-      b = 0;
+      if (b > 0)
+        b--;
+    }
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
   }
 
   // Step 2: Spawn new twinkles
+  // Map intensity effectively: 0-255 -> spawn chance
+  // Use WLED-ish logic: if random8 < intensity, spawn.
   int spawnLoops = (len / 50) + 1;
   uint8_t intensity = instance->_segment.intensity;
 
   for (int j = 0; j < spawnLoops; j++) {
-    // Reduced spawn rate for calmer twinkle: intensity/2
-    if (hw_random8() <= (intensity >> 1)) {
+    // Unconditional spawning based on intensity - no "dark pixel" check to
+    // avoid deadlocks
+    if (hw_random8() < intensity) {
       int i = hw_random16(0, len);
-
-      // Check brightness level - allow spawning if pixel is "dark enough"
-      // This prevents deadlock if pixels get stuck at low non-zero values
-      uint32_t c_check = instance->_segment.getPixelColor(i);
-      uint16_t total_bright =
-          ((c_check >> 16) & 0xFF) + ((c_check >> 8) & 0xFF) + (c_check & 0xFF);
-
-      if (total_bright < 16) { // Allow if very dark
-        CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
-        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
-      }
+      CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
 
