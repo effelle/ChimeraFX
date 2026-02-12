@@ -11,3 +11,9 @@ site/* linguist-generated
 # Explicitly identify C++ files just in case
 *.h linguist-language=C++
 *.cpp linguist-language=C++
+
+# Treat Python as vendored if you want to hide it completely (uncomment the next line to hide Python)
+# *.py linguist-vendored
+
+# Or just treat it as a language, but since C++ files are larger, C++ will be #1
+*.py linguist-language=Python
