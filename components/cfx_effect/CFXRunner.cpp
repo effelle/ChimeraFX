@@ -2685,7 +2685,11 @@ void CFXRunner::service() {
   _segment.call++;
 
   // Perform periodic logging if enabled
-  diagnostics.maybe_log("CFX");
+  const char *log_tag = "CFX";
+  if (target_light) {
+    log_tag = target_light->get_name().c_str();
+  }
+  diagnostics.maybe_log(log_tag);
 
   // --- INTRO LOGIC ---
   if (_state == STATE_INTRO) {

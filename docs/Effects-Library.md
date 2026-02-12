@@ -1,7 +1,5 @@
 # Available Effects, Palettes and Intros
 
-## 🔥 Effect Library
-
 If you’re wondering why all WLED effects aren't available yet, here is the answer:
 
 Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
@@ -39,7 +37,7 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 
 ---
 
-## 🎨 Palettes
+## Palettes
 
 You can assign any of these palettes to compatible effects using the `palette` selector.
 
@@ -71,7 +69,7 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 ---
 
-## 🚀 Intro Animations
+## Intro Animations
 
 These short animations play once when the light is turned ON.
 

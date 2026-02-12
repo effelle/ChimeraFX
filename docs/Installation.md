@@ -8,8 +8,8 @@
     *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.
     *   **ESP8266**: **NOT RECOMMENDED**. The old ESP8266 is stuck on the Arduino framework and simply lacks the resources to run ESPHome and ChimeraFX simultaneously. Save yourself the headache and upgrade to an ESP32. Seriously.
 *   **Frameworks** (both supported):
-    *   **ESP-IDF** (with esp32_rmt_led_strip) — slightly better performance
-    *   **Arduino** (with NeoPixelBus) — simpler setup
+    *   **ESP-IDF** (with [esp32_rmt_led_strip](https://esphome.io/components/light/esp32_rmt_led_strip.html)) 
+    *   **Arduino** (with [NeoPixelBus](https://esphome.io/components/light/neopixelbus.html))
 
 You can install the component in two ways:
 
@@ -70,6 +70,8 @@ light:
     id: led_strip           # ID of your light
 ```
 
+For a full overview of the `esp32_rmt_led_strip` light platform, please refer to the official [ESPHome documentation](https://esphome.io/components/light/esp32_rmt_led_strip.html).
+
 ### Option B: Arduino + NeoPixelBus (Simpler)
 
 ```yaml
@@ -87,6 +89,9 @@ light:
     name: "LED Strip"     # Name of your light
     id: led_strip         # ID of your light
 ```
+
+For a full overview of the `neopixelbus` light platform, please refer to the official [ESPHome documentation](https://esphome.io/components/light/neopixelbus.html).
+
 ### Adding the effects
 
 You can now add the effects you like to your light component. The `effect_id` is the ID of the effect you want to use. You can find the list of effects in the [Effects](Effects-Library.md) section. 

@@ -3,8 +3,7 @@
 That’s a great question! To answer it, let me take you back a few years.
 
 ### My Tasmota Roots
-
-Before I started this project, I had the privilege of serving as a **Core Developer for Tasmota**. 
+Years before I started this project, I had the privilege of serving as a **Core Developer for Tasmota**. 
 
 That experience was truly my "masterclass" in IoT. Working deep in the Tasmota code taught me the importance of stability, efficiency, and how to squeeze every drop of performance out of a microcontroller. It shaped how I look at smart home reliability.
 
