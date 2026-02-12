@@ -24,6 +24,7 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   target_light = light;
   instance = this;
   _mode = FX_MODE_STATIC;
+  _name = "CFX";
   frame_time = 0;
 
   // Initialize Segment defaults
@@ -2685,11 +2686,7 @@ void CFXRunner::service() {
   _segment.call++;
 
   // Perform periodic logging if enabled
-  const char *log_tag = "CFX";
-  if (target_light) {
-    log_tag = target_light->get_name().c_str();
-  }
-  diagnostics.maybe_log(log_tag);
+  diagnostics.maybe_log(_name);
 
   // --- INTRO LOGIC ---
   if (_state == STATE_INTRO) {

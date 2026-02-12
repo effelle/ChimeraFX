@@ -250,6 +250,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
   if (this->debug_switch_ && this->runner_) {
     this->runner_->setDebug(this->debug_switch_->state);
+    if (this->get_light_state()) {
+      this->runner_->setName(this->get_light_state()->get_name().c_str());
+    }
   }
 
   // Update speed from Number component

@@ -253,6 +253,7 @@ public:
   ~CFXRunner() { _segment.deallocateData(); }
 
   void setDebug(bool state) { diagnostics.enabled = state; }
+  void setName(const char *name) { _name = name; }
 
   void service();
   void setMode(uint8_t m) {
@@ -318,6 +319,8 @@ private:
   static mode_ptr _mode_ptr[];
 
   uint32_t _last_frame = 0;
+
+  const char *_name = "CFX";
 
   cfx::FrameDiagnostics diagnostics;
 };
