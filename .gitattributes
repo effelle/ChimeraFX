@@ -16,4 +16,4 @@ site/* linguist-generated
 # *.py linguist-vendored
 
 # Or just treat it as a language, but since C++ files are larger, C++ will be #1
-*.py linguist-language=Python
+*.py linguist-language=Python linguist-detectable=true linguist-vendored=false
