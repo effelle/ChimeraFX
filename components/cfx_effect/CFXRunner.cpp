@@ -2451,17 +2451,17 @@ uint16_t mode_chase_color(void) {
 // --- BPM Effect (ID 68) ---
 // Colored stripes pulsing at a defined BPM
 uint16_t mode_bpm(void) {
-  // Tuned Port: Use smooth beat8 for stp to prevent aliasing/vibration at 16ms
-  // WLED logic: stp increments every 20ms -> 50 steps/sec -> 3000 steps/min
-  // WLED beat8 input is Q8.8 BPM. 3000 / 256 = 11.71875 BPM.
-  // beat8(2996) creates a smooth 0-255 ramp with the exact same average speed
-  // as (now / 20), but updates every ms.
-  uint32_t stp = cfx::beat8(2996);
+  // Tuned Port: Frame-Synced Color Shift
+  // Uses aux0 to advance stp by exactly 1 unit per frame.
+  // Eliminates time-aliasing vibration. Speed matches WLED (60 vs 51
+  // steps/sec).
+  if (instance->_segment.call == 0)
+    instance->_segment.aux0 = 0;
+
+  uint32_t stp = (instance->_segment.aux0++) & 0xFF;
   uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
 
   for (unsigned i = 0; i < instance->_segment.length(); i++) {
-    // Spatial multiplier i*10 (WLED default) is preserved.
-    // Smooth stp eliminates the "nervous" aliasing artifact.
     uint32_t col = instance->_segment.color_from_palette(
         stp + (i * 2), false, true, 0, beat - stp + (i * 10));
     instance->_segment.setPixelColor(i, col);
@@ -2471,10 +2471,8 @@ uint16_t mode_bpm(void) {
 
 // --- Glitter (ID 87) ---
 // Two-pass: palette background + overwrite white sparkles
-// --- Glitter (ID 87) ---
-// Two-pass: palette background + overwrite white sparkles
 uint16_t mode_glitter(void) {
-  // Pass 1: Background palette fill
+  // Pass 1: Background palette fill (Always run for smooth background)
   unsigned counter = 0;
   if (instance->_segment.speed != 0) {
     counter = (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
@@ -2488,13 +2486,17 @@ uint16_t mode_glitter(void) {
     instance->_segment.setPixelColor(i, col);
   }
 
-  // Pass 2: Glitter overlay (overwrite white sparkles)
-  // Tuned Port: Scale probability by deltams to fix density at high FPS
+  // Pass 2: Glitter overlay (Rate Limited to ~30 FPS)
+  // Reduces "busy" noise perception while keeping density correct
   uint32_t dt = instance->now - instance->_segment.step;
-  instance->_segment.step = instance->now; // Store last run time
 
-  if (dt > 100)
-    dt = 16; // Clamp large gaps (first run)
+  if (dt < 30) {
+    if (dt > 150)
+      instance->_segment.step = instance->now; // Reset LAG
+    return FRAMETIME;
+  }
+
+  instance->_segment.step = instance->now;
 
   // Scale intensity: WLED runs ~24ms.
   // chance = (intensity * dt) / 24.
