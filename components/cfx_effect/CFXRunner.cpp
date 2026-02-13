@@ -2479,11 +2479,11 @@ void glitter_base(uint8_t intensity, uint32_t col = 0xFFFFFFFF) {
       uint16_t pos = cfx::hw_random16(0, len);
       // Additive blending: saturating add onto existing background
       uint32_t existing = instance->_segment.getPixelColor(pos);
-      uint8_t r =
-          std::min(255, (int)((existing >> 16) & 0xFF) + ((col >> 16) & 0xFF));
+      uint8_t r = std::min(
+          255, (int)(((existing >> 16) & 0xFF) + ((col >> 16) & 0xFF)));
       uint8_t g =
-          std::min(255, (int)((existing >> 8) & 0xFF) + ((col >> 8) & 0xFF));
-      uint8_t b = std::min(255, (int)(existing & 0xFF) + (col & 0xFF));
+          std::min(255, (int)(((existing >> 8) & 0xFF) + ((col >> 8) & 0xFF)));
+      uint8_t b = std::min(255, (int)((existing & 0xFF) + (col & 0xFF)));
       instance->_segment.setPixelColor(pos, RGBW32(r, g, b, 0));
     }
   }
