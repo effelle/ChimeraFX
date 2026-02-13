@@ -73,6 +73,9 @@ struct CHSV {
   CHSV(uint8_t ih, uint8_t is, uint8_t iv) : h(ih), s(is), v(iv) {}
 };
 
+// --- HSV to RGB Stub (Forward Declaration) ---
+void hsv2rgb_rainbow(const CHSV &hsv, CRGB &rgb);
+
 // Palette type for Pacifica
 struct CRGBPalette16 {
   CRGB entries[16];
