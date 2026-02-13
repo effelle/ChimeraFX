@@ -2449,26 +2449,48 @@ uint16_t mode_chase_color(void) {
 }
 
 // --- BPM Effect (ID 68) ---
+// Colored stripes pulsing at a defined BPM
 uint16_t mode_bpm(void) {
-  uint32_t stp = (instance->now / 20) & 0xFF;
-  uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
+  // Slow the time domain (ESPHome ticks faster than WLED)
+  uint32_t stp = (instance->now >> 3) & 0xFF;
+
+  // Scale speed down to match WLED's beat timing (~0.66x)
+  uint8_t eff_speed = cfx::scale8(instance->_segment.speed, 170);
+  uint8_t beat = cfx::beatsin8_t(eff_speed, 64, 255);
+
   for (unsigned i = 0; i < instance->_segment.length(); i++) {
-    uint32_t col = instance->_segment.color_from_palette(
-        stp + (i * 2), false, true, 0, beat - stp + (i * 10));
+    // Wide bars: i*2 spatial multiplier (was i*10 = too thin)
+    uint8_t bri = beat - stp + (i * 2);
+    uint32_t col = instance->_segment.color_from_palette(stp + (i * 2), false,
+                                                         true, 0, bri);
     instance->_segment.setPixelColor(i, col);
   }
   return FRAMETIME;
 }
 
 // --- Glitter (ID 87) ---
+// Two-pass: palette background + additive white sparkles
 void glitter_base(uint8_t intensity, uint32_t col = 0xFFFFFFFF) {
-  if (intensity > cfx::hw_random8()) {
-    instance->_segment.setPixelColor(
-        cfx::hw_random16(0, instance->_segment.length()), col);
+  uint16_t len = instance->_segment.length();
+  // Multiple sparkle chances per frame (1 per ~32 pixels)
+  uint8_t chances = 1 + (len >> 5);
+  for (uint8_t j = 0; j < chances; j++) {
+    if (intensity > cfx::hw_random8()) {
+      uint16_t pos = cfx::hw_random16(0, len);
+      // Additive blending: saturating add onto existing background
+      uint32_t existing = instance->_segment.getPixelColor(pos);
+      uint8_t r =
+          std::min(255, (int)((existing >> 16) & 0xFF) + ((col >> 16) & 0xFF));
+      uint8_t g =
+          std::min(255, (int)((existing >> 8) & 0xFF) + ((col >> 8) & 0xFF));
+      uint8_t b = std::min(255, (int)(existing & 0xFF) + (col & 0xFF));
+      instance->_segment.setPixelColor(pos, RGBW32(r, g, b, 0));
+    }
   }
 }
 
 uint16_t mode_glitter(void) {
+  // Pass 1: Background palette fill
   unsigned counter = 0;
   if (instance->_segment.speed != 0) {
     counter = (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
@@ -2482,37 +2504,34 @@ uint16_t mode_glitter(void) {
     instance->_segment.setPixelColor(i, col);
   }
 
+  // Pass 2: Glitter overlay (additive white sparkles)
   glitter_base(instance->_segment.intensity);
   return FRAMETIME;
 }
 
 // --- Tricolor Chase (ID 54) ---
-// Ported from WLED FX.cpp — tricolor_chase + mode_tricolor_chase
-static uint16_t tricolor_chase(uint32_t color1, uint32_t color2) {
+// Simplified to 2-band chase: primary color + palette
+uint16_t mode_tricolor_chase(void) {
   uint32_t cycleTime = 50 + ((255 - instance->_segment.speed) << 1);
   uint32_t it = instance->now / cycleTime;
   unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
-  unsigned index = it % (width * 3);
+  unsigned index = it % (width * 2);                          // 2 bands
 
   for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
-    if (index > (width * 3) - 1)
+    if (index > (width * 2) - 1)
       index = 0;
 
-    uint32_t color = color1;
-    if (index > (width << 1) - 1)
-      color = instance->_segment.color_from_palette(i, true, true, 1);
-    else if (index > width - 1)
-      color = color2;
+    uint32_t color;
+    if (index > width - 1)
+      color =
+          instance->_segment.color_from_palette(i, true, true, 1); // palette
+    else
+      color = instance->_segment.colors[0]; // primary (solid)
 
     instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
                                      color);
   }
   return FRAMETIME;
-}
-
-uint16_t mode_tricolor_chase(void) {
-  return tricolor_chase(instance->_segment.colors[2],
-                        instance->_segment.colors[0]);
 }
 
 // --- Sunrise Effect (ID 104) ---
@@ -2684,8 +2703,8 @@ uint16_t mode_colortwinkle(void) {
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
   // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
-  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
-  // max ~12 units/frame
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly
+  // to max ~12 units/frame
   uint8_t fade_amt = 8 + (instance->_segment.speed > 128
                               ? (instance->_segment.speed - 128) >> 5
                               : 0);
@@ -2905,7 +2924,8 @@ uint16_t mode_scanner_internal(bool dualMode) {
     // Dynamic fade duration based on speed:
     // Faster speed = shorter duration (trail must clear faster)
     // Slower speed = longer duration (trail lingers)
-    // Formula: (trail_len * speed_factor) / 3 scales perfectly with travel time
+    // Formula: (trail_len * speed_factor) / 3 scales perfectly with travel
+    // time
     unsigned fadeFrames = (trail_len * speed_factor) / 3;
     if (fadeFrames < 5)
       fadeFrames = 5;
@@ -3306,7 +3326,8 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     uint32_t pixelPos = (uint32_t)i << 15;
     int32_t dist = (int32_t)(totalPos - pixelPos);
 
-    // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536 steps)
+    // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536
+    // steps)
     uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
 
     uint8_t blendVal;
