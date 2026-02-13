@@ -794,8 +794,14 @@ uint16_t mode_aurora(void) {
       }
     }
 
-    instance->_segment.setPixelColor(
-        i, RGBW32(mixedRgb.r, mixedRgb.g, mixedRgb.b, mixedRgb.w));
+    // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep
+    // black" contrast which was previously provided by the driver's gamma
+    // correction.
+    instance->_segment.setPixelColor(i,
+                                     RGBW32(instance->applyGamma(mixedRgb.r),
+                                            instance->applyGamma(mixedRgb.g),
+                                            instance->applyGamma(mixedRgb.b),
+                                            instance->applyGamma(mixedRgb.w)));
   }
 
   return FRAMETIME;
@@ -1337,7 +1343,12 @@ uint16_t mode_ocean() {
     c.g = (c.g < 16) ? 16 : c.g;
     c.b = (c.b < 24) ? 24 : c.b;
 
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+    // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep
+    // ocean" contrast which was previously provided by the driver's gamma
+    // correction.
+    instance->_segment.setPixelColor(i, RGBW32(instance->applyGamma(c.r),
+                                               instance->applyGamma(c.g),
+                                               instance->applyGamma(c.b), 0));
   }
 
   return FRAMETIME;
@@ -1431,8 +1442,8 @@ uint16_t mode_plasma(void) {
     uint8_t rawBri = sin8(briInput);
 
     // Apply gamma correction to rawBri for deep contrast curve
-    // Old: uint8_t gammaBri = dim8_video(rawBri);
-    uint8_t gammaBri = instance->applyGamma(rawBri);
+    // RESTORED dim8_video for wave shaping (x^2), then applied gamma correction
+    uint8_t gammaBri = instance->applyGamma(dim8_video(rawBri));
 
     // Calculate contrast depth from intensity with SHIFTED QUADRATIC curve
     // Shifted so intensity=128 (default) gives same fill as intensity=90 would
@@ -2260,7 +2271,9 @@ uint16_t mode_meteor(void) {
       // Multiplicative decay with random factor
       // Scale factor 200-255 for longer trail (78-100% retention per frame)
       // Original WLED uses 128-255 but runs at higher FPS
-      uint8_t scale_factor = 200 + hw_random8(55);
+      // GAMMA CORRECTION: Adjust retention factor for gamma
+      uint8_t raw_factor = 200 + hw_random8(55);
+      uint8_t scale_factor = instance->getFadeFactor(raw_factor);
       r = scale8(r, scale_factor);
       g = scale8(g, scale_factor);
       b = scale8(b, scale_factor);
