@@ -2460,10 +2460,13 @@ uint16_t mode_bpm(void) {
 
   uint32_t stp = (instance->_segment.aux0++) & 0xFF;
   uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
+  uint16_t len = instance->_segment.length(); // Cache length
 
-  for (unsigned i = 0; i < instance->_segment.length(); i++) {
+  // Explicit 32-bit math to avoid 16-bit overflow on long strips
+  for (unsigned i = 0; i < len; i++) {
     uint32_t col = instance->_segment.color_from_palette(
-        stp + (i * 2), false, true, 0, beat - stp + (i * 10));
+        stp + ((uint32_t)i * 2), false, true, 0,
+        beat - stp + ((uint32_t)i * 10));
     instance->_segment.setPixelColor(i, col);
   }
   return FRAMETIME;
@@ -2479,15 +2482,18 @@ uint16_t mode_glitter(void) {
     counter = counter >> 8;
   }
 
-  for (unsigned i = 0; i < instance->_segment.length(); i++) {
-    unsigned colorIndex = (i * 255 / instance->_segment.length()) - counter;
+  uint16_t len = instance->_segment.length(); // Cache length
+
+  for (unsigned i = 0; i < len; i++) {
+    // FIX: (uint32_t)i prevents overflow at i=257 (257*255 > 65535)
+    // This fixes "phantom rainbow" appearing at mid-point of long strips
+    unsigned colorIndex = ((uint32_t)i * 255 / len) - counter;
     uint32_t col =
         instance->_segment.color_from_palette(colorIndex, false, true, 255);
     instance->_segment.setPixelColor(i, col);
   }
 
   // Pass 2: Glitter overlay (Rate Limited to ~30 FPS)
-  // Reduces "busy" noise perception while keeping density correct
   uint32_t dt = instance->now - instance->_segment.step;
 
   if (dt < 30) {
@@ -2499,7 +2505,6 @@ uint16_t mode_glitter(void) {
   instance->_segment.step = instance->now;
 
   // Scale intensity: WLED runs ~24ms.
-  // chance = (intensity * dt) / 24.
   uint16_t chance = (uint16_t)instance->_segment.intensity * dt / 24;
   if (chance > 255)
     chance = 255;
@@ -2509,8 +2514,7 @@ uint16_t mode_glitter(void) {
     uint32_t glitterCol = (instance->_segment.colors[2])
                               ? instance->_segment.colors[2]
                               : 0xFFFFFFFF;
-    instance->_segment.setPixelColor(
-        cfx::hw_random16(0, instance->_segment.length()), glitterCol);
+    instance->_segment.setPixelColor(cfx::hw_random16(0, len), glitterCol);
   }
 
   return FRAMETIME;
