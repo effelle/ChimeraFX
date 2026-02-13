@@ -55,10 +55,10 @@ void CFXRunner::setGamma(float g) {
     g = 1.0f; // Safety
   _gamma = g;
 
-  // The power we need to raise input by to get x^5.6 output
-  // If Gamma=2.8 -> p=2.0 -> (x^2)^2.8 = x^5.6
-  // If Gamma=1.0 -> p=5.6 -> (x^5.6)^1.0 = x^5.6
-  float power = 5.6f / _gamma;
+  // The power we need to raise input by to get x^2.8 output
+  // If Gamma=2.8 -> p=1.0 -> (x^1)^2.8 = x^2.8
+  // If Gamma=1.0 -> p=2.8 -> (x^2.8)^1.0 = x^2.8
+  float power = 2.8f / _gamma;
 
   for (int i = 0; i < 256; i++) {
     _lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
@@ -1442,8 +1442,9 @@ uint16_t mode_plasma(void) {
     uint8_t rawBri = sin8(briInput);
 
     // Apply gamma correction to rawBri for deep contrast curve
-    // RESTORED dim8_video for wave shaping (x^2), then applied gamma correction
-    uint8_t gammaBri = instance->applyGamma(dim8_video(rawBri));
+    // RESTORED dim8_video for wave shaping (x^2)
+    // GAMMA CHANGE: Don't apply gamma yet! We need to mix in fillAmount first.
+    uint8_t gammaBri = dim8_video(rawBri);
 
     // Calculate contrast depth from intensity with SHIFTED QUADRATIC curve
     // Shifted so intensity=128 (default) gives same fill as intensity=90 would
@@ -1460,7 +1461,9 @@ uint16_t mode_plasma(void) {
     uint16_t brightness16 = gammaBri + ((fillAmount * (255 - gammaBri)) >> 8);
 
     // Very low floor of 8 (3%) to prevent true black but allow deep voids
+    // THEN APPLY GAMMA to the whole thing to crush the floor at Gamma 1.0
     uint8_t brightness = (brightness16 < 8) ? 8 : (uint8_t)brightness16;
+    brightness = instance->applyGamma(brightness);
 
     // Get color from palette with gamma-corrected brightness
     CRGBW c = ColorFromPalette(smoothIndex, brightness, active_palette);
