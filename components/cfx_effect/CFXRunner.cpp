@@ -2451,11 +2451,17 @@ uint16_t mode_chase_color(void) {
 // --- BPM Effect (ID 68) ---
 // Colored stripes pulsing at a defined BPM
 uint16_t mode_bpm(void) {
-  // Strict Port from WLED
-  uint32_t stp = (instance->now / 20) & 0xFF;
+  // Tuned Port: Use smooth beat8 for stp to prevent aliasing/vibration at 16ms
+  // WLED logic: stp increments every 20ms -> 50 steps/sec -> 3000 steps/min
+  // WLED beat8 input is Q8.8 BPM. 3000 / 256 = 11.71875 BPM.
+  // beat8(2996) creates a smooth 0-255 ramp with the exact same average speed
+  // as (now / 20), but updates every ms.
+  uint32_t stp = cfx::beat8(2996);
   uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
 
   for (unsigned i = 0; i < instance->_segment.length(); i++) {
+    // Spatial multiplier i*10 (WLED default) is preserved.
+    // Smooth stp eliminates the "nervous" aliasing artifact.
     uint32_t col = instance->_segment.color_from_palette(
         stp + (i * 2), false, true, 0, beat - stp + (i * 10));
     instance->_segment.setPixelColor(i, col);
@@ -2465,13 +2471,8 @@ uint16_t mode_bpm(void) {
 
 // --- Glitter (ID 87) ---
 // Two-pass: palette background + overwrite white sparkles
-void glitter_base(uint8_t intensity, uint32_t col = 0xFFFFFFFF) {
-  if (intensity > cfx::hw_random8()) {
-    instance->_segment.setPixelColor(
-        cfx::hw_random16(0, instance->_segment.length()), col);
-  }
-}
-
+// --- Glitter (ID 87) ---
+// Two-pass: palette background + overwrite white sparkles
 uint16_t mode_glitter(void) {
   // Pass 1: Background palette fill
   unsigned counter = 0;
@@ -2488,10 +2489,28 @@ uint16_t mode_glitter(void) {
   }
 
   // Pass 2: Glitter overlay (overwrite white sparkles)
-  uint32_t glitterCol = (instance->_segment.colors[2])
-                            ? instance->_segment.colors[2]
-                            : 0xFFFFFFFF;
-  glitter_base(instance->_segment.intensity, glitterCol);
+  // Tuned Port: Scale probability by deltams to fix density at high FPS
+  uint32_t dt = instance->now - instance->_segment.step;
+  instance->_segment.step = instance->now; // Store last run time
+
+  if (dt > 100)
+    dt = 16; // Clamp large gaps (first run)
+
+  // Scale intensity: WLED runs ~24ms.
+  // chance = (intensity * dt) / 24.
+  uint16_t chance = (uint16_t)instance->_segment.intensity * dt / 24;
+  if (chance > 255)
+    chance = 255;
+
+  // Use the scaled probability
+  if (chance > cfx::hw_random8()) {
+    uint32_t glitterCol = (instance->_segment.colors[2])
+                              ? instance->_segment.colors[2]
+                              : 0xFFFFFFFF;
+    instance->_segment.setPixelColor(
+        cfx::hw_random16(0, instance->_segment.length()), glitterCol);
+  }
+
   return FRAMETIME;
 }
 
@@ -2509,8 +2528,8 @@ uint16_t mode_tricolor_chase(void) {
 
     uint32_t color;
     if (index > width - 1)
-      color =
-          instance->_segment.color_from_palette(i, true, true, 1); // palette
+      color = instance->_segment.color_from_palette(i, true, true,
+                                                    1); // palette
     else
       color = instance->_segment.colors[0]; // primary (solid)
 
@@ -2672,7 +2691,8 @@ uint16_t mode_colortwinkle(void) {
   }
 
   // Speed controls fade rate using scale8 (multiplicative)
-  // Lower speed = slower fade (higher retention), higher speed = faster fade
+  // Lower speed = slower fade (higher retention), higher speed = faster
+  // fade
   uint8_t speed = instance->_segment.speed;
   // fade_scale: 248-230 range for calmer twinkle
   // At speed=0: scale=248 (~97% retention = very slow fade, long trails)
@@ -2689,8 +2709,8 @@ uint16_t mode_colortwinkle(void) {
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
   // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
-  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly
-  // to max ~12 units/frame
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases
+  // slightly to max ~12 units/frame
   uint8_t fade_amt = 8 + (instance->_segment.speed > 128
                               ? (instance->_segment.speed - 128) >> 5
                               : 0);
@@ -2971,8 +2991,8 @@ void CFXRunner::service() {
     if (serviceIntro()) {
       _state = STATE_RUNNING;
       // Intro just finished.
-      // We let the next loop iteration handle the main effect start to ensure
-      // clean state.
+      // We let the next loop iteration handle the main effect start to
+      // ensure clean state.
     }
     return;
   }
@@ -3362,8 +3382,8 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
   }
 
   // Debug log
-  // ESP_LOGD("wled_intro", "Starting Intro Mode %d, Dur %.1fs, Color 0x%08X",
-  // mode, duration_s, color);
+  // ESP_LOGD("wled_intro", "Starting Intro Mode %d, Dur %.1fs, Color
+  // 0x%08X", mode, duration_s, color);
 
   _state = STATE_INTRO;
   _intro_mode = mode;
