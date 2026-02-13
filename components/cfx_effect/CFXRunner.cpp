@@ -2688,7 +2688,9 @@ uint16_t mode_scanner_internal(bool dualMode) {
       } else {
         unsigned fade = 255 - (t * 255 / tLen);
         // Quadratic: fade^2 / 255, scaled by maxBri
-        bri = ((fade * fade) >> 8) * maxBri / 255;
+        // GAMMA CORRECTION: Replace x*x with LUT
+        // bri = ((fade * fade) >> 8) * maxBri / 255;
+        bri = ((uint16_t)instance->applyGamma(fade) * maxBri) >> 8;
         if (bri == 0 && t < tLen && maxBri > 0)
           bri = 1;
       }
@@ -2759,95 +2761,7 @@ uint16_t mode_scanner(void) { return mode_scanner_internal(false); }
 // Two scanners moving in opposite directions
 uint16_t mode_scanner_dual(void) { return mode_scanner_internal(true); }
 
-// Internal shared scanner implementation
-uint16_t mode_scanner_internal(bool dual) {
-  uint16_t len = instance->_segment.length();
-  if (len == 0)
-    return FRAMETIME;
-
-  // 1. Calculate Position
-  // Speed controls the cycle time.
-  // We want a full round-trip (2 * len) roughly every (256-Speed) * multiplier.
-  uint32_t cycleTime = 2000 + (255 - instance->_segment.speed) * 150;
-  uint32_t flow = instance->now % cycleTime;
-  uint16_t index = (flow * (len * 2 - 2)) / cycleTime;
-
-  bool back = false;
-  if (index >= len) {
-    index = (len * 2 - 2) - index;
-    back = true;
-  }
-
-  // Dual Scanner Logic: Second dot moves opposite
-  uint16_t index2 = 0;
-  if (dual) {
-    index2 = (len - 1) - index;
-  }
-
-  // 2. Render Trail
-  // Trail decay is controlled by "Intensity" (Slider 2).
-  // Standard WLED Scan has fixed trail. We want adjustable?
-  // Actually WLED Scanner uses hardcoded trail. We'll stick to that but GAMMA
-  // CORRECT IT.
-
-  const uint32_t *active_palette =
-      getPaletteByIndex(instance->_segment.palette);
-
-  // We need to iterate all pixels to clear/fade them
-  for (int i = 0; i < len; i++) {
-    // Distance from the "head" (dot)
-    int dist1 = abs(i - index);
-    int dist2 = dual ? abs(i - index2) : 255; // Far away if not dual
-
-    int dist = std::min(dist1, dist2);
-
-    // WLED Math: val = (size - dist) / size -> then squared?
-    // Actually WLED `scan` uses: `i = ((i * i) >> 8)` which is x^2.
-    // We replace that with our Gamma LUT.
-
-    uint8_t val = 0;
-    // Width of the "beam" is roughly 10% of strip or fixed?
-    // Let's mimic WLED: It searches for the pixel.
-    // Let's use a spatial falloff.
-
-    // Falloff radius (how fat the dot is)
-    // Intensity slider controls beam width? WLED Scanner doesn't use intensity.
-    // We will use Intensity to control width for added value.
-    uint16_t width = 2 + (instance->_segment.intensity / 32); // 2 to 10
-
-    if (dist <= width) {
-      // Linear gradient 0..255 within the width
-      uint8_t fade = 255 - (dist * 255 / (width + 1));
-
-      // GAMMA CORRECTION HERE!
-      // Old: val = (fade * fade) >> 8; // x^2
-      // New: val = instance->applyGamma(fade); // x^5.6 (Perceived linear)
-      val = instance->applyGamma(fade);
-
-      // Get color from palette or distinct color for Dual?
-      // Use palette color 0 (or palette gradient)
-      uint32_t color = instance->_segment.colors[0];
-      if (instance->_segment.palette > 0) {
-        color =
-            ColorFromPalette(i * 255 / len, 255, active_palette, 255, NOBLEND);
-        // Ah ColorFromPalette returns CRGBW, we need uint32_t logic or helper
-        // Let's stick to simple color[0] for now or existing palette logic if
-        // typical. WLED 'scan' uses SEGMENT.color_from_palette(i, true,
-        // PALETTE_SOLID_WRAP, 0); We'll simplify:
-        CRGBW c = ColorFromPalette(i * 10, 255, active_palette);
-        color = RGBW32(c.r, c.g, c.b, c.w);
-      }
-
-      // Apply brightness
-      // esphome::Color logic...
-      instance->_segment.setPixelColor(i, color_fade(color, val));
-    } else {
-      instance->_segment.setPixelColor(i, 0); // Black background
-    }
-  }
-
-  return FRAMETIME;
-}
+// (Duplicate scanner implementation removed)
 
 // Mode Table
 // --- Service Loop with Switch Dispatch ---
