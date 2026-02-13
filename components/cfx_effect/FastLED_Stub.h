@@ -97,6 +97,33 @@ struct CRGBPalette16 {
       entries[i] = c;
   }
 
+  // Constructor for 4-stop HSV palette (used by Noise Pal dynamic palettes)
+  // Interpolates 4 CHSV colors across 16 entries (stops at 0, 4, 8, 12)
+  CRGBPalette16(CHSV c1, CHSV c2, CHSV c3, CHSV c4) {
+    CHSV stops[4] = {c1, c2, c3, c4};
+    for (int i = 0; i < 16; i++) {
+      int segment = i / 4;    // 0-3: which pair of stops
+      int pos_in_seg = i % 4; // 0-3: position within segment
+      int next_seg = (segment + 1) > 3 ? 3 : (segment + 1);
+      // Blend HSV components linearly, then convert to RGB
+      uint8_t blend_amt = pos_in_seg * 64; // 0, 64, 128, 192
+      uint8_t inv = 255 - blend_amt;
+      CHSV blended;
+      blended.h = ((uint16_t)stops[segment].h * inv +
+                   (uint16_t)stops[next_seg].h * blend_amt) >>
+                  8;
+      blended.s = ((uint16_t)stops[segment].s * inv +
+                   (uint16_t)stops[next_seg].s * blend_amt) >>
+                  8;
+      blended.v = ((uint16_t)stops[segment].v * inv +
+                   (uint16_t)stops[next_seg].v * blend_amt) >>
+                  8;
+      CRGB rgb;
+      hsv2rgb_rainbow(blended, rgb);
+      entries[i] = rgb;
+    }
+  }
+
   CRGB operator[](uint8_t index) const { return entries[index & 0x0F]; }
 };
 
@@ -142,6 +169,32 @@ FASTLED_INLINE CRGB ColorFromPalette(const CRGBPalette16 &pal, uint8_t index,
               scale8(result.b, brightness));
 }
 
+// nblendPaletteTowardPalette: smoothly blend current palette toward target
+// Steps each R/G/B channel by 1 per entry, up to maxChanges total per call
+// WLED uses this for Noise Pal's slow palette evolution
+static inline void nblendPaletteTowardPalette(CRGBPalette16 &current,
+                                              CRGBPalette16 &target,
+                                              uint8_t maxChanges) {
+  uint8_t *p1 = (uint8_t *)current.entries;
+  uint8_t *p2 = (uint8_t *)target.entries;
+  const uint8_t totalChannels = 16 * 3; // 16 entries × 3 channels (RGB)
+
+  uint8_t changes = 0;
+  for (uint8_t i = 0; i < totalChannels; i++) {
+    if (changes >= maxChanges)
+      break;
+    if (p1[i] == p2[i])
+      continue;
+    if (p1[i] < p2[i]) {
+      p1[i]++;
+      changes++;
+    } else {
+      p1[i]--;
+      changes++;
+    }
+  }
+}
+
 // --- Math Helpers ---
 
 // Lookup table declarations
@@ -166,20 +219,24 @@ FASTLED_INLINE uint8_t min(uint8_t a, uint8_t b) { return (a < b) ? a : b; }
 // --- Random Helpers (ESP-IDF compatible) ---
 FASTLED_INLINE uint8_t random8() { return rand() & 0xFF; }
 FASTLED_INLINE uint8_t random8(uint8_t lim) {
-  if (lim == 0) return 0;  // Safety: prevent div/0
+  if (lim == 0)
+    return 0; // Safety: prevent div/0
   return rand() % lim;
 }
 FASTLED_INLINE uint8_t random8(uint8_t min, uint8_t lim) {
-  if (min >= lim) return min;  // Safety: prevent div/0
+  if (min >= lim)
+    return min; // Safety: prevent div/0
   return min + (rand() % (lim - min));
 }
 FASTLED_INLINE uint16_t random16() { return rand() & 0xFFFF; }
 FASTLED_INLINE uint16_t random16(uint16_t lim) {
-  if (lim == 0) return 0;  // Safety: prevent div/0
+  if (lim == 0)
+    return 0; // Safety: prevent div/0
   return rand() % lim;
 }
 FASTLED_INLINE uint16_t random16(uint16_t min, uint16_t lim) {
-  if (min >= lim) return min;  // Safety: prevent div/0
+  if (min >= lim)
+    return min; // Safety: prevent div/0
   return min + (rand() % (lim - min));
 }
 

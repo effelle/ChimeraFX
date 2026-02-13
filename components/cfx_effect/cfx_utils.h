@@ -74,18 +74,74 @@ inline uint16_t triwave16(uint16_t in) {
 // NOISE FUNCTIONS
 // ============================================================================
 
-// Simplified Perlin-style noise approximation
-// Returns pseudo-random but smooth noise value based on x,y coordinates
+// WLED-faithful 2D Perlin noise (ported from util.cpp by @dedehai)
+// Fixed-point integer math, optimized for speed on ESP32
+// Returns 0-255 smooth noise value
+
+#define PERLIN_SHIFT 1
+
+// Hash grid corner to gradient direction
+static inline __attribute__((always_inline)) int32_t
+hashToGradient(uint32_t h) {
+  return (h & 0x03) - 2; // PERLIN_SHIFT 1 → closest to FastLED
+}
+
+// 2D gradient: dot product of gradient vector with distance vector
+static inline __attribute__((always_inline)) int32_t gradient2D(uint32_t x0,
+                                                                int32_t dx,
+                                                                uint32_t y0,
+                                                                int32_t dy) {
+  uint32_t h = (x0 * 0x27D4EB2D) ^ (y0 * 0xB5297A4D);
+  h ^= h >> 15;
+  h *= 0x92C3412B;
+  h ^= h >> 13;
+  return (hashToGradient(h) * dx + hashToGradient(h >> PERLIN_SHIFT) * dy) >>
+         (1 + PERLIN_SHIFT);
+}
+
+// Cubic smoothstep: t*(3 - 2t²), fixed-point
+static inline uint32_t perlin_smoothstep(uint32_t t) {
+  uint32_t t_squared = (t * t) >> 16;
+  uint32_t factor = (3 << 16) - (t << 1);
+  return (t_squared * factor) >> 18;
+}
+
+// Linear interpolation for Perlin noise
+static inline int32_t perlin_lerp(int32_t a, int32_t b, int32_t t) {
+  return a + (((b - a) * t) >> 14);
+}
+
+// 2D Perlin noise raw (returns signed ~±20633)
+inline int32_t perlin2D_raw(uint32_t x, uint32_t y) {
+  int32_t x0 = x >> 16;
+  int32_t y0 = y >> 16;
+  int32_t x1 = (x0 + 1) & 0xFF; // wrap at 255 for 8-bit input
+  int32_t y1 = (y0 + 1) & 0xFF;
+
+  int32_t dx0 = x & 0xFFFF;
+  int32_t dy0 = y & 0xFFFF;
+  int32_t dx1 = dx0 - 0x10000;
+  int32_t dy1 = dy0 - 0x10000;
+
+  int32_t g00 = gradient2D(x0, dx0, y0, dy0);
+  int32_t g10 = gradient2D(x1, dx1, y0, dy0);
+  int32_t g01 = gradient2D(x0, dx0, y1, dy1);
+  int32_t g11 = gradient2D(x1, dx1, y1, dy1);
+
+  uint32_t tx = perlin_smoothstep(dx0);
+  uint32_t ty = perlin_smoothstep(dy0);
+
+  int32_t nx0 = perlin_lerp(g00, g10, tx);
+  int32_t nx1 = perlin_lerp(g01, g11, tx);
+
+  return perlin_lerp(nx0, nx1, ty);
+}
+
+// perlin8(x,y): WLED-compatible 2D noise, returns 0-255
 inline uint8_t inoise8(uint16_t x, uint16_t y) {
-  // Simple hash-based noise approximation
-  uint32_t hash = x * 374761393 + y * 668265263;
-  hash = (hash ^ (hash >> 13)) * 1274126177;
-  hash = hash ^ (hash >> 16);
-  // Smooth between neighboring values
-  uint8_t base = (hash >> 8) & 0xFF;
-  uint8_t next = ((hash * 7) >> 8) & 0xFF;
-  uint8_t blend = (x + y) & 0xFF;
-  return base + (((int16_t)(next - base) * blend) >> 8);
+  return (((perlin2D_raw((uint32_t)x << 8, (uint32_t)y << 8) * 1620) >> 10) +
+          32771) >>
+         8;
 }
 
 // ============================================================================

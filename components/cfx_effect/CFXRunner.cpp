@@ -2317,8 +2317,8 @@ uint16_t mode_meteor(void) {
 }
 
 // --- Noise Pal Effect (ID 107) ---
-// Perlin noise mapped to palette. By Andrew Tuline
-// Simplified - uses single palette with slow organic movement
+// Slow noise palette by Andrew Tuline. WLED-faithful port.
+// Uses true 2D Perlin noise + dynamic palette generation/blending.
 uint16_t mode_noisepal(void) {
   if (!instance)
     return 350;
@@ -2327,37 +2327,53 @@ uint16_t mode_noisepal(void) {
   if (len <= 1)
     return mode_static();
 
-  // Get palette
-  const uint32_t *active_palette;
-  if (instance->_segment.palette == 0) {
-    active_palette = PaletteRainbow;
-  } else {
-    active_palette = getPaletteByIndex(instance->_segment.palette);
+  // Allocate space for 2 CRGBPalette16: current (palettes[0]) + target
+  // (palettes[1])
+  unsigned dataSize = sizeof(CRGBPalette16) * 2; // 2 * 16 * 3 = 96 bytes
+  if (!instance->_segment.allocateData(dataSize))
+    return mode_static();
+
+  CRGBPalette16 *palettes =
+      reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
+
+  // Scale based on intensity (zoom level) — WLED exact formula
+  unsigned scale = 15 + (instance->_segment.intensity >> 2); // 15-78
+
+  // Generate new target palette periodically (4-6.5 seconds based on speed)
+  unsigned changePaletteMs = 4000 + instance->_segment.speed * 10;
+  if (instance->now - instance->_segment.step > changePaletteMs) {
+    instance->_segment.step = instance->now;
+
+    // WLED exact: 4-stop random HSV palette
+    uint8_t baseI = random8();
+    palettes[1] =
+        CRGBPalette16(CHSV(baseI + random8(64), 255, random8(128, 255)),
+                      CHSV(baseI + 128, 255, random8(128, 255)),
+                      CHSV(baseI + random8(92), 192, random8(128, 255)),
+                      CHSV(baseI + random8(92), 255, random8(128, 255)));
   }
 
-  // Scale based on intensity (zoom level) - higher = more waves visible
-  uint8_t scale = 15 + (instance->_segment.intensity >> 2); // 15-78
+  // Smoothly blend current palette toward target — WLED uses 48 steps
+  nblendPaletteTowardPalette(palettes[0], palettes[1], 48);
 
-  // Use instance->now for smooth animation, scaled by speed
-  // noiseY changes every frame for visible movement
-  uint32_t baseTime = instance->now;
-  uint8_t speedFactor = 1 + (instance->_segment.speed >> 4); // 1-16
-  uint16_t noiseY = ((baseTime * speedFactor) >> 8) & 0xFFFF;
+  // If user selected a palette, override the dynamic one
+  if (instance->_segment.palette > 0) {
+    const uint32_t *user_pal = getPaletteByIndex(instance->_segment.palette);
+    // Convert uint32_t palette to CRGBPalette16
+    for (int i = 0; i < 16; i++) {
+      palettes[0].entries[i] = CRGB(user_pal[i]);
+    }
+  }
 
+  // Render: Perlin noise mapped to palette — WLED exact
   for (int i = 0; i < len; i++) {
-    // Multi-octave noise approximation using staggered sine waves
-    uint16_t noiseX = i * scale;
-    // Three waves at different frequencies for organic look
-    // Shift by less for smoother gradients
-    uint8_t wave1 = sin8((uint8_t)((noiseX + noiseY) >> 4));
-    uint8_t wave2 = sin8((uint8_t)((noiseX + noiseY * 2) >> 5) + 85);
-    uint8_t wave3 = sin8((uint8_t)((noiseX * 2 + noiseY) >> 5) + 170);
-    // Average the waves for smooth noise-like pattern
-    uint8_t noiseVal = (wave1 + wave2 + wave3) / 3;
-
-    CRGBW c = ColorFromPalette(noiseVal, 255, active_palette);
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    uint8_t index = inoise8(i * scale, instance->_segment.aux0 + i * scale);
+    CRGB c = ColorFromPalette(palettes[0], index, 255, LINEARBLEND);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
   }
+
+  // Organic Y-axis drift — WLED exact
+  instance->_segment.aux0 += beatsin8_t(10, 1, 4);
 
   return FRAMETIME;
 }

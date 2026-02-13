@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - stage
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
 
 permissions:
   contents: write
