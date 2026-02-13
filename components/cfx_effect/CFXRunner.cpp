@@ -2451,41 +2451,24 @@ uint16_t mode_chase_color(void) {
 // --- BPM Effect (ID 68) ---
 // Colored stripes pulsing at a defined BPM
 uint16_t mode_bpm(void) {
-  // Slow the time domain (ESPHome ticks faster than WLED)
-  uint32_t stp = (instance->now >> 3) & 0xFF;
-
-  // Scale speed down to match WLED's beat timing (~0.66x)
-  uint8_t eff_speed = cfx::scale8(instance->_segment.speed, 170);
-  uint8_t beat = cfx::beatsin8_t(eff_speed, 64, 255);
+  // Strict Port from WLED
+  uint32_t stp = (instance->now / 20) & 0xFF;
+  uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
 
   for (unsigned i = 0; i < instance->_segment.length(); i++) {
-    // Wide bars: i*2 spatial multiplier (was i*10 = too thin)
-    uint8_t bri = beat - stp + (i * 2);
-    uint32_t col = instance->_segment.color_from_palette(stp + (i * 2), false,
-                                                         true, 0, bri);
+    uint32_t col = instance->_segment.color_from_palette(
+        stp + (i * 2), false, true, 0, beat - stp + (i * 10));
     instance->_segment.setPixelColor(i, col);
   }
   return FRAMETIME;
 }
 
 // --- Glitter (ID 87) ---
-// Two-pass: palette background + additive white sparkles
+// Two-pass: palette background + overwrite white sparkles
 void glitter_base(uint8_t intensity, uint32_t col = 0xFFFFFFFF) {
-  uint16_t len = instance->_segment.length();
-  // Multiple sparkle chances per frame (1 per ~32 pixels)
-  uint8_t chances = 1 + (len >> 5);
-  for (uint8_t j = 0; j < chances; j++) {
-    if (intensity > cfx::hw_random8()) {
-      uint16_t pos = cfx::hw_random16(0, len);
-      // Additive blending: saturating add onto existing background
-      uint32_t existing = instance->_segment.getPixelColor(pos);
-      uint8_t r = std::min(
-          255, (int)(((existing >> 16) & 0xFF) + ((col >> 16) & 0xFF)));
-      uint8_t g =
-          std::min(255, (int)(((existing >> 8) & 0xFF) + ((col >> 8) & 0xFF)));
-      uint8_t b = std::min(255, (int)((existing & 0xFF) + (col & 0xFF)));
-      instance->_segment.setPixelColor(pos, RGBW32(r, g, b, 0));
-    }
+  if (intensity > cfx::hw_random8()) {
+    instance->_segment.setPixelColor(
+        cfx::hw_random16(0, instance->_segment.length()), col);
   }
 }
 
@@ -2504,8 +2487,11 @@ uint16_t mode_glitter(void) {
     instance->_segment.setPixelColor(i, col);
   }
 
-  // Pass 2: Glitter overlay (additive white sparkles)
-  glitter_base(instance->_segment.intensity);
+  // Pass 2: Glitter overlay (overwrite white sparkles)
+  uint32_t glitterCol = (instance->_segment.colors[2])
+                            ? instance->_segment.colors[2]
+                            : 0xFFFFFFFF;
+  glitter_base(instance->_segment.intensity, glitterCol);
   return FRAMETIME;
 }
 
