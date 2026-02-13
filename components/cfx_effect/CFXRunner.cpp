@@ -2360,11 +2360,16 @@ uint16_t mode_noisepal(void) {
   // If user selected a palette, override the dynamic one
   if (instance->_segment.palette > 0) {
     if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
-      // Handle "Solid" palette: use primary color directly
-      // Avoids using the static (empty) PaletteSolid
+      // Handle "Solid" palette: use primary color with brightness variation
+      // This creates a "texture" (Dim -> Full -> Dim) so noise is visible
       CRGB c = CRGB(instance->_segment.colors[0]);
+      CRGB dim(scale8(c.r, 60), scale8(c.g, 60),
+               scale8(c.b, 60)); // ~25% brightness base
+
       for (int i = 0; i < 16; i++) {
-        palettes[0].entries[i] = c;
+        // Create a triangle wave: 0 (Dim) -> 255 (Full) -> 0 (Dim)
+        uint8_t ramp = (i < 8) ? (i * 32) : (255 - (i - 8) * 32);
+        palettes[0].entries[i] = blend(dim, c, ramp);
       }
     } else {
       const uint32_t *user_pal = getPaletteByIndex(instance->_segment.palette);
