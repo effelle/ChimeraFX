@@ -55,10 +55,10 @@ void CFXRunner::setGamma(float g) {
     g = 1.0f; // Safety
   _gamma = g;
 
-  // The power we need to raise input by to get x^2.8 output
-  // If Gamma=2.8 -> p=1.0 -> (x^1)^2.8 = x^2.8
-  // If Gamma=1.0 -> p=2.8 -> (x^2.8)^1.0 = x^2.8
-  float power = 2.8f / _gamma;
+  // The power we need to raise input by to get x^3.5 output (Compromise for
+  // Aurora vs Plasma) If Gamma=3.5 -> p=1.0 If Gamma=1.0 -> p=3.5 ->
+  // (x^3.5)^1.0 = x^3.5
+  float power = 3.5f / _gamma;
 
   for (int i = 0; i < 256; i++) {
     _lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
@@ -1442,9 +1442,9 @@ uint16_t mode_plasma(void) {
     uint8_t rawBri = sin8(briInput);
 
     // Apply gamma correction to rawBri for deep contrast curve
-    // RESTORED dim8_video for wave shaping (x^2)
-    // GAMMA CHANGE: Don't apply gamma yet! We need to mix in fillAmount first.
-    uint8_t gammaBri = dim8_video(rawBri);
+    // REMOVED dim8_video (x^2) to soften the curve because x^3.5 is steep
+    // enough. This widens the blocks and reduces the "void" effect.
+    uint8_t gammaBri = rawBri;
 
     // Calculate contrast depth from intensity with SHIFTED QUADRATIC curve
     // Shifted so intensity=128 (default) gives same fill as intensity=90 would
