@@ -2357,11 +2357,21 @@ uint16_t mode_noisepal(void) {
   nblendPaletteTowardPalette(palettes[0], palettes[1], 48);
 
   // If user selected a palette, override the dynamic one
+  // If user selected a palette, override the dynamic one
   if (instance->_segment.palette > 0) {
-    const uint32_t *user_pal = getPaletteByIndex(instance->_segment.palette);
-    // Convert uint32_t palette to CRGBPalette16
-    for (int i = 0; i < 16; i++) {
-      palettes[0].entries[i] = CRGB(user_pal[i]);
+    if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
+      // Handle "Solid" palette: use primary color directly
+      // Avoids using the static (empty) PaletteSolid
+      CRGB c = CRGB(instance->_segment.colors[0]);
+      for (int i = 0; i < 16; i++) {
+        palettes[0].entries[i] = c;
+      }
+    } else {
+      const uint32_t *user_pal = getPaletteByIndex(instance->_segment.palette);
+      // Convert uint32_t palette to CRGBPalette16
+      for (int i = 0; i < 16; i++) {
+        palettes[0].entries[i] = CRGB(user_pal[i]);
+      }
     }
   }
 
