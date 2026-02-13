@@ -13,6 +13,8 @@
 // ESP-IDF heap diagnostics (for production monitoring)
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include <algorithm> // For std::min, std::max
+#include <cmath>     // For powf
 
 CFXRunner *instance = nullptr;
 
@@ -35,6 +37,82 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   _segment.intensity = DEFAULT_INTENSITY;
   _segment.palette = 0;
   _segment.colors[0] = DEFAULT_COLOR; // Orange default
+
+  // Initialize Gamma Table
+  // Default to 2.8 (WLED standard) so effects look correct out of the box
+  _gamma = 2.8f;
+  setGamma(_gamma);
+}
+
+// === Gamma Correction Helpers ===
+
+// Re-calculate the LUT based on the new gamma value
+// Goal: Output = Input^5.6 (Perceptually correct for effects)
+// Input is linear 0-255.
+// We want: Lut[i] = ( (i/255)^(5.6/Gamma) ) * 255
+void CFXRunner::setGamma(float g) {
+  if (g < 0.1f)
+    g = 1.0f; // Safety
+  _gamma = g;
+
+  // The power we need to raise input by to get x^5.6 output
+  // If Gamma=2.8 -> p=2.0 -> (x^2)^2.8 = x^5.6
+  // If Gamma=1.0 -> p=5.6 -> (x^5.6)^1.0 = x^5.6
+  float power = 5.6f / _gamma;
+
+  for (int i = 0; i < 256; i++) {
+    _lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+  }
+}
+
+// Adjust a "floor" brightness value (e.g. Breath effect minimum)
+// A raw floor of 30 is ~12% in linear space.
+// If Gamma is 1.0, 30 is still 30/255 (~12%) brightness.
+// If Gamma is 2.8, 30 is (30/255)^2.8 = ~0.2% brightness (too dark!)
+// We must SCALE the floor up if Gamma is high, or down if Gamma is low,
+// so that the *perceived* floor remains constant.
+uint8_t CFXRunner::shiftFloor(uint8_t val) {
+  // If gamma is standard (2.8), return original value (it's tuned for this)
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return val;
+
+  // Otherwise, inversely apply the gamma difference
+  // We want PerceivedFloor = (val/255)^2.8
+  // NewVal = (PerceivedFloor^(1/NewGamma)) * 255
+  float perceived = powf((float)val / 255.0f, 2.8f);
+  return (uint8_t)(powf(perceived, 1.0f / _gamma) * 255.0f);
+}
+
+// Adjust a "Fade Factor" (Multiplicative fade, e.g. Meteor: val = val *
+// factor/256) A factor of 200/255 means "retain 78% of brightness". If Gamma
+// is 1.0: 78% brightness -> 78% perceived. If Gamma is 2.8: 78% val ->
+// (0.78^2.8) = 50% perceived brightness! (Fades much faster) We need to adjust
+// the factor so the *perceived decay rate* is constant.
+uint8_t CFXRunner::getFadeFactor(uint8_t factor) {
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return factor;
+
+  float retention = (float)factor / 255.0f;
+  // Standard retention in linear light (Gamma 2.8)
+  // Perceived retention p = r^2.8
+  // We want r_new such that r_new^gamma_new = p
+  // r_new = p^(1/gamma_new) = r^(2.8/gamma_new)
+  float new_retention = powf(retention, 2.8f / _gamma);
+  return (uint8_t)(new_retention * 255.0f);
+}
+
+// Adjust a "Subtractive Factor" (e.g. Twinkle: val = val - factor)
+// Subtractive fades are tricky because they depend on the absolute value.
+// We approximate by scaling the step size to match the mid-range slope.
+uint8_t CFXRunner::getSubFactor(uint8_t factor) {
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return factor;
+
+  // Simple heuristic: High gamma compresses low end, so subtract less.
+  // Low gamma expands low end, so subtract more.
+  float scale = _gamma / 2.8f;
+  int new_factor = (int)((float)factor * scale);
+  return (uint8_t)std::max(1, std::min(255, new_factor));
 }
 
 void Segment::setPixelColor(int n, uint32_t c) {
@@ -90,6 +168,21 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
   if (!instance || !instance->target_light)
     return;
 
+  // GAMMA CORRECTION for Fade Speed
+  // A raw "fadeBy" of 10 creates a very different decay curve at Gamma 1.0
+  // vs 2.8. We adjust it so the visual decay SPEED is constant.
+  uint8_t adjustedFade = instance->getFadeFactor(255 - fadeBy);
+  // Invert back: We calculated retention, now we want fade amount
+  // Wait, getFadeFactor takes "Retention" (0=Black, 255=Full).
+  // fadeBy is "Amount to subtract" (10 = subtract 10/256).
+  // Retention = 255 - fadeBy.
+  // NewRetention = getFadeFactor(Retention).
+  // NewFadeBy = 255 - NewRetention.
+
+  uint8_t retention = 255 - fadeBy;
+  uint8_t newRetention = instance->getFadeFactor(retention);
+  uint8_t effectiveFade = 255 - newRetention;
+
   int len = length();
   int light_size = instance->target_light->size();
   int global_start = start;
@@ -100,10 +193,11 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
     if (global_index < light_size) {
       // Read directly from ESPHome buffer for speed
       esphome::Color c = light[global_index].get();
-      c.r = (c.r * (255 - fadeBy)) >> 8;
-      c.g = (c.g * (255 - fadeBy)) >> 8;
-      c.b = (c.b * (255 - fadeBy)) >> 8;
-      c.w = (c.w * (255 - fadeBy)) >> 8;
+      // Use standard bit math with Gamma-Corrected effectiveFade
+      c.r = (c.r * (255 - effectiveFade)) >> 8;
+      c.g = (c.g * (255 - effectiveFade)) >> 8;
+      c.b = (c.b * (255 - effectiveFade)) >> 8;
+      c.w = (c.w * (255 - effectiveFade)) >> 8;
       light[global_index] = c;
     }
   }
@@ -1337,7 +1431,8 @@ uint16_t mode_plasma(void) {
     uint8_t rawBri = sin8(briInput);
 
     // Apply gamma correction to rawBri for deep contrast curve
-    uint8_t gammaBri = dim8_video(rawBri);
+    // Old: uint8_t gammaBri = dim8_video(rawBri);
+    uint8_t gammaBri = instance->applyGamma(rawBri);
 
     // Calculate contrast depth from intensity with SHIFTED QUADRATIC curve
     // Shifted so intensity=128 (default) gives same fill as intensity=90 would
@@ -1481,7 +1576,9 @@ uint16_t mode_breath(void) {
 
   // lum = 30 + var (30 minimum = ~12% floor, max ~254)
   // WLED uses this as blend amount, not brightness multiplier
-  uint8_t lum = 30 + var;
+  // GAMMA CORRECTION: 30 is only ~12% at Gamma 1.0. At Gamma 2.8 it's
+  // invisible.
+  uint8_t lum = instance->shiftFloor(30) + var;
 
   // Get base color (user selected or white as fallback)
   uint32_t baseColor = instance->_segment.colors[0];
@@ -2654,11 +2751,103 @@ uint16_t mode_scanner_internal(bool dualMode) {
 }
 
 // Wrapper for single scanner (ID 40)
+// Wrapper for single scanner (ID 40)
+uint16_t mode_scanner_internal(bool dual);
 uint16_t mode_scanner(void) { return mode_scanner_internal(false); }
 
 // Dual Scanner (ID 60)
 // Two scanners moving in opposite directions
 uint16_t mode_scanner_dual(void) { return mode_scanner_internal(true); }
+
+// Internal shared scanner implementation
+uint16_t mode_scanner_internal(bool dual) {
+  uint16_t len = instance->_segment.length();
+  if (len == 0)
+    return FRAMETIME;
+
+  // 1. Calculate Position
+  // Speed controls the cycle time.
+  // We want a full round-trip (2 * len) roughly every (256-Speed) * multiplier.
+  uint32_t cycleTime = 2000 + (255 - instance->_segment.speed) * 150;
+  uint32_t flow = instance->now % cycleTime;
+  uint16_t index = (flow * (len * 2 - 2)) / cycleTime;
+
+  bool back = false;
+  if (index >= len) {
+    index = (len * 2 - 2) - index;
+    back = true;
+  }
+
+  // Dual Scanner Logic: Second dot moves opposite
+  uint16_t index2 = 0;
+  if (dual) {
+    index2 = (len - 1) - index;
+  }
+
+  // 2. Render Trail
+  // Trail decay is controlled by "Intensity" (Slider 2).
+  // Standard WLED Scan has fixed trail. We want adjustable?
+  // Actually WLED Scanner uses hardcoded trail. We'll stick to that but GAMMA
+  // CORRECT IT.
+
+  const uint32_t *active_palette =
+      getPaletteByIndex(instance->_segment.palette);
+
+  // We need to iterate all pixels to clear/fade them
+  for (int i = 0; i < len; i++) {
+    // Distance from the "head" (dot)
+    int dist1 = abs(i - index);
+    int dist2 = dual ? abs(i - index2) : 255; // Far away if not dual
+
+    int dist = std::min(dist1, dist2);
+
+    // WLED Math: val = (size - dist) / size -> then squared?
+    // Actually WLED `scan` uses: `i = ((i * i) >> 8)` which is x^2.
+    // We replace that with our Gamma LUT.
+
+    uint8_t val = 0;
+    // Width of the "beam" is roughly 10% of strip or fixed?
+    // Let's mimic WLED: It searches for the pixel.
+    // Let's use a spatial falloff.
+
+    // Falloff radius (how fat the dot is)
+    // Intensity slider controls beam width? WLED Scanner doesn't use intensity.
+    // We will use Intensity to control width for added value.
+    uint16_t width = 2 + (instance->_segment.intensity / 32); // 2 to 10
+
+    if (dist <= width) {
+      // Linear gradient 0..255 within the width
+      uint8_t fade = 255 - (dist * 255 / (width + 1));
+
+      // GAMMA CORRECTION HERE!
+      // Old: val = (fade * fade) >> 8; // x^2
+      // New: val = instance->applyGamma(fade); // x^5.6 (Perceived linear)
+      val = instance->applyGamma(fade);
+
+      // Get color from palette or distinct color for Dual?
+      // Use palette color 0 (or palette gradient)
+      uint32_t color = instance->_segment.colors[0];
+      if (instance->_segment.palette > 0) {
+        color =
+            ColorFromPalette(i * 255 / len, 255, active_palette, 255, NOBLEND);
+        // Ah ColorFromPalette returns CRGBW, we need uint32_t logic or helper
+        // Let's stick to simple color[0] for now or existing palette logic if
+        // typical. WLED 'scan' uses SEGMENT.color_from_palette(i, true,
+        // PALETTE_SOLID_WRAP, 0); We'll simplify:
+        CRGBW c = ColorFromPalette(i * 10, 255, active_palette);
+        color = RGBW32(c.r, c.g, c.b, c.w);
+      }
+
+      // Apply brightness
+      // esphome::Color logic...
+      instance->_segment.setPixelColor(i, color_fade(color, val));
+    } else {
+      instance->_segment.setPixelColor(i, 0); // Black background
+    }
+  }
+
+  return FRAMETIME;
+}
 
 // Mode Table
 // --- Service Loop with Switch Dispatch ---

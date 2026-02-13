@@ -6,7 +6,9 @@
 
 #include "cfx_addressable_light_effect.h"
 #include "cfx_compat.h"
+#include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
+
 
 namespace esphome {
 namespace chimera_fx {
@@ -264,6 +266,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                    (uint32_t(current_color.green) << 8) |
                    uint32_t(current_color.blue);
   this->runner_->setColor(color);
+
+  // === Dynamic Gamma Update ===
+  // Sync the Runner's gamma LUT with the light's current gamma setting
+  float current_gamma = this->get_light_state()->get_gamma_correct();
+  // setGamma checks for change internally (float comparison), so simple call is
+  // safe-ish but to avoid function call overhead we can check locally if we
+  // wanted. We'll trust setGamma or just check here. setGamma does a check but
+  // re-calcs LUT. Let's rely on setGamma's internal check (which I implemented:
+  // if (g < 0.1) ... _gamma = g ...). Wait, I didn't verify if I added a
+  // 'change check' efficiently in setGamma. Let's add a check here to be safe
+  // and efficient.
+  if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
+    this->runner_->setGamma(current_gamma);
+  }
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {

@@ -249,6 +249,17 @@ class CFXRunner {
 public:
   CFXRunner(esphome::light::AddressableLight *light);
 
+  // Gamma Correction Helper Support
+  // Non-static to allow multiple strips with different gammas to coexist
+  uint8_t _lut[256];
+  float _gamma;
+
+  void setGamma(float g);
+  inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }
+  uint8_t shiftFloor(uint8_t val);
+  uint8_t getFadeFactor(uint8_t factor);
+  uint8_t getSubFactor(uint8_t factor);
+
   // Destructor: Release segment data to reclaim RAM
   ~CFXRunner() { _segment.deallocateData(); }
 
