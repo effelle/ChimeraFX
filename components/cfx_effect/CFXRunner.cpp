@@ -2393,6 +2393,99 @@ uint16_t mode_noisepal(void) {
   return FRAMETIME;
 }
 
+// --- Chase 2 (ID 28) ---
+static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
+                      bool do_palette) {
+  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
+  uint16_t a = (counter * instance->_segment.length()) >> 16;
+
+  unsigned size =
+      1 + ((instance->_segment.intensity * instance->_segment.length()) >> 10);
+
+  uint16_t b = a + size;
+  if (b > instance->_segment.length())
+    b -= instance->_segment.length();
+  uint16_t c = b + size;
+  if (c > instance->_segment.length())
+    c -= instance->_segment.length();
+
+  if (do_palette) {
+    for (unsigned i = 0; i < instance->_segment.length(); i++) {
+      uint32_t col = instance->_segment.color_from_palette(i, true, true, 0);
+      instance->_segment.setPixelColor(i, col);
+    }
+  } else {
+    instance->_segment.fill(color1);
+  }
+
+  if (a < b) {
+    for (unsigned i = a; i < b; i++)
+      instance->_segment.setPixelColor(i, color2);
+  } else {
+    for (unsigned i = a; i < instance->_segment.length(); i++)
+      instance->_segment.setPixelColor(i, color2);
+    for (unsigned i = 0; i < b; i++)
+      instance->_segment.setPixelColor(i, color2);
+  }
+
+  if (b < c) {
+    for (unsigned i = b; i < c; i++)
+      instance->_segment.setPixelColor(i, color3);
+  } else {
+    for (unsigned i = b; i < instance->_segment.length(); i++)
+      instance->_segment.setPixelColor(i, color3);
+    for (unsigned i = 0; i < c; i++)
+      instance->_segment.setPixelColor(i, color3);
+  }
+
+  return FRAMETIME;
+}
+
+uint16_t mode_chase_color(void) {
+  return chase(instance->_segment.colors[1],
+               (instance->_segment.colors[2]) ? instance->_segment.colors[2]
+                                              : instance->_segment.colors[0],
+               instance->_segment.colors[0], true);
+}
+
+// --- BPM Effect (ID 68) ---
+uint16_t mode_bpm(void) {
+  uint32_t stp = (instance->now / 20) & 0xFF;
+  uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
+  for (unsigned i = 0; i < instance->_segment.length(); i++) {
+    uint32_t col = instance->_segment.color_from_palette(
+        stp + (i * 2), false, true, 0, beat - stp + (i * 10));
+    instance->_segment.setPixelColor(i, col);
+  }
+  return FRAMETIME;
+}
+
+// --- Glitter (ID 87) ---
+void glitter_base(uint8_t intensity, uint32_t col = 0xFFFFFFFF) {
+  if (intensity > cfx::hw_random8()) {
+    instance->_segment.setPixelColor(
+        cfx::hw_random16(0, instance->_segment.length()), col);
+  }
+}
+
+uint16_t mode_glitter(void) {
+  unsigned counter = 0;
+  if (instance->_segment.speed != 0) {
+    counter = (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
+    counter = counter >> 8;
+  }
+
+  for (unsigned i = 0; i < instance->_segment.length(); i++) {
+    unsigned colorIndex = (i * 255 / instance->_segment.length()) - counter;
+    uint32_t col =
+        instance->_segment.color_from_palette(colorIndex, false, true, 0);
+    instance->_segment.setPixelColor(i, col);
+  }
+
+  glitter_base(instance->_segment.intensity);
+  return FRAMETIME;
+}
+
 // --- Sunrise Effect (ID 104) ---
 // Gradual sunrise/sunset simulation
 uint16_t mode_sunrise(void) {
@@ -2853,6 +2946,15 @@ void CFXRunner::service() {
   switch (_mode) {
   case FX_MODE_RAINBOW: // 8
     mode_rainbow();
+    break;
+  case FX_MODE_CHASE_COLOR: // 28
+    mode_chase_color();
+    break;
+  case FX_MODE_BPM: // 68
+    mode_bpm();
+    break;
+  case FX_MODE_GLITTER: // 87
+    mode_glitter();
     break;
   case FX_MODE_RAINBOW_CYCLE: // 9
     mode_rainbow_cycle();

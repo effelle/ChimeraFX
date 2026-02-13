@@ -11,8 +11,16 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
+
+// Scale one byte by a second one, which is treated as the numerator of a
+// fraction whose denominator is 256.
+inline uint8_t scale8(uint8_t i, uint8_t scale) {
+  return ((uint16_t)i * (uint16_t)scale) >> 8;
+}
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -56,10 +64,37 @@ inline uint8_t hw_random8(uint8_t min, uint8_t max) {
     return min;
   return min + (rand() % (max - min));
 }
+inline uint8_t sin8(uint8_t theta) {
+  // Simple approximation or std::sin
+  // return (sin(theta * 6.2831853f / 256.0f) + 1.0f) * 127.5f;
+  // Use integer approximation for speed if needed, but float is fine on ESP32
+  // We'll use a lookup-table-free robust version or just std::sin
+  return (uint8_t)((sinf(theta * 0.02454369f) + 1.0f) * 127.5f);
+}
 
-// ============================================================================
-// WAVE FUNCTIONS
-// ============================================================================
+typedef uint16_t accum88;
+
+// Generates a saw wave with a given BPM
+inline uint8_t beat8(accum88 beats_per_minute, uint32_t timebase = 0) {
+  // BPM is usually 8.8 fixed point in FastLED, but here we might treat it as
+  // simple int? WLED passes 8.8
+  // (millis() * bpm * 256) / 60000
+  // = (millis() * bpm) * 0.0042666...
+  // = (millis() * bpm) * 280 / 65536 approx
+  return ((millis() - timebase) * beats_per_minute * 280) >> 16;
+}
+
+// WLED's beatsin8_t from util.cpp
+inline uint8_t beatsin8_t(accum88 beats_per_minute, uint8_t lowest = 0,
+                          uint8_t highest = 255, uint32_t timebase = 0,
+                          uint8_t phase_offset = 0) {
+  uint8_t beat = beat8(beats_per_minute, timebase);
+  uint8_t beatsin = sin8(beat + phase_offset);
+  uint8_t rangewidth = highest - lowest;
+  uint8_t scaledbeat = scale8(beatsin, rangewidth);
+  uint8_t result = lowest + scaledbeat;
+  return result;
+}
 
 // Triangle wave: 0-65535 input -> 0-65535 output
 inline uint16_t triwave16(uint16_t in) {
@@ -173,7 +208,8 @@ inline uint32_t color_blend(uint32_t color1, uint32_t color2, uint8_t blend) {
   return ((uint32_t)w3 << 24) | ((uint32_t)r3 << 16) | ((uint32_t)g3 << 8) | b3;
 }
 
-// Get random wheel index avoiding previous value (for smooth color transitions)
+// Get random wheel index avoiding previous value (for smooth color
+// transitions)
 inline uint8_t get_random_wheel_index(uint8_t pos) {
   uint8_t r = 0;
   uint8_t x = 0;
