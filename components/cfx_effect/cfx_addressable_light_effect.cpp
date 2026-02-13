@@ -9,7 +9,6 @@
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
-
 namespace esphome {
 namespace chimera_fx {
 
@@ -538,6 +537,16 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 104:
     return 12; // Sunrise -> HeatColors
 
+  // New effects
+  case 28:
+    return 255; // Chase → Solid
+  case 54:
+    return 255; // Tricolor Chase → Solid
+  case 68:
+    return 255; // BPM → Solid
+  case 87:
+    return 4; // Glitter → Rainbow
+
   // Default Aurora (1) or specific handling
   default:
     return 1; // Aurora is the general default
@@ -555,6 +564,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 64; // Juggle
   case 66:
     return 64; // Fire 2012
+  case 68:
+    return 64; // BPM
   case 104:
     return 60; // Sunrise
   default:

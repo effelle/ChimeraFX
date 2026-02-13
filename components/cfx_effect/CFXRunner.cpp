@@ -2478,12 +2478,41 @@ uint16_t mode_glitter(void) {
   for (unsigned i = 0; i < instance->_segment.length(); i++) {
     unsigned colorIndex = (i * 255 / instance->_segment.length()) - counter;
     uint32_t col =
-        instance->_segment.color_from_palette(colorIndex, false, true, 0);
+        instance->_segment.color_from_palette(colorIndex, false, true, 255);
     instance->_segment.setPixelColor(i, col);
   }
 
   glitter_base(instance->_segment.intensity);
   return FRAMETIME;
+}
+
+// --- Tricolor Chase (ID 54) ---
+// Ported from WLED FX.cpp — tricolor_chase + mode_tricolor_chase
+static uint16_t tricolor_chase(uint32_t color1, uint32_t color2) {
+  uint32_t cycleTime = 50 + ((255 - instance->_segment.speed) << 1);
+  uint32_t it = instance->now / cycleTime;
+  unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
+  unsigned index = it % (width * 3);
+
+  for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
+    if (index > (width * 3) - 1)
+      index = 0;
+
+    uint32_t color = color1;
+    if (index > (width << 1) - 1)
+      color = instance->_segment.color_from_palette(i, true, true, 1);
+    else if (index > width - 1)
+      color = color2;
+
+    instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
+                                     color);
+  }
+  return FRAMETIME;
+}
+
+uint16_t mode_tricolor_chase(void) {
+  return tricolor_chase(instance->_segment.colors[2],
+                        instance->_segment.colors[0]);
 }
 
 // --- Sunrise Effect (ID 104) ---
@@ -2949,6 +2978,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_CHASE_COLOR: // 28
     mode_chase_color();
+    break;
+  case FX_MODE_TRICOLOR_CHASE: // 54
+    mode_tricolor_chase();
     break;
   case FX_MODE_BPM: // 68
     mode_bpm();
@@ -3425,5 +3457,14 @@ uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
   uint32_t c1 = palData[index];
   uint32_t c2 = palData[(index + 1) & 0x0F]; // Wrap 16->0
 
-  return color_blend(c1, c2, blendAmt);
+  uint32_t color = color_blend(c1, c2, blendAmt);
+
+  // Apply brightness scaling (critical for BPM pulsing effect)
+  if (pbri < 255) {
+    uint8_t r = ((color >> 16) & 0xFF) * pbri / 255;
+    uint8_t g = ((color >> 8) & 0xFF) * pbri / 255;
+    uint8_t b = (color & 0xFF) * pbri / 255;
+    return RGBW32(r, g, b, 0);
+  }
+  return color;
 }
