@@ -16,12 +16,6 @@
 #include <cstdlib>
 #include <vector>
 
-// Scale one byte by a second one, which is treated as the numerator of a
-// fraction whose denominator is 256.
-inline uint8_t scale8(uint8_t i, uint8_t scale) {
-  return ((uint16_t)i * (uint16_t)scale) >> 8;
-}
-
 #ifdef ARDUINO
 #include <Arduino.h>
 #else
@@ -35,8 +29,15 @@ inline uint8_t scale8(uint8_t i, uint8_t scale) {
 namespace cfx {
 
 // ============================================================================
+// ============================================================================
 // RANDOM HELPERS
 // ============================================================================
+
+// Scale one byte by a second one, which is treated as the numerator of a
+// fraction whose denominator is 256.
+inline uint8_t scale8(uint8_t i, uint8_t scale) {
+  return ((uint16_t)i * (uint16_t)scale) >> 8;
+}
 
 // Random 16-bit value (0-65535)
 inline uint16_t hw_random16() { return rand() & 0xFFFF; }
@@ -81,7 +82,7 @@ inline uint8_t beat8(accum88 beats_per_minute, uint32_t timebase = 0) {
   // (millis() * bpm * 256) / 60000
   // = (millis() * bpm) * 0.0042666...
   // = (millis() * bpm) * 280 / 65536 approx
-  return ((millis() - timebase) * beats_per_minute * 280) >> 16;
+  return ((cfx_millis() - timebase) * beats_per_minute * 280) >> 16;
 }
 
 // WLED's beatsin8_t from util.cpp
