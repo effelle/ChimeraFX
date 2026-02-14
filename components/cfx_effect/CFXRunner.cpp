@@ -2507,7 +2507,10 @@ uint16_t mode_glitter(void) {
   // Pass 2: The Glitter (Overlay)
   // "Randomly blast specific pixels with Pure White... if (random8() <
   // intensity)" No fading logic. Next frame overwrites it.
-  if (cfx::hw_random8() < instance->_segment.intensity) {
+  // User asked for ~10% more glitter.
+  // We use (intensity + intensity/8) ~= intensity * 1.125
+  if (cfx::hw_random8() <
+      (instance->_segment.intensity + (instance->_segment.intensity >> 3))) {
     uint16_t pos = cfx::hw_random16(0, len);
     instance->_segment.setPixelColor(pos, 0xFFFFFFFF); // Pure White (RGBW)
   }
