@@ -2605,7 +2605,7 @@ uint16_t mode_sparkle(void) {
   // Standard WLED Sparkle: just `fadeToBlackBy(speed)`.
   // Let's stick to raw `fadeToBlackBy` for the "Shape" of the fade,
   // but use `getFadeFactor` to ensure it's effective.
-  uint8_t retention = 255 - constrain(fade_amt, 0, 255);
+  uint8_t retention = 255 - (fade_amt > 255 ? 255 : (uint8_t)fade_amt);
   uint8_t corrected_retention = instance->getFadeFactor(retention);
   uint8_t final_fade = 255 - corrected_retention;
 
