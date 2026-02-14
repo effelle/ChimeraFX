@@ -2583,19 +2583,18 @@ uint16_t mode_sparkle(void) {
   // A) Exponential Fade (The "Snappy" WLED look)
   // Logic: WLED Speed 255 -> fadeToBlackBy(255) (Instant).
   // Scale speed by delta (normalized to ~20ms).
-  // We use a non-linear mapping for speed to give better control at low end.
-  // But strictly matching WLED: fade = speed.
-  uint16_t fade_amt = (instance->_segment.speed * delta) / 20;
+  // User says "Too fast" -> We need to slow down the fade (make it linger
+  // longer). Divisor 20 -> 32.
+  uint16_t fade_amt = (instance->_segment.speed * delta) / 32;
 
-  // Correction: If speed is high (>220), we want instant fade.
-  if (instance->_segment.speed > 220)
+  // Correction: If speed is high (>220), we still want instant fade for
+  // strobe-like effects.
+  if (instance->_segment.speed > 230)
     fade_amt = 255;
 
   // Ensure we don't fade TOO slowly at low speeds (stuck pixel risk),
   // but allow it to be gentle.
   if (fade_amt == 0 && instance->_segment.speed > 0) {
-    // Accumulate? Or just minimum 1?
-    // With Hybrid Subtractive below, we can be lenient here.
     fade_amt = 1;
   }
 
@@ -2635,25 +2634,10 @@ uint16_t mode_sparkle(void) {
 
   // 3. Spawning
   // WLED Density is sparse. My previous defaults were too high.
-  // Intensity 0-255.
-  // Scale down significantly.
-  // WLED logic: `if (random8() < intensity)` -> This is actually quite high!
-  // But WLED `mode_sparkle` DOES NOT USE INTENSITY for density!
-  // It uses `SEGLEN` logic usually?
-  // Actually, standard WLED Sparkle uses generic `intensity` (speed is fade,
-  // intensity is spawn). User said "WLED has not intensity control for its
-  // sparkle effect". If so, WLED uses a fixed probability. Let's emulate a
-  // fixed "sparse" probability and modulate it slightly with intensity.
+  // User Feedback: "Density now way too low. Try factor 4".
+  // Previous: >> 3 (div 8). New: >> 2 (div 4).
 
-  // Target: ~1 spark active on 58 LEDs.
-  // If fade is slow (1 sec), we need <1 spawn per sec.
-
-  // Let's map Intensity 0-255 to a Probability 0-50 (out of 255) per frame?
-  // Or even sparser.
-  // Try: Chance = Intensity / 8. Max 32/255 -> ~12%.
-  // Scale by Delta.
-
-  uint32_t chance = ((instance->_segment.intensity >> 3) * delta) / 20;
+  uint32_t chance = ((instance->_segment.intensity >> 2) * delta) / 20;
 
   if (cfx::hw_random16(0, 255) < chance) {
     uint16_t index = cfx::hw_random16(0, len);
