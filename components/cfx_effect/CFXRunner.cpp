@@ -20,6 +20,7 @@ CFXRunner *instance = nullptr;
 
 // Forward declarations
 uint16_t mode_running_lights(void);
+uint16_t mode_running_dual(void);
 uint16_t mode_saw(void);
 
 // Global time provider for FastLED timing functions
@@ -3100,6 +3101,9 @@ void CFXRunner::service() {
   case FX_MODE_SAW: // 16
     mode_saw();
     break;
+  case FX_MODE_RUNNING_DUAL: // 52
+    mode_running_dual();
+    break;
   default:
     mode_static();
     break;
@@ -3245,8 +3249,8 @@ static uint16_t running_base(bool saw, bool dual = false) {
       }
       a = 255 - a;
     }
-    uint8_t s =
-        dual ? cfx::sin8(a + 192) : cfx::sin8(a); // sin_gap approx for dual
+    // WLED logic: dual uses sin_gap, single uses sin8
+    uint8_t s = dual ? cfx::sin_gap(a) : cfx::sin8(a);
 
     // Logic: Blend between Background (colors[1]) and Target (Palette/Color)
     // SEGCOLOR(1) is background in WLED.
@@ -3266,8 +3270,18 @@ static uint16_t running_base(bool saw, bool dual = false) {
     uint32_t ca = color_blend(color1, color2, s);
 
     if (dual) {
-      // Dual logic omitted for now as sin_gap is not fully ported and not
-      // requested But keeping structure if needed later
+      uint8_t s2 = cfx::sin_gap(a + 128); // 2nd wave phase shifted
+      uint32_t color3;
+      if (instance->_segment.palette == 0 ||
+          instance->_segment.palette == 255) {
+        color3 = instance->_segment.colors[2]; // Use Tertiary color
+      } else {
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
+        CRGBW c = ColorFromPalette((i * 255) / len + 128, 255, active_palette);
+        color3 = RGBW32(c.r, c.g, c.b, c.w);
+      }
+      ca = color_blend(ca, color3, s2);
     }
 
     instance->_segment.setPixelColor(i, ca);
@@ -3277,6 +3291,8 @@ static uint16_t running_base(bool saw, bool dual = false) {
 }
 
 uint16_t mode_running_lights(void) { return running_base(false); }
+
+uint16_t mode_running_dual(void) { return running_base(false, true); }
 
 uint16_t mode_saw(void) { return running_base(true); }
 

@@ -548,6 +548,8 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Running Lights → Solid
   case 16:
     return 255; // Saw → Solid
+  case 52:
+    return 49; // Running Dual → Sakura
   case 87:
     return 4; // Glitter → Rainbow
 

@@ -115,6 +115,14 @@ inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+// WLED sin_gap function
+// Creates a sine wave with a flat gap at the bottom (0)
+inline uint8_t sin_gap(uint16_t in) {
+  if (in & 0x100)
+    return 0;
+  return cfx::sin8(in + 192);
+}
+
 // ============================================================================
 // NOISE FUNCTIONS
 // ============================================================================
