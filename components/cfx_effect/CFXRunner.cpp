@@ -18,6 +18,10 @@
 
 CFXRunner *instance = nullptr;
 
+// Forward declarations
+uint16_t mode_running_lights(void);
+uint16_t mode_saw(void);
+
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
 
