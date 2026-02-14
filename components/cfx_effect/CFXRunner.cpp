@@ -3274,7 +3274,8 @@ static uint16_t running_base(bool saw, bool dual = false) {
       uint32_t color3;
       if (instance->_segment.palette == 0 ||
           instance->_segment.palette == 255) {
-        color3 = instance->_segment.colors[2]; // Use Tertiary color
+        color3 = instance->_segment
+                     .colors[0]; // Use Primary color (fix solid palette hole)
       } else {
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
