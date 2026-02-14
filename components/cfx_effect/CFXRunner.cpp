@@ -3379,35 +3379,6 @@ uint16_t mode_multi_strobe(void) {
 
   // 2. State Logic
   unsigned count = 2 * ((instance->_segment.intensity / 10) + 1);
-  if (instance->_segment.aux1 < count) {
-    // In a burst sequence
-    if (instance->now - instance->_segment.step > instance->_segment.aux0) {
-      instance->_segment.aux1++;
-      instance->_segment.step = instance->now;
-
-      if ((instance->_segment.aux1 & 1) == 0) {
-        // ON Step
-        instance->_segment.aux0 = 20; // 20ms Flash
-      } else {
-        // OFF Step (Gap between flashes in burst)
-        instance->_segment.aux0 = 50;
-      }
-    }
-  } else {
-    // Burst finished, waiting for next burst
-    if (instance->now - instance->_segment.step > instance->_segment.aux0) {
-      instance->_segment.aux1 = 0; // Start new burst
-      instance->_segment.step = instance->now;
-      instance->_segment.aux0 = 20; // First flash duration
-      // Delay to next burst
-      uint32_t delay = 50 + 20 * (uint16_t)(255 - instance->_segment.speed);
-      // We store the delay for the *next* check, but here we just started a
-      // burst. Wait. The logic is: If aux1 > count (burst done), wait 'delay'.
-      // When delay passes, reset aux1=0.
-      // Actually, standard WLED logic is a bit interleaved.
-      // Let's stick closer to the ITR pattern.
-    }
-  }
 
   // Rethinking Multi-Strobe State Machine for clarity:
   // aux1: Current Flash Count in Burst (0 to count). Even = ON, Odd = OFF.
@@ -3426,21 +3397,21 @@ uint16_t mode_multi_strobe(void) {
         instance->_segment.aux0 = 50;
       }
     } else {
-      // Burst Done -> Long Delay
-      // Reset to -1 so next increment goes to 0 (First ON)
-      instance->_segment.aux1 =
-          0xFFFF; // Using overflow to wrap to 0 on next ++?
-      // No, let's set aux0 (delay) and reset aux1 to -1 effectively.
-      instance->_segment.aux0 = 200 + (255 - instance->_segment.speed) * 10;
-      instance->_segment.aux1 = 0xFFFFFFFF; // Will roll to 0 next time
+      // Burst Done -> Start Long Delay
+
+      // Base Delay
+      uint32_t delay = 200 + (255 - instance->_segment.speed) * 10;
+
+      // Randomize delay to restore "Multi Strobe" variance
+      delay += cfx::random8();
+
+      instance->_segment.aux0 = delay;
+      instance->_segment.aux1 = 0xFFFF; // Reset state (roll to 0 next time)
     }
   }
 
   // 3. Rendering
   // If aux1 is Even and <= count, we are ON.
-  // Warning: check 0xFFFFFFFF logic.
-  // Let's use simpler logic:
-  // If aux1 is even and < count: ON.
   bool isOn =
       ((instance->_segment.aux1 & 1) == 0) && (instance->_segment.aux1 < count);
 
