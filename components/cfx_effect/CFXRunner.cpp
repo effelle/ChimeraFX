@@ -3403,7 +3403,7 @@ uint16_t mode_multi_strobe(void) {
       uint32_t delay = 200 + (255 - instance->_segment.speed) * 10;
 
       // Randomize delay to restore "Multi Strobe" variance
-      delay += cfx::random8();
+      delay += cfx::hw_random8();
 
       instance->_segment.aux0 = delay;
       instance->_segment.aux1 = 0xFFFF; // Reset state (roll to 0 next time)
