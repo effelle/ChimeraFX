@@ -3263,10 +3263,62 @@ uint16_t mode_blink_rainbow(void) {
 
 /*
  * Classic Strobe effect.
+ * Refined to use stateful timing (aux0/aux1) for stability at high speeds.
  */
 uint16_t mode_strobe(void) {
-  return blink(instance->_segment.colors[0], instance->_segment.colors[1], true,
-               true);
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 1; // Start ON
+    instance->_segment.step = instance->now;
+    instance->_segment.aux0 = 20; // Initial ON duration
+    instance->_segment.reset = false;
+  }
+
+  // 2. State Transition
+  if (instance->now - instance->_segment.step > instance->_segment.aux0) {
+    instance->_segment.aux1 = !instance->_segment.aux1; // Toggle
+    instance->_segment.step = instance->now;
+
+    if (instance->_segment.aux1) {
+      // Turning ON
+      // Strobe ON time: fixed 20ms for crispness
+      instance->_segment.aux0 = 20;
+    } else {
+      // Turning OFF
+      // Speed 255 -> 0ms delay (max speed)
+      // Speed 0 -> Slow delay (~1000ms)
+      // WLED map: 255-speed * multiplier.
+      // 255-0 = 255 * 5 = ~1275ms max delay
+      uint32_t delay = (255 - instance->_segment.speed) * 5;
+      instance->_segment.aux0 = delay;
+    }
+  }
+
+  // 3. Rendering
+  if (instance->_segment.aux1) {
+    // ON State
+    uint32_t color = instance->_segment.colors[0];
+
+    // Palette handling with "Primary Color" override for Solid/Default
+    // Identical to our blink() fix: if Solid/Default, use Primary Color.
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      uint16_t len = instance->_segment.length();
+      for (unsigned i = 0; i < len; i++) {
+        uint8_t colorIndex = (i * 255) / len;
+        CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      }
+    } else {
+      instance->_segment.fill(color);
+    }
+  } else {
+    // OFF State
+    instance->_segment.fill(instance->_segment.colors[1]); // Background
+  }
+
+  return FRAMETIME;
 }
 
 /*
