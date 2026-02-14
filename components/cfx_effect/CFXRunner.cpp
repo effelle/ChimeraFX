@@ -2581,51 +2581,45 @@ uint16_t mode_sparkle(void) {
   uint32_t delta = instance->frame_time;
 
   // A) Exponential Fade (The "Snappy" WLED look)
-  // Logic: WLED Speed 255 -> fadeToBlackBy(255) (Instant).
-  // Scale speed by delta (normalized to ~20ms).
-  // User says "Too fast" -> We need to slow down the fade (make it linger
-  // longer). Divisor 20 -> 32.
-  uint16_t fade_amt = (instance->_segment.speed * delta) / 32;
+  // User: "Still too slow blinking time".
+  // Divisor 32 -> 12 (Much faster, snappier).
+  uint16_t fade_amt = (instance->_segment.speed * delta) / 12;
 
-  // Correction: If speed is high (>220), we still want instant fade for
-  // strobe-like effects.
+  // Correction: Instant fade at high speeds for effect
   if (instance->_segment.speed > 230)
     fade_amt = 255;
 
-  // Ensure we don't fade TOO slowly at low speeds (stuck pixel risk),
-  // but allow it to be gentle.
-  if (fade_amt == 0 && instance->_segment.speed > 0) {
-    fade_amt = 1;
-  }
-
-  // Gamma correct the fade amount?
-  // WLED doesn't gamma-correct the *fade rate* usually, it just fades.
-  // But my `getFadeFactor` helps keep it consistent.
-  // Standard WLED Sparkle: just `fadeToBlackBy(speed)`.
-  // Let's stick to raw `fadeToBlackBy` for the "Shape" of the fade,
-  // but use `getFadeFactor` to ensure it's effective.
+  // Ensure we don't fade TOO slowly at low speeds (stuck pixel risk).
+  // Calculate retention.
   uint8_t retention = 255 - (fade_amt > 255 ? 255 : (uint8_t)fade_amt);
+
+  // Apply Gamma Correction to Retention
   uint8_t corrected_retention = instance->getFadeFactor(retention);
+
+  // Final Fade Amount
   uint8_t final_fade = 255 - corrected_retention;
+
+  // CRITICAL FIX: If speed > 0, we MUST have some fade, otherwise pixels stick.
+  // Gamma correction might have rounded it to 0. Force minimum 1.
+  if (instance->_segment.speed > 0 && final_fade == 0)
+    final_fade = 1;
 
   instance->_segment.fadeToBlackBy(final_fade);
 
   // B) Subtractive Kicker (The "Floor Fix")
-  // Exponential fade (fadeToBlack) never reaches pure zero mathematically
-  // (Zeno). At low brightness, it gets stuck. We subtract a small constant
-  // amount every frame to force it to zero. Amount: 1 or 2 units is usually
-  // enough.
-  uint8_t sub_kicker = 1;
+  // Subtract a constant amount every frame to force pixels to zero.
+  // User: "Floor brightness comes back".
+  // Increased kicker to ensure the floor is swept even if fade is slow.
+  uint8_t sub_kicker = 2;
   if (instance->_segment.speed > 100)
-    sub_kicker = 2;
+    sub_kicker = 3;
 
-  // Scale kicker by delta? 1 unit per 20ms is fine.
-  // Applying qsub8 loop to clear the floor.
   int len = instance->_segment.length();
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
     if (c != 0) {
-      // Only burn if nonzero (optimization)
+      // Optimization: check if sub_kicker will zero it out?
+      // Just apply.
       instance->_segment.setPixelColor(
           i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
                     qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
