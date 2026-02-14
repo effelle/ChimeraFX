@@ -26,6 +26,7 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 | 76 | **Meteor** | Meteor with random decay trail. | **Intensity**: Trail length - **Speed**: Fall speed | Yes | Aircoookie |
 | 91 | **Bouncing Balls**| Real gravity physics. | **Intensity**: Count - **Speed**: Gravity | Yes | Tweaking4All |
 | 97 | **Plasma** | Smooth plasma animation. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
+| 100 | **Heartbeat** | Heartbeat simulation. | **Intensity**: Decay rate - **Speed**: BPM rate | Yes | Aircoookie |
 | 101 | **Ocean** | Gentle ocean waves (based on Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Ripple speed | No | Mark Kriegsman |
 | 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | Yes | Aircoookie |
 | 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |

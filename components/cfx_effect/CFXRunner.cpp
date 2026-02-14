@@ -3214,6 +3214,108 @@ uint16_t mode_strobe(void);
 uint16_t mode_percent(void);
 uint16_t mode_percent_center(void);
 
+// --- Heartbeat Effect (ID 100) ---
+// Replicates WLED logic with framerate-independent decay and gamma correction
+uint16_t mode_heartbeat(void) {
+  if (!instance)
+    return 350;
+
+  // BPM: 40 + (speed / 8) -> Range 40-71 BPM
+  unsigned bpm = 40 + (instance->_segment.speed >> 3);
+  // Time per beat (ms)
+  uint32_t msPerBeat = (60000L / bpm);
+  // Second beat timing (approx 1/3 of beat)
+  uint32_t secondBeat = (msPerBeat / 3);
+
+  // State:
+  // aux0: Beat Phase (0=Main Beat waiting, 1=Second Beat waiting)
+  // aux1: Brightness/Decay State (High = Dark, Low = Bright)
+  // step: Last Beat Time
+
+  // Reset logic
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 0; // Start Dark
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t beatTimer = instance->now - instance->_segment.step;
+
+  // 1. Beat Logic
+  if ((beatTimer > secondBeat) && !instance->_segment.aux0) {
+    // Trigger Second Beat ("dup")
+    instance->_segment.aux1 = UINT16_MAX;
+    instance->_segment.aux0 = 1;
+  }
+
+  if (beatTimer > msPerBeat) {
+    // Trigger Main Beat ("lub")
+    instance->_segment.aux1 = UINT16_MAX;
+    instance->_segment.aux0 = 0;
+    // Account for drift
+    instance->_segment.step = instance->now;
+  }
+
+  // 2. Linear Decay (Framerate Independent)
+  // WLED Factor: F = 2042 / (2048 + intensity)
+  // We apply F ^ (delta / 24ms)
+
+  uint32_t delta = instance->frame_time;
+  if (delta < 1)
+    delta = 1;
+
+  // Base WLED factor per ~24ms frame
+  // 2042/2048 = 0.99707
+  // 2042/2303 = 0.8866 (at max intensity)
+  float wled_factor = 2042.0f / (2048.0f + instance->_segment.intensity);
+
+  // Adjust for actual delta (Target 42FPS = ~24ms)
+  float time_ratio = (float)delta / 24.0f;
+
+  // Clamp ratio safety
+  if (time_ratio > 10.0f)
+    time_ratio = 10.0f;
+
+  float decay = powf(wled_factor, time_ratio);
+
+  instance->_segment.aux1 = (uint16_t)((float)instance->_segment.aux1 * decay);
+
+  // 3. Rendering
+  // Pulse Amount (Linear): 0 (Back) -> 255 (Pulse)
+  uint8_t pulse_amt = (instance->_segment.aux1 >> 8);
+
+  // GAMMA CORRECTION:
+  // Apply gamma to the visual pulse brightness to ensure natural fade
+  uint8_t gamma_pulse = instance->applyGamma(pulse_amt);
+
+  // Blend Factor: 0 = Pulse, 255 = Back
+  uint8_t blend = 255 - gamma_pulse;
+
+  // Colors
+  uint32_t colorBg = instance->_segment.colors[1]; // SEGCOLOR(1)
+
+  uint16_t len = instance->_segment.length();
+
+  for (int i = 0; i < len; i++) {
+    uint32_t colorPulse;
+    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+      colorPulse = instance->_segment.colors[0];
+    } else {
+      // Palette mapping
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      colorPulse = RGBW32(c.r, c.g, c.b, c.w);
+    }
+
+    uint32_t finalColor = color_blend(colorPulse, colorBg, blend);
+    instance->_segment.setPixelColor(i, finalColor);
+  }
+
+  return FRAMETIME;
+}
+
 void CFXRunner::service() {
   // CRITICAL FIX: Update global instance pointer to 'this' runner
   // Ensures effect functions operate on the correct strip context
@@ -3294,6 +3396,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_BREATH: // 2
     mode_breath();
+    break;
+  case FX_MODE_HEARTBEAT: // 100
+    mode_heartbeat();
     break;
   case FX_MODE_DISSOLVE: // 18
     mode_dissolve();

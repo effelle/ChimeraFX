@@ -501,6 +501,7 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 20:
   case 21:      // Sparkle / Flash Sparkle
   case 22:      // Hyper Sparkle
+  case 100:     // Heartbeat
     return 255; // Solid Palette by default
 
   // Rainbow Defaults (4)
