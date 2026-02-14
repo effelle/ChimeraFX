@@ -2567,9 +2567,9 @@ uint16_t mode_sunrise(void) {
 /*
  * Sparkle (ID 20)
  * Random pixels flash the primary color on a darkened background.
+ * Refactored: Subtractive Fade (qsub) via getSubFactor to fix "stuck pixels".
  */
-*Refactored : Subtractive Fade(qsub)
-via getSubFactor to fix "stuck pixels".* / uint16_t mode_sparkle(void) {
+uint16_t mode_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
