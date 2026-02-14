@@ -246,6 +246,22 @@ inline uint8_t get_random_wheel_index(uint8_t pos) {
   return r;
 }
 
+// WLED color_wheel legacy support
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+inline uint32_t color_wheel(uint8_t pos) {
+  pos = 255 - pos;
+  if (pos < 85) {
+    return ((uint32_t)(255 - pos * 3) << 16) | ((uint32_t)(0) << 8) | (pos * 3);
+  } else if (pos < 170) {
+    pos -= 85;
+    return ((uint32_t)(0) << 16) | ((uint32_t)(pos * 3) << 8) | (255 - pos * 3);
+  } else {
+    pos -= 170;
+    return ((uint32_t)(pos * 3) << 16) | ((uint32_t)(255 - pos * 3) << 8) | (0);
+  }
+}
+
 // Gamma inverse placeholder (can be extended later)
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 

@@ -22,6 +22,11 @@ CFXRunner *instance = nullptr;
 uint16_t mode_running_lights(void);
 uint16_t mode_running_dual(void);
 uint16_t mode_saw(void);
+uint16_t mode_blink(void);
+uint16_t mode_blink_rainbow(void);
+uint16_t mode_strobe(void);
+uint16_t mode_strobe_rainbow(void);
+uint16_t mode_multi_strobe(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -650,54 +655,13 @@ uint16_t mode_static(void) {
   return FRAMETIME; // Refresh rate
 }
 
-uint16_t mode_blink(void) {
-  if (!instance)
-    return 350;
+return FRAMETIME; // Refresh rate
+}
 
-  // BLINK (ID 1)
-  // Simple periodic On/Off effect.
-  // Speed sets frequency directly. Intensity sets duty cycle.
-
-  // === TIMING: Speed controls cycle time directly ===
-  // WLED behavior: Speed 0 = slow blink (~2s), Speed 255 = fast strobe (~50ms)
-  uint8_t speed = instance->_segment.speed;
-  uint16_t intensity = instance->_segment.intensity;
-
-  // Cycle time: 2000ms at speed 0, down to ~50ms at speed 255 (strobe)
-  // Formula: cycleTime = 2000 - (speed * 7.6) -> 2000ms to ~62ms
-  uint32_t cycleTime = 6000 - ((uint32_t)speed * 5800 / 255);
-  if (cycleTime < 200)
-    cycleTime = 200; // Safe minimum for stable strobing
-
-  uint32_t prog = instance->now % cycleTime;
-
-  // Duty cycle threshold:
-  // Intensity 0: Short blip (~10%)
-  // Intensity 128: Square wave (50%)
-  // Intensity 255: Mostly on (~90%)
-  uint32_t threshold = (cycleTime * (intensity + 25)) / 300;
-
-  bool on = (prog < threshold);
-
-  if (on) {
-    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
-      instance->_segment.fill(instance->_segment.colors[0]);
-    } else {
-      const uint32_t *active_palette =
-          getPaletteByIndex(instance->_segment.palette);
-      // Map entire palette to strip for "On" state
-      uint16_t len = instance->_segment.length();
-      for (int i = 0; i < len; i++) {
-        uint8_t colorIndex = (i * 255) / len;
-        CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
-        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-      }
-    }
-  } else {
-    instance->_segment.fill(instance->_segment.colors[1]); // Background
-  }
-
-  return FRAMETIME;
+/*
+ * Old mode_blink removed to avoid duplication.
+ * New implementation uses blink() helper at the bottom of file.
+ */
 }
 
 uint16_t mode_aurora(void) {
@@ -3085,9 +3049,6 @@ void CFXRunner::service() {
     break;
   case FX_MODE_COLOR_SWEEP: // 6
     mode_color_sweep();
-    break;
-  case FX_MODE_BLINK: // 1
-    mode_blink();
     break;
   case FX_MODE_SUNRISE: // 104
     mode_sunrise();
