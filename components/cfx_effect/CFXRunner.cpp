@@ -2567,56 +2567,63 @@ uint16_t mode_sunrise(void) {
 /*
  * Sparkle (ID 20)
  * Random pixels flash the primary color on a darkened background.
- * Refactored: Subtractive Fade (qsub) via getSubFactor to fix "stuck pixels".
+ * Refactored: Accumulator-based Subtractive Fade for ultra-smooth low speeds.
  */
 uint16_t mode_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
+    instance->_segment.aux1 = 0; // Reset accumulator
   }
 
-  // 2. Timing & Gamma Correct Subtractive Fade
+  // 2. Timing & Accumulator Subtractive Fade
   uint32_t delta = instance->frame_time;
 
-  // Calculate Base Subtraction Amount
-  // Speed 0 -> Slow (e.g. 2 units/frame). Speed 255 -> Fast (255 units/frame).
-  // Linear mapping often feels better for subtractive fade.
-  // We want range approx [2, 255].
+  // Accumulator Logic:
+  // We want Speed 1 to be VERY slow (e.g. 1 minute fade)
+  // and Speed 255 to be fast (e.g. 0.2s fade).
+  // Accumulator (aux1) stores fractional subtraction.
+  // Add (Speed * Delta) to aux1.
+  // Rate: If Speed=1, Delta=20 -> Add 20.
+  // Threshold 256 (>> 8) to subtract 1 unit.
+  // Frames to subtract 1: 256/20 = 12.8 frames (~250ms).
+  // Total fade time: 255 * 250ms = 64 seconds.
+  // If Speed=255, Delta=20 -> Add 5100.
+  // Subtract amount: 5100 >> 8 = 19 units/frame.
+  // Frames to black: 255/19 = ~13 frames (~260ms).
 
-  uint16_t sub_base = 2 + instance->_segment.speed;
+  // Scale factor to adjust overall curve if needed. 1.0 is fine.
+  instance->_segment.aux1 += (instance->_segment.speed * delta);
 
-  // Scale by Delta Time (normalize to 20ms)
-  sub_base = (sub_base * delta) / 20;
+  uint16_t sub_base = instance->_segment.aux1 >> 8; // Integer part
+  instance->_segment.aux1 &= 0xFF;                  // Keep fractional part
 
-  // Bounds check before cast
-  uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
+  if (sub_base > 0) {
+    uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
 
-  // Apply Gamma Correction to Subtraction Factor
-  // "High gamma compresses low end, so subtract less"
-  uint8_t corrected_sub = instance->getSubFactor(sub_8);
+    // Apply Gamma Correction
+    uint8_t corrected_sub = instance->getSubFactor(sub_8);
 
-  // 3. Apply Subtractive Fade (Manually)
-  // fadeToBlackBy is multiplicative (can get stuck). qsub is subtractive
-  // (guarantees zero).
-  int len = instance->_segment.length();
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    // Optimize: only write if nonzero
-    if (c != 0) {
-      uint8_t r = qsub8(CFX_R(c), corrected_sub);
-      uint8_t g = qsub8(CFX_G(c), corrected_sub);
-      uint8_t b = qsub8(CFX_B(c), corrected_sub);
-      uint8_t w = qsub8(CFX_W(c), corrected_sub);
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    // Apply Subtractive Fade Loop
+    int len = instance->_segment.length();
+    for (int i = 0; i < len; i++) {
+      uint32_t c = instance->_segment.getPixelColor(i);
+      if (c != 0) {
+        uint8_t r = qsub8(CFX_R(c), corrected_sub);
+        uint8_t g = qsub8(CFX_G(c), corrected_sub);
+        uint8_t b = qsub8(CFX_B(c), corrected_sub);
+        uint8_t w = qsub8(CFX_W(c), corrected_sub);
+        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+      }
     }
   }
 
-  // 4. Spawning
+  // 3. Spawning
   // Probability adapted for delta time
   uint32_t chance = (instance->_segment.intensity * delta) / 20;
   if (cfx::hw_random16(0, 255) < chance) {
-    uint16_t index = cfx::hw_random16(0, len);
+    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
     uint32_t color = instance->_segment.colors[0];
     if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
       uint8_t colorIndex = cfx::hw_random8();
@@ -2640,7 +2647,6 @@ uint16_t mode_flash_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Effect Logic:
   // Re-fill background every frame. No fade needed (it's "Flash").
   instance->_segment.fill(instance->_segment.colors[0]);
 
@@ -2668,33 +2674,38 @@ uint16_t mode_hyper_sparkle(void) {
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
+    instance->_segment.aux1 = 0;
   }
 
-  // Subtractive Fade for Hyper Sparkle too
-  // Base subtract: Faster than normal sparkle. Start at 20?
-  uint16_t sub_base = 20 + (instance->_segment.speed);
+  // Accumulator Logic for Hyper version
+  // Base rate is higher (Speed + 50ish?)
+  // Or just scale the speed multiplier?
+  // Let's multiply input by 4 for "Hyper" speed
+  uint32_t hyper_speed = (instance->_segment.speed * 4) + 10;
+  instance->_segment.aux1 += (hyper_speed * delta);
 
-  // Scale / Normalize
-  sub_base = (sub_base * delta) / 20;
-  uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
+  uint16_t sub_base = instance->_segment.aux1 >> 8;
+  instance->_segment.aux1 &= 0xFF;
 
-  // Gamma Correct
-  uint8_t corrected_sub = instance->getSubFactor(sub_8);
+  if (sub_base > 0) {
+    uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
+    uint8_t corrected_sub = instance->getSubFactor(sub_8);
 
-  // Apply Loop
-  int len = instance->_segment.length();
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    if (c != 0) {
-      uint8_t r = qsub8(CFX_R(c), corrected_sub);
-      uint8_t g = qsub8(CFX_G(c), corrected_sub);
-      uint8_t b = qsub8(CFX_B(c), corrected_sub);
-      uint8_t w = qsub8(CFX_W(c), corrected_sub);
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    int len = instance->_segment.length();
+    for (int i = 0; i < len; i++) {
+      uint32_t c = instance->_segment.getPixelColor(i);
+      if (c != 0) {
+        uint8_t r = qsub8(CFX_R(c), corrected_sub);
+        uint8_t g = qsub8(CFX_G(c), corrected_sub);
+        uint8_t b = qsub8(CFX_B(c), corrected_sub);
+        uint8_t w = qsub8(CFX_W(c), corrected_sub);
+        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+      }
     }
   }
 
   // Spawn Logic
+  uint16_t len = instance->_segment.length();
   uint16_t max_sparks = (len / 5) + 1;
   uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
   if (count == 0 && instance->_segment.intensity > 0)
