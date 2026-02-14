@@ -3095,6 +3095,21 @@ void CFXRunner::service() {
   case FX_MODE_BOUNCINGBALLS: // 91
     mode_bouncing_balls();
     break;
+  case FX_MODE_BLINK: // 1
+    mode_blink();
+    break;
+  case FX_MODE_STROBE: // 23
+    mode_strobe();
+    break;
+  case FX_MODE_STROBE_RAINBOW: // 24
+    mode_strobe_rainbow();
+    break;
+  case FX_MODE_MULTI_STROBE: // 25
+    mode_multi_strobe();
+    break;
+  case FX_MODE_BLINK_RAINBOW: // 26
+    mode_blink_rainbow();
+    break;
   case FX_MODE_RUNNING_LIGHTS: // 15
     mode_running_lights();
     break;
@@ -3233,6 +3248,113 @@ uint16_t mode_bouncing_balls(void) {
 /*
  * Running lights effect with smooth sine transition base.
  */
+/*
+ * Blink/strobe function
+ * Alternate between color1 and color2
+ * if(strobe == true) then create a strobe effect
+ */
+uint16_t blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
+  uint32_t cycleTime = (255 - instance->_segment.speed) * 20;
+  uint32_t onTime = FRAMETIME;
+  if (!strobe)
+    onTime += ((cycleTime * instance->_segment.intensity) >> 8);
+  cycleTime += FRAMETIME * 2;
+  uint32_t it = instance->now / cycleTime;
+  uint32_t rem = instance->now % cycleTime;
+
+  bool on = false;
+  if (it != instance->_segment.step // new iteration, force on state for one
+                                    // frame, even if set time is too brief
+      || rem <= onTime) {
+    on = true;
+  }
+
+  instance->_segment.step = it; // save previous iteration
+
+  uint32_t color = on ? color1 : color2;
+  if (color == color1 && do_palette) {
+    for (unsigned i = 0; i < instance->_segment.length(); i++) {
+      // We use colors[0] vs colors[1] logic above but if do_palette is true,
+      // we ignore color1 and use the palette color.
+      // WLED logic: SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 0)
+      // Since we lack simple palette helper in this scope, we use manual:
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      // PALETTE_SOLID_WRAP means wrap, we use standard logic
+      uint16_t len = instance->_segment.length();
+      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+  } else {
+    instance->_segment.fill(color);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Normal blinking. Intensity sets duty cycle.
+ */
+uint16_t mode_blink(void) {
+  return blink(instance->_segment.colors[0], instance->_segment.colors[1],
+               false, true);
+}
+
+/*
+ * Classic Blink effect. Cycling through the rainbow.
+ */
+uint16_t mode_blink_rainbow(void) {
+  return blink(cfx::color_wheel(instance->_segment.call & 0xFF),
+               instance->_segment.colors[1], false, false);
+}
+
+/*
+ * Classic Strobe effect.
+ */
+uint16_t mode_strobe(void) {
+  return blink(instance->_segment.colors[0], instance->_segment.colors[1], true,
+               true);
+}
+
+/*
+ * Classic Strobe effect. Cycling through the rainbow.
+ */
+uint16_t mode_strobe_rainbow(void) {
+  return blink(cfx::color_wheel(instance->_segment.call & 0xFF),
+               instance->_segment.colors[1], true, false);
+}
+
+/*
+ * Multi Strobe logic
+ */
+uint16_t mode_multi_strobe(void) {
+  for (unsigned i = 0; i < instance->_segment.length(); i++) {
+    // Background color (colors[1] logic mimics WLED SEGCOLOR(1))
+    instance->_segment.setPixelColor(i, instance->_segment.colors[1]);
+  }
+
+  instance->_segment.aux0 =
+      50 + 20 * (uint16_t)(255 - instance->_segment.speed);
+  unsigned count = 2 * ((instance->_segment.intensity / 10) + 1);
+  if (instance->_segment.aux1 < count) {
+    if ((instance->_segment.aux1 & 1) == 0) {
+      instance->_segment.fill(instance->_segment.colors[0]);
+      instance->_segment.aux0 = 15;
+    } else {
+      instance->_segment.aux0 = 50;
+    }
+  }
+
+  if (instance->now - instance->_segment.aux0 > instance->_segment.step) {
+    instance->_segment.aux1++;
+    if (instance->_segment.aux1 > count)
+      instance->_segment.aux1 = 0;
+    instance->_segment.step = instance->now;
+  }
+
+  return FRAMETIME;
+}
+
 static uint16_t running_base(bool saw, bool dual = false) {
   uint16_t len = instance->_segment.length();
   unsigned x_scale = instance->_segment.intensity >> 2;

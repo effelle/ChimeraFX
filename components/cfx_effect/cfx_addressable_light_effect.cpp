@@ -490,6 +490,14 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Wipe Sweep (ID=6)
   case 91:
     return 255; // Bouncing Balls
+  case 23:
+    return 255; // Strobe -> Solid
+  case 24:
+    return 255; // Strobe Rainbow -> Solid
+  case 25:
+    return 255; // Multi Strobe -> Solid
+  case 26:
+    return 255; // Blink Rainbow -> Solid
 
   // Rainbow Defaults (4)
   case 7:
