@@ -3270,7 +3270,9 @@ static uint16_t running_base(bool saw, bool dual = false) {
     uint32_t ca = color_blend(color1, color2, s);
 
     if (dual) {
-      uint8_t s2 = cfx::sin_gap(a + 128); // 2nd wave phase shifted
+      // Wave B: Use +counter to move in opposite direction (Left)
+      unsigned b = i * x_scale + counter;
+      uint8_t s2 = cfx::sin_gap(b);
       uint32_t color3;
       if (instance->_segment.palette == 0 ||
           instance->_segment.palette == 255) {
