@@ -2567,63 +2567,96 @@ uint16_t mode_sunrise(void) {
 /*
  * Sparkle (ID 20)
  * Random pixels flash the primary color on a darkened background.
- * Refactored: Accumulator-based Subtractive Fade for ultra-smooth low speeds.
+ * Refactored: Hybrid Fade (Exponential + Subtractive) & Tuned Density.
+ * Matches WLED's "snappy" feel but fixes the stuck-pixel floor issue.
  */
 uint16_t mode_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
-    instance->_segment.aux1 = 0; // Reset accumulator
   }
 
-  // 2. Timing & Accumulator Subtractive Fade
+  // 2. Timing & Hybrid Fade
   uint32_t delta = instance->frame_time;
 
-  // Accumulator Logic:
-  // We want Speed 1 to be VERY slow (e.g. 1 minute fade)
-  // and Speed 255 to be fast (e.g. 0.2s fade).
-  // Accumulator (aux1) stores fractional subtraction.
-  // Add (Speed * Delta) to aux1.
-  // Rate: If Speed=1, Delta=20 -> Add 20.
-  // Threshold 256 (>> 8) to subtract 1 unit.
-  // Frames to subtract 1: 256/20 = 12.8 frames (~250ms).
-  // Total fade time: 255 * 250ms = 64 seconds.
-  // If Speed=255, Delta=20 -> Add 5100.
-  // Subtract amount: 5100 >> 8 = 19 units/frame.
-  // Frames to black: 255/19 = ~13 frames (~260ms).
+  // A) Exponential Fade (The "Snappy" WLED look)
+  // Logic: WLED Speed 255 -> fadeToBlackBy(255) (Instant).
+  // Scale speed by delta (normalized to ~20ms).
+  // We use a non-linear mapping for speed to give better control at low end.
+  // But strictly matching WLED: fade = speed.
+  uint16_t fade_amt = (instance->_segment.speed * delta) / 20;
 
-  // Scale factor to adjust overall curve if needed. 1.0 is fine.
-  instance->_segment.aux1 += (instance->_segment.speed * delta);
+  // Correction: If speed is high (>220), we want instant fade.
+  if (instance->_segment.speed > 220)
+    fade_amt = 255;
 
-  uint16_t sub_base = instance->_segment.aux1 >> 8; // Integer part
-  instance->_segment.aux1 &= 0xFF;                  // Keep fractional part
+  // Ensure we don't fade TOO slowly at low speeds (stuck pixel risk),
+  // but allow it to be gentle.
+  if (fade_amt == 0 && instance->_segment.speed > 0) {
+    // Accumulate? Or just minimum 1?
+    // With Hybrid Subtractive below, we can be lenient here.
+    fade_amt = 1;
+  }
 
-  if (sub_base > 0) {
-    uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
+  // Gamma correct the fade amount?
+  // WLED doesn't gamma-correct the *fade rate* usually, it just fades.
+  // But my `getFadeFactor` helps keep it consistent.
+  // Standard WLED Sparkle: just `fadeToBlackBy(speed)`.
+  // Let's stick to raw `fadeToBlackBy` for the "Shape" of the fade,
+  // but use `getFadeFactor` to ensure it's effective.
+  uint8_t retention = 255 - constrain(fade_amt, 0, 255);
+  uint8_t corrected_retention = instance->getFadeFactor(retention);
+  uint8_t final_fade = 255 - corrected_retention;
 
-    // Apply Gamma Correction
-    uint8_t corrected_sub = instance->getSubFactor(sub_8);
+  instance->_segment.fadeToBlackBy(final_fade);
 
-    // Apply Subtractive Fade Loop
-    int len = instance->_segment.length();
-    for (int i = 0; i < len; i++) {
-      uint32_t c = instance->_segment.getPixelColor(i);
-      if (c != 0) {
-        uint8_t r = qsub8(CFX_R(c), corrected_sub);
-        uint8_t g = qsub8(CFX_G(c), corrected_sub);
-        uint8_t b = qsub8(CFX_B(c), corrected_sub);
-        uint8_t w = qsub8(CFX_W(c), corrected_sub);
-        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-      }
+  // B) Subtractive Kicker (The "Floor Fix")
+  // Exponential fade (fadeToBlack) never reaches pure zero mathematically
+  // (Zeno). At low brightness, it gets stuck. We subtract a small constant
+  // amount every frame to force it to zero. Amount: 1 or 2 units is usually
+  // enough.
+  uint8_t sub_kicker = 1;
+  if (instance->_segment.speed > 100)
+    sub_kicker = 2;
+
+  // Scale kicker by delta? 1 unit per 20ms is fine.
+  // Applying qsub8 loop to clear the floor.
+  int len = instance->_segment.length();
+  for (int i = 0; i < len; i++) {
+    uint32_t c = instance->_segment.getPixelColor(i);
+    if (c != 0) {
+      // Only burn if nonzero (optimization)
+      instance->_segment.setPixelColor(
+          i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
+                    qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
     }
   }
 
   // 3. Spawning
-  // Probability adapted for delta time
-  uint32_t chance = (instance->_segment.intensity * delta) / 20;
+  // WLED Density is sparse. My previous defaults were too high.
+  // Intensity 0-255.
+  // Scale down significantly.
+  // WLED logic: `if (random8() < intensity)` -> This is actually quite high!
+  // But WLED `mode_sparkle` DOES NOT USE INTENSITY for density!
+  // It uses `SEGLEN` logic usually?
+  // Actually, standard WLED Sparkle uses generic `intensity` (speed is fade,
+  // intensity is spawn). User said "WLED has not intensity control for its
+  // sparkle effect". If so, WLED uses a fixed probability. Let's emulate a
+  // fixed "sparse" probability and modulate it slightly with intensity.
+
+  // Target: ~1 spark active on 58 LEDs.
+  // If fade is slow (1 sec), we need <1 spawn per sec.
+
+  // Let's map Intensity 0-255 to a Probability 0-50 (out of 255) per frame?
+  // Or even sparser.
+  // Try: Chance = Intensity / 8. Max 32/255 -> ~12%.
+  // Scale by Delta.
+
+  uint32_t chance = ((instance->_segment.intensity >> 3) * delta) / 20;
+
   if (cfx::hw_random16(0, 255) < chance) {
-    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint16_t index = cfx::hw_random16(0, len);
     uint32_t color = instance->_segment.colors[0];
     if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
       uint8_t colorIndex = cfx::hw_random8();
@@ -2647,12 +2680,15 @@ uint16_t mode_flash_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Re-fill background every frame. No fade needed (it's "Flash").
+  // Effect Logic:
+  // Re-fill background every frame (Standard "Flash").
+  // No fade needed.
   instance->_segment.fill(instance->_segment.colors[0]);
 
-  // Spawning - Time Scaled
+  // Spawning - Low Density
   uint32_t delta = instance->frame_time;
-  uint32_t threshold = (instance->_segment.speed * delta) / 20;
+  uint32_t threshold =
+      ((instance->_segment.speed >> 2) * delta) / 20; // Sparser threshold
 
   if (cfx::hw_random16(0, 255) < threshold) {
     if (cfx::hw_random8() < instance->_segment.intensity) {
@@ -2667,6 +2703,7 @@ uint16_t mode_flash_sparkle(void) {
 /*
  * Hyper Sparkle (ID 22) - "Sparkle+"
  * Intense, fast sparkles.
+ * Matches Sparkle logic but Higher Density/Speed.
  */
 uint16_t mode_hyper_sparkle(void) {
   uint32_t delta = instance->frame_time;
@@ -2674,39 +2711,35 @@ uint16_t mode_hyper_sparkle(void) {
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
-    instance->_segment.aux1 = 0;
   }
 
-  // Accumulator Logic for Hyper version
-  // Base rate is higher (Speed + 50ish?)
-  // Or just scale the speed multiplier?
-  // Let's multiply input by 4 for "Hyper" speed
-  uint32_t hyper_speed = (instance->_segment.speed * 4) + 10;
-  instance->_segment.aux1 += (hyper_speed * delta);
+  // Hybrid Fade for Hyper Sparkle
+  // Much Faster fade
+  uint16_t fade_base = 30 + (instance->_segment.speed); // Start high
+  fade_base = (fade_base * delta) / 20;
+  if (fade_base > 255)
+    fade_base = 255;
 
-  uint16_t sub_base = instance->_segment.aux1 >> 8;
-  instance->_segment.aux1 &= 0xFF;
+  uint8_t retention = 255 - (uint8_t)fade_base;
+  uint8_t final_fade = 255 - instance->getFadeFactor(retention);
 
-  if (sub_base > 0) {
-    uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
-    uint8_t corrected_sub = instance->getSubFactor(sub_8);
+  instance->_segment.fadeToBlackBy(final_fade);
 
-    int len = instance->_segment.length();
-    for (int i = 0; i < len; i++) {
-      uint32_t c = instance->_segment.getPixelColor(i);
-      if (c != 0) {
-        uint8_t r = qsub8(CFX_R(c), corrected_sub);
-        uint8_t g = qsub8(CFX_G(c), corrected_sub);
-        uint8_t b = qsub8(CFX_B(c), corrected_sub);
-        uint8_t w = qsub8(CFX_W(c), corrected_sub);
-        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-      }
+  // Subtractive Kicker (Stronger here)
+  uint8_t sub_kicker = 4;
+  int len = instance->_segment.length();
+  for (int i = 0; i < len; i++) {
+    uint32_t c = instance->_segment.getPixelColor(i);
+    if (c != 0) {
+      instance->_segment.setPixelColor(
+          i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
+                    qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
     }
   }
 
   // Spawn Logic
-  uint16_t len = instance->_segment.length();
-  uint16_t max_sparks = (len / 5) + 1;
+  // Higher density than Sparkle
+  uint16_t max_sparks = (len / 4) + 1;
   uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
   if (count == 0 && instance->_segment.intensity > 0)
     count = 1;
