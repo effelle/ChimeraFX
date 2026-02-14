@@ -2597,7 +2597,7 @@ uint16_t mode_sparkle(void) {
   }
 
   // Convert to Retention (0-255) for Gamma Helper
-  uint8_t retention = 255 - constrain(fade_base, 0, 255);
+  uint8_t retention = 255 - (fade_base > 255 ? 255 : fade_base);
 
   // Apply Gamma Correction to Retention
   // This ensures the "decay rate" looks consistent across different Gamma
@@ -2677,9 +2677,15 @@ uint16_t mode_hyper_sparkle(void) {
   // Scale / Normalize
   fade_base = (fade_base * delta) / 20;
 
-  // Gamma Correct
-  uint8_t retention = 255 - constrain(fade_base, 0, 255);
+  // Convert to Retention (0-255) for Gamma Helper
+  uint8_t retention = 255 - (fade_base > 255 ? 255 : fade_base);
+
+  // Apply Gamma Correction to Retention
+  // This ensures the "decay rate" looks consistent across different Gamma
+  // settings
   uint8_t corrected_retention = instance->getFadeFactor(retention);
+
+  // Convert back to Fade Amount and Apply
   uint8_t final_fade = 255 - corrected_retention;
 
   instance->_segment.fadeToBlackBy(final_fade);
