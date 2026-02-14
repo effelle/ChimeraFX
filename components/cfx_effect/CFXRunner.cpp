@@ -2568,30 +2568,56 @@ uint16_t mode_sunrise(void) {
  * Sparkle (ID 20)
  * Random pixels flash the primary color on a darkened background.
  */
+/*
+ * Sparkle (ID 20)
+ * Random pixels flash the primary color on a darkened background.
+ * Refactored for delta-time timing and gamma-correct fading.
+ */
 uint16_t mode_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
-    instance->_segment.fill(
-        instance->_segment.colors[1]); // Fill with secondary (background)
+    instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
   }
 
-  // 2. Rendering
-  // Fade everything by speed
-  uint8_t fade = instance->_segment.speed;
-  if (fade < 10)
-    fade = 10; // Minimum fade to prevent stuck pixels
-  instance->_segment.fadeToBlackBy(fade);
+  // 2. Timing Control (Delta Time)
+  uint32_t delta = instance->frame_time;
 
-  // Spawn new sparkles
-  // Probability depends on intensity
-  // WLED logic: if (random8() < intensity) spawn
-  if (cfx::hw_random8() < instance->_segment.intensity) {
+  // Calculate Fade Amount based on Speed and Time
+  // Standard framing is ~20ms.
+  // Map speed to a "fade value per frame" scaled by delta.
+
+  uint16_t fade = (instance->_segment.speed * delta) >> 9; // Approx scale
+  if (fade == 0 && instance->_segment.speed > 0) {
+    if ((instance->now & 3) == 0)
+      fade = 1; // Slow trickling fade for low speeds
+  }
+
+  // Use fadeToBlackBy (scaling) but ensure we don't get stuck at low brightness
+  // WLED commonly uses qsub8 (subtraction) for fire/sparkle dryness,
+  // but fadeToBlackBy (scaling) for trails.
+  // Sticking to fadeToBlackBy but ensuring minimal progress.
+
+  uint8_t fade_amount =
+      instance->_segment.speed ? qadd8(1, instance->_segment.speed >> 3) : 1;
+  // Scale by time: normalize to 20ms
+  fade_amount = (fade_amount * delta) / 20;
+  if (fade_amount == 0 && instance->_segment.speed > 0)
+    fade_amount = 1;
+
+  instance->_segment.fadeToBlackBy(fade_amount);
+
+  // 3. Spawning
+  // Probability adapted for delta time
+  // chance = intensity * delta / 20
+  uint32_t chance = (instance->_segment.intensity * delta) / 20;
+  if (cfx::hw_random16(0, 255) < chance) {
     uint16_t index = cfx::hw_random16(0, instance->_segment.length());
-    uint32_t color = instance->_segment.colors[0]; // Primary Color
-    // Palette support
+    uint32_t color = instance->_segment.colors[0];
     if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
-      color = instance->_segment.color_from_palette(index, true, false, 0, 255);
+      uint8_t colorIndex = cfx::hw_random8();
+      color = instance->_segment.color_from_palette(colorIndex, true, false, 0,
+                                                    255);
     }
     instance->_segment.setPixelColor(index, color);
   }
@@ -2607,18 +2633,27 @@ uint16_t mode_sparkle(void) {
 uint16_t mode_flash_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
-    instance->_segment.fill(instance->_segment.colors[0]); // Fill with Primary
+    instance->_segment.fill(instance->_segment.colors[0]);
     instance->_segment.reset = false;
   }
 
   // 2. Rendering
-  instance->_segment.fill(instance->_segment.colors[0]); // Base Color
+  // Re-fill background to clear previous dark spots
+  instance->_segment.fill(instance->_segment.colors[0]);
 
-  // Probability
-  if (cfx::hw_random8() < instance->_segment.intensity) {
-    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
-    instance->_segment.setPixelColor(
-        index, instance->_segment.colors[1]); // Secondary (usually black/dark)
+  // 3. Spawning
+  // Rate limited by Speed
+  uint32_t delta = instance->frame_time;
+
+  // Threshold = speed * delta scaling
+  uint32_t threshold = (instance->_segment.speed * delta) / 20;
+
+  if (cfx::hw_random16(0, 255) < threshold) {
+    if (cfx::hw_random8() < instance->_segment.intensity) {
+      uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+      instance->_segment.setPixelColor(
+          index, instance->_segment.colors[1]); // Secondary
+    }
   }
 
   return FRAMETIME;
@@ -2627,28 +2662,36 @@ uint16_t mode_flash_sparkle(void) {
 /*
  * Hyper Sparkle (ID 22) - "Sparkle+"
  * Intense, fast sparkles.
- * Logic: Like Sparkle, but multiple sparkles per frame or faster fade.
  */
 uint16_t mode_hyper_sparkle(void) {
-  // 1. Initialization
+  uint32_t delta = instance->frame_time;
+
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
   }
 
-  // 2. Rendering
-  // Very fast fade
-  instance->_segment.fadeToBlackBy(50 + (instance->_segment.speed >> 2));
+  // Fade
+  // Base fade 50 + speed/4
+  uint16_t fade_base = 50 + (instance->_segment.speed >> 2);
+  // Scale by delta
+  uint16_t fade_amount = (fade_base * delta) / 20;
+  if (fade_amount > 255)
+    fade_amount = 255;
 
-  // Multiple sparks per frame based on intensity
-  // Intensity 0-255.
-  // lets spawn (1 + intensity/32) pixels.
-  uint8_t count = 1 + (instance->_segment.intensity >> 5);
+  instance->_segment.fadeToBlackBy(fade_amount);
+
+  // Spawn
+  // Count scaled by intensity
+  uint16_t len = instance->_segment.length();
+  uint16_t max_sparks = (len / 5) + 1;
+  uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
+  if (count == 0 && instance->_segment.intensity > 0)
+    count = 1;
 
   for (int i = 0; i < count; i++) {
-    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint16_t index = cfx::hw_random16(0, len);
     uint32_t color = instance->_segment.colors[0];
-    // Palette support
     if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
       color = instance->_segment.color_from_palette(index, true, false, 0, 255);
     }
