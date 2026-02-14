@@ -655,15 +655,6 @@ uint16_t mode_static(void) {
   return FRAMETIME; // Refresh rate
 }
 
-return FRAMETIME; // Refresh rate
-}
-
-/*
- * Old mode_blink removed to avoid duplication.
- * New implementation uses blink() helper at the bottom of file.
- */
-}
-
 uint16_t mode_aurora(void) {
   // === FRAME DIAGNOSTICS (enabled with CFX_FRAME_DIAGNOSTICS) ===
   static cfx::FrameDiagnostics aurora_diag;
