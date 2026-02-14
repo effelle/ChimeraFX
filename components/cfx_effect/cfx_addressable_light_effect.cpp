@@ -562,8 +562,13 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Saw -> Solid
   case 52:
     return 13; // Running Dual -> Sakura
+  case 52:
+    return 13; // Running Dual -> Sakura
   case 87:
-    return 4; // Glitter -> Rainbow
+    return 4;   // Glitter -> Rainbow
+  case 98:      // Percent
+  case 114:     // Percent Center
+    return 255; // Solid
 
   // Default Aurora (1) or specific handling
   default:
@@ -678,10 +683,10 @@ void CFXAddressableLightEffect::run_controls_() {
         return 23;
       if (strcmp(opt, "Default") == 0) {
         // Resolve the natural default for this effect
-        if (this->runner_) {
-          uint8_t m = this->runner_->getMode();
-          return this->get_default_palette_id_(m);
-        }
+        // FIX: Use this->effect_id_ (Requested Effect) instead of
+        // runner_->getMode() (Current/Old Effect) This ensures that when
+        // switching effects, we get the default palette of the NEW effect.
+        return this->get_default_palette_id_(this->effect_id_);
         return 1; // Fallback to Aurora if no runner
       }
       return 0; // Unknown palette name

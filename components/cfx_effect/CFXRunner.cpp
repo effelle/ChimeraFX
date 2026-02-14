@@ -2506,6 +2506,114 @@ uint16_t mode_tricolor_chase(void) {
   return FRAMETIME;
 }
 
+// --- Percent Effect (ID 98) ---
+// Linear meter/progress bar based on Intensity (0-255 mapped to 0-100%)
+// Palette support: Solid (default), Rainbow, etc.
+uint16_t mode_percent(void) {
+  uint16_t len = instance->_segment.length();
+  uint8_t percent = instance->_segment.intensity;
+  // Map 0-255 to 0-len
+  uint16_t lit_len = (uint32_t)percent * len / 255;
+
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? PaletteSolid // Default to Solid
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Behavior:
+  // If palette is Solid (255), use Primary Color.
+  // If palette is Rainbow/etc, use gradient.
+
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    fillSolidPalette(instance->_segment.colors[0]);
+    active_palette = PaletteSolid;
+  }
+
+  for (int i = 0; i < len; i++) {
+    if (i < lit_len) {
+      // Lit portion
+      // Map palette to the *lit* length? Or whole length?
+      // "Meter" usually implies the color matches the position.
+      // Let's map palette to the WHOLE length, so green is always at 0, red
+      // always at 100 (if using heatmap)
+      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else {
+      // Unlit portion
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  // Speed > 0: Add a subtle breathing effect to the lit portion
+  if (instance->_segment.speed > 0) {
+    uint8_t bri = beatsin8(instance->_segment.speed, 200, 255);
+    for (int i = 0; i < lit_len; i++) {
+      uint32_t c = instance->_segment.getPixelColor(i);
+      // Scale brightness
+      uint8_t r = scale8(CFX_R(c), bri);
+      uint8_t g = scale8(CFX_G(c), bri);
+      uint8_t b = scale8(CFX_B(c), bri);
+      uint8_t w = scale8(CFX_W(c), bri);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
+  }
+
+  return FRAMETIME;
+}
+
+// --- Percent Center Effect (ID 114) ---
+// Bi-directional meter from center based on Intensity
+uint16_t mode_percent_center(void) {
+  uint16_t len = instance->_segment.length();
+  uint16_t center = len / 2;
+  uint8_t percent = instance->_segment.intensity;
+
+  // Map 0-255 to 0-center (radius)
+  uint16_t lit_radius = (uint32_t)percent * center / 255;
+
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? PaletteSolid
+          : getPaletteByIndex(instance->_segment.palette);
+
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    fillSolidPalette(instance->_segment.colors[0]);
+    active_palette = PaletteSolid;
+  }
+
+  for (int i = 0; i < len; i++) {
+    int dist = abs(i - center);
+    if (dist <= lit_radius) {
+      // Lit
+      // Map palette from center (0) to edge (255)
+      // Or strip-linear? Strip-linear looks more Percent-like usually.
+      // Let's do strip-linear so it looks like a single bar revealed from
+      // center.
+      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else {
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  // Breathing
+  if (instance->_segment.speed > 0) {
+    uint8_t bri = beatsin8(instance->_segment.speed, 200, 255);
+    for (int i = 0; i < len; i++) {
+      if (abs(i - center) <= lit_radius) {
+        uint32_t c = instance->_segment.getPixelColor(i);
+        uint8_t r = scale8(CFX_R(c), bri);
+        uint8_t g = scale8(CFX_G(c), bri);
+        uint8_t b = scale8(CFX_B(c), bri);
+        uint8_t w = scale8(CFX_W(c), bri);
+        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
 // --- Sunrise Effect (ID 104) ---
 // Gradual sunrise/sunset simulation
 uint16_t mode_sunrise(void) {
@@ -3101,7 +3209,10 @@ uint16_t mode_bouncing_balls(void);
 uint16_t mode_color_wipe(void);
 uint16_t mode_color_wipe_random(void);
 uint16_t mode_color_sweep(void);
+uint16_t mode_color_sweep(void);
 uint16_t mode_strobe(void);
+uint16_t mode_percent(void);
+uint16_t mode_percent_center(void);
 
 void CFXRunner::service() {
   // CRITICAL FIX: Update global instance pointer to 'this' runner
@@ -3252,6 +3363,12 @@ void CFXRunner::service() {
     break;
   case FX_MODE_RUNNING_DUAL: // 52
     mode_running_dual();
+    break;
+  case FX_MODE_PERCENT: // 98
+    mode_percent();
+    break;
+  case FX_MODE_PERCENT_CENTER: // 114
+    mode_percent_center();
     break;
   default:
     mode_static();
