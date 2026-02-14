@@ -2568,52 +2568,55 @@ uint16_t mode_sunrise(void) {
  * Sparkle (ID 20)
  * Random pixels flash the primary color on a darkened background.
  */
-/*
- * Sparkle (ID 20)
- * Random pixels flash the primary color on a darkened background.
- * Refactored for delta-time timing and gamma-correct fading.
- */
-uint16_t mode_sparkle(void) {
+*Refactored : Subtractive Fade(qsub)
+via getSubFactor to fix "stuck pixels".* / uint16_t mode_sparkle(void) {
   // 1. Initialization
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[1]);
     instance->_segment.reset = false;
   }
 
-  // 2. Timing & Gamma Correct Fade
+  // 2. Timing & Gamma Correct Subtractive Fade
   uint32_t delta = instance->frame_time;
 
-  // Calculate Base Fade (Linear approximation)
-  // Scale speed by delta (normalized to ~20ms)
-  // Logic: speed 255 -> fade ~25/frame. speed 0 -> fade 0?
-  uint16_t fade_base = (instance->_segment.speed * delta) >> 9;
+  // Calculate Base Subtraction Amount
+  // Speed 0 -> Slow (e.g. 2 units/frame). Speed 255 -> Fast (255 units/frame).
+  // Linear mapping often feels better for subtractive fade.
+  // We want range approx [2, 255].
 
-  // Ensure minimum fade progress if speed > 0
-  if (fade_base == 0 && instance->_segment.speed > 0) {
-    // Trickle: fade 1 unit every ~4 frames approx?
-    // Or just fade 1.
-    if ((instance->now & 3) == 0)
-      fade_base = 1;
+  uint16_t sub_base = 2 + instance->_segment.speed;
+
+  // Scale by Delta Time (normalize to 20ms)
+  sub_base = (sub_base * delta) / 20;
+
+  // Bounds check before cast
+  uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
+
+  // Apply Gamma Correction to Subtraction Factor
+  // "High gamma compresses low end, so subtract less"
+  uint8_t corrected_sub = instance->getSubFactor(sub_8);
+
+  // 3. Apply Subtractive Fade (Manually)
+  // fadeToBlackBy is multiplicative (can get stuck). qsub is subtractive
+  // (guarantees zero).
+  int len = instance->_segment.length();
+  for (int i = 0; i < len; i++) {
+    uint32_t c = instance->_segment.getPixelColor(i);
+    // Optimize: only write if nonzero
+    if (c != 0) {
+      uint8_t r = qsub8(CFX_R(c), corrected_sub);
+      uint8_t g = qsub8(CFX_G(c), corrected_sub);
+      uint8_t b = qsub8(CFX_B(c), corrected_sub);
+      uint8_t w = qsub8(CFX_W(c), corrected_sub);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
   }
 
-  // Convert to Retention (0-255) for Gamma Helper
-  uint8_t retention = 255 - (fade_base > 255 ? 255 : fade_base);
-
-  // Apply Gamma Correction to Retention
-  // This ensures the "decay rate" looks consistent across different Gamma
-  // settings
-  uint8_t corrected_retention = instance->getFadeFactor(retention);
-
-  // Convert back to Fade Amount and Apply
-  uint8_t final_fade = 255 - corrected_retention;
-
-  instance->_segment.fadeToBlackBy(final_fade);
-
-  // 3. Spawning
+  // 4. Spawning
   // Probability adapted for delta time
   uint32_t chance = (instance->_segment.intensity * delta) / 20;
   if (cfx::hw_random16(0, 255) < chance) {
-    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint16_t index = cfx::hw_random16(0, len);
     uint32_t color = instance->_segment.colors[0];
     if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
       uint8_t colorIndex = cfx::hw_random8();
@@ -2638,10 +2641,7 @@ uint16_t mode_flash_sparkle(void) {
   }
 
   // Effect Logic:
-  // We want to KEEP the background (Primary)
-  // And just flash Secondary pixels briefly.
-  // Standard implementation re-fills background every frame.
-
+  // Re-fill background every frame. No fade needed (it's "Flash").
   instance->_segment.fill(instance->_segment.colors[0]);
 
   // Spawning - Time Scaled
@@ -2670,28 +2670,31 @@ uint16_t mode_hyper_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Fast Fade
-  // Base fade roughly 50 + speed/4
-  uint16_t fade_base = 50 + (instance->_segment.speed >> 2);
+  // Subtractive Fade for Hyper Sparkle too
+  // Base subtract: Faster than normal sparkle. Start at 20?
+  uint16_t sub_base = 20 + (instance->_segment.speed);
 
   // Scale / Normalize
-  fade_base = (fade_base * delta) / 20;
+  sub_base = (sub_base * delta) / 20;
+  uint8_t sub_8 = (sub_base > 255) ? 255 : (uint8_t)sub_base;
 
-  // Convert to Retention (0-255) for Gamma Helper
-  uint8_t retention = 255 - (fade_base > 255 ? 255 : fade_base);
+  // Gamma Correct
+  uint8_t corrected_sub = instance->getSubFactor(sub_8);
 
-  // Apply Gamma Correction to Retention
-  // This ensures the "decay rate" looks consistent across different Gamma
-  // settings
-  uint8_t corrected_retention = instance->getFadeFactor(retention);
-
-  // Convert back to Fade Amount and Apply
-  uint8_t final_fade = 255 - corrected_retention;
-
-  instance->_segment.fadeToBlackBy(final_fade);
+  // Apply Loop
+  int len = instance->_segment.length();
+  for (int i = 0; i < len; i++) {
+    uint32_t c = instance->_segment.getPixelColor(i);
+    if (c != 0) {
+      uint8_t r = qsub8(CFX_R(c), corrected_sub);
+      uint8_t g = qsub8(CFX_G(c), corrected_sub);
+      uint8_t b = qsub8(CFX_B(c), corrected_sub);
+      uint8_t w = qsub8(CFX_W(c), corrected_sub);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
+  }
 
   // Spawn Logic
-  uint16_t len = instance->_segment.length();
   uint16_t max_sparks = (len / 5) + 1;
   uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
   if (count == 0 && instance->_segment.intensity > 0)
