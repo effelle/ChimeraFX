@@ -27,6 +27,9 @@ uint16_t mode_blink_rainbow(void);
 uint16_t mode_strobe(void);
 uint16_t mode_strobe_rainbow(void);
 uint16_t mode_multi_strobe(void);
+uint16_t mode_sparkle(void);
+uint16_t mode_flash_sparkle(void);
+uint16_t mode_hyper_sparkle(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -3028,6 +3031,15 @@ void CFXRunner::service() {
     break;
   case FX_MODE_METEOR: // 76
     mode_meteor();
+    break;
+  case FX_MODE_SPARKLE: // 20
+    mode_sparkle();
+    break;
+  case FX_MODE_FLASH_SPARKLE: // 21
+    mode_flash_sparkle();
+    break;
+  case FX_MODE_HYPER_SPARKLE: // 22
+    mode_hyper_sparkle();
     break;
   case FX_MODE_NOISEPAL: // 107
     mode_noisepal();

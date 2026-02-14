@@ -498,6 +498,10 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Multi Strobe -> Solid
   case 26:
     return 255; // Blink Rainbow -> Solid
+  case 20:
+  case 21:      // Sparkle / Flash Sparkle
+  case 22:      // Hyper Sparkle
+    return 255; // Solid Palette by default
 
   // Rainbow Defaults (4)
   case 7:
