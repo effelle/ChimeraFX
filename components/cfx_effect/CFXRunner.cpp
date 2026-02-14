@@ -2546,7 +2546,7 @@ uint16_t mode_percent(void) {
 
   // Speed > 0: Add a subtle breathing effect to the lit portion
   if (instance->_segment.speed > 0) {
-    uint8_t bri = beatsin8(instance->_segment.speed, 200, 255);
+    uint8_t bri = beatsin88_t(instance->_segment.speed << 8, 200, 255);
     for (int i = 0; i < lit_len; i++) {
       uint32_t c = instance->_segment.getPixelColor(i);
       // Scale brightness
@@ -2598,7 +2598,7 @@ uint16_t mode_percent_center(void) {
 
   // Breathing
   if (instance->_segment.speed > 0) {
-    uint8_t bri = beatsin8(instance->_segment.speed, 200, 255);
+    uint8_t bri = beatsin88_t(instance->_segment.speed << 8, 200, 255);
     for (int i = 0; i < len; i++) {
       if (abs(i - center) <= lit_radius) {
         uint32_t c = instance->_segment.getPixelColor(i);
