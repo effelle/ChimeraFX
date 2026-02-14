@@ -2564,6 +2564,100 @@ uint16_t mode_sunrise(void) {
   return FRAMETIME;
 }
 
+/*
+ * Sparkle (ID 20)
+ * Random pixels flash the primary color on a darkened background.
+ */
+uint16_t mode_sparkle(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.fill(
+        instance->_segment.colors[1]); // Fill with secondary (background)
+    instance->_segment.reset = false;
+  }
+
+  // 2. Rendering
+  // Fade everything by speed
+  uint8_t fade = instance->_segment.speed;
+  if (fade < 10)
+    fade = 10; // Minimum fade to prevent stuck pixels
+  instance->_segment.fadeToBlackBy(fade);
+
+  // Spawn new sparkles
+  // Probability depends on intensity
+  // WLED logic: if (random8() < intensity) spawn
+  if (cfx::hw_random8() < instance->_segment.intensity) {
+    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint32_t color = instance->_segment.colors[0]; // Primary Color
+    // Palette support
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      color = instance->_segment.color_from_palette(index, true, false, 0, 255);
+    }
+    instance->_segment.setPixelColor(index, color);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Flash Sparkle (ID 21) - "Sparkle Dark"
+ * Inverted: Background is lit (primary color), sparkles are black (or
+ * secondary). Brief flashes of darkness.
+ */
+uint16_t mode_flash_sparkle(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.fill(instance->_segment.colors[0]); // Fill with Primary
+    instance->_segment.reset = false;
+  }
+
+  // 2. Rendering
+  instance->_segment.fill(instance->_segment.colors[0]); // Base Color
+
+  // Probability
+  if (cfx::hw_random8() < instance->_segment.intensity) {
+    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    instance->_segment.setPixelColor(
+        index, instance->_segment.colors[1]); // Secondary (usually black/dark)
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Hyper Sparkle (ID 22) - "Sparkle+"
+ * Intense, fast sparkles.
+ * Logic: Like Sparkle, but multiple sparkles per frame or faster fade.
+ */
+uint16_t mode_hyper_sparkle(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.fill(instance->_segment.colors[1]);
+    instance->_segment.reset = false;
+  }
+
+  // 2. Rendering
+  // Very fast fade
+  instance->_segment.fadeToBlackBy(50 + (instance->_segment.speed >> 2));
+
+  // Multiple sparks per frame based on intensity
+  // Intensity 0-255.
+  // lets spawn (1 + intensity/32) pixels.
+  uint8_t count = 1 + (instance->_segment.intensity >> 5);
+
+  for (int i = 0; i < count; i++) {
+    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint32_t color = instance->_segment.colors[0];
+    // Palette support
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      color = instance->_segment.color_from_palette(index, true, false, 0, 255);
+    }
+    instance->_segment.setPixelColor(index, color);
+  }
+
+  return FRAMETIME;
+}
+
 // --- Rainbow/Colorloop Effects (ID 8, 9) ---
 // Ported from WLED FX.cpp
 
