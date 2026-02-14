@@ -2580,36 +2580,37 @@ uint16_t mode_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // 2. Timing Control (Delta Time)
+  // 2. Timing & Gamma Correct Fade
   uint32_t delta = instance->frame_time;
 
-  // Calculate Fade Amount based on Speed and Time
-  // Standard framing is ~20ms.
-  // Map speed to a "fade value per frame" scaled by delta.
+  // Calculate Base Fade (Linear approximation)
+  // Scale speed by delta (normalized to ~20ms)
+  // Logic: speed 255 -> fade ~25/frame. speed 0 -> fade 0?
+  uint16_t fade_base = (instance->_segment.speed * delta) >> 9;
 
-  uint16_t fade = (instance->_segment.speed * delta) >> 9; // Approx scale
-  if (fade == 0 && instance->_segment.speed > 0) {
+  // Ensure minimum fade progress if speed > 0
+  if (fade_base == 0 && instance->_segment.speed > 0) {
+    // Trickle: fade 1 unit every ~4 frames approx?
+    // Or just fade 1.
     if ((instance->now & 3) == 0)
-      fade = 1; // Slow trickling fade for low speeds
+      fade_base = 1;
   }
 
-  // Use fadeToBlackBy (scaling) but ensure we don't get stuck at low brightness
-  // WLED commonly uses qsub8 (subtraction) for fire/sparkle dryness,
-  // but fadeToBlackBy (scaling) for trails.
-  // Sticking to fadeToBlackBy but ensuring minimal progress.
+  // Convert to Retention (0-255) for Gamma Helper
+  uint8_t retention = 255 - constrain(fade_base, 0, 255);
 
-  uint8_t fade_amount =
-      instance->_segment.speed ? qadd8(1, instance->_segment.speed >> 3) : 1;
-  // Scale by time: normalize to 20ms
-  fade_amount = (fade_amount * delta) / 20;
-  if (fade_amount == 0 && instance->_segment.speed > 0)
-    fade_amount = 1;
+  // Apply Gamma Correction to Retention
+  // This ensures the "decay rate" looks consistent across different Gamma
+  // settings
+  uint8_t corrected_retention = instance->getFadeFactor(retention);
 
-  instance->_segment.fadeToBlackBy(fade_amount);
+  // Convert back to Fade Amount and Apply
+  uint8_t final_fade = 255 - corrected_retention;
+
+  instance->_segment.fadeToBlackBy(final_fade);
 
   // 3. Spawning
   // Probability adapted for delta time
-  // chance = intensity * delta / 20
   uint32_t chance = (instance->_segment.intensity * delta) / 20;
   if (cfx::hw_random16(0, 255) < chance) {
     uint16_t index = cfx::hw_random16(0, instance->_segment.length());
@@ -2628,31 +2629,29 @@ uint16_t mode_sparkle(void) {
 /*
  * Flash Sparkle (ID 21) - "Sparkle Dark"
  * Inverted: Background is lit (primary color), sparkles are black (or
- * secondary). Brief flashes of darkness.
+ * secondary).
  */
 uint16_t mode_flash_sparkle(void) {
-  // 1. Initialization
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[0]);
     instance->_segment.reset = false;
   }
 
-  // 2. Rendering
-  // Re-fill background to clear previous dark spots
+  // Effect Logic:
+  // We want to KEEP the background (Primary)
+  // And just flash Secondary pixels briefly.
+  // Standard implementation re-fills background every frame.
+
   instance->_segment.fill(instance->_segment.colors[0]);
 
-  // 3. Spawning
-  // Rate limited by Speed
+  // Spawning - Time Scaled
   uint32_t delta = instance->frame_time;
-
-  // Threshold = speed * delta scaling
   uint32_t threshold = (instance->_segment.speed * delta) / 20;
 
   if (cfx::hw_random16(0, 255) < threshold) {
     if (cfx::hw_random8() < instance->_segment.intensity) {
       uint16_t index = cfx::hw_random16(0, instance->_segment.length());
-      instance->_segment.setPixelColor(
-          index, instance->_segment.colors[1]); // Secondary
+      instance->_segment.setPixelColor(index, instance->_segment.colors[1]);
     }
   }
 
@@ -2671,18 +2670,21 @@ uint16_t mode_hyper_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Fade
-  // Base fade 50 + speed/4
+  // Fast Fade
+  // Base fade roughly 50 + speed/4
   uint16_t fade_base = 50 + (instance->_segment.speed >> 2);
-  // Scale by delta
-  uint16_t fade_amount = (fade_base * delta) / 20;
-  if (fade_amount > 255)
-    fade_amount = 255;
 
-  instance->_segment.fadeToBlackBy(fade_amount);
+  // Scale / Normalize
+  fade_base = (fade_base * delta) / 20;
 
-  // Spawn
-  // Count scaled by intensity
+  // Gamma Correct
+  uint8_t retention = 255 - constrain(fade_base, 0, 255);
+  uint8_t corrected_retention = instance->getFadeFactor(retention);
+  uint8_t final_fade = 255 - corrected_retention;
+
+  instance->_segment.fadeToBlackBy(final_fade);
+
+  // Spawn Logic
   uint16_t len = instance->_segment.length();
   uint16_t max_sparks = (len / 5) + 1;
   uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
