@@ -3224,7 +3224,8 @@ uint16_t blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
   instance->_segment.step = it; // save previous iteration
 
   uint32_t color = on ? color1 : color2;
-  if (color == color1 && do_palette) {
+  if (color == color1 && do_palette && instance->_segment.palette != 0 &&
+      instance->_segment.palette != 255) {
     for (unsigned i = 0; i < instance->_segment.length(); i++) {
       // We use colors[0] vs colors[1] logic above but if do_palette is true,
       // we ignore color1 and use the palette color.
