@@ -2473,48 +2473,43 @@ uint16_t mode_bpm(void) {
 }
 
 // --- Glitter (ID 87) ---
-// Two-pass: palette background + overwrite white sparkles
+// Two-pass: Inverted Palette Background + Random White Sparks (No Fading)
 uint16_t mode_glitter(void) {
-  // Pass 1: Background palette fill (Always run for smooth background)
-  unsigned counter = 0;
-  if (instance->_segment.speed != 0) {
-    counter = (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
-    counter = counter >> 8;
-  }
+  if (!instance)
+    return 350;
 
-  uint16_t len = instance->_segment.length(); // Cache length
+  // Pass 1: Background - Inverted Palette Fill
+  // Directions: "Fill the entire strip with a rainbow gradient... Subtracting
+  // time moves it backwards" Use active palette (defaulting to Rainbow if none
+  // selected or if default/0 is selected)
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? getPaletteByIndex(4) // Force Rainbow (ID 4) as default
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Time base for scrolling
+  // Speed factor: standard WLED-like scaling
+  uint16_t counter =
+      (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
+
+  uint16_t len = instance->_segment.length();
 
   for (unsigned i = 0; i < len; i++) {
-    // FIX: (uint32_t)i prevents overflow at i=257 (257*255 > 65535)
-    // This fixes "phantom rainbow" appearing at mid-point of long strips
-    unsigned colorIndex = ((uint32_t)i * 255 / len) - counter;
-    uint32_t col =
-        instance->_segment.color_from_palette(colorIndex, false, true, 255);
-    instance->_segment.setPixelColor(i, col);
+    // Math: colorIndex = (Position - Time) -> Moves "Backwards"
+    // (i * 255 / len) scales index to full 0-255 palette range across strip
+    uint8_t colorIndex = (i * 255 / len) - (counter >> 8);
+
+    // Render from palette
+    CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
-  // Pass 2: Glitter overlay (Rate Limited to ~30 FPS)
-  uint32_t dt = instance->now - instance->_segment.step;
-
-  if (dt < 30) {
-    if (dt > 150)
-      instance->_segment.step = instance->now; // Reset LAG
-    return FRAMETIME;
-  }
-
-  instance->_segment.step = instance->now;
-
-  // Scale intensity: WLED runs ~24ms.
-  uint16_t chance = (uint16_t)instance->_segment.intensity * dt / 24;
-  if (chance > 255)
-    chance = 255;
-
-  // Use the scaled probability
-  if (chance > cfx::hw_random8()) {
-    uint32_t glitterCol = (instance->_segment.colors[2])
-                              ? instance->_segment.colors[2]
-                              : 0xFFFFFFFF;
-    instance->_segment.setPixelColor(cfx::hw_random16(0, len), glitterCol);
+  // Pass 2: The Glitter (Overlay)
+  // "Randomly blast specific pixels with Pure White... if (random8() <
+  // intensity)" No fading logic. Next frame overwrites it.
+  if (cfx::hw_random8() < instance->_segment.intensity) {
+    uint16_t pos = cfx::hw_random16(0, len);
+    instance->_segment.setPixelColor(pos, 0xFFFFFFFF); // Pure White (RGBW)
   }
 
   return FRAMETIME;
