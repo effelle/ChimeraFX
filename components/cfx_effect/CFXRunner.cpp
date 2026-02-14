@@ -3090,6 +3090,12 @@ void CFXRunner::service() {
   case FX_MODE_BOUNCINGBALLS: // 91
     mode_bouncing_balls();
     break;
+  case FX_MODE_RUNNING_LIGHTS: // 15
+    mode_running_lights();
+    break;
+  case FX_MODE_SAW: // 16
+    mode_saw();
+    break;
   default:
     mode_static();
     break;
@@ -3213,6 +3219,62 @@ uint16_t mode_bouncing_balls(void) {
 
   return FRAMETIME;
 }
+
+// --- Running Effects (ID 15, 16) ---
+
+/*
+ * Running lights effect with smooth sine transition base.
+ */
+static uint16_t running_base(bool saw, bool dual = false) {
+  uint16_t len = instance->_segment.length();
+  unsigned x_scale = instance->_segment.intensity >> 2;
+  uint32_t counter = (instance->now * instance->_segment.speed) >> 9;
+
+  for (unsigned i = 0; i < len; i++) {
+    unsigned a = i * x_scale - counter;
+    if (saw) {
+      a &= 0xFF;
+      if (a < 16) {
+        a = 192 + a * 8;
+      } else {
+        a = cfx::map(a, 16, 255, 64, 192);
+      }
+      a = 255 - a;
+    }
+    uint8_t s =
+        dual ? cfx::sin8(a + 192) : cfx::sin8(a); // sin_gap approx for dual
+
+    // Logic: Blend between Background (colors[1]) and Target (Palette/Color)
+    // SEGCOLOR(1) is background in WLED.
+    uint32_t color1 = instance->_segment.colors[1];
+
+    uint32_t color2;
+    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+      color2 = instance->_segment.colors[0];
+    } else {
+      // Palette mode: use palette color for 'i'
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      color2 = RGBW32(c.r, c.g, c.b, c.w);
+    }
+
+    uint32_t ca = color_blend(color1, color2, s);
+
+    if (dual) {
+      // Dual logic omitted for now as sin_gap is not fully ported and not
+      // requested But keeping structure if needed later
+    }
+
+    instance->_segment.setPixelColor(i, ca);
+  }
+
+  return FRAMETIME;
+}
+
+uint16_t mode_running_lights(void) { return running_base(false); }
+
+uint16_t mode_saw(void) { return running_base(true); }
 
 // --- Simple Effects Batch (ID 3, 4, 6, 23) ---
 

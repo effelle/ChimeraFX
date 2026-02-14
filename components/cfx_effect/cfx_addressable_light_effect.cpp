@@ -544,6 +544,10 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Tricolor Chase → Solid
   case 68:
     return 255; // BPM → Solid
+  case 15:
+    return 255; // Running Lights → Solid
+  case 16:
+    return 255; // Saw → Solid
   case 87:
     return 4; // Glitter → Rainbow
 
