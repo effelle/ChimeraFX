@@ -3339,28 +3339,30 @@ uint16_t mode_strobe_rainbow(void) {
     instance->_segment.aux1 = !instance->_segment.aux1; // Toggle
     instance->_segment.step = instance->now;
 
-    if (instance->_segment.aux1) {
-      // ON: 20ms
-      instance->_segment.aux0 = 20;
-    } else {
-      // OFF: Speed dependent
-      uint32_t delay = (255 - instance->_segment.speed) * 5;
-      instance->_segment.aux0 = delay;
-    }
-  }
-
-  // 3. Rendering
-  if (instance->_segment.aux1) {
-    // ON State: Rainbow Color
-    // Use (instance->now >> 4) for smooth rainbow cycling over time
-    uint32_t color = cfx::color_wheel((instance->now >> 4) & 0xFF);
-    instance->_segment.fill(color);
+    // ON: 20ms
+    instance->_segment.aux0 = 20;
   } else {
-    // OFF State
-    instance->_segment.fill(instance->_segment.colors[1]);
+    // OFF: Speed dependent
+    // SAFETY FIX: Clamp minimum delay to 10ms to prevent power brownouts
+    uint32_t delay = (255 - instance->_segment.speed) * 5;
+    if (delay < 10)
+      delay = 10;
+    instance->_segment.aux0 = delay;
   }
+}
 
-  return FRAMETIME;
+// 3. Rendering
+if (instance->_segment.aux1) {
+  // ON State: Rainbow Color
+  // Use (instance->now >> 4) for smooth rainbow cycling over time
+  uint32_t color = cfx::color_wheel((instance->now >> 4) & 0xFF);
+  instance->_segment.fill(color);
+} else {
+  // OFF State
+  instance->_segment.fill(instance->_segment.colors[1]);
+}
+
+return FRAMETIME;
 }
 
 /*
