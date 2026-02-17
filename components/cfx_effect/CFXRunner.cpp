@@ -3843,44 +3843,48 @@ uint16_t mode_drip(void) {
         // without tail" So ONLY draw tail if falling.
         if (drops[j].vel < 0) {
           // Falling: Moves towards 0. Tail is at pos+1, pos+2...
-          for (int t = 1; t <= 4; t++) {
+          // Increased tail length to 6 pixels
+          for (int t = 1; t <= 6; t++) {
             int tPos = pos + t;
             if (tPos >= 0 && tPos < len) {
-              // Faint tail: 64, 32, 16, 8
+              // Faint tail: 64, 32, 16, 8, 4, 2
               uint8_t dim = 64 >> (t - 1);
-              // If source is occupying top pixel, don't overwrite it?
-              // Actually source is managed by drop[j] index 1 usually.
+              if (t > 7)
+                dim = 0; // Safety clamp
+
               instance->_segment.setPixelColor(tPos,
                                                color_blend(col, 0, 255 - dim));
             }
           }
-        } else {
-          // Bouncing (Rising): No tail, just the head.
-          // Maybe a faint single pixel trail? User said "without tail".
         }
 
         // Bounce Logic
         if (drops[j].colIndex > 2) { // Bouncing
-          // Splash on floor
-          // Dim brightness on bounce
-          uint32_t dimCol = color_blend(col, 0, 100);
-          // Always show splash at 0 if bouncing low
-          if (drops[j].pos < 2.0f) {
-            instance->_segment.setPixelColor(0, dimCol);
-          }
-          // Also color the head dimmer?
-          if (pos < len && pos >= 0) {
+          // Splash on floor (stay on the last led) applies when bouncing
+          // Draw the static drop at the bottom with lower brightness
+          uint32_t dimCol = color_blend(col, 0, 150); // Lower brightness
+          instance->_segment.setPixelColor(0, dimCol);
+
+          // Draw the bouncing particle (already drawn by the main pos logic
+          // above if pos > 0) But we want it to be dimmer too. The main logic
+          // above draws 'col' at 'pos'. We need to overwrite it with dimCol if
+          // we are bouncing.
+          if (pos >= 0 && pos < len) {
             instance->_segment.setPixelColor(pos, dimCol);
           }
         }
 
       } else {                       // Hit Bottom
-        if (drops[j].colIndex > 2) { // Already bounced
-          drops[j].colIndex = 0;     // Reset
+        if (drops[j].colIndex > 2) { // Already bouncing and hit bottom again
+          drops[j].colIndex = 0;     // Reset / Disappear
         } else {
           // Init Bounce
-          drops[j].vel = -drops[j].vel / 4.0f; // Dampen
-          drops[j].pos += drops[j].vel;
+          // Math for exactly 7 LEDs high: v = sqrt(2 * |g| * h)
+          // gravity is negative, so |g| = -gravity.
+          // h = 7.0f
+          drops[j].vel = sqrtf(-2.0f * gravity * 7.0f);
+          drops[j].pos =
+              0.1f; // Lift slightly so it doesn't immediately hit 0 again
           drops[j].colIndex = 5; // Bouncing state
         }
       }
