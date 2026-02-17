@@ -3526,10 +3526,19 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  instance->_segment.fadeToBlackBy(
-      40); // 252 in WLED = ~10/255 -> very slow fade. Here we use fastled
-           // style. WLED fade_out(252) means "scale by 252/255" = retain 98%.
-           // fadeToBlackBy(4) would be similar. Let's try 24 for a nice trail.
+  // WLED Bugfix: fadeToBlackBy might clip to 0 too fast or ignore gamma floor.
+  // We use scale8 directly on the pixel data if needed, or stick to
+  // fadeToBlackBy but ensure we don't floor-clip aggressively. User suggestion:
+  // "Did you use the gamma correction helper?" -> getFadeFactor? Let's use
+  // standard fadeToBlackBy but maybe slower? actually, wled uses fade_out(offs)
+  // which is scale8(pixel, 255-offs). 40 is fairly aggressive (255-40 = 215).
+  // WLED uses 252 (retention) -> fadeBy 3. My previous code used 40... which is
+  // HUGE fade. WLED: dim8_video(255-scale) -> if scale is small... Wait, WLED
+  // `fade_out(252)` means keep 252/255. fadeToBlackBy(x) means substract or
+  // scale down by x/256? FastLED: `i = scale8(i, 255-x)`. So fadeToBlackBy(3)
+  // is equivalent to WLED 252. The user complained about floor brightness.
+  // Let's try a much smaller fade value.
+  instance->_segment.fadeToBlackBy(3);
 
   // Physics
   // Gravity: WLED 0.0004 + speed/800000.
@@ -3621,14 +3630,21 @@ uint16_t mode_exploding_fireworks(void) {
             uint8_t prog = (uint8_t)constrain((int)sparks[i].col, 0, 255);
 
             // Resolve Color from Palette
-            // colIndex was random8
             uint32_t spColor;
             if (instance->_segment.palette == 0) {
-              spColor = instance->_segment.colors[0]; // Default to primary
+              // FIREWORKS Default: Use Palette 11 (Rainbow/Color) typically
+              // used in WLED or maybe just Random colors? WLED
+              // `mode_exploding_fireworks` usually forces a palette if 0. Let's
+              // use Palette 11 (Rainbow) logic if available, or just random
+              // hue. Actually WLED uses `SEGMENT.palette` directly. If default
+              // (0), we usually want colorful sparks.
+              const uint32_t *pal = getPaletteByIndex(11); // Rainbow
+              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal, 255);
+              spColor = RGBW32(c.r, c.g, c.b, c.w);
             } else {
               const uint32_t *pal =
                   getPaletteByIndex(instance->_segment.palette);
-              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
+              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal, 255);
               spColor = RGBW32(c.r, c.g, c.b, c.w);
             }
 
@@ -3690,7 +3706,17 @@ uint16_t mode_popcorn(void) {
   float gravity = -0.0001f - (instance->_segment.speed / 200000.0f);
   gravity *= len;
 
-  int numPopcorn = instance->_segment.intensity * MAX_POPCORN / 255;
+  // WLED Density fix: ~1:1 with 83 intensity
+  // WLED used `intensity` directly?
+  // WLED structure: loop MAX_POPCORN. if active update. else `if (random8() <
+  // 255)`. Wait, WLED `mode_popcorn` spawns based on simple chance? Actually,
+  // WLED default particle count logic might be sparser. We'll scale density
+  // down. If user says "83 to have 1:1", it means 128 (default) is 1.5x too
+  // dense. Let's scale intensity by 0.65?
+
+  uint8_t effective_intensity =
+      scale8(instance->_segment.intensity, 170); // ~0.66
+  int numPopcorn = effective_intensity * MAX_POPCORN / 255;
   if (numPopcorn == 0)
     numPopcorn = 1;
 
@@ -3721,11 +3747,14 @@ uint16_t mode_popcorn(void) {
       if (idx < len) {
         uint32_t col;
         if (instance->_segment.palette == 0) {
-          // Default colors logic
-          col = instance->_segment.colors[0];
+          // Default colors logic: Use Rainbow (11) as Popcorn usually is
+          // colorful
+          const uint32_t *pal = getPaletteByIndex(11);
+          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal, 255);
+          col = RGBW32(c.r, c.g, c.b, c.w);
         } else {
           const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
+          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal, 255);
           col = RGBW32(c.r, c.g, c.b, c.w);
         }
         instance->_segment.setPixelColor(idx, col);
@@ -3754,7 +3783,12 @@ uint16_t mode_drip(void) {
 
   int numDrops = 1 + (instance->_segment.intensity >> 6); // 1..4
 
-  float gravity = -0.0005f - (instance->_segment.speed / 50000.0f);
+  // Speed Fix: 128 -> 83 scaling
+  // WLED internal speed 83 is standard 1D physics.
+  // If we receive 128, map it down.
+  uint8_t wled_speed = scale8(instance->_segment.speed, 166); // 128 -> ~83
+
+  float gravity = -0.0005f - (wled_speed / 50000.0f);
   gravity *= (len - 1);
 
   for (int j = 0; j < numDrops; j++) {
@@ -3796,17 +3830,31 @@ uint16_t mode_drip(void) {
           drops[j].pos = 0;
         drops[j].vel += gravity;
 
-        // Draw falling drop
-        // Simple trail logic
+        // Draw falling drop with TAIL
+        // Simple trail logic: pos, pos-1, pos-2
+        // Brightness: 255, 128, 64
         int pos = (int)drops[j].pos;
-        if (pos >= 0 && pos < len) {
-          instance->_segment.setPixelColor(pos, instance->_segment.colors[0]);
-        }
+        uint32_t col = instance->_segment.colors[0];
+
+        if (pos >= 0 && pos < len)
+          instance->_segment.setPixelColor(pos, col);
+
+        // Tail
+        if (pos + 1 < len)
+          instance->_segment.setPixelColor(pos + 1, color_blend(col, 0, 128));
+        if (pos + 2 < len)
+          instance->_segment.setPixelColor(pos + 2, color_blend(col, 0, 192));
 
         // Bounce Logic
         if (drops[j].colIndex > 2) { // Bouncing
           // Splash on floor
-          instance->_segment.setPixelColor(0, instance->_segment.colors[0]);
+          // Dim brightness on bounce
+          uint32_t dimCol = color_blend(col, 0, 100);
+          if (drops[j].pos < 1.0f) {
+            instance->_segment.setPixelColor(0, dimCol);
+          } else if (pos < len) {
+            instance->_segment.setPixelColor(pos, dimCol);
+          }
         }
 
       } else {                       // Hit Bottom
