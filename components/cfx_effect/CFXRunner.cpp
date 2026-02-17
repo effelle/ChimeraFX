@@ -3591,7 +3591,9 @@ uint16_t mode_exploding_fireworks(void) {
       // This implies we are drawing too many pixels or they are too
       // bright/sustained. WLED: 5-8 sparks. We spawn sparks at current flare
       // pos. Let's make sure they decay faster or start with diversity.
-      for (int i = 0; i < MAX_SPARKS; i++) { // Using 12 sparks
+      // We spawn sparks at current flare pos.
+      // Fix Crash: Use numSparks (allocated size) instead of MAX_SPARKS (64).
+      for (int i = 0; i < numSparks; i++) {
         sparks[i].pos = flare->pos;
         // Random velocity spread
         // To prevent "long wave", we need variability in velocity.
