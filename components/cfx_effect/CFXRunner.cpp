@@ -3400,6 +3400,9 @@ void CFXRunner::service() {
   case FX_MODE_RIPPLE: // 79
     mode_ripple();
     break;
+  case FX_MODE_HEARTBEAT_CENTER: // 154
+    mode_heartbeat_center();
+    break;
   case FX_MODE_PHASED: // 105
     mode_phased();
     break;
@@ -4835,6 +4838,99 @@ bool CFXRunner::serviceIntro() {
   }
 
   return false; // Still running
+}
+
+// --- Heartbeat Center Effect (ID 154) ---
+// Same logic as Heartbeat, but mapping pulse to width from center
+uint16_t mode_heartbeat_center(void) {
+  if (!instance)
+    return 350;
+
+  // BPM: 40 + (speed / 8) -> Range 40-71 BPM
+  unsigned bpm = 40 + (instance->_segment.speed >> 3);
+  // Time per beat (ms)
+  uint32_t msPerBeat = (60000L / bpm);
+  // Second beat timing (approx 1/3 of beat)
+  uint32_t secondBeat = (msPerBeat / 3);
+
+  // State reuse: aux0 (phase), aux1 (amplitude), step (last beat time)
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 0;
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t beatTimer = instance->now - instance->_segment.step;
+
+  // 1. Beat Logic
+  if ((beatTimer > secondBeat) && !instance->_segment.aux0) {
+    instance->_segment.aux1 = UINT16_MAX; // Trigger Second Beat "dup"
+    instance->_segment.aux0 = 1;
+  }
+
+  if (beatTimer > msPerBeat) {
+    instance->_segment.aux1 = UINT16_MAX; // Trigger Main Beat "lub"
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+  }
+
+  // 2. Decay Logic (Framerate Independent)
+  uint32_t delta = instance->frame_time;
+  if (delta < 1)
+    delta = 1;
+
+  float wled_factor = 2042.0f / (2048.0f + instance->_segment.intensity);
+  float time_ratio = (float)delta / 24.0f;
+  if (time_ratio > 10.0f)
+    time_ratio = 10.0f;
+  float decay = powf(wled_factor, time_ratio);
+
+  instance->_segment.aux1 = (uint16_t)((float)instance->_segment.aux1 * decay);
+
+  // 3. Rendering (Map Amplitude to Width)
+  uint8_t pulse_amt = (instance->_segment.aux1 >> 8);
+  // Apply gamma to the "size" ensures the expansion feels "weighted" like
+  // brightness
+  uint8_t effective_val = instance->applyGamma(pulse_amt);
+
+  uint16_t len = instance->_segment.length();
+  uint16_t center = len / 2;
+  // Max radius is half the strip length
+  uint16_t max_radius = len / 2;
+  // Calculate current lit radius
+  uint16_t radius = (uint32_t)(max_radius * effective_val) / 255;
+
+  uint32_t color = instance->_segment.colors[0];
+  if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+    // Use palette color 0 or map entire palette to the heart?
+    // Heartbeat usually uses colors[0]. Let's stick to standard behavior.
+    // If palette active, map palette across the lit area?
+    // WLED Heartbeat maps palette across the whole strip but fades brightness.
+    // Here we map palette across whole strip? Or just the heart?
+    // Let's map palette across the whole strip for consistency.
+  }
+
+  for (int i = 0; i < len; i++) {
+    int dist = abs(i - center);
+    if (dist <= radius) {
+      if (instance->_segment.palette != 0 &&
+          instance->_segment.palette != 255) {
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
+        // Map palette to the whole strip or just the active part?
+        // Let's map to whole strip so colors are stationary and just revealed
+        CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      } else {
+        instance->_segment.setPixelColor(i, color);
+      }
+    } else {
+      instance->_segment.setPixelColor(i, 0); // Black outside heart
+    }
+  }
+
+  return FRAMETIME;
 }
 
 // Valid Palette Implementation (Moved from line 121)
