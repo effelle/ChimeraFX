@@ -3475,10 +3475,335 @@ void CFXRunner::service() {
   case FX_MODE_PERCENT_CENTER: // 114
     mode_percent_center();
     break;
+  case FX_MODE_EXPLODING_FIREWORKS: // 90
+    mode_exploding_fireworks();
+    break;
+  case FX_MODE_POPCORN: // 95
+    mode_popcorn();
+    break;
+  case FX_MODE_DRIP: // 96
+    mode_drip();
+    break;
   default:
     mode_static();
     break;
   }
+}
+
+// --- Physics Effects (ID 90, 95, 96) ---
+
+// Shared Particle Struct for Fireworks, Popcorn, Drip
+struct Spark {
+  float pos;
+  float vel;
+  uint16_t col;     // Brightness/Color
+  uint8_t colIndex; // State or color index
+};
+
+/*
+ * Exploding Fireworks (ID 90)
+ * Ported from WLED (Aircoookie/Blazoncek)
+ * Optimized for 1D Strips (No 2D support)
+ */
+uint16_t mode_exploding_fireworks(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+
+  // Allocate Data
+  // WLED Logic: 5 + (rows*cols)/2, maxed at FAIR_DATA
+  // simplified: max 64 sparks for typical strips to save RAM
+  const uint16_t MAX_SPARKS = 64; 
+  uint16_t numSparks = std::min((uint16_t)(5 + (len >> 1)), MAX_SPARKS);
+  
+  // Data layout: [Spark array...] [float dying_gravity]
+  size_t dataSize = sizeof(Spark) * numSparks;
+  
+  if (!instance->_segment.allocateData(dataSize + sizeof(float))) return mode_static();
+
+  Spark* sparks = reinterpret_cast<Spark*>(instance->_segment.data);
+  float* dying_gravity = reinterpret_cast<float*>(instance->_segment.data + dataSize);
+  Spark* flare = sparks; // First spark is the rocket flare
+
+  // Initialization / Resize handling
+  if (dataSize != instance->_segment.aux1) {
+    *dying_gravity = 0.0f;
+    instance->_segment.aux0 = 0;      // State: 0=Init Flare
+    instance->_segment.aux1 = dataSize; // Size tracker
+  }
+
+  // Fade out canvas (Trail effect)
+  instance->_segment.fadeToBlackBy(40); // 252 in WLED = ~10/255 -> very slow fade. Here we use fastled style. 
+                                        // WLED fade_out(252) means "scale by 252/255" = retain 98%.
+                                        // fadeToBlackBy(4) would be similar. Let's try 24 for a nice trail.
+
+  // Physics
+  // Gravity: WLED 0.0004 + speed/800000. 
+  // Map speed 0-255 to reasonable gravity.
+  float gravity = -0.0004f - (instance->_segment.speed / 800000.0f);
+  gravity *= len; // Scale by strip length
+
+  if (instance->_segment.aux0 < 2) { // STATE: FLARE LAUNCH
+    if (instance->_segment.aux0 == 0) { // Init Flare
+      flare->pos = 0;
+      flare->vel = 0;
+      // WLED Peak Height: 75 + random8(180) -> 75..255 mapped to len
+      // v^2 = 2*g*h -> v = sqrt(2 * |g| * h)
+      float peakHeight = (75 + cfx::hw_random8(180)) * (len - 1) / 255.0f;
+      flare->vel = sqrtf(-2.0f * gravity * peakHeight);
+      flare->col = 255; // Max brightness
+      instance->_segment.aux0 = 1;
+    }
+
+    // Process Flare Physics
+    if (flare->vel > 12 * gravity) { // Still rising (gravity is negative)
+      // Draw Flare
+      int pos = (int)flare->pos;
+      if (pos >= 0 && pos < len) {
+        instance->_segment.setPixelColor(pos, RGBW32(flare->col, flare->col, flare->col, 0));
+      }
+      
+      flare->pos += flare->vel;
+      flare->pos = constrain(flare->pos, 0.0f, (float)len - 1.0f);
+      flare->vel += gravity;
+      flare->col = qsub8(flare->col, 2); // Dim slightly
+    } else {
+      instance->_segment.aux0 = 2; // Trigger Explosion
+    }
+
+  } else if (instance->_segment.aux0 < 4) { // STATE: EXPLOSION
+    
+    // Initialize Sparks (Debris)
+    if (instance->_segment.aux0 == 2) {
+      // How many sparks?
+      int nSparks = flare->pos + cfx::hw_random8(4);
+      nSparks = std::min((int)nSparks, (int)numSparks);
+      nSparks = std::max(nSparks, 4);
+
+      for (int i = 1; i < nSparks; i++) {
+        sparks[i].pos = flare->pos;
+        // Random velocity 
+        sparks[i].vel = (float(cfx::hw_random16(20001)) / 10000.0f) - 0.9f; // -0.9 to 1.1
+        sparks[i].vel *= (len < 32 ? 0.5f : 1.0f); // Scale for short strips
+        
+        // Color
+        sparks[i].col = 345; // Start "Hot" (used for coloring/cooling logic)
+        sparks[i].colIndex = cfx::hw_random8(); // Random palette index
+        
+        // Explode outward energy
+        sparks[i].vel *= flare->pos / len; // Height factor
+        sparks[i].vel *= -gravity * 50;
+      }
+      *dying_gravity = gravity / 2;
+      instance->_segment.aux0 = 3; 
+    }
+
+    // Process Sparks
+    // Check if "known spark" (index 1) is still burnt out
+    if (sparks[1].col > 4) {
+      // Simulate all sparks
+      // We process all allocated slots, but effective ones were set above
+      // Optimization: simple loop over all possible sparks
+      for (int i = 1; i < numSparks; i++) {
+        // Only process if it has "heat"
+        if (sparks[i].col > 0) {
+            sparks[i].pos += sparks[i].vel;
+            sparks[i].vel += *dying_gravity;
+            
+            if (sparks[i].col > 3) sparks[i].col -= 4; // Cooling
+            else sparks[i].col = 0;
+
+            if (sparks[i].pos >= 0 && sparks[i].pos < len) {
+               uint8_t prog = (uint8_t)constrain((int)sparks[i].col, 0, 255);
+               
+               // Resolve Color from Palette
+               // colIndex was random8
+               uint32_t spColor;
+               if (instance->_segment.palette == 0) {
+                 spColor = instance->_segment.colors[0]; // Default to primary
+               } else {
+                 const uint32_t* pal = getPaletteByIndex(instance->_segment.palette);
+                 CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
+                 spColor = RGBW32(c.r, c.g, c.b, c.w);
+               }
+
+               CRGBW c = RGBW32(0,0,0,0);
+               // Heat logic: 
+               // > 300?? WLED used uint16_t col for heat. 
+               // Here we clamped to 255 for display but logic keeps it high?
+               // Let's stick to standard byte logic for simplicity in this port.
+               
+               // Simple Fade logic
+               c = ColorFromPalette(sparks[i].colIndex, prog, getPaletteByIndex(instance->_segment.palette));
+               if (prog > 200) { // White hot
+                 c = color_blend(c, RGBW32(255,255,255,0), (prog - 200) * 5);
+               }
+               
+               instance->_segment.setPixelColor((int)sparks[i].pos, RGBW32(c.r, c.g, c.b, c.w));
+            }
+        }
+      }
+      *dying_gravity *= 0.9f; // Air resistance
+    } else {
+      // Burnt out
+      instance->_segment.aux0 = 6 + cfx::hw_random8(10); // Wait frames
+    }
+
+  } else { // STATE: COOLDOWN/RESET
+    instance->_segment.aux0--;
+    if (instance->_segment.aux0 < 4) {
+      instance->_segment.aux0 = 0; // Reset to Flare
+    }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Popcorn (ID 95)
+ * Ported from WLED
+ */
+uint16_t mode_popcorn(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+
+  // WLED: max 21 kernels per segment (ESP8266)
+  const int MAX_POPCORN = 24;
+  if (!instance->_segment.allocateData(sizeof(Spark) * MAX_POPCORN)) return mode_static();
+  
+  Spark* popcorn = reinterpret_cast<Spark*>(instance->_segment.data);
+
+  // Background
+  instance->_segment.fill(instance->_segment.colors[1]); // Secondary
+
+  float gravity = -0.0001f - (instance->_segment.speed / 200000.0f);
+  gravity *= len;
+
+  int numPopcorn = instance->_segment.intensity * MAX_POPCORN / 255;
+  if (numPopcorn == 0) numPopcorn = 1;
+
+  for (int i = 0; i < numPopcorn; i++) {
+    if (popcorn[i].pos >= 0.0f) { // Active
+      popcorn[i].pos += popcorn[i].vel;
+      popcorn[i].vel += gravity;
+    } else { // Inactive - Pop?
+      if (cfx::hw_random8() < 5) { // Pop Chance
+         popcorn[i].pos = 0.01f;
+         
+         // Initial Velocity calculation
+         unsigned peakHeight = 128 + cfx::hw_random8(128);
+         peakHeight = (peakHeight * (len - 1)) >> 8;
+         popcorn[i].vel = sqrtf(-2.0f * gravity * peakHeight);
+
+         if (instance->_segment.palette == 0) {
+            popcorn[i].colIndex = cfx::hw_random8(0, 3); // Pick simple colors? 
+         } else {
+            popcorn[i].colIndex = cfx::hw_random8();
+         }
+      }
+    }
+
+    // Draw
+    if (popcorn[i].pos >= 0.0f) {
+      int idx = (int)popcorn[i].pos;
+      if (idx < len) {
+        uint32_t col;
+        if (instance->_segment.palette == 0) {
+             // Default colors logic
+             col = instance->_segment.colors[0]; 
+        } else {
+             const uint32_t* pal = getPaletteByIndex(instance->_segment.palette);
+             CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
+             col = RGBW32(c.r, c.g, c.b, c.w);
+        }
+        instance->_segment.setPixelColor(idx, col);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Drip (ID 96)
+ * Ported from WLED
+ */
+uint16_t mode_drip(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+
+  const int MAX_DROPS = 4;
+  if (!instance->_segment.allocateData(sizeof(Spark) * MAX_DROPS)) return mode_static();
+  Spark* drops = reinterpret_cast<Spark*>(instance->_segment.data);
+
+  instance->_segment.fill(instance->_segment.colors[1]);
+
+  int numDrops = 1 + (instance->_segment.intensity >> 6); // 1..4
+  
+  float gravity = -0.0005f - (instance->_segment.speed / 50000.0f);
+  gravity *= (len - 1);
+
+  for (int j = 0; j < numDrops; j++) {
+    if (drops[j].colIndex == 0) { // Init
+      drops[j].pos = len - 1;
+      drops[j].vel = 0;
+      drops[j].col = 0;   // Brightness/Size measure
+      drops[j].colIndex = 1; // State: 1=Forming
+    }
+
+    // Source (Tap)
+    // Draw source pixel at top
+    // WLED uses "sourcedrop" brightness logic.
+    
+    if (drops[j].colIndex == 1) { // Forming
+       // Swelling
+       drops[j].col += map(instance->_segment.speed, 0, 255, 1, 6);
+       if (drops[j].col > 255) drops[j].col = 255;
+       
+       // Draw swelling drop
+       instance->_segment.setPixelColor(len-1, RGBW32(0,0, (int)drops[j].col, 0)); // Blueish? Or Primary?
+       // Let's use Primary with brightness
+       // instance->_segment.setPixelColor(len-1, color_blend(0, instance->_segment.colors[0], drops[j].col));
+
+       // Random Fall
+       if (cfx::hw_random8() < drops[j].col / 10) {
+         drops[j].colIndex = 2; // Fall
+         drops[j].col = 255;
+       }
+    }
+
+    if (drops[j].colIndex > 1) { // Falling
+       if (drops[j].pos > 0) {
+          drops[j].pos += drops[j].vel;
+          if (drops[j].pos < 0) drops[j].pos = 0;
+          drops[j].vel += gravity;
+          
+          // Draw falling drop
+          // Simple trail logic
+          int pos = (int)drops[j].pos;
+          if (pos >= 0 && pos < len) {
+             instance->_segment.setPixelColor(pos, instance->_segment.colors[0]);
+          }
+
+          // Bounce Logic
+          if (drops[j].colIndex > 2) { // Bouncing
+             // Splash on floor
+             instance->_segment.setPixelColor(0, instance->_segment.colors[0]);
+          }
+
+       } else { // Hit Bottom
+          if (drops[j].colIndex > 2) { // Already bounced
+             drops[j].colIndex = 0; // Reset
+          } else {
+             // Init Bounce
+             drops[j].vel = -drops[j].vel / 4.0f; // Dampen
+             drops[j].pos += drops[j].vel;
+             drops[j].colIndex = 5; // Bouncing state
+          }
+       }
+    }
+  }
+
+  return FRAMETIME;
 }
 
 // --- Bouncing Balls Effect (ID 91) ---
