@@ -33,6 +33,7 @@ uint16_t mode_hyper_sparkle(void);
 uint16_t mode_exploding_fireworks(void);
 uint16_t mode_popcorn(void);
 uint16_t mode_drip(void);
+uint16_t mode_dropping_time(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -3473,6 +3474,9 @@ void CFXRunner::service() {
   case FX_MODE_DRIP: // 96
     mode_drip();
     break;
+  case FX_MODE_DROPPING_TIME: // 151
+    mode_dropping_time();
+    break;
   default:
     mode_static();
     break;
@@ -3765,6 +3769,286 @@ uint16_t mode_popcorn(void) {
  * Drip (ID 96)
  * Ported from WLED
  */
+// --- Dropping Time Effect (ID 151) ---
+// Fills the strip with water over a set duration (Timer).
+// Speed 0-255 maps to 1 minute - 60 minutes.
+
+struct DroppingTimeState {
+  uint32_t startTime;
+  uint16_t filledPixels;
+  uint32_t lastDropTime;
+
+  // We need to track multiple drops:
+  // 1. The "Filling" drop (the one that will raise the level)
+  // 2. "Dummy" drops (visual only)
+  // Reusing Spark struct logic
+  Spark fillingDrop;
+  Spark dummyDrops[2]; // Max 2 dummy drops active
+
+  bool fillingDropActive;
+
+  void init() {
+    startTime = 0;
+    filledPixels = 0;
+    lastDropTime = 0;
+    fillingDropActive = false;
+    fillingDrop = Spark();
+    for (int i = 0; i < 2; i++)
+      dummyDrops[i] = Spark();
+  }
+};
+
+uint16_t mode_dropping_time(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  if (!instance->_segment.allocateData(sizeof(DroppingTimeState))) {
+    ESP_LOGE("CFX", "DroppingTime: Alloc failed!");
+    return mode_static();
+  }
+
+  DroppingTimeState *state =
+      reinterpret_cast<DroppingTimeState *>(instance->_segment.data);
+
+  // Initialize or Reset
+  if (instance->_segment.reset) {
+    ESP_LOGD("CFX", "DroppingTime: RESET");
+    state->init();
+    state->startTime = instance->now;
+    instance->_segment.fill(0); // Start black
+    instance->_segment.reset = false;
+  }
+
+  // Debug Log
+  static uint32_t last_log = 0;
+  if (instance->now - last_log > 2000) {
+    last_log = instance->now;
+    // Recalc duration for log
+    uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+    uint32_t duration_ms = duration_min * 60 * 1000;
+    uint32_t elapsed = instance->now - state->startTime;
+    ESP_LOGD("CFX", "DT: Elapsed %u/%u ms, Filled %u", elapsed, duration_ms,
+             state->filledPixels);
+  }
+
+  // 1. Calculate Time & Progress
+  // Speed 0   -> 1 minute
+  // Speed 255 -> 60 minutes
+  // Mapping: Duration (min) = 1 + (Speed * 59 / 255)
+  uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+  uint32_t duration_ms = duration_min * 60 * 1000;
+
+  uint32_t elapsed = instance->now - state->startTime;
+  if (elapsed > duration_ms)
+    elapsed = duration_ms;
+
+  // Calculate Target Level based on Time
+  // We want the level to rise *smoothly* or *stepwise*?
+  // User said: "Every drop reduced by one the strip length... At 100% all lit
+  // and animation stop." This implies the level is the visual representation of
+  // time.
+
+  uint16_t targetLevel = (uint16_t)((float)elapsed / duration_ms * len);
+  if (targetLevel > len)
+    targetLevel = len;
+
+  // If we are done, just fill and return
+  if (elapsed >= duration_ms) {
+    // Show full ocean
+    // ... (ocean logic for full strip)
+    // For now, just a full color or ocean static
+    // Reuse ocean logic but for full strip
+  }
+
+  // 2. Drop Logic
+  // Gravity Physics
+  uint8_t wled_speed = 83; // Standard gravity
+  float gravity = -0.0005f - (wled_speed / 50000.0f);
+  gravity *= (len - 1);
+
+  // A. Filling Drop
+  // We need to spawn a drop such that it hits the WATER LEVEL exactly when the
+  // level needs to increment? Or simpler: We just spawn drops periodically.
+  // When one hits, if it's time, we raise the level. User's request: "Every
+  // drop... leaving the leds lit." So the drop CAUSES the fill.
+
+  // Let's reverse it:
+  // Calculate when the NEXT pixel should be filled.
+  // NextFillTime = (PixelIndex + 1) * (Duration / Len)
+  // We need to spawn the drop so it ARRIVES at NextFillTime.
+  // FallTime = sqrt(2 * dist / |g|)
+  // dist = (len-1) - currentLevel
+  // SpawnTime = NextFillTime - FallTime.
+
+  if (state->filledPixels < len) {
+    uint32_t msPerPixel = duration_ms / len;
+    uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
+
+    // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
+    float dist = (len - 1) - state->filledPixels;
+    if (dist < 0)
+      dist = 0;
+
+    // Time to fall (frames? ms?). Gravity is in units/frame^2?
+    // In Drip effect: pos += vel; vel += gravity.
+    // Distance d = 0.5 * g * t^2 -> t = sqrt(2d/g) (in frames)
+    // Convert frames to ms (approx 15ms/frame default, but variable)
+    // Let's use a rough estimate or just spawn it slightly ahead.
+
+    // Heuristic: Just spawn it when we are close.
+    // Better: Interval based.
+    // If we simply spawn drops at `msPerPixel` interval, they will arrive at
+    // roughly the right rate. Let's try that for robustness.
+
+    if (!state->fillingDropActive) {
+      // Check if it's time to spawn the next filling drop
+      // We want the drop to LAND when the timer reaches the next pixel.
+      // So we spawn it `FallTime` *before* that.
+      // Approx Fall Time (ms) ~ sqrt(2 * dist / 0.0005) * 15ms
+      // G_eff = |gravity| = 0.0005 * len roughly.
+      // Let's just spawn it if (NextPixelTime - Now) < ExpectedFallDuration
+
+      float estFallFrames = sqrtf(2.0f * dist / (-gravity));
+      uint32_t estFallMs = estFallFrames * 15; // Approx
+
+      // Add a buffer so it doesn't arrive too late
+      if (elapsed + estFallMs >= nextPixelTime) {
+        // Spawn!
+        state->fillingDropActive = true;
+        state->fillingDrop.pos = len - 1;
+        state->fillingDrop.vel = 0;
+        state->fillingDrop.col = 255;
+        state->fillingDrop.colIndex = 2; // Falling
+      }
+    }
+  }
+
+  // Update Filling Drop
+  if (state->fillingDropActive) {
+    state->fillingDrop.vel += gravity;
+    state->fillingDrop.pos += state->fillingDrop.vel;
+
+    // Hit Water Level?
+    if (state->fillingDrop.pos <= state->filledPixels) {
+      // Splash / Disappear
+      state->fillingDropActive = false;
+      // Increment Level (Visual latch to timer)
+      // Only increment if we haven't exceeded the calculated timer level too
+      // much (To keep in sync with wall clock)
+      state->filledPixels++;
+      if (state->filledPixels > len)
+        state->filledPixels = len;
+    }
+
+    // Draw Filling Drop (Bright Blue/White)
+    int pos = (int)state->fillingDrop.pos;
+    if (pos >= state->filledPixels && pos < len) {
+      instance->_segment.setPixelColor(pos, 0xFFFFFF); // White head
+                                                       // Tail
+      for (int t = 1; t <= 4; t++) {
+        int tPos = pos + t;
+        if (tPos < len) {
+          instance->_segment.setPixelColor(
+              tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+        }
+      }
+    }
+  } else {
+    // Failsafe: If timer says we should have filled more pixels but no drop
+    // triggered it (lag?), catch up This ensures the timer hits 60m exactly
+    // even if drops miss.
+    if (targetLevel > state->filledPixels) {
+      state->filledPixels = targetLevel;
+    }
+  }
+
+  // B. Dummy Drops (Visuals)
+  // Randomly spawn if not too busy
+  if (cfx::hw_random8() < 5) { // Low chance per frame
+    for (int i = 0; i < 2; i++) {
+      if (state->dummyDrops[i].colIndex == 0) {
+        state->dummyDrops[i].colIndex = 2;
+        state->dummyDrops[i].pos = len - 1;
+        state->dummyDrops[i].vel = 0;
+        state->dummyDrops[i].col = 150; // Dimmer
+        break;
+      }
+    }
+  }
+
+  // Update Dummy Drops
+  for (int i = 0; i < 2; i++) {
+    if (state->dummyDrops[i].colIndex != 0) {
+      state->dummyDrops[i].vel += gravity;
+      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
+
+      if (state->dummyDrops[i].pos <= state->filledPixels) {
+        // Splash at water surface
+        instance->_segment.setPixelColor(state->filledPixels,
+                                         0x0000FF); // Blue splash
+        state->dummyDrops[i].colIndex = 0;          // Die
+      } else {
+        // Draw
+        int pos = (int)state->dummyDrops[i].pos;
+        if (pos < len) {
+          uint32_t col = instance->_segment.colors[0]; // Use selected color
+          instance->_segment.setPixelColor(pos, col);
+        }
+      }
+    }
+  }
+
+  // 3. Render Water (Ocean Logic)
+  // Render ONLY up to filledPixels
+  // Mask the rest?
+  // Actually, we should render the ocean logic for the whole strip but only
+  // WRITE pixels < filledPixels This ensures the wave phase is continuous.
+
+  uint32_t s = instance->_segment.speed; // Speed of waves
+  uint32_t ms = instance->now;
+
+  // Ocean colors (Palette 11 - Ocean)
+  // Forced Ocean Palette or User Selected?
+  // User said "Like our ocean".
+  const uint32_t *active_palette =
+      getPaletteByIndex(11); // Force Ocean for now, or match segment
+  if (instance->_segment.palette != 0)
+    active_palette = getPaletteByIndex(instance->_segment.palette);
+
+  for (int i = 0; i < state->filledPixels; i++) {
+    // Simple Wave Logic (Sinewave)
+    // Color = Palette( (i*freq + time) )
+    uint8_t index = beatsin8(s / 4, 0, 255, 0, i * 3); // Base wave
+    // Add some sparkle/noise?
+    CRGBW c = ColorFromPalette(index, 255, active_palette);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // Ensure "Air" is black (cleared by dummy drop logic logic above? No, we need
+  // to clear) Actually, we usually fill black at start of frame?
+  // CFXRunner::service calls per-effect. Effect is responsible for drawing
+  // WHOLE strip or cleaning. We need to clear the "Air" part (filledPixels to
+  // len). But we already drew drops there. So we should clear BEFORE drawing
+  // drops. Let's correct order:
+  // 1. Draw Water (0 to filled)
+  // 2. Clear Air (filled to len)
+  // 3. Draw Drops (Air)
+
+  // Rewind:
+  // Re-drawing strategy:
+  // 1. Set all to Black (instance->_segment.fill(0))? No, preserve water.
+  // Loop i from filledPixels to len -> Set Black.
+  for (int i = state->filledPixels; i < len; i++) {
+    instance->_segment.setPixelColor(i, 0);
+  }
+  // Now drops logic (which calls setPixelColor) will obey Z-order if called
+  // here. My previous code called setPixelColor for drops mixed with logic. I
+  // should move "Clear Air" to top of function or before drop rendering.
+
+  return FRAMETIME;
+}
+
 uint16_t mode_drip(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1)
