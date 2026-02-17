@@ -28,6 +28,7 @@ struct CRGBW {
   uint8_t b;
   uint8_t w;
 
+  CRGBW() = default;
   CRGBW(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t iw = 0)
       : r(ir), g(ig), b(ib), w(iw) {}
   CRGBW(uint32_t c)

@@ -231,21 +231,6 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
 #define AW_SHIFT 16
 #define AW_SCALE (1 << AW_SHIFT)
 
-struct CRGBW {
-  union {
-    struct {
-      uint8_t r;
-      uint8_t g;
-      uint8_t b;
-      uint8_t w;
-    };
-    uint8_t raw[4];
-  };
-  CRGBW() : r(0), g(0), b(0), w(0) {}
-  CRGBW(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t iw = 0)
-      : r(ir), g(ig), b(ib), w(iw) {}
-};
-
 // Math Helpers - use cfx:: namespace from cfx_utils.h
 using cfx::color_blend;
 using cfx::constrain;

@@ -115,6 +115,16 @@ inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+// Constrain helper
+template <class T> const T &constrain(const T &x, const T &a, const T &b) {
+  if (x < a)
+    return a;
+  else if (b < x)
+    return b;
+  else
+    return x;
+}
+
 // WLED sin_gap function
 // Creates a sine wave with a flat gap at the bottom (0)
 inline uint8_t sin_gap(uint16_t in) {
