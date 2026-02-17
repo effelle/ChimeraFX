@@ -3932,96 +3932,70 @@ uint16_t mode_dropping_time(void) {
 
     // Hit Water Level?
     if (state->fillingDrop.pos <= state->filledPixels) {
-      // Splash / Disappear
       state->fillingDropActive = false;
-      // Increment Level (Visual latch to timer)
-      // Only increment if we haven't exceeded the calculated timer level too
-      // much (To keep in sync with wall clock)
       state->filledPixels++;
       if (state->filledPixels > len)
         state->filledPixels = len;
     }
-
-    // 3. RENDER PHASE
-    // Correct Order: 1. Clear Air, 2. Draw Water, 3. Draw Drops
-
-    // A. Clear Air (everything above water level)
-    for (int i = state->filledPixels; i < len; i++) {
-      instance->_segment.setPixelColor(i, 0);
+  } else {
+    // Failsafe / Catch-up Logic
+    if (targetLevel > state->filledPixels) {
+      state->filledPixels = targetLevel;
     }
-
-    // B. Draw Water (Ocean Logic)
-    // Use a FIXED speed for the waves so they animate even if the Timer speed
-    // is slow/zero.
-    uint32_t wave_speed = 32; // Good default ocean speed
-    uint32_t ms = instance->now;
-
-    // Ocean colors (Palette 11 - Ocean)
-    const uint32_t *active_palette = getPaletteByIndex(11);
-    if (instance->_segment.palette != 0)
-      active_palette = getPaletteByIndex(instance->_segment.palette);
-
-    for (int i = 0; i < state->filledPixels; i++) {
-      // Simple Wave Logic (Sinewave)
-      uint8_t index = beatsin8_t(wave_speed, 0, 255, 0, i * 3); // Base wave
-      CRGBW c = ColorFromPalette(index, 255, active_palette);
-      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-    }
-
-    // C. Draw Drops (Filling Drop)
-    if (state->fillingDropActive) {
-      int pos = (int)state->fillingDrop.pos;
-      // Head
-      if (pos >= state->filledPixels && pos < len) {
-        instance->_segment.setPixelColor(pos, 0xFFFFFF); // White head
-      }
-      // Tail
-      for (int t = 1; t <= 4; t++) {
-        int tPos = pos + t;
-        if (tPos >= state->filledPixels && tPos < len) {
-          instance->_segment.setPixelColor(
-              tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
-        }
-      }
-    }
-
-    // D. Draw Drops (Dummy Drops)
-    for (int i = 0; i < 2; i++) {
-      if (state->dummyDrops[i].colIndex != 0) {
-        int pos = (int)state->dummyDrops[i].pos;
-        if (pos >= state->filledPixels && pos < len) {
-          uint32_t col = instance->_segment.colors[0];
-          // If color is black/default, make it visible (e.g. Blue)
-          if (col == 0)
-            col = 0x0000FF;
-          instance->_segment.setPixelColor(pos, col);
-        }
-      }
-    }
-
-    return FRAMETIME;
   }
 
-  // Ensure "Air" is black (cleared by dummy drop logic logic above? No, we need
-  // to clear) Actually, we usually fill black at start of frame?
-  // CFXRunner::service calls per-effect. Effect is responsible for drawing
-  // WHOLE strip or cleaning. We need to clear the "Air" part (filledPixels to
-  // len). But we already drew drops there. So we should clear BEFORE drawing
-  // drops. Let's correct order:
-  // 1. Draw Water (0 to filled)
-  // 2. Clear Air (filled to len)
-  // 3. Draw Drops (Air)
+  // If Duration ended, force full fill
+  if (elapsed >= duration_ms) {
+    state->filledPixels = len;
+  }
 
-  // Rewind:
-  // Re-drawing strategy:
-  // 1. Set all to Black (instance->_segment.fill(0))? No, preserve water.
-  // Loop i from filledPixels to len -> Set Black.
+  // --- 3. RENDER PHASE (Always Run) ---
+
+  // A. Clear Air (everything above water level)
   for (int i = state->filledPixels; i < len; i++) {
     instance->_segment.setPixelColor(i, 0);
   }
-  // Now drops logic (which calls setPixelColor) will obey Z-order if called
-  // here. My previous code called setPixelColor for drops mixed with logic. I
-  // should move "Clear Air" to top of function or before drop rendering.
+
+  // B. Draw Water (Ocean Logic)
+  // Use a FIXED speed for the waves so they animate seamlessly
+  uint32_t wave_speed = 32;
+  const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
+  if (instance->_segment.palette != 0)
+    active_palette = getPaletteByIndex(instance->_segment.palette);
+
+  for (int i = 0; i < state->filledPixels; i++) {
+    uint8_t index = beatsin8_t(wave_speed, 0, 255, 0, i * 3);
+    CRGBW c = ColorFromPalette(index, 255, active_palette);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // C. Draw Drops (Filling Drop)
+  if (state->fillingDropActive) {
+    int pos = (int)state->fillingDrop.pos;
+    if (pos >= state->filledPixels && pos < len) {
+      instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
+    }
+    for (int t = 1; t <= 4; t++) {
+      int tPos = pos + t;
+      if (tPos >= state->filledPixels && tPos < len) {
+        instance->_segment.setPixelColor(
+            tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+      }
+    }
+  }
+
+  // D. Draw Drops (Dummy Drops)
+  for (int i = 0; i < 2; i++) {
+    if (state->dummyDrops[i].colIndex != 0) {
+      int pos = (int)state->dummyDrops[i].pos;
+      if (pos >= state->filledPixels && pos < len) {
+        uint32_t col = instance->_segment.colors[0];
+        if (col == 0)
+          col = 0x0000FF;
+        instance->_segment.setPixelColor(pos, col);
+      }
+    }
+  }
 
   return FRAMETIME;
 }
