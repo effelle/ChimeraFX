@@ -34,6 +34,7 @@ uint16_t mode_exploding_fireworks(void);
 uint16_t mode_popcorn(void);
 uint16_t mode_drip(void);
 uint16_t mode_dropping_time(void);
+uint16_t mode_heartbeat_center(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
