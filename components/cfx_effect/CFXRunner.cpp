@@ -3526,22 +3526,24 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  // User: "floor brightness bug... use fadeByBlack()?"
-  // WLED logic: fade_out(segment.intensity < 128 ? 250 : 252) typically.
-  // fadeToBlackBy(x) in FastLED: leds[i].nscale8(255-x).
-  // So fadeToBlackBy(3) -> scale by 252. This is correct.
-  // If user sees a floor brightness bug (pixels never reaching 0?), it might be
-  // that scaling 1 down to 0 doesn't happen fast enough or gamma curve lifts 1
-  // to visible. Let's force a slightly more aggressive fade BUT use nscale8
-  // directly for control. "Particle explosion too strong... long wave with same
-  // color". This implies the tail is too long/bright? Let's try
-  // fadeToBlackBy(10). Wait, user says "bug of floor brightness level...
-  // suggest gamma correction". If we fade by a small amount, we might float at
-  // low values. Let's enable a hard clamp at low values? No, let's use standard
-  // fadeToBlackBy(10) for shorter tails.
+  // Fix Brownout: fadeToBlackBy(1) is too slow, accumulating too much white
+  // (high current). Fix Floor: fadeToBlackBy might leave artifacts at low
+  // brightness. We use fadeToBlackBy(10) (keep ~96%) for a nice trail but safe
+  // decay.
   instance->_segment.fadeToBlackBy(10);
-  // Also blur to smooth out "same color" blocks?
-  // instance->_segment.blur(8);
+
+  // Floor Clamp: Ensure pixels reach pure black
+  for (int i = 0; i < len; i++) {
+    uint32_t c = instance->_segment.getPixelColor(i);
+    // Fast check for low brightness
+    // If R, G, And B are all very low (< 5), force 0.
+    uint8_t r = (c >> 16) & 0xFF;
+    uint8_t g = (c >> 8) & 0xFF;
+    uint8_t b = c & 0xFF;
+    if (r <= 5 && g <= 5 && b <= 5) {
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
 
   // Physics
   // Gravity: WLED 0.0004 + speed/800000.
@@ -3568,10 +3570,8 @@ uint16_t mode_exploding_fireworks(void) {
         instance->_segment.setPixelColor(
             pos, RGBW32(flare->col, flare->col, flare->col, 0));
         // Meteor tail
-        if (pos > 0)
-          instance->_segment.setPixelColor(
-              pos - 1,
-              RGBW32(flare->col / 2, flare->col / 2, flare->col / 2, 0));
+        // if (pos > 0) instance->_segment.setPixelColor(pos-1,
+        // RGBW32(flare->col/2, flare->col/2, flare->col/2, 0));
       }
 
       flare->pos += flare->vel;
@@ -3742,12 +3742,10 @@ uint16_t mode_popcorn(void) {
       int idx = (int)popcorn[i].pos;
       if (idx < len) {
         uint32_t col;
-        if (instance->_segment.palette == 0) {
-          // Default colors logic: User requested Solid (255) for Popcorn
-          // default
-          const uint32_t *pal = getPaletteByIndex(255); // Solid
-          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
-          col = RGBW32(c.r, c.g, c.b, c.w);
+        if (instance->_segment.palette == 0 ||
+            instance->_segment.palette == 255) {
+          // Default (0) or Solid (255): Use Primary Color
+          col = instance->_segment.colors[0];
         } else {
           const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
           CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
