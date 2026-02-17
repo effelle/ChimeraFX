@@ -4901,8 +4901,11 @@ uint16_t mode_heartbeat_center(void) {
   uint16_t len = instance->_segment.length();
 
   // Dynamic Radius
-  // Scale max_radius slightly so the "core" can be full brightness at peak.
-  uint32_t max_radius = (len / 2);
+  // Scale max_radius HIGHER than the strip length to ensure the fade doesn't
+  // cutoff the edges at full brightness. Using 'len' instead of 'len/2' gives a
+  // 2x overshoot. This means at max pulse, the "zero point" is far outside the
+  // strip.
+  uint32_t max_radius = len;
   uint32_t current_radius = (max_radius * effective_val) / 255;
 
   // Ensure a minimum radius so it doesn't disappear completely (Dry off fix)
