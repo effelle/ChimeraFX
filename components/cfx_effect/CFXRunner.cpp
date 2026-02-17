@@ -330,10 +330,11 @@ static const uint32_t PalettePastel[16] CFX_PROGMEM = {
     0xB4C8FF, 0xE6B4FF, 0xFFB4DC, 0xFFBEBE};
 
 // Palette 10: Ocean (formerly Pacifica) - Deep ocean blues with white crests
+// Palette 10: Ocean (formerly Pacifica) - Deep ocean blues with white crests
 static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
-    0x000212, 0x000F1E, 0x001937, 0x002850, 0x004678, 0x0064B4,
+    0x001040, 0x002050, 0x003060, 0x004080, 0x0050A0, 0x0064B4,
     0x148CF0, 0x28C8FF, 0x50DCFF, 0x96E6FF, 0xC8F0FF, 0xC8F0FF,
-    0x96E6FF, 0x28C8FF, 0x004678, 0x000212};
+    0x96E6FF, 0x28C8FF, 0x0050A0, 0x001040};
 
 // Palette 11: HeatColors - For Sunrise effect (black → red → orange → yellow →
 // white)
