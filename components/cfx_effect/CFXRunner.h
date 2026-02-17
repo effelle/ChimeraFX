@@ -22,6 +22,19 @@
 
 #define MIN_FRAME_DELAY 2
 
+struct CRGBW {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t w;
+
+  CRGBW(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t iw = 0)
+      : r(ir), g(ig), b(ib), w(iw) {}
+  CRGBW(uint32_t c)
+      : r((c >> 16) & 0xFF), g((c >> 8) & 0xFF), b(c & 0xFF),
+        w((c >> 24) & 0xFF) {}
+};
+
 #define RGBW32(r, g, b, w)                                                     \
   (uint32_t((uint8_t(w) << 24) | (uint8_t(r) << 16) | (uint8_t(g) << 8) |      \
             (uint8_t(b))))

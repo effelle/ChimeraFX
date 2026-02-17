@@ -256,7 +256,6 @@ using cfx::hw_random8;
 using cfx::inoise8;
 using cfx::map;
 using cfx::triwave16;
-
 // Note: triwave16 and inoise8 now come from cfx_utils.h
 
 // Add support for CRGBW math
@@ -1322,7 +1321,7 @@ uint16_t mode_ocean() {
   return FRAMETIME;
 }
 
-// --- Plasma Effect ---
+// --- Plasma Effect (ID 101) ---
 // Ported from WLED FX.cpp by Andrew Tuline
 // Smooth, liquid organic effect using wave mixing
 // Fixed: Drastically reduced spatial freq (wide gradients) + slow temporal
@@ -3503,6 +3502,8 @@ struct Spark {
   float vel;
   uint16_t col;     // Brightness/Color
   uint8_t colIndex; // State or color index
+  Spark()
+      : pos(0.0f), vel(0.0f), col(0), colIndex(0) {} // Add default constructor
 };
 
 /*
@@ -3573,7 +3574,7 @@ uint16_t mode_exploding_fireworks(void) {
       }
 
       flare->pos += flare->vel;
-      flare->pos = cfx::constrain(flare->pos, 0.0f, (float)len - 1.0f);
+      flare->pos = constrain(flare->pos, 0.0f, (float)len - 1.0f);
       flare->vel += gravity;
       flare->col = qsub8(flare->col, 2); // Dim slightly
     } else {
@@ -3632,7 +3633,7 @@ uint16_t mode_exploding_fireworks(void) {
             sparks[i].col = 0;
 
           if (sparks[i].pos >= 0 && sparks[i].pos < len) {
-            uint8_t prog = (uint8_t)cfx::constrain((int)sparks[i].col, 0, 255);
+            uint8_t prog = (uint8_t)constrain((int)sparks[i].col, 0, 255);
 
             // Resolve Color from Palette
             // colIndex was random8
