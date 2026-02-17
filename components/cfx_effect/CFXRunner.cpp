@@ -3639,12 +3639,12 @@ uint16_t mode_exploding_fireworks(void) {
               // hue. Actually WLED uses `SEGMENT.palette` directly. If default
               // (0), we usually want colorful sparks.
               const uint32_t *pal = getPaletteByIndex(11); // Rainbow
-              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal, 255);
+              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
               spColor = RGBW32(c.r, c.g, c.b, c.w);
             } else {
               const uint32_t *pal =
                   getPaletteByIndex(instance->_segment.palette);
-              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal, 255);
+              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
               spColor = RGBW32(c.r, c.g, c.b, c.w);
             }
 
@@ -3750,11 +3750,11 @@ uint16_t mode_popcorn(void) {
           // Default colors logic: Use Rainbow (11) as Popcorn usually is
           // colorful
           const uint32_t *pal = getPaletteByIndex(11);
-          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal, 255);
+          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
           col = RGBW32(c.r, c.g, c.b, c.w);
         } else {
           const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal, 255);
+          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
           col = RGBW32(c.r, c.g, c.b, c.w);
         }
         instance->_segment.setPixelColor(idx, col);
