@@ -3526,19 +3526,22 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  // WLED Bugfix: fadeToBlackBy might clip to 0 too fast or ignore gamma floor.
-  // We use scale8 directly on the pixel data if needed, or stick to
-  // fadeToBlackBy but ensure we don't floor-clip aggressively. User suggestion:
-  // "Did you use the gamma correction helper?" -> getFadeFactor? Let's use
-  // standard fadeToBlackBy but maybe slower? actually, wled uses fade_out(offs)
-  // which is scale8(pixel, 255-offs). 40 is fairly aggressive (255-40 = 215).
-  // WLED uses 252 (retention) -> fadeBy 3. My previous code used 40... which is
-  // HUGE fade. WLED: dim8_video(255-scale) -> if scale is small... Wait, WLED
-  // `fade_out(252)` means keep 252/255. fadeToBlackBy(x) means substract or
-  // scale down by x/256? FastLED: `i = scale8(i, 255-x)`. So fadeToBlackBy(3)
-  // is equivalent to WLED 252. The user complained about floor brightness.
-  // Let's try a much smaller fade value.
-  instance->_segment.fadeToBlackBy(3);
+  // User: "floor brightness bug... use fadeByBlack()?"
+  // WLED logic: fade_out(segment.intensity < 128 ? 250 : 252) typically.
+  // fadeToBlackBy(x) in FastLED: leds[i].nscale8(255-x).
+  // So fadeToBlackBy(3) -> scale by 252. This is correct.
+  // If user sees a floor brightness bug (pixels never reaching 0?), it might be
+  // that scaling 1 down to 0 doesn't happen fast enough or gamma curve lifts 1
+  // to visible. Let's force a slightly more aggressive fade BUT use nscale8
+  // directly for control. "Particle explosion too strong... long wave with same
+  // color". This implies the tail is too long/bright? Let's try
+  // fadeToBlackBy(10). Wait, user says "bug of floor brightness level...
+  // suggest gamma correction". If we fade by a small amount, we might float at
+  // low values. Let's enable a hard clamp at low values? No, let's use standard
+  // fadeToBlackBy(10) for shorter tails.
+  instance->_segment.fadeToBlackBy(10);
+  // Also blur to smooth out "same color" blocks?
+  // instance->_segment.blur(8);
 
   // Physics
   // Gravity: WLED 0.0004 + speed/800000.
@@ -3550,8 +3553,7 @@ uint16_t mode_exploding_fireworks(void) {
     if (instance->_segment.aux0 == 0) { // Init Flare
       flare->pos = 0;
       flare->vel = 0;
-      // WLED Peak Height: 75 + random8(180) -> 75..255 mapped to len
-      // v^2 = 2*g*h -> v = sqrt(2 * |g| * h)
+      // WLED Peak Height
       float peakHeight = (75 + cfx::hw_random8(180)) * (len - 1) / 255.0f;
       flare->vel = sqrtf(-2.0f * gravity * peakHeight);
       flare->col = 255; // Max brightness
@@ -3565,6 +3567,11 @@ uint16_t mode_exploding_fireworks(void) {
       if (pos >= 0 && pos < len) {
         instance->_segment.setPixelColor(
             pos, RGBW32(flare->col, flare->col, flare->col, 0));
+        // Meteor tail
+        if (pos > 0)
+          instance->_segment.setPixelColor(
+              pos - 1,
+              RGBW32(flare->col / 2, flare->col / 2, flare->col / 2, 0));
       }
 
       flare->pos += flare->vel;
@@ -3579,31 +3586,20 @@ uint16_t mode_exploding_fireworks(void) {
 
     // Initialize Sparks (Debris)
     if (instance->_segment.aux0 == 2) {
-      // How many sparks?
-      int nSparks = flare->pos + cfx::hw_random8(4);
-      nSparks = std::min((int)nSparks, (int)numSparks);
-      nSparks = std::max(nSparks, 4);
-
-      for (int i = 1; i < nSparks; i++) {
+      // Explosion Logic
+      // User: "Particle explosion too strong... long wave with same color"
+      // This implies we are drawing too many pixels or they are too
+      // bright/sustained. WLED: 5-8 sparks. We spawn sparks at current flare
+      // pos. Let's make sure they decay faster or start with diversity.
+      for (int i = 0; i < MAX_SPARKS; i++) { // Using 12 sparks
         sparks[i].pos = flare->pos;
-        // Random velocity
-        sparks[i].vel =
-            (float(cfx::hw_random16()) / 65535.0f * 2.0f) -
-            0.9f; // -0.9 to 1.1 approxiomation or use 20000 logic properly
-        // WLED logic was random16(20001) which returns 0..20000.
-        // Our hw_random16() is void -> 0..65535, or (min, max).
-        // Let's use (min, max) if available or adjust math.
-        // cfx_compat.h/utils.h says: hw_random16() or hw_random16(min, max)
-        sparks[i].vel = (float(cfx::hw_random16(0, 20001)) / 10000.0f) - 0.9f;
-        sparks[i].vel *= (len < 32 ? 0.5f : 1.0f); // Scale for short strips
-
-        // Color
-        sparks[i].col = 345; // Start "Hot" (used for coloring/cooling logic)
-        sparks[i].colIndex = cfx::hw_random8(); // Random palette index
-
-        // Explode outward energy
-        sparks[i].vel *= flare->pos / len; // Height factor
-        sparks[i].vel *= -gravity * 50;
+        // Random velocity spread
+        // To prevent "long wave", we need variability in velocity.
+        sparks[i].vel = (float)((rand() % 200) - 100) / 500.0f;
+        sparks[i].col = 255;
+        // User: default (0) MUST be remapped to Rainbow (ID 4?).
+        // Using Rainbow (11).
+        sparks[i].colIndex = cfx::hw_random8();
       }
       *dying_gravity = gravity / 2;
       instance->_segment.aux0 = 3;
@@ -3714,8 +3710,8 @@ uint16_t mode_popcorn(void) {
   // down. If user says "83 to have 1:1", it means 128 (default) is 1.5x too
   // dense. Let's scale intensity by 0.65?
 
-  uint8_t effective_intensity =
-      scale8(instance->_segment.intensity, 170); // ~0.66
+  // Scaling density by 0.5 for further reduction
+  uint8_t effective_intensity = scale8(instance->_segment.intensity, 128);
   int numPopcorn = effective_intensity * MAX_POPCORN / 255;
   if (numPopcorn == 0)
     numPopcorn = 1;
@@ -3747,9 +3743,9 @@ uint16_t mode_popcorn(void) {
       if (idx < len) {
         uint32_t col;
         if (instance->_segment.palette == 0) {
-          // Default colors logic: Use Rainbow (11) as Popcorn usually is
-          // colorful
-          const uint32_t *pal = getPaletteByIndex(11);
+          // Default colors logic: User requested Solid (255) for Popcorn
+          // default
+          const uint32_t *pal = getPaletteByIndex(255); // Solid
           CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
           col = RGBW32(c.r, c.g, c.b, c.w);
         } else {
@@ -3831,28 +3827,46 @@ uint16_t mode_drip(void) {
         drops[j].vel += gravity;
 
         // Draw falling drop with TAIL
-        // Simple trail logic: pos, pos-1, pos-2
-        // Brightness: 255, 128, 64
+        // Simple trail logic: pos, pos-direction, ...
         int pos = (int)drops[j].pos;
         uint32_t col = instance->_segment.colors[0];
 
         if (pos >= 0 && pos < len)
           instance->_segment.setPixelColor(pos, col);
 
-        // Tail
-        if (pos + 1 < len)
-          instance->_segment.setPixelColor(pos + 1, color_blend(col, 0, 128));
-        if (pos + 2 < len)
-          instance->_segment.setPixelColor(pos + 2, color_blend(col, 0, 192));
+        // Tail Logic: Direction based.
+        // Falling (vel < 0): Tail is at pos >= pos.
+        // Bouncing (vel > 0): Tail is at pos <= pos ??
+        // If 0 is bottom.
+        // Falling: Moving towards 0. Tail is at pos+1 (higher). Correct.
+        // Bouncing: Moving away from 0. Tail is at pos-1 (lower). Correct.
+
+        int dir =
+            (drops[j].vel > 0) ? -1 : 1; // 1 for falling (tail at +1), -1 for
+                                         // rising (bouncing, tail at -1)
+
+        // Longer tail: 4 pixels
+        for (int t = 1; t <= 4; t++) {
+          int tPos = pos + (t * dir);
+          if (tPos >= 0 && tPos < len) {
+            // Faint tail: 64, 32, 16, 8
+            uint8_t dim = 64 >> (t - 1);
+            instance->_segment.setPixelColor(tPos,
+                                             color_blend(col, 0, 255 - dim));
+          }
+        }
 
         // Bounce Logic
         if (drops[j].colIndex > 2) { // Bouncing
           // Splash on floor
           // Dim brightness on bounce
           uint32_t dimCol = color_blend(col, 0, 100);
-          if (drops[j].pos < 1.0f) {
+          // Always show splash at 0 if bouncing low
+          if (drops[j].pos < 2.0f) {
             instance->_segment.setPixelColor(0, dimCol);
-          } else if (pos < len) {
+          }
+          // Also color the head dimmer?
+          if (pos < len && pos >= 0) {
             instance->_segment.setPixelColor(pos, dimCol);
           }
         }
