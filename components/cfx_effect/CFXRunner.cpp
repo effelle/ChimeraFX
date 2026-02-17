@@ -4894,30 +4894,32 @@ uint16_t mode_heartbeat_center(void) {
 
   instance->_segment.aux1 = (uint16_t)((float)instance->_segment.aux1 * decay);
 
-  // 3. Rendering (Map Amplitude to Width)
+  // 3. Rendering (Soft Edge / Gradient)
   uint8_t pulse_amt = (instance->_segment.aux1 >> 8);
-  // Apply gamma to the "size" ensures the expansion feels "weighted" like
-  // brightness
   uint8_t effective_val = instance->applyGamma(pulse_amt);
 
   uint16_t len = instance->_segment.length();
-  uint16_t max_radius = len / 2;
-  // Calculate current lit radius
-  uint16_t radius = (uint32_t)(max_radius * effective_val) / 255;
+
+  // Dynamic Radius
+  // Scale max_radius slightly so the "core" can be full brightness at peak.
+  uint32_t max_radius = (len / 2);
+  uint32_t current_radius = (max_radius * effective_val) / 255;
+
+  // Ensure a minimum radius so it doesn't disappear completely (Dry off fix)
+  if (current_radius < 2)
+    current_radius = 2;
+
+  // Master Brightness for the peak center pixel
+  uint8_t peak_brightness = effective_val;
 
   uint32_t color = instance->_segment.colors[0];
-
-  // Mirror Mode: If enabled, pulse from Edges Inward (Inverse of Center Out)
   bool mirror = instance->_segment.mirror;
   uint16_t center = len / 2;
 
   for (int i = 0; i < len; i++) {
     int dist;
-
     if (mirror) {
       // Distance from nearest edge
-      // Pixel 0 -> dist 0. Pixel len-1 -> dist 0.
-      // Pixel center -> dist len/2.
       int dist1 = i;
       int dist2 = (len - 1) - i;
       dist = (dist1 < dist2) ? dist1 : dist2;
@@ -4926,18 +4928,37 @@ uint16_t mode_heartbeat_center(void) {
       dist = abs(i - center);
     }
 
-    if (dist <= radius) {
+    if (dist < current_radius) {
+      // Logic:
+      // max_radius = 0 brightness.
+      // 0 distance = peak_brightness.
+      // Linear falloff.
+
+      uint32_t falloff = ((current_radius - dist) * 255) / current_radius;
+      uint8_t pixel_scale = (falloff * peak_brightness) / 255;
+
+      // Render
+      uint32_t pixel_color = color;
       if (instance->_segment.palette != 0 &&
           instance->_segment.palette != 255) {
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
         CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
-        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-      } else {
-        instance->_segment.setPixelColor(i, color);
+        pixel_color = RGBW32(c.r, c.g, c.b, c.w);
       }
+
+      // Apply Brightness Scaling
+      if (pixel_scale < 255) {
+        uint8_t r = ((pixel_color >> 16) & 0xFF) * pixel_scale / 255;
+        uint8_t g = ((pixel_color >> 8) & 0xFF) * pixel_scale / 255;
+        uint8_t b = (pixel_color & 0xFF) * pixel_scale / 255;
+        uint8_t w = ((pixel_color >> 24) & 0xFF) * pixel_scale / 255;
+        pixel_color = RGBW32(r, g, b, w);
+      }
+      instance->_segment.setPixelColor(i, pixel_color);
+
     } else {
-      instance->_segment.setPixelColor(i, 0); // Black outside heart
+      instance->_segment.setPixelColor(i, 0);
     }
   }
 
