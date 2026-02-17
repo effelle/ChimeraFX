@@ -3822,6 +3822,7 @@ uint16_t mode_dropping_time(void) {
   }
 
   // Debug Log
+  /*
   static uint32_t last_log = 0;
   if (instance->now - last_log > 2000) {
     last_log = instance->now;
@@ -3832,6 +3833,7 @@ uint16_t mode_dropping_time(void) {
     ESP_LOGD("CFX", "DT: Elapsed %u/%u ms, Filled %u", elapsed, duration_ms,
              state->filledPixels);
   }
+  */
 
   // 1. Calculate Time & Progress
   // Speed 0   -> 1 minute
@@ -3957,22 +3959,33 @@ uint16_t mode_dropping_time(void) {
   }
 
   // B. Draw Water (Ocean Logic)
-  // Dual-wave interference for organic look (less "scrolling")
-  // Wave 1: Slow and wide
-  // Wave 2: Faster and ripple-like
+  // Bidirectional waves for organic "sloshing" effect
+  // Explicitly calculated to ensure opposing direction
   uint32_t ms = instance->now;
   const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
   if (instance->_segment.palette != 0)
     active_palette = getPaletteByIndex(instance->_segment.palette);
 
-  for (int i = 0; i < state->filledPixels; i++) {
-    // Wave 1: Speed 10 BPM, Phase multiplier 2
-    uint8_t wave1 = beatsin8_t(10, 0, 255, 0, i * 2);
-    // Wave 2: Speed 23 BPM, Phase multiplier 5
-    uint8_t wave2 = beatsin8_t(23, 0, 255, 0, i * 5);
+  // Time bases for waves (sawtooth 0-255)
+  // Wave 1: Moves RIGHT (x - t)
+  uint8_t t1 = beat8(15);
+  // Wave 2: Moves LEFT (x + t)
+  uint8_t t2 = beat8(18);
 
-    // Average them to create interference
-    uint8_t index = scale8(wave1, 128) + scale8(wave2, 128);
+  for (int i = 0; i < state->filledPixels; i++) {
+    // x coordinates (scaled)
+    // larger multiplier = narrower waves
+    uint8_t x1 = i * 4;
+    uint8_t x2 = i * 7;
+
+    // Wave 1: Right moving -> sin(x - t)
+    uint8_t wave1 = sin8(x1 - t1);
+
+    // Wave 2: Left moving -> sin(x + t)
+    uint8_t wave2 = sin8(x2 + t2);
+
+    // Combine (Average)
+    uint8_t index = (wave1 + wave2) / 2;
 
     CRGBW c = ColorFromPalette(index, 255, active_palette);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
