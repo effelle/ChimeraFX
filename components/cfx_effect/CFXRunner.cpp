@@ -2552,7 +2552,7 @@ uint16_t mode_percent(void) {
   return FRAMETIME;
 }
 
-// --- Percent Center Effect (ID 114) ---
+// --- Percent Center Effect (ID 152) ---
 // Bi-directional meter from center based on Intensity
 uint16_t mode_percent_center(void) {
   uint16_t len = instance->_segment.length();
@@ -3463,7 +3463,7 @@ void CFXRunner::service() {
   case FX_MODE_PERCENT: // 98
     mode_percent();
     break;
-  case FX_MODE_PERCENT_CENTER: // 114
+  case FX_MODE_PERCENT_CENTER: // 152
     mode_percent_center();
     break;
   case FX_MODE_EXPLODING_FIREWORKS: // 90

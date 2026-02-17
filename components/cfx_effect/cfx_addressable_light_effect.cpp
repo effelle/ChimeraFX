@@ -568,7 +568,7 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 87:
     return 4;   // Glitter -> Rainbow
   case 98:      // Percent
-  case 114:     // Percent Center
+  case 152:     // Percent Center
     return 255; // Solid
 
   // Default Aurora (1) or specific handling
