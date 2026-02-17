@@ -4019,7 +4019,7 @@ uint16_t mode_dropping_time(void) {
   for (int i = 0; i < state->filledPixels; i++) {
     // Simple Wave Logic (Sinewave)
     // Color = Palette( (i*freq + time) )
-    uint8_t index = beatsin8(s / 4, 0, 255, 0, i * 3); // Base wave
+    uint8_t index = beatsin8_t(s / 4, 0, 255, 0, i * 3); // Base wave
     // Add some sparkle/noise?
     CRGBW c = ColorFromPalette(index, 255, active_palette);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
