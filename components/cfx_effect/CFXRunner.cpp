@@ -3957,14 +3957,23 @@ uint16_t mode_dropping_time(void) {
   }
 
   // B. Draw Water (Ocean Logic)
-  // Use a FIXED speed for the waves so they animate seamlessly
-  uint32_t wave_speed = 32;
+  // Dual-wave interference for organic look (less "scrolling")
+  // Wave 1: Slow and wide
+  // Wave 2: Faster and ripple-like
+  uint32_t ms = instance->now;
   const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
   if (instance->_segment.palette != 0)
     active_palette = getPaletteByIndex(instance->_segment.palette);
 
   for (int i = 0; i < state->filledPixels; i++) {
-    uint8_t index = beatsin8_t(wave_speed, 0, 255, 0, i * 3);
+    // Wave 1: Speed 10 BPM, Phase multiplier 2
+    uint8_t wave1 = beatsin8_t(10, 0, 255, 0, i * 2);
+    // Wave 2: Speed 23 BPM, Phase multiplier 5
+    uint8_t wave2 = beatsin8_t(23, 0, 255, 0, i * 5);
+
+    // Average them to create interference
+    uint8_t index = scale8(wave1, 128) + scale8(wave2, 128);
+
     CRGBW c = ColorFromPalette(index, 255, active_palette);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
