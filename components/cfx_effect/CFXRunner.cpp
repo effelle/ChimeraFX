@@ -3805,17 +3805,21 @@ uint16_t mode_drip(void) {
       if (drops[j].col > 255)
         drops[j].col = 255;
 
-      // Draw swelling drop
+      // Draw swelling drop at the top (len-1)
+      // WLED logic: Source brightness increases.
+      uint32_t col = instance->_segment.colors[0];
+      // Blend black -> color based on 'col' (0-255)
+      // Using color_blend(0, col, brightness)
+      // Note: color_blend blend param: 0=color1, 255=color2.
+      // So color_blend(0, col, drops[j].col) blends from Black(0) to Color.
       instance->_segment.setPixelColor(
-          len - 1, RGBW32(0, 0, (int)drops[j].col, 0)); // Blueish? Or Primary?
-      // Let's use Primary with brightness
-      // instance->_segment.setPixelColor(len-1, color_blend(0,
-      // instance->_segment.colors[0], drops[j].col));
+          len - 1, color_blend(0, col, (uint8_t)drops[j].col));
 
-      // Random Fall
-      if (cfx::hw_random8() < drops[j].col / 10) {
-        drops[j].colIndex = 2; // Fall
-        drops[j].col = 255;
+      // Random Fall Trigger
+      // Chance increased by swelling size
+      if (cfx::hw_random8() < drops[j].col / 20) {
+        drops[j].colIndex = 2; // Fall State
+        drops[j].col = 255;    // Full brightness for falling
       }
     }
 
@@ -3834,26 +3838,25 @@ uint16_t mode_drip(void) {
         if (pos >= 0 && pos < len)
           instance->_segment.setPixelColor(pos, col);
 
-        // Tail Logic: Direction based.
-        // Falling (vel < 0): Tail is at pos >= pos.
-        // Bouncing (vel > 0): Tail is at pos <= pos ??
-        // If 0 is bottom.
-        // Falling: Moving towards 0. Tail is at pos+1 (higher). Correct.
-        // Bouncing: Moving away from 0. Tail is at pos-1 (lower). Correct.
-
-        int dir =
-            (drops[j].vel > 0) ? -1 : 1; // 1 for falling (tail at +1), -1 for
-                                         // rising (bouncing, tail at -1)
-
-        // Longer tail: 4 pixels
-        for (int t = 1; t <= 4; t++) {
-          int tPos = pos + (t * dir);
-          if (tPos >= 0 && tPos < len) {
-            // Faint tail: 64, 32, 16, 8
-            uint8_t dim = 64 >> (t - 1);
-            instance->_segment.setPixelColor(tPos,
-                                             color_blend(col, 0, 255 - dim));
+        // Tail Logic: Only when Falling (vel < 0)
+        // User: "another led bounce 6 led backward with a lower brightness
+        // without tail" So ONLY draw tail if falling.
+        if (drops[j].vel < 0) {
+          // Falling: Moves towards 0. Tail is at pos+1, pos+2...
+          for (int t = 1; t <= 4; t++) {
+            int tPos = pos + t;
+            if (tPos >= 0 && tPos < len) {
+              // Faint tail: 64, 32, 16, 8
+              uint8_t dim = 64 >> (t - 1);
+              // If source is occupying top pixel, don't overwrite it?
+              // Actually source is managed by drop[j] index 1 usually.
+              instance->_segment.setPixelColor(tPos,
+                                               color_blend(col, 0, 255 - dim));
+            }
           }
+        } else {
+          // Bouncing (Rising): No tail, just the head.
+          // Maybe a faint single pixel trail? User said "without tail".
         }
 
         // Bounce Logic
