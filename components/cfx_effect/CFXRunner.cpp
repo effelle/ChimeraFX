@@ -3941,88 +3941,64 @@ uint16_t mode_dropping_time(void) {
         state->filledPixels = len;
     }
 
-    // Draw Filling Drop (Bright Blue/White)
-    int pos = (int)state->fillingDrop.pos;
-    if (pos >= state->filledPixels && pos < len) {
-      instance->_segment.setPixelColor(pos, 0xFFFFFF); // White head
-                                                       // Tail
+    // 3. RENDER PHASE
+    // Correct Order: 1. Clear Air, 2. Draw Water, 3. Draw Drops
+
+    // A. Clear Air (everything above water level)
+    for (int i = state->filledPixels; i < len; i++) {
+      instance->_segment.setPixelColor(i, 0);
+    }
+
+    // B. Draw Water (Ocean Logic)
+    // Use a FIXED speed for the waves so they animate even if the Timer speed
+    // is slow/zero.
+    uint32_t wave_speed = 32; // Good default ocean speed
+    uint32_t ms = instance->now;
+
+    // Ocean colors (Palette 11 - Ocean)
+    const uint32_t *active_palette = getPaletteByIndex(11);
+    if (instance->_segment.palette != 0)
+      active_palette = getPaletteByIndex(instance->_segment.palette);
+
+    for (int i = 0; i < state->filledPixels; i++) {
+      // Simple Wave Logic (Sinewave)
+      uint8_t index = beatsin8_t(wave_speed, 0, 255, 0, i * 3); // Base wave
+      CRGBW c = ColorFromPalette(index, 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+
+    // C. Draw Drops (Filling Drop)
+    if (state->fillingDropActive) {
+      int pos = (int)state->fillingDrop.pos;
+      // Head
+      if (pos >= state->filledPixels && pos < len) {
+        instance->_segment.setPixelColor(pos, 0xFFFFFF); // White head
+      }
+      // Tail
       for (int t = 1; t <= 4; t++) {
         int tPos = pos + t;
-        if (tPos < len) {
+        if (tPos >= state->filledPixels && tPos < len) {
           instance->_segment.setPixelColor(
               tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
         }
       }
     }
-  } else {
-    // Failsafe: If timer says we should have filled more pixels but no drop
-    // triggered it (lag?), catch up This ensures the timer hits 60m exactly
-    // even if drops miss.
-    if (targetLevel > state->filledPixels) {
-      state->filledPixels = targetLevel;
-    }
-  }
 
-  // B. Dummy Drops (Visuals)
-  // Randomly spawn if not too busy
-  if (cfx::hw_random8() < 5) { // Low chance per frame
+    // D. Draw Drops (Dummy Drops)
     for (int i = 0; i < 2; i++) {
-      if (state->dummyDrops[i].colIndex == 0) {
-        state->dummyDrops[i].colIndex = 2;
-        state->dummyDrops[i].pos = len - 1;
-        state->dummyDrops[i].vel = 0;
-        state->dummyDrops[i].col = 150; // Dimmer
-        break;
-      }
-    }
-  }
-
-  // Update Dummy Drops
-  for (int i = 0; i < 2; i++) {
-    if (state->dummyDrops[i].colIndex != 0) {
-      state->dummyDrops[i].vel += gravity;
-      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
-
-      if (state->dummyDrops[i].pos <= state->filledPixels) {
-        // Splash at water surface
-        instance->_segment.setPixelColor(state->filledPixels,
-                                         0x0000FF); // Blue splash
-        state->dummyDrops[i].colIndex = 0;          // Die
-      } else {
-        // Draw
+      if (state->dummyDrops[i].colIndex != 0) {
         int pos = (int)state->dummyDrops[i].pos;
-        if (pos < len) {
-          uint32_t col = instance->_segment.colors[0]; // Use selected color
+        if (pos >= state->filledPixels && pos < len) {
+          uint32_t col = instance->_segment.colors[0];
+          // If color is black/default, make it visible (e.g. Blue)
+          if (col == 0)
+            col = 0x0000FF;
           instance->_segment.setPixelColor(pos, col);
         }
       }
     }
-  }
 
-  // 3. Render Water (Ocean Logic)
-  // Render ONLY up to filledPixels
-  // Mask the rest?
-  // Actually, we should render the ocean logic for the whole strip but only
-  // WRITE pixels < filledPixels This ensures the wave phase is continuous.
-
-  uint32_t s = instance->_segment.speed; // Speed of waves
-  uint32_t ms = instance->now;
-
-  // Ocean colors (Palette 11 - Ocean)
-  // Forced Ocean Palette or User Selected?
-  // User said "Like our ocean".
-  const uint32_t *active_palette =
-      getPaletteByIndex(11); // Force Ocean for now, or match segment
-  if (instance->_segment.palette != 0)
-    active_palette = getPaletteByIndex(instance->_segment.palette);
-
-  for (int i = 0; i < state->filledPixels; i++) {
-    // Simple Wave Logic (Sinewave)
-    // Color = Palette( (i*freq + time) )
-    uint8_t index = beatsin8_t(s / 4, 0, 255, 0, i * 3); // Base wave
-    // Add some sparkle/noise?
-    CRGBW c = ColorFromPalette(index, 255, active_palette);
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    return FRAMETIME;
   }
 
   // Ensure "Air" is black (cleared by dummy drop logic logic above? No, we need
