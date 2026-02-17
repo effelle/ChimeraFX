@@ -3838,19 +3838,25 @@ uint16_t mode_drip(void) {
         if (pos >= 0 && pos < len)
           instance->_segment.setPixelColor(pos, col);
 
-        // Tail Logic: Only when Falling (vel < 0)
-        // User: "another led bounce 6 led backward with a lower brightness
-        // without tail" So ONLY draw tail if falling.
-        if (drops[j].vel < 0) {
+        // Tail Logic: Only when Falling (vel < 0) AND in initial Drop phase
+        // (colIndex == 2) User: "another led bounce 6 led backward with a lower
+        // brightness without tail" So ONLY draw tail if falling.
+        if (drops[j].colIndex == 2 && drops[j].vel < 0) {
           // Falling: Moves towards 0. Tail is at pos+1, pos+2...
           // Increased tail length to 6 pixels
           for (int t = 1; t <= 6; t++) {
             int tPos = pos + t;
             if (tPos >= 0 && tPos < len) {
-              // Faint tail: 64, 32, 16, 8, 4, 2
-              uint8_t dim = 64 >> (t - 1);
-              if (t > 7)
-                dim = 0; // Safety clamp
+              // Faint tail: Brighter fade to ensure visibility
+              // Old: 64 >> (t-1) was too dim (Starts at 25%).
+              // New: 255 >> t.
+              // t=1: 128 (50%)
+              // t=2: 64 (25%)
+              // t=3: 32 (12.5%)
+              // t=4: 16
+              // t=5: 8
+              // t=6: 4
+              uint8_t dim = 255 >> t;
 
               instance->_segment.setPixelColor(tPos,
                                                color_blend(col, 0, 255 - dim));
