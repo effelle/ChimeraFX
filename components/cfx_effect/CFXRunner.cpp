@@ -3370,7 +3370,7 @@ void CFXRunner::service() {
   case FX_MODE_FIRE_2012: // 66
     mode_fire_2012();
     break;
-  case FX_MODE_FIRE_DUAL: // 53
+  case FX_MODE_FIRE_DUAL: // 153
     mode_fire_dual();
     break;
   case FX_MODE_COLORTWINKLE: // 74
