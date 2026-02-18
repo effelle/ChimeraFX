@@ -3639,6 +3639,11 @@ struct Spark {
  * Ported from WLED (Aircoookie/Blazoncek)
  * Optimized for 1D Strips (No 2D support)
  */
+/*
+ * Exploding Fireworks (ID 90)
+ * Ported from WLED (Aircoookie/Blazoncek)
+ * Optimized for 1D Strips (No 2D support)
+ */
 uint16_t mode_exploding_fireworks(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1)
@@ -3646,7 +3651,6 @@ uint16_t mode_exploding_fireworks(void) {
 
   // Allocate Data
   // WLED Logic: 5 + (rows*cols)/2, maxed at FAIR_DATA
-  // simplified: max 64 sparks for typical strips to save RAM
   const uint16_t MAX_SPARKS = 64;
   uint16_t numSparks = std::min((uint16_t)(5 + (len >> 1)), MAX_SPARKS);
 
@@ -3669,22 +3673,21 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  // Fix Brownout: fadeToBlackBy(1) is too slow, accumulating too much white
-  // (high current). Fix Floor: fadeToBlackBy might leave artifacts at low
-  // brightness. We use fadeToBlackBy(10) (keep ~96%) for a nice trail but safe
-  // decay.
-  instance->_segment.fadeToBlackBy(10);
-
-  // Floor Clamp: Ensure pixels reach pure black.
-  // Threshold raised to 15 to catch more residual brightness from trails.
+  // WLED uses fade_out(252) which is a multiplicative fade (scale8).
+  // This avoids the floor bug caused by subtractive fadeToBlackBy.
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-    if (r <= 15 && g <= 15 && b <= 15) {
-      instance->_segment.setPixelColor(i, 0);
-    }
+    if (c == 0)
+      continue;
+
+    // Scale each channel by 252/256 (~98%)
+    // This creates a smooth trail that naturally decays to zero
+    uint8_t r = cfx::scale8((c >> 16) & 0xFF, 252);
+    uint8_t g = cfx::scale8((c >> 8) & 0xFF, 252);
+    uint8_t b = cfx::scale8(c & 0xFF, 252);
+    uint8_t w = cfx::scale8((c >> 24) & 0xFF, 252); // If RGBW
+
+    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
 
   // Physics
@@ -3711,9 +3714,6 @@ uint16_t mode_exploding_fireworks(void) {
       if (pos >= 0 && pos < len) {
         instance->_segment.setPixelColor(
             pos, RGBW32(flare->col, flare->col, flare->col, 0));
-        // Meteor tail
-        // if (pos > 0) instance->_segment.setPixelColor(pos-1,
-        // RGBW32(flare->col/2, flare->col/2, flare->col/2, 0));
       }
 
       flare->pos += flare->vel;
@@ -3729,22 +3729,29 @@ uint16_t mode_exploding_fireworks(void) {
     // Initialize Sparks (Debris)
     if (instance->_segment.aux0 == 2) {
       // Explosion Logic
-      // User: "Particle explosion too strong... long wave with same color"
-      // This implies we are drawing too many pixels or they are too
-      // bright/sustained. WLED: 5-8 sparks. We spawn sparks at current flare
-      // pos. Let's make sure they decay faster or start with diversity.
-      // We spawn sparks at current flare pos.
-      // Fix Crash: Use numSparks (allocated size) instead of MAX_SPARKS (64).
-      for (int i = 0; i < numSparks; i++) {
+      // Use nSparks logic from WLED (approximate for 1D)
+      int nSparks = flare->pos + cfx::hw_random8(4);
+      nSparks = std::max(nSparks, 4);
+      nSparks = std::min(nSparks, (int)numSparks);
+
+      for (int i = 1; i < nSparks; i++) {
         sparks[i].pos = flare->pos;
-        // Random velocity spread
-        // To prevent "long wave", we need variability in velocity.
-        sparks[i].vel = (float)((rand() % 200) - 100) / 500.0f;
-        sparks[i].col = 255;
-        // User: default (0) MUST be remapped to Rainbow (ID 4?).
-        // Using Rainbow (11).
+        // WLED Velocity Logic:
+        // (random(20001)/10000 - 0.9) covers range -0.9 to 1.1
+        // Then multiplied by negative gravity * 50 to scale to strip
+        // size/physics
+        sparks[i].vel = (float(cfx::hw_random16(20001)) / 10000.0f) - 0.9f;
+        sparks[i].vel *= -gravity * 50.0f; // CRITICAL FIX: Velocity scaling
+
+        // Heat initialization (WLED uses extended range for heat)
+        sparks[i].col = 345;
+
+        // Random color index
         sparks[i].colIndex = cfx::hw_random8();
       }
+      // Known spark[1] keeps the explosion alive
+      sparks[1].col = 345;
+
       *dying_gravity = gravity / 2;
       instance->_segment.aux0 = 3;
     }
@@ -3752,11 +3759,10 @@ uint16_t mode_exploding_fireworks(void) {
     // Process Sparks
     // Check if "known spark" (index 1) is still burnt out
     if (sparks[1].col > 4) {
-      // Simulate all sparks
-      // We process all allocated slots, but effective ones were set above
-      // Optimization: simple loop over all possible sparks
+      // Iterate over all active sparks.
+      // Note: We don't track nSparks locally between frames, so we iterate
+      // numSparks but only process those with heat > 0.
       for (int i = 1; i < numSparks; i++) {
-        // Only process if it has "heat"
         if (sparks[i].col > 0) {
           sparks[i].pos += sparks[i].vel;
           sparks[i].vel += *dying_gravity;
@@ -3767,27 +3773,49 @@ uint16_t mode_exploding_fireworks(void) {
             sparks[i].col = 0;
 
           if (sparks[i].pos >= 0 && sparks[i].pos < len) {
-            uint8_t prog = (uint8_t)constrain((int)sparks[i].col, 0, 255);
+            // WLED Heat->Color Logic
+            uint16_t prog = sparks[i].col;
+            uint32_t spColor;
 
-            // Resolve palette: palette==0 defaults to Rainbow (ID 4)
-            uint8_t palIdx = (instance->_segment.palette == 0)
-                                 ? 4
-                                 : instance->_segment.palette;
-            const uint32_t *pal = getPaletteByIndex(palIdx);
+            // Resolve palette color
+            // If default palette (0), use Rainbow (ID 4) logic
+            uint8_t palId = instance->_segment.palette;
+            if (palId == 0)
+              palId = 4; // Default to Rainbow
 
-            CRGBW c = ColorFromPalette(sparks[i].colIndex, prog, pal);
-            if (prog > 200) { // White hot
-              c = CRGBW(color_blend(RGBW32(c.r, c.g, c.b, c.w),
-                                    RGBW32(255, 255, 255, 0),
-                                    (prog - 200) * 5));
+            const uint32_t *pal = getPaletteByIndex(palId);
+            CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
+            spColor = RGBW32(c.r, c.g, c.b, c.w);
+
+            CRGBW finalColor = CRGBW(0, 0, 0, 0);
+
+            if (prog > 300) { // White hot (fade from white to spark color)
+              // Blend White -> Color
+              // prog 345 -> 300 map to 255 -> 0 blend amount?
+              // WLED: color_blend(spColor, WHITE, (prog-300)*5)
+              // (345-300)*5 = 225. So high heat = mostly white.
+              finalColor = CRGBW(color_blend(
+                  spColor, RGBW32(255, 255, 255, 255), (prog - 300) * 5));
+            } else if (prog > 45) { // Fade from color to black
+              // WLED: color_blend(BLACK, spColor, prog - 45)
+              // (300-45) = 255 (full color). (46-45) = 1 (mostly black).
+              int blendAmt = constrain((int)prog - 45, 0, 255);
+              finalColor = CRGBW(color_blend(0, spColor, blendAmt));
+
+              // WLED adds specific cooling to G/B channels for fire look?
+              // int cooling = (300 - prog) >> 5;
+              // We'll skip that subtle detail for 1D optimization unless
+              // needed.
             }
 
-            instance->_segment.setPixelColor((int)sparks[i].pos,
-                                             RGBW32(c.r, c.g, c.b, c.w));
+            instance->_segment.setPixelColor(
+                (int)sparks[i].pos,
+                RGBW32(finalColor.r, finalColor.g, finalColor.b, finalColor.w));
           }
         }
       }
-      *dying_gravity *= 0.9f; // Air resistance
+      *dying_gravity *=
+          0.8f; // Air resistance (WLED uses 0.8f, we were using 0.9f)
     } else {
       // Burnt out
       instance->_segment.aux0 = 6 + cfx::hw_random8(10); // Wait frames
