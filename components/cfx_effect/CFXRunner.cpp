@@ -2061,7 +2061,9 @@ uint16_t mode_ripple(void) {
   RippleState *ripples = (RippleState *)instance->_segment.data;
 
   // Fade Background
-  instance->_segment.fadeToBlackBy(224);
+  // Reduced from 224 to 48 to allow smooth trails and avoid "dry" turn-off
+  // when pixels leave the ripple window.
+  instance->_segment.fadeToBlackBy(48);
 
   // Spawn Logic
   // Time-Based Probability to Fix Gaps
