@@ -2196,9 +2196,13 @@ uint16_t mode_ripple(void) {
       int prev = (i == 0) ? 0 : i - 1;
       int next = (i == len - 1) ? len - 1 : i + 1;
 
-      Color c_prev = instance->_segment.get(prev);
-      Color c_curr = instance->_segment.get(i);
-      Color c_next = instance->_segment.get(next);
+      uint32_t p = instance->_segment.getPixelColor(prev);
+      uint32_t c = instance->_segment.getPixelColor(i);
+      uint32_t n = instance->_segment.getPixelColor(next);
+
+      CRGBW c_prev(p);
+      CRGBW c_curr(c);
+      CRGBW c_next(n);
 
       // Simple average for now to be safe and fast?
       // WLED uses a specific 'blur1d' math but let's try a simple weighted
@@ -2216,7 +2220,7 @@ uint16_t mode_ripple(void) {
           ((uint16_t)c_prev.w + (uint16_t)c_curr.w * 2 + (uint16_t)c_next.w) >>
           2;
 
-      instance->_segment.setPixelColor(i, r, g, b, w);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
     }
   }
 
