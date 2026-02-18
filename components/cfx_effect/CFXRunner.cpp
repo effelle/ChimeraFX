@@ -5217,7 +5217,8 @@ uint16_t mode_follow_me(void) {
   // 1. Scale (Dimming): Exponential decay. High intensity = slow fade.
   // 2. Subtract (Floor Cleaning): Hard subtraction to force zero.
   uint8_t scale = 255 - (instance->_segment.intensity >> 1); // 128..255
-  uint8_t sub_val = 2; // Fixed subtraction to clear floor
+  // Increased subtraction for low intensity to fix persistent floor bug.
+  uint8_t sub_val = (instance->_segment.intensity < 90) ? 4 : 2;
 
   int start = instance->_segment.start;
   int stop = instance->_segment.stop;
