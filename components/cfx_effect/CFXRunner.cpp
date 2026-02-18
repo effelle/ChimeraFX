@@ -2168,15 +2168,11 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 6 pixels (Kept for length)
-    for (int v = 0; v < 6; v++) {
-      // Phase Matching Fix:
-      // Spatial Step is 48. We MUST scale propF (0-255) to 0-48 to match.
-      // previous (propF >> 2) was 0-64. Mismatch caused "jump" at pixel border.
-      // (propF * 3) / 16 = 255 * 3 / 16 = 47.8 (~48).
-      uint8_t phase_shift = (propF * 3) >> 4;
-
-      uint8_t wave = cubicwave8(phase_shift + (v * 48));
+    // Loop 4 pixels (Standard WLED Geometry)
+    // Reverting to WLED constants to eliminate math aliasing/blinking.
+    // Step 64 (256/4) provides perfect phase alignment.
+    for (int v = 0; v < 4; v++) {
+      uint8_t wave = cubicwave8((propF >> 2) + (v * 64));
       uint8_t mag = scale8(wave, amp);
 
       // Gamma Disabled
