@@ -2841,11 +2841,9 @@ uint16_t mode_sparkle(void) {
   }
 
   // 3. Spawning
-  // WLED Density is sparse. My previous defaults were too high.
-  // User Feedback: "Density now way too low. Try factor 4".
-  // Previous: >> 3 (div 8). New: >> 2 (div 4).
-
-  uint32_t chance = ((instance->_segment.intensity >> 2) * delta) / 20;
+  // User: "Double density at 128".
+  // Previous divisor 20 -> 10 (doubles the chance at same intensity).
+  uint32_t chance = ((instance->_segment.intensity >> 2) * delta) / 10;
 
   if (cfx::hw_random16(0, 255) < chance) {
     uint16_t index = cfx::hw_random16(0, len);
@@ -3677,15 +3675,14 @@ uint16_t mode_exploding_fireworks(void) {
   // decay.
   instance->_segment.fadeToBlackBy(10);
 
-  // Floor Clamp: Ensure pixels reach pure black
+  // Floor Clamp: Ensure pixels reach pure black.
+  // Threshold raised to 15 to catch more residual brightness from trails.
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
-    // Fast check for low brightness
-    // If R, G, And B are all very low (< 5), force 0.
     uint8_t r = (c >> 16) & 0xFF;
     uint8_t g = (c >> 8) & 0xFF;
     uint8_t b = c & 0xFF;
-    if (r <= 5 && g <= 5 && b <= 5) {
+    if (r <= 15 && g <= 15 && b <= 15) {
       instance->_segment.setPixelColor(i, 0);
     }
   }
@@ -3772,34 +3769,13 @@ uint16_t mode_exploding_fireworks(void) {
           if (sparks[i].pos >= 0 && sparks[i].pos < len) {
             uint8_t prog = (uint8_t)constrain((int)sparks[i].col, 0, 255);
 
-            // Resolve Color from Palette
-            uint32_t spColor;
-            if (instance->_segment.palette == 0) {
-              // FIREWORKS Default: Use Palette 11 (Rainbow/Color) typically
-              // used in WLED or maybe just Random colors? WLED
-              // `mode_exploding_fireworks` usually forces a palette if 0. Let's
-              // use Palette 11 (Rainbow) logic if available, or just random
-              // hue. Actually WLED uses `SEGMENT.palette` directly. If default
-              // (0), we usually want colorful sparks.
-              const uint32_t *pal = getPaletteByIndex(11); // Rainbow
-              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
-              spColor = RGBW32(c.r, c.g, c.b, c.w);
-            } else {
-              const uint32_t *pal =
-                  getPaletteByIndex(instance->_segment.palette);
-              CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
-              spColor = RGBW32(c.r, c.g, c.b, c.w);
-            }
+            // Resolve palette: palette==0 defaults to Rainbow (ID 4)
+            uint8_t palIdx = (instance->_segment.palette == 0)
+                                 ? 4
+                                 : instance->_segment.palette;
+            const uint32_t *pal = getPaletteByIndex(palIdx);
 
-            CRGBW c = CRGBW(0, 0, 0, 0);
-            // Heat logic:
-            // > 300?? WLED used uint16_t col for heat.
-            // Here we clamped to 255 for display but logic keeps it high?
-            // Let's stick to standard byte logic for simplicity in this port.
-
-            // Simple Fade logic
-            c = ColorFromPalette(sparks[i].colIndex, prog,
-                                 getPaletteByIndex(instance->_segment.palette));
+            CRGBW c = ColorFromPalette(sparks[i].colIndex, prog, pal);
             if (prog > 200) { // White hot
               c = CRGBW(color_blend(RGBW32(c.r, c.g, c.b, c.w),
                                     RGBW32(255, 255, 255, 0),

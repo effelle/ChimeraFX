@@ -575,7 +575,9 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 52:
     return 13; // Running Dual -> Sakura
   case 87:
-    return 4;   // Glitter -> Rainbow
+    return 4; // Glitter -> Rainbow
+  case 90:
+    return 4;   // Fireworks -> Rainbow
   case 98:      // Percent
   case 152:     // Percent Center
     return 255; // Solid
