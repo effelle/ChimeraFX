@@ -4180,7 +4180,16 @@ uint16_t mode_drip(void) {
 
       // Draw swelling drop at the top (len-1)
       // WLED logic: Source brightness increases.
-      uint32_t col = instance->_segment.colors[0];
+      // Palette support (like Popcorn): use palette color if active
+      uint32_t col;
+      if (instance->_segment.palette == 0 ||
+          instance->_segment.palette == 255) {
+        col = instance->_segment.colors[0];
+      } else {
+        const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+        CRGBW c = ColorFromPalette((uint8_t)(j * 64), 255, pal);
+        col = RGBW32(c.r, c.g, c.b, c.w);
+      }
       // Blend black -> color based on 'col' (0-255)
       // Using color_blend(0, col, brightness)
       // Note: color_blend blend param: 0=color1, 255=color2.
@@ -4206,7 +4215,16 @@ uint16_t mode_drip(void) {
         // Draw falling drop with TAIL
         // Simple trail logic: pos, pos-direction, ...
         int pos = (int)drops[j].pos;
-        uint32_t col = instance->_segment.colors[0];
+        // Palette support (like Popcorn)
+        uint32_t col;
+        if (instance->_segment.palette == 0 ||
+            instance->_segment.palette == 255) {
+          col = instance->_segment.colors[0];
+        } else {
+          const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+          CRGBW c = ColorFromPalette((uint8_t)(j * 64), 255, pal);
+          col = RGBW32(c.r, c.g, c.b, c.w);
+        }
 
         if (pos >= 0 && pos < len)
           instance->_segment.setPixelColor(pos, col);
