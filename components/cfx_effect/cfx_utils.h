@@ -97,6 +97,13 @@ inline uint8_t beatsin8_t(accum88 beats_per_minute, uint8_t lowest = 0,
   return result;
 }
 
+// Alias for compatibility
+inline uint8_t beatsin8(accum88 beats_per_minute, uint8_t lowest = 0,
+                        uint8_t highest = 255, uint32_t timebase = 0,
+                        uint8_t phase_offset = 0) {
+  return beatsin8_t(beats_per_minute, lowest, highest, timebase, phase_offset);
+}
+
 // Triangle wave: 0-65535 input -> 0-65535 output
 inline uint16_t triwave16(uint16_t in) {
   if (in < 0x8000) {
