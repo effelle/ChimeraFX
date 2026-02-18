@@ -2802,19 +2802,29 @@ uint16_t mode_sparkle(void) {
   // Final Fade Amount
   uint8_t final_fade = 255 - corrected_retention;
 
-  // CRITICAL FIX: If speed > 0, we MUST have some fade, otherwise pixels stick.
-  // Gamma correction might have rounded it to 0. Force minimum 1.
-  if (instance->_segment.speed > 0 && final_fade == 0)
-    final_fade = 1;
+  // Floor Fix: At low speeds, fade_amt is tiny. Even with gamma correction,
+  // final_fade can be so small that pixels accumulate faster than they drain.
+  // Enforce a minimum fade that guarantees visible drain at all speeds.
+  uint8_t min_fade;
+  if (instance->_segment.speed == 0)
+    min_fade = 0; // Speed 0 = frozen, no fade
+  else if (instance->_segment.speed <= 34)
+    min_fade = 20; // Strong minimum: pixel drains in ~13 frames
+  else if (instance->_segment.speed <= 100)
+    min_fade = 8;
+  else
+    min_fade = 1;
+
+  if (final_fade < min_fade)
+    final_fade = min_fade;
 
   instance->_segment.fadeToBlackBy(final_fade);
 
   // B) Subtractive Kicker (The "Floor Fix")
-  // Scale kicker inversely with speed: at low speeds fade is slow,
-  // so we need a stronger kicker to prevent floor accumulation.
+  // Scale kicker inversely with speed to sweep residual floor brightness.
   uint8_t sub_kicker;
-  if (instance->_segment.speed < 34)
-    sub_kicker = 6; // Strong kick at very low speeds
+  if (instance->_segment.speed <= 34)
+    sub_kicker = 12; // Aggressive sweep at very low speeds
   else if (instance->_segment.speed < 100)
     sub_kicker = 3;
   else
