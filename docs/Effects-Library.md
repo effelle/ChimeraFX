@@ -30,6 +30,8 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 | 101 | **Ocean** | Gentle ocean waves (based on Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Ripple speed | No | Mark Kriegsman |
 | 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | Yes | Aircoookie |
 | 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
+| 151 | **Dropping Time** | Falling drops with ripple effect. | **Intensity**: Spawn rate - **Speed**: Fall speed | Yes | Aircoookie |
+| 155 | **Kaleidos** | N-Way symmetrical mirroring. | **Intensity**: Segment count (2/4/6/8) - **Speed**: Scroll speed | Yes | ChimeraFX |
 
 ### A few notes on the credits:
 *   **Aircoookie:** He is the lead developer of WLED. Any effect that doesn't have a clear historical "parent" in the FastLED community is usually his work.
