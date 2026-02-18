@@ -5243,6 +5243,16 @@ uint16_t mode_follow_me(void) {
       c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
       c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
 
+      // 3. Hard Cutoff (Final Cleanup)
+      if (c.r < 10)
+        c.r = 0;
+      if (c.g < 10)
+        c.g = 0;
+      if (c.b < 10)
+        c.b = 0;
+      if (c.w < 10)
+        c.w = 0;
+
       light[i] = c;
     }
   }
