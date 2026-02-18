@@ -5087,7 +5087,10 @@ uint16_t mode_kaleidos(void) {
 
   // === Symmetry Engine ===
   // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
-  uint8_t half_segs = cfx::map(instance->_segment.intensity, 0, 255, 1, 4);
+  // Optimized mapping: 0-63=1, 64-127=2, 128-191=3, 192-255=4
+  uint8_t half_segs = 1 + (instance->_segment.intensity >> 6);
+  if (half_segs > 4)
+    half_segs = 4; // Safety clamp for 255
   uint8_t num_segments = half_segs * 2;
 
   uint16_t seg_len = len / num_segments;
@@ -5104,8 +5107,9 @@ uint16_t mode_kaleidos(void) {
   // === Time Base (Speed-controlled scroll) ===
   uint32_t ms = cfx_millis();
   // Speed 0 = very slow, Speed 255 = fast
-  // >>4 gives ~16ms steps at speed 255, much slower at low speed
-  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 12;
+  // Tuned: >>9 (512x div) provides WLED-like speed.
+  // Old >>12 was too slow.
+  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
 
   // === Palette ===
   const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
