@@ -2810,19 +2810,20 @@ uint16_t mode_sparkle(void) {
   instance->_segment.fadeToBlackBy(final_fade);
 
   // B) Subtractive Kicker (The "Floor Fix")
-  // Subtract a constant amount every frame to force pixels to zero.
-  // User: "Floor brightness comes back".
-  // Increased kicker to ensure the floor is swept even if fade is slow.
-  uint8_t sub_kicker = 2;
-  if (instance->_segment.speed > 100)
+  // Scale kicker inversely with speed: at low speeds fade is slow,
+  // so we need a stronger kicker to prevent floor accumulation.
+  uint8_t sub_kicker;
+  if (instance->_segment.speed < 34)
+    sub_kicker = 6; // Strong kick at very low speeds
+  else if (instance->_segment.speed < 100)
     sub_kicker = 3;
+  else
+    sub_kicker = 2;
 
   int len = instance->_segment.length();
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
     if (c != 0) {
-      // Optimization: check if sub_kicker will zero it out?
-      // Just apply.
       instance->_segment.setPixelColor(
           i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
                     qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
@@ -2852,8 +2853,8 @@ uint16_t mode_sparkle(void) {
 
 /*
  * Flash Sparkle (ID 21) - "Sparkle Dark"
- * Inverted: Background is lit (primary color), sparkles are black (or
- * secondary).
+ * Inverted: Background is lit (primary color or palette), sparkles are black
+ * (or secondary). Intensity controls sparkle density.
  */
 uint16_t mode_flash_sparkle(void) {
   if (instance->_segment.reset) {
@@ -2861,21 +2862,24 @@ uint16_t mode_flash_sparkle(void) {
     instance->_segment.reset = false;
   }
 
-  // Effect Logic:
-  // Re-fill background every frame (Standard "Flash").
-  // No fade needed.
-  instance->_segment.fill(instance->_segment.colors[0]);
+  // Resolve background color from palette (like Popcorn/Drip)
+  uint32_t bg_color;
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    bg_color = instance->_segment.colors[0];
+  } else {
+    const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+    CRGBW c = ColorFromPalette(0, 255, pal); // Use index 0 for solid background
+    bg_color = RGBW32(c.r, c.g, c.b, c.w);
+  }
 
-  // Spawning - Low Density
-  uint32_t delta = instance->frame_time;
-  uint32_t threshold =
-      ((instance->_segment.speed >> 2) * delta) / 20; // Sparser threshold
+  // Re-fill background every frame
+  instance->_segment.fill(bg_color);
 
-  if (cfx::hw_random16(0, 255) < threshold) {
-    if (cfx::hw_random8() < instance->_segment.intensity) {
-      uint16_t index = cfx::hw_random16(0, instance->_segment.length());
-      instance->_segment.setPixelColor(index, instance->_segment.colors[1]);
-    }
+  // Spawning - Intensity is the primary density driver
+  // random8() < intensity: 0=never, 128=50%, 255=always
+  if (cfx::hw_random8() < instance->_segment.intensity) {
+    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    instance->_segment.setPixelColor(index, instance->_segment.colors[1]);
   }
 
   return FRAMETIME;
@@ -2906,8 +2910,14 @@ uint16_t mode_hyper_sparkle(void) {
 
   instance->_segment.fadeToBlackBy(final_fade);
 
-  // Subtractive Kicker (Stronger here)
-  uint8_t sub_kicker = 4;
+  // Subtractive Kicker (Stronger here, but scaled at very low speeds)
+  uint8_t sub_kicker;
+  if (instance->_segment.speed < 17)
+    sub_kicker = 8; // Strong kick at very low speeds
+  else if (instance->_segment.speed < 50)
+    sub_kicker = 6;
+  else
+    sub_kicker = 4;
   int len = instance->_segment.length();
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
