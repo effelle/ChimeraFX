@@ -5214,18 +5214,38 @@ uint16_t mode_follow_me(void) {
 
   // 1. Dimming (Multiplicative)
   // nscale8(dim_amt) is equivalent to fadeToBlackBy(255 - dim_amt)
-  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1);
+  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1); // 128..255
   instance->_segment.fadeToBlackBy(255 - dim_amt);
 
-  // 2. Subtraction (Floor Cleaning)
-  // If intensity is low, we need more subtraction to clear the trail faster
-  uint8_t sub_amt = (255 - instance->_segment.intensity) >> 3;
-  if (sub_amt < 3)
-    sub_amt = 3; // Always subtract at least 3
-  instance->_segment.fadeToBlackBy(sub_amt);
+  // 2. Subtraction (Floor Cleaning) - MANUAL LOOP
+  // Needed because fadeToBlackBy is multiplicative and never reaches 0
+  // effectively at low levels. We manually subtract a small amount from every
+  // pixel to force zeroing. More aggressive at low intensity (< 128) to prevent
+  // "floor" persistence.
+  uint8_t sub_val = (instance->_segment.intensity < 128) ? 3 : 1;
+
+  int start = instance->_segment.start;
+  int stop = instance->_segment.stop;
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = start; i < stop; i++) {
+    if (i < light.size()) {
+      esphome::Color c = light[i].get();
+      // qsub8 equivalent
+      c.r = (c.r > sub_val) ? (c.r - sub_val) : 0;
+      c.g = (c.g > sub_val) ? (c.g - sub_val) : 0;
+      c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
+      c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
+      light[i] = c;
+    }
+  }
 
   // === Strobe Frequency ===
-  // Faster strobe (approx 30Hz) for attention grabbing
+  // Real Strobe: Short ON time, Long OFF time.
+  // 4Hz (250ms period), 40ms ON pulse.
+  // This guarantees >4 flashes in 1.5s (1500/250 = 6 flashes).
+  const uint32_t STROBE_PERIOD_MS = 250;
+  const uint32_t STROBE_ON_MS = 40;
   const uint32_t STROBE_DURATION_MS = 1500;
   const uint32_t RESTART_DURATION_MS = 500;
 
@@ -5234,7 +5254,7 @@ uint16_t mode_follow_me(void) {
 
   case FM_STROBE_START: {
     // Strobe the cursor at position 0 to grab attention
-    bool strobe_on = (now >> 4) & 1; // Faster strobe (approx 62ms cycle)
+    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
     if (strobe_on) {
       for (int j = 0; j < cursor_size && j < len; j++) {
         // Alternate between White and Palette color for max impact
@@ -5272,6 +5292,12 @@ uint16_t mode_follow_me(void) {
       int px = head + j;
       if (px >= 0 && px < len) {
         // Gradient across cursor for a polished look
+        // Uses Solid Palette (forced above), so it's just brightness gradient
+        // logic over solid color But palette is forced to solid, so
+        // ColorFromPalette returns the solid color (with brightness scaled by
+        // index if it was a gradient palette, but here it's solid). Actually,
+        // ColorFromPalette with PaletteSolid returns the color regardless of
+        // index (usually). Let's rely on standard behavior.
         uint8_t ci = (j * 255) / cursor_size;
         CRGBW c = ColorFromPalette(ci, 255, palette);
         instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
@@ -5293,7 +5319,7 @@ uint16_t mode_follow_me(void) {
     if (end_start < 0)
       end_start = 0;
 
-    bool strobe_on = (now >> 4) & 1; // Faster strobe
+    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
     if (strobe_on) {
       for (int j = 0; j < cursor_size; j++) {
         int px = end_start + j;
