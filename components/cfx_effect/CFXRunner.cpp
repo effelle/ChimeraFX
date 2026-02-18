@@ -2110,72 +2110,62 @@ uint16_t mode_ripple(void) {
     }
     ripples[i].age += age_step;
 
-    // Map Age (0-65535) to WLED State (0-255)
-    uint8_t ripplestate = ripples[i].age >> 8;
-
-    // WLED Math:
-    // rippledecay = (speed >> 4) + 1;  <-- We replaced this with lifespan_ms
+    // 1. High Precision Propagation (8.16 Fixed Point)
+    // prop_sub represents pixels * 65536.
     uint8_t wled_speed = instance->_segment.speed;
     unsigned rippledecay = (wled_speed >> 4) + 1;
-
-    // High Precision Propagation Calculation to FIX JITTER at low speeds.
-    // Original WLED: propagation = ((ripplestate / rippledecay) * (wled_speed +
-    // 1)); Problem: ripplestate (0-255) effectively quantizes motion. At low
-    // speeds, ripplestate might not change for multiple frames, causing
-    // stutter. Fix: Use 'age' (0-65535) which has 256x more resolution. Eq:
-    // (age / (rippledecay * 256)) * (speed + 1)
-
-    unsigned propagation;
     if (rippledecay == 0)
-      rippledecay = 1; // Safety
+      rippledecay = 1;
 
-    // We calculate "how many decay units have passed" in high precision
-    // scaled_state = age / 256.0
-    // units = scaled_state / decay
-    // Therefore units = age / (decay * 256)
+    // Eq: (age * (speed + 1)) / decay.
+    // Result is directly in 8.16 format because 'age' is 0..65535 (fraction of
+    // lifespan) and lifespan maps to max propagation. Wait, let's stick to the
+    // multiplier logic: val = age * (speed+1) / decay.
+    uint32_t prop_sub =
+        ((uint32_t)ripples[i].age * (uint32_t)(wled_speed + 1)) / rippledecay;
 
-    uint32_t prop_numerator =
-        (uint32_t)ripples[i].age * (uint32_t)(wled_speed + 1);
-    uint32_t prop_denominator = (uint32_t)rippledecay * 256;
+    int propI = prop_sub >> 16; // Integer pixels
 
-    propagation = prop_numerator / prop_denominator;
+    // 2. High Precision Amplitude (Avoids 0-255 step stutter)
+    // WLED: ramp up first ~6.6% (17/255), then ramp down.
+    // 17/255 * 65535 ~= 4369.
+    unsigned amp;
+    if (ripples[i].age < 4369) {
+      // Ramp up 0 to 255
+      amp = (ripples[i].age * 255) / 4369;
+    } else {
+      // Ramp down 255 to 2
+      // map(age, 4369, 65535, 255, 2)
+      uint32_t progress = ripples[i].age - 4369;
+      uint32_t range = 65535 - 4369;
+      // inv_progress 0..1 -> 255..2
+      amp = 2 + ((range - progress) * 253) / range;
+    }
 
-    int propI = propagation >> 8;
-    unsigned propF = propagation & 0xFF;
-
-    // Amplitude Logic
-    // "unsigned amp = (ripplestate < 17) ? triwave8((ripplestate-1)*8) :
-    // map(ripplestate,17,255,255,2);"
-    unsigned amp = (ripplestate < 17) ? triwave8((ripplestate) * 8)
-                                      : // Simplified -1
-                       map(ripplestate, 17, 255, 255, 2);
-
-    // Rendering: 2 wavefronts
     int left = ripples[i].pos - propI - 1;
     int right = ripples[i].pos + propI + 2;
 
     uint32_t col;
     if (instance->_segment.palette == 255) {
-      uint32_t c = instance->_segment.colors[0]; // Simple color
-      // To support scale8 properly we should unpack.
+      uint32_t c = instance->_segment.colors[0];
       col = c;
     } else {
       CRGBW c = ColorFromPalette(ripples[i].color, 255, active_palette);
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 6 pixels (User requested longer ripple, previous 5th pixel was
-    // 0-phase)
+    // Loop 6 pixels
     for (int v = 0; v < 6; v++) {
-      // "uint8_t mag = scale8(cubicwave8((propF>>2) + v * 64), amp);"
-      // Reduced step to 48 (from 64) to spread the wave over more pixels
-      // without wrapping to 0 too fast.
-      uint8_t wave = cubicwave8((propF >> 2) + (v * 48)); // 0-255
+      // 3. High Precision Phase
+      // We use (prop_sub >> 7) which includes 1 extra bit of precision compared
+      // to standard PropF. This ensures the wave phase updates every frame even
+      // at low speeds, preventing visual stutter.
+      uint8_t phase = (prop_sub >> 7) & 0xFF;
+
+      uint8_t wave = cubicwave8(phase + (v * 48));
       uint8_t mag = scale8(wave, amp);
 
-      // FIX: ApplyGamma crushed the brightness too much, creating faint
-      // ripples. Removed per user request to restore "full" brightness.
-      // mag = instance->applyGamma(mag);
+      // Gamma Disabled per previous fix.
 
       if (mag > 0) {
         // Render Left
