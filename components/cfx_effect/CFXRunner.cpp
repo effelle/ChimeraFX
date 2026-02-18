@@ -2110,38 +2110,36 @@ uint16_t mode_ripple(void) {
     }
     ripples[i].age += age_step;
 
-    // 1. High Precision Propagation (8.16 Fixed Point)
-    // prop_sub represents pixels * 65536.
+    // Map Age (0-65535) to WLED State (0-255)
+    uint8_t ripplestate = ripples[i].age >> 8;
+
+    // WLED Math:
     uint8_t wled_speed = instance->_segment.speed;
     unsigned rippledecay = (wled_speed >> 4) + 1;
-    if (rippledecay == 0)
-      rippledecay = 1;
 
-    // Eq: (age * (speed + 1)) / decay.
-    // Result is directly in 8.16 format because 'age' is 0..65535 (fraction of
-    // lifespan) and lifespan maps to max propagation. Wait, let's stick to the
-    // multiplier logic: val = age * (speed+1) / decay.
-    uint32_t prop_sub =
+    // High Precision Propagation (Safe Mode)
+    // We want to calculate the WLED propagation value but using the full
+    // resolution of 'age' instead of the quantized 'ripplestate'. WLED: prop =
+    // (state / decay) * (speed + 1). (Approx) Ours: prop = (age * (speed + 1))
+    // / decay / 256. This gives us the same scale as WLED but updates every
+    // frame.
+
+    // 1. Calculate raw value (Age * Speed) / Decay
+    uint32_t prop_raw =
         ((uint32_t)ripples[i].age * (uint32_t)(wled_speed + 1)) / rippledecay;
 
-    int propI = prop_sub >> 16; // Integer pixels
+    // 2. Shift down by 8 to match WLED's 8.8 fixed point scale
+    // (Because Age is 256x larger than State).
+    unsigned propagation = prop_raw >> 8;
 
-    // 2. High Precision Amplitude (Avoids 0-255 step stutter)
-    // WLED: ramp up first ~6.6% (17/255), then ramp down.
-    // 17/255 * 65535 ~= 4369.
-    unsigned amp;
-    if (ripples[i].age < 4369) {
-      // Ramp up 0 to 255
-      amp = (ripples[i].age * 255) / 4369;
-    } else {
-      // Ramp down 255 to 2
-      // map(age, 4369, 65535, 255, 2)
-      uint32_t progress = ripples[i].age - 4369;
-      uint32_t range = 65535 - 4369;
-      // inv_progress 0..1 -> 255..2
-      amp = 2 + ((range - progress) * 253) / range;
-    }
+    int propI = propagation >> 8;
+    unsigned propF = propagation & 0xFF;
 
+    // Amplitude Logic (Reverted to Safe WLED Logic)
+    unsigned amp = (ripplestate < 17) ? triwave8((ripplestate) * 8)
+                                      : map(ripplestate, 17, 255, 255, 2);
+
+    // Rendering: 2 wavefronts
     int left = ripples[i].pos - propI - 1;
     int right = ripples[i].pos + propI + 2;
 
@@ -2154,18 +2152,14 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 6 pixels
+    // Loop 6 pixels (Keep length fix)
     for (int v = 0; v < 6; v++) {
-      // 3. High Precision Phase
-      // We use (prop_sub >> 7) which includes 1 extra bit of precision compared
-      // to standard PropF. This ensures the wave phase updates every frame even
-      // at low speeds, preventing visual stutter.
-      uint8_t phase = (prop_sub >> 7) & 0xFF;
-
-      uint8_t wave = cubicwave8(phase + (v * 48));
+      // Use standard Phase logic (based on propF) but using our smoother
+      // propagation value. v * 48 from previous tuning.
+      uint8_t wave = cubicwave8((propF >> 2) + (v * 48));
       uint8_t mag = scale8(wave, amp);
 
-      // Gamma Disabled per previous fix.
+      // Gamma Disabled
 
       if (mag > 0) {
         // Render Left
