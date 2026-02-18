@@ -2016,22 +2016,24 @@ uint16_t mode_phased(void) {
 }
 
 // --- Ripple Effect (ID 79) ---
-// Expanding waves from random points (simplified, no allocateData)
-// --- Ripple Effect (ID 79) ---
+// Ported from WLED FX.cpp mode_ripple
+// Modified for Delta-Time smoothness
+
 struct RippleState {
-  uint16_t age;    // High-res position (radius = age >> 8)
-  uint8_t color;   // Color index
-  uint16_t center; // Center position
-  bool active;     // Active flag
+  uint16_t age; // 0 to 65535 (Lifetime)
+  uint16_t pos; // Center
+  uint8_t color;
+  bool active;
 };
 
-// Helper to avoid zero-floor issues during fade (simulating scale8_video)
-// Ensures that if (val > 0 && scale > 0), result is at least 1.
-static inline uint8_t scale8_video_eff(uint8_t i, uint8_t scale) {
-  uint8_t val = ((uint16_t)i * (uint16_t)scale) >> 8;
-  if (val == 0 && i > 0 && scale > 0)
-    return 1;
-  return val;
+// WLED helpers
+// triwave8: 0->255->0 triangle wave
+static inline uint8_t triwave8(uint8_t in) {
+  if (in & 0x80) {
+    in = 255 - in;
+  }
+  uint8_t out = in << 1;
+  return out;
 }
 
 uint16_t mode_ripple(void) {
@@ -2042,85 +2044,50 @@ uint16_t mode_ripple(void) {
   if (len <= 1)
     return mode_static();
 
-  // 1. Delta Time Logic
   uint32_t delta = instance->frame_time;
   if (delta < 1)
     delta = 1;
 
-  // Max ripples calculation
-  uint8_t maxRipples = 1 + (instance->_segment.intensity >> 5);
-  uint16_t dataSize = sizeof(RippleState) * maxRipples;
+  uint8_t maxRipples = 1 + (len >> 2);
+  if (maxRipples > 20)
+    maxRipples = 20;
 
+  uint16_t dataSize = sizeof(RippleState) * maxRipples;
   if (!instance->_segment.allocateData(dataSize))
     return mode_static();
 
   RippleState *ripples = (RippleState *)instance->_segment.data;
 
-  // 2. Fade Background
-  // Use decay dependent on time to ensure consistency
-  // approx 224 per frame at 60fps => ~30ms decay?
-  // let's use a tuned decay factor similar to heartbeat but faster
-  // or just stick to fadeToBlackBy but scaled by delta?
-  // For now, standard fadeToBlackBy is okay, but sensitive to FPS.
-  // Better:
-  // uint8_t fade = (delta * 224) / 16;
-  // if (fade > 255) fade = 255;
-  // instance->_segment.fadeToBlackBy(fade);
-  // Reverting to WLED Standard for now to keep "look" similar,
-  // but let's stick to the requested "wrong logic" fix which implies timing.
+  // Fade
   instance->_segment.fadeToBlackBy(224);
 
-  // 3. Spawn Logic
-  // Probability should also be time-based?
-  // Current: random16(400) < intensity. Passed every frame.
-  // If FPS doubles, spawn rate doubles.
-  // Fix: Scale probability by delta.
-  // Base chance per ms?
-  // Let's keep it simple for now and focus on movement speed first.
-  if (random16(400) < instance->_segment.intensity) {
+  // Spawn Logic
+  // WLED: if (hw_random16(IBN + 10000) <= (SEGMENT.intensity >>
+  // (SEGMENT.is2D()*3))) IBN is 5100. So random16(15100) <= intensity. Our
+  // intensity is 0-255. 255 / 15100 ~= 1.6%. We need to scale this by Delta
+  // Time if we want time-accuracy? WLED runs ~42fps (23ms). Prob per ms ~= 1.6%
+  // / 23 ~= 0.07%. Chance = (0.07 * delta * intensity_factor). Let's just stick
+  // to the frame-based prob for now but scaled slightly if delta is huge.
+  // random16(15000) <= intensity.
+
+  if (random16(15000) <= instance->_segment.intensity) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
-        uint16_t last_spawn = instance->_segment.aux0;
-        uint16_t new_center = 0;
-        int attempts = 0;
-        do {
-          new_center = random16(len);
-          attempts++;
-        } while (abs((int)new_center - (int)last_spawn) < (len / 4) &&
-                 attempts < 5);
-
-        instance->_segment.aux0 = new_center;
         ripples[i].active = true;
         ripples[i].age = 0;
-        ripples[i].center = new_center;
+        ripples[i].pos = random16(len);
         ripples[i].color = random8();
         break;
       }
     }
   }
 
-  // 4. Process Ripples
-  // Map Speed slider to Pixels Per Second.
-  // Low speed (0): Slow ripples. High speed (255): Fast.
-  // Let's say range is 5 px/sec to 100 px/sec.
-  // Or simply: WLED formula.
-
-  // WLED Logic for movement: step = speed / 16 ? No.
-  // Let's use our clean Delta Logic.
-  // Speed 0-255.
-  // target_px_per_sec = map(speed, 0, 255, 10, 200).
-  // radius = age >> 8.
-  // age increment per sec = target_px_per_sec * 256.
-  // age increment per ms = (target_px_per_sec * 256) / 1000.
-  // age step = (age_inc_per_ms * delta).
-
-  uint32_t px_per_sec = 10 + ((uint32_t)instance->_segment.speed * 190) / 255;
-  uint32_t age_step = (px_per_sec * 256 * delta) / 1000;
-
+  // Process logic
+  uint32_t lifespan_ms = map(instance->_segment.speed, 0, 255, 6000, 300);
+  // age step = (65535 * delta) / lifespan
+  uint32_t age_step = (65535 * delta) / lifespan_ms;
   if (age_step < 1)
-    age_step = 1; // Minimum move
-
-  uint32_t max_age = (uint32_t)len * 256;
+    age_step = 1;
 
   const uint32_t *active_palette = nullptr;
   if (instance->_segment.palette != 0) {
@@ -2133,83 +2100,84 @@ uint16_t mode_ripple(void) {
     if (!ripples[i].active)
       continue;
 
-    if (ripples[i].age > max_age) {
+    // Age update
+    if ((uint32_t)ripples[i].age + age_step > 65535) {
       ripples[i].active = false;
       continue;
     }
+    ripples[i].age += age_step;
 
-    uint16_t radius = ripples[i].age >> 8;
+    // Map Age (0-65535) to WLED State (0-255)
+    uint8_t ripplestate = ripples[i].age >> 8;
 
-    if (radius > len + 6) {
-      ripples[i].active = false;
-      continue;
-    }
+    // WLED Math:
+    // rippledecay = (speed >> 4) + 1;  <-- We replaced this with lifespan_ms
+    // propagation = ((ripplestate/rippledecay - 1) * (speed + 1));
+    // This formula depends on 'rippledecay' which depends on 'speed'.
+    // We should calculate 'rippledecay' to simulate WLED's expansion rate
+    // calculation? Or can we simplify? WLED: propagation is roughly
+    // proportional to state * speed / decay. speed/decay is roughly constant
+    // (16). So propagation ~= state * 16. Let's calculate the explicit WLED
+    // values to be safe.
 
-    // Energy Decay
-    uint8_t energy = 255 - ((ripples[i].age * 255) / max_age);
+    uint8_t wled_speed = instance->_segment.speed;
+    unsigned rippledecay = (wled_speed >> 4) + 1;
+    unsigned propagation = ((ripplestate / rippledecay) * (wled_speed + 1));
+    // Note: WLED has -1 in there: ((state/decay - 1) ...)
+    // We'll trust the math: if state < decay, it's negative?
+    // WLED: "if (ripplestate < 17) ..." special amplitude handling.
 
-    // Apply Gamma to energy for smoother fade out
-    energy = instance->applyGamma(energy);
+    int propI = propagation >> 8;
+    unsigned propF = propagation & 0xFF;
 
-    CRGBW c;
+    // Amplitude Logic
+    // "unsigned amp = (ripplestate < 17) ? triwave8((ripplestate-1)*8) :
+    // map(ripplestate,17,255,255,2);"
+    unsigned amp = (ripplestate < 17) ? triwave8((ripplestate) * 8)
+                                      : // Simplified -1
+                       map(ripplestate, 17, 255, 255, 2);
+
+    // Rendering: 2 wavefronts
+    int left = ripples[i].pos - propI - 1;
+    int right = ripples[i].pos + propI + 2;
+
+    uint32_t col;
     if (instance->_segment.palette == 255) {
-      uint32_t col = instance->_segment.colors[0];
-      c = CRGBW((col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF,
-                (col >> 24) & 0xFF);
+      uint32_t c = instance->_segment.colors[0]; // Simple color
+      // To support scale8 properly we should unpack.
+      col = c;
     } else {
-      c = ColorFromPalette(ripples[i].color, 255, active_palette);
+      CRGBW c = ColorFromPalette(ripples[i].color, 255, active_palette);
+      col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Apply Energy Decay
-    c.r = scale8_video_eff(c.r, energy);
-    c.g = scale8_video_eff(c.g, energy);
-    c.b = scale8_video_eff(c.b, energy);
-    c.w = scale8_video_eff(c.w, energy);
+    // Loop 4 pixels
+    for (int v = 0; v < 4; v++) {
+      // "uint8_t mag = scale8(cubicwave8((propF>>2) + v * 64), amp);"
+      uint8_t wave = cubicwave8((propF >> 2) + (v * 64)); // 0-255
+      uint8_t mag = scale8(wave, amp);
 
-    // Render Wavefronts
-    int centers[2] = {(int)ripples[i].center + radius,
-                      (int)ripples[i].center - radius};
+      // Apply Gamma to magnitude! (Fix for floor bug)
+      mag = instance->applyGamma(mag);
 
-    for (int k = 0; k < 2; k++) {
-      int wave_center = centers[k];
-      int start = wave_center - 6;
-      int end = wave_center + 6;
+      if (mag > 0) {
+        // Render Left
+        int pLeft = left + v;
+        if (pLeft >= 0 && pLeft < len) {
+          uint32_t existing = instance->_segment.getPixelColor(pLeft);
+          instance->_segment.setPixelColor(pLeft,
+                                           color_blend(existing, col, mag));
+        }
 
-      if (start < 0)
-        start = 0;
-      if (end > len)
-        end = len;
-
-      for (int pos = start; pos < end; pos++) {
-        int dist = abs(pos - wave_center);
-
-        // Wave profile:
-        // 0 at dist=6, 255 at dist=0.
-        // Simple linear ramp or cubic.
-        int16_t ramp = 255 - (dist * 42);
-        if (ramp < 0)
-          ramp = 0;
-
-        // Apply cubic curve for "water" feel
-        uint8_t bri = cubicwave8((uint8_t)ramp);
-
-        // Additive Blend with scale8_video to preserve dim tails
-        CRGBW c_pixel = c;
-        c_pixel.r = scale8_video_eff(c_pixel.r, bri);
-        c_pixel.g = scale8_video_eff(c_pixel.g, bri);
-        c_pixel.b = scale8_video_eff(c_pixel.b, bri);
-        c_pixel.w = scale8_video_eff(c_pixel.w, bri);
-
-        uint32_t old = instance->_segment.getPixelColor(pos);
-        instance->_segment.setPixelColor(
-            pos, RGBW32(qadd8((old >> 16) & 0xFF, c_pixel.r),
-                        qadd8((old >> 8) & 0xFF, c_pixel.g),
-                        qadd8(old & 0xFF, c_pixel.b),
-                        qadd8((old >> 24) & 0xFF, c_pixel.w)));
+        // Render Right
+        int pRight = right - v;
+        if (pRight >= 0 && pRight < len) {
+          uint32_t existing = instance->_segment.getPixelColor(pRight);
+          instance->_segment.setPixelColor(pRight,
+                                           color_blend(existing, col, mag));
+        }
       }
     }
-
-    ripples[i].age += age_step;
   }
 
   return FRAMETIME;
