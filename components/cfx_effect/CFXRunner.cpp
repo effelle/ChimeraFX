@@ -2061,9 +2061,8 @@ uint16_t mode_ripple(void) {
   RippleState *ripples = (RippleState *)instance->_segment.data;
 
   // Fade Background
-  // Reduced from 224 to 48 to allow smooth trails and avoid "dry" turn-off
-  // when pixels leave the ripple window.
-  instance->_segment.fadeToBlackBy(48);
+  // REVERT: Back to 224 per user request (Fixed Floor Brightness Bug)
+  instance->_segment.fadeToBlackBy(224);
 
   // Spawn Logic
   // Time-Based Probability to Fix Gaps
@@ -2184,6 +2183,40 @@ uint16_t mode_ripple(void) {
                                            color_blend(existing, col, mag));
         }
       }
+    }
+  }
+
+  // WLED Blur Effect (Simulated)
+  // This smooths the "dry" transitions by spreading light to neighbors.
+  // Using a simple 16-bit kernel: (L*4 + C*8 + R*4) >> 4
+  uint8_t blur_amount = 64; // Moderate blur
+  if (blur_amount > 0) {
+    for (int i = 0; i < len; i++) {
+      // Safety checks for boundaries
+      int prev = (i == 0) ? 0 : i - 1;
+      int next = (i == len - 1) ? len - 1 : i + 1;
+
+      Color c_prev = instance->_segment.get(prev);
+      Color c_curr = instance->_segment.get(i);
+      Color c_next = instance->_segment.get(next);
+
+      // Simple average for now to be safe and fast?
+      // WLED uses a specific 'blur1d' math but let's try a simple weighted
+      // average first. Red
+      uint16_t r =
+          ((uint16_t)c_prev.r + (uint16_t)c_curr.r * 2 + (uint16_t)c_next.r) >>
+          2;
+      uint16_t g =
+          ((uint16_t)c_prev.g + (uint16_t)c_curr.g * 2 + (uint16_t)c_next.g) >>
+          2;
+      uint16_t b =
+          ((uint16_t)c_prev.b + (uint16_t)c_curr.b * 2 + (uint16_t)c_next.b) >>
+          2;
+      uint16_t w =
+          ((uint16_t)c_prev.w + (uint16_t)c_curr.w * 2 + (uint16_t)c_next.w) >>
+          2;
+
+      instance->_segment.setPixelColor(i, r, g, b, w);
     }
   }
 
