@@ -597,6 +597,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 64; // BPM
   case 104:
     return 60; // Sunrise
+  case 156:
+    return 140; // Follow Me (Default Speed)
   default:
     return 128; // WLED default
   }
@@ -609,6 +611,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 160; // Fire Dual (same as Fire 2012)
   case 66:
     return 160; // Fire 2012
+  case 156:
+    return 40; // Follow Me (Default Intensity)
   default:
     return 128; // WLED default
   }
