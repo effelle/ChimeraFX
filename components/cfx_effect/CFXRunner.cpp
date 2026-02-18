@@ -5168,7 +5168,7 @@ uint16_t mode_kaleidos(void) {
  */
 
 // State constants
-#define FM_STROBE_START 0
+#define FM_PULSE_START 0
 #define FM_MOVING 1
 #define FM_STROBE_END 2
 #define FM_RESTART 3
@@ -5197,7 +5197,7 @@ uint16_t mode_follow_me(void) {
   // === Init on Reset ===
   if (instance->_segment.reset) {
     fm->pos = 0.0f;
-    fm->state = FM_STROBE_START;
+    fm->state = FM_PULSE_START;
     fm->state_start_ms = cfx_millis();
     fm->restart_brightness = 255;
     instance->_segment.reset = false;
@@ -5272,28 +5272,24 @@ uint16_t mode_follow_me(void) {
   // This guarantees >4 flashes in 1.5s (1500/250 = 6 flashes).
   const uint32_t STROBE_PERIOD_MS = 250;
   const uint32_t STROBE_ON_MS = 40;
+  const uint32_t PULSE_DURATION_MS = 2000;
   const uint32_t STROBE_DURATION_MS = 1500;
   const uint32_t RESTART_DURATION_MS = 500;
 
   // === State Machine ===
   switch (fm->state) {
 
-  case FM_STROBE_START: {
-    // Strobe the cursor at position 0 to grab attention
-    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
-    if (strobe_on) {
-      for (int j = 0; j < cursor_size && j < len; j++) {
-        // Alternate between White and Palette color for max impact
-        // Use Palette Color (Solid) exclusively
-        uint8_t ci = (j * 255) / cursor_size;
-        CRGBW c = ColorFromPalette(ci, 255, palette);
-        instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
-      }
+  case FM_PULSE_START: {
+    // Breathing/pulsing cursor at position 0 (same as Follow Us FU_PULSE)
+    uint8_t bri = beatsin8(60, 50, 255);
+    for (int j = 0; j < cursor_size && j < len; j++) {
+      uint8_t ci = (j * 255) / cursor_size;
+      CRGBW c = ColorFromPalette(ci, bri, palette);
+      instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
     }
-    // else: fadeToBlackBy already handled the "off" frames
 
-    // Transition: After strobe duration, start moving
-    if (now - fm->state_start_ms > STROBE_DURATION_MS) {
+    // Transition: After pulse duration, start moving
+    if (now - fm->state_start_ms > PULSE_DURATION_MS) {
       fm->state = FM_MOVING;
       fm->pos = 0.0f;
       fm->state_start_ms = now;
@@ -5372,7 +5368,7 @@ uint16_t mode_follow_me(void) {
     if (now - fm->state_start_ms > RESTART_DURATION_MS) {
       // Clear strip fully
       instance->_segment.fill(0);
-      fm->state = FM_STROBE_START;
+      fm->state = FM_PULSE_START;
       fm->pos = 0.0f;
       fm->state_start_ms = now;
     }
