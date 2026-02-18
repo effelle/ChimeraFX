@@ -2137,8 +2137,23 @@ uint16_t mode_ripple(void) {
     unsigned propF = propagation & 0xFF;
 
     // Amplitude Logic (Reverted to Safe WLED Logic)
-    unsigned amp = (ripplestate < 17) ? triwave8((ripplestate) * 8)
-                                      : map(ripplestate, 17, 255, 255, 2);
+    // Amplitude Logic (Smooth High-Precision)
+    // Fixes "Blinking" issue caused by stepping ripplestate (age >> 8).
+    // Previous logic was: triwave8((age >> 8) * 8). This caused jumps of 16
+    // units in brightness. New logic: Use age (0-65535) directly for smooth
+    // ramp-up and decay. Ramp up finishes at age ~4369 (equivalent to state
+    // 17).
+    unsigned amp;
+    if (ripples[i].age < 4369) {
+      // Linear Fade In (0 to 255 over 4369 ticks)
+      amp = (ripples[i].age * 255) / 4369;
+    } else {
+      // Linear Fade Out (255 to 2 over remaining life)
+      // map(age, 4369, 65535, 255, 2)
+      // slope = (2 - 255) / (65535 - 4369) = -253 / 61166
+      // val = 255 - ((age - 4369) * 253) / 61166
+      amp = 255 - ((uint32_t)(ripples[i].age - 4369) * 253) / 61166;
+    }
 
     // Rendering: 2 wavefronts
     int left = ripples[i].pos - propI - 1;
