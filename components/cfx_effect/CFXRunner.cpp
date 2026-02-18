@@ -5218,7 +5218,10 @@ uint16_t mode_follow_me(void) {
   // 2. Subtract (Floor Cleaning): Hard subtraction to force zero.
   uint8_t scale = 255 - (instance->_segment.intensity >> 1); // 128..255
   // Increased subtraction for low intensity to fix persistent floor bug.
-  uint8_t sub_val = (instance->_segment.intensity < 90) ? 4 : 2;
+  // 60..89: sub 4. < 60: sub 6 (Aggressive). > 90: sub 2.
+  uint8_t sub_val = (instance->_segment.intensity < 60)
+                        ? 6
+                        : ((instance->_segment.intensity < 90) ? 4 : 2);
 
   int start = instance->_segment.start;
   int stop = instance->_segment.stop;
