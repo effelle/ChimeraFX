@@ -36,6 +36,7 @@ uint16_t mode_drip(void);
 uint16_t mode_dropping_time(void);
 uint16_t mode_heartbeat_center(void);
 uint16_t mode_kaleidos(void);
+uint16_t mode_follow_me(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -3583,6 +3584,9 @@ void CFXRunner::service() {
   case FX_MODE_KALEIDOS: // 155
     mode_kaleidos();
     break;
+  case FX_MODE_FOLLOW_ME: // 156
+    mode_follow_me();
+    break;
   default:
     mode_static();
     break;
@@ -5144,6 +5148,182 @@ uint16_t mode_kaleidos(void) {
     CRGBW c = ColorFromPalette(color_index, 255, palette);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
+
+  return FRAMETIME;
+}
+
+/*
+ * Follow Me (ID 156)
+ * Linear scanner with attention-grabbing strobe.
+ * State Machine: STROBE_START → MOVING → STROBE_END → RESTART
+ * The cursor strobes at the start, travels with a fading trail,
+ * strobes at the end, then fades out and restarts.
+ */
+
+// State constants
+#define FM_STROBE_START 0
+#define FM_MOVING 1
+#define FM_STROBE_END 2
+#define FM_RESTART 3
+
+struct FollowMeData {
+  float pos;                  // Current head position (sub-pixel)
+  uint8_t state;              // Current state machine state
+  uint32_t state_start_ms;    // Timestamp when current state began
+  uint8_t restart_brightness; // For fade-out in RESTART state
+};
+
+uint16_t mode_follow_me(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // === Allocate State ===
+  if (!instance->_segment.allocateData(sizeof(FollowMeData)))
+    return mode_static();
+
+  FollowMeData *fm = reinterpret_cast<FollowMeData *>(instance->_segment.data);
+
+  // === Init on Reset ===
+  if (instance->_segment.reset) {
+    fm->pos = 0.0f;
+    fm->state = FM_STROBE_START;
+    fm->state_start_ms = cfx_millis();
+    fm->restart_brightness = 255;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t now = cfx_millis();
+
+  // === Cursor Size ===
+  // ~10 pixels, but scale for short strips (min 3)
+  int cursor_size = std::max(3, std::min(10, (int)len / 10));
+
+  // === Palette ===
+  const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
+  if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
+    fillSolidPalette(instance->_segment.colors[0]);
+  }
+
+  // === Trail Fade ===
+  // Intensity controls trail length: High = slow fade (long trail)
+  // Map: intensity 0 = fadeBy 80 (fast), intensity 255 = fadeBy 5 (slow)
+  uint8_t fade_amount = 80 - ((instance->_segment.intensity * 75) >> 8);
+  if (fade_amount < 5)
+    fade_amount = 5;
+  instance->_segment.fadeToBlackBy(fade_amount);
+
+  // === Strobe Duration ===
+  const uint32_t STROBE_DURATION_MS = 1500;
+  const uint32_t RESTART_DURATION_MS = 500;
+
+  // === State Machine ===
+  switch (fm->state) {
+
+  case FM_STROBE_START: {
+    // Strobe the cursor at position 0 to grab attention
+    bool strobe_on = (now >> 3) & 1; // ~125Hz strobe
+    if (strobe_on) {
+      for (int j = 0; j < cursor_size && j < len; j++) {
+        // Alternate between White and Palette color for max impact
+        if ((now >> 6) & 1) {
+          instance->_segment.setPixelColor(j, RGBW32(255, 255, 255, 0));
+        } else {
+          uint8_t ci = (j * 255) / cursor_size;
+          CRGBW c = ColorFromPalette(ci, 255, palette);
+          instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
+        }
+      }
+    }
+    // else: fadeToBlackBy already handled the "off" frames
+
+    // Transition: After strobe duration, start moving
+    if (now - fm->state_start_ms > STROBE_DURATION_MS) {
+      fm->state = FM_MOVING;
+      fm->pos = 0.0f;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FM_MOVING: {
+    // === Movement Speed ===
+    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = fast (~4 px/frame)
+    float speed_factor = 0.2f + (instance->_segment.speed * 3.8f / 255.0f);
+    fm->pos += speed_factor;
+
+    int head = (int)fm->pos;
+    int end_pos = len - cursor_size;
+
+    // Draw cursor block
+    for (int j = 0; j < cursor_size; j++) {
+      int px = head + j;
+      if (px >= 0 && px < len) {
+        // Gradient across cursor for a polished look
+        uint8_t ci = (j * 255) / cursor_size;
+        CRGBW c = ColorFromPalette(ci, 255, palette);
+        instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
+      }
+    }
+
+    // Transition: Cursor reached the end
+    if (head >= end_pos) {
+      fm->pos = (float)end_pos;
+      fm->state = FM_STROBE_END;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FM_STROBE_END: {
+    // Strobe the cursor at the END of the strip
+    int end_start = len - cursor_size;
+    if (end_start < 0)
+      end_start = 0;
+
+    bool strobe_on = (now >> 3) & 1; // ~125Hz strobe
+    if (strobe_on) {
+      for (int j = 0; j < cursor_size; j++) {
+        int px = end_start + j;
+        if (px < len) {
+          if ((now >> 6) & 1) {
+            instance->_segment.setPixelColor(px, RGBW32(255, 255, 255, 0));
+          } else {
+            uint8_t ci = (j * 255) / cursor_size;
+            CRGBW c = ColorFromPalette(ci, 255, palette);
+            instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
+          }
+        }
+      }
+    }
+
+    // Transition: After strobe, start restart (fade out)
+    if (now - fm->state_start_ms > STROBE_DURATION_MS) {
+      fm->state = FM_RESTART;
+      fm->state_start_ms = now;
+      fm->restart_brightness = 255;
+    }
+    break;
+  }
+
+  case FM_RESTART: {
+    // Gentle fade-out of whatever remains, then restart
+    // fadeToBlackBy is already running at the top of the function.
+    // We just wait for a short period for the strip to go dark.
+    if (now - fm->state_start_ms > RESTART_DURATION_MS) {
+      // Clear strip fully
+      instance->_segment.fill(0);
+      fm->state = FM_STROBE_START;
+      fm->pos = 0.0f;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  } // switch
 
   return FRAMETIME;
 }
