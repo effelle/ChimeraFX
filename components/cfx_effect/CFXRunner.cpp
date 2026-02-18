@@ -2154,15 +2154,18 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 5 pixels (User requested longer ripple +1)
-    for (int v = 0; v < 5; v++) {
+    // Loop 6 pixels (User requested longer ripple, previous 5th pixel was
+    // 0-phase)
+    for (int v = 0; v < 6; v++) {
       // "uint8_t mag = scale8(cubicwave8((propF>>2) + v * 64), amp);"
-      uint8_t wave = cubicwave8((propF >> 2) + (v * 64)); // 0-255
+      // Reduced step to 48 (from 64) to spread the wave over more pixels
+      // without wrapping to 0 too fast.
+      uint8_t wave = cubicwave8((propF >> 2) + (v * 48)); // 0-255
       uint8_t mag = scale8(wave, amp);
 
       // FIX: ApplyGamma crushed the brightness too much, creating faint
-      // ripples. Removed per user request to restore "full" brightness. mag =
-      // instance->applyGamma(mag);
+      // ripples. Removed per user request to restore "full" brightness.
+      // mag = instance->applyGamma(mag);
 
       if (mag > 0) {
         // Render Left
