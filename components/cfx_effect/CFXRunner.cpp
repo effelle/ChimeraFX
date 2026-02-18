@@ -2218,11 +2218,18 @@ uint16_t mode_ripple(void) {
     }
   }
 
-  // WLED Blur Effect (Simulated)
-  // This smooths the "dry" transitions by spreading light to neighbors.
-  // Using a simple 16-bit kernel: (L*4 + C*8 + R*4) >> 4
-  uint8_t blur_amount = 64; // Moderate blur
+  // WLED Blur Effect (Exact WLED Kernel)
+  // This provides the specific "smoothness" signature of WLED.
+  // Formula: new_val = (val * (255-blur) + (left + right) * (blur/2)) >> 8
+
+  uint8_t blur_amount =
+      40; // Tuned for Ripple (Simulate 'blur' parameter which is often ~32-64)
+  // 128 is extremely blurry. 40 is a good "trail" value.
+
   if (blur_amount > 0) {
+    uint8_t keep = 255 - blur_amount;
+    uint8_t seep = blur_amount >> 1;
+
     for (int i = 0; i < len; i++) {
       // Safety checks for boundaries
       int prev = (i == 0) ? 0 : i - 1;
@@ -2236,21 +2243,20 @@ uint16_t mode_ripple(void) {
       CRGBW c_curr(c);
       CRGBW c_next(n);
 
-      // Simple average for now to be safe and fast?
-      // WLED uses a specific 'blur1d' math but let's try a simple weighted
-      // average first. Red
-      uint16_t r =
-          ((uint16_t)c_prev.r + (uint16_t)c_curr.r * 2 + (uint16_t)c_next.r) >>
-          2;
-      uint16_t g =
-          ((uint16_t)c_prev.g + (uint16_t)c_curr.g * 2 + (uint16_t)c_next.g) >>
-          2;
-      uint16_t b =
-          ((uint16_t)c_prev.b + (uint16_t)c_curr.b * 2 + (uint16_t)c_next.b) >>
-          2;
-      uint16_t w =
-          ((uint16_t)c_prev.w + (uint16_t)c_curr.w * 2 + (uint16_t)c_next.w) >>
-          2;
+      // WLED blur1d math
+      // We must cast to uint16_t before multiplication to avoid overflow
+      uint8_t r = ((uint16_t)c_curr.r * keep +
+                   ((uint16_t)c_prev.r + c_next.r) * seep) >>
+                  8;
+      uint8_t g = ((uint16_t)c_curr.g * keep +
+                   ((uint16_t)c_prev.g + c_next.g) * seep) >>
+                  8;
+      uint8_t b = ((uint16_t)c_curr.b * keep +
+                   ((uint16_t)c_prev.b + c_next.b) * seep) >>
+                  8;
+      uint8_t w = ((uint16_t)c_curr.w * keep +
+                   ((uint16_t)c_prev.w + c_next.w) * seep) >>
+                  8;
 
       instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
     }
