@@ -2115,20 +2115,30 @@ uint16_t mode_ripple(void) {
 
     // WLED Math:
     // rippledecay = (speed >> 4) + 1;  <-- We replaced this with lifespan_ms
-    // propagation = ((ripplestate/rippledecay - 1) * (speed + 1));
-    // This formula depends on 'rippledecay' which depends on 'speed'.
-    // We should calculate 'rippledecay' to simulate WLED's expansion rate
-    // calculation? Or can we simplify? WLED: propagation is roughly
-    // proportional to state * speed / decay. speed/decay is roughly constant
-    // (16). So propagation ~= state * 16. Let's calculate the explicit WLED
-    // values to be safe.
-
     uint8_t wled_speed = instance->_segment.speed;
     unsigned rippledecay = (wled_speed >> 4) + 1;
-    unsigned propagation = ((ripplestate / rippledecay) * (wled_speed + 1));
-    // Note: WLED has -1 in there: ((state/decay - 1) ...)
-    // We'll trust the math: if state < decay, it's negative?
-    // WLED: "if (ripplestate < 17) ..." special amplitude handling.
+
+    // High Precision Propagation Calculation to FIX JITTER at low speeds.
+    // Original WLED: propagation = ((ripplestate / rippledecay) * (wled_speed +
+    // 1)); Problem: ripplestate (0-255) effectively quantizes motion. At low
+    // speeds, ripplestate might not change for multiple frames, causing
+    // stutter. Fix: Use 'age' (0-65535) which has 256x more resolution. Eq:
+    // (age / (rippledecay * 256)) * (speed + 1)
+
+    unsigned propagation;
+    if (rippledecay == 0)
+      rippledecay = 1; // Safety
+
+    // We calculate "how many decay units have passed" in high precision
+    // scaled_state = age / 256.0
+    // units = scaled_state / decay
+    // Therefore units = age / (decay * 256)
+
+    uint32_t prop_numerator =
+        (uint32_t)ripples[i].age * (uint32_t)(wled_speed + 1);
+    uint32_t prop_denominator = (uint32_t)rippledecay * 256;
+
+    propagation = prop_numerator / prop_denominator;
 
     int propI = propagation >> 8;
     unsigned propF = propagation & 0xFF;
