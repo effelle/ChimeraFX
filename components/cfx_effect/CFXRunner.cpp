@@ -5506,12 +5506,18 @@ uint16_t mode_follow_us(void) {
     if (now - fu->state_start_ms > PULSE_DURATION_MS) {
       fu->state = FU_RUN;
       fu->state_start_ms = now;
-      // Activate all parts and set their initial positions for the run
-      for (int i = 0; i < num_parts; i++) {
-        fu->parts[i].active = true;
-        fu->parts[i].pos = (float)(i * part_size);
-        fu->parts[i].arrived = false; // Reset arrived status
-      }
+      // Only launch part 0 — parts 1 & 2 stay inactive at their start positions
+      // until triggered by the gap logic. They are still drawn (below) so the
+      // 9px cursor remains visible until each sub-cursor separates.
+      fu->parts[0].active = true;
+      fu->parts[0].pos = 0.0f;
+      fu->parts[0].arrived = false;
+      fu->parts[1].active = false;
+      fu->parts[1].pos = (float)part_size; // stays at 3 until triggered
+      fu->parts[1].arrived = false;
+      fu->parts[2].active = false;
+      fu->parts[2].pos = (float)(2 * part_size); // stays at 6 until triggered
+      fu->parts[2].arrived = false;
     }
     break;
   }
