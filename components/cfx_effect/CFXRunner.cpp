@@ -5402,8 +5402,9 @@ uint16_t mode_follow_me(void) {
 
 #define FU_PULSE 0
 #define FU_RUN 1
-#define FU_FINALE 2
-#define FU_RESTART 3
+#define FU_JOIN 2
+#define FU_FINALE 3
+#define FU_RESTART 4
 
 struct CursorPart {
   float pos;
@@ -5449,17 +5450,17 @@ uint16_t mode_follow_us(void) {
   const int part_size = 3;
   const int num_parts = 3;
   const int cursor_total = part_size * num_parts; // 9 pixels
-  // Pixel gap before next runner launches
-  const int run_gap = std::max(12, (int)len / 6);
+  // Intensity slider controls gap between sub-cursor launches (0=tight,
+  // 255=wide)
+  const int run_gap = 4 + (instance->_segment.intensity * 36 / 255);
 
-  // Staggered arrival targets (from right end):
-  // Part 0 (lead) -> rightmost position
-  // Part 1        -> middle
-  // Part 2 (tail) -> leftmost
+  // Launch order: 2 -> 1 -> 0 (back of cursor peels off first)
+  // Arrival targets: part 2 arrives rightmost, part 0 arrives leftmost
+  // so they reassemble into the original 9px block at the end.
   int targets[3];
-  targets[0] = len - part_size;     // e.g. len-3
-  targets[1] = len - 2 * part_size; // e.g. len-6
-  targets[2] = len - 3 * part_size; // e.g. len-9
+  targets[2] = len - part_size;     // part 2 (first to launch) -> rightmost
+  targets[1] = len - 2 * part_size; // part 1 -> middle
+  targets[0] = len - 3 * part_size; // part 0 (last to launch)  -> leftmost
 
   // === Solid Color (No Palette) ===
   uint32_t color0 = instance->_segment.colors[0];
@@ -5470,6 +5471,7 @@ uint16_t mode_follow_us(void) {
 
   // === Timing Constants ===
   const uint32_t PULSE_DURATION_MS = 2000;
+  const uint32_t JOIN_DELAY_MS = 600; // pause after all parts arrive
   const uint32_t STROBE_PERIOD_MS = 250;
   const uint32_t STROBE_ON_MS = 40;
   const uint32_t FINALE_DURATION_MS = 1500;
@@ -5506,17 +5508,16 @@ uint16_t mode_follow_us(void) {
     if (now - fu->state_start_ms > PULSE_DURATION_MS) {
       fu->state = FU_RUN;
       fu->state_start_ms = now;
-      // Only launch part 0 — parts 1 & 2 stay inactive at their start positions
-      // until triggered by the gap logic. They are still drawn (below) so the
-      // 9px cursor remains visible until each sub-cursor separates.
-      fu->parts[0].active = true;
-      fu->parts[0].pos = 0.0f;
+      // Launch order: 2 -> 1 -> 0 (back peels off first)
+      // Part 2 launches immediately; parts 1 & 0 wait.
+      fu->parts[0].active = false;
+      fu->parts[0].pos = 0.0f; // front, launches last
       fu->parts[0].arrived = false;
       fu->parts[1].active = false;
-      fu->parts[1].pos = (float)part_size; // stays at 3 until triggered
+      fu->parts[1].pos = (float)part_size; // middle, launches second
       fu->parts[1].arrived = false;
-      fu->parts[2].active = false;
-      fu->parts[2].pos = (float)(2 * part_size); // stays at 6 until triggered
+      fu->parts[2].active = true;
+      fu->parts[2].pos = (float)(2 * part_size); // back, launches first
       fu->parts[2].arrived = false;
     }
     break;
@@ -5539,23 +5540,35 @@ uint16_t mode_follow_us(void) {
         }
       }
 
-      // Trigger next part when this one has moved far enough from its start
-      if (i < num_parts - 1 && fu->parts[i].active &&
-          !fu->parts[i + 1].active) {
-        float launch_threshold = (float)((i + 1) * part_size + run_gap);
+      // Trigger chain: 2 triggers 1, then 1 triggers 0
+      // Each part triggers the one with index-1 (moving toward front)
+      if (i > 0 && fu->parts[i].active && !fu->parts[i - 1].active) {
+        // Trigger when this part has moved gap pixels ahead of part i-1's start
+        float launch_threshold = (float)(i * part_size + run_gap);
         if (fu->parts[i].pos > launch_threshold) {
-          fu->parts[i + 1].active = true;
-          fu->parts[i + 1].pos = (float)((i + 1) * part_size);
+          fu->parts[i - 1].active = true;
+          fu->parts[i - 1].pos = (float)((i - 1) * part_size);
         }
       }
 
       // Draw ALL parts: active ones at current pos, inactive ones at start pos
-      // This ensures the 9px cursor stays visible until each part launches
       draw_part((int)fu->parts[i].pos, 255);
     }
 
-    // All arrived? -> Finale
+    // All arrived? -> JOIN delay before strobe
     if (fu->parts[0].arrived && fu->parts[1].arrived && fu->parts[2].arrived) {
+      fu->state = FU_JOIN;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_JOIN: {
+    // Brief pause after all parts arrive — hold the reassembled cursor steady
+    for (int i = 0; i < num_parts; i++) {
+      draw_part(targets[i], 255);
+    }
+    if (now - fu->state_start_ms > JOIN_DELAY_MS) {
       fu->state = FU_FINALE;
       fu->state_start_ms = now;
     }
