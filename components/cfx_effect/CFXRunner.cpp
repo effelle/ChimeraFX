@@ -5218,10 +5218,11 @@ uint16_t mode_follow_me(void) {
   // 2. Subtract (Floor Cleaning): Hard subtraction to force zero.
   uint8_t scale = 255 - (instance->_segment.intensity >> 1); // 128..255
   // Increased subtraction for low intensity to fix persistent floor bug.
-  // 60..89: sub 4. < 60: sub 6 (Aggressive). > 90: sub 2.
-  uint8_t sub_val = (instance->_segment.intensity < 60)
-                        ? 6
-                        : ((instance->_segment.intensity < 90) ? 4 : 2);
+  // 60..89: sub 4. < 60: sub 6. <= 15: sub 8 (Very Aggressive). > 90: sub 2.
+  uint8_t sub_val = (instance->_segment.intensity <= 15)  ? 8
+                    : (instance->_segment.intensity < 60) ? 6
+                    : (instance->_segment.intensity < 90) ? 4
+                                                          : 2;
 
   int start = instance->_segment.start;
   int stop = instance->_segment.stop;
@@ -5244,13 +5245,14 @@ uint16_t mode_follow_me(void) {
       c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
 
       // 3. Hard Cutoff (Final Cleanup)
-      if (c.r < 10)
+      // Increased threshold to 20 for absolute clearance of low-level noise.
+      if (c.r < 20)
         c.r = 0;
-      if (c.g < 10)
+      if (c.g < 20)
         c.g = 0;
-      if (c.b < 10)
+      if (c.b < 20)
         c.b = 0;
-      if (c.w < 10)
+      if (c.w < 20)
         c.w = 0;
 
       light[i] = c;
