@@ -555,7 +555,7 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 155:
     return 4; // Kaleidos -> Rainbow
   case 156:
-    return 4; // Follow Me -> Rainbow
+    return 255; // Follow Me -> Solid (Use Primary Color)
 
   // New effects
   case 28:

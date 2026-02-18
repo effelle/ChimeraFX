@@ -5208,15 +5208,15 @@ uint16_t mode_follow_me(void) {
     fillSolidPalette(instance->_segment.colors[0]);
   }
 
-  // === Trail Fade ===
-  // Intensity controls trail length: High = slow fade (long trail)
-  // Map: intensity 0 = fadeBy 80 (fast), intensity 255 = fadeBy 5 (slow)
-  uint8_t fade_amount = 80 - ((instance->_segment.intensity * 75) >> 8);
-  if (fade_amount < 5)
-    fade_amount = 5;
-  instance->_segment.fadeToBlackBy(fade_amount);
+  // === Trail Fade (Subtractive) ===
+  // Fixes persistence issue: Always subtract at least 1 to ensure floor drops
+  // to 0 Intensity controls fade rate: High = slow fade (long trail), Low =
+  // fast fade
+  uint8_t fade_amt = 10 + ((255 - instance->_segment.intensity) >> 2);
+  instance->_segment.fadeToBlackBy(fade_amt);
 
-  // === Strobe Duration ===
+  // === Strobe Frequency ===
+  // Faster strobe (approx 30Hz) for attention grabbing
   const uint32_t STROBE_DURATION_MS = 1500;
   const uint32_t RESTART_DURATION_MS = 500;
 
@@ -5225,7 +5225,7 @@ uint16_t mode_follow_me(void) {
 
   case FM_STROBE_START: {
     // Strobe the cursor at position 0 to grab attention
-    bool strobe_on = (now >> 3) & 1; // ~125Hz strobe
+    bool strobe_on = (now >> 4) & 1; // Faster strobe (approx 62ms cycle)
     if (strobe_on) {
       for (int j = 0; j < cursor_size && j < len; j++) {
         // Alternate between White and Palette color for max impact
@@ -5284,7 +5284,7 @@ uint16_t mode_follow_me(void) {
     if (end_start < 0)
       end_start = 0;
 
-    bool strobe_on = (now >> 3) & 1; // ~125Hz strobe
+    bool strobe_on = (now >> 4) & 1; // Faster strobe
     if (strobe_on) {
       for (int j = 0; j < cursor_size; j++) {
         int px = end_start + j;
