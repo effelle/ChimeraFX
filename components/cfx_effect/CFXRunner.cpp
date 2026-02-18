@@ -2170,15 +2170,22 @@ uint16_t mode_ripple(void) {
 
     // Loop 6 pixels (Restored Geometry - "Thicker Ripples")
     // User requested filling the "space in the middle".
-    // Using Step 48 (288 total) with Phase Matching to avoid blinking.
+    //
+    // Fix for "3-4 leds -> Space -> 2 leds" issue:
+    // This was caused by Step 48 wrapping (6 * 48 = 288 > 256). It created a
+    // trough.
+    //
+    // New Logic: **Step 32** (Widened Wave).
+    // Span: 6 * 32 = 192. Fits comfortably within one 256-unit wave cycle.
+    // Result: One continuous, thick ripple. No gap.
     for (int v = 0; v < 6; v++) {
       // Phase Matching Fix:
-      // Spatial Step is 48. We MUST scale propF (0-255) to 0-48 to match.
-      // (propF * 3) / 16 = 255 * 3 / 16 = 47.8 (~48).
-      uint8_t phase_shift = (propF * 3) >> 4;
+      // Spatial Step is 32. Scale propF (0-255) to 0-32.
+      // 256 / 8 = 32. So shift right by 3.
+      uint8_t phase_shift = propF >> 3;
 
-      // Use sin8 for smooth organic wave (replaces cubicwave8)
-      uint8_t wave = sin8(phase_shift + (v * 48));
+      // Use sin8 for smooth organic wave
+      uint8_t wave = sin8(phase_shift + (v * 32));
       uint8_t mag = scale8(wave, amp);
 
       // Gamma Disabled per previous fix
