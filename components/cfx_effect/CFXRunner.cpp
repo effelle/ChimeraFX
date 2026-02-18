@@ -5203,9 +5203,8 @@ uint16_t mode_follow_me(void) {
   int cursor_size = std::max(3, std::min(10, (int)len / 10));
 
   // === Palette (Ignored per request) ===
-  // Force usage of the primary solid color
   fillSolidPalette(instance->_segment.colors[0]);
-  const uint32_t *palette = instance->_segment.palette_lut;
+  const uint32_t *palette = getPaletteByIndex(255); // Solid Palette via ID 255
 
   // === Trail Fade (Subtractive) ===
   // Fixes persistence issue: Ensure we always subtract enough to clear the
@@ -5214,8 +5213,9 @@ uint16_t mode_follow_me(void) {
   // to kill low-level noise.
 
   // 1. Dimming (Multiplicative)
-  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1); // 128..255
-  instance->_segment.nscale8(dim_amt);
+  // nscale8(dim_amt) is equivalent to fadeToBlackBy(255 - dim_amt)
+  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1);
+  instance->_segment.fadeToBlackBy(255 - dim_amt);
 
   // 2. Subtraction (Floor Cleaning)
   // If intensity is low, we need more subtraction to clear the trail faster
