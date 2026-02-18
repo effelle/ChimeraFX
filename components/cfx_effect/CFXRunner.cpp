@@ -5202,18 +5202,27 @@ uint16_t mode_follow_me(void) {
   // ~10 pixels, but scale for short strips (min 3)
   int cursor_size = std::max(3, std::min(10, (int)len / 10));
 
-  // === Palette ===
-  const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
-  if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
-    fillSolidPalette(instance->_segment.colors[0]);
-  }
+  // === Palette (Ignored per request) ===
+  // Force usage of the primary solid color
+  fillSolidPalette(instance->_segment.colors[0]);
+  const uint32_t *palette = instance->_segment.palette_lut;
 
   // === Trail Fade (Subtractive) ===
-  // Fixes persistence issue: Always subtract at least 1 to ensure floor drops
-  // to 0 Intensity controls fade rate: High = slow fade (long trail), Low =
-  // fast fade
-  uint8_t fade_amt = 10 + ((255 - instance->_segment.intensity) >> 2);
-  instance->_segment.fadeToBlackBy(fade_amt);
+  // Fixes persistence issue: Ensure we always subtract enough to clear the
+  // floor. Intensity controls fade rate: High = slow fade (long trail), Low =
+  // fast fade. We use scale8 to dim the whole strip, then subtract a constant
+  // to kill low-level noise.
+
+  // 1. Dimming (Multiplicative)
+  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1); // 128..255
+  instance->_segment.nscale8(dim_amt);
+
+  // 2. Subtraction (Floor Cleaning)
+  // If intensity is low, we need more subtraction to clear the trail faster
+  uint8_t sub_amt = (255 - instance->_segment.intensity) >> 3;
+  if (sub_amt < 3)
+    sub_amt = 3; // Always subtract at least 3
+  instance->_segment.fadeToBlackBy(sub_amt);
 
   // === Strobe Frequency ===
   // Faster strobe (approx 30Hz) for attention grabbing
