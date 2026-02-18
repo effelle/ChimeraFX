@@ -2048,23 +2048,29 @@ uint16_t mode_ripple(void) {
   if (delta < 1)
     delta = 1;
 
-  uint8_t maxRipples = 1 + (len >> 2);
-  if (maxRipples > 20)
-    maxRipples = 20;
+  // Max ripples calculation
+  uint8_t maxRipples = 1 + (instance->_segment.length() >> 2);
+  if (maxRipples > 100)
+    maxRipples = 100; // Increased cap from 20 to 100
 
   uint16_t dataSize = sizeof(RippleState) * maxRipples;
+
   if (!instance->_segment.allocateData(dataSize))
     return mode_static();
 
   RippleState *ripples = (RippleState *)instance->_segment.data;
 
-  // Fade
+  // Fade Background
   instance->_segment.fadeToBlackBy(224);
 
   // Spawn Logic
-  // Scaled for visibility (WLED uses 15100, we use 3000 to drastically boost
-  // density per user request)
-  if (random16(3000) <= instance->_segment.intensity) {
+  // Time-Based Probability to Fix Gaps
+  // We want ~4 ripples/sec at Max Intensity (255) regardless of FPS.
+  // Threshold = Intensity * Delta.
+  // Example: I=255, D=16ms -> T=4080. 4080/65535 = 6% per frame (60fps)
+  // -> 3.6/sec. Example: I=255, D=100ms -> T=25500. 39% per frame (10fps)
+  // -> 3.9/sec.
+  if (random16(65535) <= (uint32_t)(instance->_segment.intensity * delta)) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
         ripples[i].active = true;
@@ -2150,15 +2156,14 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 4 pixels
-    for (int v = 0; v < 4; v++) {
+    // Loop 5 pixels (User requested longer ripple +1)
+    for (int v = 0; v < 5; v++) {
       // "uint8_t mag = scale8(cubicwave8((propF>>2) + v * 64), amp);"
       uint8_t wave = cubicwave8((propF >> 2) + (v * 64)); // 0-255
       uint8_t mag = scale8(wave, amp);
 
-      // FIX: Do NOT apply Gamma to mag. It crushes the fade curve, making
-      // ripples disappear too fast.
-      // mag = instance->applyGamma(mag);
+      // Re-enabled Apply Gamma (User Request)
+      mag = instance->applyGamma(mag);
 
       if (mag > 0) {
         // Render Left
