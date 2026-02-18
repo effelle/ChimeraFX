@@ -5258,13 +5258,10 @@ uint16_t mode_follow_me(void) {
     if (strobe_on) {
       for (int j = 0; j < cursor_size && j < len; j++) {
         // Alternate between White and Palette color for max impact
-        if ((now >> 6) & 1) {
-          instance->_segment.setPixelColor(j, RGBW32(255, 255, 255, 0));
-        } else {
-          uint8_t ci = (j * 255) / cursor_size;
-          CRGBW c = ColorFromPalette(ci, 255, palette);
-          instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
-        }
+        // Use Palette Color (Solid) exclusively
+        uint8_t ci = (j * 255) / cursor_size;
+        CRGBW c = ColorFromPalette(ci, 255, palette);
+        instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
       }
     }
     // else: fadeToBlackBy already handled the "off" frames
@@ -5280,8 +5277,9 @@ uint16_t mode_follow_me(void) {
 
   case FM_MOVING: {
     // === Movement Speed ===
-    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = fast (~4 px/frame)
-    float speed_factor = 0.2f + (instance->_segment.speed * 3.8f / 255.0f);
+    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = very fast (~16 px/frame)
+    // Increased max speed to handle long strips (user request)
+    float speed_factor = 0.2f + (instance->_segment.speed * 16.0f / 255.0f);
     fm->pos += speed_factor;
 
     int head = (int)fm->pos;
@@ -5324,13 +5322,10 @@ uint16_t mode_follow_me(void) {
       for (int j = 0; j < cursor_size; j++) {
         int px = end_start + j;
         if (px < len) {
-          if ((now >> 6) & 1) {
-            instance->_segment.setPixelColor(px, RGBW32(255, 255, 255, 0));
-          } else {
-            uint8_t ci = (j * 255) / cursor_size;
-            CRGBW c = ColorFromPalette(ci, 255, palette);
-            instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
-          }
+          // Use Palette Color (Solid) exclusively
+          uint8_t ci = (j * 255) / cursor_size;
+          CRGBW c = ColorFromPalette(ci, 255, palette);
+          instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
         }
       }
     }
