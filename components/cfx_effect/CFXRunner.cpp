@@ -2067,10 +2067,8 @@ uint16_t mode_ripple(void) {
   // Time-Based Probability to Fix Gaps
   // We want ~4 ripples/sec at Max Intensity (255) regardless of FPS.
   // Threshold = Intensity * Delta.
-  // Example: I=255, D=16ms -> T=4080. 4080/65535 = 6% per frame (60fps)
-  // -> 3.6/sec. Example: I=255, D=100ms -> T=25500. 39% per frame (10fps)
-  // -> 3.9/sec.
-  if (random16(65535) <= (uint32_t)(instance->_segment.intensity * delta)) {
+  // Boosted 3x per user request to eliminate gaps at lower intensities.
+  if (random16(65535) <= (uint32_t)(instance->_segment.intensity * delta * 3)) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
         ripples[i].active = true;
@@ -2162,8 +2160,9 @@ uint16_t mode_ripple(void) {
       uint8_t wave = cubicwave8((propF >> 2) + (v * 64)); // 0-255
       uint8_t mag = scale8(wave, amp);
 
-      // Re-enabled Apply Gamma (User Request)
-      mag = instance->applyGamma(mag);
+      // FIX: ApplyGamma crushed the brightness too much, creating faint
+      // ripples. Removed per user request to restore "full" brightness. mag =
+      // instance->applyGamma(mag);
 
       if (mag > 0) {
         // Render Left
