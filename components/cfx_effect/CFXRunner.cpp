@@ -2062,8 +2062,9 @@ uint16_t mode_ripple(void) {
   instance->_segment.fadeToBlackBy(224);
 
   // Spawn Logic
-  // Scaled for visibility (WLED uses 15100, we use 6000 to boost density)
-  if (random16(6000) <= instance->_segment.intensity) {
+  // Scaled for visibility (WLED uses 15100, we use 3000 to drastically boost
+  // density per user request)
+  if (random16(3000) <= instance->_segment.intensity) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
         ripples[i].active = true;
@@ -2101,7 +2102,7 @@ uint16_t mode_ripple(void) {
     // Age update
     if ((uint32_t)ripples[i].age + age_step > 65535) {
       ripples[i].active = false;
-      continue;
+      continue; // Expired
     }
     ripples[i].age += age_step;
 
@@ -2155,8 +2156,9 @@ uint16_t mode_ripple(void) {
       uint8_t wave = cubicwave8((propF >> 2) + (v * 64)); // 0-255
       uint8_t mag = scale8(wave, amp);
 
-      // Apply Gamma to magnitude! (Fix for floor bug)
-      mag = instance->applyGamma(mag);
+      // FIX: Do NOT apply Gamma to mag. It crushes the fade curve, making
+      // ripples disappear too fast.
+      // mag = instance->applyGamma(mag);
 
       if (mag > 0) {
         // Render Left
