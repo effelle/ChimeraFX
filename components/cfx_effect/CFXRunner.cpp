@@ -5466,35 +5466,7 @@ uint16_t mode_follow_us(void) {
   CRGBW solid_color(color0);
 
   // === Trail Fade (Background Cleanup) ===
-  uint8_t fade_scale = 255 - (instance->_segment.intensity >> 1);
-  uint8_t sub_val = (instance->_segment.intensity <= 15) ? 8 : 4;
-
-  esphome::light::AddressableLight &light = *instance->target_light;
-  int seg_start = instance->_segment.start;
-  int seg_stop = instance->_segment.stop;
-
-  for (int i = seg_start; i < seg_stop; i++) {
-    if (i < light.size()) {
-      esphome::Color c = light[i].get();
-      c.r = cfx::scale8(c.r, fade_scale);
-      c.g = cfx::scale8(c.g, fade_scale);
-      c.b = cfx::scale8(c.b, fade_scale);
-      c.w = cfx::scale8(c.w, fade_scale);
-      c.r = (c.r > sub_val) ? (c.r - sub_val) : 0;
-      c.g = (c.g > sub_val) ? (c.g - sub_val) : 0;
-      c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
-      c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
-      if (c.r < 10)
-        c.r = 0;
-      if (c.g < 10)
-        c.g = 0;
-      if (c.b < 10)
-        c.b = 0;
-      if (c.w < 10)
-        c.w = 0;
-      light[i] = c;
-    }
-  }
+  // Removed explicit trail fade here. The global fadeToBlackBy handles it.
 
   // === Timing Constants ===
   const uint32_t PULSE_DURATION_MS = 2000;
@@ -5534,43 +5506,45 @@ uint16_t mode_follow_us(void) {
     if (now - fu->state_start_ms > PULSE_DURATION_MS) {
       fu->state = FU_RUN;
       fu->state_start_ms = now;
-      // Activate Part 0 (lead runner)
-      fu->parts[0].active = true;
-      fu->parts[0].pos = 0.0f;
-      // Parts 1 & 2 stay at their pulse positions until triggered
-      fu->parts[1].pos = (float)part_size;
-      fu->parts[2].pos = (float)(2 * part_size);
+      // Activate all parts and set their initial positions for the run
+      for (int i = 0; i < num_parts; i++) {
+        fu->parts[i].active = true;
+        fu->parts[i].pos = (float)(i * part_size);
+        fu->parts[i].arrived = false; // Reset arrived status
+      }
     }
     break;
   }
 
   case FU_RUN: {
-    // Speed: maps slider 0-255 to 0.2 - 5.2 px/frame
-    float base_speed = 0.2f + (instance->_segment.speed * 5.0f / 255.0f);
+    // Hard clear every frame — no tails
+    instance->_segment.fill(0);
+
+    // Speed: maps slider 0-255 to 0.3 - 4.0 px/frame
+    float base_speed = 0.3f + (instance->_segment.speed * 3.7f / 255.0f);
 
     for (int i = 0; i < num_parts; i++) {
-      if (!fu->parts[i].active)
-        continue;
-
-      if (!fu->parts[i].arrived) {
+      // Move active, non-arrived parts
+      if (fu->parts[i].active && !fu->parts[i].arrived) {
         fu->parts[i].pos += base_speed;
-
-        // Check arrival at this part's target
         if (fu->parts[i].pos >= (float)targets[i]) {
           fu->parts[i].pos = (float)targets[i];
           fu->parts[i].arrived = true;
         }
       }
 
-      // Trigger next part when this one has moved far enough from origin
-      if (i < 2 && !fu->parts[i + 1].active) {
-        if (fu->parts[i].pos > (float)((i + 1) * part_size + run_gap)) {
+      // Trigger next part when this one has moved far enough from its start
+      if (i < num_parts - 1 && fu->parts[i].active &&
+          !fu->parts[i + 1].active) {
+        float launch_threshold = (float)((i + 1) * part_size + run_gap);
+        if (fu->parts[i].pos > launch_threshold) {
           fu->parts[i + 1].active = true;
           fu->parts[i + 1].pos = (float)((i + 1) * part_size);
         }
       }
 
-      // Draw this part
+      // Draw ALL parts: active ones at current pos, inactive ones at start pos
+      // This ensures the 9px cursor stays visible until each part launches
       draw_part((int)fu->parts[i].pos, 255);
     }
 
@@ -5586,12 +5560,12 @@ uint16_t mode_follow_us(void) {
     // Strobe the reassembled cursor at the end
     bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
     if (strobe_on) {
-      // Draw all 3 parts at their final (target) positions
       for (int i = 0; i < num_parts; i++) {
         draw_part(targets[i], 255);
       }
+    } else {
+      instance->_segment.fill(0); // Hard off between strobes
     }
-    // else: fade handles the "off" frames
 
     if (now - fu->state_start_ms > FINALE_DURATION_MS) {
       fu->state = FU_RESTART;
