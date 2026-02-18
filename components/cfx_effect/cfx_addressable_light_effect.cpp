@@ -504,7 +504,6 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 100:     // Heartbeat
   case 154:     // HeartBeat Center
   case 154:     // HeartBeat Center
-  case 154:     // HeartBeat Center
     return 255; // Solid Palette by default
   case 157:     // Follow Us
     return 255; // Solid Palette

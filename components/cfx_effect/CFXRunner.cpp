@@ -39,6 +39,7 @@ uint16_t mode_dropping_time(void);
 uint16_t mode_heartbeat_center(void);
 uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
+uint16_t mode_follow_us(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -238,6 +239,7 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
 #define AW_SCALE (1 << AW_SHIFT)
 
 // Math Helpers - use cfx:: namespace from cfx_utils.h
+using cfx::beatsin8;
 using cfx::color_blend;
 using cfx::constrain;
 using cfx::gamma8inv;
