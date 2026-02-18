@@ -35,6 +35,7 @@ uint16_t mode_popcorn(void);
 uint16_t mode_drip(void);
 uint16_t mode_dropping_time(void);
 uint16_t mode_heartbeat_center(void);
+uint16_t mode_kaleidos(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -3579,6 +3580,9 @@ void CFXRunner::service() {
   case FX_MODE_DROPPING_TIME: // 151
     mode_dropping_time();
     break;
+  case FX_MODE_KALEIDOS: // 155
+    mode_kaleidos();
+    break;
   default:
     mode_static();
     break;
@@ -5060,6 +5064,81 @@ uint16_t mode_heartbeat_center(void) {
     } else {
       instance->_segment.setPixelColor(i, 0);
     }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Kaleidos (ID 155)
+ * N-Way Symmetrical Mirroring Effect
+ * Divides the strip into 2/4/6/8 mirrored segments.
+ * Even segments render forward, odd segments render backward.
+ * Uses a scrolling palette as the source pattern.
+ * Density: Hybrid approach (Option C) - dynamic fit with aliasing clamp.
+ */
+uint16_t mode_kaleidos(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // === Symmetry Engine ===
+  // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
+  uint8_t half_segs = cfx::map(instance->_segment.intensity, 0, 255, 1, 4);
+  uint8_t num_segments = half_segs * 2;
+
+  uint16_t seg_len = len / num_segments;
+  if (seg_len == 0)
+    seg_len = 1; // Safety: very short strips
+
+  // === Hybrid Density (Option C) ===
+  // Dynamic: fit one full pattern cycle per segment
+  // Clamped: prevent aliasing on very short segments (min density 8)
+  uint8_t density = (seg_len > 1) ? (255 / seg_len) : 255;
+  if (density < 8)
+    density = 8; // Floor: prevent washed-out pattern on long segments
+
+  // === Time Base (Speed-controlled scroll) ===
+  uint32_t ms = cfx_millis();
+  // Speed 0 = very slow, Speed 255 = fast
+  // >>4 gives ~16ms steps at speed 255, much slower at low speed
+  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 12;
+
+  // === Palette ===
+  const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
+  // Handle solid color palette
+  if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
+    fillSolidPalette(instance->_segment.colors[0]);
+  }
+
+  // === Render Loop ===
+  for (int i = 0; i < len; i++) {
+    // Determine which segment this pixel belongs to
+    uint16_t seg_index = i / seg_len;
+    uint16_t local_pos = i % seg_len;
+
+    // Handle remainder pixels: clamp to last segment
+    if (seg_index >= num_segments) {
+      seg_index = num_segments - 1;
+      // Recalculate local_pos relative to the last segment's start
+      local_pos = i - (seg_index * seg_len);
+    }
+
+    // Mirror Logic: Even = Forward, Odd = Backward
+    uint16_t mirrored_pos = local_pos;
+    if (seg_index & 0x01) {
+      mirrored_pos = (seg_len - 1) - local_pos;
+    }
+
+    // Calculate color index from mirrored position + scrolling time
+    uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
+
+    // Draw
+    CRGBW c = ColorFromPalette(color_index, 255, palette);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
   return FRAMETIME;

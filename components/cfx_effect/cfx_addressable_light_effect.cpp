@@ -552,6 +552,8 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 12; // Sunrise -> HeatColors
   case 151:
     return 11; // Dropping Time -> Ocean
+  case 155:
+    return 4; // Kaleidos -> Rainbow
 
   // New effects
   case 28:
