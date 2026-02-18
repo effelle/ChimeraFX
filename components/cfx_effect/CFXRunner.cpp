@@ -5277,9 +5277,9 @@ uint16_t mode_follow_me(void) {
 
   case FM_MOVING: {
     // === Movement Speed ===
-    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = very fast (~16 px/frame)
-    // Increased max speed to handle long strips (user request)
-    float speed_factor = 0.2f + (instance->_segment.speed * 16.0f / 255.0f);
+    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = fast (~6 px/frame)
+    // Increased max speed by 50% (user request)
+    float speed_factor = 0.2f + (instance->_segment.speed * 5.7f / 255.0f);
     fm->pos += speed_factor;
 
     int head = (int)fm->pos;
