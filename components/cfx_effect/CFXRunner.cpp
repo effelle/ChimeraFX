@@ -2172,26 +2172,47 @@ uint16_t mode_ripple(void) {
     // Reverting to WLED constants to eliminate math aliasing/blinking.
     // Step 64 (256/4) provides perfect phase alignment.
     for (int v = 0; v < 4; v++) {
-      uint8_t wave = cubicwave8((propF >> 2) + (v * 64));
+      // Use sin8 for smoother, more organic wave than cubicwave8
+      uint8_t wave = sin8((propF >> 2) + (v * 64));
       uint8_t mag = scale8(wave, amp);
 
-      // Gamma Disabled
+      // Gamma Disabled per previous fix
 
       if (mag > 0) {
+        // Helper lambda for MAX blending to prevent "dimming" flickers
+        auto apply_max_pixel = [&](int pos, uint32_t color, uint8_t magnitude) {
+          CRGBW c_new(color);
+          // Scale by magnitude immediately
+          c_new.r = scale8(c_new.r, magnitude);
+          c_new.g = scale8(c_new.g, magnitude);
+          c_new.b = scale8(c_new.b, magnitude);
+          c_new.w = scale8(c_new.w, magnitude);
+
+          uint32_t existing_int = instance->_segment.getPixelColor(pos);
+          CRGBW c_exist(existing_int);
+
+          // MAX Blending: Keep the brightest channel values
+          // This prevents the "tail" of a wave from darkening the "trail" of
+          // another.
+          c_exist.r = (c_new.r > c_exist.r) ? c_new.r : c_exist.r;
+          c_exist.g = (c_new.g > c_exist.g) ? c_new.g : c_exist.g;
+          c_exist.b = (c_new.b > c_exist.b) ? c_new.b : c_exist.b;
+          c_exist.w = (c_new.w > c_exist.w) ? c_new.w : c_exist.w;
+
+          instance->_segment.setPixelColor(
+              pos, RGBW32(c_exist.r, c_exist.g, c_exist.b, c_exist.w));
+        };
+
         // Render Left
         int pLeft = left + v;
         if (pLeft >= 0 && pLeft < len) {
-          uint32_t existing = instance->_segment.getPixelColor(pLeft);
-          instance->_segment.setPixelColor(pLeft,
-                                           color_blend(existing, col, mag));
+          apply_max_pixel(pLeft, col, mag);
         }
 
         // Render Right
         int pRight = right - v;
         if (pRight >= 0 && pRight < len) {
-          uint32_t existing = instance->_segment.getPixelColor(pRight);
-          instance->_segment.setPixelColor(pRight,
-                                           color_blend(existing, col, mag));
+          apply_max_pixel(pRight, col, mag);
         }
       }
     }
