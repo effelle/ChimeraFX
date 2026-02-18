@@ -15,6 +15,8 @@
 #include "esp_system.h"
 #include <algorithm> // For std::min, std::max
 #include <cmath>     // For powf
+#include <cstdint>
+#include <vector>
 
 CFXRunner *instance = nullptr;
 

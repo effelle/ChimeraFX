@@ -508,8 +508,6 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Solid Palette by default
   case 157:     // Follow Us
     return 255; // Solid Palette
-  case 157:     // Follow Us
-    return 255; // Solid Palette
 
   // Rainbow Defaults (4)
   case 7:
