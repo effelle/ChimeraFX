@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2026 Federico Leoni (effelle)
  * Copyright (c) Aircoookie (WLED)
  *
@@ -339,8 +339,8 @@ static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
     0x148CF0, 0x28C8FF, 0x50DCFF, 0x96E6FF, 0xC8F0FF, 0xC8F0FF,
     0x96E6FF, 0x28C8FF, 0x0050A0, 0x001040};
 
-// Palette 11: HeatColors - For Sunrise effect (black → red → orange → yellow →
-// white)
+// Palette 11: HeatColors - For Sunrise effect (black â†’ red â†’ orange â†’
+// yellow â†’ white)
 static const uint32_t PaletteHeatColors[16] CFX_PROGMEM = {
     0x000000, 0x330000, 0x660000, 0x990000, 0xCC0000, 0xFF0000,
     0xFF3300, 0xFF6600, 0xFF9900, 0xFFCC00, 0xFFFF00, 0xFFFF33,
@@ -1655,9 +1655,9 @@ uint16_t mode_dissolve(void) {
   switch (state) {
   case 0: { // FILLING - set random OFF pixels to ON using probability
     // Probability-based approach (WLED-style):
-    // At intensity 0: ~0% chance per frame → Very slow fill
-    // At intensity 128: ~50% chance per frame → Medium fill
-    // At intensity 255: ~100% + bonus → Fast fill
+    // At intensity 0: ~0% chance per frame â†’ Very slow fill
+    // At intensity 128: ~50% chance per frame â†’ Medium fill
+    // At intensity 255: ~100% + bonus â†’ Fast fill
     int pixels_to_spawn = 0;
     if (hw_random8() <= raw_intensity) {
       pixels_to_spawn = 1;
@@ -2390,7 +2390,7 @@ uint16_t mode_noisepal(void) {
   CRGBPalette16 *palettes =
       reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
 
-  // Scale based on intensity (zoom level) — WLED exact formula
+  // Scale based on intensity (zoom level) â€” WLED exact formula
   unsigned scale = 15 + (instance->_segment.intensity >> 2); // 15-78
 
   // Generate new target palette periodically (4-6.5 seconds based on speed)
@@ -2407,7 +2407,7 @@ uint16_t mode_noisepal(void) {
                       CHSV(baseI + random8(92), 255, random8(128, 255)));
   }
 
-  // Smoothly blend current palette toward target — WLED uses 48 steps
+  // Smoothly blend current palette toward target â€” WLED uses 48 steps
   nblendPaletteTowardPalette(palettes[0], palettes[1], 48);
 
   // If user selected a palette, override the dynamic one
@@ -2434,14 +2434,14 @@ uint16_t mode_noisepal(void) {
     }
   }
 
-  // Render: Perlin noise mapped to palette — WLED exact
+  // Render: Perlin noise mapped to palette â€” WLED exact
   for (int i = 0; i < len; i++) {
     uint8_t index = inoise8(i * scale, instance->_segment.aux0 + i * scale);
     CRGB c = ColorFromPalette(palettes[0], index, 255, LINEARBLEND);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
   }
 
-  // Organic Y-axis drift — WLED exact
+  // Organic Y-axis drift â€” WLED exact
   instance->_segment.aux0 += beatsin8_t(10, 1, 4);
 
   return FRAMETIME;
@@ -3091,7 +3091,7 @@ uint16_t mode_colortwinkle(void) {
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Explicit trail rendering — gamma-aware, with direction-change memory
+// Explicit trail rendering â€” gamma-aware, with direction-change memory
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -3129,7 +3129,7 @@ uint16_t mode_scanner_internal(bool dualMode) {
 
   // 2. Movement: WLED speed mapping
   uint8_t spd = instance->_segment.speed;
-  unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96→2
+  unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96â†’2
   unsigned effective_speed = FRAMETIME * speed_factor;
   unsigned pixels = len / effective_speed;
 
@@ -3586,6 +3586,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_FOLLOW_ME: // 156
     mode_follow_me();
+    break;
+  case FX_MODE_FOLLOW_US: // 157
+    mode_follow_us();
     break;
   default:
     mode_static();
@@ -5155,7 +5158,7 @@ uint16_t mode_kaleidos(void) {
 /*
  * Follow Me (ID 156)
  * Linear scanner with attention-grabbing strobe.
- * State Machine: STROBE_START → MOVING → STROBE_END → RESTART
+ * State Machine: STROBE_START â†’ MOVING â†’ STROBE_END â†’ RESTART
  * The cursor strobes at the start, travels with a fading trail,
  * strobes at the end, then fades out and restarts.
  */
@@ -5368,6 +5371,242 @@ uint16_t mode_follow_me(void) {
       fm->state = FM_STROBE_START;
       fm->pos = 0.0f;
       fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  } // switch
+
+  return FRAMETIME;
+}
+
+/*
+ * Follow Us (ID 157)
+ * Multi-cursor variant of Follow Me.
+ * Narrative:
+ * 1. Pulse: Cursor appears at start and pulses for ~2s.
+ * 2. Run: Splits into 3 parts that run sequentially to the other side.
+ * 3. Reassemble: Parts arrive at staggered positions, reforming the cursor.
+ * 4. Finale: The reassembled cursor strobes, then fades away.
+ * 5. Restart: Brief blackout, then loop.
+ *
+ * Part 0 (lead) -> targets len - part_size        (rightmost)
+ * Part 1         -> targets len - 2*part_size      (middle)
+ * Part 2 (tail)  -> targets len - 3*part_size      (leftmost)
+ * When all arrive, they form one contiguous 9-pixel block at the end.
+ */
+
+#define FU_PULSE 0
+#define FU_RUN 1
+#define FU_FINALE 2
+#define FU_RESTART 3
+
+struct CursorPart {
+  float pos;
+  bool active;
+  bool arrived;
+};
+
+struct FollowUsData {
+  uint8_t state;
+  uint32_t state_start_ms;
+  CursorPart parts[3];
+};
+
+uint16_t mode_follow_us(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 9)
+    return mode_static();
+
+  // === Allocate State ===
+  if (!instance->_segment.allocateData(sizeof(FollowUsData)))
+    return mode_static();
+
+  FollowUsData *fu = reinterpret_cast<FollowUsData *>(instance->_segment.data);
+
+  // === Init on Reset ===
+  if (instance->_segment.reset) {
+    fu->state = FU_PULSE;
+    fu->state_start_ms = cfx_millis();
+    for (int i = 0; i < 3; i++) {
+      fu->parts[i].pos = (float)(i * 3); // Start positions: 0, 3, 6
+      fu->parts[i].active = false;
+      fu->parts[i].arrived = false;
+    }
+    instance->_segment.reset = false;
+  }
+
+  uint32_t now = cfx_millis();
+
+  // === Cursor Config ===
+  const int part_size = 3;
+  const int num_parts = 3;
+  const int cursor_total = part_size * num_parts; // 9 pixels
+  // Pixel gap before next runner launches
+  const int run_gap = std::max(4, (int)len / 8);
+
+  // Staggered arrival targets (from right end):
+  // Part 0 (lead) -> rightmost position
+  // Part 1        -> middle
+  // Part 2 (tail) -> leftmost
+  int targets[3];
+  targets[0] = len - part_size;     // e.g. len-3
+  targets[1] = len - 2 * part_size; // e.g. len-6
+  targets[2] = len - 3 * part_size; // e.g. len-9
+
+  // === Solid Color (No Palette) ===
+  uint32_t color0 = instance->_segment.colors[0];
+  CRGBW solid_color(color0);
+
+  // === Trail Fade (Background Cleanup) ===
+  uint8_t fade_scale = 255 - (instance->_segment.intensity >> 1);
+  uint8_t sub_val = (instance->_segment.intensity <= 15) ? 8 : 4;
+
+  esphome::light::AddressableLight &light = *instance->target_light;
+  int seg_start = instance->_segment.start;
+  int seg_stop = instance->_segment.stop;
+
+  for (int i = seg_start; i < seg_stop; i++) {
+    if (i < light.size()) {
+      esphome::Color c = light[i].get();
+      c.r = cfx::scale8(c.r, fade_scale);
+      c.g = cfx::scale8(c.g, fade_scale);
+      c.b = cfx::scale8(c.b, fade_scale);
+      c.w = cfx::scale8(c.w, fade_scale);
+      c.r = (c.r > sub_val) ? (c.r - sub_val) : 0;
+      c.g = (c.g > sub_val) ? (c.g - sub_val) : 0;
+      c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
+      c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
+      if (c.r < 10)
+        c.r = 0;
+      if (c.g < 10)
+        c.g = 0;
+      if (c.b < 10)
+        c.b = 0;
+      if (c.w < 10)
+        c.w = 0;
+      light[i] = c;
+    }
+  }
+
+  // === Timing Constants ===
+  const uint32_t PULSE_DURATION_MS = 2000;
+  const uint32_t STROBE_PERIOD_MS = 250;
+  const uint32_t STROBE_ON_MS = 40;
+  const uint32_t FINALE_DURATION_MS = 1500;
+  const uint32_t RESTART_DURATION_MS = 500;
+
+  // === Helper: Draw a part at position ===
+  auto draw_part = [&](int pos, uint8_t bri) {
+    for (int k = 0; k < part_size; k++) {
+      int px = pos + k;
+      if (px >= 0 && px < len) {
+        instance->_segment.setPixelColor(
+            px, RGBW32(cfx::scale8(solid_color.r, bri),
+                       cfx::scale8(solid_color.g, bri),
+                       cfx::scale8(solid_color.b, bri),
+                       cfx::scale8(solid_color.w, bri)));
+      }
+    }
+  };
+
+  // === State Machine ===
+  switch (fu->state) {
+
+  case FU_PULSE: {
+    // Pulsing cursor at start (all 3 parts together = 9px block)
+    uint8_t bri = beatsin8(60, 50, 255);
+    for (int k = 0; k < cursor_total && k < len; k++) {
+      instance->_segment.setPixelColor(k,
+                                       RGBW32(cfx::scale8(solid_color.r, bri),
+                                              cfx::scale8(solid_color.g, bri),
+                                              cfx::scale8(solid_color.b, bri),
+                                              cfx::scale8(solid_color.w, bri)));
+    }
+
+    if (now - fu->state_start_ms > PULSE_DURATION_MS) {
+      fu->state = FU_RUN;
+      fu->state_start_ms = now;
+      // Activate Part 0 (lead runner)
+      fu->parts[0].active = true;
+      fu->parts[0].pos = 0.0f;
+      // Parts 1 & 2 stay at their pulse positions until triggered
+      fu->parts[1].pos = (float)part_size;
+      fu->parts[2].pos = (float)(2 * part_size);
+    }
+    break;
+  }
+
+  case FU_RUN: {
+    // Speed: maps slider 0-255 to 0.2 - 5.2 px/frame
+    float base_speed = 0.2f + (instance->_segment.speed * 5.0f / 255.0f);
+
+    for (int i = 0; i < num_parts; i++) {
+      if (!fu->parts[i].active)
+        continue;
+
+      if (!fu->parts[i].arrived) {
+        fu->parts[i].pos += base_speed;
+
+        // Check arrival at this part's target
+        if (fu->parts[i].pos >= (float)targets[i]) {
+          fu->parts[i].pos = (float)targets[i];
+          fu->parts[i].arrived = true;
+        }
+      }
+
+      // Trigger next part when this one has moved far enough from origin
+      if (i < 2 && !fu->parts[i + 1].active) {
+        if (fu->parts[i].pos > (float)((i + 1) * part_size + run_gap)) {
+          fu->parts[i + 1].active = true;
+          fu->parts[i + 1].pos = (float)((i + 1) * part_size);
+        }
+      }
+
+      // Draw this part
+      draw_part((int)fu->parts[i].pos, 255);
+    }
+
+    // All arrived? -> Finale
+    if (fu->parts[0].arrived && fu->parts[1].arrived && fu->parts[2].arrived) {
+      fu->state = FU_FINALE;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_FINALE: {
+    // Strobe the reassembled cursor at the end
+    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
+    if (strobe_on) {
+      // Draw all 3 parts at their final (target) positions
+      for (int i = 0; i < num_parts; i++) {
+        draw_part(targets[i], 255);
+      }
+    }
+    // else: fade handles the "off" frames
+
+    if (now - fu->state_start_ms > FINALE_DURATION_MS) {
+      fu->state = FU_RESTART;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_RESTART: {
+    // Let the fade clean up, then restart
+    if (now - fu->state_start_ms > RESTART_DURATION_MS) {
+      instance->_segment.fill(0);
+      fu->state = FU_PULSE;
+      fu->state_start_ms = now;
+      for (int i = 0; i < 3; i++) {
+        fu->parts[i].pos = (float)(i * part_size);
+        fu->parts[i].active = false;
+        fu->parts[i].arrived = false;
+      }
     }
     break;
   }

@@ -503,7 +503,13 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 22:      // Hyper Sparkle
   case 100:     // Heartbeat
   case 154:     // HeartBeat Center
+  case 154:     // HeartBeat Center
+  case 154:     // HeartBeat Center
     return 255; // Solid Palette by default
+  case 157:     // Follow Us
+    return 255; // Solid Palette
+  case 157:     // Follow Us
+    return 255; // Solid Palette
 
   // Rainbow Defaults (4)
   case 7:
@@ -599,6 +605,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 60; // Sunrise
   case 156:
     return 140; // Follow Me (Default Speed)
+  case 157:
+    return 128; // Follow Us (Default Speed 128)
   default:
     return 128; // WLED default
   }
@@ -613,6 +621,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 160; // Fire 2012
   case 156:
     return 40; // Follow Me (Default Intensity)
+  case 157:
+    return 128; // Follow Us (Default Intensity 128)
   default:
     return 128; // WLED default
   }
