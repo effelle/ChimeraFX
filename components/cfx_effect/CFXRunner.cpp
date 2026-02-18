@@ -2853,32 +2853,36 @@ uint16_t mode_sparkle(void) {
 
 /*
  * Flash Sparkle (ID 21) - "Sparkle Dark"
- * Inverted: Background is lit (primary color or palette), sparkles are black
- * (or secondary). Intensity controls sparkle density.
+ * Inverted: Background is lit (primary color or full palette), sparkles are
+ * black (or secondary). Intensity controls sparkle density.
  */
 uint16_t mode_flash_sparkle(void) {
+  int len = instance->_segment.length();
+
   if (instance->_segment.reset) {
     instance->_segment.fill(instance->_segment.colors[0]);
     instance->_segment.reset = false;
   }
 
-  // Resolve background color from palette (like Popcorn/Drip)
-  uint32_t bg_color;
+  // Paint background every frame.
+  // Solid palette: flat fill with primary color.
+  // Any other palette: map the full palette across the strip length.
   if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
-    bg_color = instance->_segment.colors[0];
+    instance->_segment.fill(instance->_segment.colors[0]);
   } else {
     const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-    CRGBW c = ColorFromPalette(0, 255, pal); // Use index 0 for solid background
-    bg_color = RGBW32(c.r, c.g, c.b, c.w);
+    for (int i = 0; i < len; i++) {
+      // Map pixel position to palette index 0-255
+      uint8_t palIdx = (uint8_t)((i * 255) / (len - 1 > 0 ? len - 1 : 1));
+      CRGBW c = ColorFromPalette(palIdx, 255, pal);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
   }
-
-  // Re-fill background every frame
-  instance->_segment.fill(bg_color);
 
   // Spawning - Intensity is the primary density driver
   // random8() < intensity: 0=never, 128=50%, 255=always
   if (cfx::hw_random8() < instance->_segment.intensity) {
-    uint16_t index = cfx::hw_random16(0, instance->_segment.length());
+    uint16_t index = cfx::hw_random16(0, len);
     instance->_segment.setPixelColor(index, instance->_segment.colors[1]);
   }
 
