@@ -5450,7 +5450,7 @@ uint16_t mode_follow_us(void) {
   const int num_parts = 3;
   const int cursor_total = part_size * num_parts; // 9 pixels
   // Pixel gap before next runner launches
-  const int run_gap = std::max(4, (int)len / 8);
+  const int run_gap = std::max(12, (int)len / 6);
 
   // Staggered arrival targets (from right end):
   // Part 0 (lead) -> rightmost position
