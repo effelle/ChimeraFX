@@ -1372,6 +1372,25 @@ static const char _data_FX_MODE_COMET[] PROGMEM =
 /*
  * Fireworks function.
  */
+// Helper for subtractive fade to ensure floor is black
+static void subtractive_fade(uint8_t fade_amt) {
+  uint16_t len = SEGMENT.length();
+  for (uint16_t i = 0; i < len; i++) {
+    uint32_t c = SEGMENT.getPixelColor(i);
+    uint8_t r = (c >> 16) & 0xFF;
+    uint8_t g = (c >> 8) & 0xFF;
+    uint8_t b = c & 0xFF;
+    uint8_t w = (c >> 24) & 0xFF;
+
+    r = (r > fade_amt) ? (r - fade_amt) : 0;
+    g = (g > fade_amt) ? (g - fade_amt) : 0;
+    b = (b > fade_amt) ? (b - fade_amt) : 0;
+    w = (w > fade_amt) ? (w - fade_amt) : 0;
+
+    SEGMENT.setPixelColor(i, RGBW32(r, g, b, w));
+  }
+}
+
 void mode_fireworks() {
   if (SEGLEN <= 1)
     FX_FALLBACK_STATIC;
@@ -1382,7 +1401,9 @@ void mode_fireworks() {
     SEGENV.aux0 = UINT16_MAX;
     SEGENV.aux1 = UINT16_MAX;
   }
-  SEGMENT.fadeToBlackBy(32);
+
+  // Use Manual Subtractive Fade to ensure floor is black
+  subtractive_fade(32);
 
   uint8_t x = SEGENV.aux0 % width,
           y = SEGENV.aux0 /
@@ -3516,9 +3537,9 @@ static void mode_rolling_balls(void) {
     balls[i].height = thisHeight;
   }
 }
-static const char _data_FX_MODE_ROLLINGBALLS
-    [] PROGMEM = "Rolling Balls@!,# of "
-                 "balls,,,,Collide,Overlay,Trails;!,!,!;!;1;m12=1"; // bar
+static const char _data_FX_MODE_ROLLINGBALLS[] PROGMEM =
+    "Rolling Balls@!,# of "
+    "balls,,,,Collide,Overlay,Trails;!,!,!;!;1;m12=1"; // bar
 #endif // WLED_PS_DONT_REPLACE_1D_FX
 
 /*
@@ -4310,7 +4331,7 @@ void mode_exploding_fireworks(void) {
     }
 
     if (sparks[1].col > 4) { //&& sparks[1].pos > 0) { // as long as our known
-                             //spark is lit, work with all the sparks
+                             // spark is lit, work with all the sparks
       for (unsigned i = 1; i < nSparks; i++) {
         sparks[i].pos += sparks[i].vel;
         sparks[i].posX += sparks[i].velX;
@@ -6125,9 +6146,10 @@ static const char _data_FX_MODE_2DFIRENOISE[] PROGMEM =
 //////////////////////////////
 //     2D Frizzles          //
 //////////////////////////////
-void mode_2DFrizzles(void) { // By: Stepko
-                             // https://editor.soulmatelights.com/gallery/640-color-frizzles
-                             // , Modified by: Andrew Tuline
+void mode_2DFrizzles(
+    void) { // By: Stepko
+            // https://editor.soulmatelights.com/gallery/640-color-frizzles
+            // , Modified by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -6154,11 +6176,10 @@ typedef struct Cell {
       oscillatorCheck : 1, spaceshipCheck : 1, unused : 2;
 } Cell;
 
-void mode_2Dgameoflife(
-    void) { // Written by Ewoud Wijma, inspired by
-            // https://natureofcode.com/book/chapter-7-cellular-automata/ and
-            // https://github.com/DougHaber/nlife-color , Modified By: Brandon
-            // Butler
+void mode_2Dgameoflife(void) { // Written by Ewoud Wijma, inspired by
+                               // https://natureofcode.com/book/chapter-7-cellular-automata/
+                               // and https://github.com/DougHaber/nlife-color ,
+                               // Modified By: Brandon Butler
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
   const int cols = SEG_W, rows = SEG_H;
@@ -6709,9 +6730,10 @@ static const char _data_FX_MODE_2DNOISE[] PROGMEM = "Noise2D@!,Scale;;!;2";
 //////////////////////////////
 //     2D Plasma Ball       //
 //////////////////////////////
-void mode_2DPlasmaball(void) { // By: Stepko
-                               // https://editor.soulmatelights.com/gallery/659-plasm-ball
-                               // , Modified by: Andrew Tuline
+void mode_2DPlasmaball(
+    void) { // By: Stepko
+            // https://editor.soulmatelights.com/gallery/659-plasm-ball
+            // , Modified by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -6793,9 +6815,10 @@ static const char _data_FX_MODE_2DPOLARLIGHTS[] PROGMEM =
 /////////////////////////
 //     2D Pulser       //
 /////////////////////////
-void mode_2DPulser(void) { // By: ldirko
-                           // https://editor.soulmatelights.com/gallery/878-pulse-test
-                           // , modifed by: Andrew Tuline
+void mode_2DPulser(
+    void) { // By: ldirko
+            // https://editor.soulmatelights.com/gallery/878-pulse-test
+            // , modifed by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -6853,10 +6876,9 @@ static const char _data_FX_MODE_2DSINDOTS[] PROGMEM =
 //     2D Squared Swirl     //
 //////////////////////////////
 // custom3 affects the blur amount.
-void mode_2Dsquaredswirl(
-    void) { // By: Mark Kriegsman.
-            // https://gist.github.com/kriegsman/368b316c55221134b160 Modifed
-            // by: Andrew Tuline
+void mode_2Dsquaredswirl(void) { // By: Mark Kriegsman.
+                                 // https://gist.github.com/kriegsman/368b316c55221134b160
+                                 // Modifed by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -6889,9 +6911,10 @@ static const char _data_FX_MODE_2DSQUAREDSWIRL[] PROGMEM =
 //////////////////////////////
 //     2D Sun Radiation     //
 //////////////////////////////
-void mode_2DSunradiation(void) { // By: ldirko
-                                 // https://editor.soulmatelights.com/gallery/599-sun-radiation
-                                 // , modified by: Andrew Tuline
+void mode_2DSunradiation(
+    void) { // By: ldirko
+            // https://editor.soulmatelights.com/gallery/599-sun-radiation
+            // , modified by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -6988,9 +7011,10 @@ static const char _data_FX_MODE_2DTARTAN[] PROGMEM =
 /////////////////////////
 //     2D spaceships   //
 /////////////////////////
-void mode_2Dspaceships(void) { //// Space ships by stepko (c)05.02.21
-                               ///[https://editor.soulmatelights.com/gallery/639-space-ships],
-                               ///adapted by Blaz Kristan (AKA blazoncek)
+void mode_2Dspaceships(
+    void) { //// Space ships by stepko (c)05.02.21
+            ///[https://editor.soulmatelights.com/gallery/639-space-ships],
+            /// adapted by Blaz Kristan (AKA blazoncek)
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
 
@@ -7036,7 +7060,7 @@ static const char _data_FX_MODE_2DSPACESHIPS[] PROGMEM =
 /////////////////////////
 //// Crazy bees by stepko (c)12.02.21
 ///[https://editor.soulmatelights.com/gallery/651-crazy-bees], adapted by Blaz
-///Kristan (AKA blazoncek), improved by @dedehai
+/// Kristan (AKA blazoncek), improved by @dedehai
 #define MAX_BEES 5
 void mode_2Dcrazybees(void) {
   if (!strip.isMatrix || !SEGMENT.is2D())
@@ -7115,7 +7139,7 @@ static const char _data_FX_MODE_2DCRAZYBEES[] PROGMEM =
 /////////////////////////
 //// Ghost Rider by stepko (c)2021
 ///[https://editor.soulmatelights.com/gallery/716-ghost-rider], adapted by Blaz
-///Kristan (AKA blazoncek)
+/// Kristan (AKA blazoncek)
 #define LIGHTERS_AM 64 // max lighters (adequate for 32x32 matrix)
 void mode_2Dghostrider(void) {
   if (!strip.isMatrix || !SEGMENT.is2D())
@@ -7213,7 +7237,7 @@ static const char _data_FX_MODE_2DGHOSTRIDER[] PROGMEM =
 ////////////////////////////
 //// Floating Blobs by stepko (c)2021
 ///[https://editor.soulmatelights.com/gallery/573-blobs], adapted by Blaz
-///Kristan (AKA blazoncek)
+/// Kristan (AKA blazoncek)
 #define MAX_BLOBS 8
 void mode_2Dfloatingblobs(void) {
   if (!strip.isMatrix || !SEGMENT.is2D())
@@ -7564,7 +7588,7 @@ static const char _data_FX_MODE_2DSCROLLTEXT[] PROGMEM =
 ////////////////////////////
 //// Drift Rose by stepko (c)2021
 ///[https://editor.soulmatelights.com/gallery/1369-drift-rose-pattern], adapted
-///by Blaz Kristan (AKA blazoncek) improved by @dedehai
+/// by Blaz Kristan (AKA blazoncek) improved by @dedehai
 void mode_2Ddriftrose(void) {
   if (!strip.isMatrix || !SEGMENT.is2D())
     FX_FALLBACK_STATIC; // not a 2D set-up
@@ -8009,10 +8033,10 @@ static const char _data_FX_MODE_GRAVCENTER[] PROGMEM =
 void mode_gravcentric(void) { // Gravcentric. By Andrew Tuline.
   mode_gravcenter_base(1);
 }
-static const char _data_FX_MODE_GRAVCENTRIC
-    [] PROGMEM = "Gravcentric@Rate of "
-                 "fall,Sensitivity;!,!;!;1v;ix=128,m12=3,si=0"; // Corner,
-                                                                // Beatsin
+static const char _data_FX_MODE_GRAVCENTRIC[] PROGMEM =
+    "Gravcentric@Rate of "
+    "fall,Sensitivity;!,!;!;1v;ix=128,m12=3,si=0"; // Corner,
+                                                   // Beatsin
 
 ///////////////////////
 //   * GRAVIMETER    //
@@ -8096,8 +8120,8 @@ void mode_matripix(void) { // Matripix. By Andrew Tuline.
 } // mode_matripix()
 static const char _data_FX_MODE_MATRIPIX[] PROGMEM =
     "Matripix@!,Brightness;!,!;!;1v;ix=64,m12=2,si=1"; //,rev=1,mi=1,rY=1,mY=1
-                                                       //Circle, WeWillRockYou,
-                                                       //reverseX
+                                                       // Circle, WeWillRockYou,
+                                                       // reverseX
 
 //////////////////////
 //   * MIDNOISE     //
@@ -8637,10 +8661,9 @@ void mode_freqpixels(void) { // Freqpixel. By Andrew Tuline.
                                             (uint8_t)my_magnitude));
   }
 } // mode_freqpixels()
-static const char
-    _data_FX_MODE_FREQPIXELS[] PROGMEM =
-        "Freqpixels@Fade rate,Starting color and # of "
-        "pixels;!,!,;!;1f;m12=0,si=0"; // Pixels, Beatsin
+static const char _data_FX_MODE_FREQPIXELS[] PROGMEM =
+    "Freqpixels@Fade rate,Starting color and # of "
+    "pixels;!,!,;!;1f;m12=0,si=0"; // Pixels, Beatsin
 
 //////////////////////
 //   ** Freqwave    //
@@ -8724,9 +8747,9 @@ void mode_freqwave(void) { // Freqwave. By Andreas Pleschung.
                             SEGMENT.getPixelColor(i + 1)); // move to the right
   }
 } // mode_freqwave()
-static const char _data_FX_MODE_FREQWAVE
-    [] PROGMEM = "Freqwave@Speed,Sound effect,Low bin,High "
-                 "bin,Pre-amp;;;01f;m12=2,si=0"; // Circle, Beatsin
+static const char _data_FX_MODE_FREQWAVE[] PROGMEM =
+    "Freqwave@Speed,Sound effect,Low bin,High "
+    "bin,Pre-amp;;;01f;m12=2,si=0"; // Circle, Beatsin
 
 //////////////////////
 //   ** Noisemove   //
@@ -9945,7 +9968,7 @@ void mode_particlefire(void) {
                               4)) // maximum number of source (PS may limit
                                   // based on segment size); need 4 additional
                                   // bytes for time keeping (uint32_t lastcall)
-      FX_FALLBACK_STATIC; // allocation failed or not 2D
+      FX_FALLBACK_STATIC;         // allocation failed or not 2D
     SEGENV.aux0 =
         hw_random16(); // aux0 is wind position (index) in the perlin noise
   } else
@@ -9974,7 +9997,7 @@ void mode_particlefire(void) {
       SEGMENT.call--; // skipping a frame, decrement the counter (on call0, this
                       // is never executed as lastcall is 0, so its fine to not
                       // check if >0)
-      return; // do not update this frame
+      return;         // do not update this frame
     }
     *lastcall = strip.now;
   }
@@ -10009,7 +10032,7 @@ void mode_particlefire(void) {
           hw_random16((SEGMENT.custom1 * SEGMENT.custom1) >> 8) /
               (1 + (firespeed >>
                     5)); //'hotness' of fire, faster flames reduce the effect or
-                         //flame height will scale too much with speed
+                         // flame height will scale too much with speed
       PartSys->sources[i].maxLife =
           hw_random16(SEGMENT.vHeight() >> 1) +
           16; // defines flame height together with the vy speed, vy
