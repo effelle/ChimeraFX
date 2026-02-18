@@ -2168,12 +2168,17 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 4 pixels (Standard WLED Geometry)
-    // Reverting to WLED constants to eliminate math aliasing/blinking.
-    // Step 64 (256/4) provides perfect phase alignment.
-    for (int v = 0; v < 4; v++) {
-      // Use sin8 for smoother, more organic wave than cubicwave8
-      uint8_t wave = sin8((propF >> 2) + (v * 64));
+    // Loop 6 pixels (Restored Geometry - "Thicker Ripples")
+    // User requested filling the "space in the middle".
+    // Using Step 48 (288 total) with Phase Matching to avoid blinking.
+    for (int v = 0; v < 6; v++) {
+      // Phase Matching Fix:
+      // Spatial Step is 48. We MUST scale propF (0-255) to 0-48 to match.
+      // (propF * 3) / 16 = 255 * 3 / 16 = 47.8 (~48).
+      uint8_t phase_shift = (propF * 3) >> 4;
+
+      // Use sin8 for smooth organic wave (replaces cubicwave8)
+      uint8_t wave = sin8(phase_shift + (v * 48));
       uint8_t mag = scale8(wave, amp);
 
       // Gamma Disabled per previous fix
