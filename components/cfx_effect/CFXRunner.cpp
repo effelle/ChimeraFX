@@ -2152,11 +2152,15 @@ uint16_t mode_ripple(void) {
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
-    // Loop 6 pixels (Keep length fix)
+    // Loop 6 pixels (Kept for length)
     for (int v = 0; v < 6; v++) {
-      // Use standard Phase logic (based on propF) but using our smoother
-      // propagation value. v * 48 from previous tuning.
-      uint8_t wave = cubicwave8((propF >> 2) + (v * 48));
+      // Phase Matching Fix:
+      // Spatial Step is 48. We MUST scale propF (0-255) to 0-48 to match.
+      // previous (propF >> 2) was 0-64. Mismatch caused "jump" at pixel border.
+      // (propF * 3) / 16 = 255 * 3 / 16 = 47.8 (~48).
+      uint8_t phase_shift = (propF * 3) >> 4;
+
+      uint8_t wave = cubicwave8(phase_shift + (v * 48));
       uint8_t mag = scale8(wave, amp);
 
       // Gamma Disabled
