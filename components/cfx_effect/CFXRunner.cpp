@@ -2062,15 +2062,8 @@ uint16_t mode_ripple(void) {
   instance->_segment.fadeToBlackBy(224);
 
   // Spawn Logic
-  // WLED: if (hw_random16(IBN + 10000) <= (SEGMENT.intensity >>
-  // (SEGMENT.is2D()*3))) IBN is 5100. So random16(15100) <= intensity. Our
-  // intensity is 0-255. 255 / 15100 ~= 1.6%. We need to scale this by Delta
-  // Time if we want time-accuracy? WLED runs ~42fps (23ms). Prob per ms ~= 1.6%
-  // / 23 ~= 0.07%. Chance = (0.07 * delta * intensity_factor). Let's just stick
-  // to the frame-based prob for now but scaled slightly if delta is huge.
-  // random16(15000) <= intensity.
-
-  if (random16(15000) <= instance->_segment.intensity) {
+  // Scaled for visibility (WLED uses 15100, we use 6000 to boost density)
+  if (random16(6000) <= instance->_segment.intensity) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
         ripples[i].active = true;
@@ -2083,7 +2076,12 @@ uint16_t mode_ripple(void) {
   }
 
   // Process logic
-  uint32_t lifespan_ms = map(instance->_segment.speed, 0, 255, 6000, 300);
+  // WLED Decay Logic: decay = (speed >> 4) + 1
+  // Lifespan (frames) = 255 / decay
+  // Lifespan (ms) = Frames * 25ms (approx WLED tick)
+  uint8_t decay = (instance->_segment.speed >> 4) + 1;
+  uint32_t lifespan_ms = (255 * 25) / decay;
+
   // age step = (65535 * delta) / lifespan
   uint32_t age_step = (65535 * delta) / lifespan_ms;
   if (age_step < 1)
