@@ -5212,17 +5212,12 @@ uint16_t mode_follow_me(void) {
   // fast fade. We use scale8 to dim the whole strip, then subtract a constant
   // to kill low-level noise.
 
-  // 1. Dimming (Multiplicative)
-  // nscale8(dim_amt) is equivalent to fadeToBlackBy(255 - dim_amt)
-  uint8_t dim_amt = 255 - (instance->_segment.intensity >> 1); // 128..255
-  instance->_segment.fadeToBlackBy(255 - dim_amt);
-
-  // 2. Subtraction (Floor Cleaning) - MANUAL LOOP
-  // Needed because fadeToBlackBy is multiplicative and never reaches 0
-  // effectively at low levels. We manually subtract a small amount from every
-  // pixel to force zeroing. More aggressive at low intensity (< 128) to prevent
-  // "floor" persistence.
-  uint8_t sub_val = (instance->_segment.intensity < 128) ? 3 : 1;
+  // === Trail Fade (Manual Loop) ===
+  // Replaces fadeToBlackBy to avoid gamma/floor issues.
+  // 1. Scale (Dimming): Exponential decay. High intensity = slow fade.
+  // 2. Subtract (Floor Cleaning): Hard subtraction to force zero.
+  uint8_t scale = 255 - (instance->_segment.intensity >> 1); // 128..255
+  uint8_t sub_val = 2; // Fixed subtraction to clear floor
 
   int start = instance->_segment.start;
   int stop = instance->_segment.stop;
@@ -5231,11 +5226,19 @@ uint16_t mode_follow_me(void) {
   for (int i = start; i < stop; i++) {
     if (i < light.size()) {
       esphome::Color c = light[i].get();
-      // qsub8 equivalent
+
+      // 1. Scale
+      c.r = cfx::scale8(c.r, scale);
+      c.g = cfx::scale8(c.g, scale);
+      c.b = cfx::scale8(c.b, scale);
+      c.w = cfx::scale8(c.w, scale);
+
+      // 2. Subtract (Floor Cleaning)
       c.r = (c.r > sub_val) ? (c.r - sub_val) : 0;
       c.g = (c.g > sub_val) ? (c.g - sub_val) : 0;
       c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
       c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
+
       light[i] = c;
     }
   }
