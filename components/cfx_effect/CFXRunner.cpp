@@ -282,6 +282,11 @@ void Segment::blur(uint8_t blur_amount) {
 }
 
 void Segment::subtractive_fade_val(uint8_t fade_amt) {
+  if (!instance || !instance->target_light)
+    return;
+  int len = length();
+  int light_size = instance->target_light->size();
+  int global_start = start;
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
