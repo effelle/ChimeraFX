@@ -6,37 +6,68 @@ Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is parti
 
 ### Effect List
 
+The following effects are currently available in ChimeraFX. They are optimized for ESP32 and ESP8266 performance.
+
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 0 | **Static** | Solid color with palette and intro support. | **Palette**: Gradient/Solid | Yes | Aircoookie |
+| 38 | **Aurora** | Northern lights animation with drifting waves. | **Intensity**: Wave width - **Speed**: Drift speed | Yes | Aircoookie |
+| 1 | **Blink** | Simple on/off blinking. | **Speed**: Blink rate | Yes | Aircoookie |
+| 26 | **Blink Rainbow** | Blinking with color cycling. | **Speed**: Blink rate - **Intensity**: Color speed | Yes | Aircoookie |
+| 91 | **Bouncing Balls** | Real gravity physics with multiple balls. | **Intensity**: Count - **Speed**: Gravity | Yes | Tweaking4All |
+| 68 | **Bpm** | Pulsing color cycle synced to BPM. | **Intensity**: Beat width - **Speed**: BPM | Yes | Mark Kriegsman |
 | 2 | **Breathe** | Apple-style standby breathing LED. | **Speed**: Breathe rate | Yes | Aircoookie |
-| 3 | **Wipe** | Primary/Secondary color wipe. | **Speed**: Wipe speed | Yes | Aircoookie |
-| 6 | **Sweep** | Ping-pong wipe animation. | **Speed**: Sweep speed | Yes | Aircoookie |
+| 28 | **Chase** | Moving dot with fading trail. | **Intensity**: Trail length - **Speed**: Chase speed | Yes | Aircoookie |
+| 54 | **Chase tri** | Three-color chase animation. | **Intensity**: Spacing - **Speed**: Chase speed | Yes | Aircoookie |
 | 8 | **Colorloop** | Solid color cycling through palette. | **Intensity**: Saturation - **Speed**: Cycle speed | Yes | Harm Aldick |
-| 9 | **Rainbow** | Per-pixel rainbow with density control. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
-| 18 | **Dissolve** | Random pixel color transitions. | **Speed**: Dissolve rate | Yes | Aircoookie |
-| 38 | **Aurora** | Northern lights animation. | **Intensity**: Wave width - **Speed**: Drift speed | Yes | Aircoookie |
-| 40 | **Scanner** | Single dot moving back and forth. | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
-| 53 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
-| 60 | **Scanner Dual** | Two dots meeting in the center. | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
+| 74 | **Colortwinkle** | Magical fairy-dust twinkles. | **Intensity**: Spawn rate - **Speed**: Fade speed | Yes | Mark Kriegsman |
 | 63 | **Colorwaves** | Rainbow flag with breathing motion. | **Intensity**: Saturation - **Speed**: Wave speed | Yes | WLED (Pride 2015) |
-| 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail - **Speed**: Speed | Yes | Mark Kriegsman (FastLED) |
-| 66 | **Fire** | Realistic fire simulation. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman |
-| 74 | **Colortwinkles** | Magical fairy-dust twinkles. | **Intensity**: Spawn rate - **Speed**: Fade speed | Yes | Mark Kriegsman |
+| 18 | **Dissolve** | Sequential random pixel fill and clear. | **Intensity**: Change rate - **Speed**: Hold time | Yes | Aircoookie |
+| 96 | **Drip** | Falling water drop physics. | **Intensity**: Drop size - **Speed**: Gravity | Yes | Aircoookie |
+| 151 | **Dropping Time**| Falling drops with ripple effect. | **Intensity**: Spawn rate - **Speed**: Fall speed | Yes | Aircoookie |
+| 158 | **Energy** | Progress bar revealing live rainbow animation. | **Intensity**: Rainbow density - **Speed**: Fill speed | Yes | ChimeraFX |
+| 66 | **Fire** | Realistic 1D fire simulation. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman |
+| 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
+| 90 | **Fireworks** | Exploding rocket simulation. | **Intensity**: Explosion size - **Speed**: Launch frequency | Yes | Aircoookie |
+| 110 | **Flow** | Smooth moving color zones. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
+| 156 | **Follow Me** | Single dot following intensity. | **Intensity**: Position - **Speed**: Smoothness | Yes | ChimeraFX |
+| 157 | **Follow Us** | Two dots following intensity from edges. | **Intensity**: Position - **Speed**: Smoothness | Yes | ChimeraFX |
+| 87 | **Glitter** | Moving rainbow with random sparkles. | **Intensity**: Sparkle density - **Speed**: Flow speed | Yes | Mark Kriegsman |
+| 100 | **HeartBeat** | Anatomical heartbeat simulation. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | Aircoookie |
+| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | Aircoookie |
+| 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail length - **Speed**: Movement speed | Yes | Mark Kriegsman |
+| 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 76 | **Meteor** | Meteor with random decay trail. | **Intensity**: Trail length - **Speed**: Fall speed | Yes | Aircoookie |
-| 91 | **Bouncing Balls**| Real gravity physics. | **Intensity**: Count - **Speed**: Gravity | Yes | Tweaking4All |
-| 97 | **Plasma** | Smooth plasma animation. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
-| 100 | **Heartbeat** | Heartbeat simulation. | **Intensity**: Decay rate - **Speed**: BPM rate | Yes | Aircoookie |
-| 101 | **Ocean** | Gentle ocean waves (based on Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Ripple speed | No | Mark Kriegsman |
-| 104 | **Sunrise** | Gradual sunrise/sunset simulation. | **Speed**: Duration | Yes | Aircoookie |
-| 110 | **Flow** | Smooth color zones animation. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
-| 151 | **Dropping Time** | Falling drops with ripple effect. | **Intensity**: Spawn rate - **Speed**: Fall speed | Yes | Aircoookie |
-| 155 | **Kaleidos** | N-Way symmetrical mirroring. | **Intensity**: Segment count (2/4/6/8) - **Speed**: Scroll speed | Yes | ChimeraFX |
+| 25 | **Multi Strobe** | Multiple strobe pulses in sequence. | **Intensity**: Burst count - **Speed**: Strobe rate | Yes | Aircoookie |
+| 107 | **Noise Pal** | Perlin noise color movement. | **Intensity**: Zoom - **Speed**: Drift speed | Yes | WLED |
+| 101 | **Ocean** | Gentle ocean waves (Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Wave speed | No | Mark Kriegsman |
+| 98 | **Percent** | Percent-based fill (Progress Bar). | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
+| 152 | **Percent Center**| Percent-based fill from the center. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
+| 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Cutoff - **Speed**: Phase speed | Yes | Andrew Tuline |
+| 97 | **Plasma** | Multi-layer Perlin noise plasma. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
+| 95 | **Popcorn** | Bouncing particles simulation. | **Intensity**: Particle count - **Speed**: Bounciness | Yes | Aircoookie |
+| 9 | **Rainbow** | Moving per-pixel rainbow. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
+| 79 | **Ripple** | Expanding ripple waves. | **Intensity**: Wave strength - **Speed**: Propagation | Yes | Aircoookie |
+| 52 | **Running Dual** | Two running light trails from center. | **Intensity**: Spacing - **Speed**: Run speed | Yes | Aircoookie |
+| 15 | **Running lights**| Moving light trails with subtle decay. | **Intensity**: Trail spacing - **Speed**: Run speed | Yes | Aircoookie |
+| 16 | **Saw** | Sawtooth wave color movement. | **Intensity**: Wave count - **Speed**: Speed | Yes | Aircoookie |
+| 40 | **Scanner** | Larson Scanner (Cylon eye). | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
+| 60 | **Scanner Dual** | Two scanners meeting in the center. | **Intensity**: Trail length - **Speed**: Scan speed | Yes | Aircoookie |
+| 20 | **Sparkle** | Randomly flashing pixels. | **Intensity**: Sparkle density - **Speed**: Cycle speed | Yes | Aircoookie |
+| 22 | **Sparkle +** | Intense high-frequency sparkles. | **Intensity**: Density - **Speed**: Flash rate | Yes | Aircoookie |
+| 21 | **Sparkle Dark** | Random pixels turning off briefly. | **Intensity**: Density - **Speed**: Blink rate | Yes | Aircoookie |
+| 0 | **Static** | Solid color or stationary palette. | **Palette**: Gradient/Solid | Yes | Aircoookie |
+| 23 | **Strobe** | Rapid full-strip flashing. | **Speed**: Strobe rate | Yes | Aircoookie |
+| 24 | **Strobe Rainbow**| Strobe flashing with color cycle. | **Speed**: Strobe rate - **Intensity**: Color speed | Yes | Aircoookie |
+| 104 | **Sunrise** | Gradual brightness and color increase. | **Speed**: Duration | Yes | Aircoookie |
+| 6 | **Sweep** | Ping-pong wipe animation. | **Speed**: Sweep speed | Yes | Aircoookie |
+| 3 | **Wipe** | Linear color wipe from start to end. | **Speed**: Wipe speed | Yes | Aircoookie |
+| 4 | **Wipe Random** | Linear wipe with random color changes. | **Speed**: Wipe speed | Yes | Aircoookie |
 
 ### A few notes on the credits:
-*   **Aircoookie:** He is the lead developer of WLED. Any effect that doesn't have a clear historical "parent" in the FastLED community is usually his work.
-*   **Tweaking4All:** The "Bouncing Balls" algorithm with gravity is a very famous bit of code from a specific tutorial on the Tweaking4All website that has been used in almost every LED project for the last decade.
-*   **Mark Kriegsman:** Most of the high-quality, math-heavy effects (Fire, Juggle, Pacifica) come from his work on the **FastLED** library. He is widely considered the "godfather" of modern LED animations.
+*   **Aircoookie:** Lead developer of WLED. Most core effect logic is derived from his work.
+*   **Mark Kriegsman:** Godfather of high-quality LED math. Responsible for Fire, Juggle, and many FastLED classics.
+*   **Tweaking4All:** Creator of the iconic Bouncing Balls physics logic.
+*   **ChimeraFX:** Custom high-performance effects developed specifically for this package.
 
 ---
 
@@ -55,6 +86,7 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 6 | **Sunset** | Purple, red, orange, and yellow gradients. |
 | 7 | **Ice** | Cool whites, blues, and cyans. |
 | 8 | **Party** | Vibrant high-contrast mixed colors. |
+| 9 | **Lava** | Black, red, and orange deep heatmap. |
 | 10 | **Pastel** | Soft, desaturated soothing colors. |
 | 11 | **Ocean** | Deep blues, cyans, and white crests. |
 | 12 | **HeatColors** | Traditional heatmap colors. |
