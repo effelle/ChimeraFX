@@ -245,3 +245,15 @@
     # set_intro_duration: 1.0
     # set_intro_use_palette: False
     # set_timer: 0
+
+- addressable_cfx:
+    name: "Energy"
+    effect_id: 158
+    # set_speed: 128
+    # set_palette: "Default"
+    # set_intensity: 128
+    # set_mirror: False
+    # set_intro_effect: "None"
+    # set_intro_duration: 1.0
+    # set_intro_use_palette: False
+    # set_timer: 0

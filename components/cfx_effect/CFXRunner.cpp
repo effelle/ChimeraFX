@@ -2997,6 +2997,67 @@ uint16_t mode_hyper_sparkle(void) {
 // Ported from WLED FX.cpp
 
 // ID 8: Colorloop - Entire strip cycles through one color
+// --- Energy Effect (ID 158) ---
+// Progress bar that unmasks a live rainbow animation with a white leading tip.
+uint16_t mode_energy(void) {
+  if (!instance)
+    return 350;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // Reset state on segment reset
+  if (instance->_segment.reset) {
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  // Calculate progress based on speed
+  // Speed 0: ~25s, Speed 255: ~0.1s
+  uint32_t duration = 25000 / (instance->_segment.speed + 1);
+  if (duration < 100)
+    duration = 100;
+
+  uint32_t elapsed = instance->now - instance->_segment.step;
+  if (elapsed >= duration) {
+    instance->_segment.step = instance->now; // Loop
+    elapsed = 0;
+  }
+
+  uint16_t progress = (elapsed * len) / duration;
+
+  // Pattern timing (scaled for background movement)
+  auto timing = cfx::calculate_frame_timing(DEFAULT_SPEED, instance->now);
+  uint32_t counter = (timing.scaled_now >> 4) & 0xFF;
+
+  // Intensity controls spatial density
+  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
+
+  // Palette handling
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? getPaletteByIndex(4) // Rainbow
+          : getPaletteByIndex(instance->_segment.palette);
+
+  for (int i = 0; i < len; i++) {
+    if (i < progress) {
+      // revealed area: cycling rainbow/palette
+      uint8_t index = ((i * spatial_mult) / len) + counter;
+      CRGBW c = ColorFromPalette(index, 255, active_palette);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else if (i == progress) {
+      // white leading tip
+      instance->_segment.setPixelColor(i, RGBW32(255, 255, 255, 255));
+    } else {
+      // unrevealed area
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  return FRAMETIME;
+}
+
 // Intensity controls saturation (blends with white)
 uint16_t mode_rainbow(void) {
   if (!instance)
@@ -3638,6 +3699,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_FOLLOW_US: // 157
     mode_follow_us();
+    break;
+  case FX_MODE_ENERGY: // 158
+    mode_energy();
     break;
   default:
     mode_static();
