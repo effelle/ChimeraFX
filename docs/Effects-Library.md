@@ -12,12 +12,13 @@ Please note that some WLED effects will not be ported. This includes animations 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
+| 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | Yes | ChimeraFX |
 | 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
+| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 152 | **Percent Center**| Percent-based fill from the center. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
-| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
 
 #### WLED-Style Effects:
 
