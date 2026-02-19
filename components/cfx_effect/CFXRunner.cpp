@@ -3035,22 +3035,22 @@ uint16_t mode_energy(void) {
   if (finished)
     elapsed = duration;
 
-  // --- Step 1: Agitation Engine (Chaos Contrast) ---
-  // We use a power curve on noise to create meaningful bursts of speed.
-  // now >> 10 drifts every ~1 second.
-  uint8_t noise = cfx::inoise8(instance->now >> 10, 42);
+  // --- Step 1: Agitation Engine (Chaos Contrast FIX) ---
+  // Background speed fluctuates organically using noise.
+  // We traverse the noise grid at ~8 units per second (now >> 3).
+  uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
 
   // Power Curve: Squaring noise creates longer calm periods and sharp spikes.
-  uint32_t chaos = (uint32_t)noise * noise; // 0..65025
+  uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
 
   // Integrate the user speed slider (0-255).
-  // Map chaos to a wide multiplier (0.25x to 8.0x) where 256 is 1.0x
-  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 64, 2048);
+  // Map chaos to a wide multiplier (approx 0.2x to 5.0x) where 256 is 1.0x.
+  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
 
-  // Speed factor = baseline speed * chaotic fluctuation
+  // Speed factor = baseline speed * chaotic fluctuation.
   uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
   if (speed_factor < 16)
-    speed_factor = 16; // Safety floor
+    speed_factor = 16; // Safety floor.
 
   data->accumulator += (dt * speed_factor);
 
