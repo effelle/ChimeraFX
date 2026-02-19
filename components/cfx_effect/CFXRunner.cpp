@@ -3817,8 +3817,15 @@ uint16_t mode_exploding_fireworks(void) {
         // (random(20001)/10000 - 0.9) covers range -0.9 to 1.1
         // Then multiplied by negative gravity * 50 to scale to strip
         // size/physics
+        // INTENSITY CONTROL: Scale velocity by intensity/128 (128=Native,
+        // 255=2x, 64=0.5x)
+        float intensityScale = instance->_segment.intensity / 128.0f;
+        if (intensityScale < 0.1f)
+          intensityScale = 0.1f; // Prevent 0 velocity
+
         sparks[i].vel = (float(cfx::hw_random16(0, 20001)) / 10000.0f) - 0.9f;
-        sparks[i].vel *= -gravity * 50.0f; // CRITICAL FIX: Velocity scaling
+        sparks[i].vel *= -gravity * 50.0f *
+                         intensityScale; // Velocity scaling + Intensity scaling
 
         // Heat initialization (WLED uses extended range for heat)
         sparks[i].col = 345;
