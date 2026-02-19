@@ -1951,16 +1951,8 @@ uint16_t mode_juggle(void) {
   if (fadeAmount < 1)
     fadeAmount = 1;
 
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-    r = (r > fadeAmount) ? r - fadeAmount : 0;
-    g = (g > fadeAmount) ? g - fadeAmount : 0;
-    b = (b > fadeAmount) ? b - fadeAmount : 0;
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(fadeAmount);
 
   // Get palette
   const uint32_t *active_palette;
@@ -2325,49 +2317,9 @@ uint16_t mode_ripple(void) {
     }
   }
 
-  // WLED Blur Effect (Exact WLED Kernel)
-  // This provides the specific "smoothness" signature of WLED.
-  // Formula: new_val = (val * (255-blur) + (left + right) * (blur/2)) >> 8
-
-  uint8_t blur_amount =
-      40; // Tuned for Ripple (Simulate 'blur' parameter which is often ~32-64)
-  // 128 is extremely blurry. 40 is a good "trail" value.
-
-  if (blur_amount > 0) {
-    uint8_t keep = 255 - blur_amount;
-    uint8_t seep = blur_amount >> 1;
-
-    for (int i = 0; i < len; i++) {
-      // Safety checks for boundaries
-      int prev = (i == 0) ? 0 : i - 1;
-      int next = (i == len - 1) ? len - 1 : i + 1;
-
-      uint32_t p = instance->_segment.getPixelColor(prev);
-      uint32_t c = instance->_segment.getPixelColor(i);
-      uint32_t n = instance->_segment.getPixelColor(next);
-
-      CRGBW c_prev(p);
-      CRGBW c_curr(c);
-      CRGBW c_next(n);
-
-      // WLED blur1d math
-      // We must cast to uint16_t before multiplication to avoid overflow
-      uint8_t r = ((uint16_t)c_curr.r * keep +
-                   ((uint16_t)c_prev.r + c_next.r) * seep) >>
-                  8;
-      uint8_t g = ((uint16_t)c_curr.g * keep +
-                   ((uint16_t)c_prev.g + c_next.g) * seep) >>
-                  8;
-      uint8_t b = ((uint16_t)c_curr.b * keep +
-                   ((uint16_t)c_prev.b + c_next.b) * seep) >>
-                  8;
-      uint8_t w = ((uint16_t)c_curr.w * keep +
-                   ((uint16_t)c_prev.w + c_next.w) * seep) >>
-                  8;
-
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-    }
-  }
+  // Use standardized Segment::blur — identical WLED kernel, centralized.
+  // blur(40): tuned for Ripple (smooth trail without excessive smearing).
+  instance->_segment.blur(40);
 
   return FRAMETIME;
 }
@@ -3020,14 +2972,8 @@ uint16_t mode_hyper_sparkle(void) {
   else
     sub_kicker = 4;
   int len = instance->_segment.length();
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    if (c != 0) {
-      instance->_segment.setPixelColor(
-          i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
-                    qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
-    }
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(sub_kicker);
 
   // Spawn Logic
   // Higher density than Sparkle
