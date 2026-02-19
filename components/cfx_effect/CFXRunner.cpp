@@ -581,8 +581,8 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
 
 // Simple Linear Interpolation Palette Lookup (Updated for dynamic palettes)
 // Uses cfx_pgm_read_dword for PROGMEM/Flash compatibility
-static CRGBW ColorFromPalette(uint8_t index, uint8_t brightness,
-                              const uint32_t *palette) {
+static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
+                              uint8_t brightness) {
   uint8_t i = index >> 4;   // 0-15
   uint8_t f = index & 0x0F; // Fraction 0-15
 
@@ -733,7 +733,7 @@ uint16_t mode_static(void) {
 
     for (int i = 0; i < len; i++) {
       uint8_t colorIndex = (i * 255) / (len > 1 ? len - 1 : 1);
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     }
   } else {
@@ -812,7 +812,7 @@ uint16_t mode_aurora(void) {
           uint8_t colorIndex = rand() % 256;
           const uint32_t *active_palette =
               getPaletteByIndex(instance->_segment.palette);
-          CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+          CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
           waves[i].init(instance->_segment.length(), color);
         }
       }
@@ -822,7 +822,7 @@ uint16_t mode_aurora(void) {
         uint8_t colorIndex = rand() % 256;
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
-        CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+        CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
         waves[i].init(instance->_segment.length(), color);
       }
     }
@@ -1516,7 +1516,7 @@ uint16_t mode_plasma(void) {
     brightness = instance->applyGamma(brightness);
 
     // Get color from palette with gamma-corrected brightness
-    CRGBW c = ColorFromPalette(smoothIndex, brightness, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, smoothIndex, brightness);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -1578,7 +1578,7 @@ uint16_t mode_pride_2015(void) {
     uint8_t hue8 = hue16 >> 8;
 
     // Get color at full brightness
-    CRGBW c = ColorFromPalette(hue8, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, hue8, 255);
 
     // Apply saturation (blend toward white at low intensity)
     if (saturation < 255) {
@@ -1664,7 +1664,7 @@ uint16_t mode_breath(void) {
       // Use palette color as foreground (0-19)
       const uint32_t *active_palette =
           getPaletteByIndex(instance->_segment.palette);
-      CRGBW c = ColorFromPalette((i * 256 / len), 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 256 / len), 255);
       fgR = c.r;
       fgG = c.g;
       fgB = c.b;
@@ -1912,7 +1912,7 @@ uint16_t mode_dissolve(void) {
         instance->_segment.setPixelColor(i, RGBW32(col.r, col.g, col.b, col.w));
       } else {
         uint8_t hue = (i * 255 / len);
-        CRGBW col = ColorFromPalette(hue, 255, active_palette);
+        CRGBW col = ColorFromPalette(active_palette, hue, 255);
         instance->_segment.setPixelColor(i, RGBW32(col.r, col.g, col.b, col.w));
       }
     } else {
@@ -1978,7 +1978,7 @@ uint16_t mode_juggle(void) {
       c = CRGBW((col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF,
                 (col >> 24) & 0xFF);
     } else {
-      c = ColorFromPalette(dothue, 255, active_palette);
+      c = ColorFromPalette(active_palette, dothue, 255);
     }
 
     // Additive blend
@@ -2036,7 +2036,7 @@ uint16_t mode_flow(void) {
 
   // Fill background with counter-colored palette
   uint8_t bgIndex = (uint8_t)(256 - counter);
-  CRGBW bgColor = ColorFromPalette(bgIndex, 255, active_palette);
+  CRGBW bgColor = ColorFromPalette(active_palette, bgIndex, 255);
   for (int i = 0; i < len; i++) {
     instance->_segment.setPixelColor(
         i, RGBW32(bgColor.r, bgColor.g, bgColor.b, bgColor.w));
@@ -2048,7 +2048,7 @@ uint16_t mode_flow(void) {
     for (int i = 0; i < zoneLen; i++) {
       uint8_t colorIndex = (i * 255 / zoneLen) - (uint8_t)counter;
       int led = (z & 0x01) ? i : (zoneLen - 1) - i;
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
       instance->_segment.setPixelColor(pos + led, RGBW32(c.r, c.g, c.b, c.w));
     }
   }
@@ -2091,7 +2091,7 @@ uint16_t mode_phased(void) {
     uint8_t b = cubicwave8(val & 0xFF);
     b = (b > cutOff) ? (b - cutOff) : 0;
 
-    CRGBW c = ColorFromPalette(colorIndex, b, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, b);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
 
     colorIndex += 256 / len;
@@ -2251,7 +2251,7 @@ uint16_t mode_ripple(void) {
       uint32_t c = instance->_segment.colors[0];
       col = c;
     } else {
-      CRGBW c = ColorFromPalette(ripples[i].color, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, ripples[i].color, 255);
       col = RGBW32(c.r, c.g, c.b, c.w);
     }
 
@@ -2405,7 +2405,7 @@ uint16_t mode_meteor(void) {
       // Reverted to this state as "Static Peak" was too flat.
       // 1. Dynamic Indexing: Brings back rich colors for Ocean/Rainbow.
       uint8_t colorIndex = (index * 10) + (instance->now >> 4);
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
 
       // 2. White Energy Boost (Universal)
       // Inject white to guarantee visibility for all palettes.
@@ -2604,7 +2604,7 @@ uint16_t mode_glitter(void) {
     uint8_t colorIndex = (i * 255 / len) - (counter >> 8);
 
     // Render from palette
-    CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -2677,7 +2677,7 @@ uint16_t mode_percent(void) {
       // "Meter" usually implies the color matches the position.
       // Let's map palette to the WHOLE length, so green is always at 0, red
       // always at 100 (if using heatmap)
-      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     } else {
       // Unlit portion
@@ -2730,7 +2730,7 @@ uint16_t mode_percent_center(void) {
       // Or strip-linear? Strip-linear looks more Percent-like usually.
       // Let's do strip-linear so it looks like a single bar revealed from
       // center.
-      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     } else {
       instance->_segment.setPixelColor(i, 0);
@@ -2804,7 +2804,7 @@ uint16_t mode_sunrise(void) {
     wave = (wave >> 8) + ((wave * instance->_segment.intensity) >> 15);
 
     uint8_t colorIndex = (wave > 240) ? 240 : wave;
-    CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     instance->_segment.setPixelColor(len - i - 1, RGBW32(c.r, c.g, c.b, c.w));
@@ -2922,7 +2922,7 @@ uint16_t mode_flash_sparkle(void) {
     for (int i = 0; i < len; i++) {
       // Map pixel position to palette index 0-255
       uint8_t palIdx = (uint8_t)((i * 255) / (len - 1 > 0 ? len - 1 : 1));
-      CRGBW c = ColorFromPalette(palIdx, 255, pal);
+      CRGBW c = ColorFromPalette(pal, palIdx, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     }
   }
@@ -3002,55 +3002,41 @@ uint16_t mode_hyper_sparkle(void) {
 uint16_t mode_energy(void) {
   if (!instance)
     return 350;
-
   uint16_t len = instance->_segment.length();
-  if (len <= 1)
-    return mode_static();
 
-  // Reset state on segment reset
   if (instance->_segment.reset) {
     instance->_segment.step = instance->now;
     instance->_segment.reset = false;
   }
 
-  // Recalibrated Duration: 128 speed -> ~1.9s fill. 255 -> ~15ms. 0 -> ~3.8s.
   uint32_t duration = (257 - instance->_segment.speed) * 15;
-
   uint32_t elapsed = instance->now - instance->_segment.step;
+
+  // Handover to Rainbow
   if (elapsed >= duration) {
-    instance->_segment.step = instance->now; // Loop
-    elapsed = 0;
+    instance->setMode(FX_MODE_RAINBOW);
+    return FRAMETIME;
   }
 
   uint16_t progress = (elapsed * len) / duration;
-
-  // Pattern timing: cycles every 4s roughly
   uint32_t counter = (instance->now >> 4) & 0xFF;
-
-  // Intensity controls spatial density
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
-  // Palette handling: Force rainbow if default or solid (255) is picked
-  const uint32_t *active_palette =
-      (instance->_segment.palette == 0 || instance->_segment.palette == 255)
-          ? getPaletteByIndex(4) // Rainbow
-          : getPaletteByIndex(instance->_segment.palette);
-
   for (int i = 0; i < len; i++) {
-    if (i < progress) {
-      // revealed area: cycling rainbow/palette
-      uint8_t index = ((i * spatial_mult) / len) + counter;
-      CRGBW c = ColorFromPalette(index, 255, active_palette);
-      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-    } else if (i == progress) {
-      // white leading tip
-      instance->_segment.setPixelColor(i, RGBW32(255, 255, 255, 255));
+    if (i < (int)progress - 3) {
+      // Trail
+      uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+      instance->_segment.setPixelColor(i, cfx::color_wheel(index));
+    } else if (i <= progress) {
+      // 4-pixel Faded Head
+      int8_t dist = progress - i;
+      uint8_t bri = 255 >> dist;
+      instance->_segment.setPixelColor(i, RGBW32(bri, bri, bri, bri));
     } else {
-      // unrevealed area
+      // Void
       instance->_segment.setPixelColor(i, 0);
     }
   }
-
   return FRAMETIME;
 }
 
@@ -3074,7 +3060,7 @@ uint16_t mode_rainbow(void) {
           ? getPaletteByIndex(4) // Rainbow palette
           : getPaletteByIndex(instance->_segment.palette);
 
-  CRGBW c = ColorFromPalette(counter, 255, active_palette);
+  CRGBW c = ColorFromPalette(active_palette, counter, 255);
 
   // Intensity < 128: blend with white (reduce saturation)
   if (instance->_segment.intensity < 128) {
@@ -3117,7 +3103,7 @@ uint16_t mode_rainbow_cycle(void) {
 
   for (int i = 0; i < len; i++) {
     uint8_t index = ((i * spatial_mult) / len) + counter;
-    CRGBW c = ColorFromPalette(index, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, index, 255);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
@@ -3183,7 +3169,7 @@ uint16_t mode_colortwinkle(void) {
     // avoid deadlocks
     if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
-      CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, hw_random8(), 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
@@ -3502,7 +3488,7 @@ uint16_t mode_heartbeat(void) {
       // Palette mapping
       const uint32_t *active_palette =
           getPaletteByIndex(instance->_segment.palette);
-      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
       colorPulse = RGBW32(c.r, c.g, c.b, c.w);
     }
 
@@ -3862,7 +3848,7 @@ uint16_t mode_exploding_fireworks(void) {
               palId = 4; // Default to Rainbow
 
             const uint32_t *pal = getPaletteByIndex(palId);
-            CRGBW c = ColorFromPalette(sparks[i].colIndex, 255, pal);
+            CRGBW c = ColorFromPalette(pal, sparks[i].colIndex, 255);
             spColor = RGBW32(c.r, c.g, c.b, c.w);
 
             CRGBW finalColor = CRGBW(0, 0, 0, 0);
@@ -3977,7 +3963,7 @@ uint16_t mode_popcorn(void) {
           col = instance->_segment.colors[0];
         } else {
           const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-          CRGBW c = ColorFromPalette(popcorn[i].colIndex, 255, pal);
+          CRGBW c = ColorFromPalette(pal, popcorn[i].colIndex, 255);
           col = RGBW32(c.r, c.g, c.b, c.w);
         }
         instance->_segment.setPixelColor(idx, col);
@@ -4209,7 +4195,7 @@ uint16_t mode_dropping_time(void) {
     // Combine (Average)
     uint8_t index = (wave1 + wave2) / 2;
 
-    CRGBW c = ColorFromPalette(index, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, index, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -4293,7 +4279,7 @@ uint16_t mode_drip(void) {
         col = instance->_segment.colors[0];
       } else {
         const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-        CRGBW c = ColorFromPalette((uint8_t)(j * 64), 255, pal);
+        CRGBW c = ColorFromPalette(pal, (uint8_t)(j * 64), 255);
         col = RGBW32(c.r, c.g, c.b, c.w);
       }
       // Blend black -> color based on 'col' (0-255)
@@ -4328,7 +4314,7 @@ uint16_t mode_drip(void) {
           col = instance->_segment.colors[0];
         } else {
           const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
-          CRGBW c = ColorFromPalette((uint8_t)(j * 64), 255, pal);
+          CRGBW c = ColorFromPalette(pal, (uint8_t)(j * 64), 255);
           col = RGBW32(c.r, c.g, c.b, c.w);
         }
 
@@ -4503,7 +4489,7 @@ uint16_t mode_bouncing_balls(void) {
       active_palette = getPaletteByIndex(instance->_segment.palette);
     }
 
-    CRGBW c = ColorFromPalette(i * (256 / MAX_BALLS), 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, i * (256 / MAX_BALLS), 255);
     uint32_t colorInt = RGBW32(c.r, c.g, c.b, c.w);
 
     uint32_t existing = instance->_segment.getPixelColor(pixel);
@@ -4557,7 +4543,7 @@ uint16_t blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
           getPaletteByIndex(instance->_segment.palette);
       // PALETTE_SOLID_WRAP means wrap, we use standard logic
       uint16_t len = instance->_segment.length();
-      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     }
   } else {
@@ -4629,7 +4615,7 @@ uint16_t mode_strobe(void) {
       uint16_t len = instance->_segment.length();
       for (unsigned i = 0; i < len; i++) {
         uint8_t colorIndex = (i * 255) / len;
-        CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+        CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
         instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
       }
     } else {
@@ -4744,7 +4730,7 @@ uint16_t mode_multi_strobe(void) {
       uint16_t len = instance->_segment.length();
       for (unsigned i = 0; i < len; i++) {
         uint8_t colorIndex = (i * 255) / len;
-        CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+        CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
         instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
       }
     } else {
@@ -4787,7 +4773,7 @@ static uint16_t running_base(bool saw, bool dual = false) {
       // Palette mode: use palette color for 'i'
       const uint32_t *active_palette =
           getPaletteByIndex(instance->_segment.palette);
-      CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
       color2 = RGBW32(c.r, c.g, c.b, c.w);
     }
 
@@ -4805,7 +4791,7 @@ static uint16_t running_base(bool saw, bool dual = false) {
       } else {
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
-        CRGBW c = ColorFromPalette((i * 255) / len + 128, 255, active_palette);
+        CRGBW c = ColorFromPalette(active_palette, (i * 255) / len + 128, 255);
         color3 = RGBW32(c.r, c.g, c.b, c.w);
       }
       ca = color_blend(ca, color3, s2);
@@ -4914,7 +4900,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // Background Color Logic
   uint32_t col1 = 0; // Default to Black/Off
   if (useRandomColors) {
-    CRGBW c1 = ColorFromPalette(instance->_segment.aux1, 255, active_palette);
+    CRGBW c1 = ColorFromPalette(active_palette, instance->_segment.aux1, 255);
     col1 = RGBW32(c1.r, c1.g, c1.b, c1.w);
   }
 
@@ -4924,7 +4910,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     // Foreground Color Construction
     uint32_t col0;
     if (useRandomColors) {
-      CRGBW c0 = ColorFromPalette(instance->_segment.aux0, 255, active_palette);
+      CRGBW c0 = ColorFromPalette(active_palette, instance->_segment.aux0, 255);
       col0 = RGBW32(c0.r, c0.g, c0.b, c0.w);
     } else if (instance->_segment.palette == 255 ||
                (!useRandomColors && instance->_segment.palette == 0)) {
@@ -4934,7 +4920,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
       // pattern (i * 12) This fixes "holes" and creates a smooth gradient
       // across the strip.
       uint8_t colorIndex = (i * 255) / len;
-      CRGBW c0 = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c0 = ColorFromPalette(active_palette, colorIndex, 255);
       col0 = RGBW32(c0.r, c0.g, c0.b, c0.w);
     }
 
@@ -5184,7 +5170,7 @@ uint16_t mode_heartbeat_center(void) {
           instance->_segment.palette != 255) {
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
-        CRGBW c = ColorFromPalette((i * 255) / len, 255, active_palette);
+        CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
         pixel_color = RGBW32(c.r, c.g, c.b, c.w);
       }
 
@@ -5278,7 +5264,7 @@ uint16_t mode_kaleidos(void) {
     uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
 
     // Draw
-    CRGBW c = ColorFromPalette(color_index, 255, palette);
+    CRGBW c = ColorFromPalette(palette, color_index, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -5410,7 +5396,7 @@ uint16_t mode_follow_me(void) {
     uint8_t bri = beatsin8(60, 50, 255);
     for (int j = 0; j < cursor_size && j < len; j++) {
       uint8_t ci = (j * 255) / cursor_size;
-      CRGBW c = ColorFromPalette(ci, bri, palette);
+      CRGBW c = ColorFromPalette(palette, ci, bri);
       instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
     }
 
@@ -5445,7 +5431,7 @@ uint16_t mode_follow_me(void) {
         // ColorFromPalette with PaletteSolid returns the color regardless of
         // index (usually). Let's rely on standard behavior.
         uint8_t ci = (j * 255) / cursor_size;
-        CRGBW c = ColorFromPalette(ci, 255, palette);
+        CRGBW c = ColorFromPalette(palette, ci, 255);
         instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
       }
     }
@@ -5472,7 +5458,7 @@ uint16_t mode_follow_me(void) {
         if (px < len) {
           // Use Palette Color (Solid) exclusively
           uint8_t ci = (j * 255) / cursor_size;
-          CRGBW c = ColorFromPalette(ci, 255, palette);
+          CRGBW c = ColorFromPalette(palette, ci, 255);
           instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
         }
       }
