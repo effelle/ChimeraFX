@@ -570,6 +570,12 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
     return PaletteFairy;
   case 23:
     return PaletteTwilight;
+  case 254:
+    // Smart Random (generated on switch)
+    // Needs instance to access the buffer
+    if (instance)
+      return instance->_currentRandomPaletteBuffer;
+    return PaletteRainbow;
   case 255:
     // Solid color mode - caller must call fillSolidPalette first
     // 21 = selector position, 255 = internal constant
@@ -609,6 +615,72 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
   b = (b * brightness) >> 8;
 
   return CRGBW(r, g, b, 0); // White channel unused for simple palette
+}
+
+void CFXRunner::generateRandomPalette() {
+  // Use cfx namespace for random helpers
+  uint8_t baseHue = cfx::hw_random8();
+  // Select Strategy: 0=Analogous, 1=Neon, 2=Texture
+  uint8_t strategy = cfx::hw_random8(3); // 0, 1, 2
+
+  DEBUGFX_PRINTF("Generating Random Palette: BaseHue=%d Strategy=%d", baseHue,
+                 strategy);
+
+  for (int i = 0; i < 16; i++) {
+    CHSV color;
+    // For offset calculations
+    int16_t h_calc;
+
+    if (strategy == 0) {
+      // Mode A: Analogous (Nature)
+      // BaseHue +/- 20 drift
+      // random 0-40 -> -20 to +20
+      int16_t drift = (int16_t)cfx::hw_random8(41) - 20;
+      h_calc = baseHue + drift;
+      // Wrap hue to 0-255
+      uint8_t h = (uint8_t)(h_calc & 0xFF);
+
+      // Saturation high but vary slightly for organic feel
+      uint8_t s = cfx::hw_random8(200, 256); // 200-255
+      uint8_t v = 255;
+      color = CHSV(h, s, v);
+
+    } else if (strategy == 1) {
+      // Mode B: Neon (Vaporwave)
+      // High Saturation. Base Hue + complementary accent (180 deg) at specific
+      // indices. Complementary at 0, 4, 8, 12? Or random. Let's make it 25%
+      // chance of accent
+      if ((i % 4) == 0) {
+        // Accent: Complementary + High Sat
+        color = CHSV(baseHue + 128, 255, 255);
+      } else {
+        // Base: BaseHue +/- 15
+        int16_t drift = (int16_t)cfx::hw_random8(31) - 15;
+        h_calc = baseHue + drift;
+        color = CHSV((uint8_t)(h_calc & 0xFF), 245, 255);
+      }
+
+    } else {
+      // Mode C: Texture (Monochromatic)
+      // Hue fixed. Vary Value and Saturation heavily.
+      // Good for metallic, plasma, fire-like single color.
+      uint8_t h = baseHue;
+      uint8_t s = cfx::hw_random8(100, 256); // 100-255
+      uint8_t v = cfx::hw_random8(50, 256);  // 50-255
+      color = CHSV(h, s, v);
+    }
+
+    // Convert to RGB
+    CRGB rgb;
+    hsv2rgb_rainbow(color, rgb);
+
+    // Store in internal FastLED palette (for potential future use)
+    _currentRandomPalette[i] = rgb;
+
+    // Convert to uint32_t buffer (0x00RRGGBB) for CFXRunner compatibility
+    // W channel is 0 for palettes generally
+    _currentRandomPaletteBuffer[i] = RGBW32(rgb.r, rgb.g, rgb.b, 0);
+  }
 }
 
 // AuroraWave Struct (POD version)
@@ -2437,6 +2509,82 @@ uint16_t mode_noisepal(void) {
   if (!instance->_segment.allocateData(dataSize))
     return mode_static();
 
+  // Global Palette Lookups (Stubs)
+  const CRGBPalette16 RainbowColors_p = {
+      0xFF0000, 0xD52A00, 0xAB5500, 0xAB7F00, 0xABAB00, 0x56D500,
+      0x00FF00, 0x00D52A, 0x00AB55, 0x0056AA, 0x0000FF, 0x2A00D5,
+      0x5500AB, 0x7F0081, 0xAB0055, 0xD5002B};
+
+  const CRGBPalette16 OceanColors_p = {0x000080, 0x0019A4, 0x0033C8, 0x004CEC,
+                                       0x1966FF, 0x4C80FF, 0x8099FF, 0xB3B3FF,
+                                       0xE6CCFF, 0xE6B3FF, 0xE699FF, 0xE680FF,
+                                       0xE666FF, 0xE64CFF, 0xE633FF, 0xE619FF};
+
+  const CRGBPalette16 PartyColors_p = {0x5500AB, 0x84007C, 0xB5004B, 0xE5001B,
+                                       0xE81700, 0xB84700, 0xAB7700, 0xABAB00,
+                                       0xAB5500, 0xDD2200, 0xF2000E, 0xC2003E,
+                                       0x8F0071, 0x5F00A1, 0x2F00D0, 0x0007F9};
+
+  void hsv2rgb_rainbow(const CHSV &hsv, CRGB &rgb) {
+    // Simple HSV to RGB conversion
+    uint8_t h = hsv.h;
+    uint8_t s = hsv.s;
+    uint8_t v = hsv.v;
+
+    uint8_t r, g, b;
+    uint8_t region, remainder, p, q, t;
+
+    if (s == 0) {
+      rgb.r = v;
+      rgb.g = v;
+      rgb.b = v;
+      return;
+    }
+
+    region = h / 43;
+    remainder = (h - (region * 43)) * 6;
+
+    p = (v * (255 - s)) >> 8;
+    q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+    switch (region) {
+    case 0:
+      r = v;
+      g = t;
+      b = p;
+      break;
+    case 1:
+      r = q;
+      g = v;
+      b = p;
+      break;
+    case 2:
+      r = p;
+      g = v;
+      b = t;
+      break;
+    case 3:
+      r = p;
+      g = q;
+      b = v;
+      break;
+    case 4:
+      r = t;
+      g = p;
+      b = v;
+      break;
+    default:
+      r = v;
+      g = p;
+      b = q;
+      break;
+    }
+
+    rgb.r = r;
+    rgb.g = g;
+    rgb.b = b;
+  }
   CRGBPalette16 *palettes =
       reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
 

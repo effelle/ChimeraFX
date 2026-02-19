@@ -320,6 +320,8 @@ public:
   void setPalette(uint8_t p) {
     if (_segment.palette != p) {
       _segment.palette = p;
+      if (p == 254)
+        generateRandomPalette();
     }
   }
   void setMirror(bool m) {
@@ -328,6 +330,7 @@ public:
     }
   }
   void setColor(uint32_t c) { _segment.colors[0] = c; }
+  void generateRandomPalette();
 
   void start() { _state = STATE_RUNNING; }
 
@@ -358,6 +361,10 @@ private:
   const char *_name = "CFX";
 
   cfx::FrameDiagnostics diagnostics;
+
+  // Smart Random Palette Storage
+  CRGBPalette16 _currentRandomPalette;
+  uint32_t _currentRandomPaletteBuffer[16];
 };
 
 extern CFXRunner *instance;

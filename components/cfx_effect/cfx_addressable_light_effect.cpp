@@ -456,6 +456,8 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
     return 20;
   if (strcmp(option, "None") == 0 || strcmp(option, "Solid") == 0)
     return 255;
+  if (strcmp(option, "Smart Random") == 0)
+    return 254;
   if (strcmp(option, "Fairy") == 0)
     return 22;
   if (strcmp(option, "Twilight") == 0)
@@ -697,6 +699,8 @@ void CFXAddressableLightEffect::run_controls_() {
         return 20;
       if (strcmp(opt, "None") == 0 || strcmp(opt, "Solid") == 0)
         return 255;
+      if (strcmp(opt, "Smart Random") == 0)
+        return 254;
       if (strcmp(opt, "Fairy") == 0)
         return 22;
       if (strcmp(opt, "Twilight") == 0)
