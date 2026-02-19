@@ -3012,28 +3012,37 @@ uint16_t mode_energy(void) {
   uint32_t duration = (257 - instance->_segment.speed) * 15;
   uint32_t elapsed = instance->now - instance->_segment.step;
 
-  // Handover to Rainbow
-  if (elapsed >= duration) {
-    instance->setMode(FX_MODE_RAINBOW);
-    return FRAMETIME;
-  }
+  bool finished = (elapsed >= duration);
+  if (finished)
+    elapsed = duration;
 
-  uint16_t progress = (elapsed * len) / duration;
+  uint16_t progress = (elapsed * len) / (duration ? duration : 1);
   uint32_t counter = (instance->now >> 4) & 0xFF;
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
+  // Force Rainbow Palette
+  const uint32_t *active_palette = getPaletteByIndex(4);
+
   for (int i = 0; i < len; i++) {
     if (i < (int)progress - 3) {
-      // Trail
+      // Zone 1: The Trail (Standard Rainbow Gradient)
       uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
-      instance->_segment.setPixelColor(i, cfx::color_wheel(index));
-    } else if (i <= progress) {
-      // 4-pixel Faded Head
+      CRGBW c = ColorFromPalette(active_palette, index, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else if (!finished && i <= progress) {
+      // Zone 2: The Head (White with 4-pixel fade)
+      // Only show while the intro is still running
       int8_t dist = progress - i;
       uint8_t bri = 255 >> dist;
       instance->_segment.setPixelColor(i, RGBW32(bri, bri, bri, bri));
+    } else if (finished) {
+      // Zone 3: Fully Filled state (Fill the remaining 3 pixels of the head
+      // trail)
+      uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+      CRGBW c = ColorFromPalette(active_palette, index, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     } else {
-      // Void
+      // Zone 4: Empty space
       instance->_segment.setPixelColor(i, 0);
     }
   }
