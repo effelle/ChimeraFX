@@ -2997,12 +2997,31 @@ uint16_t mode_hyper_sparkle(void) {
 // Ported from WLED FX.cpp
 
 // ID 8: Colorloop - Entire strip cycles through one color
+struct EnergyData {
+  uint32_t accumulator;
+  uint32_t last_millis;
+};
+
 // --- Energy Effect (ID 158) ---
 // Progress bar that unmasks a live rainbow animation with a white leading tip.
+// Phase 1: Agitation Engine - Noise-driven speed fluctuations.
 uint16_t mode_energy(void) {
   if (!instance)
     return 350;
   uint16_t len = instance->_segment.length();
+
+  // State Management
+  EnergyData *data = (EnergyData *)instance->_segment.data;
+  if (!data || instance->_segment.reset) {
+    if (!instance->_segment.allocateData(sizeof(EnergyData)))
+      return 350;
+    data = (EnergyData *)instance->_segment.data;
+    data->last_millis = instance->now;
+    data->accumulator = 0;
+  }
+
+  uint32_t dt = instance->now - data->last_millis;
+  data->last_millis = instance->now;
 
   if (instance->_segment.reset) {
     instance->_segment.step = instance->now;
@@ -3016,8 +3035,17 @@ uint16_t mode_energy(void) {
   if (finished)
     elapsed = duration;
 
+  // --- Step 1: Agitation Engine ---
+  // Background speed fluctuates organically using noise
+  // We fluctuate between 0.5x and 2.5x of the base speed (128 is "base")
+  uint8_t noise = cfx::inoise8(instance->now >> 7, 42);
+  uint16_t agitation_factor = cfx::cfx_map(noise, 0, 255, 64, 320);
+
+  // High agitation contributes more to the accumulator
+  data->accumulator += (dt * agitation_factor);
+
   uint16_t progress = (elapsed * len) / (duration ? duration : 1);
-  uint32_t counter = (instance->now >> 4) & 0xFF;
+  uint8_t counter = (data->accumulator >> 9) & 0xFF; // Scaled for 8-bit index
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // Force Rainbow Palette
@@ -3031,11 +3059,9 @@ uint16_t mode_energy(void) {
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     } else if (!finished && i <= progress) {
       // Zone 2: The Head (Solid White 4-pixel block)
-      // Only show while the intro is still running
       instance->_segment.setPixelColor(i, RGBW32(255, 255, 255, 255));
     } else if (finished) {
-      // Zone 3: Fully Filled state (Fill the remaining 3 pixels of the head
-      // trail)
+      // Zone 3: Fully Filled state
       uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
       CRGBW c = ColorFromPalette(active_palette, index, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
