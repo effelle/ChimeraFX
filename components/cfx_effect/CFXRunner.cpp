@@ -2872,14 +2872,8 @@ uint16_t mode_sparkle(void) {
     sub_kicker = 2;
 
   int len = instance->_segment.length();
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    if (c != 0) {
-      instance->_segment.setPixelColor(
-          i, RGBW32(qsub8(CFX_R(c), sub_kicker), qsub8(CFX_G(c), sub_kicker),
-                    qsub8(CFX_B(c), sub_kicker), qsub8(CFX_W(c), sub_kicker)));
-    }
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(sub_kicker);
 
   // 3. Spawning
   // User: "Double density at 128".
@@ -3112,19 +3106,8 @@ uint16_t mode_colortwinkle(void) {
                               ? (instance->_segment.speed - 128) >> 5
                               : 0);
 
-  for (int i = 0; i < len; i++) {
-    uint32_t cur32 = instance->_segment.getPixelColor(i);
-    uint8_t r = (cur32 >> 16) & 0xFF;
-    uint8_t g = (cur32 >> 8) & 0xFF;
-    uint8_t b = cur32 & 0xFF;
-
-    // Linear subtractive fade
-    r = qsub8(r, fade_amt);
-    g = qsub8(g, fade_amt);
-    b = qsub8(b, fade_amt);
-
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(fade_amt);
 
   // Step 2: Spawn new twinkles
   // Map intensity effectively: 0-255 -> spawn chance
