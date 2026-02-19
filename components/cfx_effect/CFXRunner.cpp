@@ -3003,7 +3003,7 @@ struct EnergySpark {
   bool building; // true = surge, false = discharge
 };
 
-#define MAX_ENERGY_SPARKS 8
+#define MAX_ENERGY_SPARKS 10
 struct EnergyData {
   uint32_t accumulator;
   uint32_t last_millis;
@@ -3014,6 +3014,7 @@ struct EnergyData {
 // Progress bar that unmasks a live rainbow animation with a white leading tip.
 // Phase 1: Agitation Engine - Noise-driven speed fluctuations.
 // Phase 2: Energy Spikes - Localized white-hot eruptions during high chaos.
+// Phase 3: Contrast & Size Refinement - Hue-gating and 5-LED bloom.
 uint16_t mode_energy(void) {
   if (!instance)
     return 350;
@@ -3047,36 +3048,32 @@ uint16_t mode_energy(void) {
     elapsed = duration;
 
   // --- Step 1: Agitation Engine (Chaos Contrast FIX) ---
-  // Background speed fluctuates organically using noise.
-  // We traverse the noise grid at ~8 units per second (now >> 3).
   uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
-
-  // Power Curve: Squaring noise creates longer calm periods and sharp spikes.
   uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
-
-  // Integrate the user speed slider (0-255).
-  // Map chaos to a wide multiplier (approx 0.2x to 5.0x) where 256 is 1.0x.
   uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
-
-  // Speed factor = baseline speed * chaotic fluctuation.
   uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
   if (speed_factor < 16)
-    speed_factor = 16; // Safety floor.
-
+    speed_factor = 16;
   data->accumulator += (dt * speed_factor);
 
   uint16_t progress = (elapsed * len) / (duration ? duration : 1);
-  // Shift >> 11 restores a "calm" speed similar to (now >> 4) when agitation is
-  // low
   uint8_t counter = (data->accumulator >> 11) & 0xFF;
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // --- Step 2: Energy Spikes (Localized Eruptions) ---
   // Trigger spikes during agitation (raw_noise > 140)
-  if (raw_noise > 140 && cfx::hw_random8() < 48) {
+  if (raw_noise > 140 && cfx::hw_random8() < 64) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) { // Found a dead slot
-        data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
+        int16_t pos = cfx::hw_random16() % (len ? len : 1);
+
+        // --- Phase 3: Hue Gating (Deterministic Contrast) ---
+        // Exclude spikes on bright hues (Yellow-Cyan, approx 40-150)
+        uint8_t hue = ((pos * spatial_mult) / (len ? len : 1)) + counter;
+        if (hue > 40 && hue < 150)
+          break; // Skip this ignition attempt
+
+        data->sparks[s].pos = pos;
         data->sparks[s].level = 10;
         data->sparks[s].building = true;
         break;
@@ -3111,25 +3108,22 @@ uint16_t mode_energy(void) {
   for (int i = 0; i < len; i++) {
     uint32_t rainbow_32 = 0;
     if (i < (int)progress - 3 || finished) {
-      // Zone 1 & 3: Rainbow Background
       uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
       CRGBW c = ColorFromPalette(active_palette, index, 255);
       rainbow_32 = RGBW32(c.r, c.g, c.b, c.w);
     } else if (i <= progress) {
-      // Zone 2: The Head (Solid White)
       rainbow_32 = RGBW32(255, 255, 255, 255);
     }
 
-    // Blend Spikes (additive brightness with 3-pixel bloom)
+    // Blend Spikes (additive brightness with 5-pixel bloom)
     uint16_t spike_bri = 0;
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level > 0) {
         int distance = std::abs(data->sparks[s].pos - i);
-        if (distance == 0) {
+        if (distance <= 1) { // 3 center pixels at 100%
           spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
-        } else if (distance == 1) {
-          // Surround pixels get 60% intensity bloom
-          uint16_t bloom = (data->sparks[s].level * 154) >> 8;
+        } else if (distance == 2) { // 2 outer pixels at 50%
+          uint16_t bloom = data->sparks[s].level >> 1;
           spike_bri = std::max(spike_bri, bloom);
         }
       }
