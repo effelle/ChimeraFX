@@ -44,6 +44,83 @@ uint16_t mode_follow_us(void);
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
 
+// Global Palette Lookups (Stubs) for Noise effects
+const CRGBPalette16 RainbowColors_p = {0xFF0000, 0xD52A00, 0xAB5500, 0xAB7F00,
+                                       0xABAB00, 0x56D500, 0x00FF00, 0x00D52A,
+                                       0x00AB55, 0x0056AA, 0x0000FF, 0x2A00D5,
+                                       0x5500AB, 0x7F0081, 0xAB0055, 0xD5002B};
+
+const CRGBPalette16 OceanColors_p = {0x000080, 0x0019A4, 0x0033C8, 0x004CEC,
+                                     0x1966FF, 0x4C80FF, 0x8099FF, 0xB3B3FF,
+                                     0xE6CCFF, 0xE6B3FF, 0xE699FF, 0xE680FF,
+                                     0xE666FF, 0xE64CFF, 0xE633FF, 0xE619FF};
+
+const CRGBPalette16 PartyColors_p = {0x5500AB, 0x84007C, 0xB5004B, 0xE5001B,
+                                     0xE81700, 0xB84700, 0xAB7700, 0xABAB00,
+                                     0xAB5500, 0xDD2200, 0xF2000E, 0xC2003E,
+                                     0x8F0071, 0x5F00A1, 0x2F00D0, 0x0007F9};
+
+void hsv2rgb_rainbow(const CHSV &hsv, CRGB &rgb) {
+  // Simple HSV to RGB conversion
+  uint8_t h = hsv.h;
+  uint8_t s = hsv.s;
+  uint8_t v = hsv.v;
+
+  uint8_t r, g, b;
+  uint8_t region, remainder, p, q, t;
+
+  if (s == 0) {
+    rgb.r = v;
+    rgb.g = v;
+    rgb.b = v;
+    return;
+  }
+
+  region = h / 43;
+  remainder = (h - (region * 43)) * 6;
+
+  p = (v * (255 - s)) >> 8;
+  q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+  t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+  switch (region) {
+  case 0:
+    r = v;
+    g = t;
+    b = p;
+    break;
+  case 1:
+    r = q;
+    g = v;
+    b = p;
+    break;
+  case 2:
+    r = p;
+    g = v;
+    b = t;
+    break;
+  case 3:
+    r = p;
+    g = q;
+    b = v;
+    break;
+  case 4:
+    r = t;
+    g = p;
+    b = v;
+    break;
+  default:
+    r = v;
+    g = p;
+    b = q;
+    break;
+  }
+
+  rgb.r = r;
+  rgb.g = g;
+  rgb.b = b;
+}
+
 // Constructor
 CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   target_light = light;
@@ -641,7 +718,7 @@ void CFXRunner::generateRandomPalette() {
       uint8_t h = (uint8_t)(h_calc & 0xFF);
 
       // Saturation high but vary slightly for organic feel
-      uint8_t s = cfx::hw_random8(200, 256); // 200-255
+      uint8_t s = cfx::hw_random8(200, 255); // 200-254
       uint8_t v = 255;
       color = CHSV(h, s, v);
 
@@ -665,8 +742,8 @@ void CFXRunner::generateRandomPalette() {
       // Hue fixed. Vary Value and Saturation heavily.
       // Good for metallic, plasma, fire-like single color.
       uint8_t h = baseHue;
-      uint8_t s = cfx::hw_random8(100, 256); // 100-255
-      uint8_t v = cfx::hw_random8(50, 256);  // 50-255
+      uint8_t s = cfx::hw_random8(100, 255); // 100-254
+      uint8_t v = cfx::hw_random8(50, 255);  // 50-254
       color = CHSV(h, s, v);
     }
 
@@ -2508,83 +2585,6 @@ uint16_t mode_noisepal(void) {
   unsigned dataSize = sizeof(CRGBPalette16) * 2; // 2 * 16 * 3 = 96 bytes
   if (!instance->_segment.allocateData(dataSize))
     return mode_static();
-
-  // Global Palette Lookups (Stubs)
-  const CRGBPalette16 RainbowColors_p = {
-      0xFF0000, 0xD52A00, 0xAB5500, 0xAB7F00, 0xABAB00, 0x56D500,
-      0x00FF00, 0x00D52A, 0x00AB55, 0x0056AA, 0x0000FF, 0x2A00D5,
-      0x5500AB, 0x7F0081, 0xAB0055, 0xD5002B};
-
-  const CRGBPalette16 OceanColors_p = {0x000080, 0x0019A4, 0x0033C8, 0x004CEC,
-                                       0x1966FF, 0x4C80FF, 0x8099FF, 0xB3B3FF,
-                                       0xE6CCFF, 0xE6B3FF, 0xE699FF, 0xE680FF,
-                                       0xE666FF, 0xE64CFF, 0xE633FF, 0xE619FF};
-
-  const CRGBPalette16 PartyColors_p = {0x5500AB, 0x84007C, 0xB5004B, 0xE5001B,
-                                       0xE81700, 0xB84700, 0xAB7700, 0xABAB00,
-                                       0xAB5500, 0xDD2200, 0xF2000E, 0xC2003E,
-                                       0x8F0071, 0x5F00A1, 0x2F00D0, 0x0007F9};
-
-  void hsv2rgb_rainbow(const CHSV &hsv, CRGB &rgb) {
-    // Simple HSV to RGB conversion
-    uint8_t h = hsv.h;
-    uint8_t s = hsv.s;
-    uint8_t v = hsv.v;
-
-    uint8_t r, g, b;
-    uint8_t region, remainder, p, q, t;
-
-    if (s == 0) {
-      rgb.r = v;
-      rgb.g = v;
-      rgb.b = v;
-      return;
-    }
-
-    region = h / 43;
-    remainder = (h - (region * 43)) * 6;
-
-    p = (v * (255 - s)) >> 8;
-    q = (v * (255 - ((s * remainder) >> 8))) >> 8;
-    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-
-    switch (region) {
-    case 0:
-      r = v;
-      g = t;
-      b = p;
-      break;
-    case 1:
-      r = q;
-      g = v;
-      b = p;
-      break;
-    case 2:
-      r = p;
-      g = v;
-      b = t;
-      break;
-    case 3:
-      r = p;
-      g = q;
-      b = v;
-      break;
-    case 4:
-      r = t;
-      g = p;
-      b = v;
-      break;
-    default:
-      r = v;
-      g = p;
-      b = q;
-      break;
-    }
-
-    rgb.r = r;
-    rgb.g = g;
-    rgb.b = b;
-  }
   CRGBPalette16 *palettes =
       reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
 

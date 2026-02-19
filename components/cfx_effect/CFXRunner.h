@@ -342,6 +342,14 @@ public:
   void startIntro(uint8_t mode, float duration_s, uint32_t color);
   bool isIntroRunning() { return _state == STATE_INTRO; }
 
+  const char *_name = "CFX";
+
+  cfx::FrameDiagnostics diagnostics;
+
+  // Smart Random Palette Storage
+  CRGBPalette16 _currentRandomPalette;
+  uint32_t _currentRandomPaletteBuffer[16];
+
 private:
   RunnerState _state = STATE_RUNNING;
   uint8_t _intro_mode = INTRO_NONE;
@@ -357,14 +365,6 @@ private:
   static mode_ptr _mode_ptr[];
 
   uint32_t _last_frame = 0;
-
-  const char *_name = "CFX";
-
-  cfx::FrameDiagnostics diagnostics;
-
-  // Smart Random Palette Storage
-  CRGBPalette16 _currentRandomPalette;
-  uint32_t _currentRandomPaletteBuffer[16];
 };
 
 extern CFXRunner *instance;
