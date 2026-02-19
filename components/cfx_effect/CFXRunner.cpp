@@ -225,6 +225,64 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
     }
   }
 }
+}
+}
+}
+
+void Segment::blur(uint8_t blur_amount) {
+  if (!instance || !instance->target_light)
+    return;
+
+  uint8_t keep = 255 - blur_amount;
+  uint8_t seep = blur_amount >> 1;
+
+  // Create a temp buffer to avoid propagating changes directionally
+  // For small strips this is fine. For large strips, we might want to optimize
+  // by just keeping "previous" pixel value.
+  // WLED approach: blur1d modifies in-place but effectively propagates.
+  // Let's stick to simple in-place for now (WLED compat).
+
+  int len = length();
+  int light_size = instance->target_light->size();
+  int global_start = start;
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = 0; i < len; i++) {
+    int global_index = global_start + i;
+    if (global_index >= light_size)
+      continue;
+
+    // Get current color
+    esphome::Color c = light[global_index].get();
+
+    // Get neighbors (clamped to segment)
+    // Left
+    esphome::Color left = c;
+    if (i > 0) {
+      if ((global_index - 1) >= 0)
+        left = light[global_index - 1].get();
+    }
+
+    // Right
+    esphome::Color right = c;
+    if (i < len - 1) {
+      if ((global_index + 1) < light_size)
+        right = light[global_index + 1].get();
+    }
+
+    // Blur Kernel: (C*keep + (L+R)*seep) / 256
+    uint8_t r =
+        ((uint16_t)c.r * keep + (uint16_t)(left.r + right.r) * seep) >> 8;
+    uint8_t g =
+        ((uint16_t)c.g * keep + (uint16_t)(left.g + right.g) * seep) >> 8;
+    uint8_t b =
+        ((uint16_t)c.b * keep + (uint16_t)(left.b + right.b) * seep) >> 8;
+    uint8_t w =
+        ((uint16_t)c.w * keep + (uint16_t)(left.w + right.w) * seep) >> 8;
+
+    light[global_index] = esphome::Color(r, g, b, w);
+  }
+}
 
 // --- Effect Implementations ---
 
@@ -3674,34 +3732,26 @@ uint16_t mode_exploding_fireworks(void) {
 
   // Fade out canvas (Trail effect)
   // Fade out canvas (Trail effect)
-  // Replaced multiplicative fade (scale8) with subtractive fade to ensure floor
-  // reaches 0
+  // WLED Logic: Fade (scale) then Blur (spread)
+  // 1. Fade: Scale by ~98% (252/256) to create smooth, long trails
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
     if (c == 0)
       continue;
 
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-    uint8_t w = (c >> 24) & 0xFF;
-
-    // Subtractive fade: subtract 12 (approx 5%) from each channel
-    // If we want slower fade, use smaller number. WLED uses 252/256 which is
-    // very slow (~1.5% loss) 252/256 is ~98.4% retention. To match speed but
-    // ensure 0, we can use qsub8 or max(0, val - x) But fixed subtraction is
-    // faster. Let's use a hybrid: scale8(252) AND subtract 1 to guarantee
-    // decay? Or just subtract 4-5 for a decent trail. The user wants "long
-    // trails". Let's try subtracting 4. (255 -> 0 in ~64 frames ~1 sec)
-    const uint8_t fade_amt = 4;
-
-    r = (r > fade_amt) ? (r - fade_amt) : 0;
-    g = (g > fade_amt) ? (g - fade_amt) : 0;
-    b = (b > fade_amt) ? (b - fade_amt) : 0;
-    w = (w > fade_amt) ? (w - fade_amt) : 0;
+    uint8_t r = cfx::scale8((c >> 16) & 0xFF, 252);
+    uint8_t g = cfx::scale8((c >> 8) & 0xFF, 252);
+    uint8_t b = cfx::scale8(c & 0xFF, 252);
+    uint8_t w = cfx::scale8((c >> 24) & 0xFF, 252);
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
+
+  // 2. Blur: Spread energy to neighbors (diffusion)
+  // This helps trails look like "meteors" and also mixes low-brightness noise
+  // into the black floor, solving the "stuck pixel" issue naturaly.
+  // WLED uses blur1d(64) for Fireworks.
+  instance->_segment.blur(64);
 
   // Physics
   // Gravity: WLED 0.0004 + speed/800000.

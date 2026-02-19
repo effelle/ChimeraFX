@@ -261,6 +261,7 @@ public:
   uint32_t getPixelColor(int n);
   void fill(uint32_t c);
   void fadeToBlackBy(uint8_t fadeBy);
+  void blur(uint8_t blur_amount);
   uint32_t color_from_palette(uint16_t i, bool mapping, bool wrap, uint8_t mcol,
                               uint8_t pbri = 255);
 };
