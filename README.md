@@ -92,13 +92,13 @@ light:
 
 ### Available Effects and Palettes
 
-ChimeraFX currently supports over 20+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
+ChimeraFX currently supports over 50+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls, plus some original effects. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
 
 #### [Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
 
 
-**Why aren't all WLED effects here yet?**  
-Bringing WLED effects to `ChimeraFX` is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
+**Why aren't all WLED effects here?**  
+I meticulously rewrite each WLED effect to ensure it runs efficiently alongside your other ESPHome components without sacrificing visual quality. However, 2D matrix animations and effects requiring two or three separate color selections will not be ported, as they are incompatible with the current ESPHome and ChimeraFX architecture. 
 
 ---
 

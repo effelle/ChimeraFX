@@ -2,11 +2,23 @@
 
 If you’re wondering why all WLED effects aren't available yet, here is the answer:
 
-Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to "squeeze" every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components. Thank you for your patience as I port them over incrementally!
+Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to 'squeeze' every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components.
+Please note that some WLED effects will not be ported. This includes animations designed specifically for 2D matrix, as well as effects that rely on WLED's ability to select three distinct colors (Secondary/Tertiary), as these features exceed the current capabilities of ESPHome and ChimeraFX.
 
 ### Effect List
 
-The following effects are currently available in ChimeraFX. They are optimized for ESP32 and ESP8266 performance.
+#### ChimeraFX Original Effects:
+
+| ID | Name | Description | Controls | Palette support | Author |
+|:---|:---|:---|:---|:---:|:---|
+| 151 | **Dropping Time**| Falling drops with ripple effect. | **Intensity**: Not supported - **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
+| 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
+| 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
+| 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
+| 152 | **Percent Center**| Percent-based fill from the center. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
+| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
+
+#### WLED-Style Effects:
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
@@ -14,7 +26,6 @@ The following effects are currently available in ChimeraFX. They are optimized f
 | 1 | **Blink** | Simple on/off blinking. | **Speed**: Blink rate | Yes | Aircoookie |
 | 26 | **Blink Rainbow** | Blinking with color cycling. | **Speed**: Blink rate - **Intensity**: Color speed | Yes | Aircoookie |
 | 91 | **Bouncing Balls** | Real gravity physics with multiple balls. | **Intensity**: Count - **Speed**: Gravity | Yes | Tweaking4All |
-| 68 | **Bpm** | Pulsing color cycle synced to BPM. | **Intensity**: Beat width - **Speed**: BPM | Yes | Mark Kriegsman |
 | 2 | **Breathe** | Apple-style standby breathing LED. | **Speed**: Breathe rate | Yes | Aircoookie |
 | 28 | **Chase** | Moving dot with fading trail. | **Intensity**: Trail length - **Speed**: Chase speed | Yes | Aircoookie |
 | 54 | **Chase tri** | Three-color chase animation. | **Intensity**: Spacing - **Speed**: Chase speed | Yes | Aircoookie |
@@ -23,26 +34,17 @@ The following effects are currently available in ChimeraFX. They are optimized f
 | 63 | **Colorwaves** | Rainbow flag with breathing motion. | **Intensity**: Saturation - **Speed**: Wave speed | Yes | WLED (Pride 2015) |
 | 18 | **Dissolve** | Sequential random pixel fill and clear. | **Intensity**: Change rate - **Speed**: Hold time | Yes | Aircoookie |
 | 96 | **Drip** | Falling water drop physics. | **Intensity**: Drop size - **Speed**: Gravity | Yes | Aircoookie |
-| 151 | **Dropping Time**| Falling drops with ripple effect. | **Intensity**: Spawn rate - **Speed**: Fall speed | Yes | Aircoookie |
-| 158 | **Energy** | Progress bar revealing live rainbow animation. | **Intensity**: Rainbow density - **Speed**: Fill speed | Yes | ChimeraFX |
 | 66 | **Fire** | Realistic 1D fire simulation. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman |
-| 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
 | 90 | **Fireworks** | Exploding rocket simulation. | **Intensity**: Explosion size - **Speed**: Launch frequency | Yes | Aircoookie |
 | 110 | **Flow** | Smooth moving color zones. | **Intensity**: Zone count - **Speed**: Flow speed | Yes | Aircoookie |
-| 156 | **Follow Me** | Single dot following intensity. | **Intensity**: Position - **Speed**: Smoothness | Yes | ChimeraFX |
-| 157 | **Follow Us** | Two dots following intensity from edges. | **Intensity**: Position - **Speed**: Smoothness | Yes | ChimeraFX |
 | 87 | **Glitter** | Moving rainbow with random sparkles. | **Intensity**: Sparkle density - **Speed**: Flow speed | Yes | Mark Kriegsman |
 | 100 | **HeartBeat** | Anatomical heartbeat simulation. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | Aircoookie |
-| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | Aircoookie |
 | 64 | **Juggle** | Eight bouncing dots with trails. | **Intensity**: Trail length - **Speed**: Movement speed | Yes | Mark Kriegsman |
-| 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 76 | **Meteor** | Meteor with random decay trail. | **Intensity**: Trail length - **Speed**: Fall speed | Yes | Aircoookie |
 | 25 | **Multi Strobe** | Multiple strobe pulses in sequence. | **Intensity**: Burst count - **Speed**: Strobe rate | Yes | Aircoookie |
 | 107 | **Noise Pal** | Perlin noise color movement. | **Intensity**: Zoom - **Speed**: Drift speed | Yes | WLED |
 | 101 | **Ocean** | Gentle ocean waves (Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Wave speed | No | Mark Kriegsman |
 | 98 | **Percent** | Percent-based fill (Progress Bar). | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
-| 152 | **Percent Center**| Percent-based fill from the center. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
-| 105 | **Phased** | Sine wave interference pattern. | **Intensity**: Cutoff - **Speed**: Phase speed | Yes | Andrew Tuline |
 | 97 | **Plasma** | Multi-layer Perlin noise plasma. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
 | 95 | **Popcorn** | Bouncing particles simulation. | **Intensity**: Particle count - **Speed**: Bounciness | Yes | Aircoookie |
 | 9 | **Rainbow** | Moving per-pixel rainbow. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
@@ -67,7 +69,7 @@ The following effects are currently available in ChimeraFX. They are optimized f
 *   **Aircoookie:** Lead developer of WLED. Most core effect logic is derived from his work.
 *   **Mark Kriegsman:** Godfather of high-quality LED math. Responsible for Fire, Juggle, and many FastLED classics.
 *   **Tweaking4All:** Creator of the iconic Bouncing Balls physics logic.
-*   **ChimeraFX:** Custom high-performance effects developed specifically for this package.
+*   **ChimeraFX:** Custom effects developed specifically for this package by Federico Leoni.
 
 ---
 
