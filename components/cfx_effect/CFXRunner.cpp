@@ -3729,25 +3729,33 @@ uint16_t mode_exploding_fireworks(void) {
 
   // Fade out canvas (Trail effect)
   // Fade out canvas (Trail effect)
-  // WLED Logic: Fade (scale) then Blur (spread)
-  // 1. Fade: Scale by ~98% (252/256) to create smooth, long trails
+  // Hybrid Approach:
+  // 1. Subtractive Fade: Ensure pixels darken to 0 (Fixes floor bug)
+  // 2. Blur: Spread energy to create "meteors" and smooth the subtractive fade
+  // (Fixes physics/choppiness)
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
     if (c == 0)
       continue;
 
-    uint8_t r = cfx::scale8((c >> 16) & 0xFF, 252);
-    uint8_t g = cfx::scale8((c >> 8) & 0xFF, 252);
-    uint8_t b = cfx::scale8(c & 0xFF, 252);
-    uint8_t w = cfx::scale8((c >> 24) & 0xFF, 252);
+    uint8_t r = (c >> 16) & 0xFF;
+    uint8_t g = (c >> 8) & 0xFF;
+    uint8_t b = c & 0xFF;
+    uint8_t w = (c >> 24) & 0xFF;
+
+    // Subtract constant amount (stronger drain than scale8)
+    // 16/255 is approx 6% per frame. Returns to black in ~16 frames.
+    const uint8_t fade_amt = 10;
+
+    r = (r > fade_amt) ? (r - fade_amt) : 0;
+    g = (g > fade_amt) ? (g - fade_amt) : 0;
+    b = (b > fade_amt) ? (b - fade_amt) : 0;
+    w = (w > fade_amt) ? (w - fade_amt) : 0;
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
 
-  // 2. Blur: Spread energy to neighbors (diffusion)
-  // This helps trails look like "meteors" and also mixes low-brightness noise
-  // into the black floor, solving the "stuck pixel" issue naturaly.
-  // WLED uses blur1d(64) for Fireworks.
+  // 2. Blur: Spread energy
   instance->_segment.blur(64);
 
   // Physics
