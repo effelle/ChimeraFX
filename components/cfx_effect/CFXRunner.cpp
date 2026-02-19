@@ -3037,15 +3037,19 @@ uint16_t mode_energy(void) {
 
   // --- Step 1: Agitation Engine ---
   // Background speed fluctuates organically using noise
-  // We fluctuate between 0.5x and 2.5x of the base speed (128 is "base")
-  uint8_t noise = cfx::inoise8(instance->now >> 7, 42);
-  uint16_t agitation_factor = cfx::cfx_map(noise, 0, 255, 64, 320);
+  // Slow down the noise sample rate (now >> 11 is roughly every 2 seconds)
+  uint8_t noise = cfx::inoise8(instance->now >> 11, 42);
+
+  // Agitation level (32 = very calm, 512 = frantic)
+  uint16_t agitation_factor = cfx::cfx_map(noise, 0, 255, 32, 512);
 
   // High agitation contributes more to the accumulator
   data->accumulator += (dt * agitation_factor);
 
   uint16_t progress = (elapsed * len) / (duration ? duration : 1);
-  uint8_t counter = (data->accumulator >> 9) & 0xFF; // Scaled for 8-bit index
+  // Shift >> 11 restores a "calm" speed similar to (now >> 4) when agitation is
+  // low
+  uint8_t counter = (data->accumulator >> 11) & 0xFF;
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // Force Rainbow Palette
