@@ -11,8 +11,8 @@ Please note that some WLED effects will not be ported. This includes animations 
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 151 | **Dropping Time**| Falling drops with ripple effect. | **Intensity**: Not supported - **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
-| 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | Mark Kriegsman (Adapt.) |
+| 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
+| 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
@@ -67,10 +67,10 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 4 | **Wipe Random** | Linear wipe with random color changes. | **Speed**: Wipe speed | Yes | Aircoookie |
 
 ### A few notes on the credits:
+*   **ChimeraFX:** Custom effects developed specifically for this component by Federico Leoni.
 *   **Aircoookie:** Lead developer of WLED. Most core effect logic is derived from his work.
 *   **Mark Kriegsman:** Godfather of high-quality LED math. Responsible for Fire, Juggle, and many FastLED classics.
 *   **Tweaking4All:** Creator of the iconic Bouncing Balls physics logic.
-*   **ChimeraFX:** Custom effects developed specifically for this package by Federico Leoni.
 
 ---
 

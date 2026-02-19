@@ -329,14 +329,14 @@ void Segment::fade_out_smooth(uint8_t fade_amt) {
 
 // Math Helpers - use cfx:: namespace from cfx_utils.h
 using cfx::beatsin8;
+using cfx::cfx_constrain;
+using cfx::cfx_map;
 using cfx::color_blend;
-using cfx::constrain;
 using cfx::gamma8inv;
 using cfx::get_random_wheel_index;
 using cfx::hw_random16;
 using cfx::hw_random8;
 using cfx::inoise8;
-using cfx::map;
 using cfx::triwave16;
 // Note: triwave16 and inoise8 now come from cfx_utils.h
 
@@ -3792,7 +3792,7 @@ uint16_t mode_exploding_fireworks(void) {
       }
 
       flare->pos += flare->vel;
-      flare->pos = constrain(flare->pos, 0.0f, (float)len - 1.0f);
+      flare->pos = cfx_constrain(flare->pos, 0.0f, (float)len - 1.0f);
       flare->vel += gravity;
       flare->col = qsub8(flare->col, 2); // Dim slightly
     } else {
@@ -3881,7 +3881,7 @@ uint16_t mode_exploding_fireworks(void) {
             } else if (prog > 45) { // Fade from color to black
               // WLED: color_blend(BLACK, spColor, prog - 45)
               // (300-45) = 255 (full color). (46-45) = 1 (mostly black).
-              int blendAmt = constrain((int)prog - 45, 0, 255);
+              int blendAmt = cfx_constrain((int)prog - 45, 0, 255);
               finalColor = CRGBW(color_blend(0, spColor, blendAmt));
 
               // WLED adds specific cooling to G/B channels for fire look?
@@ -4284,7 +4284,7 @@ uint16_t mode_drip(void) {
 
     if (drops[j].colIndex == 1) { // Forming
       // Swelling
-      drops[j].col += cfx::map(instance->_segment.speed, 0, 255, 1, 6);
+      drops[j].col += cfx::cfx_map(instance->_segment.speed, 0, 255, 1, 6);
       if (drops[j].col > 255)
         drops[j].col = 255;
 
@@ -4773,7 +4773,7 @@ static uint16_t running_base(bool saw, bool dual = false) {
       if (a < 16) {
         a = 192 + a * 8;
       } else {
-        a = cfx::map(a, 16, 255, 64, 192);
+        a = cfx::cfx_map(a, 16, 255, 64, 192);
       }
       a = 255 - a;
     }

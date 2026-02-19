@@ -118,12 +118,13 @@ inline uint16_t triwave16(uint16_t in) {
 // ============================================================================
 
 // WLED map function
-inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
+inline long cfx_map(long x, long in_min, long in_max, long out_min,
+                    long out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 // Constrain helper
-template <class T> const T &constrain(const T &x, const T &a, const T &b) {
+template <class T> const T &cfx_constrain(const T &x, const T &a, const T &b) {
   if (x < a)
     return a;
   else if (b < x)
