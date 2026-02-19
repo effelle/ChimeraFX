@@ -3035,16 +3035,24 @@ uint16_t mode_energy(void) {
   if (finished)
     elapsed = duration;
 
-  // --- Step 1: Agitation Engine ---
-  // Background speed fluctuates organically using noise
-  // Slow down the noise sample rate (now >> 11 is roughly every 2 seconds)
-  uint8_t noise = cfx::inoise8(instance->now >> 11, 42);
+  // --- Step 1: Agitation Engine (Chaos Contrast) ---
+  // We use a power curve on noise to create meaningful bursts of speed.
+  // now >> 10 drifts every ~1 second.
+  uint8_t noise = cfx::inoise8(instance->now >> 10, 42);
 
-  // Agitation level (32 = very calm, 512 = frantic)
-  uint16_t agitation_factor = cfx::cfx_map(noise, 0, 255, 32, 512);
+  // Power Curve: Squaring noise creates longer calm periods and sharp spikes.
+  uint32_t chaos = (uint32_t)noise * noise; // 0..65025
 
-  // High agitation contributes more to the accumulator
-  data->accumulator += (dt * agitation_factor);
+  // Integrate the user speed slider (0-255).
+  // Map chaos to a wide multiplier (0.25x to 8.0x) where 256 is 1.0x
+  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 64, 2048);
+
+  // Speed factor = baseline speed * chaotic fluctuation
+  uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
+  if (speed_factor < 16)
+    speed_factor = 16; // Safety floor
+
+  data->accumulator += (dt * speed_factor);
 
   uint16_t progress = (elapsed * len) / (duration ? duration : 1);
   // Shift >> 11 restores a "calm" speed similar to (now >> 4) when agitation is
