@@ -225,9 +225,6 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
     }
   }
 }
-}
-}
-}
 
 void Segment::blur(uint8_t blur_amount) {
   if (!instance || !instance->target_light)
