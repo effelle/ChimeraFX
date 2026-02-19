@@ -4372,9 +4372,10 @@ uint16_t mode_bouncing_balls(void) {
     instance->_segment.reset = false;
   }
 
-  // Subtractive fade: guarantees black floor (no grey residue).
-  // Value 30 ≈ equivalent visual speed to fadeToBlackBy(160), but floor-safe.
-  instance->_segment.subtractive_fade_val(30);
+  // fadeToBlackBy(160): aggressive multiplicative fade (37% retention/frame).
+  // Clears a 255 pixel in ~4 frames = virtually no tail. No grey floor risk
+  // at this fade strength, so subtractive_fade_val not needed here.
+  instance->_segment.fadeToBlackBy(160);
 
   // Physics Constants
   // Gravity -18.0 for snappy "real" feel (less floaty)
