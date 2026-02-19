@@ -2384,6 +2384,11 @@ uint16_t mode_meteor(void) {
     }
   }
 
+  // Floor-sweeper: removes any sub-threshold residue that scale8 can't clear.
+  // Value of 1 is minimal — won't affect the visible trail, only kills pixels
+  // stuck at 1-2 brightness from asymptotic multiplicative fade.
+  instance->_segment.subtractive_fade_val(1);
+
   // --- 2. DRAW METEOR HEAD ---
   // Fix: Ensure head is bright/hot.
   for (int j = 0; j < meteorSize; j++) {
@@ -4367,8 +4372,9 @@ uint16_t mode_bouncing_balls(void) {
     instance->_segment.reset = false;
   }
 
-  instance->_segment.fadeToBlackBy(
-      160); // Faster fade for shorter trails (WLED-like)
+  // Subtractive fade: guarantees black floor (no grey residue).
+  // Value 30 ≈ equivalent visual speed to fadeToBlackBy(160), but floor-safe.
+  instance->_segment.subtractive_fade_val(30);
 
   // Physics Constants
   // Gravity -18.0 for snappy "real" feel (less floaty)
