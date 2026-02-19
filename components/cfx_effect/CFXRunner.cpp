@@ -3673,19 +3673,32 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  // WLED uses fade_out(252) which is a multiplicative fade (scale8).
-  // This avoids the floor bug caused by subtractive fadeToBlackBy.
+  // Fade out canvas (Trail effect)
+  // Replaced multiplicative fade (scale8) with subtractive fade to ensure floor
+  // reaches 0
   for (int i = 0; i < len; i++) {
     uint32_t c = instance->_segment.getPixelColor(i);
     if (c == 0)
       continue;
 
-    // Scale each channel by 252/256 (~98%)
-    // This creates a smooth trail that naturally decays to zero
-    uint8_t r = cfx::scale8((c >> 16) & 0xFF, 252);
-    uint8_t g = cfx::scale8((c >> 8) & 0xFF, 252);
-    uint8_t b = cfx::scale8(c & 0xFF, 252);
-    uint8_t w = cfx::scale8((c >> 24) & 0xFF, 252); // If RGBW
+    uint8_t r = (c >> 16) & 0xFF;
+    uint8_t g = (c >> 8) & 0xFF;
+    uint8_t b = c & 0xFF;
+    uint8_t w = (c >> 24) & 0xFF;
+
+    // Subtractive fade: subtract 12 (approx 5%) from each channel
+    // If we want slower fade, use smaller number. WLED uses 252/256 which is
+    // very slow (~1.5% loss) 252/256 is ~98.4% retention. To match speed but
+    // ensure 0, we can use qsub8 or max(0, val - x) But fixed subtraction is
+    // faster. Let's use a hybrid: scale8(252) AND subtract 1 to guarantee
+    // decay? Or just subtract 4-5 for a decent trail. The user wants "long
+    // trails". Let's try subtracting 4. (255 -> 0 in ~64 frames ~1 sec)
+    const uint8_t fade_amt = 4;
+
+    r = (r > fade_amt) ? (r - fade_amt) : 0;
+    g = (g > fade_amt) ? (g - fade_amt) : 0;
+    b = (b > fade_amt) ? (b - fade_amt) : 0;
+    w = (w > fade_amt) ? (w - fade_amt) : 0;
 
     instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
