@@ -3068,7 +3068,9 @@ uint16_t mode_energy(void) {
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // --- Step 2: Energy Spikes (Localized Eruptions) ---
-  if (raw_noise > 140 && cfx::hw_random8() < 64) {
+  // Trigger spikes during agitation (raw_noise > 140)
+  // Phase 5: Lock ignition until the introductory wipe is finished
+  if (finished && raw_noise > 140 && cfx::hw_random8() < 64) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         int16_t pos = cfx::hw_random16() % (len ? len : 1);
