@@ -3015,6 +3015,7 @@ struct EnergyData {
 // Phase 1: Agitation Engine - Noise-driven speed fluctuations.
 // Phase 2: Energy Spikes - Localized white-hot eruptions during high chaos.
 // Phase 3: Contrast & Size Refinement - Hue-gating and 5-LED bloom.
+// Phase 4: Scaling & Exit Refinement - Proportional blooms and linear exit.
 uint16_t mode_energy(void) {
   if (!instance)
     return 350;
@@ -3043,9 +3044,15 @@ uint16_t mode_energy(void) {
   uint32_t duration = (257 - instance->_segment.speed) * 15;
   uint32_t elapsed = instance->now - instance->_segment.step;
 
-  bool finished = (elapsed >= duration);
+  // --- Step 3: Linear Exit Logic (Phase 4) ---
+  // Extend duration so the white head (4px) fully clears the end.
+  uint32_t head_len = 4;
+  uint32_t extra_time = (head_len * duration) / (len ? len : 1);
+  uint32_t total_duration = duration + extra_time;
+
+  bool finished = (elapsed >= total_duration);
   if (finished)
-    elapsed = duration;
+    elapsed = total_duration;
 
   // --- Step 1: Agitation Engine (Chaos Contrast FIX) ---
   uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
@@ -3061,18 +3068,13 @@ uint16_t mode_energy(void) {
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // --- Step 2: Energy Spikes (Localized Eruptions) ---
-  // Trigger spikes during agitation (raw_noise > 140)
   if (raw_noise > 140 && cfx::hw_random8() < 64) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
-      if (data->sparks[s].level == 0) { // Found a dead slot
+      if (data->sparks[s].level == 0) {
         int16_t pos = cfx::hw_random16() % (len ? len : 1);
-
-        // --- Phase 3: Hue Gating (Deterministic Contrast) ---
-        // Exclude spikes on bright hues (Yellow-Cyan, approx 40-150)
         uint8_t hue = ((pos * spatial_mult) / (len ? len : 1)) + counter;
         if (hue > 40 && hue < 150)
-          break; // Skip this ignition attempt
-
+          break;
         data->sparks[s].pos = pos;
         data->sparks[s].level = 10;
         data->sparks[s].building = true;
@@ -3086,7 +3088,7 @@ uint16_t mode_energy(void) {
     if (data->sparks[s].level == 0)
       continue;
     if (data->sparks[s].building) {
-      uint16_t next = data->sparks[s].level + (dt / 2); // Fast build
+      uint16_t next = data->sparks[s].level + (dt / 2);
       if (next >= 255) {
         data->sparks[s].level = 255;
         data->sparks[s].building = false;
@@ -3094,7 +3096,7 @@ uint16_t mode_energy(void) {
         data->sparks[s].level = (uint8_t)next;
       }
     } else {
-      uint16_t sub = (dt / 4); // Slower discharge
+      uint16_t sub = (dt / 4);
       if (data->sparks[s].level <= sub)
         data->sparks[s].level = 0;
       else
@@ -3105,24 +3107,32 @@ uint16_t mode_energy(void) {
   // Force Rainbow Palette
   const uint32_t *active_palette = getPaletteByIndex(4);
 
+  // --- Phase 4: Proportional Bloom Logic ---
+  uint16_t spark_radius = (len / 60);
+  if (spark_radius < 2)
+    spark_radius = 2; // Min 5 LED total
+  if (spark_radius > 5)
+    spark_radius = 5; // Max 11 LED total
+
   for (int i = 0; i < len; i++) {
     uint32_t rainbow_32 = 0;
-    if (i < (int)progress - 3 || finished) {
+    if (i < (int)progress - (int)head_len || finished) {
       uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
-      CRGBW c = ColorFromPalette(active_palette, index, 255);
+      // --- Phase 4: 80% Background Dimming ---
+      CRGBW c = ColorFromPalette(active_palette, index, 205);
       rainbow_32 = RGBW32(c.r, c.g, c.b, c.w);
-    } else if (i <= progress) {
+    } else if (i <= (int)progress) {
       rainbow_32 = RGBW32(255, 255, 255, 255);
     }
 
-    // Blend Spikes (additive brightness with 5-pixel bloom)
+    // Blend Spikes (additive brightness with proportional bloom)
     uint16_t spike_bri = 0;
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level > 0) {
         int distance = std::abs(data->sparks[s].pos - i);
-        if (distance <= 1) { // 3 center pixels at 100%
+        if (distance <= (int)spark_radius - 1) {
           spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
-        } else if (distance == 2) { // 2 outer pixels at 50%
+        } else if (distance == (int)spark_radius) {
           uint16_t bloom = data->sparks[s].level >> 1;
           spike_bri = std::max(spike_bri, bloom);
         }
