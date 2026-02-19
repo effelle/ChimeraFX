@@ -281,6 +281,35 @@ void Segment::blur(uint8_t blur_amount) {
   }
 }
 
+void Segment::subtractive_fade_val(uint8_t fade_amt) {
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = 0; i < len; i++) {
+    int global_index = global_start + i;
+    if (global_index >= light_size)
+      continue;
+
+    esphome::Color c = light[global_index].get();
+    uint8_t r = (c.r > fade_amt) ? (c.r - fade_amt) : 0;
+    uint8_t g = (c.g > fade_amt) ? (c.g - fade_amt) : 0;
+    uint8_t b = (c.b > fade_amt) ? (c.b - fade_amt) : 0;
+    uint8_t w = (c.w > fade_amt) ? (c.w - fade_amt) : 0;
+
+    light[global_index] = esphome::Color(r, g, b, w);
+  }
+}
+
+void Segment::fade_out_smooth(uint8_t fade_amt) {
+  // 1. Subtract (guarantee 0 floor)
+  subtractive_fade_val(fade_amt);
+
+  // 2. Blur (spread energy / anti-alias the fade)
+  // Heuristic: Blur amount related to fade amount?
+  // User asked for "standardized". Let's pick a good default.
+  // blur(32) is a good balance between spreading and preserving detail.
+  blur(32);
+}
+
 // --- Effect Implementations ---
 
 #ifdef ESP8266
@@ -3728,35 +3757,10 @@ uint16_t mode_exploding_fireworks(void) {
   }
 
   // Fade out canvas (Trail effect)
-  // Fade out canvas (Trail effect)
-  // Hybrid Approach:
-  // 1. Subtractive Fade: Ensure pixels darken to 0 (Fixes floor bug)
-  // 2. Blur: Spread energy to create "meteors" and smooth the subtractive fade
-  // (Fixes physics/choppiness)
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    if (c == 0)
-      continue;
-
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-    uint8_t w = (c >> 24) & 0xFF;
-
-    // Subtract constant amount (stronger drain than scale8)
-    // 16/255 is approx 6% per frame. Returns to black in ~16 frames.
-    const uint8_t fade_amt = 10;
-
-    r = (r > fade_amt) ? (r - fade_amt) : 0;
-    g = (g > fade_amt) ? (g - fade_amt) : 0;
-    b = (b > fade_amt) ? (b - fade_amt) : 0;
-    w = (w > fade_amt) ? (w - fade_amt) : 0;
-
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-  }
-
-  // 2. Blur: Spread energy
-  instance->_segment.blur(64);
+  // Use the standardized helper which combines subtractive fade (floor
+  // clearing) and blur (trail smoothing). 10 is the subtractive amount (approx
+  // 4% per frame).
+  instance->_segment.fade_out_smooth(10);
 
   // Physics
   // Gravity: WLED 0.0004 + speed/800000.
