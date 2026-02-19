@@ -3003,7 +3003,7 @@ struct EnergySpark {
   bool building; // true = surge, false = discharge
 };
 
-#define MAX_ENERGY_SPARKS 4
+#define MAX_ENERGY_SPARKS 8
 struct EnergyData {
   uint32_t accumulator;
   uint32_t last_millis;
@@ -3013,6 +3013,7 @@ struct EnergyData {
 // --- Energy Effect (ID 158) ---
 // Progress bar that unmasks a live rainbow animation with a white leading tip.
 // Phase 1: Agitation Engine - Noise-driven speed fluctuations.
+// Phase 2: Energy Spikes - Localized white-hot eruptions during high chaos.
 uint16_t mode_energy(void) {
   if (!instance)
     return 350;
@@ -3071,8 +3072,8 @@ uint16_t mode_energy(void) {
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // --- Step 2: Energy Spikes (Localized Eruptions) ---
-  // Trigger spikes during high agitation (raw_noise > 180)
-  if (raw_noise > 180 && cfx::hw_random8() < 24) {
+  // Trigger spikes during agitation (raw_noise > 140)
+  if (raw_noise > 140 && cfx::hw_random8() < 48) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) { // Found a dead slot
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
@@ -3119,11 +3120,18 @@ uint16_t mode_energy(void) {
       rainbow_32 = RGBW32(255, 255, 255, 255);
     }
 
-    // Blend Spikes (additive brightness)
+    // Blend Spikes (additive brightness with 3-pixel bloom)
     uint16_t spike_bri = 0;
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
-      if (data->sparks[s].level > 0 && data->sparks[s].pos == i) {
-        spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
+      if (data->sparks[s].level > 0) {
+        int distance = std::abs(data->sparks[s].pos - i);
+        if (distance == 0) {
+          spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
+        } else if (distance == 1) {
+          // Surround pixels get 60% intensity bloom
+          uint16_t bloom = (data->sparks[s].level * 154) >> 8;
+          spike_bri = std::max(spike_bri, bloom);
+        }
       }
     }
 
