@@ -2997,9 +2997,17 @@ uint16_t mode_hyper_sparkle(void) {
 // Ported from WLED FX.cpp
 
 // ID 8: Colorloop - Entire strip cycles through one color
+struct EnergySpark {
+  int16_t pos;
+  uint8_t level; // 0-255 (0 = dead)
+  bool building; // true = surge, false = discharge
+};
+
+#define MAX_ENERGY_SPARKS 4
 struct EnergyData {
   uint32_t accumulator;
   uint32_t last_millis;
+  EnergySpark sparks[MAX_ENERGY_SPARKS];
 };
 
 // --- Energy Effect (ID 158) ---
@@ -3018,6 +3026,8 @@ uint16_t mode_energy(void) {
     data = (EnergyData *)instance->_segment.data;
     data->last_millis = instance->now;
     data->accumulator = 0;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++)
+      data->sparks[s].level = 0;
   }
 
   uint32_t dt = instance->now - data->last_millis;
@@ -3060,26 +3070,70 @@ uint16_t mode_energy(void) {
   uint8_t counter = (data->accumulator >> 11) & 0xFF;
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
+  // --- Step 2: Energy Spikes (Localized Eruptions) ---
+  // Trigger spikes during high agitation (raw_noise > 180)
+  if (raw_noise > 180 && cfx::hw_random8() < 24) {
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level == 0) { // Found a dead slot
+        data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
+        data->sparks[s].level = 10;
+        data->sparks[s].building = true;
+        break;
+      }
+    }
+  }
+
+  // Update Spikes
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level == 0)
+      continue;
+    if (data->sparks[s].building) {
+      uint16_t next = data->sparks[s].level + (dt / 2); // Fast build
+      if (next >= 255) {
+        data->sparks[s].level = 255;
+        data->sparks[s].building = false;
+      } else {
+        data->sparks[s].level = (uint8_t)next;
+      }
+    } else {
+      uint16_t sub = (dt / 4); // Slower discharge
+      if (data->sparks[s].level <= sub)
+        data->sparks[s].level = 0;
+      else
+        data->sparks[s].level -= (uint8_t)sub;
+    }
+  }
+
   // Force Rainbow Palette
   const uint32_t *active_palette = getPaletteByIndex(4);
 
   for (int i = 0; i < len; i++) {
-    if (i < (int)progress - 3) {
-      // Zone 1: The Trail (Standard Rainbow Gradient)
+    uint32_t rainbow_32 = 0;
+    if (i < (int)progress - 3 || finished) {
+      // Zone 1 & 3: Rainbow Background
       uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
       CRGBW c = ColorFromPalette(active_palette, index, 255);
-      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-    } else if (!finished && i <= progress) {
-      // Zone 2: The Head (Solid White 4-pixel block)
-      instance->_segment.setPixelColor(i, RGBW32(255, 255, 255, 255));
-    } else if (finished) {
-      // Zone 3: Fully Filled state
-      uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
-      CRGBW c = ColorFromPalette(active_palette, index, 255);
-      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      rainbow_32 = RGBW32(c.r, c.g, c.b, c.w);
+    } else if (i <= progress) {
+      // Zone 2: The Head (Solid White)
+      rainbow_32 = RGBW32(255, 255, 255, 255);
+    }
+
+    // Blend Spikes (additive brightness)
+    uint16_t spike_bri = 0;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level > 0 && data->sparks[s].pos == i) {
+        spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
+      }
+    }
+
+    if (spike_bri > 0) {
+      CRGBW final_c = color_add(
+          CRGBW(rainbow_32), CRGBW(spike_bri, spike_bri, spike_bri, spike_bri));
+      instance->_segment.setPixelColor(
+          i, RGBW32(final_c.r, final_c.g, final_c.b, final_c.w));
     } else {
-      // Zone 4: Empty space
-      instance->_segment.setPixelColor(i, 0);
+      instance->_segment.setPixelColor(i, rainbow_32);
     }
   }
   return FRAMETIME;
