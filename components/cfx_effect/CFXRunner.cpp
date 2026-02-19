@@ -3013,11 +3013,8 @@ uint16_t mode_energy(void) {
     instance->_segment.reset = false;
   }
 
-  // Calculate progress based on speed
-  // Speed 0: ~25s, Speed 255: ~0.1s
-  uint32_t duration = 25000 / (instance->_segment.speed + 1);
-  if (duration < 100)
-    duration = 100;
+  // Recalibrated Duration: 128 speed -> ~1.9s fill. 255 -> ~15ms. 0 -> ~3.8s.
+  uint32_t duration = (257 - instance->_segment.speed) * 15;
 
   uint32_t elapsed = instance->now - instance->_segment.step;
   if (elapsed >= duration) {
@@ -3027,16 +3024,15 @@ uint16_t mode_energy(void) {
 
   uint16_t progress = (elapsed * len) / duration;
 
-  // Pattern timing (scaled for background movement)
-  auto timing = cfx::calculate_frame_timing(DEFAULT_SPEED, instance->now);
-  uint32_t counter = (timing.scaled_now >> 4) & 0xFF;
+  // Pattern timing: cycles every 4s roughly
+  uint32_t counter = (instance->now >> 4) & 0xFF;
 
   // Intensity controls spatial density
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
-  // Palette handling
+  // Palette handling: Force rainbow if default or solid (255) is picked
   const uint32_t *active_palette =
-      (instance->_segment.palette == 0)
+      (instance->_segment.palette == 0 || instance->_segment.palette == 255)
           ? getPaletteByIndex(4) // Rainbow
           : getPaletteByIndex(instance->_segment.palette);
 
