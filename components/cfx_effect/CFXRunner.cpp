@@ -3030,11 +3030,9 @@ uint16_t mode_energy(void) {
       CRGBW c = ColorFromPalette(active_palette, index, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     } else if (!finished && i <= progress) {
-      // Zone 2: The Head (White with 4-pixel fade)
+      // Zone 2: The Head (Solid White 4-pixel block)
       // Only show while the intro is still running
-      int8_t dist = progress - i;
-      uint8_t bri = 255 >> dist;
-      instance->_segment.setPixelColor(i, RGBW32(bri, bri, bri, bri));
+      instance->_segment.setPixelColor(i, RGBW32(255, 255, 255, 255));
     } else if (finished) {
       // Zone 3: Fully Filled state (Fill the remaining 3 pixels of the head
       // trail)
