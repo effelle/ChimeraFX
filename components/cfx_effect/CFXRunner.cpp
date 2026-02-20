@@ -3318,17 +3318,36 @@ uint16_t mode_chaos_theory(void) {
     speed_factor = 16;
   data->accumulator += (dt * speed_factor);
 
-  uint8_t counter = (data->accumulator >> 11) & 0xFF;
-  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
+  // FIX (Iteration 9): Hybrid Approach for 16-Color Palette
+  // Energy uses a 255-smooth palette. Chaos uses 16 distinct colors.
+  // Using the high-speed accumulator directly on 16 colors causes twinkling.
+  // We need a dedicated, very slow accumulator for the background scroll.
+  // We repurpose the upper bits or scale drastically down.
+  uint32_t slow_scroll = data->accumulator >> 14;
+  uint8_t counter = slow_scroll & 0xFF;
 
-  // 2. Render Background (Copy exactly from Energy)
+  // Reduce Spatial Multiplier (Zoom OUT)
+  // Max Zoom was 16 << (255/29) = 16 << 8 = 4096.
+  // 4096 / length means the 16 colors repeat dozens of times per strip =
+  // twinkle. We want the 16 colors to stretch across the whole strip or just
+  // repeat 1-2 times. Intensity 0 = 1 repeat (Zoom Out). Intensity 255 = 4
+  // repeats (Zoom In).
+  uint16_t map_range = 255;
+  uint16_t spatial_mult =
+      map_range +
+      (map_range * (instance->_segment.intensity / 85)); // 255 to ~1000
+
+  // 2. Render Background
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
   if (active_palette[0] == 0 && active_palette[15] == 0) {
     instance->generateRandomPalette();
   }
 
   for (int i = 0; i < len; i++) {
-    uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+    // Map position to 0-255 using the reduced spatial multiplier
+    uint16_t positional_offset = (i * spatial_mult) / (len ? len : 1);
+    uint8_t index = (positional_offset + counter) & 0xFF;
+
     // Use 205 (80%) brightness to match Energy's background depth exactly
     CRGBW c = ColorFromPalette(active_palette, index, 205);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
