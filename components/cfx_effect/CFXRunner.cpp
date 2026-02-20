@@ -6154,61 +6154,82 @@ uint16_t mode_fluid_rain(void) {
   // 1. Damping (Intensity: 0 = syrup, 255 = water)
   uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
 
-  // 2. Wave Equation – Simple 3-point stencil (bit shifts only, no division)
-  // All operations are >>1 and >>8 — 1 cycle each on ESP32.
-  for (int i = 1; i < len - 1; i++) {
-    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
-    int32_t new_val = smooth - current[i];
-    new_val = (new_val * damping) >> 8;
-    current[i] = (int16_t)new_val;
-  }
-
-  // Fixed-end boundaries
-  current[0] = 0;
-  current[len - 1] = 0;
-
-  // 3. Drop Injection – Wide 5-pixel Gaussian splashes
+  // 2. Drop Injection – Wide 5-pixel Gaussian splashes (before wave loop)
   uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3);
   if (cfx::hw_random8() < spawn_chance) {
     int pos = 2 + cfx::hw_random16(0, len - 4);
     int16_t amp = 120 + cfx::hw_random16(0, 130);
-    current[pos] += amp;
-    current[pos - 1] += (amp * 3) >> 2;
-    current[pos + 1] += (amp * 3) >> 2;
+    previous[pos] += amp;
+    previous[pos - 1] += (amp * 3) >> 2;
+    previous[pos + 1] += (amp * 3) >> 2;
     if (pos > 2)
-      current[pos - 2] += amp >> 2;
+      previous[pos - 2] += amp >> 2;
     if (pos < len - 3)
-      current[pos + 2] += amp >> 2;
+      previous[pos + 2] += amp >> 2;
   }
 
-  // 4. Rendering – Quadratic height mapping (anti-strobe)
-  // Using height² instead of abs(height): the derivative of x² is 0 at x=0,
-  // so brightness transitions through zero-crossings are SMOOTH, not sharp.
-  // This eliminates the strobing "dark flash" when waves oscillate ±.
-  // Multiplication is 1 cycle on ESP32, >>8 is 1 cycle. No division.
+  // 3. Merged Wave + Render in ONE loop
+  // Wave equation computes into current[], then immediately renders.
+  // Data is hot in registers — no cache miss between compute and render.
   const uint32_t *active_palette =
       getPaletteByIndex(instance->_segment.palette);
   bool is_solid = (instance->_segment.palette == 255);
   uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
-  for (int i = 0; i < len; i++) {
-    int32_t h = current[i];
-    // Quadratic: h² / 256 → maps ±255 to 255, ±128 to 64, 0 to 0
-    uint32_t sq = ((uint32_t)(h * h)) >> 8;
-    uint8_t pal_index = (sq > 255) ? 255 : (uint8_t)sq;
+  // Edge pixel 0: fixed boundary
+  current[0] = 0;
+  {
+    uint32_t c;
+    if (is_solid) {
+      CRGBW sc(solid_color);
+      c = RGBW32((sc.r * 12) >> 8, (sc.g * 12) >> 8, (sc.b * 12) >> 8,
+                 (sc.w * 12) >> 8);
+    } else {
+      CRGBW cw = ColorFromPalette(active_palette, 12, 255);
+      c = RGBW32(cw.r, cw.g, cw.b, cw.w);
+    }
+    instance->_segment.setPixelColor(0, c);
+  }
+
+  // Interior pixels: wave equation + render
+  for (int i = 1; i < len - 1; i++) {
+    // Wave equation (3-point stencil, bit shifts only)
+    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
+    int32_t nv = smooth - current[i];
+    nv = (nv * damping) >> 8;
+    current[i] = (int16_t)nv;
+
+    // Render immediately from the just-computed value
+    int32_t h = (nv < 0) ? -nv : nv; // abs without stdlib call
+    // Clamp to 255, add base glow floor (12) to mask zero-crossing strobe
+    uint8_t pal_index = (h > 255) ? 255 : (uint8_t)h;
+    pal_index = (pal_index < 12) ? 12 : pal_index;
 
     uint32_t c;
     if (is_solid) {
-      uint8_t bri = std::max((uint8_t)8, pal_index);
       CRGBW sc(solid_color);
-      c = RGBW32((sc.r * bri) >> 8, (sc.g * bri) >> 8, (sc.b * bri) >> 8,
-                 (sc.w * bri) >> 8);
+      c = RGBW32((sc.r * pal_index) >> 8, (sc.g * pal_index) >> 8,
+                 (sc.b * pal_index) >> 8, (sc.w * pal_index) >> 8);
     } else {
       CRGBW cWLED = ColorFromPalette(active_palette, pal_index, 255);
       c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
     }
-
     instance->_segment.setPixelColor(i, c);
+  }
+
+  // Edge pixel len-1: fixed boundary
+  current[len - 1] = 0;
+  {
+    uint32_t c;
+    if (is_solid) {
+      CRGBW sc(solid_color);
+      c = RGBW32((sc.r * 12) >> 8, (sc.g * 12) >> 8, (sc.b * 12) >> 8,
+                 (sc.w * 12) >> 8);
+    } else {
+      CRGBW cw = ColorFromPalette(active_palette, 12, 255);
+      c = RGBW32(cw.r, cw.g, cw.b, cw.w);
+    }
+    instance->_segment.setPixelColor(len - 1, c);
   }
 
   // Toggle buffer for next frame
