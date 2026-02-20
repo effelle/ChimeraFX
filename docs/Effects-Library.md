@@ -11,21 +11,21 @@ Please note that some WLED effects will not be ported. This includes animations 
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
+| 152 | **Center Gauge**| A symmetrical progress bar expanding smoothly from the middle to the edges. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
 | 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | No | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
-| 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 | 160 | **Fluid Rain** | 1D fluid simulation of raindrops hitting water. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
-| 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
-| 152 | **Percent Center**| Percent-based fill from the center. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
+| 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
+| 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite at the ends and burn inwards to meet in the center. Toggle Mirror to reverse the effect and make the flames erupt from the middle outward. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 
 #### WLED-Style Effects:
 
 | ID | Name | Description | Controls | Palette support | Author |
-|:---|:---|:---|:---|:---:|:---|
+|:---|:---|:---|:---|:---:|:---:|
 | 38 | **Aurora** | Northern lights animation with drifting waves. | **Intensity**: Wave width - **Speed**: Drift speed | Yes | Aircoookie |
 | 1 | **Blink** | Simple on/off blinking. | **Speed**: Blink rate | Yes | Aircoookie |
 | 26 | **Blink Rainbow** | Blinking with color cycling. | **Speed**: Blink rate - **Intensity**: Color speed | Yes | Aircoookie |
@@ -49,6 +49,7 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 107 | **Noise Pal** | Perlin noise color movement. | **Intensity**: Zoom - **Speed**: Drift speed | Yes | WLED |
 | 101 | **Ocean** | Gentle ocean waves (Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Wave speed | No | Mark Kriegsman |
 | 98 | **Percent** | Percent-based fill (Progress Bar). | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
+| 105 | **Phased** | A dynamic color mapping animation. | **Intensity**: Zoom/Density - **Speed**: Transition speed | Yes | Aircoookie |
 | 97 | **Plasma** | Multi-layer Perlin noise plasma. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
 | 95 | **Popcorn** | Bouncing particles simulation. | **Intensity**: Particle count - **Speed**: Bounciness | Yes | Aircoookie |
 | 9 | **Rainbow** | Moving per-pixel rainbow. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
