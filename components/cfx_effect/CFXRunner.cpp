@@ -6164,12 +6164,16 @@ uint16_t mode_fluid_rain(void) {
 
   // 2. Physics Simulation
   for (int i = 1; i < len - 1; i++) {
-    // 1D Wave Equation: New = ((Prev[i-1] + Prev[i+1]) / 2) - Current[i]
-    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
+    // 1D Wave Equation: New = ((Prev[i-1] + Prev[i+1])) - Current[i]
+    // The standard integer fluid sim uses (L + R) - Old.
+    int32_t smooth = (int32_t)previous[i - 1] + (int32_t)previous[i + 1];
     int32_t new_val = smooth - current[i];
 
     // Damping: Val = (Val * damping) / 256
-    new_val = (new_val * damping_factor) >> 8;
+    // Mapping Intensity 0-255 to a multiplier 244-255 (out of 256)
+    // Even a factor of 250 (0.97) is significant damping for fluid.
+    uint16_t local_damping = 244 + (instance->_segment.intensity * 11 / 255);
+    new_val = (new_val * local_damping) >> 8;
 
     current[i] = (int16_t)new_val;
   }
