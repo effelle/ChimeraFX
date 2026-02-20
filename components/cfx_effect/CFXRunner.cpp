@@ -3775,6 +3775,7 @@ uint16_t mode_color_sweep(void);
 uint16_t mode_strobe(void);
 uint16_t mode_percent(void);
 uint16_t mode_percent_center(void);
+uint16_t mode_fluid_rain(void);
 
 // --- Heartbeat Effect (ID 100) ---
 // Replicates WLED logic with framerate-independent decay and gamma correction
@@ -6182,7 +6183,7 @@ uint16_t mode_fluid_rain(void) {
   uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
   if (cfx::hw_random8() < spawn_chance) {
     // Random position to inject energy
-    int pos = 1 + cfx::hw_random16(len - 2);
+    int pos = 1 + cfx::hw_random16(0, len - 2);
     // Inject positive energy peak (max 32767 for int16, we use a nice big
     // number)
     current[pos] = 20000;
