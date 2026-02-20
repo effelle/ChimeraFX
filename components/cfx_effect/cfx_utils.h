@@ -215,6 +215,14 @@ inline uint8_t inoise8(uint16_t x, uint16_t y) {
          8;
 }
 
+// inoise16(x,y): 16-bit version of the Perlin noise, returns 0-65535
+inline uint16_t inoise16(uint16_t x, uint16_t y) {
+  return (
+      uint16_t)(((perlin2D_raw((uint32_t)x << 8, (uint32_t)y << 8) * 1620) >>
+                 10) +
+                32771);
+}
+
 // ============================================================================
 // COLOR MATH
 // ============================================================================
