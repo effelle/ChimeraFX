@@ -6108,132 +6108,84 @@ uint16_t mode_follow_us(void) {
 }
 
 // --- Fluid Rain (ID 160) ---
-// True 1D Fluid Simulation using integer math
-struct FluidRainState {
-  size_t buffer_size;
-  uint8_t toggle; // 0 or 1 for active buffer
-  // We allocate buffer1 and buffer2 sequentially in memory
-  // int16_t buffer1[len]
-  // int16_t buffer2[len]
-};
-
+// Pacifica-style rendering: layered sine waves + rain drops
+// Zero allocated buffers — safe for multi-strip operation
 uint16_t mode_fluid_rain(void) {
-  uint16_t len = instance->_segment.length();
+  if (!instance)
+    return FRAMETIME;
+
+  int len = instance->_segment.length();
   if (len <= 1)
     return mode_static();
 
-  // Allocation
-  // We need 2 * len * sizeof(int16_t) + sizeof(FluidRainState)
-  size_t dataSize = sizeof(FluidRainState) + (2 * len * sizeof(int16_t));
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
 
-  if (!instance->_segment.allocateData(dataSize)) {
-    return mode_static();
-  }
+  // Time base: speed controls wave movement
+  uint32_t now = cfx_millis();
+  uint32_t t = (now * (speed + 1)) >> 7;
 
-  FluidRainState *state =
-      reinterpret_cast<FluidRainState *>(instance->_segment.data);
-  int16_t *buffer1 = reinterpret_cast<int16_t *>(instance->_segment.data +
-                                                 sizeof(FluidRainState));
-  int16_t *buffer2 = buffer1 + len;
+  // 3 wave layers at different speeds and directions
+  uint16_t wave1 = t * 3;    // Slow forward ripple
+  uint16_t wave2 = -(t * 5); // Medium reverse ripple
+  uint16_t wave3 = t * 7;    // Fast forward shimmer
 
-  // Initialize buffers on reset or size change
-  if (instance->_segment.reset || state->buffer_size != len) {
-    state->buffer_size = len;
-    state->toggle = 0;
-    for (int i = 0; i < len; i++) {
-      buffer1[i] = 0;
-      buffer2[i] = 0;
-    }
-    instance->_segment.reset = false;
-  }
+  // Oscillating brightness for each layer (organic feel)
+  uint8_t bri1 = 100 + ((sin8((t >> 3) & 0xFF) * 100) >> 8); // 100-200
+  uint8_t bri2 = 80 + ((sin8((t >> 4) & 0xFF) * 80) >> 8);   // 80-160
+  uint8_t bri3 = 60 + ((sin8((t >> 5) & 0xFF) * 60) >> 8);   // 60-120
 
-  // Determine current and previous buffers
-  int16_t *current = (state->toggle == 0) ? buffer1 : buffer2;
-  int16_t *previous = (state->toggle == 0) ? buffer2 : buffer1;
+  // Rain drop phase: shifts over time to create moving impact points
+  uint8_t drop_phase = (t >> 3) & 0xFF;
+  // Intensity controls how many drops are visible (more = heavier rain)
+  uint8_t drop_threshold =
+      240 - (intensity >> 1); // 240 (drizzle) to 112 (downpour)
 
-  // 1. Damping (Intensity: 0 = syrup, 255 = water)
-  uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
-
-  // 2. Drop Injection – Wide 5-pixel Gaussian splashes (before wave loop)
-  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3);
-  if (cfx::hw_random8() < spawn_chance) {
-    int pos = 2 + cfx::hw_random16(0, len - 4);
-    int16_t amp = 120 + cfx::hw_random16(0, 130);
-    previous[pos] += amp;
-    previous[pos - 1] += (amp * 3) >> 2;
-    previous[pos + 1] += (amp * 3) >> 2;
-    if (pos > 2)
-      previous[pos - 2] += amp >> 2;
-    if (pos < len - 3)
-      previous[pos + 2] += amp >> 2;
-  }
-
-  // 3. Merged Wave + Render in ONE loop
-  // Wave equation computes into current[], then immediately renders.
-  // Data is hot in registers — no cache miss between compute and render.
-  const uint32_t *active_palette =
-      getPaletteByIndex(instance->_segment.palette);
+  // Palette
+  const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
   bool is_solid = (instance->_segment.palette == 255);
   uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
-  // Edge pixel 0: fixed boundary
-  current[0] = 0;
-  {
-    uint32_t c;
-    if (is_solid) {
-      CRGBW sc(solid_color);
-      c = RGBW32((sc.r * 12) >> 8, (sc.g * 12) >> 8, (sc.b * 12) >> 8,
-                 (sc.w * 12) >> 8);
-    } else {
-      CRGBW cw = ColorFromPalette(active_palette, 12, 255);
-      c = RGBW32(cw.r, cw.g, cw.b, cw.w);
+  for (int i = 0; i < len; i++) {
+    uint16_t spatial = i * 256;
+
+    // Wave layers: sin8 lookup (table read, 1 cycle each)
+    uint8_t w1 = sin8(((spatial >> 1) + wave1) >> 8);
+    uint8_t w2 = sin8(((spatial >> 2) + wave2) >> 8);
+    uint8_t w3 = sin8(((spatial >> 1) + wave3) >> 8);
+
+    // Blend layers with oscillating brightness
+    uint16_t composite =
+        ((uint16_t)scale8(w1, bri1) + (uint16_t)scale8(w2, bri2) +
+         (uint16_t)scale8(w3, bri3));
+    // Normalize 3-layer sum: max possible ≈ 200+160+120 = 480 → scale to 0-255
+    uint8_t base = (composite > 480) ? 255 : (uint8_t)((composite * 255) >> 9);
+
+    // Rain drop impacts: pseudo-random bright spots using sin8 hash
+    // Each pixel gets a unique hash that shifts with time → drops
+    // appear/disappear
+    uint8_t drop_hash = sin8((uint8_t)(i * 37 + drop_phase));
+    if (drop_hash > drop_threshold) {
+      // Bright splash: boost proportional to how far over threshold
+      uint8_t splash = ((uint16_t)(drop_hash - drop_threshold) * 200) >> 8;
+      base = qadd8(base, splash);
     }
-    instance->_segment.setPixelColor(0, c);
-  }
 
-  // Interior pixels: wave equation + render
-  for (int i = 1; i < len - 1; i++) {
-    // Wave equation (3-point stencil, bit shifts only)
-    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
-    int32_t nv = smooth - current[i];
-    nv = (nv * damping) >> 8;
-    current[i] = (int16_t)nv;
+    // Ensure minimum visibility floor (no pure black)
+    uint8_t pal_index = (base < 16) ? 16 : base;
 
-    // Render immediately from the just-computed value
-    int32_t h = (nv < 0) ? -nv : nv; // abs without stdlib call
-    // Clamp to 255, add base glow floor (12) to mask zero-crossing strobe
-    uint8_t pal_index = (h > 255) ? 255 : (uint8_t)h;
-    pal_index = (pal_index < 12) ? 12 : pal_index;
-
+    // Render
     uint32_t c;
     if (is_solid) {
       CRGBW sc(solid_color);
       c = RGBW32((sc.r * pal_index) >> 8, (sc.g * pal_index) >> 8,
                  (sc.b * pal_index) >> 8, (sc.w * pal_index) >> 8);
     } else {
-      CRGBW cWLED = ColorFromPalette(active_palette, pal_index, 255);
+      CRGBW cWLED = ColorFromPalette(pal, pal_index, 255);
       c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
     }
     instance->_segment.setPixelColor(i, c);
   }
-
-  // Edge pixel len-1: fixed boundary
-  current[len - 1] = 0;
-  {
-    uint32_t c;
-    if (is_solid) {
-      CRGBW sc(solid_color);
-      c = RGBW32((sc.r * 12) >> 8, (sc.g * 12) >> 8, (sc.b * 12) >> 8,
-                 (sc.w * 12) >> 8);
-    } else {
-      CRGBW cw = ColorFromPalette(active_palette, 12, 255);
-      c = RGBW32(cw.r, cw.g, cw.b, cw.w);
-    }
-    instance->_segment.setPixelColor(len - 1, c);
-  }
-
-  // Toggle buffer for next frame
-  state->toggle = 1 - state->toggle;
 
   return FRAMETIME;
 }
