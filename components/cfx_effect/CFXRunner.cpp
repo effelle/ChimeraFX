@@ -3309,22 +3309,17 @@ uint16_t mode_chaos_theory(void) {
 
   // --- Phase 2: The Chaos Engine (Running State) ---
 
-  // 1. Bidirectional Flux (Noise-Driven Speed)
-  // Use inoise16 for smooth gradients. Scale time by speed slider.
-  // Speed 0 -> Slow morphing, Speed 255 -> Rapid chaotic shifts
-  uint32_t noise_time = instance->now * (instance->_segment.speed + 10);
-  uint16_t raw_noise = cfx::inoise16(noise_time, 42); // 0..65535
+  // 1. Agitation Engine (Restored from Energy ID 158)
+  // Noise-driven speed fluctuations for organic flow.
+  uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
+  uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
+  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
+  uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
+  if (speed_factor < 16)
+    speed_factor = 16;
 
-  // Map noise to signed speed modifier: -2.0 to +2.0 roughly
-  // 0 -> -512, 32768 -> 0, 65535 -> +512
-  int32_t speed_mod = (int32_t)((raw_noise * 1024) / 65535) - 512;
-
-  // Apply to accumulator
-  // Base speed is from slider, but direction comes from noise
-  // We use the slider to scale the *magnitude* of the movement delta
-  int32_t delta_move = (speed_mod * (instance->_segment.speed + 1)) >> 6;
-
-  data->accumulator += delta_move;
+  // Drive accumulator with dynamic speed factor
+  data->accumulator += (dt * speed_factor);
 
   // 2. Coordinate Mapping
   // Accumulator is high resolution. Shift down to get "Virtual Position".
@@ -3356,14 +3351,8 @@ uint16_t mode_chaos_theory(void) {
   }
 
   // --- Phase 3: Energy Spikes (Texture) ---
-  // Reuse logic from Energy, but overlay on top of chaos
-
-  // Trigger logic: High agitation only?
-  // Let's use the derivative of the noise (speed_mod magnitude)
-  // If moving FAST, spawn more spikes.
-  uint32_t agitation = std::abs(speed_mod); // 0..512
-
-  if (agitation > 200 && cfx::hw_random8() < 40) {
+  // Trigger spikes during high agitation (raw_noise > 140)
+  if (raw_noise > 140 && cfx::hw_random8() < 40) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
