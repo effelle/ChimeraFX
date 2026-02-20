@@ -3309,45 +3309,28 @@ uint16_t mode_chaos_theory(void) {
 
   // --- Phase 2: The Chaos Engine (Running State) ---
 
-  // 1. Agitation Engine (Restored from Energy ID 158)
-  // Noise-driven speed fluctuations for organic flow.
+  // 1. Agitation Engine (Literal Port from Energy ID 158)
   uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
   uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
   uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
   uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
   if (speed_factor < 16)
     speed_factor = 16;
-
-  // Drive accumulator with dynamic speed factor
   data->accumulator += (dt * speed_factor);
 
-  // 2. Coordinate Mapping
-  // Accumulator is high resolution. Shift down to get "Virtual Position".
-  // FIX (Iteration 7): Shift by 11 to match Energy (ID 158) scrolling speed.
-  // This prevents the "twinkle" flicker and restores visible color bands.
-  uint16_t virtual_pos_base = (data->accumulator >> 11);
-
-  // Spatial Multiplier (Zoom) from Intensity
+  uint8_t counter = (data->accumulator >> 11) & 0xFF;
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
-  // 3. Render Background (Smart Random Palette)
-  // Force Smart Random Palette (ID 254)
-  // Direct access to buffer avoids getPaletteByIndex bounds issues
+  // 2. Render Background (Copy exactly from Energy)
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
-
-  // If palette hasn't been generated yet (e.g. fresh boot), ensure it's valid
   if (active_palette[0] == 0 && active_palette[15] == 0) {
     instance->generateRandomPalette();
   }
 
   for (int i = 0; i < len; i++) {
-    // Offset: i * scale
-    uint16_t pixel_offset = (i * spatial_mult) / (len ? len : 1);
-    // Scroll: + virtual position
-    // Use 8-bit wrap for palette index
-    uint8_t index = (virtual_pos_base + pixel_offset) & 0xFF;
-
-    CRGBW c = ColorFromPalette(active_palette, index, 255);
+    uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+    // Use 205 (80%) brightness to match Energy's background depth exactly
+    CRGBW c = ColorFromPalette(active_palette, index, 205);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
