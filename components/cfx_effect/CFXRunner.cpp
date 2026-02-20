@@ -6158,9 +6158,9 @@ uint16_t mode_fluid_rain(void) {
   // Intensity 0 -> High damping (syrup), 255 -> Low damping (water)
   // factor 0 to 255
   // We want a damping multiplier where 255 = no damping, 0 = freeze.
-  // Realistically water should settle. We'll map Intensity 0-255 to a
-  // multiplier 128-250
-  uint16_t damping_factor = 128 + (instance->_segment.intensity * 123 / 255);
+  // Realistically water should settle. Typical wave damping is 0.95 to 0.99
+  // Mapping Intensity 0-255 to a multiplier 230-254 (out of 256)
+  uint16_t damping_factor = 230 + (instance->_segment.intensity * 24 / 255);
 
   // 2. Physics Simulation
   for (int i = 1; i < len - 1; i++) {
@@ -6216,7 +6216,7 @@ uint16_t mode_fluid_rain(void) {
     } else {
       uint8_t palId = instance->_segment.palette;
       if (palId == 0)
-        palId = 101; // Default to Ocean/Water palette if 0
+        palId = 11; // Default to Ocean/Water palette (ID 11) if 0
 
       const uint32_t *active_palette = getPaletteByIndex(palId);
       CRGBW cWLED = ColorFromPalette(active_palette, pal_index, 255);
