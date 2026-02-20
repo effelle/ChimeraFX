@@ -3284,13 +3284,23 @@ uint16_t mode_chaos_theory(void) {
     instance->_segment.fadeToBlackBy(40);
 
     // Spawn glitter based on progress (accelerating density)
-    // Progress 0.0 -> 1.0
+    // Progress 0.0 -> 1.0 (approximated 0-255)
     uint8_t progress = (intro_elapsed * 255) / INTRO_DURATION;
 
-    // Chance increases with progress: 0% -> 50%
-    if (cfx::hw_random8() < (progress / 2)) {
+    // Density increases with progress
+    // Scale spawn count by length to ensure density on long strips
+    // Base: at least 1 pixel. Max: len / 10 pixels per frame.
+    int max_spawn = (len / 10) + 1;
+    long spawn_count = (long(progress) * max_spawn) / 255;
+
+    // Always spawn at least one in the second half
+    if (spawn_count == 0 && progress > 128)
+      spawn_count = 1;
+
+    for (int k = 0; k < spawn_count; k++) {
+      // Random position
       uint16_t pos = cfx::hw_random16() % (len ? len : 1);
-      // White sparkles
+      // Sparkling white
       instance->_segment.setPixelColor(pos, RGBW32(255, 255, 255, 255));
     }
 
@@ -3325,9 +3335,14 @@ uint16_t mode_chaos_theory(void) {
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
   // 3. Render Background (Smart Random Palette)
-  // Use the active palette (ID 254 if selected)
-  const uint32_t *active_palette =
-      getPaletteByIndex(instance->_segment.palette);
+  // Force Smart Random Palette (ID 254)
+  // Direct access to buffer avoids getPaletteByIndex bounds issues
+  const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
+
+  // If palette hasn't been generated yet (e.g. fresh boot), ensure it's valid
+  if (active_palette[0] == 0 && active_palette[15] == 0) {
+    instance->generateRandomPalette();
+  }
 
   for (int i = 0; i < len; i++) {
     // Offset: i * scale
