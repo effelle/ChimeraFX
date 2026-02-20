@@ -6151,19 +6151,12 @@ uint16_t mode_fluid_rain(void) {
   int16_t *current = (state->toggle == 0) ? buffer1 : buffer2;
   int16_t *previous = (state->toggle == 0) ? buffer2 : buffer1;
 
-  // Speed throttle: run physics every N frames
-  // Speed 255 → every frame, Speed 0 → every ~8 frames
-  uint8_t skip = 1 + ((255 - instance->_segment.speed) >> 5); // 1 to 8
-  if (instance->_segment.call % skip != 0) {
-    return FRAMETIME; // Hold last frame
-  }
-
   // 1. Damping (Intensity: 0 = syrup, 255 = water)
   // Multiplier range 245-254 out of 256 → 0.957 to 0.992 per step
   uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
 
   // 2. Wave Equation – Standard 1D Ripple Tank
-  // New[i] = Average(Prev[i-1], Prev[i+1]) - Current[i]
+  // Runs every frame for smooth animation (no frame skip)
   for (int i = 1; i < len - 1; i++) {
     int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
     int32_t new_val = smooth - current[i];
@@ -6176,13 +6169,11 @@ uint16_t mode_fluid_rain(void) {
   current[len - 1] = 0;
 
   // 3. Drop Injection – Wide Gaussian-like splashes
-  // Speed controls drop frequency: 0 = drizzle, 255 = downpour
-  uint8_t spawn_chance = 2 + (instance->_segment.speed >> 2); // 2 to 65
+  // Speed 0 = drizzle (~1 drop/sec), 255 = downpour
+  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
   if (cfx::hw_random8() < spawn_chance) {
-    // Pick a random position away from edges
     int pos = 2 + cfx::hw_random16(0, len - 4);
-    // Organic drop: 5-pixel Gaussian-like bell (center strongest)
-    int16_t amp = 300 + cfx::hw_random16(0, 200); // 300-500 random amplitude
+    int16_t amp = 300 + cfx::hw_random16(0, 200); // 300-500
     current[pos] += amp;
     current[pos - 1] += (amp * 3) >> 2; // 75%
     current[pos + 1] += (amp * 3) >> 2; // 75%
@@ -6193,19 +6184,15 @@ uint16_t mode_fluid_rain(void) {
   }
 
   // 4. Rendering – Map wave height to palette color
-  // Palette is resolved by the framework (get_default_palette_id_)
   const uint32_t *active_palette =
       getPaletteByIndex(instance->_segment.palette);
 
   for (int i = 0; i < len; i++) {
     int32_t height = abs((int32_t)current[i]);
-
-    // Scale: calm water ≈ 0, peak ripple ≈ 500-700 → palette 0-255
     uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 600);
 
     uint32_t c;
     if (instance->_segment.palette == 255) {
-      // Solid color mode: modulate brightness by wave height
       c = instance->_segment.colors[0];
       uint8_t bri = std::max((uint8_t)8, pal_index);
       CRGBW sc(c);
@@ -6218,6 +6205,11 @@ uint16_t mode_fluid_rain(void) {
 
     instance->_segment.setPixelColor(i, c);
   }
+
+  // 5. Smooth Pass – Blur the rendered pixels for fluid LED transitions
+  // This is the key to making the wave look like flowing water instead of
+  // discrete pixel jumps. blur(172) ≈ 67% neighbor bleed.
+  instance->_segment.blur(172);
 
   // Toggle buffer for next frame
   state->toggle = 1 - state->toggle;
