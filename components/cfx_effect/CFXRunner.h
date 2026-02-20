@@ -182,6 +182,7 @@ struct CRGBW {
 #define FX_MODE_FOLLOW_ME 156
 #define FX_MODE_FOLLOW_US 157
 #define FX_MODE_ENERGY 158
+#define FX_MODE_CHAOS_THEORY 159
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1

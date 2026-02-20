@@ -3224,6 +3224,191 @@ uint16_t mode_energy(void) {
   return FRAMETIME;
 }
 
+// --- Chaos Theory Effect (ID 159) ---
+// Organic, noise-driven evolution of the Energy effect.
+// Features:
+// 1. Embedded Glitter Intro: Replaces cursor with a sparkling birth.
+// 2. Bidirectional Flux: Smooth 16-bit noise drives speed and direction.
+// 3. Smart Palette: Fully integrated with ID 254.
+// 4. Energy Spikes: Retained for visual texture.
+
+struct ChaosData {
+  uint32_t accumulator;
+  uint32_t last_millis;
+  EnergySpark sparks[MAX_ENERGY_SPARKS];
+  // Intro State
+  uint32_t intro_start;
+  bool intro_done;
+};
+
+uint16_t mode_chaos_theory(void) {
+  if (!instance)
+    return 350;
+
+  uint16_t len = instance->_segment.length();
+
+  // State Management
+  ChaosData *data = (ChaosData *)instance->_segment.data;
+  if (!data || instance->_segment.reset) {
+    if (!instance->_segment.allocateData(sizeof(ChaosData)))
+      return 350;
+    data = (ChaosData *)instance->_segment.data;
+    data->last_millis = instance->now;
+    data->accumulator = 0;
+    data->intro_start = instance->now;
+    data->intro_done = false;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++)
+      data->sparks[s].level = 0;
+
+    // On reset, fill black to start fresh for intro
+    instance->_segment.fill(0);
+    instance->_segment.reset = false;
+  }
+
+  uint32_t dt = instance->now - data->last_millis;
+  data->last_millis = instance->now;
+
+  // --- Phase 1: Embedded Glitter Intro ---
+  if (!data->intro_done) {
+    uint32_t intro_elapsed = instance->now - data->intro_start;
+    const uint32_t INTRO_DURATION = 1500; // 1.5s build-up
+
+    if (intro_elapsed >= INTRO_DURATION) {
+      data->intro_done = true;
+      // Flash white to signify "Birth of Chaos"
+      instance->_segment.fill(RGBW32(255, 255, 255, 255));
+      return FRAMETIME;
+    }
+
+    // Fade existing sparks slightly (leave trails)
+    instance->_segment.fadeToBlackBy(40);
+
+    // Spawn glitter based on progress (accelerating density)
+    // Progress 0.0 -> 1.0
+    uint8_t progress = (intro_elapsed * 255) / INTRO_DURATION;
+
+    // Chance increases with progress: 0% -> 50%
+    if (cfx::hw_random8() < (progress / 2)) {
+      uint16_t pos = cfx::hw_random16() % (len ? len : 1);
+      // White sparkles
+      instance->_segment.setPixelColor(pos, RGBW32(255, 255, 255, 255));
+    }
+
+    return FRAMETIME;
+  }
+
+  // --- Phase 2: The Chaos Engine (Running State) ---
+
+  // 1. Bidirectional Flux (Noise-Driven Speed)
+  // Use inoise16 for smooth gradients. Scale time by speed slider.
+  // Speed 0 -> Slow morphing, Speed 255 -> Rapid chaotic shifts
+  uint32_t noise_time = instance->now * (instance->_segment.speed + 10);
+  uint16_t raw_noise = cfx::inoise16(noise_time, 42); // 0..65535
+
+  // Map noise to signed speed modifier: -2.0 to +2.0 roughly
+  // 0 -> -512, 32768 -> 0, 65535 -> +512
+  int32_t speed_mod = (int32_t)((raw_noise * 1024) / 65535) - 512;
+
+  // Apply to accumulator
+  // Base speed is from slider, but direction comes from noise
+  // We use the slider to scale the *magnitude* of the movement delta
+  int32_t delta_move = (speed_mod * (instance->_segment.speed + 1)) >> 6;
+
+  data->accumulator += delta_move;
+
+  // 2. Coordinate Mapping
+  // Accumulator is high resolution. Shift down to get "Virtual Position".
+  // Mask to keep it wrapping cleanliness if needed, but simple shift is fine.
+  uint16_t virtual_pos_base = (data->accumulator >> 8);
+
+  // Spatial Multiplier (Zoom) from Intensity
+  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
+
+  // 3. Render Background (Smart Random Palette)
+  // Use the active palette (ID 254 if selected)
+  const uint32_t *active_palette =
+      getPaletteByIndex(instance->_segment.palette);
+
+  for (int i = 0; i < len; i++) {
+    // Offset: i * scale
+    uint16_t pixel_offset = (i * spatial_mult) / (len ? len : 1);
+    // Scroll: + virtual position
+    // Use 8-bit wrap for palette index
+    uint8_t index = (virtual_pos_base + pixel_offset) & 0xFF;
+
+    CRGBW c = ColorFromPalette(active_palette, index, 255);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // --- Phase 3: Energy Spikes (Texture) ---
+  // Reuse logic from Energy, but overlay on top of chaos
+
+  // Trigger logic: High agitation only?
+  // Let's use the derivative of the noise (speed_mod magnitude)
+  // If moving FAST, spawn more spikes.
+  uint32_t agitation = std::abs(speed_mod); // 0..512
+
+  if (agitation > 200 && cfx::hw_random8() < 40) {
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level == 0) {
+        data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
+        data->sparks[s].level = 200;      // Start bright
+        data->sparks[s].building = false; // Instant pop, then fade
+        break;
+      }
+    }
+  }
+
+  // Provide bloom range
+  uint16_t spark_radius = (len / 60) + 1;
+  if (spark_radius > 4)
+    spark_radius = 4;
+
+  // Update Spikes
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level > 0) {
+      // Fade
+      uint8_t fade = 5; // Fixed fade rate
+      if (data->sparks[s].level <= fade)
+        data->sparks[s].level = 0;
+      else
+        data->sparks[s].level -= fade;
+    }
+  }
+
+  // Draw Spikes (Additive Blend)
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level > 0) {
+      int center = data->sparks[s].pos;
+      uint8_t bri = data->sparks[s].level;
+
+      // Helper to add brightness
+      auto add_brightness = [&](int pos, uint8_t amount) {
+        if (pos >= 0 && pos < len) {
+          uint32_t existing = instance->_segment.getPixelColor(pos);
+          CRGBW bg(existing);
+          CRGBW fg(amount, amount, amount, amount);
+          CRGBW final = color_add(bg, fg);
+          instance->_segment.setPixelColor(
+              pos, RGBW32(final.r, final.g, final.b, final.w));
+        }
+      };
+
+      add_brightness(center, bri);
+
+      for (int r = 1; r <= spark_radius; r++) {
+        uint8_t dim = bri >> r;
+        if (dim == 0)
+          continue;
+        add_brightness(center - r, dim);
+        add_brightness(center + r, dim);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
 // Intensity controls saturation (blends with white)
 uint16_t mode_rainbow(void) {
   if (!instance)
@@ -3868,6 +4053,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_ENERGY: // 158
     mode_energy();
+    break;
+  case FX_MODE_CHAOS_THEORY: // 159
+    mode_chaos_theory();
     break;
   default:
     mode_static();
