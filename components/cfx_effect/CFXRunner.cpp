@@ -6154,12 +6154,37 @@ uint16_t mode_fluid_rain(void) {
   // 1. Damping (Intensity: 0 = syrup, 255 = water)
   uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
 
-  // 2. Wave Equation – Standard 1D Ripple Tank
-  for (int i = 1; i < len - 1; i++) {
-    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
-    int32_t new_val = smooth - current[i];
-    new_val = (new_val * damping) >> 8;
-    current[i] = (int16_t)new_val;
+  // 2. Wave Equation with built-in smoothing
+  // Uses a 5-point weighted stencil instead of 3-point + separate blur pass.
+  // This produces inherently smooth wave propagation in ONE loop.
+  // Weights: [1, 2, -4*old, 2, 1] / 4 → naturally anti-aliased ripples
+  if (len > 4) {
+    // Interior: wide 5-point stencil
+    current[1] =
+        (int16_t)((((int32_t)previous[0] + (int32_t)previous[2]) >> 1) -
+                  current[1]);
+    for (int i = 2; i < len - 2; i++) {
+      int32_t smooth =
+          ((int32_t)previous[i - 2] + (int32_t)previous[i - 1] * 2 +
+           (int32_t)previous[i + 1] * 2 + (int32_t)previous[i + 2]) /
+          6;
+      int32_t new_val = smooth - current[i];
+      new_val = (new_val * damping) >> 8;
+      current[i] = (int16_t)new_val;
+    }
+    current[len - 2] =
+        (int16_t)((((int32_t)previous[len - 3] + (int32_t)previous[len - 1]) >>
+                   1) -
+                  current[len - 2]);
+  } else {
+    // Very short strips: simple 3-point
+    for (int i = 1; i < len - 1; i++) {
+      int32_t smooth =
+          ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
+      int32_t new_val = smooth - current[i];
+      new_val = (new_val * damping) >> 8;
+      current[i] = (int16_t)new_val;
+    }
   }
 
   // Fixed-end boundaries
@@ -6167,10 +6192,10 @@ uint16_t mode_fluid_rain(void) {
   current[len - 1] = 0;
 
   // 3. Drop Injection – Wide Gaussian-like splashes
-  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
+  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3);
   if (cfx::hw_random8() < spawn_chance) {
     int pos = 2 + cfx::hw_random16(0, len - 4);
-    int16_t amp = 120 + cfx::hw_random16(0, 130); // 120-250
+    int16_t amp = 120 + cfx::hw_random16(0, 130);
     current[pos] += amp;
     current[pos - 1] += (amp * 3) >> 2;
     current[pos + 1] += (amp * 3) >> 2;
@@ -6180,30 +6205,20 @@ uint16_t mode_fluid_rain(void) {
       current[pos + 2] += amp >> 2;
   }
 
-  // 4. Cheap wave-buffer smoothing (replaces expensive Segment::blur)
-  // 3-tap box filter on raw int16 data — orders of magnitude faster than
-  // blur() which does virtual light buffer reads/writes per pixel.
-  // This smooths the wave data BEFORE rendering, preventing strobing and
-  // creating organic transitions without touching the light buffer.
-  for (int i = 1; i < len - 1; i++) {
-    current[i] = (int16_t)(((int32_t)current[i - 1] + (int32_t)current[i] * 2 +
-                            (int32_t)current[i + 1]) >>
-                           2);
-  }
-
-  // 5. Rendering – Map wave height to palette color
+  // 4. Rendering – Map wave height to palette color (single pass)
   const uint32_t *active_palette =
       getPaletteByIndex(instance->_segment.palette);
+  bool is_solid = (instance->_segment.palette == 255);
+  uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
   for (int i = 0; i < len; i++) {
     int32_t height = abs((int32_t)current[i]);
     uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 250);
 
     uint32_t c;
-    if (instance->_segment.palette == 255) {
-      c = instance->_segment.colors[0];
+    if (is_solid) {
       uint8_t bri = std::max((uint8_t)8, pal_index);
-      CRGBW sc(c);
+      CRGBW sc(solid_color);
       c = RGBW32((sc.r * bri) >> 8, (sc.g * bri) >> 8, (sc.b * bri) >> 8,
                  (sc.w * bri) >> 8);
     } else {
