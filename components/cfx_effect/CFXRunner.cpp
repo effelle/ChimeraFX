@@ -6108,8 +6108,9 @@ uint16_t mode_follow_us(void) {
 }
 
 // --- Fluid Rain (ID 160) ---
-// Pacifica-style rendering: layered sine waves + rain drops
+// Layered sine waves (subtle water surface) + time-phased rain drops
 // Zero allocated buffers — safe for multi-strip operation
+#define FLUID_RAIN_NUM_DROPS 6
 uint16_t mode_fluid_rain(void) {
   if (!instance)
     return FRAMETIME;
@@ -6121,60 +6122,94 @@ uint16_t mode_fluid_rain(void) {
   uint8_t speed = instance->_segment.speed;
   uint8_t intensity = instance->_segment.intensity;
 
-  // Time base: speed controls wave movement
+  // Time base
   uint32_t now = cfx_millis();
   uint32_t t = (now * (speed + 1)) >> 7;
 
-  // 3 wave layers at different speeds and directions
-  uint16_t wave1 = t * 3;    // Slow forward ripple
-  uint16_t wave2 = -(t * 5); // Medium reverse ripple
-  uint16_t wave3 = t * 7;    // Fast forward shimmer
+  // === SUBTLE BACKGROUND WATER SURFACE ===
+  // Two slow waves create gentle undulation (not the main visual)
+  uint16_t wave1 = t * 2;
+  uint16_t wave2 = -(t * 3);
 
-  // Oscillating brightness for each layer (organic feel)
-  uint8_t bri1 = 100 + ((sin8((t >> 3) & 0xFF) * 100) >> 8); // 100-200
-  uint8_t bri2 = 80 + ((sin8((t >> 4) & 0xFF) * 80) >> 8);   // 80-160
-  uint8_t bri3 = 60 + ((sin8((t >> 5) & 0xFF) * 60) >> 8);   // 60-120
-
-  // Rain drop phase: shifts over time to create moving impact points
-  uint8_t drop_phase = (t >> 3) & 0xFF;
-  // Intensity controls how many drops are visible (more = heavier rain)
-  uint8_t drop_threshold =
-      240 - (intensity >> 1); // 240 (drizzle) to 112 (downpour)
+  // === RAIN DROP SYSTEM ===
+  // Each drop has its own time cycle. Drops appear, splash wide, then fade.
+  // Drop cycle length controls how long each drop lives (in time units)
+  // Intensity: slower cycle = longer-lived drops at low intensity
+  uint16_t cycle_len =
+      160 - (intensity >> 2); // 160 (slow rain) to 96 (fast rain)
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
   bool is_solid = (instance->_segment.palette == 255);
   uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
+  // Pre-compute drop positions and envelopes (6 drops, outside pixel loop)
+  struct {
+    int center;
+    uint8_t envelope;
+  } drops[FLUID_RAIN_NUM_DROPS];
+
+  for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
+    // Each drop has a staggered time offset so they don't all appear at once
+    uint32_t drop_t = t + d * (cycle_len / FLUID_RAIN_NUM_DROPS);
+    uint16_t phase = drop_t % cycle_len; // Where are we in this drop's life?
+
+    // Fade envelope: quick attack (20%), slow decay (80%)
+    uint8_t attack_end = cycle_len / 5;
+    uint8_t env;
+    if (phase < attack_end) {
+      env = (phase * 255) / attack_end; // Ramp up
+    } else {
+      env = ((cycle_len - phase) * 255) / (cycle_len - attack_end); // Fade out
+    }
+    drops[d].envelope = env;
+
+    // Drop position: pseudo-random from cycle number, deterministic per drop
+    uint16_t cycle_num = drop_t / cycle_len;
+    drops[d].center =
+        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 4)) >> 8;
+    drops[d].center += 2; // Keep away from edges
+  }
+
+  // === SINGLE RENDER LOOP ===
   for (int i = 0; i < len; i++) {
     uint16_t spatial = i * 256;
 
-    // Wave layers: sin8 lookup (table read, 1 cycle each)
+    // Background: subtle water surface (low amplitude)
     uint8_t w1 = sin8(((spatial >> 1) + wave1) >> 8);
     uint8_t w2 = sin8(((spatial >> 2) + wave2) >> 8);
-    uint8_t w3 = sin8(((spatial >> 1) + wave3) >> 8);
+    // Scale way down: background is just a gentle shimmer (0-50 range)
+    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3; // 0-63
 
-    // Blend layers with oscillating brightness
-    uint16_t composite =
-        ((uint16_t)scale8(w1, bri1) + (uint16_t)scale8(w2, bri2) +
-         (uint16_t)scale8(w3, bri3));
-    // Normalize 3-layer sum: max possible ≈ 200+160+120 = 480 → scale to 0-255
-    uint8_t base = (composite > 480) ? 255 : (uint8_t)((composite * 255) >> 9);
+    // Add rain drops: check each drop's distance to this pixel
+    for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
+      int dist = i - drops[d].center;
+      if (dist < 0)
+        dist = -dist;
+      if (dist > 4)
+        continue; // Outside splash radius
 
-    // Rain drop impacts: pseudo-random bright spots using sin8 hash
-    // Each pixel gets a unique hash that shifts with time → drops
-    // appear/disappear
-    uint8_t drop_hash = sin8((uint8_t)(i * 37 + drop_phase));
-    if (drop_hash > drop_threshold) {
-      // Bright splash: boost proportional to how far over threshold
-      uint8_t splash = ((uint16_t)(drop_hash - drop_threshold) * 200) >> 8;
-      base = qadd8(base, splash);
+      // Splash profile: bell curve over 5 pixels (center=100%, ±1=70%, ±2=30%)
+      uint8_t falloff;
+      if (dist == 0)
+        falloff = 255;
+      else if (dist == 1)
+        falloff = 180;
+      else if (dist == 2)
+        falloff = 90;
+      else if (dist == 3)
+        falloff = 35;
+      else
+        falloff = 10;
+
+      // Drop brightness = envelope × falloff
+      uint8_t drop_bri = scale8(drops[d].envelope, falloff);
+      base = qadd8(base, drop_bri);
     }
 
-    // Ensure minimum visibility floor (no pure black)
+    // Minimum floor + palette mapping
     uint8_t pal_index = (base < 16) ? 16 : base;
 
-    // Render
     uint32_t c;
     if (is_solid) {
       CRGBW sc(solid_color);
