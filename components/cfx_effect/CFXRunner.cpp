@@ -6189,7 +6189,7 @@ uint16_t mode_fluid_rain(void) {
 
   for (int i = 0; i < len; i++) {
     int32_t height = abs((int32_t)current[i]);
-    uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 600);
+    uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 200);
 
     uint32_t c;
     if (instance->_segment.palette == 255) {
