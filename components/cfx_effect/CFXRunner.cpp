@@ -6154,44 +6154,20 @@ uint16_t mode_fluid_rain(void) {
   // 1. Damping (Intensity: 0 = syrup, 255 = water)
   uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
 
-  // 2. Wave Equation with built-in smoothing
-  // Uses a 5-point weighted stencil instead of 3-point + separate blur pass.
-  // This produces inherently smooth wave propagation in ONE loop.
-  // Weights: [1, 2, -4*old, 2, 1] / 4 → naturally anti-aliased ripples
-  if (len > 4) {
-    // Interior: wide 5-point stencil
-    current[1] =
-        (int16_t)((((int32_t)previous[0] + (int32_t)previous[2]) >> 1) -
-                  current[1]);
-    for (int i = 2; i < len - 2; i++) {
-      int32_t smooth =
-          ((int32_t)previous[i - 2] + (int32_t)previous[i - 1] * 2 +
-           (int32_t)previous[i + 1] * 2 + (int32_t)previous[i + 2]) /
-          6;
-      int32_t new_val = smooth - current[i];
-      new_val = (new_val * damping) >> 8;
-      current[i] = (int16_t)new_val;
-    }
-    current[len - 2] =
-        (int16_t)((((int32_t)previous[len - 3] + (int32_t)previous[len - 1]) >>
-                   1) -
-                  current[len - 2]);
-  } else {
-    // Very short strips: simple 3-point
-    for (int i = 1; i < len - 1; i++) {
-      int32_t smooth =
-          ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
-      int32_t new_val = smooth - current[i];
-      new_val = (new_val * damping) >> 8;
-      current[i] = (int16_t)new_val;
-    }
+  // 2. Wave Equation – Simple 3-point stencil (bit shifts only, no division)
+  // All operations are >>1 and >>8 — 1 cycle each on ESP32.
+  for (int i = 1; i < len - 1; i++) {
+    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
+    int32_t new_val = smooth - current[i];
+    new_val = (new_val * damping) >> 8;
+    current[i] = (int16_t)new_val;
   }
 
   // Fixed-end boundaries
   current[0] = 0;
   current[len - 1] = 0;
 
-  // 3. Drop Injection – Wide Gaussian-like splashes
+  // 3. Drop Injection – Wide 5-pixel Gaussian splashes
   uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3);
   if (cfx::hw_random8() < spawn_chance) {
     int pos = 2 + cfx::hw_random16(0, len - 4);
@@ -6205,15 +6181,21 @@ uint16_t mode_fluid_rain(void) {
       current[pos + 2] += amp >> 2;
   }
 
-  // 4. Rendering – Map wave height to palette color (single pass)
+  // 4. Rendering – Quadratic height mapping (anti-strobe)
+  // Using height² instead of abs(height): the derivative of x² is 0 at x=0,
+  // so brightness transitions through zero-crossings are SMOOTH, not sharp.
+  // This eliminates the strobing "dark flash" when waves oscillate ±.
+  // Multiplication is 1 cycle on ESP32, >>8 is 1 cycle. No division.
   const uint32_t *active_palette =
       getPaletteByIndex(instance->_segment.palette);
   bool is_solid = (instance->_segment.palette == 255);
   uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
   for (int i = 0; i < len; i++) {
-    int32_t height = abs((int32_t)current[i]);
-    uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 250);
+    int32_t h = current[i];
+    // Quadratic: h² / 256 → maps ±255 to 255, ±128 to 64, 0 to 0
+    uint32_t sq = ((uint32_t)(h * h)) >> 8;
+    uint8_t pal_index = (sq > 255) ? 255 : (uint8_t)sq;
 
     uint32_t c;
     if (is_solid) {
