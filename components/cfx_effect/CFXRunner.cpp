@@ -3318,24 +3318,22 @@ uint16_t mode_chaos_theory(void) {
     speed_factor = 16;
   data->accumulator += (dt * speed_factor);
 
-  // FIX (Iteration 9): Hybrid Approach for 16-Color Palette
-  // Energy uses a 255-smooth palette. Chaos uses 16 distinct colors.
-  // Using the high-speed accumulator directly on 16 colors causes twinkling.
-  // We need a dedicated, very slow accumulator for the background scroll.
-  // We repurpose the upper bits or scale drastically down.
-  uint32_t slow_scroll = data->accumulator >> 14;
-  uint8_t counter = slow_scroll & 0xFF;
+  // FIX (Iteration 10): Restore Energy Controls + Dynamic Noise Zoom
+  // The user wants the speed and intensity sliders to match Energy, but they
+  // also want the effect to organically shift between "twinkle chaos" and
+  // "linear scrolling".
 
-  // Reduce Spatial Multiplier (Zoom OUT)
-  // Max Zoom was 16 << (255/29) = 16 << 8 = 4096.
-  // 4096 / length means the 16 colors repeat dozens of times per strip =
-  // twinkle. We want the 16 colors to stretch across the whole strip or just
-  // repeat 1-2 times. Intensity 0 = 1 repeat (Zoom Out). Intensity 255 = 4
-  // repeats (Zoom In).
-  uint16_t map_range = 255;
+  // 1. Restore exact Energy Speed Shift
+  uint8_t counter = (data->accumulator >> 11) & 0xFF;
+
+  // 2. Restore exact Energy Intensity Math as the "Peak Chaos" limit
+  uint16_t base_spatial_mult = 16 << (instance->_segment.intensity / 29);
+
+  // 3. Dynamic Twinkle-to-Scroll Modulation
+  // Shrink the spatial multiplier when noise is low -> Smooth Scrolling Bands.
+  // Explode the spatial multiplier when noise is high -> Twinkling Chaos.
   uint16_t spatial_mult =
-      map_range +
-      (map_range * (instance->_segment.intensity / 85)); // 255 to ~1000
+      64 + (((uint32_t)base_spatial_mult * raw_noise) / 255);
 
   // 2. Render Background
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
