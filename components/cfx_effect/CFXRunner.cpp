@@ -6152,64 +6152,66 @@ uint16_t mode_fluid_rain(void) {
   int16_t *previous = (state->toggle == 0) ? buffer2 : buffer1;
 
   // Speed throttle: run physics every N frames
-  // Speed 255 → every frame (~66fps), Speed 0 → every ~16 frames (~4fps)
-  uint8_t skip = 16 - (instance->_segment.speed >> 4); // 1 to 16
+  // Speed 255 → every frame, Speed 0 → every ~8 frames
+  uint8_t skip = 1 + ((255 - instance->_segment.speed) >> 5); // 1 to 8
   if (instance->_segment.call % skip != 0) {
-    return FRAMETIME; // Skip physics this frame, keep last render
+    return FRAMETIME; // Hold last frame
   }
 
-  // 1. Damping Factor (Intensity mapping)
-  // Intensity 0 → heavy damping (syrup/240), 255 → light damping (water/253)
-  uint16_t damping = 240 + (instance->_segment.intensity * 13 / 255);
+  // 1. Damping (Intensity: 0 = syrup, 255 = water)
+  // Multiplier range 245-254 out of 256 → 0.957 to 0.992 per step
+  uint16_t damping = 245 + (instance->_segment.intensity * 9 / 255);
 
-  // 2. Physics Simulation – Standard 1D Wave Equation
+  // 2. Wave Equation – Standard 1D Ripple Tank
+  // New[i] = Average(Prev[i-1], Prev[i+1]) - Current[i]
   for (int i = 1; i < len - 1; i++) {
-    // Average neighbors, subtract old value: New = Avg(L, R) - Old
     int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
     int32_t new_val = smooth - current[i];
-
-    // Apply damping: Val = (Val * damping) / 256
     new_val = (new_val * damping) >> 8;
-
     current[i] = (int16_t)new_val;
   }
 
-  // Edge Boundaries (fixed ends → clean reflections)
+  // Fixed-end boundaries → waves reflect and invert (pool walls)
   current[0] = 0;
   current[len - 1] = 0;
 
-  // 3. Drop Injection (Speed configures frequency)
-  // Speed 0 → rare drops, 255 → heavy storm
-  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
+  // 3. Drop Injection – Wide Gaussian-like splashes
+  // Speed controls drop frequency: 0 = drizzle, 255 = downpour
+  uint8_t spawn_chance = 2 + (instance->_segment.speed >> 2); // 2 to 65
   if (cfx::hw_random8() < spawn_chance) {
-    int pos = 1 + cfx::hw_random16(0, len - 2);
-    // Additive injection – overlapping drops stack naturally
-    current[pos] += 512;
+    // Pick a random position away from edges
+    int pos = 2 + cfx::hw_random16(0, len - 4);
+    // Organic drop: 5-pixel Gaussian-like bell (center strongest)
+    int16_t amp = 300 + cfx::hw_random16(0, 200); // 300-500 random amplitude
+    current[pos] += amp;
+    current[pos - 1] += (amp * 3) >> 2; // 75%
+    current[pos + 1] += (amp * 3) >> 2; // 75%
+    if (pos > 2)
+      current[pos - 2] += amp >> 2; // 25%
+    if (pos < len - 3)
+      current[pos + 2] += amp >> 2; // 25%
   }
 
-  // 4. Rendering (Center-Weighted Refraction)
-  // Still water (0) → Palette Index 0 (deep color)
-  // Peaks (~600-800) → Palette Index 255 (bright crest)
+  // 4. Rendering – Map wave height to palette color
+  // Palette is resolved by the framework (get_default_palette_id_)
+  const uint32_t *active_palette =
+      getPaletteByIndex(instance->_segment.palette);
+
   for (int i = 0; i < len; i++) {
     int32_t height = abs((int32_t)current[i]);
 
-    // Scale height to palette index (stable sim peaks around 600-800)
-    uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 800);
+    // Scale: calm water ≈ 0, peak ripple ≈ 500-700 → palette 0-255
+    uint8_t pal_index = (uint8_t)std::min((int32_t)255, height * 255 / 600);
 
-    // Resolve palette
     uint32_t c;
-    if (instance->_segment.palette == 255) { // Solid
+    if (instance->_segment.palette == 255) {
+      // Solid color mode: modulate brightness by wave height
       c = instance->_segment.colors[0];
-      uint8_t bri = (pal_index > 0) ? pal_index : 10;
+      uint8_t bri = std::max((uint8_t)8, pal_index);
       CRGBW sc(c);
       c = RGBW32((sc.r * bri) >> 8, (sc.g * bri) >> 8, (sc.b * bri) >> 8,
                  (sc.w * bri) >> 8);
     } else {
-      uint8_t palId = instance->_segment.palette;
-      if (palId == 0)
-        palId = 11; // Default to Ocean palette
-
-      const uint32_t *active_palette = getPaletteByIndex(palId);
       CRGBW cWLED = ColorFromPalette(active_palette, pal_index, 255);
       c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
     }
