@@ -15,12 +15,12 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | No | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
-| 160 | **Fluid Rain** | 1D fluid simulation of raindrops hitting water. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
+| 160 | **Fluid Rain** | A realistic liquid simulation. Raindrops hit the strip, creating organic ripples that travel, collide, and bounce off the edges. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
-| 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite at the ends and burn inwards to meet in the center. Toggle Mirror to reverse the effect and make the flames erupt from the middle outward. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
+| 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center. Toggle Mirror to reverse the effect. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 
 #### WLED-Style Effects:
 

@@ -6173,7 +6173,7 @@ uint16_t mode_fluid_rain(void) {
   uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
   if (cfx::hw_random8() < spawn_chance) {
     int pos = 2 + cfx::hw_random16(0, len - 4);
-    int16_t amp = 300 + cfx::hw_random16(0, 200); // 300-500
+    int16_t amp = 80 + cfx::hw_random16(0, 100); // 80-180 gentle splash
     current[pos] += amp;
     current[pos - 1] += (amp * 3) >> 2; // 75%
     current[pos + 1] += (amp * 3) >> 2; // 75%
