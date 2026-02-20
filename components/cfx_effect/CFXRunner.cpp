@@ -3323,8 +3323,9 @@ uint16_t mode_chaos_theory(void) {
 
   // 2. Coordinate Mapping
   // Accumulator is high resolution. Shift down to get "Virtual Position".
-  // Mask to keep it wrapping cleanliness if needed, but simple shift is fine.
-  uint16_t virtual_pos_base = (data->accumulator >> 8);
+  // FIX (Iteration 7): Shift by 11 to match Energy (ID 158) scrolling speed.
+  // This prevents the "twinkle" flicker and restores visible color bands.
+  uint16_t virtual_pos_base = (data->accumulator >> 11);
 
   // Spatial Multiplier (Zoom) from Intensity
   uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
