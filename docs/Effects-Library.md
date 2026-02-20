@@ -11,6 +11,7 @@ Please note that some WLED effects will not be ported. This includes animations 
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
+| 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | Yes | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
 | 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
