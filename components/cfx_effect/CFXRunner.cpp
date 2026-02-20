@@ -3318,22 +3318,23 @@ uint16_t mode_chaos_theory(void) {
     speed_factor = 16;
   data->accumulator += (dt * speed_factor);
 
-  // FIX (Iteration 10): Restore Energy Controls + Dynamic Noise Zoom
-  // The user wants the speed and intensity sliders to match Energy, but they
-  // also want the effect to organically shift between "twinkle chaos" and
-  // "linear scrolling".
+  // FIX (Iteration 11): Noise-Driven Pixel Scatter
+  // Modulating spatial_mult caused strobing (accordion stretch).
+  // Now we lock scale to Energy, and scatter pixels when chaos is high.
 
   // 1. Restore exact Energy Speed Shift
   uint8_t counter = (data->accumulator >> 11) & 0xFF;
 
-  // 2. Restore exact Energy Intensity Math as the "Peak Chaos" limit
-  uint16_t base_spatial_mult = 16 << (instance->_segment.intensity / 29);
+  // 2. Restore exact Energy Intensity Math (Zoom)
+  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
 
-  // 3. Dynamic Twinkle-to-Scroll Modulation
-  // Shrink the spatial multiplier when noise is low -> Smooth Scrolling Bands.
-  // Explode the spatial multiplier when noise is high -> Twinkling Chaos.
-  uint16_t spatial_mult =
-      64 + (((uint32_t)base_spatial_mult * raw_noise) / 255);
+  // 3. Noise-Driven Index Scattering (Twinkle Chaos overlay)
+  // Low noise = 0 scatter (Linear Scrolling).
+  // High noise = Pixel indices drift randomly (Twinkle Chaos).
+  uint8_t scatter_range = 0;
+  if (raw_noise > 128) {
+    scatter_range = cfx::cfx_map(raw_noise, 128, 255, 0, 80);
+  }
 
   // 2. Render Background
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
@@ -3342,9 +3343,13 @@ uint16_t mode_chaos_theory(void) {
   }
 
   for (int i = 0; i < len; i++) {
-    // Map position to 0-255 using the reduced spatial multiplier
-    uint16_t positional_offset = (i * spatial_mult) / (len ? len : 1);
-    uint8_t index = (positional_offset + counter) & 0xFF;
+    // Map position to 0-255 using exact Energy math
+    uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+
+    // Apply twinkle scatter if active
+    if (scatter_range > 0) {
+      index += cfx::hw_random8(scatter_range) - (scatter_range >> 1);
+    }
 
     // Use 205 (80%) brightness to match Energy's background depth exactly
     CRGBW c = ColorFromPalette(active_palette, index, 205);
