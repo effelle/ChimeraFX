@@ -183,6 +183,7 @@ struct CRGBW {
 #define FX_MODE_FOLLOW_US 157
 #define FX_MODE_ENERGY 158
 #define FX_MODE_CHAOS_THEORY 159
+#define FX_MODE_FLUID_RAIN 160
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -190,7 +191,7 @@ struct CRGBW {
 #define INTRO_CENTER 3
 #define INTRO_GLITTER 4
 
-#define MODE_COUNT 115
+#define MODE_COUNT 116
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 

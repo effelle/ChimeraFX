@@ -4067,6 +4067,9 @@ void CFXRunner::service() {
   case FX_MODE_CHAOS_THEORY: // 159
     mode_chaos_theory();
     break;
+  case FX_MODE_FLUID_RAIN: // 160
+    mode_fluid_rain();
+    break;
   default:
     mode_static();
     break;
@@ -6099,6 +6102,131 @@ uint16_t mode_follow_us(void) {
   }
 
   } // switch
+
+  return FRAMETIME;
+}
+
+// --- Fluid Rain (ID 160) ---
+// True 1D Fluid Simulation using integer math
+struct FluidRainState {
+  size_t buffer_size;
+  uint8_t toggle; // 0 or 1 for active buffer
+  // We allocate buffer1 and buffer2 sequentially in memory
+  // int16_t buffer1[len]
+  // int16_t buffer2[len]
+};
+
+uint16_t mode_fluid_rain(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // Allocation
+  // We need 2 * len * sizeof(int16_t) + sizeof(FluidRainState)
+  size_t dataSize = sizeof(FluidRainState) + (2 * len * sizeof(int16_t));
+
+  if (!instance->_segment.allocateData(dataSize)) {
+    return mode_static();
+  }
+
+  FluidRainState *state =
+      reinterpret_cast<FluidRainState *>(instance->_segment.data);
+  int16_t *buffer1 = reinterpret_cast<int16_t *>(instance->_segment.data +
+                                                 sizeof(FluidRainState));
+  int16_t *buffer2 = buffer1 + len;
+
+  // Initialize buffers on reset or size change
+  if (instance->_segment.reset || state->buffer_size != len) {
+    state->buffer_size = len;
+    state->toggle = 0;
+    for (int i = 0; i < len; i++) {
+      buffer1[i] = 0;
+      buffer2[i] = 0;
+    }
+    instance->_segment.reset = false;
+  }
+
+  // Determine current and previous buffers
+  int16_t *current = (state->toggle == 0) ? buffer1 : buffer2;
+  int16_t *previous = (state->toggle == 0) ? buffer2 : buffer1;
+
+  // Render timing: Update simulation less frequently if speed is very low?
+  // Fluid dynamics usually runs every frame. We'll run it every frame.
+
+  // 1. Damping Factor (Intensity mapping)
+  // Intensity 0 -> High damping (syrup), 255 -> Low damping (water)
+  // factor 0 to 255
+  // We want a damping multiplier where 255 = no damping, 0 = freeze.
+  // Realistically water should settle. We'll map Intensity 0-255 to a
+  // multiplier 128-250
+  uint16_t damping_factor = 128 + (instance->_segment.intensity * 123 / 255);
+
+  // 2. Physics Simulation
+  for (int i = 1; i < len - 1; i++) {
+    // 1D Wave Equation: New = ((Prev[i-1] + Prev[i+1]) / 2) - Current[i]
+    int32_t smooth = ((int32_t)previous[i - 1] + (int32_t)previous[i + 1]) >> 1;
+    int32_t new_val = smooth - current[i];
+
+    // Damping: Val = (Val * damping) / 256
+    new_val = (new_val * damping_factor) >> 8;
+
+    current[i] = (int16_t)new_val;
+  }
+
+  // Edge Boundaries (Bounce)
+  current[0] = 0;
+  current[len - 1] = 0;
+
+  // 3. Drop Injection (Speed configures frequency)
+  // Speed 0 -> rarely, 255 -> heavy storm
+  uint8_t spawn_chance = 1 + (instance->_segment.speed >> 3); // 1 to 32
+  if (cfx::hw_random8() < spawn_chance) {
+    // Random position to inject energy
+    int pos = 1 + cfx::hw_random16(len - 2);
+    // Inject positive energy peak (max 32767 for int16, we use a nice big
+    // number)
+    current[pos] = 20000;
+  }
+
+  // 4. Rendering (Center-Weighted Refraction)
+  // We map the height [-32768, 32767] to palette [0, 255].
+  // Since we want center-weighted mapping:
+  // Still water (0) -> Palette Index 0
+  // Peaks (+/- 20000) -> Palette Index 255
+  for (int i = 0; i < len; i++) {
+    int32_t height = abs((int32_t)current[i]);
+
+    // Scale height (0 to ~20000) to index (0 to 255)
+    // 20000 / 78 roughly equals 255
+    uint16_t pal_index = std::min((uint32_t)255, (uint32_t)(height / 78));
+
+    // For better visuals on low waves, optionally apply gamma to pal_index or
+    // boost it
+
+    // Resolve palette
+    uint32_t c;
+    if (instance->_segment.palette == 255) { // Solid
+      c = instance->_segment.colors[0];
+      // If solid, use height to modulate brightness instead
+      uint8_t bri = (pal_index > 0) ? pal_index : 10; // min brightness
+      CRGBW sc(c);
+      c = RGBW32((sc.r * bri) >> 8, (sc.g * bri) >> 8, (sc.b * bri) >> 8,
+                 (sc.w * bri) >> 8);
+    } else {
+      uint8_t palId = instance->_segment.palette;
+      if (palId == 0)
+        palId = 101; // Default to Ocean/Water palette if 0
+
+      const uint32_t *active_palette = getPaletteByIndex(palId);
+      CRGBW cWLED = ColorFromPalette(active_palette, pal_index, 255);
+      c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
+    }
+
+    instance->_segment.setPixelColor(i, c);
+  }
+
+  // Toggle buffer for next frame
+  state->toggle = 1 - state->toggle;
 
   return FRAMETIME;
 }

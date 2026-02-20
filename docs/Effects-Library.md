@@ -3,7 +3,7 @@
 If you’re wondering why all WLED effects aren't available yet, here is the answer:
 
 Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to 'squeeze' every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components.
-Please note that some WLED effects will not be ported. This includes animations designed specifically for 2D matrix, as well as effects that rely on WLED's ability to select three distinct colors (Secondary/Tertiary), as these features exceed the current capabilities of ESPHome and ChimeraFX.
+Please note that some WLED effects will not be ported. This includes animations designed specifically for 2D matrix, as well as effects that rely on WLED's ability to select two or three distinct colors (Secondary/Tertiary), as these features exceed the current capabilities of ESPHome and ChimeraFX.
 
 ### Effect List
 
@@ -11,10 +11,11 @@ Please note that some WLED effects will not be ported. This includes animations 
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | Yes | ChimeraFX |
+| 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | No | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
 | 153 | **Fire Dual** | Two flames meeting in the center. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
+| 160 | **Fluid Rain** | 1D fluid simulation of raindrops hitting water. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
 | 154 | **Heartbeat Center**| Heartbeat pulsing from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |

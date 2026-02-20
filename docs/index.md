@@ -18,8 +18,11 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 
 **Your mileage may vary.**
 Visual effects are computationally expensive.
+
 *   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices may function, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
+
 *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
+
 *   **Optimization:** This library is optimized for ESP-IDF, but hardware resources are finite. Manage your load accordingly.
 
 ---
