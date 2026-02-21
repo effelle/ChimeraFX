@@ -294,25 +294,27 @@ void CFXAddressableLightEffect::stop() {
       // CRITICAL FIX: ESPHome invokes stop() BEFORE it updates
       // remote_values.is_on() to false. We must defer the evaluation to ensure
       // LightCall finishes writing the state variables!
-      App.scheduler.set_timeout(1, [this, out, captured_runner]() {
-        auto *current_state = this->get_light_state();
-        if (current_state != nullptr && !current_state->remote_values.is_on()) {
-          // User genuinely clicked TURN OFF. Play the configured Outro!
-          this->outro_start_time_ = millis();
+      App.scheduler.set_timeout(
+          out, "cfx_outro_startup", 1, [this, out, captured_runner]() {
+            auto *current_state = this->get_light_state();
+            if (current_state != nullptr &&
+                !current_state->remote_values.is_on()) {
+              // User genuinely clicked TURN OFF. Play the configured Outro!
+              this->outro_start_time_ = millis();
 
-          out->set_outro_callback([this, out, captured_runner]() -> bool {
-            bool done = this->run_outro_frame(*out, captured_runner);
-            if (done) {
+              out->set_outro_callback([this, out, captured_runner]() -> bool {
+                bool done = this->run_outro_frame(*out, captured_runner);
+                if (done) {
+                  delete captured_runner;
+                }
+                return done;
+              });
+            } else {
+              // Effect was merely changed to a different one, or light remained
+              // ON. Safely delete without playing an Outro.
               delete captured_runner;
             }
-            return done;
           });
-        } else {
-          // Effect was merely changed to a different one, or light remained ON.
-          // Safely delete without playing an Outro.
-          delete captured_runner;
-        }
-      });
 
       return;
     }
