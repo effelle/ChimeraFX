@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2026 Federico Leoni (effelle)
  * Copyright (c) Aircoookie (WLED)
  *
@@ -13,8 +13,33 @@
 // ESP-IDF heap diagnostics (for production monitoring)
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include <algorithm> // For std::min, std::max
+#include <cmath>     // For powf
+#include <cstdint>
+#include <vector>
 
 CFXRunner *instance = nullptr;
+
+// Forward declarations
+uint16_t mode_running_lights(void);
+uint16_t mode_running_dual(void);
+uint16_t mode_saw(void);
+uint16_t mode_blink(void);
+uint16_t mode_blink_rainbow(void);
+uint16_t mode_strobe(void);
+uint16_t mode_strobe_rainbow(void);
+uint16_t mode_multi_strobe(void);
+uint16_t mode_sparkle(void);
+uint16_t mode_flash_sparkle(void);
+uint16_t mode_hyper_sparkle(void);
+uint16_t mode_exploding_fireworks(void);
+uint16_t mode_popcorn(void);
+uint16_t mode_drip(void);
+uint16_t mode_dropping_time(void);
+uint16_t mode_heartbeat_center(void);
+uint16_t mode_kaleidos(void);
+uint16_t mode_follow_me(void);
+uint16_t mode_follow_us(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -24,6 +49,7 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   target_light = light;
   instance = this;
   _mode = FX_MODE_STATIC;
+  _name = "CFX";
   frame_time = 0;
 
   // Initialize Segment defaults
@@ -34,6 +60,82 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   _segment.intensity = DEFAULT_INTENSITY;
   _segment.palette = 0;
   _segment.colors[0] = DEFAULT_COLOR; // Orange default
+
+  // Initialize Gamma Table
+  // Default to 2.8 (WLED standard) so effects look correct out of the box
+  _gamma = 2.8f;
+  setGamma(_gamma);
+}
+
+// === Gamma Correction Helpers ===
+
+// Re-calculate the LUT based on the new gamma value
+// Goal: Output = Input^5.6 (Perceptually correct for effects)
+// Input is linear 0-255.
+// We want: Lut[i] = ( (i/255)^(5.6/Gamma) ) * 255
+void CFXRunner::setGamma(float g) {
+  if (g < 0.1f)
+    g = 1.0f; // Safety
+  _gamma = g;
+
+  // The power we need to raise input by to get x^3.5 output (Compromise for
+  // Aurora vs Plasma) If Gamma=3.5 -> p=1.0 If Gamma=1.0 -> p=3.5 ->
+  // (x^3.5)^1.0 = x^3.5
+  float power = 3.5f / _gamma;
+
+  for (int i = 0; i < 256; i++) {
+    _lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+  }
+}
+
+// Adjust a "floor" brightness value (e.g. Breath effect minimum)
+// A raw floor of 30 is ~12% in linear space.
+// If Gamma is 1.0, 30 is still 30/255 (~12%) brightness.
+// If Gamma is 2.8, 30 is (30/255)^2.8 = ~0.2% brightness (too dark!)
+// We must SCALE the floor up if Gamma is high, or down if Gamma is low,
+// so that the *perceived* floor remains constant.
+uint8_t CFXRunner::shiftFloor(uint8_t val) {
+  // If gamma is standard (2.8), return original value (it's tuned for this)
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return val;
+
+  // Otherwise, inversely apply the gamma difference
+  // We want PerceivedFloor = (val/255)^2.8
+  // NewVal = (PerceivedFloor^(1/NewGamma)) * 255
+  float perceived = powf((float)val / 255.0f, 2.8f);
+  return (uint8_t)(powf(perceived, 1.0f / _gamma) * 255.0f);
+}
+
+// Adjust a "Fade Factor" (Multiplicative fade, e.g. Meteor: val = val *
+// factor/256) A factor of 200/255 means "retain 78% of brightness". If Gamma
+// is 1.0: 78% brightness -> 78% perceived. If Gamma is 2.8: 78% val ->
+// (0.78^2.8) = 50% perceived brightness! (Fades much faster) We need to adjust
+// the factor so the *perceived decay rate* is constant.
+uint8_t CFXRunner::getFadeFactor(uint8_t factor) {
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return factor;
+
+  float retention = (float)factor / 255.0f;
+  // Standard retention in linear light (Gamma 2.8)
+  // Perceived retention p = r^2.8
+  // We want r_new such that r_new^gamma_new = p
+  // r_new = p^(1/gamma_new) = r^(2.8/gamma_new)
+  float new_retention = powf(retention, 2.8f / _gamma);
+  return (uint8_t)(new_retention * 255.0f);
+}
+
+// Adjust a "Subtractive Factor" (e.g. Twinkle: val = val - factor)
+// Subtractive fades are tricky because they depend on the absolute value.
+// We approximate by scaling the step size to match the mid-range slope.
+uint8_t CFXRunner::getSubFactor(uint8_t factor) {
+  if (_gamma > 2.7f && _gamma < 2.9f)
+    return factor;
+
+  // Simple heuristic: High gamma compresses low end, so subtract less.
+  // Low gamma expands low end, so subtract more.
+  float scale = _gamma / 2.8f;
+  int new_factor = (int)((float)factor * scale);
+  return (uint8_t)std::max(1, std::min(255, new_factor));
 }
 
 void Segment::setPixelColor(int n, uint32_t c) {
@@ -89,6 +191,21 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
   if (!instance || !instance->target_light)
     return;
 
+  // GAMMA CORRECTION for Fade Speed
+  // A raw "fadeBy" of 10 creates a very different decay curve at Gamma 1.0
+  // vs 2.8. We adjust it so the visual decay SPEED is constant.
+  uint8_t adjustedFade = instance->getFadeFactor(255 - fadeBy);
+  // Invert back: We calculated retention, now we want fade amount
+  // Wait, getFadeFactor takes "Retention" (0=Black, 255=Full).
+  // fadeBy is "Amount to subtract" (10 = subtract 10/256).
+  // Retention = 255 - fadeBy.
+  // NewRetention = getFadeFactor(Retention).
+  // NewFadeBy = 255 - NewRetention.
+
+  uint8_t retention = 255 - fadeBy;
+  uint8_t newRetention = instance->getFadeFactor(retention);
+  uint8_t effectiveFade = 255 - newRetention;
+
   int len = length();
   int light_size = instance->target_light->size();
   int global_start = start;
@@ -99,13 +216,103 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
     if (global_index < light_size) {
       // Read directly from ESPHome buffer for speed
       esphome::Color c = light[global_index].get();
-      c.r = (c.r * (255 - fadeBy)) >> 8;
-      c.g = (c.g * (255 - fadeBy)) >> 8;
-      c.b = (c.b * (255 - fadeBy)) >> 8;
-      c.w = (c.w * (255 - fadeBy)) >> 8;
+      // Use standard bit math with Gamma-Corrected effectiveFade
+      c.r = (c.r * (255 - effectiveFade)) >> 8;
+      c.g = (c.g * (255 - effectiveFade)) >> 8;
+      c.b = (c.b * (255 - effectiveFade)) >> 8;
+      c.w = (c.w * (255 - effectiveFade)) >> 8;
       light[global_index] = c;
     }
   }
+}
+
+void Segment::blur(uint8_t blur_amount) {
+  if (!instance || !instance->target_light)
+    return;
+
+  uint8_t keep = 255 - blur_amount;
+  uint8_t seep = blur_amount >> 1;
+
+  // Create a temp buffer to avoid propagating changes directionally
+  // For small strips this is fine. For large strips, we might want to optimize
+  // by just keeping "previous" pixel value.
+  // WLED approach: blur1d modifies in-place but effectively propagates.
+  // Let's stick to simple in-place for now (WLED compat).
+
+  int len = length();
+  int light_size = instance->target_light->size();
+  int global_start = start;
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = 0; i < len; i++) {
+    int global_index = global_start + i;
+    if (global_index >= light_size)
+      continue;
+
+    // Get current color
+    esphome::Color c = light[global_index].get();
+
+    // Get neighbors (clamped to segment)
+    // Left
+    esphome::Color left = c;
+    if (i > 0) {
+      if ((global_index - 1) >= 0)
+        left = light[global_index - 1].get();
+    }
+
+    // Right
+    esphome::Color right = c;
+    if (i < len - 1) {
+      if ((global_index + 1) < light_size)
+        right = light[global_index + 1].get();
+    }
+
+    // Blur Kernel: (C*keep + (L+R)*seep) / 256
+    uint8_t r =
+        ((uint16_t)c.r * keep + (uint16_t)(left.r + right.r) * seep) >> 8;
+    uint8_t g =
+        ((uint16_t)c.g * keep + (uint16_t)(left.g + right.g) * seep) >> 8;
+    uint8_t b =
+        ((uint16_t)c.b * keep + (uint16_t)(left.b + right.b) * seep) >> 8;
+    uint8_t w =
+        ((uint16_t)c.w * keep + (uint16_t)(left.w + right.w) * seep) >> 8;
+
+    light[global_index] = esphome::Color(r, g, b, w);
+  }
+}
+
+void Segment::subtractive_fade_val(uint8_t fade_amt) {
+  if (!instance || !instance->target_light)
+    return;
+  int len = length();
+  int light_size = instance->target_light->size();
+  int global_start = start;
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = 0; i < len; i++) {
+    int global_index = global_start + i;
+    if (global_index >= light_size)
+      continue;
+
+    esphome::Color c = light[global_index].get();
+    uint8_t r = (c.r > fade_amt) ? (c.r - fade_amt) : 0;
+    uint8_t g = (c.g > fade_amt) ? (c.g - fade_amt) : 0;
+    uint8_t b = (c.b > fade_amt) ? (c.b - fade_amt) : 0;
+    uint8_t w = (c.w > fade_amt) ? (c.w - fade_amt) : 0;
+
+    light[global_index] = esphome::Color(r, g, b, w);
+  }
+}
+
+void Segment::fade_out_smooth(uint8_t fade_amt) {
+  // 1. Subtract (guarantee 0 floor)
+  subtractive_fade_val(fade_amt);
+
+  // 2. Blur (spread energy / anti-alias the fade)
+  // Heuristic: Blur amount related to fade amount?
+  // User asked for "standardized". Let's pick a good default.
+  // blur(32) is a good balance between spreading and preserving detail.
+  blur(32);
 }
 
 // --- Effect Implementations ---
@@ -120,22 +327,10 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
 #define AW_SHIFT 16
 #define AW_SCALE (1 << AW_SHIFT)
 
-struct CRGBW {
-  union {
-    struct {
-      uint8_t r;
-      uint8_t g;
-      uint8_t b;
-      uint8_t w;
-    };
-    uint8_t raw[4];
-  };
-  CRGBW() : r(0), g(0), b(0), w(0) {}
-  CRGBW(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t iw = 0)
-      : r(ir), g(ig), b(ib), w(iw) {}
-};
-
 // Math Helpers - use cfx:: namespace from cfx_utils.h
+using cfx::beatsin8;
+using cfx::cfx_constrain;
+using cfx::cfx_map;
 using cfx::color_blend;
 using cfx::gamma8inv;
 using cfx::get_random_wheel_index;
@@ -143,7 +338,6 @@ using cfx::hw_random16;
 using cfx::hw_random8;
 using cfx::inoise8;
 using cfx::triwave16;
-
 // Note: triwave16 and inoise8 now come from cfx_utils.h
 
 // Add support for CRGBW math
@@ -232,13 +426,14 @@ static const uint32_t PalettePastel[16] CFX_PROGMEM = {
     0xB4C8FF, 0xE6B4FF, 0xFFB4DC, 0xFFBEBE};
 
 // Palette 10: Ocean (formerly Pacifica) - Deep ocean blues with white crests
+// Palette 10: Ocean (formerly Pacifica) - Deep ocean blues with white crests
 static const uint32_t PaletteOcean[16] CFX_PROGMEM = {
-    0x000212, 0x000F1E, 0x001937, 0x002850, 0x004678, 0x0064B4,
+    0x001040, 0x002050, 0x003060, 0x004080, 0x0050A0, 0x0064B4,
     0x148CF0, 0x28C8FF, 0x50DCFF, 0x96E6FF, 0xC8F0FF, 0xC8F0FF,
-    0x96E6FF, 0x28C8FF, 0x004678, 0x000212};
+    0x96E6FF, 0x28C8FF, 0x0050A0, 0x001040};
 
-// Palette 11: HeatColors - For Sunrise effect (black → red → orange → yellow →
-// white)
+// Palette 11: HeatColors - For Sunrise effect (black â†’ red â†’ orange â†’
+// yellow â†’ white)
 static const uint32_t PaletteHeatColors[16] CFX_PROGMEM = {
     0x000000, 0x330000, 0x660000, 0x990000, 0xCC0000, 0xFF0000,
     0xFF3300, 0xFF6600, 0xFF9900, 0xFFCC00, 0xFFFF00, 0xFFFF33,
@@ -375,6 +570,12 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
     return PaletteFairy;
   case 23:
     return PaletteTwilight;
+  case 254:
+    // Smart Random (generated on switch)
+    // Needs instance to access the buffer
+    if (instance)
+      return instance->_currentRandomPaletteBuffer;
+    return PaletteRainbow;
   case 255:
     // Solid color mode - caller must call fillSolidPalette first
     // 21 = selector position, 255 = internal constant
@@ -386,8 +587,8 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
 
 // Simple Linear Interpolation Palette Lookup (Updated for dynamic palettes)
 // Uses cfx_pgm_read_dword for PROGMEM/Flash compatibility
-static CRGBW ColorFromPalette(uint8_t index, uint8_t brightness,
-                              const uint32_t *palette) {
+static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
+                              uint8_t brightness) {
   uint8_t i = index >> 4;   // 0-15
   uint8_t f = index & 0x0F; // Fraction 0-15
 
@@ -414,6 +615,72 @@ static CRGBW ColorFromPalette(uint8_t index, uint8_t brightness,
   b = (b * brightness) >> 8;
 
   return CRGBW(r, g, b, 0); // White channel unused for simple palette
+}
+
+void CFXRunner::generateRandomPalette() {
+  // Use cfx namespace for random helpers
+  uint8_t baseHue = cfx::hw_random8();
+  // Select Strategy: 0=Analogous, 1=Neon, 2=Texture
+  uint8_t strategy = cfx::hw_random8(3); // 0, 1, 2
+
+  DEBUGFX_PRINTF("Generating Random Palette: BaseHue=%d Strategy=%d", baseHue,
+                 strategy);
+
+  for (int i = 0; i < 16; i++) {
+    CHSV color;
+    // For offset calculations
+    int16_t h_calc;
+
+    if (strategy == 0) {
+      // Mode A: Analogous (Nature)
+      // BaseHue +/- 20 drift
+      // random 0-40 -> -20 to +20
+      int16_t drift = (int16_t)cfx::hw_random8(41) - 20;
+      h_calc = baseHue + drift;
+      // Wrap hue to 0-255
+      uint8_t h = (uint8_t)(h_calc & 0xFF);
+
+      // Saturation high but vary slightly for organic feel
+      uint8_t s = cfx::hw_random8(200, 255); // 200-254
+      uint8_t v = 255;
+      color = CHSV(h, s, v);
+
+    } else if (strategy == 1) {
+      // Mode B: Neon (Vaporwave)
+      // High Saturation. Base Hue + complementary accent (180 deg) at specific
+      // indices. Complementary at 0, 4, 8, 12? Or random. Let's make it 25%
+      // chance of accent
+      if ((i % 4) == 0) {
+        // Accent: Complementary + High Sat
+        color = CHSV(baseHue + 128, 255, 255);
+      } else {
+        // Base: BaseHue +/- 15
+        int16_t drift = (int16_t)cfx::hw_random8(31) - 15;
+        h_calc = baseHue + drift;
+        color = CHSV((uint8_t)(h_calc & 0xFF), 245, 255);
+      }
+
+    } else {
+      // Mode C: Texture (Monochromatic)
+      // Hue fixed. Vary Value and Saturation heavily.
+      // Good for metallic, plasma, fire-like single color.
+      uint8_t h = baseHue;
+      uint8_t s = cfx::hw_random8(100, 255); // 100-254
+      uint8_t v = cfx::hw_random8(50, 255);  // 50-254
+      color = CHSV(h, s, v);
+    }
+
+    // Convert to RGB
+    CRGB rgb;
+    hsv2rgb_rainbow(color, rgb);
+
+    // Store in internal FastLED palette (for potential future use)
+    _currentRandomPalette[i] = rgb;
+
+    // Convert to uint32_t buffer (0x00RRGGBB) for CFXRunner compatibility
+    // W channel is 0 for palettes generally
+    _currentRandomPaletteBuffer[i] = RGBW32(rgb.r, rgb.g, rgb.b, 0);
+  }
 }
 
 // AuroraWave Struct (POD version)
@@ -538,7 +805,7 @@ uint16_t mode_static(void) {
 
     for (int i = 0; i < len; i++) {
       uint8_t colorIndex = (i * 255) / (len > 1 ? len - 1 : 1);
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     }
   } else {
@@ -548,56 +815,6 @@ uint16_t mode_static(void) {
     instance->_segment.fill(instance->_segment.colors[0]);
   }
   return FRAMETIME; // Refresh rate
-}
-
-uint16_t mode_blink(void) {
-  if (!instance)
-    return 350;
-
-  // BLINK (ID 1)
-  // Simple periodic On/Off effect.
-  // Speed sets frequency directly. Intensity sets duty cycle.
-
-  // === TIMING: Speed controls cycle time directly ===
-  // WLED behavior: Speed 0 = slow blink (~2s), Speed 255 = fast strobe (~50ms)
-  uint8_t speed = instance->_segment.speed;
-  uint16_t intensity = instance->_segment.intensity;
-
-  // Cycle time: 2000ms at speed 0, down to ~50ms at speed 255 (strobe)
-  // Formula: cycleTime = 2000 - (speed * 7.6) -> 2000ms to ~62ms
-  uint32_t cycleTime = 6000 - ((uint32_t)speed * 5800 / 255);
-  if (cycleTime < 200)
-    cycleTime = 200; // Safe minimum for stable strobing
-
-  uint32_t prog = instance->now % cycleTime;
-
-  // Duty cycle threshold:
-  // Intensity 0: Short blip (~10%)
-  // Intensity 128: Square wave (50%)
-  // Intensity 255: Mostly on (~90%)
-  uint32_t threshold = (cycleTime * (intensity + 25)) / 300;
-
-  bool on = (prog < threshold);
-
-  if (on) {
-    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
-      instance->_segment.fill(instance->_segment.colors[0]);
-    } else {
-      const uint32_t *active_palette =
-          getPaletteByIndex(instance->_segment.palette);
-      // Map entire palette to strip for "On" state
-      uint16_t len = instance->_segment.length();
-      for (int i = 0; i < len; i++) {
-        uint8_t colorIndex = (i * 255) / len;
-        CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
-        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-      }
-    }
-  } else {
-    instance->_segment.fill(instance->_segment.colors[1]); // Background
-  }
-
-  return FRAMETIME;
 }
 
 uint16_t mode_aurora(void) {
@@ -667,7 +884,7 @@ uint16_t mode_aurora(void) {
           uint8_t colorIndex = rand() % 256;
           const uint32_t *active_palette =
               getPaletteByIndex(instance->_segment.palette);
-          CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+          CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
           waves[i].init(instance->_segment.length(), color);
         }
       }
@@ -677,7 +894,7 @@ uint16_t mode_aurora(void) {
         uint8_t colorIndex = rand() % 256;
         const uint32_t *active_palette =
             getPaletteByIndex(instance->_segment.palette);
-        CRGBW color = ColorFromPalette(colorIndex, 255, active_palette);
+        CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
         waves[i].init(instance->_segment.length(), color);
       }
     }
@@ -699,8 +916,14 @@ uint16_t mode_aurora(void) {
       }
     }
 
-    instance->_segment.setPixelColor(
-        i, RGBW32(mixedRgb.r, mixedRgb.g, mixedRgb.b, mixedRgb.w));
+    // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep
+    // black" contrast which was previously provided by the driver's gamma
+    // correction.
+    instance->_segment.setPixelColor(i,
+                                     RGBW32(instance->applyGamma(mixedRgb.r),
+                                            instance->applyGamma(mixedRgb.g),
+                                            instance->applyGamma(mixedRgb.b),
+                                            instance->applyGamma(mixedRgb.w)));
   }
 
   return FRAMETIME;
@@ -1242,13 +1465,18 @@ uint16_t mode_ocean() {
     c.g = (c.g < 16) ? 16 : c.g;
     c.b = (c.b < 24) ? 24 : c.b;
 
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+    // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep
+    // ocean" contrast which was previously provided by the driver's gamma
+    // correction.
+    instance->_segment.setPixelColor(i, RGBW32(instance->applyGamma(c.r),
+                                               instance->applyGamma(c.g),
+                                               instance->applyGamma(c.b), 0));
   }
 
   return FRAMETIME;
 }
 
-// --- Plasma Effect ---
+// --- Plasma Effect (ID 101) ---
 // Ported from WLED FX.cpp by Andrew Tuline
 // Smooth, liquid organic effect using wave mixing
 // Fixed: Drastically reduced spatial freq (wide gradients) + slow temporal
@@ -1336,7 +1564,9 @@ uint16_t mode_plasma(void) {
     uint8_t rawBri = sin8(briInput);
 
     // Apply gamma correction to rawBri for deep contrast curve
-    uint8_t gammaBri = dim8_video(rawBri);
+    // REMOVED dim8_video (x^2) to soften the curve because x^3.5 is steep
+    // enough. This widens the blocks and reduces the "void" effect.
+    uint8_t gammaBri = rawBri;
 
     // Calculate contrast depth from intensity with SHIFTED QUADRATIC curve
     // Shifted so intensity=128 (default) gives same fill as intensity=90 would
@@ -1353,10 +1583,12 @@ uint16_t mode_plasma(void) {
     uint16_t brightness16 = gammaBri + ((fillAmount * (255 - gammaBri)) >> 8);
 
     // Very low floor of 8 (3%) to prevent true black but allow deep voids
+    // THEN APPLY GAMMA to the whole thing to crush the floor at Gamma 1.0
     uint8_t brightness = (brightness16 < 8) ? 8 : (uint8_t)brightness16;
+    brightness = instance->applyGamma(brightness);
 
     // Get color from palette with gamma-corrected brightness
-    CRGBW c = ColorFromPalette(smoothIndex, brightness, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, smoothIndex, brightness);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -1418,7 +1650,7 @@ uint16_t mode_pride_2015(void) {
     uint8_t hue8 = hue16 >> 8;
 
     // Get color at full brightness
-    CRGBW c = ColorFromPalette(hue8, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, hue8, 255);
 
     // Apply saturation (blend toward white at low intensity)
     if (saturation < 255) {
@@ -1480,7 +1712,9 @@ uint16_t mode_breath(void) {
 
   // lum = 30 + var (30 minimum = ~12% floor, max ~254)
   // WLED uses this as blend amount, not brightness multiplier
-  uint8_t lum = 30 + var;
+  // GAMMA CORRECTION: 30 is only ~12% at Gamma 1.0. At Gamma 2.8 it's
+  // invisible.
+  uint8_t lum = instance->shiftFloor(30) + var;
 
   // Get base color (user selected or white as fallback)
   uint32_t baseColor = instance->_segment.colors[0];
@@ -1502,7 +1736,7 @@ uint16_t mode_breath(void) {
       // Use palette color as foreground (0-19)
       const uint32_t *active_palette =
           getPaletteByIndex(instance->_segment.palette);
-      CRGBW c = ColorFromPalette((i * 256 / len), 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 256 / len), 255);
       fgR = c.r;
       fgG = c.g;
       fgB = c.b;
@@ -1586,9 +1820,9 @@ uint16_t mode_dissolve(void) {
   switch (state) {
   case 0: { // FILLING - set random OFF pixels to ON using probability
     // Probability-based approach (WLED-style):
-    // At intensity 0: ~0% chance per frame → Very slow fill
-    // At intensity 128: ~50% chance per frame → Medium fill
-    // At intensity 255: ~100% + bonus → Fast fill
+    // At intensity 0: ~0% chance per frame â†’ Very slow fill
+    // At intensity 128: ~50% chance per frame â†’ Medium fill
+    // At intensity 255: ~100% + bonus â†’ Fast fill
     int pixels_to_spawn = 0;
     if (hw_random8() <= raw_intensity) {
       pixels_to_spawn = 1;
@@ -1750,7 +1984,7 @@ uint16_t mode_dissolve(void) {
         instance->_segment.setPixelColor(i, RGBW32(col.r, col.g, col.b, col.w));
       } else {
         uint8_t hue = (i * 255 / len);
-        CRGBW col = ColorFromPalette(hue, 255, active_palette);
+        CRGBW col = ColorFromPalette(active_palette, hue, 255);
         instance->_segment.setPixelColor(i, RGBW32(col.r, col.g, col.b, col.w));
       }
     } else {
@@ -1789,16 +2023,8 @@ uint16_t mode_juggle(void) {
   if (fadeAmount < 1)
     fadeAmount = 1;
 
-  for (int i = 0; i < len; i++) {
-    uint32_t c = instance->_segment.getPixelColor(i);
-    uint8_t r = (c >> 16) & 0xFF;
-    uint8_t g = (c >> 8) & 0xFF;
-    uint8_t b = c & 0xFF;
-    r = (r > fadeAmount) ? r - fadeAmount : 0;
-    g = (g > fadeAmount) ? g - fadeAmount : 0;
-    b = (b > fadeAmount) ? b - fadeAmount : 0;
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(fadeAmount);
 
   // Get palette
   const uint32_t *active_palette;
@@ -1824,7 +2050,7 @@ uint16_t mode_juggle(void) {
       c = CRGBW((col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF,
                 (col >> 24) & 0xFF);
     } else {
-      c = ColorFromPalette(dothue, 255, active_palette);
+      c = ColorFromPalette(active_palette, dothue, 255);
     }
 
     // Additive blend
@@ -1882,7 +2108,7 @@ uint16_t mode_flow(void) {
 
   // Fill background with counter-colored palette
   uint8_t bgIndex = (uint8_t)(256 - counter);
-  CRGBW bgColor = ColorFromPalette(bgIndex, 255, active_palette);
+  CRGBW bgColor = ColorFromPalette(active_palette, bgIndex, 255);
   for (int i = 0; i < len; i++) {
     instance->_segment.setPixelColor(
         i, RGBW32(bgColor.r, bgColor.g, bgColor.b, bgColor.w));
@@ -1894,7 +2120,7 @@ uint16_t mode_flow(void) {
     for (int i = 0; i < zoneLen; i++) {
       uint8_t colorIndex = (i * 255 / zoneLen) - (uint8_t)counter;
       int led = (z & 0x01) ? i : (zoneLen - 1) - i;
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
       instance->_segment.setPixelColor(pos + led, RGBW32(c.r, c.g, c.b, c.w));
     }
   }
@@ -1903,60 +2129,92 @@ uint16_t mode_flow(void) {
 }
 
 // --- Phased Effect (ID 105) ---
-// Sine wave interference pattern. By Andrew Tuline
+// Continuous Moiré interference pattern using opposing sub-pixel sine waves
 uint16_t mode_phased(void) {
   if (!instance)
     return 350;
 
-  int len = instance->_segment.length();
+  uint16_t len = instance->_segment.length();
   if (len <= 1)
     return mode_static();
 
-  // Get palette
-  const uint32_t *active_palette;
-  if (instance->_segment.palette == 0) {
-    active_palette = PaletteRainbow;
-  } else {
-    active_palette = getPaletteByIndex(instance->_segment.palette);
-  }
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
 
-  // Phase accumulator (stored in step)
-  uint16_t allfreq = 16;
-  int32_t phase = instance->_segment.step;
-  phase += (instance->_segment.speed * 7 / 10) / 4; // Slower phase change
-  instance->_segment.step = phase;
+  // Accumulate phase using 32-bit integer for perfect sub-pixel smoothness.
+  // speed maps to wave velocity.
+  uint32_t phase_speed = 30 + (speed * 3);
+  instance->_segment.step += phase_speed;
+  uint32_t t = instance->_segment.step;
 
-  uint8_t cutOff = 255 - instance->_segment.intensity;
-  uint8_t modVal = 5;
+  // Intensity controls the spatial frequency (how tightly packed the nodes are)
+  // Maps 0-255 to 1..10 sine waves across the total strip length
+  uint32_t num_waves = 1 + (intensity / 28);
 
-  uint8_t colorIndex = (instance->now / 64) & 0xFF;
+  // Calculate 16-bit phase delta per pixel so the math is continuous across any
+  // length
+  uint32_t phase_step = (num_waves * 65536) / len;
+
+  const uint32_t *active_palette =
+      instance->_segment.palette == 0
+          ? PaletteRainbow
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Determine starting color index (drifts slowly over time)
+  uint8_t color_idx_start = (instance->now >> 6) & 0xFF;
 
   for (int i = 0; i < len; i++) {
-    uint16_t val = (i + 1) * allfreq;
-    val += (phase / 256) * ((i % modVal) + 1) / 2;
-    uint8_t b = cubicwave8(val & 0xFF);
-    b = (b > cutOff) ? (b - cutOff) : 0;
+    // Spatial phase (0-65535 across the strip length)
+    uint32_t spatial_phase = i * phase_step;
 
-    CRGBW c = ColorFromPalette(colorIndex, b, active_palette);
+    // Wave A: Moves Forward
+    uint16_t w_a_phase = (spatial_phase + (t << 1)) & 0xFFFF;
+    uint8_t w_a = cfx::sin8(w_a_phase >> 8); // 0-255
+
+    // Wave B: Moves Backward at a slightly offset velocity
+    uint16_t w_b_phase = (spatial_phase - (t + (t >> 2))) & 0xFFFF;
+    uint8_t w_b = cfx::sin8(w_b_phase >> 8); // 0-255
+
+    // Multiply the two waves to create a true Moiré interference pattern
+    // The nodes where the waves collide and overlap perfectly are bright.
+    uint8_t moire = cfx::scale8(w_a, w_b);
+
+    // Increase contrast so the nodes pop brightly over a dark background
+    uint16_t bri = moire * 3;
+    if (bri > 255)
+      bri = 255;
+
+    // Standard Phased color mapping (spread the palette seamlessly across the
+    // strip)
+    uint8_t colorIndex = color_idx_start + ((i * 255) / len);
+
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, (uint8_t)bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-
-    colorIndex += 256 / len;
-    if (len > 256)
-      colorIndex++;
   }
 
   return FRAMETIME;
 }
 
 // --- Ripple Effect (ID 79) ---
-// Expanding waves from random points (simplified, no allocateData)
-// --- Ripple Effect (ID 79) ---
+// Ported from WLED FX.cpp mode_ripple
+// Modified for Delta-Time smoothness
+
 struct RippleState {
-  uint16_t age;    // High-res position (radius = age >> 8)
-  uint8_t color;   // Color index
-  uint16_t center; // Center position
-  bool active;     // Active flag
+  uint16_t age; // 0 to 65535 (Lifetime)
+  uint16_t pos; // Center
+  uint8_t color;
+  bool active;
 };
+
+// WLED helpers
+// triwave8: 0->255->0 triangle wave
+static inline uint8_t triwave8(uint8_t in) {
+  if (in & 0x80) {
+    in = 255 - in;
+  }
+  uint8_t out = in << 1;
+  return out;
+}
 
 uint16_t mode_ripple(void) {
   if (!instance)
@@ -1966,56 +2224,54 @@ uint16_t mode_ripple(void) {
   if (len <= 1)
     return mode_static();
 
-  // Max ripples
-  uint8_t maxRipples = 1 + (instance->_segment.intensity >> 5);
+  uint32_t delta = instance->frame_time;
+  if (delta < 1)
+    delta = 1;
+
+  // Max ripples calculation
+  uint8_t maxRipples = 1 + (instance->_segment.length() >> 2);
+  if (maxRipples > 100)
+    maxRipples = 100; // Increased cap from 20 to 100
+
   uint16_t dataSize = sizeof(RippleState) * maxRipples;
 
   if (!instance->_segment.allocateData(dataSize))
-    return mode_static(); // Alloc failed
+    return mode_static();
 
   RippleState *ripples = (RippleState *)instance->_segment.data;
 
-  // 1. Fade Background
-  // WLED Standard Fade (224) - Aggressive but not total wipe.
-  // Creates organic "water drop" decay.
+  // Fade Background
+  // REVERT: Back to 224 per user request (Fixed Floor Brightness Bug)
   instance->_segment.fadeToBlackBy(224);
 
-  // 2. Spawn Logic
-  // Increased density for "Organic" feel (WLED-like)
-  // random16(400) provides ~5x more ripples than the previous "Nuclear" setting
-  if (random16(400) < instance->_segment.intensity) {
+  // Spawn Logic
+  // Time-Based Probability to Fix Gaps
+  // We want ~4 ripples/sec at Max Intensity (255) regardless of FPS.
+  // Threshold = Intensity * Delta.
+  // Boosted 3x per user request to eliminate gaps at lower intensities.
+  if (random16(65535) <= (uint32_t)(instance->_segment.intensity * delta * 3)) {
     for (int i = 0; i < maxRipples; i++) {
       if (!ripples[i].active) {
-        // Spatial filter: Don't spawn near the last ripple
-        uint16_t last_spawn = instance->_segment.aux0;
-        uint16_t new_center = 0;
-        int attempts = 0;
-
-        // Try to find a distinct spot
-        do {
-          new_center = random16(len);
-          attempts++;
-        } while (abs((int)new_center - (int)last_spawn) < (len / 4) &&
-                 attempts < 5);
-
-        instance->_segment.aux0 = new_center; // Save history
-
         ripples[i].active = true;
         ripples[i].age = 0;
-        ripples[i].center = new_center;
+        ripples[i].pos = random16(len);
         ripples[i].color = random8();
         break;
       }
     }
   }
 
-  // 3. Process Ripples
-  // Speed Tuning: Fluid motion (Speed + 2)
-  uint16_t step = instance->_segment.speed + 2;
+  // Process logic
+  // WLED Decay Logic: decay = (speed >> 4) + 1
+  // Lifespan (frames) = 255 / decay
+  // Lifespan (ms) = Frames * 25ms (approx WLED tick)
+  uint8_t decay = (instance->_segment.speed >> 4) + 1;
+  uint32_t lifespan_ms = (255 * 25) / decay;
 
-  // Calculate Max Age (Lifespan)
-  // Ripple should fade out completely by the time it travels 'len' pixels
-  uint32_t max_age = (uint32_t)len * 256;
+  // age step = (65535 * delta) / lifespan
+  uint32_t age_step = (65535 * delta) / lifespan_ms;
+  if (age_step < 1)
+    age_step = 1;
 
   const uint32_t *active_palette = nullptr;
   if (instance->_segment.palette != 0) {
@@ -2028,87 +2284,135 @@ uint16_t mode_ripple(void) {
     if (!ripples[i].active)
       continue;
 
-    // Lifespan & Kill Check
-    if (ripples[i].age > max_age) {
+    // Age update
+    if ((uint32_t)ripples[i].age + age_step > 65535) {
       ripples[i].active = false;
-      continue;
+      continue; // Expired
     }
+    ripples[i].age += age_step;
 
-    uint16_t radius = ripples[i].age >> 8;
+    // Map Age (0-65535) to WLED State (0-255)
+    uint8_t ripplestate = ripples[i].age >> 8;
 
-    // Kill if out of bounds (Safety, though max_age should handle it)
-    if (radius > len + 6) {
-      ripples[i].active = false;
-      continue;
-    }
+    // WLED Math:
+    uint8_t wled_speed = instance->_segment.speed;
+    unsigned rippledecay = (wled_speed >> 4) + 1;
 
-    // Energy Decay: Dimmer as it gets older
-    // map(age, 0, max_age, 255, 0)
-    uint8_t energy = 255 - ((ripples[i].age * 255) / max_age);
+    // High Precision Propagation (Safe Mode)
+    // We want to calculate the WLED propagation value but using the full
+    // resolution of 'age' instead of the quantized 'ripplestate'. WLED: prop =
+    // (state / decay) * (speed + 1). (Approx) Ours: prop = (age * (speed + 1))
+    // / decay / 256. This gives us the same scale as WLED but updates every
+    // frame.
 
-    // Get Color
-    CRGBW c;
-    if (instance->_segment.palette == 255) {
-      uint32_t col = instance->_segment.colors[0];
-      c = CRGBW((col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF,
-                (col >> 24) & 0xFF);
+    // 1. Calculate raw value (Age * Speed) / Decay
+    uint32_t prop_raw =
+        ((uint32_t)ripples[i].age * (uint32_t)(wled_speed + 1)) / rippledecay;
+
+    // 2. Shift down by 8 to match WLED's 8.8 fixed point scale
+    // (Because Age is 256x larger than State).
+    unsigned propagation = prop_raw >> 8;
+
+    int propI = propagation >> 8;
+    unsigned propF = propagation & 0xFF;
+
+    // Amplitude Logic (Reverted to Safe WLED Logic)
+    // Amplitude Logic (Smooth High-Precision)
+    // Fixes "Blinking" issue caused by stepping ripplestate (age >> 8).
+    // Previous logic was: triwave8((age >> 8) * 8). This caused jumps of 16
+    // units in brightness. New logic: Use age (0-65535) directly for smooth
+    // ramp-up and decay. Ramp up finishes at age ~4369 (equivalent to state
+    // 17).
+    unsigned amp;
+    if (ripples[i].age < 4369) {
+      // Linear Fade In (0 to 255 over 4369 ticks)
+      amp = (ripples[i].age * 255) / 4369;
     } else {
-      c = ColorFromPalette(ripples[i].color, 255, active_palette);
+      // Linear Fade Out (255 to 2 over remaining life)
+      // map(age, 4369, 65535, 255, 2)
+      // slope = (2 - 255) / (65535 - 4369) = -253 / 61166
+      // val = 255 - ((age - 4369) * 253) / 61166
+      amp = 255 - ((uint32_t)(ripples[i].age - 4369) * 253) / 61166;
     }
 
-    // Apply Energy Decay to base color
-    c.r = scale8(c.r, energy);
-    c.g = scale8(c.g, energy);
-    c.b = scale8(c.b, energy);
-    c.w = scale8(c.w, energy);
+    // Rendering: 2 wavefronts
+    int left = ripples[i].pos - propI - 1;
+    int right = ripples[i].pos + propI + 2;
 
-    // Render Wavefronts (Center +/- Radius)
-    // Body Wave (+/- 6 pixels)
-    int centers[2] = {(int)ripples[i].center + radius,
-                      (int)ripples[i].center - radius};
+    uint32_t col;
+    if (instance->_segment.palette == 255) {
+      uint32_t c = instance->_segment.colors[0];
+      col = c;
+    } else {
+      CRGBW c = ColorFromPalette(active_palette, ripples[i].color, 255);
+      col = RGBW32(c.r, c.g, c.b, c.w);
+    }
 
-    for (int k = 0; k < 2; k++) {
-      int wave_center = centers[k];
-      int start = wave_center - 6;
-      int end = wave_center + 6;
+    // Loop 6 pixels (Restored Geometry - "Thicker Ripples")
+    // User requested filling the "space in the middle".
+    //
+    // Fix for "3-4 leds -> Space -> 2 leds" issue:
+    // This was caused by Step 48 wrapping (6 * 48 = 288 > 256). It created a
+    // trough.
+    //
+    // New Logic: **Step 32** (Widened Wave).
+    // Span: 6 * 32 = 192. Fits comfortably within one 256-unit wave cycle.
+    // Result: One continuous, thick ripple. No gap.
+    for (int v = 0; v < 6; v++) {
+      // Phase Matching Fix:
+      // Spatial Step is 32. Scale propF (0-255) to 0-32.
+      // 256 / 8 = 32. So shift right by 3.
+      uint8_t phase_shift = propF >> 3;
 
-      // Clamp to strip bounds
-      if (start < 0)
-        start = 0;
-      if (end > len)
-        end = len;
+      // Use sin8 for smooth organic wave
+      uint8_t wave = sin8(phase_shift + (v * 32));
+      uint8_t mag = scale8(wave, amp);
 
-      for (int pos = start; pos < end; pos++) {
-        // Distance from theoretical wave center
-        int delta = abs(pos - wave_center);
+      // Gamma Disabled per previous fix
 
-        // Map distance 0-6 to brightness 255-0
-        // Safety: use int16_t to avoid unsigned underflow (uint8_t can't be >
-        // 255)
-        int16_t ramp = 255 - (delta * 42);
-        if (ramp < 0)
-          ramp = 0;
-        uint8_t bri = cubicwave8((uint8_t)ramp);
+      if (mag > 0) {
+        // Helper lambda for MAX blending to prevent "dimming" flickers
+        auto apply_max_pixel = [&](int pos, uint32_t color, uint8_t magnitude) {
+          CRGBW c_new(color);
+          // Scale by magnitude immediately
+          c_new.r = scale8(c_new.r, magnitude);
+          c_new.g = scale8(c_new.g, magnitude);
+          c_new.b = scale8(c_new.b, magnitude);
+          c_new.w = scale8(c_new.w, magnitude);
 
-        // Apply color (Energy already applied to c)
-        CRGBW c_pixel = c;
-        c_pixel.r = scale8(c_pixel.r, bri);
-        c_pixel.g = scale8(c_pixel.g, bri);
-        c_pixel.b = scale8(c_pixel.b, bri);
-        c_pixel.w = scale8(c_pixel.w, bri);
+          uint32_t existing_int = instance->_segment.getPixelColor(pos);
+          CRGBW c_exist(existing_int);
 
-        // Additive blend
-        uint32_t old = instance->_segment.getPixelColor(pos);
-        instance->_segment.setPixelColor(
-            pos, RGBW32(qadd8((old >> 16) & 0xFF, c_pixel.r),
-                        qadd8((old >> 8) & 0xFF, c_pixel.g),
-                        qadd8(old & 0xFF, c_pixel.b),
-                        qadd8((old >> 24) & 0xFF, c_pixel.w)));
+          // MAX Blending: Keep the brightest channel values
+          // This prevents the "tail" of a wave from darkening the "trail" of
+          // another.
+          c_exist.r = (c_new.r > c_exist.r) ? c_new.r : c_exist.r;
+          c_exist.g = (c_new.g > c_exist.g) ? c_new.g : c_exist.g;
+          c_exist.b = (c_new.b > c_exist.b) ? c_new.b : c_exist.b;
+          c_exist.w = (c_new.w > c_exist.w) ? c_new.w : c_exist.w;
+
+          instance->_segment.setPixelColor(
+              pos, RGBW32(c_exist.r, c_exist.g, c_exist.b, c_exist.w));
+        };
+
+        // Render Left
+        int pLeft = left + v;
+        if (pLeft >= 0 && pLeft < len) {
+          apply_max_pixel(pLeft, col, mag);
+        }
+
+        // Render Right
+        int pRight = right - v;
+        if (pRight >= 0 && pRight < len) {
+          apply_max_pixel(pRight, col, mag);
+        }
       }
     }
-
-    ripples[i].age += step;
   }
+
+  // Use standardized Segment::blur — identical WLED kernel, centralized.
+  // blur(40): tuned for Ripple (smooth trail without excessive smearing).
+  instance->_segment.blur(40);
 
   return FRAMETIME;
 }
@@ -2162,7 +2466,9 @@ uint16_t mode_meteor(void) {
       // Multiplicative decay with random factor
       // Scale factor 200-255 for longer trail (78-100% retention per frame)
       // Original WLED uses 128-255 but runs at higher FPS
-      uint8_t scale_factor = 200 + hw_random8(55);
+      // GAMMA CORRECTION: Adjust retention factor for gamma
+      uint8_t raw_factor = 200 + hw_random8(55);
+      uint8_t scale_factor = instance->getFadeFactor(raw_factor);
       r = scale8(r, scale_factor);
       g = scale8(g, scale_factor);
       b = scale8(b, scale_factor);
@@ -2170,6 +2476,11 @@ uint16_t mode_meteor(void) {
       instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
     }
   }
+
+  // Floor-sweeper: removes any sub-threshold residue that scale8 can't clear.
+  // Value of 1 is minimal — won't affect the visible trail, only kills pixels
+  // stuck at 1-2 brightness from asymptotic multiplicative fade.
+  instance->_segment.subtractive_fade_val(1);
 
   // --- 2. DRAW METEOR HEAD ---
   // Fix: Ensure head is bright/hot.
@@ -2187,7 +2498,7 @@ uint16_t mode_meteor(void) {
       // Reverted to this state as "Static Peak" was too flat.
       // 1. Dynamic Indexing: Brings back rich colors for Ocean/Rainbow.
       uint8_t colorIndex = (index * 10) + (instance->now >> 4);
-      CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
 
       // 2. White Energy Boost (Universal)
       // Inject white to guarantee visibility for all palettes.
@@ -2203,8 +2514,8 @@ uint16_t mode_meteor(void) {
 }
 
 // --- Noise Pal Effect (ID 107) ---
-// Perlin noise mapped to palette. By Andrew Tuline
-// Simplified - uses single palette with slow organic movement
+// Slow noise palette by Andrew Tuline. WLED-faithful port.
+// Uses true 2D Perlin noise + dynamic palette generation/blending.
 uint16_t mode_noisepal(void) {
   if (!instance)
     return 350;
@@ -2213,36 +2524,382 @@ uint16_t mode_noisepal(void) {
   if (len <= 1)
     return mode_static();
 
-  // Get palette
-  const uint32_t *active_palette;
-  if (instance->_segment.palette == 0) {
-    active_palette = PaletteRainbow;
-  } else {
-    active_palette = getPaletteByIndex(instance->_segment.palette);
+  // Allocate space for 2 CRGBPalette16: current (palettes[0]) + target
+  // (palettes[1])
+  unsigned dataSize = sizeof(CRGBPalette16) * 2; // 2 * 16 * 3 = 96 bytes
+  if (!instance->_segment.allocateData(dataSize))
+    return mode_static();
+  CRGBPalette16 *palettes =
+      reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
+
+  // Scale based on intensity (zoom level) â€” WLED exact formula
+  unsigned scale = 15 + (instance->_segment.intensity >> 2); // 15-78
+
+  // Generate new target palette periodically (4-6.5 seconds based on speed)
+  unsigned changePaletteMs = 4000 + instance->_segment.speed * 10;
+  if (instance->now - instance->_segment.step > changePaletteMs) {
+    instance->_segment.step = instance->now;
+
+    // WLED exact: 4-stop random HSV palette
+    uint8_t baseI = random8();
+    palettes[1] =
+        CRGBPalette16(CHSV(baseI + random8(64), 255, random8(128, 255)),
+                      CHSV(baseI + 128, 255, random8(128, 255)),
+                      CHSV(baseI + random8(92), 192, random8(128, 255)),
+                      CHSV(baseI + random8(92), 255, random8(128, 255)));
   }
 
-  // Scale based on intensity (zoom level) - higher = more waves visible
-  uint8_t scale = 15 + (instance->_segment.intensity >> 2); // 15-78
+  // Smoothly blend current palette toward target â€” WLED uses 48 steps
+  nblendPaletteTowardPalette(palettes[0], palettes[1], 48);
 
-  // Use instance->now for smooth animation, scaled by speed
-  // noiseY changes every frame for visible movement
-  uint32_t baseTime = instance->now;
-  uint8_t speedFactor = 1 + (instance->_segment.speed >> 4); // 1-16
-  uint16_t noiseY = ((baseTime * speedFactor) >> 8) & 0xFFFF;
+  // If user selected a palette, override the dynamic one
+  // If user selected a palette, override the dynamic one
+  if (instance->_segment.palette > 0) {
+    if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
+      // Handle "Solid" palette: use primary color with brightness variation
+      // This creates a "texture" (Dim -> Full -> Dim) so noise is visible
+      CRGB c = CRGB(instance->_segment.colors[0]);
+      CRGB dim(scale8(c.r, 60), scale8(c.g, 60),
+               scale8(c.b, 60)); // ~25% brightness base
+
+      for (int i = 0; i < 16; i++) {
+        // Create a triangle wave: 0 (Dim) -> 255 (Full) -> 0 (Dim)
+        uint8_t ramp = (i < 8) ? (i * 32) : (255 - (i - 8) * 32);
+        palettes[0].entries[i] = blend(dim, c, ramp);
+      }
+    } else {
+      const uint32_t *user_pal = getPaletteByIndex(instance->_segment.palette);
+      // Convert uint32_t palette to CRGBPalette16
+      for (int i = 0; i < 16; i++) {
+        palettes[0].entries[i] = CRGB(user_pal[i]);
+      }
+    }
+  }
+
+  // Render: Perlin noise mapped to palette â€” WLED exact
+  for (int i = 0; i < len; i++) {
+    uint8_t index = inoise8(i * scale, instance->_segment.aux0 + i * scale);
+    CRGB c = ColorFromPalette(palettes[0], index, 255, LINEARBLEND);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+  }
+
+  // Organic Y-axis drift â€” WLED exact
+  instance->_segment.aux0 += beatsin8_t(10, 1, 4);
+
+  return FRAMETIME;
+}
+
+// --- Chase 2 (ID 28) ---
+static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
+                      bool do_palette) {
+  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
+  uint16_t a = (counter * instance->_segment.length()) >> 16;
+
+  unsigned size =
+      1 + ((instance->_segment.intensity * instance->_segment.length()) >> 10);
+
+  uint16_t b = a + size;
+  if (b > instance->_segment.length())
+    b -= instance->_segment.length();
+  uint16_t c = b + size;
+  if (c > instance->_segment.length())
+    c -= instance->_segment.length();
+
+  if (do_palette) {
+    for (unsigned i = 0; i < instance->_segment.length(); i++) {
+      uint32_t col = instance->_segment.color_from_palette(i, true, true, 0);
+      instance->_segment.setPixelColor(i, col);
+    }
+  } else {
+    instance->_segment.fill(color1);
+  }
+
+  if (a < b) {
+    for (unsigned i = a; i < b; i++)
+      instance->_segment.setPixelColor(i, color2);
+  } else {
+    for (unsigned i = a; i < instance->_segment.length(); i++)
+      instance->_segment.setPixelColor(i, color2);
+    for (unsigned i = 0; i < b; i++)
+      instance->_segment.setPixelColor(i, color2);
+  }
+
+  if (b < c) {
+    for (unsigned i = b; i < c; i++)
+      instance->_segment.setPixelColor(i, color3);
+  } else {
+    for (unsigned i = b; i < instance->_segment.length(); i++)
+      instance->_segment.setPixelColor(i, color3);
+    for (unsigned i = 0; i < c; i++)
+      instance->_segment.setPixelColor(i, color3);
+  }
+
+  return FRAMETIME;
+}
+
+uint16_t mode_chase_color(void) {
+  return chase(instance->_segment.colors[1],
+               (instance->_segment.colors[2]) ? instance->_segment.colors[2]
+                                              : instance->_segment.colors[0],
+               instance->_segment.colors[0], true);
+}
+
+// --- BPM Effect (ID 68) ---
+// Rhythmic pulsing bands of light synchronized to a precision global master
+// beat.
+uint16_t mode_bpm(void) {
+  if (!instance)
+    return 350;
+
+  uint16_t len = instance->_segment.length();
+  if (len == 0)
+    return mode_static();
+
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
+
+  // 1. GLOBAL PRECISION BEAT ENGINE
+  // User speed slider maps from ~30 BPM to ~150 BPM
+  uint16_t bpm = 30 + ((speed * 120) >> 8);
+
+  // Generate a synchronous 8-bit master beat envelope (0 to 255)
+  // beatsin8_t provides a mathematically perfect sine oscillator synced to
+  // cfx_millis()
+  uint8_t global_beat_env = cfx::beatsin8_t(bpm, 0, 255);
+
+  // 2. KINETIC BURST SHAPING
+  // Rather than a soft sine wave, we want a punchy "surge" that feels musical.
+  // We sharpen the sine wave into a spiky pulse by squaring it.
+  uint8_t sharp_beat = cfx::scale8(global_beat_env, global_beat_env);
+  sharp_beat =
+      cfx::scale8(sharp_beat, sharp_beat); // 4th power for tight spikes
+
+  // 3. SPATIAL INTERFERENCE
+  // The intensity slider controls the density of the outward bands
+  uint16_t wave_scale = 10 + (intensity >> 2); // 10 to 73
+
+  // Accumulate position in the segment's `step` variable for high precision
+  // drift. The drift speed bursts massively during the peak of the beat.
+  uint32_t now = cfx_millis();
+  uint32_t drift_speed = 50 + (sharp_beat * 3);
+  instance->_segment.step += drift_speed;
+  uint32_t spatial_offset = instance->_segment.step >> 6;
+
+  int center = len / 2;
+  const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+  bool is_solid = (instance->_segment.palette == 255);
+  uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
   for (int i = 0; i < len; i++) {
-    // Multi-octave noise approximation using staggered sine waves
-    uint16_t noiseX = i * scale;
-    // Three waves at different frequencies for organic look
-    // Shift by less for smoother gradients
-    uint8_t wave1 = sin8((uint8_t)((noiseX + noiseY) >> 4));
-    uint8_t wave2 = sin8((uint8_t)((noiseX + noiseY * 2) >> 5) + 85);
-    uint8_t wave3 = sin8((uint8_t)((noiseX * 2 + noiseY) >> 5) + 170);
-    // Average the waves for smooth noise-like pattern
-    uint8_t noiseVal = (wave1 + wave2 + wave3) / 3;
+    // Calculate distance from center for symmetrical burst
+    int dist = abs(i - center);
 
-    CRGBW c = ColorFromPalette(noiseVal, 255, active_palette);
+    // Generate traveling sine waves pushing outward from the center
+    uint16_t wave_phase = (dist * wave_scale) - spatial_offset;
+    uint8_t wave_val = cfx::sin8(wave_phase & 0xFF);
+
+    // MULTIPLY the wave by the master beat envelope. This completely prevents
+    // 8-bit wrap tearing. Base brightness is 40 (never fully dark) + (wave *
+    // surge pulse)
+    uint8_t pixel_bri = 40 + cfx::scale8(wave_val, sharp_beat);
+
+    // Base color shifts symmetrically outward over time
+    uint8_t color_idx = (dist * 2) - (now >> 6);
+
+    uint32_t c;
+    if (is_solid) {
+      c = solid_color;
+    } else {
+      CRGBW pal_c = ColorFromPalette(pal, color_idx, 255);
+      c = RGBW32(pal_c.r, pal_c.g, pal_c.b, pal_c.w);
+    }
+
+    // Apply the newly calculated brightness envelope
+    uint8_t r = cfx::scale8((c >> 16) & 0xFF, pixel_bri);
+    uint8_t g = cfx::scale8((c >> 8) & 0xFF, pixel_bri);
+    uint8_t b = cfx::scale8(c & 0xFF, pixel_bri);
+    uint8_t w = cfx::scale8((c >> 24) & 0xFF, pixel_bri);
+
+    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+  }
+
+  return FRAMETIME;
+}
+
+// --- Glitter (ID 87) ---
+// Two-pass: Inverted Palette Background + Random White Sparks (No Fading)
+uint16_t mode_glitter(void) {
+  if (!instance)
+    return 350;
+
+  // Pass 1: Background - Inverted Palette Fill
+  // Directions: "Fill the entire strip with a rainbow gradient... Subtracting
+  // time moves it backwards" Use active palette (defaulting to Rainbow if none
+  // selected or if default/0 is selected)
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? getPaletteByIndex(4) // Force Rainbow (ID 4) as default
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Time base for scrolling
+  // Speed factor: standard WLED-like scaling
+  uint16_t counter =
+      (instance->now * ((instance->_segment.speed >> 3) + 1)) & 0xFFFF;
+
+  uint16_t len = instance->_segment.length();
+
+  for (unsigned i = 0; i < len; i++) {
+    // Math: colorIndex = (Position - Time) -> Moves "Backwards"
+    // (i * 255 / len) scales index to full 0-255 palette range across strip
+    uint8_t colorIndex = (i * 255 / len) - (counter >> 8);
+
+    // Render from palette
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // Pass 2: The Glitter (Overlay)
+  // "Randomly blast specific pixels with Pure White... if (random8() <
+  // intensity)" No fading logic. Next frame overwrites it.
+  // User asked for ~10% more glitter.
+  // We use (intensity + intensity/8) ~= intensity * 1.125
+  if (cfx::hw_random8() <
+      (instance->_segment.intensity + (instance->_segment.intensity >> 3))) {
+    uint16_t pos = cfx::hw_random16(0, len);
+    instance->_segment.setPixelColor(pos, 0xFFFFFFFF); // Pure White (RGBW)
+  }
+
+  return FRAMETIME;
+}
+
+// --- Tricolor Chase (ID 54) ---
+// Simplified to 2-band chase: primary color + palette
+uint16_t mode_tricolor_chase(void) {
+  uint32_t cycleTime = 50 + ((255 - instance->_segment.speed) << 1);
+  uint32_t it = instance->now / cycleTime;
+  unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
+  unsigned index = it % (width * 2);                          // 2 bands
+
+  for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
+    if (index > (width * 2) - 1)
+      index = 0;
+
+    uint32_t color;
+    if (index > width - 1)
+      color = instance->_segment.color_from_palette(i, true, true,
+                                                    1); // palette
+    else
+      color = instance->_segment.colors[0]; // primary (solid)
+
+    instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
+                                     color);
+  }
+  return FRAMETIME;
+}
+
+// --- Percent Effect (ID 98) ---
+// Linear meter/progress bar based on Intensity (0-255 mapped to 0-100%)
+// Palette support: Solid (default), Rainbow, etc.
+uint16_t mode_percent(void) {
+  uint16_t len = instance->_segment.length();
+  uint8_t percent = instance->_segment.intensity;
+  // Map 0-255 to 0-len
+  uint16_t lit_len = (uint32_t)percent * len / 255;
+
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? PaletteSolid // Default to Solid
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Behavior:
+  // If palette is Solid (255), use Primary Color.
+  // If palette is Rainbow/etc, use gradient.
+
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    fillSolidPalette(instance->_segment.colors[0]);
+    active_palette = PaletteSolid;
+  }
+
+  for (int i = 0; i < len; i++) {
+    if (i < lit_len) {
+      // Lit portion
+      // Map palette to the *lit* length? Or whole length?
+      // "Meter" usually implies the color matches the position.
+      // Let's map palette to the WHOLE length, so green is always at 0, red
+      // always at 100 (if using heatmap)
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else {
+      // Unlit portion
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  // Speed > 0: Add a subtle breathing effect to the lit portion
+  if (instance->_segment.speed > 0) {
+    uint8_t bri = beatsin88_t(instance->_segment.speed << 8, 200, 255);
+    for (int i = 0; i < lit_len; i++) {
+      uint32_t c = instance->_segment.getPixelColor(i);
+      // Scale brightness
+      uint8_t r = scale8(CFX_R(c), bri);
+      uint8_t g = scale8(CFX_G(c), bri);
+      uint8_t b = scale8(CFX_B(c), bri);
+      uint8_t w = scale8(CFX_W(c), bri);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
+  }
+
+  return FRAMETIME;
+}
+
+// --- Percent Center Effect (ID 152) ---
+// Bi-directional meter from center based on Intensity
+uint16_t mode_percent_center(void) {
+  uint16_t len = instance->_segment.length();
+  uint16_t center = len / 2;
+  uint8_t percent = instance->_segment.intensity;
+
+  // Map 0-255 to 0-center (radius)
+  uint16_t lit_radius = (uint32_t)percent * center / 255;
+
+  const uint32_t *active_palette =
+      (instance->_segment.palette == 0)
+          ? PaletteSolid
+          : getPaletteByIndex(instance->_segment.palette);
+
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    fillSolidPalette(instance->_segment.colors[0]);
+    active_palette = PaletteSolid;
+  }
+
+  for (int i = 0; i < len; i++) {
+    int dist = abs(i - center);
+    if (dist <= lit_radius) {
+      // Lit
+      // Map palette from center (0) to edge (255)
+      // Or strip-linear? Strip-linear looks more Percent-like usually.
+      // Let's do strip-linear so it looks like a single bar revealed from
+      // center.
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    } else {
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  // Breathing
+  if (instance->_segment.speed > 0) {
+    uint8_t bri = beatsin88_t(instance->_segment.speed << 8, 200, 255);
+    for (int i = 0; i < len; i++) {
+      if (abs(i - center) <= lit_radius) {
+        uint32_t c = instance->_segment.getPixelColor(i);
+        uint8_t r = scale8(CFX_R(c), bri);
+        uint8_t g = scale8(CFX_G(c), bri);
+        uint8_t b = scale8(CFX_B(c), bri);
+        uint8_t w = scale8(CFX_W(c), bri);
+        instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+      }
+    }
   }
 
   return FRAMETIME;
@@ -2297,10 +2954,190 @@ uint16_t mode_sunrise(void) {
     wave = (wave >> 8) + ((wave * instance->_segment.intensity) >> 15);
 
     uint8_t colorIndex = (wave > 240) ? 240 : wave;
-    CRGBW c = ColorFromPalette(colorIndex, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     instance->_segment.setPixelColor(len - i - 1, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Sparkle (ID 20)
+ * Random pixels flash the primary color on a darkened background.
+ * Refactored: Hybrid Fade (Exponential + Subtractive) & Tuned Density.
+ * Matches WLED's "snappy" feel but fixes the stuck-pixel floor issue.
+ */
+uint16_t mode_sparkle(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.fill(instance->_segment.colors[1]);
+    instance->_segment.reset = false;
+  }
+
+  // 2. Timing & Hybrid Fade
+  uint32_t delta = instance->frame_time;
+
+  // A) Exponential Fade (The "Snappy" WLED look)
+  // User: "Still too slow blinking time".
+  // Divisor 32 -> 12 (Much faster, snappier).
+  uint16_t fade_amt = (instance->_segment.speed * delta) / 12;
+
+  // Correction: Instant fade at high speeds for effect
+  if (instance->_segment.speed > 230)
+    fade_amt = 255;
+
+  // Ensure we don't fade TOO slowly at low speeds (stuck pixel risk).
+  // Calculate retention.
+  uint8_t retention = 255 - (fade_amt > 255 ? 255 : (uint8_t)fade_amt);
+
+  // Apply Gamma Correction to Retention
+  uint8_t corrected_retention = instance->getFadeFactor(retention);
+
+  // Final Fade Amount
+  uint8_t final_fade = 255 - corrected_retention;
+
+  // Floor Fix: At low speeds, fade_amt is tiny. Even with gamma correction,
+  // final_fade can be so small that pixels accumulate faster than they drain.
+  // Enforce a minimum fade that guarantees visible drain at all speeds.
+  uint8_t min_fade;
+  if (instance->_segment.speed == 0)
+    min_fade = 0; // Speed 0 = frozen, no fade
+  else if (instance->_segment.speed <= 34)
+    min_fade = 20; // Strong minimum: pixel drains in ~13 frames
+  else if (instance->_segment.speed <= 100)
+    min_fade = 8;
+  else
+    min_fade = 1;
+
+  if (final_fade < min_fade)
+    final_fade = min_fade;
+
+  instance->_segment.fadeToBlackBy(final_fade);
+
+  // B) Subtractive Kicker (The "Floor Fix")
+  // Scale kicker inversely with speed to sweep residual floor brightness.
+  uint8_t sub_kicker;
+  if (instance->_segment.speed <= 34)
+    sub_kicker = 12; // Aggressive sweep at very low speeds
+  else if (instance->_segment.speed < 100)
+    sub_kicker = 3;
+  else
+    sub_kicker = 2;
+
+  int len = instance->_segment.length();
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(sub_kicker);
+
+  // 3. Spawning
+  // User: "Double density at 128".
+  // Previous divisor 20 -> 10 (doubles the chance at same intensity).
+  uint32_t chance = ((instance->_segment.intensity >> 2) * delta) / 10;
+
+  if (cfx::hw_random16(0, 255) < chance) {
+    uint16_t index = cfx::hw_random16(0, len);
+    uint32_t color = instance->_segment.colors[0];
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      uint8_t colorIndex = cfx::hw_random8();
+      color = instance->_segment.color_from_palette(colorIndex, true, false, 0,
+                                                    255);
+    }
+    instance->_segment.setPixelColor(index, color);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Flash Sparkle (ID 21) - "Sparkle Dark"
+ * Inverted: Background is lit (primary color or full palette), sparkles are
+ * black (or secondary). Intensity controls sparkle density.
+ */
+uint16_t mode_flash_sparkle(void) {
+  int len = instance->_segment.length();
+
+  if (instance->_segment.reset) {
+    instance->_segment.fill(instance->_segment.colors[0]);
+    instance->_segment.reset = false;
+  }
+
+  // Paint background every frame.
+  // Solid palette: flat fill with primary color.
+  // Any other palette: map the full palette across the strip length.
+  if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+    instance->_segment.fill(instance->_segment.colors[0]);
+  } else {
+    const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+    for (int i = 0; i < len; i++) {
+      // Map pixel position to palette index 0-255
+      uint8_t palIdx = (uint8_t)((i * 255) / (len - 1 > 0 ? len - 1 : 1));
+      CRGBW c = ColorFromPalette(pal, palIdx, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+  }
+
+  // Spawning - Intensity is the primary density driver
+  // random8() < intensity: 0=never, 128=50%, 255=always
+  if (cfx::hw_random8() < instance->_segment.intensity) {
+    uint16_t index = cfx::hw_random16(0, len);
+    instance->_segment.setPixelColor(index, instance->_segment.colors[1]);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Hyper Sparkle (ID 22) - "Sparkle+"
+ * Intense, fast sparkles.
+ * Matches Sparkle logic but Higher Density/Speed.
+ */
+uint16_t mode_hyper_sparkle(void) {
+  uint32_t delta = instance->frame_time;
+
+  if (instance->_segment.reset) {
+    instance->_segment.fill(instance->_segment.colors[1]);
+    instance->_segment.reset = false;
+  }
+
+  // Hybrid Fade for Hyper Sparkle
+  // Much Faster fade
+  uint16_t fade_base = 30 + (instance->_segment.speed); // Start high
+  fade_base = (fade_base * delta) / 20;
+  if (fade_base > 255)
+    fade_base = 255;
+
+  uint8_t retention = 255 - (uint8_t)fade_base;
+  uint8_t final_fade = 255 - instance->getFadeFactor(retention);
+
+  instance->_segment.fadeToBlackBy(final_fade);
+
+  // Subtractive Kicker (Stronger here, but scaled at very low speeds)
+  uint8_t sub_kicker;
+  if (instance->_segment.speed < 17)
+    sub_kicker = 8; // Strong kick at very low speeds
+  else if (instance->_segment.speed < 50)
+    sub_kicker = 6;
+  else
+    sub_kicker = 4;
+  int len = instance->_segment.length();
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(sub_kicker);
+
+  // Spawn Logic
+  // Higher density than Sparkle
+  uint16_t max_sparks = (len / 4) + 1;
+  uint16_t count = (instance->_segment.intensity * max_sparks) / 255;
+  if (count == 0 && instance->_segment.intensity > 0)
+    count = 1;
+
+  for (int i = 0; i < count; i++) {
+    uint16_t index = cfx::hw_random16(0, len);
+    uint32_t color = instance->_segment.colors[0];
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      color = instance->_segment.color_from_palette(index, true, false, 0, 255);
+    }
+    instance->_segment.setPixelColor(index, color);
   }
 
   return FRAMETIME;
@@ -2310,6 +3147,370 @@ uint16_t mode_sunrise(void) {
 // Ported from WLED FX.cpp
 
 // ID 8: Colorloop - Entire strip cycles through one color
+struct EnergySpark {
+  int16_t pos;
+  uint8_t level; // 0-255 (0 = dead)
+  bool building; // true = surge, false = discharge
+};
+
+#define MAX_ENERGY_SPARKS 10
+struct EnergyData {
+  uint32_t accumulator;
+  uint32_t last_millis;
+  EnergySpark sparks[MAX_ENERGY_SPARKS];
+};
+
+// --- Energy Effect (ID 158) ---
+// Progress bar that unmasks a live rainbow animation with a white leading tip.
+// Phase 1: Agitation Engine - Noise-driven speed fluctuations.
+// Phase 2: Energy Spikes - Localized white-hot eruptions during high chaos.
+// Phase 3: Contrast & Size Refinement - Hue-gating and 5-LED bloom.
+// Phase 4: Scaling & Exit Refinement - Proportional blooms and linear exit.
+uint16_t mode_energy(void) {
+  if (!instance)
+    return 350;
+  uint16_t len = instance->_segment.length();
+
+  // State Management
+  EnergyData *data = (EnergyData *)instance->_segment.data;
+  if (!data || instance->_segment.reset) {
+    if (!instance->_segment.allocateData(sizeof(EnergyData)))
+      return 350;
+    data = (EnergyData *)instance->_segment.data;
+    data->last_millis = instance->now;
+    data->accumulator = 0;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++)
+      data->sparks[s].level = 0;
+  }
+
+  uint32_t dt = instance->now - data->last_millis;
+  data->last_millis = instance->now;
+
+  if (instance->_segment.reset) {
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t duration = (257 - instance->_segment.speed) * 15;
+  uint32_t elapsed = instance->now - instance->_segment.step;
+
+  // --- Step 3: Linear Exit Logic (Phase 4) ---
+  // Extend duration so the white head (4px) fully clears the end.
+  uint32_t head_len = 4;
+  uint32_t extra_time = (head_len * duration) / (len ? len : 1);
+  uint32_t total_duration = duration + extra_time;
+
+  bool finished = (elapsed >= total_duration);
+  if (finished)
+    elapsed = total_duration;
+
+  // --- Step 1: Agitation Engine (Chaos Contrast FIX) ---
+  uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
+  uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
+  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
+  uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
+  if (speed_factor < 16)
+    speed_factor = 16;
+  data->accumulator += (dt * speed_factor);
+
+  uint16_t progress = (elapsed * len) / (duration ? duration : 1);
+  uint8_t counter = (data->accumulator >> 11) & 0xFF;
+  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
+
+  // --- Step 2: Energy Spikes (Localized Eruptions) ---
+  // Trigger spikes during agitation (raw_noise > 140)
+  // Phase 5: Lock ignition until the introductory wipe is finished
+  if (finished && raw_noise > 140 && cfx::hw_random8() < 64) {
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level == 0) {
+        int16_t pos = cfx::hw_random16() % (len ? len : 1);
+        uint8_t hue = ((pos * spatial_mult) / (len ? len : 1)) + counter;
+        if (hue > 40 && hue < 150)
+          break;
+        data->sparks[s].pos = pos;
+        data->sparks[s].level = 10;
+        data->sparks[s].building = true;
+        break;
+      }
+    }
+  }
+
+  // Update Spikes
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level == 0)
+      continue;
+    if (data->sparks[s].building) {
+      uint16_t next = data->sparks[s].level + (dt / 2);
+      if (next >= 255) {
+        data->sparks[s].level = 255;
+        data->sparks[s].building = false;
+      } else {
+        data->sparks[s].level = (uint8_t)next;
+      }
+    } else {
+      uint16_t sub = (dt / 4);
+      if (data->sparks[s].level <= sub)
+        data->sparks[s].level = 0;
+      else
+        data->sparks[s].level -= (uint8_t)sub;
+    }
+  }
+
+  // Force Rainbow Palette
+  const uint32_t *active_palette = getPaletteByIndex(4);
+
+  // --- Phase 4: Proportional Bloom Logic ---
+  uint16_t spark_radius = (len / 60);
+  if (spark_radius < 2)
+    spark_radius = 2; // Min 5 LED total
+  if (spark_radius > 5)
+    spark_radius = 5; // Max 11 LED total
+
+  for (int i = 0; i < len; i++) {
+    uint32_t rainbow_32 = 0;
+    if (i < (int)progress - (int)head_len || finished) {
+      uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+      // --- Phase 4: 80% Background Dimming ---
+      CRGBW c = ColorFromPalette(active_palette, index, 205);
+      rainbow_32 = RGBW32(c.r, c.g, c.b, c.w);
+    } else if (i <= (int)progress) {
+      rainbow_32 = RGBW32(255, 255, 255, 255);
+    }
+
+    // Blend Spikes (additive brightness with proportional bloom)
+    uint16_t spike_bri = 0;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level > 0) {
+        int distance = std::abs(data->sparks[s].pos - i);
+        if (distance <= (int)spark_radius - 1) {
+          spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
+        } else if (distance == (int)spark_radius) {
+          uint16_t bloom = data->sparks[s].level >> 1;
+          spike_bri = std::max(spike_bri, bloom);
+        }
+      }
+    }
+
+    if (spike_bri > 0) {
+      CRGBW final_c = color_add(
+          CRGBW(rainbow_32), CRGBW(spike_bri, spike_bri, spike_bri, spike_bri));
+      instance->_segment.setPixelColor(
+          i, RGBW32(final_c.r, final_c.g, final_c.b, final_c.w));
+    } else {
+      instance->_segment.setPixelColor(i, rainbow_32);
+    }
+  }
+  return FRAMETIME;
+}
+
+// --- Chaos Theory Effect (ID 159) ---
+// Organic, noise-driven evolution of the Energy effect.
+// Features:
+// 1. Embedded Glitter Intro: Replaces cursor with a sparkling birth.
+// 2. Bidirectional Flux: Smooth 16-bit noise drives speed and direction.
+// 3. Smart Palette: Fully integrated with ID 254.
+// 4. Energy Spikes: Retained for visual texture.
+
+struct ChaosData {
+  uint32_t accumulator;
+  uint32_t last_millis;
+  EnergySpark sparks[MAX_ENERGY_SPARKS];
+  // Intro State
+  uint32_t intro_start;
+  bool intro_done;
+};
+
+uint16_t mode_chaos_theory(void) {
+  if (!instance)
+    return 350;
+
+  uint16_t len = instance->_segment.length();
+
+  // State Management
+  ChaosData *data = (ChaosData *)instance->_segment.data;
+  if (!data || instance->_segment.reset) {
+    if (!instance->_segment.allocateData(sizeof(ChaosData)))
+      return 350;
+    data = (ChaosData *)instance->_segment.data;
+    data->last_millis = instance->now;
+    data->accumulator = 0;
+    data->intro_start = instance->now;
+    data->intro_done = false;
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++)
+      data->sparks[s].level = 0;
+
+    // On reset, fill black to start fresh for intro
+    instance->_segment.fill(0);
+    instance->_segment.reset = false;
+  }
+
+  uint32_t dt = instance->now - data->last_millis;
+  data->last_millis = instance->now;
+
+  // --- Phase 1: Embedded Glitter Intro ---
+  if (!data->intro_done) {
+    uint32_t intro_elapsed = instance->now - data->intro_start;
+    const uint32_t INTRO_DURATION = 1500; // 1.5s build-up
+
+    if (intro_elapsed >= INTRO_DURATION) {
+      data->intro_done = true;
+      // Flash white to signify "Birth of Chaos"
+      instance->_segment.fill(RGBW32(255, 255, 255, 255));
+      return FRAMETIME;
+    }
+
+    // Fade existing sparks slightly (leave trails)
+    instance->_segment.fadeToBlackBy(40);
+
+    // Spawn glitter based on progress (accelerating density)
+    // Progress 0.0 -> 1.0 (approximated 0-255)
+    uint8_t progress = (intro_elapsed * 255) / INTRO_DURATION;
+
+    // Density increases with progress
+    // Scale spawn count by length to ensure density on long strips
+    // Base: at least 1 pixel. Max: len / 10 pixels per frame.
+    int max_spawn = (len / 10) + 1;
+    long spawn_count = (long(progress) * max_spawn) / 255;
+
+    // Always spawn at least one in the second half
+    if (spawn_count == 0 && progress > 128)
+      spawn_count = 1;
+
+    for (int k = 0; k < spawn_count; k++) {
+      // Random position
+      uint16_t pos = cfx::hw_random16() % (len ? len : 1);
+      // Sparkling white
+      instance->_segment.setPixelColor(pos, RGBW32(255, 255, 255, 255));
+    }
+
+    return FRAMETIME;
+  }
+
+  // --- Phase 2: The Chaos Engine (Running State) ---
+
+  // 1. Agitation Engine (Literal Port from Energy ID 158)
+  uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
+  uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
+  uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
+  uint32_t speed_factor = (instance->_segment.speed * chaos_mult) >> 8;
+  if (speed_factor < 16)
+    speed_factor = 16;
+  data->accumulator += (dt * speed_factor);
+
+  // FIX (Iteration 11): Noise-Driven Pixel Scatter
+  // Modulating spatial_mult caused strobing (accordion stretch).
+  // Now we lock scale to Energy, and scatter pixels when chaos is high.
+
+  // 1. Restore exact Energy Speed Shift
+  uint8_t counter = (data->accumulator >> 11) & 0xFF;
+
+  // 2. Restore exact Energy Intensity Math (Zoom)
+  uint16_t spatial_mult = 16 << (instance->_segment.intensity / 29);
+
+  // 3. Noise-Driven Index Scattering (Twinkle Chaos overlay)
+  // Low noise = 0 scatter (Linear Scrolling).
+  // High noise = Pixel indices drift randomly (Twinkle Chaos).
+  uint8_t scatter_range = 0;
+  if (raw_noise > 128) {
+    scatter_range = cfx::cfx_map(raw_noise, 128, 255, 0, 80);
+  }
+
+  // 2. Render Background
+  const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
+  if (active_palette[0] == 0 && active_palette[15] == 0) {
+    instance->generateRandomPalette();
+  }
+
+  for (int i = 0; i < len; i++) {
+    // Map position to 0-255 using exact Energy math
+    uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+
+    // Apply twinkle scatter if active
+    if (scatter_range > 0) {
+      index += cfx::hw_random8(scatter_range) - (scatter_range >> 1);
+    }
+
+    // Use 205 (80%) brightness to match Energy's background depth exactly
+    CRGBW c = ColorFromPalette(active_palette, index, 205);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // --- Phase 3: Energy Spikes (Synchronized Chaos) ---
+  // In the original, spikes were purely random during high agitation.
+  // Here, we inject the GLOBAL PRECISION BEAT ENGINE to give the chaos a
+  // structural, musical pulse.
+  uint16_t bpm = 30 + ((instance->_segment.speed * 120) >> 8);
+  uint8_t global_beat_env = cfx::beatsin8_t(bpm, 0, 255);
+
+  // Sharpen the beat into an explosive trigger
+  uint8_t sharp_beat = cfx::scale8(global_beat_env, global_beat_env);
+  sharp_beat = cfx::scale8(sharp_beat, sharp_beat);
+
+  // Trigger explosive spikes ONLY when the noise field is agitated AND the
+  // global beat strikes. The higher the beat peak, the higher the probability
+  // of spawning a spark.
+  if (raw_noise > 120 && sharp_beat > 128 &&
+      cfx::hw_random8() < (sharp_beat >> 1)) {
+    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+      if (data->sparks[s].level == 0) {
+        data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
+        data->sparks[s].level = 255; // Maximum bright explosion on the beat
+        data->sparks[s].building = false; // Instant pop, then fade
+        break;
+      }
+    }
+  }
+
+  // Provide bloom range
+  uint16_t spark_radius = (len / 60) + 1;
+  if (spark_radius > 4)
+    spark_radius = 4;
+
+  // Update Spikes
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level > 0) {
+      // Fade
+      uint8_t fade = 5; // Fixed fade rate
+      if (data->sparks[s].level <= fade)
+        data->sparks[s].level = 0;
+      else
+        data->sparks[s].level -= fade;
+    }
+  }
+
+  // Draw Spikes (Additive Blend)
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level > 0) {
+      int center = data->sparks[s].pos;
+      uint8_t bri = data->sparks[s].level;
+
+      // Helper to add brightness
+      auto add_brightness = [&](int pos, uint8_t amount) {
+        if (pos >= 0 && pos < len) {
+          uint32_t existing = instance->_segment.getPixelColor(pos);
+          CRGBW bg(existing);
+          CRGBW fg(amount, amount, amount, amount);
+          CRGBW final = color_add(bg, fg);
+          instance->_segment.setPixelColor(
+              pos, RGBW32(final.r, final.g, final.b, final.w));
+        }
+      };
+
+      add_brightness(center, bri);
+
+      for (int r = 1; r <= spark_radius; r++) {
+        uint8_t dim = bri >> r;
+        if (dim == 0)
+          continue;
+        add_brightness(center - r, dim);
+        add_brightness(center + r, dim);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
 // Intensity controls saturation (blends with white)
 uint16_t mode_rainbow(void) {
   if (!instance)
@@ -2330,7 +3531,7 @@ uint16_t mode_rainbow(void) {
           ? getPaletteByIndex(4) // Rainbow palette
           : getPaletteByIndex(instance->_segment.palette);
 
-  CRGBW c = ColorFromPalette(counter, 255, active_palette);
+  CRGBW c = ColorFromPalette(active_palette, counter, 255);
 
   // Intensity < 128: blend with white (reduce saturation)
   if (instance->_segment.intensity < 128) {
@@ -2373,7 +3574,7 @@ uint16_t mode_rainbow_cycle(void) {
 
   for (int i = 0; i < len; i++) {
     uint8_t index = ((i * spatial_mult) / len) + counter;
-    CRGBW c = ColorFromPalette(index, 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, index, 255);
 
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
@@ -2400,7 +3601,8 @@ uint16_t mode_colortwinkle(void) {
   }
 
   // Speed controls fade rate using scale8 (multiplicative)
-  // Lower speed = slower fade (higher retention), higher speed = faster fade
+  // Lower speed = slower fade (higher retention), higher speed = faster
+  // fade
   uint8_t speed = instance->_segment.speed;
   // fade_scale: 248-230 range for calmer twinkle
   // At speed=0: scale=248 (~97% retention = very slow fade, long trails)
@@ -2417,25 +3619,14 @@ uint16_t mode_colortwinkle(void) {
   // Step 1: Fade ALL pixels toward black using linear subtraction (qsub8)
   // Logic: Linear fade ensures pixels strictly reach zero, avoiding "floor
   // level" artifacts Speed controls fade rate: Speed 0-128 -> fade 8
-  // units/frame (Clean fade, avoids floor) Speed >128  -> increases slightly to
-  // max ~12 units/frame
+  // units/frame (Clean fade, avoids floor) Speed >128  -> increases
+  // slightly to max ~12 units/frame
   uint8_t fade_amt = 8 + (instance->_segment.speed > 128
                               ? (instance->_segment.speed - 128) >> 5
                               : 0);
 
-  for (int i = 0; i < len; i++) {
-    uint32_t cur32 = instance->_segment.getPixelColor(i);
-    uint8_t r = (cur32 >> 16) & 0xFF;
-    uint8_t g = (cur32 >> 8) & 0xFF;
-    uint8_t b = cur32 & 0xFF;
-
-    // Linear subtractive fade
-    r = qsub8(r, fade_amt);
-    g = qsub8(g, fade_amt);
-    b = qsub8(b, fade_amt);
-
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
-  }
+  // Use standardized subtractive_fade_val: identical math, centralized.
+  instance->_segment.subtractive_fade_val(fade_amt);
 
   // Step 2: Spawn new twinkles
   // Map intensity effectively: 0-255 -> spawn chance
@@ -2449,7 +3640,7 @@ uint16_t mode_colortwinkle(void) {
     // avoid deadlocks
     if (hw_random8() <= intensity) {
       int i = hw_random16(0, len);
-      CRGBW c = ColorFromPalette(hw_random8(), 255, active_palette);
+      CRGBW c = ColorFromPalette(active_palette, hw_random8(), 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
     }
   }
@@ -2463,7 +3654,7 @@ uint16_t mode_colortwinkle(void) {
 // dualMode = if true, paint a second eye on opposite side (ID 60)
 //
 // Based on WLED mode_larson_scanner() by Aircoookie
-// Explicit trail rendering — gamma-aware, with direction-change memory
+// Explicit trail rendering â€” gamma-aware, with direction-change memory
 uint16_t mode_scanner_internal(bool dualMode) {
   if (!instance)
     return 350;
@@ -2501,7 +3692,7 @@ uint16_t mode_scanner_internal(bool dualMode) {
 
   // 2. Movement: WLED speed mapping
   uint8_t spd = instance->_segment.speed;
-  unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96→2
+  unsigned speed_factor = 96 - ((unsigned)spd * 94 / 255); // 96â†’2
   unsigned effective_speed = FRAMETIME * speed_factor;
   unsigned pixels = len / effective_speed;
 
@@ -2590,7 +3781,9 @@ uint16_t mode_scanner_internal(bool dualMode) {
       } else {
         unsigned fade = 255 - (t * 255 / tLen);
         // Quadratic: fade^2 / 255, scaled by maxBri
-        bri = ((fade * fade) >> 8) * maxBri / 255;
+        // GAMMA CORRECTION: Replace x*x with LUT
+        // bri = ((fade * fade) >> 8) * maxBri / 255;
+        bri = ((uint16_t)instance->applyGamma(fade) * maxBri) >> 8;
         if (bri == 0 && t < tLen && maxBri > 0)
           bri = 1;
       }
@@ -2636,7 +3829,8 @@ uint16_t mode_scanner_internal(bool dualMode) {
     // Dynamic fade duration based on speed:
     // Faster speed = shorter duration (trail must clear faster)
     // Slower speed = longer duration (trail lingers)
-    // Formula: (trail_len * speed_factor) / 3 scales perfectly with travel time
+    // Formula: (trail_len * speed_factor) / 3 scales perfectly with travel
+    // time
     unsigned fadeFrames = (trail_len * speed_factor) / 3;
     if (fadeFrames < 5)
       fadeFrames = 5;
@@ -2653,11 +3847,15 @@ uint16_t mode_scanner_internal(bool dualMode) {
 }
 
 // Wrapper for single scanner (ID 40)
+// Wrapper for single scanner (ID 40)
+uint16_t mode_scanner_internal(bool dual);
 uint16_t mode_scanner(void) { return mode_scanner_internal(false); }
 
 // Dual Scanner (ID 60)
 // Two scanners moving in opposite directions
 uint16_t mode_scanner_dual(void) { return mode_scanner_internal(true); }
+
+// (Duplicate scanner implementation removed)
 
 // Mode Table
 // --- Service Loop with Switch Dispatch ---
@@ -2665,7 +3863,113 @@ uint16_t mode_bouncing_balls(void);
 uint16_t mode_color_wipe(void);
 uint16_t mode_color_wipe_random(void);
 uint16_t mode_color_sweep(void);
+uint16_t mode_color_sweep(void);
 uint16_t mode_strobe(void);
+uint16_t mode_percent(void);
+uint16_t mode_percent_center(void);
+uint16_t mode_fluid_rain(void);
+
+// --- Heartbeat Effect (ID 100) ---
+// Replicates WLED logic with framerate-independent decay and gamma correction
+uint16_t mode_heartbeat(void) {
+  if (!instance)
+    return 350;
+
+  // BPM: 40 + (speed / 8) -> Range 40-71 BPM
+  unsigned bpm = 40 + (instance->_segment.speed >> 3);
+  // Time per beat (ms)
+  uint32_t msPerBeat = (60000L / bpm);
+  // Second beat timing (approx 1/3 of beat)
+  uint32_t secondBeat = (msPerBeat / 3);
+
+  // State:
+  // aux0: Beat Phase (0=Main Beat waiting, 1=Second Beat waiting)
+  // aux1: Brightness/Decay State (High = Dark, Low = Bright)
+  // step: Last Beat Time
+
+  // Reset logic
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 0; // Start Dark
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t beatTimer = instance->now - instance->_segment.step;
+
+  // 1. Beat Logic
+  if ((beatTimer > secondBeat) && !instance->_segment.aux0) {
+    // Trigger Second Beat ("dup")
+    instance->_segment.aux1 = UINT16_MAX;
+    instance->_segment.aux0 = 1;
+  }
+
+  if (beatTimer > msPerBeat) {
+    // Trigger Main Beat ("lub")
+    instance->_segment.aux1 = UINT16_MAX;
+    instance->_segment.aux0 = 0;
+    // Account for drift
+    instance->_segment.step = instance->now;
+  }
+
+  // 2. Linear Decay (Framerate Independent)
+  // WLED Factor: F = 2042 / (2048 + intensity)
+  // We apply F ^ (delta / 24ms)
+
+  uint32_t delta = instance->frame_time;
+  if (delta < 1)
+    delta = 1;
+
+  // Base WLED factor per ~24ms frame
+  // 2042/2048 = 0.99707
+  // 2042/2303 = 0.8866 (at max intensity)
+  float wled_factor = 2042.0f / (2048.0f + instance->_segment.intensity);
+
+  // Adjust for actual delta (Target 42FPS = ~24ms)
+  float time_ratio = (float)delta / 24.0f;
+
+  // Clamp ratio safety
+  if (time_ratio > 10.0f)
+    time_ratio = 10.0f;
+
+  float decay = powf(wled_factor, time_ratio);
+
+  instance->_segment.aux1 = (uint16_t)((float)instance->_segment.aux1 * decay);
+
+  // 3. Rendering
+  // Pulse Amount (Linear): 0 (Back) -> 255 (Pulse)
+  uint8_t pulse_amt = (instance->_segment.aux1 >> 8);
+
+  // GAMMA CORRECTION:
+  // Apply gamma to the visual pulse brightness to ensure natural fade
+  uint8_t gamma_pulse = instance->applyGamma(pulse_amt);
+
+  // Blend Factor: 0 = Pulse, 255 = Back
+  uint8_t blend = 255 - gamma_pulse;
+
+  // Colors
+  uint32_t colorBg = instance->_segment.colors[1]; // SEGCOLOR(1)
+
+  uint16_t len = instance->_segment.length();
+
+  for (int i = 0; i < len; i++) {
+    uint32_t colorPulse;
+    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+      colorPulse = instance->_segment.colors[0];
+    } else {
+      // Palette mapping
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      colorPulse = RGBW32(c.r, c.g, c.b, c.w);
+    }
+
+    uint32_t finalColor = color_blend(colorPulse, colorBg, blend);
+    instance->_segment.setPixelColor(i, finalColor);
+  }
+
+  return FRAMETIME;
+}
 
 void CFXRunner::service() {
   // CRITICAL FIX: Update global instance pointer to 'this' runner
@@ -2685,15 +3989,15 @@ void CFXRunner::service() {
   _segment.call++;
 
   // Perform periodic logging if enabled
-  diagnostics.maybe_log("CFX");
+  diagnostics.maybe_log(_name);
 
   // --- INTRO LOGIC ---
   if (_state == STATE_INTRO) {
     if (serviceIntro()) {
       _state = STATE_RUNNING;
       // Intro just finished.
-      // We let the next loop iteration handle the main effect start to ensure
-      // clean state.
+      // We let the next loop iteration handle the main effect start to
+      // ensure clean state.
     }
     return;
   }
@@ -2702,6 +4006,18 @@ void CFXRunner::service() {
   switch (_mode) {
   case FX_MODE_RAINBOW: // 8
     mode_rainbow();
+    break;
+  case FX_MODE_CHASE_COLOR: // 28
+    mode_chase_color();
+    break;
+  case FX_MODE_TRICOLOR_CHASE: // 54
+    mode_tricolor_chase();
+    break;
+  case FX_MODE_BPM: // 68
+    mode_bpm();
+    break;
+  case FX_MODE_GLITTER: // 87
+    mode_glitter();
     break;
   case FX_MODE_RAINBOW_CYCLE: // 9
     mode_rainbow_cycle();
@@ -2718,7 +4034,7 @@ void CFXRunner::service() {
   case FX_MODE_FIRE_2012: // 66
     mode_fire_2012();
     break;
-  case FX_MODE_FIRE_DUAL: // 53
+  case FX_MODE_FIRE_DUAL: // 153
     mode_fire_dual();
     break;
   case FX_MODE_COLORTWINKLE: // 74
@@ -2736,6 +4052,9 @@ void CFXRunner::service() {
   case FX_MODE_BREATH: // 2
     mode_breath();
     break;
+  case FX_MODE_HEARTBEAT: // 100
+    mode_heartbeat();
+    break;
   case FX_MODE_DISSOLVE: // 18
     mode_dissolve();
     break;
@@ -2745,6 +4064,9 @@ void CFXRunner::service() {
   case FX_MODE_RIPPLE: // 79
     mode_ripple();
     break;
+  case FX_MODE_HEARTBEAT_CENTER: // 154
+    mode_heartbeat_center();
+    break;
   case FX_MODE_PHASED: // 105
     mode_phased();
     break;
@@ -2753,6 +4075,15 @@ void CFXRunner::service() {
     break;
   case FX_MODE_METEOR: // 76
     mode_meteor();
+    break;
+  case FX_MODE_SPARKLE: // 20
+    mode_sparkle();
+    break;
+  case FX_MODE_FLASH_SPARKLE: // 21
+    mode_flash_sparkle();
+    break;
+  case FX_MODE_HYPER_SPARKLE: // 22
+    mode_hyper_sparkle();
     break;
   case FX_MODE_NOISEPAL: // 107
     mode_noisepal();
@@ -2766,19 +4097,768 @@ void CFXRunner::service() {
   case FX_MODE_COLOR_SWEEP: // 6
     mode_color_sweep();
     break;
-  case FX_MODE_BLINK: // 1
-    mode_blink();
-    break;
   case FX_MODE_SUNRISE: // 104
     mode_sunrise();
     break;
   case FX_MODE_BOUNCINGBALLS: // 91
     mode_bouncing_balls();
     break;
+  case FX_MODE_BLINK: // 1
+    mode_blink();
+    break;
+  case FX_MODE_STROBE: // 23
+    mode_strobe();
+    break;
+  case FX_MODE_STROBE_RAINBOW: // 24
+    mode_strobe_rainbow();
+    break;
+  case FX_MODE_MULTI_STROBE: // 25
+    mode_multi_strobe();
+    break;
+  case FX_MODE_BLINK_RAINBOW: // 26
+    mode_blink_rainbow();
+    break;
+  case FX_MODE_RUNNING_LIGHTS: // 15
+    mode_running_lights();
+    break;
+  case FX_MODE_SAW: // 16
+    mode_saw();
+    break;
+  case FX_MODE_RUNNING_DUAL: // 52
+    mode_running_dual();
+    break;
+  case FX_MODE_PERCENT: // 98
+    mode_percent();
+    break;
+  case FX_MODE_PERCENT_CENTER: // 152
+    mode_percent_center();
+    break;
+  case FX_MODE_EXPLODING_FIREWORKS: // 90
+    mode_exploding_fireworks();
+    break;
+  case FX_MODE_POPCORN: // 95
+    mode_popcorn();
+    break;
+  case FX_MODE_DRIP: // 96
+    mode_drip();
+    break;
+  case FX_MODE_DROPPING_TIME: // 151
+    mode_dropping_time();
+    break;
+  case FX_MODE_KALEIDOS: // 155
+    mode_kaleidos();
+    break;
+  case FX_MODE_FOLLOW_ME: // 156
+    mode_follow_me();
+    break;
+  case FX_MODE_FOLLOW_US: // 157
+    mode_follow_us();
+    break;
+  case FX_MODE_ENERGY: // 158
+    mode_energy();
+    break;
+  case FX_MODE_CHAOS_THEORY: // 159
+    mode_chaos_theory();
+    break;
+  case FX_MODE_FLUID_RAIN: // 160
+    mode_fluid_rain();
+    break;
   default:
     mode_static();
     break;
   }
+}
+
+// --- Physics Effects (ID 90, 95, 96) ---
+
+// Shared Particle Struct for Fireworks, Popcorn, Drip
+struct Spark {
+  float pos;
+  float vel;
+  uint16_t col;     // Brightness/Color
+  uint8_t colIndex; // State or color index
+  Spark()
+      : pos(0.0f), vel(0.0f), col(0), colIndex(0) {} // Add default constructor
+};
+
+/*
+ * Exploding Fireworks (ID 90)
+ * Ported from WLED (Aircoookie/Blazoncek)
+ * Optimized for 1D Strips (No 2D support)
+ */
+/*
+ * Exploding Fireworks (ID 90)
+ * Ported from WLED (Aircoookie/Blazoncek)
+ * Optimized for 1D Strips (No 2D support)
+ */
+uint16_t mode_exploding_fireworks(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // Allocate Data
+  // WLED Logic: 5 + (rows*cols)/2, maxed at FAIR_DATA
+  const uint16_t MAX_SPARKS = 64;
+  uint16_t numSparks = std::min((uint16_t)(5 + (len >> 1)), MAX_SPARKS);
+
+  // Data layout: [Spark array...] [float dying_gravity]
+  size_t dataSize = sizeof(Spark) * numSparks;
+
+  if (!instance->_segment.allocateData(dataSize + sizeof(float)))
+    return mode_static();
+
+  Spark *sparks = reinterpret_cast<Spark *>(instance->_segment.data);
+  float *dying_gravity =
+      reinterpret_cast<float *>(instance->_segment.data + dataSize);
+  Spark *flare = sparks; // First spark is the rocket flare
+
+  // Initialization / Resize handling
+  if (dataSize != instance->_segment.aux1) {
+    *dying_gravity = 0.0f;
+    instance->_segment.aux0 = 0;        // State: 0=Init Flare
+    instance->_segment.aux1 = dataSize; // Size tracker
+  }
+
+  // Fade out canvas (Trail effect)
+  // Use the standardized helper which combines subtractive fade (floor
+  // clearing) and blur (trail smoothing). 10 is the subtractive amount (approx
+  // 4% per frame).
+  instance->_segment.fade_out_smooth(10);
+
+  // Physics
+  // Gravity: WLED 0.0004 + speed/800000.
+  // Map speed 0-255 to reasonable gravity.
+  float gravity = -0.0004f - (instance->_segment.speed / 800000.0f);
+  gravity *= len; // Scale by strip length
+
+  if (instance->_segment.aux0 < 2) {    // STATE: FLARE LAUNCH
+    if (instance->_segment.aux0 == 0) { // Init Flare
+      flare->pos = 0;
+      flare->vel = 0;
+      // WLED Peak Height
+      float peakHeight = (75 + cfx::hw_random8(180)) * (len - 1) / 255.0f;
+      flare->vel = sqrtf(-2.0f * gravity * peakHeight);
+      flare->col = 255; // Max brightness
+      instance->_segment.aux0 = 1;
+    }
+
+    // Process Flare Physics
+    if (flare->vel > 12 * gravity) { // Still rising (gravity is negative)
+      // Draw Flare
+      int pos = (int)flare->pos;
+      if (pos >= 0 && pos < len) {
+        instance->_segment.setPixelColor(
+            pos, RGBW32(flare->col, flare->col, flare->col, 0));
+      }
+
+      flare->pos += flare->vel;
+      flare->pos = cfx_constrain(flare->pos, 0.0f, (float)len - 1.0f);
+      flare->vel += gravity;
+      flare->col = qsub8(flare->col, 2); // Dim slightly
+    } else {
+      instance->_segment.aux0 = 2; // Trigger Explosion
+    }
+
+  } else if (instance->_segment.aux0 < 4) { // STATE: EXPLOSION
+
+    // Initialize Sparks (Debris)
+    if (instance->_segment.aux0 == 2) {
+      // Explosion Logic
+      // Use nSparks logic from WLED (approximate for 1D)
+      int nSparks = flare->pos + cfx::hw_random8(4);
+      nSparks = std::max(nSparks, 4);
+      nSparks = std::min(nSparks, (int)numSparks);
+
+      for (int i = 1; i < nSparks; i++) {
+        sparks[i].pos = flare->pos;
+        // WLED Velocity Logic:
+        // (random(20001)/10000 - 0.9) covers range -0.9 to 1.1
+        // Then multiplied by negative gravity * 50 to scale to strip
+        // size/physics
+        // INTENSITY CONTROL: Scale velocity by intensity/128 (128=Native,
+        // 255=2x, 64=0.5x)
+        float intensityScale = instance->_segment.intensity / 128.0f;
+        if (intensityScale < 0.1f)
+          intensityScale = 0.1f; // Prevent 0 velocity
+
+        sparks[i].vel = (float(cfx::hw_random16(0, 20001)) / 10000.0f) - 0.9f;
+        sparks[i].vel *= -gravity * 50.0f *
+                         intensityScale; // Velocity scaling + Intensity scaling
+
+        // Heat initialization (WLED uses extended range for heat)
+        sparks[i].col = 345;
+
+        // Random color index
+        sparks[i].colIndex = cfx::hw_random8();
+      }
+      // Known spark[1] keeps the explosion alive
+      sparks[1].col = 345;
+
+      *dying_gravity = gravity / 2;
+      instance->_segment.aux0 = 3;
+    }
+
+    // Process Sparks
+    // Check if "known spark" (index 1) is still burnt out
+    if (sparks[1].col > 4) {
+      // Iterate over all active sparks.
+      // Note: We don't track nSparks locally between frames, so we iterate
+      // numSparks but only process those with heat > 0.
+      for (int i = 1; i < numSparks; i++) {
+        if (sparks[i].col > 0) {
+          sparks[i].pos += sparks[i].vel;
+          sparks[i].vel += *dying_gravity;
+
+          if (sparks[i].col > 3)
+            sparks[i].col -= 4; // Cooling
+          else
+            sparks[i].col = 0;
+
+          if (sparks[i].pos >= 0 && sparks[i].pos < len) {
+            // WLED Heat->Color Logic
+            uint16_t prog = sparks[i].col;
+            uint32_t spColor;
+
+            // Resolve palette color
+            // If default palette (0), use Rainbow (ID 4) logic
+            uint8_t palId = instance->_segment.palette;
+            if (palId == 0)
+              palId = 4; // Default to Rainbow
+
+            const uint32_t *pal = getPaletteByIndex(palId);
+            CRGBW c = ColorFromPalette(pal, sparks[i].colIndex, 255);
+            spColor = RGBW32(c.r, c.g, c.b, c.w);
+
+            CRGBW finalColor = CRGBW(0, 0, 0, 0);
+
+            if (prog > 300) { // White hot (fade from white to spark color)
+              // Blend White -> Color
+              // prog 345 -> 300 map to 255 -> 0 blend amount?
+              // WLED: color_blend(spColor, WHITE, (prog-300)*5)
+              // (345-300)*5 = 225. So high heat = mostly white.
+              finalColor = CRGBW(color_blend(
+                  spColor, RGBW32(255, 255, 255, 255), (prog - 300) * 5));
+            } else if (prog > 45) { // Fade from color to black
+              // WLED: color_blend(BLACK, spColor, prog - 45)
+              // (300-45) = 255 (full color). (46-45) = 1 (mostly black).
+              int blendAmt = cfx_constrain((int)prog - 45, 0, 255);
+              finalColor = CRGBW(color_blend(0, spColor, blendAmt));
+
+              // WLED adds specific cooling to G/B channels for fire look?
+              // int cooling = (300 - prog) >> 5;
+              // We'll skip that subtle detail for 1D optimization unless
+              // needed.
+            }
+
+            instance->_segment.setPixelColor(
+                (int)sparks[i].pos,
+                RGBW32(finalColor.r, finalColor.g, finalColor.b, finalColor.w));
+          }
+        }
+      }
+      *dying_gravity *=
+          0.8f; // Air resistance (WLED uses 0.8f, we were using 0.9f)
+    } else {
+      // Burnt out
+      instance->_segment.aux0 = 6 + cfx::hw_random8(10); // Wait frames
+    }
+
+  } else { // STATE: COOLDOWN/RESET
+    instance->_segment.aux0--;
+    if (instance->_segment.aux0 < 4) {
+      instance->_segment.aux0 = 0; // Reset to Flare
+    }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Popcorn (ID 95)
+ * Ported from WLED
+ */
+uint16_t mode_popcorn(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // WLED: max 21 kernels per segment (ESP8266)
+  const int MAX_POPCORN = 24;
+  if (!instance->_segment.allocateData(sizeof(Spark) * MAX_POPCORN))
+    return mode_static();
+
+  Spark *popcorn = reinterpret_cast<Spark *>(instance->_segment.data);
+
+  // Background
+  instance->_segment.fill(instance->_segment.colors[1]); // Secondary
+
+  float gravity = -0.0001f - (instance->_segment.speed / 200000.0f);
+  gravity *= len;
+
+  // WLED Density fix: ~1:1 with 83 intensity
+  // WLED used `intensity` directly?
+  // WLED structure: loop MAX_POPCORN. if active update. else `if (random8() <
+  // 255)`. Wait, WLED `mode_popcorn` spawns based on simple chance? Actually,
+  // WLED default particle count logic might be sparser. We'll scale density
+  // down. If user says "83 to have 1:1", it means 128 (default) is 1.5x too
+  // dense. Let's scale intensity by 0.65?
+
+  // Scaling density by 0.5 for further reduction
+  uint8_t effective_intensity = scale8(instance->_segment.intensity, 128);
+  int numPopcorn = effective_intensity * MAX_POPCORN / 255;
+  if (numPopcorn == 0)
+    numPopcorn = 1;
+
+  for (int i = 0; i < numPopcorn; i++) {
+    if (popcorn[i].pos >= 0.0f) { // Active
+      popcorn[i].pos += popcorn[i].vel;
+      popcorn[i].vel += gravity;
+    } else {                       // Inactive - Pop?
+      if (cfx::hw_random8() < 5) { // Pop Chance
+        popcorn[i].pos = 0.01f;
+
+        // Initial Velocity calculation
+        unsigned peakHeight = 128 + cfx::hw_random8(128);
+        peakHeight = (peakHeight * (len - 1)) >> 8;
+        popcorn[i].vel = sqrtf(-2.0f * gravity * peakHeight);
+
+        if (instance->_segment.palette == 0) {
+          popcorn[i].colIndex = cfx::hw_random8(0, 3); // Pick simple colors?
+        } else {
+          popcorn[i].colIndex = cfx::hw_random8();
+        }
+      }
+    }
+
+    // Draw
+    if (popcorn[i].pos >= 0.0f) {
+      int idx = (int)popcorn[i].pos;
+      if (idx < len) {
+        uint32_t col;
+        if (instance->_segment.palette == 0 ||
+            instance->_segment.palette == 255) {
+          // Default (0) or Solid (255): Use Primary Color
+          col = instance->_segment.colors[0];
+        } else {
+          const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+          CRGBW c = ColorFromPalette(pal, popcorn[i].colIndex, 255);
+          col = RGBW32(c.r, c.g, c.b, c.w);
+        }
+        instance->_segment.setPixelColor(idx, col);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Drip (ID 96)
+ * Ported from WLED
+ */
+// --- Dropping Time Effect (ID 151) ---
+// Fills the strip with water over a set duration (Timer).
+// Speed 0-255 maps to 1 minute - 60 minutes.
+
+struct DroppingTimeState {
+  uint32_t startTime;
+  uint16_t filledPixels;
+  uint32_t lastDropTime;
+
+  // We need to track multiple drops:
+  // 1. The "Filling" drop (the one that will raise the level)
+  // 2. "Dummy" drops (visual only)
+  // Reusing Spark struct logic
+  Spark fillingDrop;
+  Spark dummyDrops[2]; // Max 2 dummy drops active
+
+  bool fillingDropActive;
+
+  void init() {
+    startTime = 0;
+    filledPixels = 0;
+    lastDropTime = 0;
+    fillingDropActive = false;
+    fillingDrop = Spark();
+    for (int i = 0; i < 2; i++)
+      dummyDrops[i] = Spark();
+  }
+};
+
+uint16_t mode_dropping_time(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  if (!instance->_segment.allocateData(sizeof(DroppingTimeState))) {
+    ESP_LOGE("CFX", "DroppingTime: Alloc failed!");
+    return mode_static();
+  }
+
+  DroppingTimeState *state =
+      reinterpret_cast<DroppingTimeState *>(instance->_segment.data);
+
+  // Initialize or Reset
+  if (instance->_segment.reset) {
+    ESP_LOGD("CFX", "DroppingTime: RESET");
+    state->init();
+    state->startTime = instance->now;
+    instance->_segment.fill(0); // Start black
+    instance->_segment.reset = false;
+  }
+
+  // Debug Log
+  /*
+  static uint32_t last_log = 0;
+  if (instance->now - last_log > 2000) {
+    last_log = instance->now;
+    // Recalc duration for log
+    uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+    uint32_t duration_ms = duration_min * 60 * 1000;
+    uint32_t elapsed = instance->now - state->startTime;
+    ESP_LOGD("CFX", "DT: Elapsed %u/%u ms, Filled %u", elapsed, duration_ms,
+             state->filledPixels);
+  }
+  */
+
+  // 1. Calculate Time & Progress
+  // Speed 0   -> 1 minute
+  // Speed 255 -> 60 minutes
+  // Mapping: Duration (min) = 1 + (Speed * 59 / 255)
+  uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+  uint32_t duration_ms = duration_min * 60 * 1000;
+
+  uint32_t elapsed = instance->now - state->startTime;
+  if (elapsed > duration_ms)
+    elapsed = duration_ms;
+
+  // Calculate Target Level based on Time
+  // We want the level to rise *smoothly* or *stepwise*?
+  // User said: "Every drop reduced by one the strip length... At 100% all lit
+  // and animation stop." This implies the level is the visual representation of
+  // time.
+
+  uint16_t targetLevel = (uint16_t)((float)elapsed / duration_ms * len);
+  if (targetLevel > len)
+    targetLevel = len;
+
+  // If we are done, just fill and return
+  if (elapsed >= duration_ms) {
+    // Show full ocean
+    // ... (ocean logic for full strip)
+    // For now, just a full color or ocean static
+    // Reuse ocean logic but for full strip
+  }
+
+  // 2. Drop Logic
+  // Gravity Physics
+  uint8_t wled_speed = 83; // Standard gravity
+  float gravity = -0.0005f - (wled_speed / 50000.0f);
+  gravity *= (len - 1);
+
+  // A. Filling Drop
+  // We need to spawn a drop such that it hits the WATER LEVEL exactly when the
+  // level needs to increment? Or simpler: We just spawn drops periodically.
+  // When one hits, if it's time, we raise the level. User's request: "Every
+  // drop... leaving the leds lit." So the drop CAUSES the fill.
+
+  // Let's reverse it:
+  // Calculate when the NEXT pixel should be filled.
+  // NextFillTime = (PixelIndex + 1) * (Duration / Len)
+  // We need to spawn the drop so it ARRIVES at NextFillTime.
+  // FallTime = sqrt(2 * dist / |g|)
+  // dist = (len-1) - currentLevel
+  // SpawnTime = NextFillTime - FallTime.
+
+  if (state->filledPixels < len) {
+    uint32_t msPerPixel = duration_ms / len;
+    uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
+
+    // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
+    float dist = (len - 1) - state->filledPixels;
+    if (dist < 0)
+      dist = 0;
+
+    // Time to fall (frames? ms?). Gravity is in units/frame^2?
+    // In Drip effect: pos += vel; vel += gravity.
+    // Distance d = 0.5 * g * t^2 -> t = sqrt(2d/g) (in frames)
+    // Convert frames to ms (approx 15ms/frame default, but variable)
+    // Let's use a rough estimate or just spawn it slightly ahead.
+
+    // Heuristic: Just spawn it when we are close.
+    // Better: Interval based.
+    // If we simply spawn drops at `msPerPixel` interval, they will arrive at
+    // roughly the right rate. Let's try that for robustness.
+
+    if (!state->fillingDropActive) {
+      // Check if it's time to spawn the next filling drop
+      // We want the drop to LAND when the timer reaches the next pixel.
+      // So we spawn it `FallTime` *before* that.
+      // Approx Fall Time (ms) ~ sqrt(2 * dist / 0.0005) * 15ms
+      // G_eff = |gravity| = 0.0005 * len roughly.
+      // Let's just spawn it if (NextPixelTime - Now) < ExpectedFallDuration
+
+      float estFallFrames = sqrtf(2.0f * dist / (-gravity));
+      uint32_t estFallMs = estFallFrames * 15; // Approx
+
+      // Add a buffer so it doesn't arrive too late
+      if (elapsed + estFallMs >= nextPixelTime) {
+        // Spawn!
+        state->fillingDropActive = true;
+        state->fillingDrop.pos = len - 1;
+        state->fillingDrop.vel = 0;
+        state->fillingDrop.col = 255;
+        state->fillingDrop.colIndex = 2; // Falling
+      }
+    }
+  }
+
+  // Update Filling Drop
+  if (state->fillingDropActive) {
+    state->fillingDrop.vel += gravity;
+    state->fillingDrop.pos += state->fillingDrop.vel;
+
+    // Hit Water Level?
+    if (state->fillingDrop.pos <= state->filledPixels) {
+      state->fillingDropActive = false;
+      state->filledPixels++;
+      if (state->filledPixels > len)
+        state->filledPixels = len;
+    }
+  } else {
+    // Failsafe / Catch-up Logic
+    if (targetLevel > state->filledPixels) {
+      state->filledPixels = targetLevel;
+    }
+  }
+
+  // If Duration ended, force full fill
+  if (elapsed >= duration_ms) {
+    state->filledPixels = len;
+  }
+
+  // --- 3. RENDER PHASE (Always Run) ---
+
+  // A. Clear Air (everything above water level)
+  for (int i = state->filledPixels; i < len; i++) {
+    instance->_segment.setPixelColor(i, 0);
+  }
+
+  // B. Draw Water (Ocean Logic)
+  // Bidirectional waves for organic "sloshing" effect
+  // Explicitly calculated to ensure opposing direction
+  uint32_t ms = instance->now;
+  const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
+  if (instance->_segment.palette != 0)
+    active_palette = getPaletteByIndex(instance->_segment.palette);
+
+  // Time bases for waves (sawtooth 0-255)
+  // Wave 1: Moves RIGHT (x - t)
+  uint8_t t1 = beat8(15);
+  // Wave 2: Moves LEFT (x + t)
+  uint8_t t2 = beat8(18);
+
+  for (int i = 0; i < state->filledPixels; i++) {
+    // x coordinates (scaled)
+    // larger multiplier = narrower waves
+    uint8_t x1 = i * 4;
+    uint8_t x2 = i * 7;
+
+    // Wave 1: Right moving -> sin(x - t)
+    uint8_t wave1 = sin8(x1 - t1);
+
+    // Wave 2: Left moving -> sin(x + t)
+    uint8_t wave2 = sin8(x2 + t2);
+
+    // Combine (Average)
+    uint8_t index = (wave1 + wave2) / 2;
+
+    CRGBW c = ColorFromPalette(active_palette, index, 255);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  // C. Draw Drops (Filling Drop)
+  if (state->fillingDropActive) {
+    int pos = (int)state->fillingDrop.pos;
+    if (pos >= state->filledPixels && pos < len) {
+      instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
+    }
+    for (int t = 1; t <= 4; t++) {
+      int tPos = pos + t;
+      if (tPos >= state->filledPixels && tPos < len) {
+        instance->_segment.setPixelColor(
+            tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+      }
+    }
+  }
+
+  // D. Draw Drops (Dummy Drops)
+  for (int i = 0; i < 2; i++) {
+    if (state->dummyDrops[i].colIndex != 0) {
+      int pos = (int)state->dummyDrops[i].pos;
+      if (pos >= state->filledPixels && pos < len) {
+        uint32_t col = instance->_segment.colors[0];
+        if (col == 0)
+          col = 0x0000FF;
+        instance->_segment.setPixelColor(pos, col);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+
+uint16_t mode_drip(void) {
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  const int MAX_DROPS = 4;
+  if (!instance->_segment.allocateData(sizeof(Spark) * MAX_DROPS))
+    return mode_static();
+  Spark *drops = reinterpret_cast<Spark *>(instance->_segment.data);
+
+  instance->_segment.fill(instance->_segment.colors[1]);
+
+  int numDrops = 1 + (instance->_segment.intensity >> 6); // 1..4
+
+  // Speed Fix: 128 -> 83 scaling
+  // WLED internal speed 83 is standard 1D physics.
+  // If we receive 128, map it down.
+  uint8_t wled_speed = scale8(instance->_segment.speed, 166); // 128 -> ~83
+
+  float gravity = -0.0005f - (wled_speed / 50000.0f);
+  gravity *= (len - 1);
+
+  for (int j = 0; j < numDrops; j++) {
+    if (drops[j].colIndex == 0) { // Init
+      drops[j].pos = len - 1;
+      drops[j].vel = 0;
+      drops[j].col = 0;      // Brightness/Size measure
+      drops[j].colIndex = 1; // State: 1=Forming
+    }
+
+    // Source (Tap)
+    // Draw source pixel at top
+    // WLED uses "sourcedrop" brightness logic.
+
+    if (drops[j].colIndex == 1) { // Forming
+      // Swelling
+      drops[j].col += cfx::cfx_map(instance->_segment.speed, 0, 255, 1, 6);
+      if (drops[j].col > 255)
+        drops[j].col = 255;
+
+      // Draw swelling drop at the top (len-1)
+      // WLED logic: Source brightness increases.
+      // Palette support (like Popcorn): use palette color if active
+      uint32_t col;
+      if (instance->_segment.palette == 0 ||
+          instance->_segment.palette == 255) {
+        col = instance->_segment.colors[0];
+      } else {
+        const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+        CRGBW c = ColorFromPalette(pal, (uint8_t)(j * 64), 255);
+        col = RGBW32(c.r, c.g, c.b, c.w);
+      }
+      // Blend black -> color based on 'col' (0-255)
+      // Using color_blend(0, col, brightness)
+      // Note: color_blend blend param: 0=color1, 255=color2.
+      // So color_blend(0, col, drops[j].col) blends from Black(0) to Color.
+      instance->_segment.setPixelColor(
+          len - 1, color_blend(0, col, (uint8_t)drops[j].col));
+
+      // Random Fall Trigger
+      // Chance increased by swelling size
+      if (cfx::hw_random8() < drops[j].col / 20) {
+        drops[j].colIndex = 2; // Fall State
+        drops[j].col = 255;    // Full brightness for falling
+      }
+    }
+
+    if (drops[j].colIndex > 1) { // Falling
+      if (drops[j].pos > 0) {
+        drops[j].pos += drops[j].vel;
+        if (drops[j].pos < 0)
+          drops[j].pos = 0;
+        drops[j].vel += gravity;
+
+        // Draw falling drop with TAIL
+        // Simple trail logic: pos, pos-direction, ...
+        int pos = (int)drops[j].pos;
+        // Palette support (like Popcorn)
+        uint32_t col;
+        if (instance->_segment.palette == 0 ||
+            instance->_segment.palette == 255) {
+          col = instance->_segment.colors[0];
+        } else {
+          const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+          CRGBW c = ColorFromPalette(pal, (uint8_t)(j * 64), 255);
+          col = RGBW32(c.r, c.g, c.b, c.w);
+        }
+
+        if (pos >= 0 && pos < len)
+          instance->_segment.setPixelColor(pos, col);
+
+        // Tail Logic: Only when Falling (vel < 0) AND in initial Drop phase
+        // (colIndex == 2) User: "another led bounce 6 led backward with a lower
+        // brightness without tail" So ONLY draw tail if falling.
+        if (drops[j].colIndex == 2 && drops[j].vel < 0) {
+          // Falling: Moves towards 0. Tail is at pos+1, pos+2...
+          // Increased tail length to 6 pixels
+          for (int t = 1; t <= 6; t++) {
+            int tPos = pos + t;
+            if (tPos >= 0 && tPos < len) {
+              // Faint tail: Brighter fade to ensure visibility
+              // Old: 64 >> (t-1) was too dim (Starts at 25%).
+              // New: 255 >> t.
+              // t=1: 128 (50%)
+              // t=2: 64 (25%)
+              // t=3: 32 (12.5%)
+              // t=4: 16
+              // t=5: 8
+              // t=6: 4
+              uint8_t dim = 255 >> t;
+
+              instance->_segment.setPixelColor(tPos,
+                                               color_blend(col, 0, 255 - dim));
+            }
+          }
+        }
+
+        // Bounce Logic
+        if (drops[j].colIndex > 2) { // Bouncing
+          // Splash on floor (stay on the last led) applies when bouncing
+          // Draw the static drop at the bottom with lower brightness
+          uint32_t dimCol = color_blend(col, 0, 150); // Lower brightness
+          instance->_segment.setPixelColor(0, dimCol);
+
+          // Draw the bouncing particle (already drawn by the main pos logic
+          // above if pos > 0) But we want it to be dimmer too. The main logic
+          // above draws 'col' at 'pos'. We need to overwrite it with dimCol if
+          // we are bouncing.
+          if (pos >= 0 && pos < len) {
+            instance->_segment.setPixelColor(pos, dimCol);
+          }
+        }
+
+      } else {                       // Hit Bottom
+        if (drops[j].colIndex > 2) { // Already bouncing and hit bottom again
+          drops[j].colIndex = 0;     // Reset / Disappear
+        } else {
+          // Init Bounce
+          // Math for exactly 7 LEDs high: v = sqrt(2 * |g| * h)
+          // gravity is negative, so |g| = -gravity.
+          // h = 7.0f
+          drops[j].vel = sqrtf(-2.0f * gravity * 7.0f);
+          drops[j].pos =
+              0.1f; // Lift slightly so it doesn't immediately hit 0 again
+          drops[j].colIndex = 5; // Bouncing state
+        }
+      }
+    }
+  }
+
+  return FRAMETIME;
 }
 
 // --- Bouncing Balls Effect (ID 91) ---
@@ -2816,8 +4896,10 @@ uint16_t mode_bouncing_balls(void) {
     instance->_segment.reset = false;
   }
 
-  instance->_segment.fadeToBlackBy(
-      160); // Faster fade for shorter trails (WLED-like)
+  // fadeToBlackBy(160): aggressive multiplicative fade (37% retention/frame).
+  // Clears a 255 pixel in ~4 frames = virtually no tail. No grey floor risk
+  // at this fade strength, so subtractive_fade_val not needed here.
+  instance->_segment.fadeToBlackBy(160);
 
   // Physics Constants
   // Gravity -18.0 for snappy "real" feel (less floaty)
@@ -2885,7 +4967,7 @@ uint16_t mode_bouncing_balls(void) {
       active_palette = getPaletteByIndex(instance->_segment.palette);
     }
 
-    CRGBW c = ColorFromPalette(i * (256 / MAX_BALLS), 255, active_palette);
+    CRGBW c = ColorFromPalette(active_palette, i * (256 / MAX_BALLS), 255);
     uint32_t colorInt = RGBW32(c.r, c.g, c.b, c.w);
 
     uint32_t existing = instance->_segment.getPixelColor(pixel);
@@ -2898,6 +4980,312 @@ uint16_t mode_bouncing_balls(void) {
 
   return FRAMETIME;
 }
+
+// --- Running Effects (ID 15, 16) ---
+
+/*
+ * Running lights effect with smooth sine transition base.
+ */
+/*
+ * Blink/strobe function
+ * Alternate between color1 and color2
+ * if(strobe == true) then create a strobe effect
+ */
+uint16_t blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
+  uint32_t cycleTime = (255 - instance->_segment.speed) * 20;
+  uint32_t onTime = FRAMETIME;
+  if (!strobe)
+    onTime += ((cycleTime * instance->_segment.intensity) >> 8);
+  cycleTime += FRAMETIME * 2;
+  uint32_t it = instance->now / cycleTime;
+  uint32_t rem = instance->now % cycleTime;
+
+  bool on = false;
+  if (it != instance->_segment.step // new iteration, force on state for one
+                                    // frame, even if set time is too brief
+      || rem <= onTime) {
+    on = true;
+  }
+
+  instance->_segment.step = it; // save previous iteration
+
+  uint32_t color = on ? color1 : color2;
+  if (color == color1 && do_palette && instance->_segment.palette != 0 &&
+      instance->_segment.palette != 255) {
+    for (unsigned i = 0; i < instance->_segment.length(); i++) {
+      // We use colors[0] vs colors[1] logic above but if do_palette is true,
+      // we ignore color1 and use the palette color.
+      // WLED logic: SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 0)
+      // Since we lack simple palette helper in this scope, we use manual:
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      // PALETTE_SOLID_WRAP means wrap, we use standard logic
+      uint16_t len = instance->_segment.length();
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+  } else {
+    instance->_segment.fill(color);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Normal blinking. Intensity sets duty cycle.
+ */
+uint16_t mode_blink(void) {
+  return blink(instance->_segment.colors[0], instance->_segment.colors[1],
+               false, true);
+}
+
+/*
+ * Classic Blink effect. Cycling through the rainbow.
+ */
+uint16_t mode_blink_rainbow(void) {
+  return blink(cfx::color_wheel(instance->_segment.call & 0xFF),
+               instance->_segment.colors[1], false, false);
+}
+
+/*
+ * Classic Strobe effect.
+ * Refined to use stateful timing (aux0/aux1) for stability at high speeds.
+ */
+uint16_t mode_strobe(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 1; // Start ON
+    instance->_segment.step = instance->now;
+    instance->_segment.aux0 = 20; // Initial ON duration
+    instance->_segment.reset = false;
+  }
+
+  // 2. State Transition
+  if (instance->now - instance->_segment.step > instance->_segment.aux0) {
+    instance->_segment.aux1 = !instance->_segment.aux1; // Toggle
+    instance->_segment.step = instance->now;
+
+    if (instance->_segment.aux1) {
+      // Turning ON
+      // Strobe ON time: fixed 20ms for crispness
+      instance->_segment.aux0 = 20;
+    } else {
+      // Turning OFF
+      // Speed 255 -> 0ms delay (max speed)
+      // Speed 0 -> Slow delay (~1000ms)
+      // WLED map: 255-speed * multiplier.
+      // 255-0 = 255 * 5 = ~1275ms max delay
+      uint32_t delay = (255 - instance->_segment.speed) * 5;
+      instance->_segment.aux0 = delay;
+    }
+  }
+
+  // 3. Rendering
+  if (instance->_segment.aux1) {
+    // ON State
+    uint32_t color = instance->_segment.colors[0];
+
+    // Palette handling with "Primary Color" override for Solid/Default
+    // Identical to our blink() fix: if Solid/Default, use Primary Color.
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      uint16_t len = instance->_segment.length();
+      for (unsigned i = 0; i < len; i++) {
+        uint8_t colorIndex = (i * 255) / len;
+        CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      }
+    } else {
+      instance->_segment.fill(color);
+    }
+  } else {
+    // OFF State
+    instance->_segment.fill(instance->_segment.colors[1]); // Background
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Classic Strobe effect. Cycling through the rainbow.
+ * Refined to use stateful timing (aux0/aux1) for stability at high speeds.
+ */
+uint16_t mode_strobe_rainbow(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 1; // Start ON
+    instance->_segment.step = instance->now;
+    instance->_segment.aux0 = 20; // Initial ON duration
+    instance->_segment.reset = false;
+  }
+
+  // 2. State Transition (Identical to mode_strobe)
+  if (instance->now - instance->_segment.step > instance->_segment.aux0) {
+    instance->_segment.aux1 = !instance->_segment.aux1; // Toggle
+    instance->_segment.step = instance->now;
+
+    // ON: 20ms
+    instance->_segment.aux0 = 20;
+  } else {
+    // OFF: Speed dependent
+    // SAFETY FIX: Clamp minimum delay to 10ms to prevent power brownouts
+    uint32_t delay = (255 - instance->_segment.speed) * 5;
+    if (delay < 10)
+      delay = 10;
+    instance->_segment.aux0 = delay;
+  }
+
+  // 3. Rendering
+  if (instance->_segment.aux1) {
+    // ON State: Rainbow Color
+    // Use (instance->now >> 4) for smooth rainbow cycling over time
+    uint32_t color = cfx::color_wheel((instance->now >> 4) & 0xFF);
+    instance->_segment.fill(color);
+  } else {
+    // OFF State
+    instance->_segment.fill(instance->_segment.colors[1]);
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Multi Strobe logic
+ * Refined to match stateful structure and include Primary Color fix.
+ */
+uint16_t mode_multi_strobe(void) {
+  // 1. Initialization
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 1000; // Trigger cycle reset
+    instance->_segment.aux0 = 0;    // Next event time
+    instance->_segment.reset = false;
+  }
+
+  // 2. State Logic
+  unsigned count = 2 * ((instance->_segment.intensity / 10) + 1);
+
+  // Rethinking Multi-Strobe State Machine for clarity:
+  // aux1: Current Flash Count in Burst (0 to count). Even = ON, Odd = OFF.
+  // step: Last Switch Time
+  // aux0: Current State Duration
+
+  if (instance->now - instance->_segment.step > instance->_segment.aux0) {
+    instance->_segment.aux1++;
+    instance->_segment.step = instance->now;
+
+    if (instance->_segment.aux1 <= count) {
+      // Inside Burst
+      if ((instance->_segment.aux1 & 1) == 0) { // 0, 2, 4... -> ON
+        instance->_segment.aux0 = 20;
+      } else { // 1, 3, 5... -> OFF (Inter-flash delay)
+        instance->_segment.aux0 = 50;
+      }
+    } else {
+      // Burst Done -> Start Long Delay
+
+      // Base Delay
+      uint32_t delay = 200 + (255 - instance->_segment.speed) * 10;
+
+      // Randomize delay to restore "Multi Strobe" variance
+      delay += cfx::hw_random8();
+
+      instance->_segment.aux0 = delay;
+      instance->_segment.aux1 = 0xFFFF; // Reset state (roll to 0 next time)
+    }
+  }
+
+  // 3. Rendering
+  // If aux1 is Even and <= count, we are ON.
+  bool isOn =
+      ((instance->_segment.aux1 & 1) == 0) && (instance->_segment.aux1 < count);
+
+  if (isOn) {
+    uint32_t color = instance->_segment.colors[0];
+    if (instance->_segment.palette != 0 && instance->_segment.palette != 255) {
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      uint16_t len = instance->_segment.length();
+      for (unsigned i = 0; i < len; i++) {
+        uint8_t colorIndex = (i * 255) / len;
+        CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      }
+    } else {
+      instance->_segment.fill(color);
+    }
+  } else {
+    instance->_segment.fill(instance->_segment.colors[1]);
+  }
+
+  return FRAMETIME;
+}
+
+static uint16_t running_base(bool saw, bool dual = false) {
+  uint16_t len = instance->_segment.length();
+  unsigned x_scale = instance->_segment.intensity >> 2;
+  uint32_t counter = (instance->now * instance->_segment.speed) >> 9;
+
+  for (unsigned i = 0; i < len; i++) {
+    unsigned a = i * x_scale - counter;
+    if (saw) {
+      a &= 0xFF;
+      if (a < 16) {
+        a = 192 + a * 8;
+      } else {
+        a = cfx::cfx_map(a, 16, 255, 64, 192);
+      }
+      a = 255 - a;
+    }
+    // WLED logic: dual uses sin_gap, single uses sin8
+    uint8_t s = dual ? cfx::sin_gap(a) : cfx::sin8(a);
+
+    // Logic: Blend between Background (colors[1]) and Target (Palette/Color)
+    // SEGCOLOR(1) is background in WLED.
+    uint32_t color1 = instance->_segment.colors[1];
+
+    uint32_t color2;
+    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
+      color2 = instance->_segment.colors[0];
+    } else {
+      // Palette mode: use palette color for 'i'
+      const uint32_t *active_palette =
+          getPaletteByIndex(instance->_segment.palette);
+      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      color2 = RGBW32(c.r, c.g, c.b, c.w);
+    }
+
+    uint32_t ca = color_blend(color1, color2, s);
+
+    if (dual) {
+      // Wave B: Use +counter to move in opposite direction (Left)
+      unsigned b = i * x_scale + counter;
+      uint8_t s2 = cfx::sin_gap(b);
+      uint32_t color3;
+      if (instance->_segment.palette == 0 ||
+          instance->_segment.palette == 255) {
+        color3 = instance->_segment
+                     .colors[0]; // Use Primary color (fix solid palette hole)
+      } else {
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
+        CRGBW c = ColorFromPalette(active_palette, (i * 255) / len + 128, 255);
+        color3 = RGBW32(c.r, c.g, c.b, c.w);
+      }
+      ca = color_blend(ca, color3, s2);
+    }
+
+    instance->_segment.setPixelColor(i, ca);
+  }
+
+  return FRAMETIME;
+}
+
+uint16_t mode_running_lights(void) { return running_base(false); }
+
+uint16_t mode_running_dual(void) { return running_base(false, true); }
+
+uint16_t mode_saw(void) { return running_base(true); }
 
 // --- Simple Effects Batch (ID 3, 4, 6, 23) ---
 
@@ -2990,7 +5378,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // Background Color Logic
   uint32_t col1 = 0; // Default to Black/Off
   if (useRandomColors) {
-    CRGBW c1 = ColorFromPalette(instance->_segment.aux1, 255, active_palette);
+    CRGBW c1 = ColorFromPalette(active_palette, instance->_segment.aux1, 255);
     col1 = RGBW32(c1.r, c1.g, c1.b, c1.w);
   }
 
@@ -3000,7 +5388,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     // Foreground Color Construction
     uint32_t col0;
     if (useRandomColors) {
-      CRGBW c0 = ColorFromPalette(instance->_segment.aux0, 255, active_palette);
+      CRGBW c0 = ColorFromPalette(active_palette, instance->_segment.aux0, 255);
       col0 = RGBW32(c0.r, c0.g, c0.b, c0.w);
     } else if (instance->_segment.palette == 255 ||
                (!useRandomColors && instance->_segment.palette == 0)) {
@@ -3010,7 +5398,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
       // pattern (i * 12) This fixes "holes" and creates a smooth gradient
       // across the strip.
       uint8_t colorIndex = (i * 255) / len;
-      CRGBW c0 = ColorFromPalette(colorIndex, 255, active_palette);
+      CRGBW c0 = ColorFromPalette(active_palette, colorIndex, 255);
       col0 = RGBW32(c0.r, c0.g, c0.b, c0.w);
     }
 
@@ -3021,7 +5409,8 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     uint32_t pixelPos = (uint32_t)i << 15;
     int32_t dist = (int32_t)(totalPos - pixelPos);
 
-    // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536 steps)
+    // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536
+    // steps)
     uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
 
     uint8_t blendVal;
@@ -3070,8 +5459,8 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
   }
 
   // Debug log
-  // ESP_LOGD("wled_intro", "Starting Intro Mode %d, Dur %.1fs, Color 0x%08X",
-  // mode, duration_s, color);
+  // ESP_LOGD("wled_intro", "Starting Intro Mode %d, Dur %.1fs, Color
+  // 0x%08X", mode, duration_s, color);
 
   _state = STATE_INTRO;
   _intro_mode = mode;
@@ -3154,6 +5543,843 @@ bool CFXRunner::serviceIntro() {
   return false; // Still running
 }
 
+// --- Heartbeat Center Effect (ID 154) ---
+// Same logic as Heartbeat, but mapping pulse to width from center
+// --- Heartbeat Center Effect (ID 154) ---
+// Same logic as Heartbeat, but mapping pulse to width from center
+uint16_t mode_heartbeat_center(void) {
+  if (!instance)
+    return 350;
+
+  // BPM: 40 + (speed / 8) -> Range 40-71 BPM
+  unsigned bpm = 40 + (instance->_segment.speed >> 3);
+  // Time per beat (ms)
+  uint32_t msPerBeat = (60000L / bpm);
+  // Second beat timing (approx 1/3 of beat)
+  uint32_t secondBeat = (msPerBeat / 3);
+
+  // State reuse: aux0 (phase), aux1 (amplitude), step (last beat time)
+  if (instance->_segment.reset) {
+    instance->_segment.aux1 = 0;
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t beatTimer = instance->now - instance->_segment.step;
+
+  // 1. Beat Logic
+  if ((beatTimer > secondBeat) && !instance->_segment.aux0) {
+    instance->_segment.aux1 = UINT16_MAX; // Trigger Second Beat "dup"
+    instance->_segment.aux0 = 1;
+  }
+
+  if (beatTimer > msPerBeat) {
+    instance->_segment.aux1 = UINT16_MAX; // Trigger Main Beat "lub"
+    instance->_segment.aux0 = 0;
+    instance->_segment.step = instance->now;
+  }
+
+  // 2. Decay Logic (Framerate Independent)
+  uint32_t delta = instance->frame_time;
+  if (delta < 1)
+    delta = 1;
+
+  // TUNING: Reduced base factor from 2042 to 2020 to make decay faster
+  // This addresses the "flat" feeling by creating more contrast/disconnect
+  // between beats Old: 2042.0f / ... New: 2020.0f / ... (Faster decay)
+  float wled_factor = 2020.0f / (2048.0f + instance->_segment.intensity);
+  float time_ratio = (float)delta / 24.0f;
+  if (time_ratio > 10.0f)
+    time_ratio = 10.0f;
+  float decay = powf(wled_factor, time_ratio);
+
+  instance->_segment.aux1 = (uint16_t)((float)instance->_segment.aux1 * decay);
+
+  // 3. Rendering (Soft Edge / Gradient)
+  uint8_t pulse_amt = (instance->_segment.aux1 >> 8);
+  uint8_t effective_val = instance->applyGamma(pulse_amt);
+
+  uint16_t len = instance->_segment.length();
+
+  // Dynamic Radius
+  // Scale max_radius HIGHER than the strip length to ensure the fade doesn't
+  // cutoff the edges at full brightness. Using 'len' instead of 'len/2' gives a
+  // 2x overshoot. This means at max pulse, the "zero point" is far outside the
+  // strip.
+  uint32_t max_radius = len;
+  uint32_t current_radius = (max_radius * effective_val) / 255;
+
+  // Ensure a minimum radius so it doesn't disappear completely (Dry off fix)
+  if (current_radius < 2)
+    current_radius = 2;
+
+  // Master Brightness for the peak center pixel
+  uint8_t peak_brightness = effective_val;
+
+  uint32_t color = instance->_segment.colors[0];
+  bool mirror = instance->_segment.mirror;
+  uint16_t center = len / 2;
+
+  for (int i = 0; i < len; i++) {
+    int dist;
+    if (mirror) {
+      // Distance from nearest edge
+      int dist1 = i;
+      int dist2 = (len - 1) - i;
+      dist = (dist1 < dist2) ? dist1 : dist2;
+    } else {
+      // Standard: Distance from Center
+      dist = abs(i - center);
+    }
+
+    if (dist < current_radius) {
+      // Logic:
+      // max_radius = 0 brightness.
+      // 0 distance = peak_brightness.
+      // Linear falloff.
+
+      uint32_t falloff = ((current_radius - dist) * 255) / current_radius;
+      uint8_t pixel_scale = (falloff * peak_brightness) / 255;
+
+      // Render
+      uint32_t pixel_color = color;
+      if (instance->_segment.palette != 0 &&
+          instance->_segment.palette != 255) {
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
+        CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+        pixel_color = RGBW32(c.r, c.g, c.b, c.w);
+      }
+
+      // Apply Brightness Scaling
+      if (pixel_scale < 255) {
+        uint8_t r = ((pixel_color >> 16) & 0xFF) * pixel_scale / 255;
+        uint8_t g = ((pixel_color >> 8) & 0xFF) * pixel_scale / 255;
+        uint8_t b = (pixel_color & 0xFF) * pixel_scale / 255;
+        uint8_t w = ((pixel_color >> 24) & 0xFF) * pixel_scale / 255;
+        pixel_color = RGBW32(r, g, b, w);
+      }
+      instance->_segment.setPixelColor(i, pixel_color);
+
+    } else {
+      instance->_segment.setPixelColor(i, 0);
+    }
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Kaleidos (ID 155)
+ * N-Way Symmetrical Mirroring Effect
+ * Divides the strip into 2/4/6/8 mirrored segments.
+ * Even segments render forward, odd segments render backward.
+ * Uses a scrolling palette as the source pattern.
+ * Density: Hybrid approach (Option C) - dynamic fit with aliasing clamp.
+ */
+uint16_t mode_kaleidos(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // === Symmetry Engine ===
+  // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
+  // Optimized mapping: 0-63=1, 64-127=2, 128-191=3, 192-255=4
+  uint8_t half_segs = 1 + (instance->_segment.intensity >> 6);
+  if (half_segs > 4)
+    half_segs = 4; // Safety clamp for 255
+  uint8_t num_segments = half_segs * 2;
+
+  uint16_t seg_len = len / num_segments;
+  if (seg_len == 0)
+    seg_len = 1; // Safety: very short strips
+
+  // === Hybrid Density (Option C) ===
+  // Dynamic: fit one full pattern cycle per segment
+  // Clamped: prevent aliasing on very short segments (min density 8)
+  uint8_t density = (seg_len > 1) ? (255 / seg_len) : 255;
+  if (density < 8)
+    density = 8; // Floor: prevent washed-out pattern on long segments
+
+  // === Time Base (Speed-controlled scroll) ===
+  uint32_t ms = cfx_millis();
+  // Speed 0 = very slow, Speed 255 = fast
+  // Tuned: >>9 (512x div) provides WLED-like speed.
+  // Old >>12 was too slow.
+  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
+
+  // === Palette ===
+  const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
+  // Handle solid color palette
+  if (instance->_segment.palette == 255 || instance->_segment.palette == 21) {
+    fillSolidPalette(instance->_segment.colors[0]);
+  }
+
+  // === Render Loop ===
+  for (int i = 0; i < len; i++) {
+    // Determine which segment this pixel belongs to
+    uint16_t seg_index = i / seg_len;
+    uint16_t local_pos = i % seg_len;
+
+    // Handle remainder pixels: clamp to last segment
+    if (seg_index >= num_segments) {
+      seg_index = num_segments - 1;
+      // Recalculate local_pos relative to the last segment's start
+      local_pos = i - (seg_index * seg_len);
+    }
+
+    // Mirror Logic: Even = Forward, Odd = Backward
+    uint16_t mirrored_pos = local_pos;
+    if (seg_index & 0x01) {
+      mirrored_pos = (seg_len - 1) - local_pos;
+    }
+
+    // Calculate color index from mirrored position + scrolling time
+    uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
+
+    // Draw
+    CRGBW c = ColorFromPalette(palette, color_index, 255);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+  }
+
+  return FRAMETIME;
+}
+
+/*
+ * Follow Me (ID 156)
+ * Linear scanner with attention-grabbing strobe.
+ * State Machine: STROBE_START â†’ MOVING â†’ STROBE_END â†’ RESTART
+ * The cursor strobes at the start, travels with a fading trail,
+ * strobes at the end, then fades out and restarts.
+ */
+
+// State constants
+#define FM_PULSE_START 0
+#define FM_MOVING 1
+#define FM_STROBE_END 2
+#define FM_RESTART 3
+
+struct FollowMeData {
+  float pos;                  // Current head position (sub-pixel)
+  uint8_t state;              // Current state machine state
+  uint32_t state_start_ms;    // Timestamp when current state began
+  uint8_t restart_brightness; // For fade-out in RESTART state
+};
+
+uint16_t mode_follow_me(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  // === Allocate State ===
+  if (!instance->_segment.allocateData(sizeof(FollowMeData)))
+    return mode_static();
+
+  FollowMeData *fm = reinterpret_cast<FollowMeData *>(instance->_segment.data);
+
+  // === Init on Reset ===
+  if (instance->_segment.reset) {
+    fm->pos = 0.0f;
+    fm->state = FM_PULSE_START;
+    fm->state_start_ms = cfx_millis();
+    fm->restart_brightness = 255;
+    instance->_segment.reset = false;
+  }
+
+  uint32_t now = cfx_millis();
+
+  // === Cursor Size ===
+  // ~10 pixels, but scale for short strips (min 3)
+  int cursor_size = std::max(3, std::min(10, (int)len / 10));
+
+  // === Palette (Ignored per request) ===
+  fillSolidPalette(instance->_segment.colors[0]);
+  const uint32_t *palette = getPaletteByIndex(255); // Solid Palette via ID 255
+
+  // === Trail Fade (Subtractive) ===
+  // Fixes persistence issue: Ensure we always subtract enough to clear the
+  // floor. Intensity controls fade rate: High = slow fade (long trail), Low =
+  // fast fade. We use scale8 to dim the whole strip, then subtract a constant
+  // to kill low-level noise.
+
+  // === Trail Fade (Manual Loop) ===
+  // Replaces fadeToBlackBy to avoid gamma/floor issues.
+  // 1. Scale (Dimming): Exponential decay. High intensity = slow fade.
+  // 2. Subtract (Floor Cleaning): Hard subtraction to force zero.
+  uint8_t scale = 255 - (instance->_segment.intensity >> 1); // 128..255
+  // Increased subtraction for low intensity to fix persistent floor bug.
+  // 60..89: sub 4. < 60: sub 6. <= 15: sub 8 (Very Aggressive). > 90: sub 2.
+  uint8_t sub_val = (instance->_segment.intensity <= 15)  ? 8
+                    : (instance->_segment.intensity < 60) ? 6
+                    : (instance->_segment.intensity < 90) ? 4
+                                                          : 2;
+
+  int start = instance->_segment.start;
+  int stop = instance->_segment.stop;
+  esphome::light::AddressableLight &light = *instance->target_light;
+
+  for (int i = start; i < stop; i++) {
+    if (i < light.size()) {
+      esphome::Color c = light[i].get();
+
+      // 1. Scale
+      c.r = cfx::scale8(c.r, scale);
+      c.g = cfx::scale8(c.g, scale);
+      c.b = cfx::scale8(c.b, scale);
+      c.w = cfx::scale8(c.w, scale);
+
+      // 2. Subtract (Floor Cleaning)
+      c.r = (c.r > sub_val) ? (c.r - sub_val) : 0;
+      c.g = (c.g > sub_val) ? (c.g - sub_val) : 0;
+      c.b = (c.b > sub_val) ? (c.b - sub_val) : 0;
+      c.w = (c.w > sub_val) ? (c.w - sub_val) : 0;
+
+      // 3. Hard Cutoff (Final Cleanup)
+      // Increased threshold to 20 for absolute clearance of low-level noise.
+      if (c.r < 20)
+        c.r = 0;
+      if (c.g < 20)
+        c.g = 0;
+      if (c.b < 20)
+        c.b = 0;
+      if (c.w < 20)
+        c.w = 0;
+
+      light[i] = c;
+    }
+  }
+
+  // === Strobe Frequency ===
+  // Real Strobe: Short ON time, Long OFF time.
+  // 4Hz (250ms period), 40ms ON pulse.
+  // This guarantees >4 flashes in 1.5s (1500/250 = 6 flashes).
+  const uint32_t STROBE_PERIOD_MS = 250;
+  const uint32_t STROBE_ON_MS = 40;
+  const uint32_t PULSE_DURATION_MS = 2000;
+  const uint32_t STROBE_DURATION_MS = 1500;
+  const uint32_t RESTART_DURATION_MS = 500;
+
+  // === State Machine ===
+  switch (fm->state) {
+
+  case FM_PULSE_START: {
+    // Breathing/pulsing cursor at position 0 (same as Follow Us FU_PULSE)
+    uint8_t bri = beatsin8(60, 50, 255);
+    for (int j = 0; j < cursor_size && j < len; j++) {
+      uint8_t ci = (j * 255) / cursor_size;
+      CRGBW c = ColorFromPalette(palette, ci, bri);
+      instance->_segment.setPixelColor(j, RGBW32(c.r, c.g, c.b, c.w));
+    }
+
+    // Transition: After pulse duration, start moving
+    if (now - fm->state_start_ms > PULSE_DURATION_MS) {
+      fm->state = FM_MOVING;
+      fm->pos = 0.0f;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FM_MOVING: {
+    // === Movement Speed ===
+    // Speed 0 = very slow (~0.2 px/frame), Speed 255 = fast (~6 px/frame)
+    // Increased max speed by 50% (user request)
+    float speed_factor = 0.2f + (instance->_segment.speed * 5.7f / 255.0f);
+    fm->pos += speed_factor;
+
+    int head = (int)fm->pos;
+    int end_pos = len - cursor_size;
+
+    // Draw cursor block
+    for (int j = 0; j < cursor_size; j++) {
+      int px = head + j;
+      if (px >= 0 && px < len) {
+        // Gradient across cursor for a polished look
+        // Uses Solid Palette (forced above), so it's just brightness gradient
+        // logic over solid color But palette is forced to solid, so
+        // ColorFromPalette returns the solid color (with brightness scaled by
+        // index if it was a gradient palette, but here it's solid). Actually,
+        // ColorFromPalette with PaletteSolid returns the color regardless of
+        // index (usually). Let's rely on standard behavior.
+        uint8_t ci = (j * 255) / cursor_size;
+        CRGBW c = ColorFromPalette(palette, ci, 255);
+        instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
+      }
+    }
+
+    // Transition: Cursor reached the end
+    if (head >= end_pos) {
+      fm->pos = (float)end_pos;
+      fm->state = FM_STROBE_END;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FM_STROBE_END: {
+    // Strobe the cursor at the END of the strip
+    int end_start = len - cursor_size;
+    if (end_start < 0)
+      end_start = 0;
+
+    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
+    if (strobe_on) {
+      for (int j = 0; j < cursor_size; j++) {
+        int px = end_start + j;
+        if (px < len) {
+          // Use Palette Color (Solid) exclusively
+          uint8_t ci = (j * 255) / cursor_size;
+          CRGBW c = ColorFromPalette(palette, ci, 255);
+          instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
+        }
+      }
+    }
+
+    // Transition: After strobe, start restart (fade out)
+    if (now - fm->state_start_ms > STROBE_DURATION_MS) {
+      fm->state = FM_RESTART;
+      fm->state_start_ms = now;
+      fm->restart_brightness = 255;
+    }
+    break;
+  }
+
+  case FM_RESTART: {
+    // Gentle fade-out of whatever remains, then restart
+    // fadeToBlackBy is already running at the top of the function.
+    // We just wait for a short period for the strip to go dark.
+    if (now - fm->state_start_ms > RESTART_DURATION_MS) {
+      // Clear strip fully
+      instance->_segment.fill(0);
+      fm->state = FM_PULSE_START;
+      fm->pos = 0.0f;
+      fm->state_start_ms = now;
+    }
+    break;
+  }
+
+  } // switch
+
+  return FRAMETIME;
+}
+
+/*
+ * Follow Us (ID 157)
+ * Multi-cursor variant of Follow Me.
+ * Narrative:
+ * 1. Pulse: Cursor appears at start and pulses for ~2s.
+ * 2. Run: Splits into 3 parts that run sequentially to the other side.
+ * 3. Reassemble: Parts arrive at staggered positions, reforming the cursor.
+ * 4. Finale: The reassembled cursor strobes, then fades away.
+ * 5. Restart: Brief blackout, then loop.
+ *
+ * Part 0 (lead) -> targets len - part_size        (rightmost)
+ * Part 1         -> targets len - 2*part_size      (middle)
+ * Part 2 (tail)  -> targets len - 3*part_size      (leftmost)
+ * When all arrive, they form one contiguous 9-pixel block at the end.
+ */
+
+#define FU_PULSE 0
+#define FU_RUN 1
+#define FU_JOIN 2
+#define FU_FINALE 3
+#define FU_RESTART 4
+
+struct CursorPart {
+  float pos;
+  bool active;
+  bool arrived;
+};
+
+struct FollowUsData {
+  uint8_t state;
+  uint32_t state_start_ms;
+  CursorPart parts[3];
+};
+
+uint16_t mode_follow_us(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len <= 9)
+    return mode_static();
+
+  // === Allocate State ===
+  if (!instance->_segment.allocateData(sizeof(FollowUsData)))
+    return mode_static();
+
+  FollowUsData *fu = reinterpret_cast<FollowUsData *>(instance->_segment.data);
+
+  // === Init on Reset ===
+  if (instance->_segment.reset) {
+    fu->state = FU_PULSE;
+    fu->state_start_ms = cfx_millis();
+    for (int i = 0; i < 3; i++) {
+      fu->parts[i].pos = (float)(i * 3); // Start positions: 0, 3, 6
+      fu->parts[i].active = false;
+      fu->parts[i].arrived = false;
+    }
+    instance->_segment.reset = false;
+  }
+
+  uint32_t now = cfx_millis();
+
+  // === Cursor Config ===
+  const int part_size = 3;
+  const int num_parts = 3;
+  const int cursor_total = part_size * num_parts; // 9 pixels
+  // Intensity slider controls gap between sub-cursor launches (0=tight,
+  // 255=wide)
+  const int run_gap = 4 + (instance->_segment.intensity * 36 / 255);
+
+  // Launch order: 2 -> 1 -> 0 (back of cursor peels off first)
+  // Arrival targets: part 2 arrives rightmost, part 0 arrives leftmost
+  // so they reassemble into the original 9px block at the end.
+  int targets[3];
+  targets[2] = len - part_size;     // part 2 (first to launch) -> rightmost
+  targets[1] = len - 2 * part_size; // part 1 -> middle
+  targets[0] = len - 3 * part_size; // part 0 (last to launch)  -> leftmost
+
+  // === Solid Color (No Palette) ===
+  uint32_t color0 = instance->_segment.colors[0];
+  CRGBW solid_color(color0);
+
+  // === Trail Fade (Background Cleanup) ===
+  // Removed explicit trail fade here. The global fadeToBlackBy handles it.
+
+  // === Timing Constants ===
+  const uint32_t PULSE_DURATION_MS = 2000;
+  const uint32_t JOIN_DELAY_MS = 600; // pause after all parts arrive
+  const uint32_t STROBE_PERIOD_MS = 250;
+  const uint32_t STROBE_ON_MS = 40;
+  const uint32_t FINALE_DURATION_MS = 1500;
+  const uint32_t RESTART_DURATION_MS = 500;
+
+  // === Helper: Draw a part at position ===
+  auto draw_part = [&](int pos, uint8_t bri) {
+    for (int k = 0; k < part_size; k++) {
+      int px = pos + k;
+      if (px >= 0 && px < len) {
+        instance->_segment.setPixelColor(
+            px, RGBW32(cfx::scale8(solid_color.r, bri),
+                       cfx::scale8(solid_color.g, bri),
+                       cfx::scale8(solid_color.b, bri),
+                       cfx::scale8(solid_color.w, bri)));
+      }
+    }
+  };
+
+  // === State Machine ===
+  switch (fu->state) {
+
+  case FU_PULSE: {
+    // Pulsing cursor at start (all 3 parts together = 9px block)
+    uint8_t bri = beatsin8(60, 50, 255);
+    for (int k = 0; k < cursor_total && k < len; k++) {
+      instance->_segment.setPixelColor(k,
+                                       RGBW32(cfx::scale8(solid_color.r, bri),
+                                              cfx::scale8(solid_color.g, bri),
+                                              cfx::scale8(solid_color.b, bri),
+                                              cfx::scale8(solid_color.w, bri)));
+    }
+
+    if (now - fu->state_start_ms > PULSE_DURATION_MS) {
+      fu->state = FU_RUN;
+      fu->state_start_ms = now;
+      // Launch order: 2 -> 1 -> 0 (back peels off first)
+      // Part 2 launches immediately; parts 1 & 0 wait.
+      fu->parts[0].active = false;
+      fu->parts[0].pos = 0.0f; // front, launches last
+      fu->parts[0].arrived = false;
+      fu->parts[1].active = false;
+      fu->parts[1].pos = (float)part_size; // middle, launches second
+      fu->parts[1].arrived = false;
+      fu->parts[2].active = true;
+      fu->parts[2].pos = (float)(2 * part_size); // back, launches first
+      fu->parts[2].arrived = false;
+    }
+    break;
+  }
+
+  case FU_RUN: {
+    // Hard clear every frame — no tails
+    instance->_segment.fill(0);
+
+    // Speed: maps slider 0-255 to 0.3 - 4.0 px/frame
+    float base_speed = 0.3f + (instance->_segment.speed * 3.7f / 255.0f);
+
+    for (int i = 0; i < num_parts; i++) {
+      // Move active, non-arrived parts
+      if (fu->parts[i].active && !fu->parts[i].arrived) {
+        fu->parts[i].pos += base_speed;
+        if (fu->parts[i].pos >= (float)targets[i]) {
+          fu->parts[i].pos = (float)targets[i];
+          fu->parts[i].arrived = true;
+        }
+      }
+
+      // Trigger chain: 2 triggers 1, then 1 triggers 0
+      // Each part triggers the one with index-1 (moving toward front)
+      if (i > 0 && fu->parts[i].active && !fu->parts[i - 1].active) {
+        // Trigger when this part has moved gap pixels ahead of part i-1's start
+        float launch_threshold = (float)(i * part_size + run_gap);
+        if (fu->parts[i].pos > launch_threshold) {
+          fu->parts[i - 1].active = true;
+          fu->parts[i - 1].pos = (float)((i - 1) * part_size);
+        }
+      }
+
+      // Draw ALL parts: active ones at current pos, inactive ones at start pos
+      draw_part((int)fu->parts[i].pos, 255);
+    }
+
+    // All arrived? -> JOIN delay before strobe
+    if (fu->parts[0].arrived && fu->parts[1].arrived && fu->parts[2].arrived) {
+      fu->state = FU_JOIN;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_JOIN: {
+    // Brief pause after all parts arrive — hold the reassembled cursor steady
+    for (int i = 0; i < num_parts; i++) {
+      draw_part(targets[i], 255);
+    }
+    if (now - fu->state_start_ms > JOIN_DELAY_MS) {
+      fu->state = FU_FINALE;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_FINALE: {
+    // Strobe the reassembled cursor at the end
+    bool strobe_on = (now % STROBE_PERIOD_MS) < STROBE_ON_MS;
+    if (strobe_on) {
+      for (int i = 0; i < num_parts; i++) {
+        draw_part(targets[i], 255);
+      }
+    } else {
+      instance->_segment.fill(0); // Hard off between strobes
+    }
+
+    if (now - fu->state_start_ms > FINALE_DURATION_MS) {
+      fu->state = FU_RESTART;
+      fu->state_start_ms = now;
+    }
+    break;
+  }
+
+  case FU_RESTART: {
+    // Let the fade clean up, then restart
+    if (now - fu->state_start_ms > RESTART_DURATION_MS) {
+      instance->_segment.fill(0);
+      fu->state = FU_PULSE;
+      fu->state_start_ms = now;
+      for (int i = 0; i < 3; i++) {
+        fu->parts[i].pos = (float)(i * part_size);
+        fu->parts[i].active = false;
+        fu->parts[i].arrived = false;
+      }
+    }
+    break;
+  }
+
+  } // switch
+
+  return FRAMETIME;
+}
+
+// --- Fluid Rain (ID 160) ---
+// Subtle moving water surface + physical drop sequences (fall -> impact ->
+// ripple) Zero allocated buffers — safe for multi-strip operation
+#define FLUID_RAIN_NUM_DROPS 5
+uint16_t mode_fluid_rain(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  int len = instance->_segment.length();
+  if (len <= 1)
+    return mode_static();
+
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
+
+  // Parameter mapping:
+  // User prefers Speed ~70 and Intensity ~40 as the "default" look.
+  // WLED defaults are 128. We scale 128 down to 70/40 via math.
+  // 128 * 140 / 256 ≈ 70
+  uint32_t eff_speed = (speed * 140) >> 8;
+
+  // Time base (slowed way down for ultimate smoothness)
+  uint32_t now = cfx_millis();
+  uint32_t t = (now * (eff_speed + 1) * 200) >> 17;
+
+  // === SUBTLE BACKGROUND WATER SURFACE ===
+  uint16_t wave1 = t;
+  uint16_t wave2 = -(t * 2);
+
+  // === RAIN DROP SYSTEM ===
+  // Cycle has 2 phases:
+  // 1. Impact flash (brief white flash at center)
+  // 2. Expanding ripple (grows outward, then fades)
+  // Intensity mapping: 128 * 60 / 256 = 30. 300 - 30 = 270 cycle length.
+  uint16_t cycle_len = 300 - ((intensity * 60) >> 8); // 300 to 240 units total
+
+  // Palette
+  const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+  bool is_solid = (instance->_segment.palette == 255);
+  uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
+
+  // Pre-compute drop states
+  struct {
+    int center;    // Impact location in 16-bit sub-pixel space (pixel * 256)
+    uint8_t phase; // 1=impact, 2=ripple spreading, 3=fade
+    uint16_t ripple_rad; // Current radius in 16-bit sub-pixel space
+    uint8_t bright;      // Current brightness of the active element
+  } drops[FLUID_RAIN_NUM_DROPS];
+
+  for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
+    uint32_t drop_t = t + d * (cycle_len / FLUID_RAIN_NUM_DROPS);
+    uint16_t c_phase = drop_t % cycle_len;
+    uint16_t cycle_num = drop_t / cycle_len;
+
+    // Impact center: random per cycle. Stored as sub-pixel position (pixel *
+    // 256)
+    uint16_t center_pixel =
+        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 14)) >> 8;
+    center_pixel += 7;                   // Generous margin
+    drops[d].center = center_pixel << 8; // Convert to sub-pixel space
+
+    // Phase timing thresholds
+    uint16_t t_ripple = cycle_len / 5; // 20% time spent as impact flash
+    uint16_t t_fade = cycle_len - (cycle_len / 3); // Fade during last 33%
+
+    if (c_phase < t_ripple) {
+      // 1. IMPACT: bright flash at center that quickly dims
+      drops[d].phase = 1;
+      drops[d].bright = 255 - (255 * c_phase / t_ripple);
+
+    } else {
+      // 2 & 3. RIPPLE: expanding ring
+      drops[d].phase = (c_phase < t_fade) ? 2 : 3;
+
+      // Radius grows over time, smoothly due to sub-pixel math.
+      // Every step of c_phase expands radius by a fractional amount
+      uint16_t time_in_ripple = c_phase - t_ripple;
+
+      // Maximum desired radius before fade out (e.g. 15 pixels)
+      // distance = (time / duration) * max_distance * 256
+      uint16_t expansion_duration = cycle_len - t_ripple;
+      drops[d].ripple_rad = (time_in_ripple * 15 * 256) / expansion_duration;
+
+      // Brightness envelope
+      if (drops[d].phase == 2) {
+        drops[d].bright = 220; // Strong ripple
+      } else {
+        // Fade out
+        uint16_t time_in_fade = c_phase - t_fade;
+        uint16_t fade_duration = cycle_len - t_fade;
+        drops[d].bright = 220 - (220 * time_in_fade / fade_duration);
+      }
+    }
+  }
+
+  // === SINGLE RENDER LOOP ===
+  for (int i = 0; i < len; i++) {
+    uint16_t spatial = i * 256;
+
+    // Background: subtle water surface
+    uint8_t w1 = sin8(((spatial >> 1) + wave1) >> 8);
+    uint8_t w2 = sin8(((spatial >> 2) + wave2) >> 8);
+    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3; // 0-48
+    uint32_t c;
+
+    // Check for drop interactions
+    uint8_t white_add = 0; // Pure white flash (impacts)
+    uint8_t color_add = 0; // Colored ripple
+
+    // i in sub-pixel space for accurate math
+    int i_sub = i << 8;
+
+    for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
+      int dist = abs(i_sub - drops[d].center) >> 8; // Integer pixel distance
+      if (drops[d].phase == 1) {
+        // Impact flash (sharp point at center)
+        if (dist == 0)
+          white_add = qadd8(white_add, drops[d].bright);
+        else if (dist == 1)
+          white_add = qadd8(white_add, drops[d].bright >> 1);
+      } else {
+        // While the ripple expands, keep a persistent white dot at the center
+        // so the user knows where the ripple originated.
+        if (dist == 0) {
+          white_add = qadd8(white_add, drops[d].bright);
+        } else if (dist == 1) {
+          white_add = qadd8(white_add, drops[d].bright >> 2);
+        }
+
+        // ANTI-ALIASED RIPPLE RING
+        // Distance from center to current pixel (in sub-pixels)
+        int dist_sub = abs(i_sub - drops[d].center);
+
+        // Distance from pixel to the exactly ideal ring radius (in sub-pixels)
+        int ring_dist_sub = abs(dist_sub - drops[d].ripple_rad);
+
+        // WIDENED RIPPLE: Render a ring 4.0 pixels wide (1024 subpixels) for
+        // smooth blending If ring_dist_sub is 0, brightness is 100%. If
+        // ring_dist_sub is 1024 (4 pixels wide total), brightness is 0%.
+        if (ring_dist_sub < 1024) {
+          // Inverse linear falloff from center of the ring
+          uint8_t intensity_scale = 255 - (ring_dist_sub >> 2);
+          uint8_t pixel_bri = (drops[d].bright * intensity_scale) >> 8;
+          color_add = qadd8(color_add, pixel_bri);
+        }
+      }
+    }
+
+    // Minimum floor + palette mapping for the base water + ripple
+    uint8_t pal_index = base;
+    pal_index = qadd8(pal_index, color_add);
+    pal_index = (pal_index < 12) ? 12 : pal_index;
+
+    // Get color from palette
+    if (is_solid) {
+      CRGBW sc(solid_color);
+      c = RGBW32((sc.r * pal_index) >> 8, (sc.g * pal_index) >> 8,
+                 (sc.b * pal_index) >> 8, (sc.w * pal_index) >> 8);
+    } else {
+      CRGBW cWLED = ColorFromPalette(pal, pal_index, 255);
+
+      // Inject the pure white impacts ON TOP of the palette color
+      if (white_add > 0) {
+        // Add white directly to RGB channels
+        uint8_t r = qadd8(cWLED.r, white_add);
+        uint8_t g = qadd8(cWLED.g, white_add);
+        uint8_t b = qadd8(cWLED.b, white_add);
+        // And use the white channel if available
+        uint8_t w = qadd8(cWLED.w, white_add);
+        c = RGBW32(r, g, b, w);
+      } else {
+        c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
+      }
+    }
+
+    instance->_segment.setPixelColor(i, c);
+  }
+
+  return FRAMETIME;
+}
+
 // Valid Palette Implementation (Moved from line 121)
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
                                      uint8_t mcol, uint8_t pbri) {
@@ -3172,5 +6398,14 @@ uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
   uint32_t c1 = palData[index];
   uint32_t c2 = palData[(index + 1) & 0x0F]; // Wrap 16->0
 
-  return color_blend(c1, c2, blendAmt);
+  uint32_t color = color_blend(c1, c2, blendAmt);
+
+  // Apply brightness scaling (critical for BPM pulsing effect)
+  if (pbri < 255) {
+    uint8_t r = ((color >> 16) & 0xFF) * pbri / 255;
+    uint8_t g = ((color >> 8) & 0xFF) * pbri / 255;
+    uint8_t b = (color & 0xFF) * pbri / 255;
+    return RGBW32(r, g, b, 0);
+  }
+  return color;
 }

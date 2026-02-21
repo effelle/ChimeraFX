@@ -2,7 +2,10 @@ name: publish-docs
 on:
   push:
     branches:
-      - stage
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
 
 permissions:
   contents: write

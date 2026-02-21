@@ -254,7 +254,7 @@ protected:
       return 255;
     if (effect_id == 38)
       return 1;
-    if (effect_id == 53)
+    if (effect_id == 153)
       return 5;
     return 1;
   }

@@ -7,241 +7,217 @@
 #     effects: !include chimera_fx_effects.yaml
 
 - addressable_cfx:
-    name: "Static"
-    effect_id: 0
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Breathe"
-    effect_id: 2
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Wipe"
-    effect_id: 3
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Sweep"
-    effect_id: 6
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Colorloop"
-    effect_id: 8
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Rainbow"
-    effect_id: 9
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Dissolve"
-    effect_id: 18
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
     name: "Aurora"
     effect_id: 38
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
 
 - addressable_cfx:
-    name: "Fire Dual"
-    effect_id: 53
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Blink"
+    effect_id: 1
 
 - addressable_cfx:
-    name: "Colorwaves"
-    effect_id: 63
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Juggle"
-    effect_id: 64
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Fire"
-    effect_id: 66
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Colortwinkles"
-    effect_id: 74
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
-
-- addressable_cfx:
-    name: "Meteor"
-    effect_id: 76
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Blink Rainbow"
+    effect_id: 26
 
 - addressable_cfx:
     name: "Bouncing Balls"
     effect_id: 91
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
 
 - addressable_cfx:
-    name: "Plasma"
-    effect_id: 97
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Bpm"
+    effect_id: 68
 
 - addressable_cfx:
-    name: "Ocean"
-    effect_id: 101
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Breathe"
+    effect_id: 2
 
 - addressable_cfx:
-    name: "Sunrise"
-    effect_id: 104
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Center Gauge"
+    effect_id: 152
 
 - addressable_cfx:
-    name: "Phased"
-    effect_id: 105
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+    name: "Chaos Theory"
+    effect_id: 159
+
+- addressable_cfx:
+    name: "Chase"
+    effect_id: 28
+
+- addressable_cfx:
+    name: "Chase tri"
+    effect_id: 54
+
+- addressable_cfx:
+    name: "Colorloop"
+    effect_id: 8
+
+- addressable_cfx:
+    name: "Colortwinkle"
+    effect_id: 74
+
+- addressable_cfx:
+    name: "Colorwaves"
+    effect_id: 63
+
+- addressable_cfx:
+    name: "Dissolve"
+    effect_id: 18
+
+- addressable_cfx:
+    name: "Drip"
+    effect_id: 96
+
+- addressable_cfx:
+    name: "Dropping Time"
+    effect_id: 151
+
+- addressable_cfx:
+    name: "Energy"
+    effect_id: 158
+
+- addressable_cfx:
+    name: "Fire"
+    effect_id: 66
+
+- addressable_cfx:
+    name: "Fireworks"
+    effect_id: 90
 
 - addressable_cfx:
     name: "Flow"
     effect_id: 110
-    # set_speed: 128
-    # set_palette: "Default"
-    # set_intensity: 128
-    # set_mirror: False
-    # set_intro_effect: "None"
-    # set_intro_duration: 1.0
-    # set_intro_use_palette: False
-    # set_timer: 0
+
+- addressable_cfx:
+    name: "Fluid Rain"
+    effect_id: 160
+
+- addressable_cfx:
+    name: "Follow Me"
+    effect_id: 156
+
+- addressable_cfx:
+    name: "Follow Us"
+    effect_id: 157
+
+- addressable_cfx:
+    name: "Glitter"
+    effect_id: 87
+
+- addressable_cfx:
+    name: "HeartBeat"
+    effect_id: 100
+
+- addressable_cfx:
+    name: "Juggle"
+    effect_id: 64
+
+- addressable_cfx:
+    name: "Kaleidos"
+    effect_id: 155
+
+- addressable_cfx:
+    name: "Meteor"
+    effect_id: 76
+
+- addressable_cfx:
+    name: "Multi Strobe"
+    effect_id: 25
+
+- addressable_cfx:
+    name: "Noise Pal"
+    effect_id: 107
+
+- addressable_cfx:
+    name: "Ocean"
+    effect_id: 101
+
+- addressable_cfx:
+    name: "Percent"
+    effect_id: 98
+
+- addressable_cfx:
+    name: "Phased"
+    effect_id: 105
+
+- addressable_cfx:
+    name: "Plasma"
+    effect_id: 97
+
+- addressable_cfx:
+    name: "Popcorn"
+    effect_id: 95
+
+- addressable_cfx:
+    name: "Rainbow"
+    effect_id: 9
+
+- addressable_cfx:
+    name: "Reactor Beat"
+    effect_id: 154
+
+- addressable_cfx:
+    name: "Ripple"
+    effect_id: 79
+
+- addressable_cfx:
+    name: "Running Dual"
+    effect_id: 52
+
+- addressable_cfx:
+    name: "Running lights"
+    effect_id: 15
+
+- addressable_cfx:
+    name: "Saw"
+    effect_id: 16
+
+- addressable_cfx:
+    name: "Scanner"
+    effect_id: 40
+
+- addressable_cfx:
+    name: "Scanner Dual"
+    effect_id: 60
+
+- addressable_cfx:
+    name: "Sparkle"
+    effect_id: 20
+
+- addressable_cfx:
+    name: "Sparkle +"
+    effect_id: 22
+
+- addressable_cfx:
+    name: "Sparkle Dark"
+    effect_id: 21
+
+- addressable_cfx:
+    name: "Static"
+    effect_id: 0
+
+- addressable_cfx:
+    name: "Strobe"
+    effect_id: 23
+
+- addressable_cfx:
+    name: "Strobe Rainbow"
+    effect_id: 24
+
+- addressable_cfx:
+    name: "Sunrise"
+    effect_id: 104
+
+- addressable_cfx:
+    name: "Sweep"
+    effect_id: 6
+
+- addressable_cfx:
+    name: "Twin Flames"
+    effect_id: 153
+
+- addressable_cfx:
+    name: "Wipe"
+    effect_id: 3
+
+- addressable_cfx:
+    name: "Wipe Random"
+    effect_id: 4

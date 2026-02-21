@@ -22,6 +22,20 @@
 
 #define MIN_FRAME_DELAY 2
 
+struct CRGBW {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t w;
+
+  CRGBW() = default;
+  CRGBW(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t iw = 0)
+      : r(ir), g(ig), b(ib), w(iw) {}
+  CRGBW(uint32_t c)
+      : r((c >> 16) & 0xFF), g((c >> 8) & 0xFF), b(c & 0xFF),
+        w((c >> 24) & 0xFF) {}
+};
+
 #define RGBW32(r, g, b, w)                                                     \
   (uint32_t((uint8_t(w) << 24) | (uint8_t(r) << 16) | (uint8_t(g) << 8) |      \
             (uint8_t(b))))
@@ -100,7 +114,7 @@
 #define FX_MODE_TWO_DOTS 50
 #define FX_MODE_FAIRYTWINKLE 51
 #define FX_MODE_RUNNING_DUAL 52
-#define FX_MODE_FIRE_DUAL 53
+#define FX_MODE_FIRE_DUAL 153
 #define FX_MODE_TRICOLOR_CHASE 54
 #define FX_MODE_TRICOLOR_WIPE 55
 #define FX_MODE_TRICOLOR_FADE 56
@@ -127,6 +141,7 @@
 #define FX_MODE_METEOR_SMOOTH 77
 #define FX_MODE_RAILWAY 78
 #define FX_MODE_RIPPLE 79
+#define FX_MODE_HEARTBEAT_CENTER 154
 #define FX_MODE_TWINKLEFOX 80
 #define FX_MODE_TWINKLECAT 81
 #define FX_MODE_HALLOWEEN_EYES 82
@@ -161,6 +176,14 @@
 #define FX_MODE_CHUNCHUN 111
 #define FX_MODE_DANCING_SHADOWS 112
 #define FX_MODE_WASHING_MACHINE 113
+#define FX_MODE_PERCENT_CENTER 152
+#define FX_MODE_DROPPING_TIME 151
+#define FX_MODE_KALEIDOS 155
+#define FX_MODE_FOLLOW_ME 156
+#define FX_MODE_FOLLOW_US 157
+#define FX_MODE_ENERGY 158
+#define FX_MODE_CHAOS_THEORY 159
+#define FX_MODE_FLUID_RAIN 160
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -168,7 +191,7 @@
 #define INTRO_CENTER 3
 #define INTRO_GLITTER 4
 
-#define MODE_COUNT 114
+#define MODE_COUNT 116
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 
@@ -241,6 +264,9 @@ public:
   uint32_t getPixelColor(int n);
   void fill(uint32_t c);
   void fadeToBlackBy(uint8_t fadeBy);
+  void subtractive_fade_val(uint8_t fade_amt);
+  void fade_out_smooth(uint8_t fade_amt);
+  void blur(uint8_t blur_amount);
   uint32_t color_from_palette(uint16_t i, bool mapping, bool wrap, uint8_t mcol,
                               uint8_t pbri = 255);
 };
@@ -249,10 +275,22 @@ class CFXRunner {
 public:
   CFXRunner(esphome::light::AddressableLight *light);
 
+  // Gamma Correction Helper Support
+  // Non-static to allow multiple strips with different gammas to coexist
+  uint8_t _lut[256];
+  float _gamma;
+
+  void setGamma(float g);
+  inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }
+  uint8_t shiftFloor(uint8_t val);
+  uint8_t getFadeFactor(uint8_t factor);
+  uint8_t getSubFactor(uint8_t factor);
+
   // Destructor: Release segment data to reclaim RAM
   ~CFXRunner() { _segment.deallocateData(); }
 
   void setDebug(bool state) { diagnostics.enabled = state; }
+  void setName(const char *name) { _name = name; }
 
   void service();
   void setMode(uint8_t m) {
@@ -284,6 +322,8 @@ public:
   void setPalette(uint8_t p) {
     if (_segment.palette != p) {
       _segment.palette = p;
+      if (p == 254)
+        generateRandomPalette();
     }
   }
   void setMirror(bool m) {
@@ -292,6 +332,7 @@ public:
     }
   }
   void setColor(uint32_t c) { _segment.colors[0] = c; }
+  void generateRandomPalette();
 
   void start() { _state = STATE_RUNNING; }
 
@@ -302,6 +343,14 @@ public:
 
   void startIntro(uint8_t mode, float duration_s, uint32_t color);
   bool isIntroRunning() { return _state == STATE_INTRO; }
+
+  const char *_name = "CFX";
+
+  cfx::FrameDiagnostics diagnostics;
+
+  // Smart Random Palette Storage
+  CRGBPalette16 _currentRandomPalette;
+  uint32_t _currentRandomPaletteBuffer[16];
 
 private:
   RunnerState _state = STATE_RUNNING;
@@ -318,8 +367,6 @@ private:
   static mode_ptr _mode_ptr[];
 
   uint32_t _last_frame = 0;
-
-  cfx::FrameDiagnostics diagnostics;
 };
 
 extern CFXRunner *instance;

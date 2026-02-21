@@ -13,7 +13,7 @@ cfx_effect:
   cfx_control:
     - id: my_cfx_controller   # The ID of the controller. Customizable
       name: "LED Strip"       # The prefix name of the controller. Customizable
-      light_id: led_strip     # The ID of the light you want to control 
+      light_id: led_strip     # The ID of the light you want to manage 
     
       # Optional: Exclude controls you don't need
       # exclude: [5, 6] # This example will exclude Intro Effects and Timer
@@ -32,6 +32,7 @@ The component creates the following entities based on your controller name (e.g.
 - `LED Strip use palette` (Switch)
 - `LED Strip intro duration` (Number)
 - `LED Strip timer` (Number)
+- `LED Strip debug` (Switch)
 
 ### Exclusion Options
 If you want to keep your dashboard clean, you can exclude specific controls by adding their IDs to the `exclude` list (e.g., `exclude: [5, 6]`).
@@ -59,12 +60,12 @@ If you want independent control for each strip (e.g., Roof vs Desk), create sepa
 cfx_effect:
   cfx_control:
     - id: my_cfx_controller   # The ID of the first controller. Customizable
-      name: "LED Strip"       # The prefix name of the controller. Customizable
-      light_id: led_strip     # The ID of the light you want to control
+      name: "LED Strip"       # The prefix name of the first control set. Customizable
+      light_id: led_strip     # The ID of the first light you want to manage
 
     - id: desk_controller     # The ID of the second controller. Customizable
-      name: "Desk Lights"     # The prefix name of the second controller. Customizable
-      light_id: led_strip_2   # The ID of the second light you want to control
+      name: "Desk Lights"     # The prefix name of the second control set. Customizable
+      light_id: led_strip_2   # The ID of the second light you want to manage
 ```
 
 ### Option 2: Unified Control (Grouped)
@@ -73,7 +74,7 @@ If you want a **single set of controls** to operate multiple lights simultaneous
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: global_controller   # The ID of the controller generator. Customizable
+    - id: global_controller   # The ID of the controller. Customizable
       name: "Global"          # The prefix name of the controller. Customizable
       light_id: [led_strip_1, led_strip_2] # IDs of the lights in a list format
 ```

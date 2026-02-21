@@ -65,7 +65,7 @@ CFX_EFFECT_NAMES = {
     20: "Sparkle", 21: "Sparkle Dark", 22: "Sparkle+", 23: "Strobe", 24: "Strobe Rainbow", 25: "Strobe Mega", 26: "Blink Rainbow", 27: "Android", 28: "Chase", 29: "Chase Random",
     30: "Chase Rainbow", 31: "Chase Flash", 32: "Chase Flash Rnd", 33: "Chase Rainbow White", 34: "Colorful", 35: "Traffic Light", 36: "Sweep Random", 37: "Running 2", 38: "Aurora", 39: "Stream",
     40: "Scanner", 41: "Lighthouse", 42: "Fireworks", 43: "Rain", 44: "Tetris", 45: "Fire Flicker", 46: "Gradient", 47: "Loading", 48: "Rolling Balls", 49: "Fairy",
-    50: "Two Dots", 51: "Fairy Twinkle", 52: "Running Dual", 53: "Fire Dual", 54: "Tri Chase", 55: "Tri Wipe", 56: "Tri Fade", 57: "Lightning", 58: "ICU", 59: "Multi Comet",
+    150: "BPM", 151: "Dropping Time", 152: "Percent Center", 153: "Fire Dual", 154: "HeartBeat Center", 54: "Tri Chase", 55: "Tri Wipe", 56: "Tri Fade", 57: "Lightning", 58: "ICU", 59: "Multi Comet",
     60: "Scanner Dual", 61: "Stream 2", 62: "Oscillate", 63: "Colorwaves", 64: "Juggle", 65: "Palette", 66: "Fire 2012", 67: "Colorwaves Alt", 68: "BPM", 69: "Fill Noise",
     70: "Noise 1", 71: "Noise 2", 72: "Noise 3", 73: "Noise 4", 74: "Colortwinkles", 75: "Lake", 76: "Meteor", 77: "Meteor Smooth", 78: "Railway", 79: "Ripple",
     80: "Twinklefox", 81: "Twinklecat", 82: "Halloween Eyes", 83: "Solid Pattern", 84: "Solid Pattern Tri", 85: "Spots", 86: "Spots Fade", 87: "Glitter", 88: "Candle", 89: "Starburst",

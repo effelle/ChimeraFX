@@ -126,7 +126,18 @@ void hsv2rgb_rainbow(const CHSV &hsv, CRGB &rgb) {
   rgb.b = b;
 }
 
-// Global Palette stubs
-const CRGBPalette16 RainbowColors_p(CRGB::Red); // Placeholder
-const CRGBPalette16 OceanColors_p(CRGB::Blue);
-const CRGBPalette16 PartyColors_p(CRGB::Green);
+// Global Palette stubs for Noise effects
+const CRGBPalette16 RainbowColors_p = {0xFF0000, 0xD52A00, 0xAB5500, 0xAB7F00,
+                                       0xABAB00, 0x56D500, 0x00FF00, 0x00D52A,
+                                       0x00AB55, 0x0056AA, 0x0000FF, 0x2A00D5,
+                                       0x5500AB, 0x7F0081, 0xAB0055, 0xD5002B};
+
+const CRGBPalette16 OceanColors_p = {0x000080, 0x0019A4, 0x0033C8, 0x004CEC,
+                                     0x1966FF, 0x4C80FF, 0x8099FF, 0xB3B3FF,
+                                     0xE6CCFF, 0xE6B3FF, 0xE699FF, 0xE680FF,
+                                     0xE666FF, 0xE64CFF, 0xE633FF, 0xE619FF};
+
+const CRGBPalette16 PartyColors_p = {0x5500AB, 0x84007C, 0xB5004B, 0xE5001B,
+                                     0xE81700, 0xB84700, 0xAB7700, 0xABAB00,
+                                     0xAB5500, 0xDD2200, 0xF2000E, 0xC2003E,
+                                     0x8F0071, 0x5F00A1, 0x2F00D0, 0x0007F9};

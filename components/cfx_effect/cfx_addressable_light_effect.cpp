@@ -6,6 +6,7 @@
 
 #include "cfx_addressable_light_effect.h"
 #include "cfx_compat.h"
+#include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -245,11 +246,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
+    // Sync diagnostics target with configured update_interval
+    this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
   if (this->debug_switch_ && this->runner_) {
     this->runner_->setDebug(this->debug_switch_->state);
+    if (this->get_light_state()) {
+      this->runner_->setName(this->get_light_state()->get_name().c_str());
+    }
   }
 
   // Update speed from Number component
@@ -261,6 +267,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                    (uint32_t(current_color.green) << 8) |
                    uint32_t(current_color.blue);
   this->runner_->setColor(color);
+
+  // === Dynamic Gamma Update ===
+  // Sync the Runner's gamma LUT with the light's current gamma setting
+  float current_gamma = this->get_light_state()->get_gamma_correct();
+  // setGamma checks for change internally (float comparison), so simple call is
+  // safe-ish but to avoid function call overhead we can check locally if we
+  // wanted. We'll trust setGamma or just check here. setGamma does a check but
+  // re-calcs LUT. Let's rely on setGamma's internal check (which I implemented:
+  // if (g < 0.1) ... _gamma = g ...). Wait, I didn't verify if I added a
+  // 'change check' efficiently in setGamma. Let's add a check here to be safe
+  // and efficient.
+  if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
+    this->runner_->setGamma(current_gamma);
+  }
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
@@ -438,6 +458,8 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
     return 20;
   if (strcmp(option, "None") == 0 || strcmp(option, "Solid") == 0)
     return 255;
+  if (strcmp(option, "Smart Random") == 0)
+    return 254;
   if (strcmp(option, "Fairy") == 0)
     return 22;
   if (strcmp(option, "Twilight") == 0)
@@ -472,6 +494,24 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 255; // Wipe Sweep (ID=6)
   case 91:
     return 255; // Bouncing Balls
+  case 23:
+    return 255; // Strobe -> Solid
+  case 24:
+    return 255; // Strobe Rainbow -> Solid
+  case 25:
+    return 255; // Multi Strobe -> Solid
+  case 26:
+    return 255; // Blink Rainbow -> Solid
+  case 20:
+  case 21:      // Sparkle / Flash Sparkle
+  case 22:      // Hyper Sparkle
+  case 95:      // Popcorn
+  case 96:      // Drip
+  case 100:     // Heartbeat
+  case 154:     // HeartBeat Center
+    return 255; // Solid Palette by default
+  case 157:     // Follow Us
+    return 255; // Solid Palette
 
   // Rainbow Defaults (4)
   case 7:
@@ -518,6 +558,35 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 11; // Pacifica -> Pacifica
   case 104:
     return 12; // Sunrise -> HeatColors
+  case 151:
+    return 11; // Dropping Time -> Ocean
+  case 155:
+    return 4; // Kaleidos -> Rainbow
+  case 160:
+    return 11; // Fluid Rain -> Ocean
+  case 156:
+    return 255; // Follow Me -> Solid (Use Primary Color)
+
+  // New effects
+  case 28:
+    return 255; // Chase → Solid
+  case 54:
+    return 255; // Tricolor Chase → Solid
+  case 68:
+    return 255; // BPM → Solid
+  case 15:
+    return 255; // Running Lights → Solid
+  case 16:
+    return 255; // Saw -> Solid
+  case 52:
+    return 13; // Running Dual -> Sakura
+  case 87:
+    return 4; // Glitter -> Rainbow
+  case 90:
+    return 4;   // Fireworks -> Rainbow
+  case 98:      // Percent
+  case 152:     // Percent Center
+    return 255; // Solid
 
   // Default Aurora (1) or specific handling
   default:
@@ -530,14 +599,20 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   switch (effect_id) {
   case 38:
     return 24; // Aurora
-  case 53:
+  case 153:
     return 64; // Fire Dual (same as Fire 2012)
   case 64:
     return 64; // Juggle
   case 66:
     return 64; // Fire 2012
+  case 68:
+    return 64; // BPM
   case 104:
     return 60; // Sunrise
+  case 156:
+    return 140; // Follow Me (Default Speed)
+  case 157:
+    return 128; // Follow Us (Default Speed 128)
   default:
     return 128; // WLED default
   }
@@ -546,10 +621,14 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
-  case 53:
+  case 153:
     return 160; // Fire Dual (same as Fire 2012)
   case 66:
     return 160; // Fire 2012
+  case 156:
+    return 40; // Follow Me (Default Intensity)
+  case 157:
+    return 128; // Follow Us (Default Intensity 128)
   default:
     return 128; // WLED default
   }
@@ -624,16 +703,18 @@ void CFXAddressableLightEffect::run_controls_() {
         return 20;
       if (strcmp(opt, "None") == 0 || strcmp(opt, "Solid") == 0)
         return 255;
+      if (strcmp(opt, "Smart Random") == 0)
+        return 254;
       if (strcmp(opt, "Fairy") == 0)
         return 22;
       if (strcmp(opt, "Twilight") == 0)
         return 23;
       if (strcmp(opt, "Default") == 0) {
         // Resolve the natural default for this effect
-        if (this->runner_) {
-          uint8_t m = this->runner_->getMode();
-          return this->get_default_palette_id_(m);
-        }
+        // FIX: Use this->effect_id_ (Requested Effect) instead of
+        // runner_->getMode() (Current/Old Effect) This ensures that when
+        // switching effects, we get the default palette of the NEW effect.
+        return this->get_default_palette_id_(this->effect_id_);
         return 1; // Fallback to Aurora if no runner
       }
       return 0; // Unknown palette name

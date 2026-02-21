@@ -27,13 +27,14 @@ This is almost always related to power, grounding, or signal timing.
 *   **Data Line Length**: Keep the wire between the ESP32 and the first LED as short as possible (ideally under 10cm). For longer runs, you can use a **"Sacrifice Pixel"** (a single LED placed close to the controller to boost the signal) or a pair of RS485 to TTL converters. It is a dirt-cheap and highly effective solution.
 *   **Power Injection**: Long strips suffer from voltage drop, which causes flickering or "browning out" (colors turning orange/dim). Inject power at the beginning, the end, and every few meters for consistent performance.
 *   **RMT Buffer (ESP-IDF)**: If you are using the **ESP-IDF framework**, you can try to set or increase the RMT buffer size to avoid the flicker issue. Refer to the [Performance Tuning](#performance-tuning-esp-idf-and-esp32_rmt_led_strip-platform) section for more information.
-*   **PSRAM (mainly ESP32-S3)**: If you are using an S3 with PSRAM enabled, verify that `use_psram: false` is set in your light config. RMT timing is extremely sensitive, and PSRAM latency will cause the strip to glitch.
+*   **PSRAM (mainly ESP32-S3)**: If you are using an ESP32 with PSRAM enabled, verify that `use_psram: false` is set in your light config. RMT timing is extremely sensitive, and PSRAM latency will cause the strip to glitch.
 
 ### "The effect is too fast"
 ESPHome runs at 60FPS, while WLED targets 42FPS. I have manually tuned most effects, but if one feels "rushed," try lowering the Speed slider.
 
 ### "Colors look wrong (Red is Green)"
 Check your `rgb_order` in the YAML.
+
 *   WS2812B usually uses `GRB`.
 *   WS2811 usually uses `RGB`.
 
