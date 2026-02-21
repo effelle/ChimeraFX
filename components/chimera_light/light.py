@@ -126,6 +126,7 @@ def _apply_defaults(config):
 
 
 CONFIG_SCHEMA = cv.All(
+    _inject_all_effects,
     light.ADDRESSABLE_LIGHT_SCHEMA.extend(
         {
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(ChimeraLightOutput),
@@ -144,7 +145,6 @@ CONFIG_SCHEMA = cv.All(
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _apply_defaults,
-    _inject_all_effects,
 )
 
 
