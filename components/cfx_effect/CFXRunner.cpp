@@ -6108,9 +6108,9 @@ uint16_t mode_follow_us(void) {
 }
 
 // --- Fluid Rain (ID 160) ---
-// Layered sine waves (subtle water surface) + time-phased rain drops
-// Zero allocated buffers — safe for multi-strip operation
-#define FLUID_RAIN_NUM_DROPS 6
+// Subtle moving water surface + physical drop sequences (fall -> impact ->
+// ripple) Zero allocated buffers — safe for multi-strip operation
+#define FLUID_RAIN_NUM_DROPS 5
 uint16_t mode_fluid_rain(void) {
   if (!instance)
     return FRAMETIME;
@@ -6124,51 +6124,91 @@ uint16_t mode_fluid_rain(void) {
 
   // Time base
   uint32_t now = cfx_millis();
-  uint32_t t = (now * (speed + 1)) >> 7;
+  uint32_t t =
+      (now * (speed + 1)) >> 6; // Sped up base time slightly for falling drops
 
   // === SUBTLE BACKGROUND WATER SURFACE ===
-  // Two slow waves create gentle undulation (not the main visual)
-  uint16_t wave1 = t * 2;
-  uint16_t wave2 = -(t * 3);
+  uint16_t wave1 = t;
+  uint16_t wave2 = -(t * 2);
 
   // === RAIN DROP SYSTEM ===
-  // Each drop has its own time cycle. Drops appear, splash wide, then fade.
-  // Drop cycle length controls how long each drop lives (in time units)
-  // Intensity: slower cycle = longer-lived drops at low intensity
-  uint16_t cycle_len =
-      160 - (intensity >> 2); // 160 (slow rain) to 96 (fast rain)
+  // Cycle has 3 phases:
+  // 1. Falling drop (moves fast until impact)
+  // 2. Impact flash
+  // 3. Expanding ripple (grows outward, then fades)
+  uint16_t cycle_len = 250 - (intensity >> 1); // 250 to 122 units per cycle
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
   bool is_solid = (instance->_segment.palette == 255);
   uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
 
-  // Pre-compute drop positions and envelopes (6 drops, outside pixel loop)
+  // Pre-compute drop states
   struct {
-    int center;
-    uint8_t envelope;
+    int center;     // Impact location
+    uint8_t phase;  // 0=falling, 1=impact, 2=ripple spreading, 3=fade
+    int fall_pos;   // Current position of falling drop (if phase 0)
+    int ripple_rad; // Current radius of ripple (if phase 2/3)
+    uint8_t bright; // Current brightness of the active element
   } drops[FLUID_RAIN_NUM_DROPS];
 
   for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
-    // Each drop has a staggered time offset so they don't all appear at once
     uint32_t drop_t = t + d * (cycle_len / FLUID_RAIN_NUM_DROPS);
-    uint16_t phase = drop_t % cycle_len; // Where are we in this drop's life?
-
-    // Fade envelope: quick attack (20%), slow decay (80%)
-    uint8_t attack_end = cycle_len / 5;
-    uint8_t env;
-    if (phase < attack_end) {
-      env = (phase * 255) / attack_end; // Ramp up
-    } else {
-      env = ((cycle_len - phase) * 255) / (cycle_len - attack_end); // Fade out
-    }
-    drops[d].envelope = env;
-
-    // Drop position: pseudo-random from cycle number, deterministic per drop
+    uint16_t c_phase = drop_t % cycle_len;
     uint16_t cycle_num = drop_t / cycle_len;
+
+    // Impact center: random per cycle
     drops[d].center =
-        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 4)) >> 8;
-    drops[d].center += 2; // Keep away from edges
+        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 10)) >> 8;
+    drops[d].center += 5; // Margin
+
+    // Phase timing thresholds
+    uint16_t t_impact = cycle_len / 4;             // 25% time spent falling
+    uint16_t t_ripple = t_impact + 5;              // Flash is very brief
+    uint16_t t_fade = cycle_len - (cycle_len / 3); // Fade during last 33%
+
+    if (c_phase < t_impact) {
+      // 1. FALLING: fast moving point
+      drops[d].phase = 0;
+      // Start away, move rapidly toward center
+      // Mapping c_phase [0..t_impact] to distance [len/2 .. 0]
+      int start_dist = len / 2;
+      int current_dist = start_dist - (start_dist * c_phase / t_impact);
+
+      // Determine origin side (pseudo-random)
+      bool from_left = (cycle_num + d) % 2 == 0;
+      if (from_left) {
+        drops[d].fall_pos = drops[d].center - current_dist;
+      } else {
+        drops[d].fall_pos = drops[d].center + current_dist;
+      }
+      drops[d].bright = 255; // Falling drop is bright white
+
+    } else if (c_phase < t_ripple) {
+      // 2. IMPACT: bright flash at center
+      drops[d].phase = 1;
+      drops[d].bright = 255;
+
+    } else {
+      // 3 & 4. RIPPLE: expanding ring
+      drops[d].phase = (c_phase < t_fade) ? 2 : 3;
+
+      // Radius grows over time
+      uint16_t time_in_ripple = c_phase - t_ripple;
+      // Expand 1 pixel every X time units
+      uint16_t expand_rate = cycle_len / 20;
+      drops[d].ripple_rad = 1 + (time_in_ripple / expand_rate);
+
+      // Brightness envelope
+      if (drops[d].phase == 2) {
+        drops[d].bright = 200; // Strong ripple
+      } else {
+        // Fade out
+        uint16_t time_in_fade = c_phase - t_fade;
+        uint16_t fade_duration = cycle_len - t_fade;
+        drops[d].bright = 200 - (200 * time_in_fade / fade_duration);
+      }
+    }
   }
 
   // === SINGLE RENDER LOOP ===
@@ -6178,47 +6218,71 @@ uint16_t mode_fluid_rain(void) {
     // Background: subtle water surface (low amplitude)
     uint8_t w1 = sin8(((spatial >> 1) + wave1) >> 8);
     uint8_t w2 = sin8(((spatial >> 2) + wave2) >> 8);
-    // Scale way down: background is just a gentle shimmer (0-50 range)
-    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3; // 0-63
+    // Base is very subtle (0-48) to let rain 'pop'
+    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3;
+    uint32_t c;
 
-    // Add rain drops: check each drop's distance to this pixel
+    // Check for drop interactions
+    uint8_t white_add = 0; // Pure white flash (impacts/falling)
+    uint8_t color_add = 0; // Colored ripple
+
     for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
-      int dist = i - drops[d].center;
-      if (dist < 0)
-        dist = -dist;
-      if (dist > 4)
-        continue; // Outside splash radius
+      if (drops[d].phase == 0) {
+        // Falling drop (sharp point)
+        int dist = abs(i - drops[d].fall_pos);
+        if (dist == 0)
+          white_add = qadd8(white_add, drops[d].bright);
+        else if (dist == 1)
+          white_add = qadd8(white_add, drops[d].bright >> 2); // Tail
+      } else if (drops[d].phase == 1) {
+        // Impact flash (sharp point at center)
+        int dist = abs(i - drops[d].center);
+        if (dist == 0)
+          white_add = qadd8(white_add, 255);
+        else if (dist == 1)
+          white_add = qadd8(white_add, 128);
+      } else {
+        // Expanding ripple ring
+        int dist = abs(i - drops[d].center);
+        int ring_dist = abs(dist - drops[d].ripple_rad);
 
-      // Splash profile: bell curve over 5 pixels (center=100%, ±1=70%, ±2=30%)
-      uint8_t falloff;
-      if (dist == 0)
-        falloff = 255;
-      else if (dist == 1)
-        falloff = 180;
-      else if (dist == 2)
-        falloff = 90;
-      else if (dist == 3)
-        falloff = 35;
-      else
-        falloff = 10;
-
-      // Drop brightness = envelope × falloff
-      uint8_t drop_bri = scale8(drops[d].envelope, falloff);
-      base = qadd8(base, drop_bri);
+        // Render a ring: bright at exactly radius, fading out inside/outside
+        if (ring_dist == 0)
+          color_add = qadd8(color_add, drops[d].bright);
+        else if (ring_dist == 1)
+          color_add = qadd8(color_add, drops[d].bright >> 1);
+        else if (ring_dist == 2)
+          color_add = qadd8(color_add, drops[d].bright >> 3);
+      }
     }
 
-    // Minimum floor + palette mapping
-    uint8_t pal_index = (base < 16) ? 16 : base;
+    // Minimum floor + palette mapping for the base water + ripple
+    uint8_t pal_index = base;
+    pal_index = qadd8(pal_index, color_add);
+    pal_index = (pal_index < 12) ? 12 : pal_index;
 
-    uint32_t c;
+    // Get color from palette
     if (is_solid) {
       CRGBW sc(solid_color);
       c = RGBW32((sc.r * pal_index) >> 8, (sc.g * pal_index) >> 8,
                  (sc.b * pal_index) >> 8, (sc.w * pal_index) >> 8);
     } else {
       CRGBW cWLED = ColorFromPalette(pal, pal_index, 255);
-      c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
+
+      // Inject the pure white impacts ON TOP of the palette color
+      if (white_add > 0) {
+        // Add white directly to RGB channels
+        uint8_t r = qadd8(cWLED.r, white_add);
+        uint8_t g = qadd8(cWLED.g, white_add);
+        uint8_t b = qadd8(cWLED.b, white_add);
+        // And use the white channel if available
+        uint8_t w = qadd8(cWLED.w, white_add);
+        c = RGBW32(r, g, b, w);
+      } else {
+        c = RGBW32(cWLED.r, cWLED.g, cWLED.b, cWLED.w);
+      }
     }
+
     instance->_segment.setPixelColor(i, c);
   }
 
