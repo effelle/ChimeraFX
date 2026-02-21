@@ -15,7 +15,6 @@ from esphome.const import CONF_ID, CONF_NAME, CONF_UPDATE_INTERVAL, CONF_EFFECTS
 from esphome.core import CORE
 
 DEPENDENCIES = ["light", "number", "select", "switch"]
-AUTO_LOAD = ["chimera_light"]
 CODEOWNERS = ["@effelle"]
 
 # Define the namespace and class
