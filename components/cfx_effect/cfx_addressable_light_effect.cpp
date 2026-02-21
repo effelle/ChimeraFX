@@ -399,6 +399,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Ensure Main Runner is reset/started
       this->runner_->start();
     }
+  } else {
     // Main CFX effect Running
     this->runner_->service();
 
