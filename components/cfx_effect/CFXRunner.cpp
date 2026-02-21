@@ -6124,7 +6124,10 @@ uint16_t mode_fluid_rain(void) {
 
   // Time base (slowed way down for ultimate smoothness)
   uint32_t now = cfx_millis();
-  uint32_t t = (now * (speed + 1)) >> 9; // >> 9 is very slow base time
+  // We want to reduce speed by ~20%.
+  // By scaling by 200/256 instead of implicitly 1.0, we get roughly 0.8x
+  uint32_t t = (now * (speed + 1) * 200) >>
+               17; // >> 17 is equivalent to >> 9 after the * 256 scale
 
   // === SUBTLE BACKGROUND WATER SURFACE ===
   uint16_t wave1 = t;
@@ -6134,7 +6137,8 @@ uint16_t mode_fluid_rain(void) {
   // Cycle has 2 phases:
   // 1. Impact flash (brief white flash at center)
   // 2. Expanding ripple (grows outward, then fades)
-  uint16_t cycle_len = 250 - (intensity >> 1); // 250 to 122 units per cycle
+  // We'll also stretch the cycle length by ~20% for a longer effect
+  uint16_t cycle_len = 300 - ((intensity * 3) >> 2); // 300 to 108 units total
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
@@ -6213,14 +6217,22 @@ uint16_t mode_fluid_rain(void) {
     int i_sub = i << 8;
 
     for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
+      int dist = abs(i_sub - drops[d].center) >> 8; // Integer pixel distance
       if (drops[d].phase == 1) {
         // Impact flash (sharp point at center)
-        int dist = abs(i_sub - drops[d].center) >> 8; // Integer pixel distance
         if (dist == 0)
           white_add = qadd8(white_add, drops[d].bright);
         else if (dist == 1)
           white_add = qadd8(white_add, drops[d].bright >> 1);
       } else {
+        // While the ripple expands, keep a persistent white dot at the center
+        // so the user knows where the ripple originated.
+        if (dist == 0) {
+          white_add = qadd8(white_add, drops[d].bright);
+        } else if (dist == 1) {
+          white_add = qadd8(white_add, drops[d].bright >> 2);
+        }
+
         // ANTI-ALIASED RIPPLE RING
         // Distance from center to current pixel (in sub-pixels)
         int dist_sub = abs(i_sub - drops[d].center);
