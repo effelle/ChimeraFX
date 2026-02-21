@@ -7,12 +7,12 @@ Implement two new features in ChimeraLight:
 
 ## Phase 1: Context Check
 We analyzed ESPHome's light state machine and our `register_addressable_effect` decorator.
-- **Auto-registration** must happen at compile-time via our Python codegen (`light.py`). We will add an `all_effects` flag and use the curated 52-effect list (not the 114 engine list).
+- **Auto-registration** must happen at compile-time via our Python codegen (`light.py`). We will add an `all_effects` flag and dynamically parse `chimera_fx_effects.yaml` at compile-time to automatically stay in sync with the curated list.
 - **Outro intercept** must happen in `ChimeraLightOutput::write_state()`. We can detect when the target state changes to OFF and block the hardware update while signaling `CFXRunner` to play the outro.
 
 ## Phase 2: Socratic Gate (Completed)
-- Q: "How to handle 114 effects?" -> A: We only use the 52 supported/tested effects from `chimera_fx_effects.yaml`.
-- Q: "How should the outro look?" -> A: It will strictly be the *inverse* of the selected intro. If the intro draws from center out, the outro erases from outside in. If an effect cannot be inverted (e.g., glitter), we skip/fade.
+- Q: "How to handle expanding the 52-effect list?" -> A: We will dynamically parse `chimera_fx_effects.yaml` during compilation so no manual list maintenance is required in `light.py`.
+- Q: "Can we support different intro and outro animations?" -> A: Yes, we will add a `set_outro` (and `set_outro_duration`) preset. If `set_outro` is provided, we use it. If not, we fall back to the inverted playback of the `set_intro` animation.
 
 ## Phase 3: Technical Architecture
 
@@ -20,8 +20,8 @@ We analyzed ESPHome's light state machine and our `register_addressable_effect` 
 **Component**: `components/chimera_light/light.py`
 - Add `CONF_ALL_EFFECTS` to the config schema (default `false`).
 - In `to_code()`, if `CONF_ALL_EFFECTS` is true:
-  - Generate a Python dictionary mapping the 52 exact effect names to their `effect_id`s (matching `chimera_fx_effects.yaml`).
-  - Iterate through this dictionary and call `cg.add(var.add_effect(cfx_effect_to_code(...)))` for each.
+  - Dynamically read and parse `chimera_fx_effects.yaml` from the `cfx_effect` component directory.
+  - Iterate through the parsed list and call `cg.add(var.add_effect(cfx_effect_to_code(...)))` for each effect found.
   - *Conflict resolution*: Merge with the `effects:` list. If a user explicitly defines an effect with presets in their YAML, it overrides the auto-registered one with the same ID.
 
 ### 2. Outro State Machine (C++)
@@ -38,12 +38,15 @@ We analyzed ESPHome's light state machine and our `register_addressable_effect` 
   2. Let ESPHome's actual 0-brightness OFF state write to the strip.
 
 ### 3. Outro Rendering Logic (CFXRunner)
-**Component**: `src/CFXRunner.h` & `src/CFXRunner.cpp`
-- Implement `start_outro()`: Setup state flags indicating an outro is active.
+**Component**: `src/CFXRunner.h` & `src/CFXRunner.cpp` & `components/cfx_effect/__init__.py`
+- **Presets**: Add `CONF_SET_OUTRO` and `CONF_SET_OUTRO_DURATION` to the `cfx_effect` schema and pass them to the runner.
+- Implement `start_outro()`:
+  - If a specific `set_outro` is configured, setup that animation for the outro duration.
+  - If NO `set_outro` is configured, fallback to the `set_intro` animation but flag it as `inverted`.
 - Modify the Intro routing logic to support an `inverted` flag.
   - Example: `intro_wipe` normally fills `0` to `len`. Inverted, it empties from `len` down to `0`.
   - Example: `intro_fade` normally goes `0` to `255`. Inverted, it goes `255` down to `0`.
-- The `is_running_intro` flag checks will need to be generalized to `is_transitioning()` to handle both intro and outro phases.
+- The `is_running_intro` flag checks will need to be generalized to `is_transitioning()` to handle both intro and outro phases cleanly.
 
 ## Phase 4: Implementation Checklist
 - [ ] Add `all_effects` boolean to `chimera_light` schema
