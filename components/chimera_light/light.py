@@ -15,16 +15,19 @@ import esphome.config_validation as cv
 from esphome import pins
 from esphome.const import (
     CONF_CHIPSET,
-    CONF_DEFAULT_TRANSITION_LENGTH,
     CONF_IS_RGBW,
     CONF_MAX_REFRESH_RATE,
     CONF_NUM_LEDS,
     CONF_NUMBER,
     CONF_OUTPUT_ID,
     CONF_PIN,
-    CONF_RGB_ORDER,
-    CONF_RMT_SYMBOLS,
 )
+
+# Constants not present in all ESPHome versions — define locally
+CONF_RGB_ORDER = "rgb_order"
+CONF_RMT_SYMBOLS = "rmt_symbols"
+CONF_IS_WRGB = "is_wrgb"
+CONF_DEFAULT_TRANSITION_LENGTH = "default_transition_length"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
