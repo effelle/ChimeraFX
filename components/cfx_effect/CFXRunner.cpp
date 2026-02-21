@@ -2129,46 +2129,67 @@ uint16_t mode_flow(void) {
 }
 
 // --- Phased Effect (ID 105) ---
-// Sine wave interference pattern. By Andrew Tuline
+// Continuous Moiré interference pattern using opposing sub-pixel sine waves
 uint16_t mode_phased(void) {
   if (!instance)
     return 350;
 
-  int len = instance->_segment.length();
+  uint16_t len = instance->_segment.length();
   if (len <= 1)
     return mode_static();
 
-  // Get palette
-  const uint32_t *active_palette;
-  if (instance->_segment.palette == 0) {
-    active_palette = PaletteRainbow;
-  } else {
-    active_palette = getPaletteByIndex(instance->_segment.palette);
-  }
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
 
-  // Phase accumulator (stored in step)
-  uint16_t allfreq = 16;
-  int32_t phase = instance->_segment.step;
-  phase += (instance->_segment.speed * 7 / 10) / 4; // Slower phase change
-  instance->_segment.step = phase;
+  // Accumulate phase using 32-bit integer for perfect sub-pixel smoothness.
+  // speed maps to wave velocity.
+  uint32_t phase_speed = 30 + (speed * 3);
+  instance->_segment.step += phase_speed;
+  uint32_t t = instance->_segment.step;
 
-  uint8_t cutOff = 255 - instance->_segment.intensity;
-  uint8_t modVal = 5;
+  // Intensity controls the spatial frequency (how tightly packed the nodes are)
+  // Maps 0-255 to 1..10 sine waves across the total strip length
+  uint32_t num_waves = 1 + (intensity / 28);
 
-  uint8_t colorIndex = (instance->now / 64) & 0xFF;
+  // Calculate 16-bit phase delta per pixel so the math is continuous across any
+  // length
+  uint32_t phase_step = (num_waves * 65536) / len;
+
+  const uint32_t *active_palette =
+      instance->_segment.palette == 0
+          ? PaletteRainbow
+          : getPaletteByIndex(instance->_segment.palette);
+
+  // Determine starting color index (drifts slowly over time)
+  uint8_t color_idx_start = (instance->now >> 6) & 0xFF;
 
   for (int i = 0; i < len; i++) {
-    uint16_t val = (i + 1) * allfreq;
-    val += (phase / 256) * ((i % modVal) + 1) / 2;
-    uint8_t b = cubicwave8(val & 0xFF);
-    b = (b > cutOff) ? (b - cutOff) : 0;
+    // Spatial phase (0-65535 across the strip length)
+    uint32_t spatial_phase = i * phase_step;
 
-    CRGBW c = ColorFromPalette(active_palette, colorIndex, b);
+    // Wave A: Moves Forward
+    uint16_t w_a_phase = (spatial_phase + (t << 1)) & 0xFFFF;
+    uint8_t w_a = cfx::sin8(w_a_phase >> 8); // 0-255
+
+    // Wave B: Moves Backward at a slightly offset velocity
+    uint16_t w_b_phase = (spatial_phase - (t + (t >> 2))) & 0xFFFF;
+    uint8_t w_b = cfx::sin8(w_b_phase >> 8); // 0-255
+
+    // Multiply the two waves to create a true Moiré interference pattern
+    // The nodes where the waves collide and overlap perfectly are bright.
+    uint8_t moire = cfx::scale8(w_a, w_b);
+
+    // Increase contrast so the nodes pop brightly over a dark background
+    uint16_t bri = moire * 3;
+    if (bri > 255)
+      bri = 255;
+
+    // Standard Phased color mapping (spread the palette seamlessly across the
+    // strip)
+    uint8_t colorIndex = color_idx_start + ((i * 255) / len);
+
+    CRGBW c = ColorFromPalette(active_palette, colorIndex, (uint8_t)bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
-
-    colorIndex += 256 / len;
-    if (len > 256)
-      colorIndex++;
   }
 
   return FRAMETIME;
@@ -2624,26 +2645,78 @@ uint16_t mode_chase_color(void) {
 }
 
 // --- BPM Effect (ID 68) ---
-// Colored stripes pulsing at a defined BPM
+// Rhythmic pulsing bands of light synchronized to a precision global master
+// beat.
 uint16_t mode_bpm(void) {
-  // Tuned Port: Frame-Synced Color Shift
-  // Uses aux0 to advance stp by exactly 1 unit per frame.
-  // Eliminates time-aliasing vibration. Speed matches WLED (60 vs 51
-  // steps/sec).
-  if (instance->_segment.call == 0)
-    instance->_segment.aux0 = 0;
+  if (!instance)
+    return 350;
 
-  uint32_t stp = (instance->_segment.aux0++) & 0xFF;
-  uint8_t beat = cfx::beatsin8_t(instance->_segment.speed, 64, 255);
-  uint16_t len = instance->_segment.length(); // Cache length
+  uint16_t len = instance->_segment.length();
+  if (len == 0)
+    return mode_static();
 
-  // Explicit 32-bit math to avoid 16-bit overflow on long strips
-  for (unsigned i = 0; i < len; i++) {
-    uint32_t col = instance->_segment.color_from_palette(
-        stp + ((uint32_t)i * 2), false, true, 0,
-        beat - stp + ((uint32_t)i * 10));
-    instance->_segment.setPixelColor(i, col);
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
+
+  // 1. GLOBAL PRECISION BEAT ENGINE
+  // User speed slider maps from ~30 BPM to ~150 BPM
+  uint16_t bpm = 30 + ((speed * 120) >> 8);
+
+  // Generate a synchronous 8-bit master beat envelope (0 to 255)
+  // beatsin8_t provides a mathematically perfect sine oscillator synced to
+  // cfx_millis()
+  uint8_t global_beat_env = cfx::beatsin8_t(bpm, 0, 255);
+
+  // 2. KINETIC BURST SHAPING
+  // Rather than a soft sine wave, we want a punchy "surge" that feels musical.
+  // We sharpen the sine wave into a spiky pulse by squaring it.
+  uint8_t sharp_beat = cfx::scale8(global_beat_env, global_beat_env);
+  sharp_beat =
+      cfx::scale8(sharp_beat, sharp_beat); // 4th power for tight spikes
+
+  // 3. SPATIAL INTERFERENCE
+  // The intensity slider controls the density of the outward bands
+  uint16_t wave_scale = 10 + (intensity >> 2); // 10 to 73
+
+  // Accumulate position in the segment's `step` variable for high precision
+  // drift. The drift speed bursts massively during the peak of the beat.
+  uint32_t now = cfx_millis();
+  uint32_t drift_speed = 50 + (sharp_beat * 3);
+  instance->_segment.step += drift_speed;
+  uint32_t spatial_offset = instance->_segment.step >> 6;
+
+  int center = len / 2;
+  const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
+  bool is_solid = (instance->_segment.palette == 255);
+  uint32_t solid_color = is_solid ? instance->_segment.colors[0] : 0;
+
+  for (int i = 0; i < len; i++) {
+    // Calculate distance from center for symmetrical burst
+    int dist = abs(i - center);
+
+    // Generate traveling sine waves pushing outward from the center
+    uint16_t wave_phase = (dist * wave_scale) - spatial_offset;
+    uint8_t wave_val = cfx::sin8(wave_phase & 0xFF);
+
+    // MULTIPLY the wave by the master beat envelope. This completely prevents
+    // 8-bit wrap tearing. Base brightness is 40 (never fully dark) + (wave *
+    // surge pulse)
+    uint8_t pixel_bri = 40 + cfx::scale8(wave_val, sharp_beat);
+
+    // Base color shifts symmetrically outward over time
+    uint8_t color_idx = (dist * 2) - (now >> 6);
+
+    uint32_t c = is_solid ? solid_color : ColorFromPalette(pal, color_idx, 255);
+
+    // Apply the newly calculated brightness envelope
+    uint8_t r = cfx::scale8((c >> 16) & 0xFF, pixel_bri);
+    uint8_t g = cfx::scale8((c >> 8) & 0xFF, pixel_bri);
+    uint8_t b = cfx::scale8(c & 0xFF, pixel_bri);
+    uint8_t w = cfx::scale8((c >> 24) & 0xFF, pixel_bri);
+
+    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
+
   return FRAMETIME;
 }
 
@@ -3356,13 +3429,26 @@ uint16_t mode_chaos_theory(void) {
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
-  // --- Phase 3: Energy Spikes (Texture) ---
-  // Trigger spikes during high agitation (raw_noise > 140)
-  if (raw_noise > 140 && cfx::hw_random8() < 40) {
+  // --- Phase 3: Energy Spikes (Synchronized Chaos) ---
+  // In the original, spikes were purely random during high agitation.
+  // Here, we inject the GLOBAL PRECISION BEAT ENGINE to give the chaos a
+  // structural, musical pulse.
+  uint16_t bpm = 30 + ((instance->_segment.speed * 120) >> 8);
+  uint8_t global_beat_env = cfx::beatsin8_t(bpm, 0, 255);
+
+  // Sharpen the beat into an explosive trigger
+  uint8_t sharp_beat = cfx::scale8(global_beat_env, global_beat_env);
+  sharp_beat = cfx::scale8(sharp_beat, sharp_beat);
+
+  // Trigger explosive spikes ONLY when the noise field is agitated AND the
+  // global beat strikes. The higher the beat peak, the higher the probability
+  // of spawning a spark.
+  if (raw_noise > 120 && sharp_beat > 128 &&
+      cfx::hw_random8() < (sharp_beat >> 1)) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
-        data->sparks[s].level = 200;      // Start bright
+        data->sparks[s].level = 255; // Maximum bright explosion on the beat
         data->sparks[s].building = false; // Instant pop, then fade
         break;
       }
