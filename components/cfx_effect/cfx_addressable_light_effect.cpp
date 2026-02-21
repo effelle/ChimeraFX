@@ -251,13 +251,12 @@ void CFXAddressableLightEffect::stop() {
   intro_snapshot_.shrink_to_fit();
 
   auto *state = this->get_light_state();
-  if (state != nullptr && !state->remote_values.is_on() &&
-      this->runner_ != nullptr) {
+  if (state != nullptr && this->runner_ != nullptr) {
     auto *out = static_cast<chimera_light::ChimeraLightOutput *>(
         this->get_addressable_());
     if (out != nullptr) {
-      this->outro_start_time_ = millis();
 
+      // Resolve Outro Mode synchronously before dropping controller mapping
       this->active_outro_mode_ = INTRO_NONE;
       select::Select *out_eff = this->outro_effect_;
       if (out_eff == nullptr && this->controller_ != nullptr)
@@ -286,22 +285,40 @@ void CFXAddressableLightEffect::stop() {
         this->controller_->unregister_runner(captured_runner);
       }
 
-      out->set_outro_callback([this, out, captured_runner]() -> bool {
-        bool done = this->run_outro_frame(*out, captured_runner);
-        if (done) {
-          delete captured_runner;
-        }
-        return done;
-      });
-
+      // Safely detach from effect runner system
       this->controller_ = nullptr;
       this->intro_active_ = false;
       this->outro_active_ = false;
+
+      // CRITICAL FIX: ESPHome invokes stop() BEFORE it updates
+      // remote_values.is_on() to false. We must defer the evaluation to the
+      // component loop to ensure LightCall finishes writing the state
+      // variables!
+      out->defer([this, out, captured_runner]() {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr && !current_state->remote_values.is_on()) {
+          // User genuinely clicked TURN OFF. Play the configured Outro!
+          this->outro_start_time_ = millis();
+
+          out->set_outro_callback([this, out, captured_runner]() -> bool {
+            bool done = this->run_outro_frame(*out, captured_runner);
+            if (done) {
+              delete captured_runner;
+            }
+            return done;
+          });
+        } else {
+          // Effect was merely changed to a different one, or light remained ON.
+          // Safely delete without playing an Outro.
+          delete captured_runner;
+        }
+      });
+
       return;
     }
   }
 
-  // Normal Stop / Cleanup
+  // Normal Stop / Cleanup (Failsafe)
   if (this->runner_ != nullptr) {
     if (this->controller_) {
       this->controller_->unregister_runner(this->runner_);
