@@ -6122,9 +6122,9 @@ uint16_t mode_fluid_rain(void) {
   uint8_t speed = instance->_segment.speed;
   uint8_t intensity = instance->_segment.intensity;
 
-  // Time base (slowed way down)
+  // Time base (slowed way down for ultimate smoothness)
   uint32_t now = cfx_millis();
-  uint32_t t = (now * (speed + 1)) >> 8; // >> 8 is 4x slower than before
+  uint32_t t = (now * (speed + 1)) >> 9; // >> 9 is very slow base time
 
   // === SUBTLE BACKGROUND WATER SURFACE ===
   uint16_t wave1 = t;
@@ -6134,7 +6134,6 @@ uint16_t mode_fluid_rain(void) {
   // Cycle has 2 phases:
   // 1. Impact flash (brief white flash at center)
   // 2. Expanding ripple (grows outward, then fades)
-  // Longer cycles = longer-lived drops, more space between drops
   uint16_t cycle_len = 250 - (intensity >> 1); // 250 to 122 units per cycle
 
   // Palette
@@ -6144,10 +6143,10 @@ uint16_t mode_fluid_rain(void) {
 
   // Pre-compute drop states
   struct {
-    int center;     // Impact location
-    uint8_t phase;  // 1=impact, 2=ripple spreading, 3=fade
-    int ripple_rad; // Current radius of ripple
-    uint8_t bright; // Current brightness of the active element
+    int center;    // Impact location in 16-bit sub-pixel space (pixel * 256)
+    uint8_t phase; // 1=impact, 2=ripple spreading, 3=fade
+    uint16_t ripple_rad; // Current radius in 16-bit sub-pixel space
+    uint8_t bright;      // Current brightness of the active element
   } drops[FLUID_RAIN_NUM_DROPS];
 
   for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
@@ -6155,13 +6154,15 @@ uint16_t mode_fluid_rain(void) {
     uint16_t c_phase = drop_t % cycle_len;
     uint16_t cycle_num = drop_t / cycle_len;
 
-    // Impact center: random per cycle
-    drops[d].center =
+    // Impact center: random per cycle. Stored as sub-pixel position (pixel *
+    // 256)
+    uint16_t center_pixel =
         (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 14)) >> 8;
-    drops[d].center += 7; // Generous margin
+    center_pixel += 7;                   // Generous margin
+    drops[d].center = center_pixel << 8; // Convert to sub-pixel space
 
     // Phase timing thresholds
-    uint16_t t_ripple = cycle_len / 4; // 25% time spent as impact flash
+    uint16_t t_ripple = cycle_len / 5; // 20% time spent as impact flash
     uint16_t t_fade = cycle_len - (cycle_len / 3); // Fade during last 33%
 
     if (c_phase < t_ripple) {
@@ -6173,10 +6174,14 @@ uint16_t mode_fluid_rain(void) {
       // 2 & 3. RIPPLE: expanding ring
       drops[d].phase = (c_phase < t_fade) ? 2 : 3;
 
-      // Radius grows over time
+      // Radius grows over time, smoothly due to sub-pixel math.
+      // Every step of c_phase expands radius by a fractional amount
       uint16_t time_in_ripple = c_phase - t_ripple;
-      uint16_t expand_rate = cycle_len / 10; // Radius +1 every 10% of cycle
-      drops[d].ripple_rad = 1 + (time_in_ripple / expand_rate);
+
+      // Maximum desired radius before fade out (e.g. 15 pixels)
+      // distance = (time / duration) * max_distance * 256
+      uint16_t expansion_duration = cycle_len - t_ripple;
+      drops[d].ripple_rad = (time_in_ripple * 15 * 256) / expansion_duration;
 
       // Brightness envelope
       if (drops[d].phase == 2) {
@@ -6194,37 +6199,44 @@ uint16_t mode_fluid_rain(void) {
   for (int i = 0; i < len; i++) {
     uint16_t spatial = i * 256;
 
-    // Background: subtle water surface (low amplitude)
+    // Background: subtle water surface
     uint8_t w1 = sin8(((spatial >> 1) + wave1) >> 8);
     uint8_t w2 = sin8(((spatial >> 2) + wave2) >> 8);
-    // Base is very subtle (0-48) to let rain 'pop'
-    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3;
+    uint8_t base = ((uint16_t)w1 + (uint16_t)w2) >> 3; // 0-48
     uint32_t c;
 
     // Check for drop interactions
-    uint8_t white_add = 0; // Pure white flash (impacts/falling)
+    uint8_t white_add = 0; // Pure white flash (impacts)
     uint8_t color_add = 0; // Colored ripple
+
+    // i in sub-pixel space for accurate math
+    int i_sub = i << 8;
 
     for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
       if (drops[d].phase == 1) {
         // Impact flash (sharp point at center)
-        int dist = abs(i - drops[d].center);
+        int dist = abs(i_sub - drops[d].center) >> 8; // Integer pixel distance
         if (dist == 0)
           white_add = qadd8(white_add, drops[d].bright);
         else if (dist == 1)
           white_add = qadd8(white_add, drops[d].bright >> 1);
       } else {
-        // Expanding ripple ring
-        int dist = abs(i - drops[d].center);
-        int ring_dist = abs(dist - drops[d].ripple_rad);
+        // ANTI-ALIASED RIPPLE RING
+        // Distance from center to current pixel (in sub-pixels)
+        int dist_sub = abs(i_sub - drops[d].center);
 
-        // Render a ring: bright at exactly radius, fading out inside/outside
-        if (ring_dist == 0)
-          color_add = qadd8(color_add, drops[d].bright);
-        else if (ring_dist == 1)
-          color_add = qadd8(color_add, drops[d].bright >> 1);
-        else if (ring_dist == 2)
-          color_add = qadd8(color_add, drops[d].bright >> 3);
+        // Distance from pixel to the exactly ideal ring radius (in sub-pixels)
+        int ring_dist_sub = abs(dist_sub - drops[d].ripple_rad);
+
+        // Render a ring 2.0 pixels wide with smooth sub-pixel anti-aliasing.
+        // If ring_dist_sub is 0, brightness is 100%.
+        // If ring_dist_sub is 512 (2 pixels), brightness is 0%.
+        if (ring_dist_sub < 512) {
+          // Inverse linear falloff from center of the ring
+          uint8_t intensity_scale = 255 - (ring_dist_sub >> 1);
+          uint8_t pixel_bri = (drops[d].bright * intensity_scale) >> 8;
+          color_add = qadd8(color_add, pixel_bri);
+        }
       }
     }
 
