@@ -4163,6 +4163,9 @@ void CFXRunner::service() {
   case FX_MODE_FLUID_RAIN: // 160
     mode_fluid_rain();
     break;
+  case FX_MODE_HORIZON_SWEEP: // 161
+    mode_cfx_horizon_sweep();
+    break;
   default:
     mode_static();
     break;

@@ -107,6 +107,10 @@
     effect_id: 100
 
 - addressable_cfx:
+    name: "Horizon Sweep"
+    effect_id: 161
+
+- addressable_cfx:
     name: "Juggle"
     effect_id: 64
 

@@ -77,7 +77,8 @@ CFX_EFFECT_NAMES = {
     80: "Twinklefox", 81: "Twinklecat", 82: "Halloween Eyes", 83: "Solid Pattern", 84: "Solid Pattern Tri", 85: "Spots", 86: "Spots Fade", 87: "Glitter", 88: "Candle", 89: "Starburst",
     90: "Fireworks Starburst", 91: "Bouncing Balls", 92: "Sinelon", 93: "Sinelon Dual", 94: "Sinelon Rainbow", 95: "Popcorn", 96: "Drip", 97: "Plasma", 98: "Percent", 99: "Ripple Rainbow",
     100: "Heartbeat", 101: "Ocean", 102: "Candle Multi", 103: "Solid Glitter", 104: "Sunrise", 105: "Phased", 106: "Twinkleup", 107: "Noise Pal", 108: "Sine", 109: "Phased Noise",
-    110: "Flow", 111: "Chunchun", 112: "Dancing Shadows", 113: "Washing Machine"
+    110: "Flow", 111: "Chunchun", 112: "Dancing Shadows", 113: "Washing Machine",
+    161: "Horizon Sweep"
 }
 
 @register_addressable_effect(

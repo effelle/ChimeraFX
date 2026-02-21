@@ -220,14 +220,19 @@ void CFXAddressableLightEffect::start() {
         this->active_intro_mode_ = INTRO_CENTER;
       else if (s == "Glitter")
         this->active_intro_mode_ = INTRO_GLITTER;
-      else
-        this->active_intro_mode_ = INTRO_NONE;
+      this->active_intro_mode_ = INTRO_NONE;
+    }
+
+    // Effect 161 (Horizon Sweep) Hijack
+    if (this->effect_id_ == 161) {
+      this->intro_active_ = true;
+      this->active_intro_mode_ = INTRO_WIPE;
     }
 
     // Cache for this run
     this->intro_effect_ = intro_sel;
 
-    if (this->active_intro_mode_ == INTRO_NONE) {
+    if (this->active_intro_mode_ == INTRO_NONE && this->effect_id_ != 161) {
       this->intro_active_ = false;
 
       // Use the light's default_transition_length for a smooth fade-in
@@ -291,15 +296,34 @@ void CFXAddressableLightEffect::stop() {
       if (dur_num == nullptr && this->controller_ != nullptr)
         dur_num = this->controller_->get_intro_duration();
 
-      if (dur_num != nullptr && dur_num->has_state()) {
-        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-      } else {
-        auto *current_state = this->get_light_state();
-        if (current_state != nullptr &&
-            current_state->get_default_transition_length() > 0) {
-          duration_ms = current_state->get_default_transition_length();
+      // Effect 161 (Horizon Sweep) Hijack - Force Wipe and Use Speed for
+      // Duration
+      if (this->effect_id_ == 161) {
+        this->active_outro_mode_ = INTRO_WIPE;
+
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (10000ms down to 500ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
         } else {
-          duration_ms = 1500;
+          duration_ms = 2500; // Default if speed slider is missing
+        }
+      } else {
+        // Normal duration logic
+        if (dur_num != nullptr && dur_num->has_state()) {
+          duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+        } else {
+          auto *current_state = this->get_light_state();
+          if (current_state != nullptr &&
+              current_state->get_default_transition_length() > 0) {
+            duration_ms = current_state->get_default_transition_length();
+          } else {
+            duration_ms = 1500;
+          }
         }
       }
       this->active_outro_duration_ms_ = duration_ms;
@@ -905,9 +929,25 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   if (dur_num == nullptr && this->controller_ != nullptr)
     dur_num = this->controller_->get_intro_duration();
 
-  if (dur_num != nullptr && dur_num->has_state()) {
-    duration = (uint32_t)(dur_num->state * 1000.0f);
+  // Effect 161 (Horizon Sweep) Hijack - Handle Duration logic
+  if (this->effect_id_ == 161) {
+    number::Number *speed_num = this->speed_;
+    if (speed_num == nullptr && this->controller_ != nullptr)
+      speed_num = this->controller_->get_speed();
+
+    if (speed_num != nullptr && speed_num->has_state()) {
+      // Map Speed (0-255) to Duration (10000ms down to 500ms)
+      float speed_val = speed_num->state;
+      duration = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
+    } else {
+      duration = 2500; // Default if speed slider is missing
+    }
+  } else {
+    if (dur_num != nullptr && dur_num->has_state()) {
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    }
   }
+
   if (duration == 0)
     duration = 1; // Prevent div by zero
 
@@ -966,6 +1006,18 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
   }
 
+  // Effect 161 (Horizon Sweep) always forces palette matching Active Effect
+  // Palette
+  if (this->effect_id_ == 161 && this->runner_ != nullptr) {
+    pal = this->runner_->_segment.palette;
+    if (pal == 0)
+      pal = this->get_default_palette_id_(161);
+    if (pal == 255)
+      use_palette = false;
+    else
+      use_palette = true;
+  }
+
   if (use_palette && this->runner_ != nullptr) {
     // Force update the runner's palette immediately
     this->runner_->_segment.palette = pal;
@@ -992,38 +1044,70 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   switch (mode) {
   case INTRO_MODE_WIPE: {
     int logical_len = symmetry ? (num_leds / 2) : num_leds;
-    int lead = (int)(progress * logical_len);
 
-    // Safety: ensure lead covers full range at 100%
-    if (progress >= 1.0f)
-      lead = logical_len + 1;
+    // Intensity defines blur radius (up to 50% of the strip)
+    float blur_percent = 0.0f;
+    number::Number *intensity_num = this->intensity_;
+    if (intensity_num == nullptr && this->controller_ != nullptr) {
+      intensity_num = this->controller_->get_intensity();
+    }
+    if (intensity_num != nullptr && intensity_num->has_state()) {
+      blur_percent = (intensity_num->state / 255.0f) * 0.5f;
+    }
+
+    int blur_radius = (int)(logical_len * blur_percent);
+    float exact_lead = progress * (logical_len + blur_radius);
+    int lead = (int)exact_lead;
 
     for (int i = 0; i < logical_len; i++) {
-      bool active = false;
+
+      float alpha = 0.0f;
+
       if (!reverse) {
-        // Standard: Fill from start (0) to lead
-        if (i <= lead)
-          active = true;
+        // Standard: Fill from 0 -> logical_len
+        if (i <= lead - blur_radius) {
+          alpha = 1.0f; // Fully solid behind the blur
+        } else if (i <= lead && blur_radius > 0) {
+          // Inside the blur radius: fade from 1.0 down to 0.0
+          float distance_into_blur = exact_lead - i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       } else {
-        // Reverse: Fill from end (logical_len-1) back to 0
-        // For Wipe: End -> Start
-        // For Center: Center -> Edges
-        if (i >= (logical_len - 1 - lead))
-          active = true;
+        // Reverse: Fill from logical_len-1 -> 0
+        int rev_i = logical_len - 1 - i;
+        if (rev_i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (rev_i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - rev_i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       }
 
       Color pixel_c = Color::BLACK;
-      if (active) {
+      if (alpha > 0.0f) {
         if (use_palette) {
-          // Map i to 0-255 for palette (Gradient Wipe)
           uint8_t map_idx =
               (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
-          // Get color from runner
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
           pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
         } else {
-          pixel_c = c;
+          pixel_c = c; // Solid Color
+        }
+
+        // Apply Alpha Blending to Background (Black)
+        if (alpha < 1.0f) {
+          pixel_c =
+              Color((uint8_t)(pixel_c.r * alpha), (uint8_t)(pixel_c.g * alpha),
+                    (uint8_t)(pixel_c.b * alpha), (uint8_t)(pixel_c.w * alpha));
         }
       }
 
@@ -1184,29 +1268,68 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
   switch (mode) {
   case INTRO_MODE_WIPE: {
-    // Outro Wipe: We ERASE the light instead of filling it.
-    // Intro filled 0 -> 100%. Outro erases 100% -> 0%.
     int logical_len = symmetry ? (num_leds / 2) : num_leds;
-    int lead = (int)((1.0f - progress) * logical_len);
+
+    // Intensity defines blur radius (up to 50% of the strip)
+    float blur_percent = 0.0f;
+    number::Number *intensity_num = this->intensity_;
+    if (intensity_num == nullptr && this->controller_ != nullptr) {
+      intensity_num = this->controller_->get_intensity();
+    }
+    if (intensity_num != nullptr && intensity_num->has_state()) {
+      blur_percent = (intensity_num->state / 255.0f) * 0.5f;
+    }
+
+    int blur_radius = (int)(logical_len * blur_percent);
+    float progress_erasing = 1.0f - progress;
+    float exact_lead = progress_erasing * (logical_len + blur_radius);
+    int lead = (int)exact_lead;
 
     for (int i = 0; i < logical_len; i++) {
-      bool active = false;
+
+      float alpha =
+          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+
       if (!reverse) {
-        if (i <= lead)
-          active = true;
+        if (i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       } else {
-        if (i >= (logical_len - 1 - lead))
-          active = true;
+        int rev_i = logical_len - 1 - i;
+        if (rev_i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (rev_i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - rev_i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       }
 
-      if (!active) {
+      if (alpha == 0.0f) {
         it[i] = Color::BLACK;
         if (symmetry)
           it[num_leds - 1 - i] = Color::BLACK;
-      } else {
-        // Keep 100% brightness of the underlying frame
-        // it[i] is already populated with runner's background frame at line
-        // 1131
+      } else if (alpha < 1.0f) {
+        // Dim the background frame by alpha
+        Color c1 = it[i].get();
+        it[i] = Color((uint8_t)(c1.r * alpha), (uint8_t)(c1.g * alpha),
+                      (uint8_t)(c1.b * alpha), (uint8_t)(c1.w * alpha));
+        if (symmetry) {
+          Color c2 = it[num_leds - 1 - i].get();
+          it[num_leds - 1 - i] =
+              Color((uint8_t)(c2.r * alpha), (uint8_t)(c2.g * alpha),
+                    (uint8_t)(c2.b * alpha), (uint8_t)(c2.w * alpha));
+        }
       }
     }
 

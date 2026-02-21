@@ -18,6 +18,7 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 160 | **Fluid Rain** | A realistic liquid simulation. Raindrops hit the strip, creating organic ripples that travel, collide, and bounce off the edges. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
+| 161 | **Horizon Sweep** | An alpha-blended wipe animation that reveals a solid color or stationary palette. Used as an ambient room filler. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
 | 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center. Toggle Mirror to reverse the effect. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
