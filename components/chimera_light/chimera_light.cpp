@@ -183,16 +183,29 @@ void ChimeraLightOutput::setup() {
   channel.gpio_num = gpio_num_t(this->pin_);
   channel.mem_block_symbols = this->rmt_symbols_;
   channel.trans_queue_depth = 1;
-  channel.flags.with_dma = true; // Always DMA — core design decision
   channel.flags.invert_out = 0;
   channel.intr_priority = 0;
 
+  // DMA only supported on ESP32-S3 and ESP32-P4
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
+  channel.flags.with_dma = true;
   if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
-    ESP_LOGE(TAG, "RMT channel creation failed (pin=%u, symbols=%u)",
-             this->pin_, this->rmt_symbols_);
+    ESP_LOGW(TAG, "DMA channel failed, falling back to non-DMA");
+    channel.flags.with_dma = false;
+    if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
+      ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
+      this->mark_failed();
+      return;
+    }
+  }
+#else
+  channel.flags.with_dma = false;
+  if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
+    ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
     this->mark_failed();
     return;
   }
+#endif
 
   // Create RMT encoder
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
