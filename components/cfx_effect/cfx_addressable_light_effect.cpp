@@ -294,7 +294,7 @@ void CFXAddressableLightEffect::stop() {
       // remote_values.is_on() to false. We must defer the evaluation to the
       // component loop to ensure LightCall finishes writing the state
       // variables!
-      out->defer([this, out, captured_runner]() {
+      this->defer([this, out, captured_runner]() {
         auto *current_state = this->get_light_state();
         if (current_state != nullptr && !current_state->remote_values.is_on()) {
           // User genuinely clicked TURN OFF. Play the configured Outro!
