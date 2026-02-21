@@ -2706,7 +2706,13 @@ uint16_t mode_bpm(void) {
     // Base color shifts symmetrically outward over time
     uint8_t color_idx = (dist * 2) - (now >> 6);
 
-    uint32_t c = is_solid ? solid_color : ColorFromPalette(pal, color_idx, 255);
+    uint32_t c;
+    if (is_solid) {
+      c = solid_color;
+    } else {
+      CRGBW pal_c = ColorFromPalette(pal, color_idx, 255);
+      c = RGBW32(pal_c.r, pal_c.g, pal_c.b, pal_c.w);
+    }
 
     // Apply the newly calculated brightness envelope
     uint8_t r = cfx::scale8((c >> 16) & 0xFF, pixel_bri);
