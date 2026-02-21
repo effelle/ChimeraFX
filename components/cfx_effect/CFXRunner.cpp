@@ -6122,10 +6122,9 @@ uint16_t mode_fluid_rain(void) {
   uint8_t speed = instance->_segment.speed;
   uint8_t intensity = instance->_segment.intensity;
 
-  // Time base
+  // Time base (slowed way down)
   uint32_t now = cfx_millis();
-  uint32_t t =
-      (now * (speed + 1)) >> 6; // Sped up base time slightly for falling drops
+  uint32_t t = (now * (speed + 1)) >> 8; // >> 8 is 4x slower than before
 
   // === SUBTLE BACKGROUND WATER SURFACE ===
   uint16_t wave1 = t;
@@ -6136,7 +6135,8 @@ uint16_t mode_fluid_rain(void) {
   // 1. Falling drop (moves fast until impact)
   // 2. Impact flash
   // 3. Expanding ripple (grows outward, then fades)
-  uint16_t cycle_len = 250 - (intensity >> 1); // 250 to 122 units per cycle
+  // Longer cycles = longer-lived, slower drops
+  uint16_t cycle_len = 400 - (intensity >> 1); // 400 to 272 units per cycle
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
@@ -6159,20 +6159,19 @@ uint16_t mode_fluid_rain(void) {
 
     // Impact center: random per cycle
     drops[d].center =
-        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 10)) >> 8;
-    drops[d].center += 5; // Margin
+        (sin8((uint8_t)(cycle_num * 37 + d * 73)) * (len - 14)) >> 8;
+    drops[d].center += 7; // Generous margin
 
     // Phase timing thresholds
-    uint16_t t_impact = cycle_len / 4;             // 25% time spent falling
-    uint16_t t_ripple = t_impact + 5;              // Flash is very brief
-    uint16_t t_fade = cycle_len - (cycle_len / 3); // Fade during last 33%
+    uint16_t t_impact = cycle_len / 3; // 33% time spent falling (slower fall)
+    uint16_t t_ripple = t_impact + 8;  // Brief flash
+    uint16_t t_fade = cycle_len - (cycle_len / 4); // Fade during last 25%
 
     if (c_phase < t_impact) {
       // 1. FALLING: fast moving point
       drops[d].phase = 0;
-      // Start away, move rapidly toward center
-      // Mapping c_phase [0..t_impact] to distance [len/2 .. 0]
-      int start_dist = len / 2;
+      int start_dist =
+          len / 3; // Start closer so it doesn't move ridiculously fast
       int current_dist = start_dist - (start_dist * c_phase / t_impact);
 
       // Determine origin side (pseudo-random)
@@ -6193,10 +6192,9 @@ uint16_t mode_fluid_rain(void) {
       // 3 & 4. RIPPLE: expanding ring
       drops[d].phase = (c_phase < t_fade) ? 2 : 3;
 
-      // Radius grows over time
+      // Radius grows over time (slower expansion)
       uint16_t time_in_ripple = c_phase - t_ripple;
-      // Expand 1 pixel every X time units
-      uint16_t expand_rate = cycle_len / 20;
+      uint16_t expand_rate = cycle_len / 12; // Radius +1 every 8% of cycle
       drops[d].ripple_rad = 1 + (time_in_ripple / expand_rate);
 
       // Brightness envelope
