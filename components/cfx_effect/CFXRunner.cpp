@@ -6122,12 +6122,15 @@ uint16_t mode_fluid_rain(void) {
   uint8_t speed = instance->_segment.speed;
   uint8_t intensity = instance->_segment.intensity;
 
+  // Parameter mapping:
+  // User prefers Speed ~70 and Intensity ~40 as the "default" look.
+  // WLED defaults are 128. We scale 128 down to 70/40 via math.
+  // 128 * 140 / 256 ≈ 70
+  uint32_t eff_speed = (speed * 140) >> 8;
+
   // Time base (slowed way down for ultimate smoothness)
   uint32_t now = cfx_millis();
-  // We want to reduce speed by ~20%.
-  // By scaling by 200/256 instead of implicitly 1.0, we get roughly 0.8x
-  uint32_t t = (now * (speed + 1) * 200) >>
-               17; // >> 17 is equivalent to >> 9 after the * 256 scale
+  uint32_t t = (now * (eff_speed + 1) * 200) >> 17;
 
   // === SUBTLE BACKGROUND WATER SURFACE ===
   uint16_t wave1 = t;
@@ -6137,8 +6140,8 @@ uint16_t mode_fluid_rain(void) {
   // Cycle has 2 phases:
   // 1. Impact flash (brief white flash at center)
   // 2. Expanding ripple (grows outward, then fades)
-  // We'll also stretch the cycle length by ~20% for a longer effect
-  uint16_t cycle_len = 300 - ((intensity * 3) >> 2); // 300 to 108 units total
+  // Intensity mapping: 128 * 60 / 256 = 30. 300 - 30 = 270 cycle length.
+  uint16_t cycle_len = 300 - ((intensity * 60) >> 8); // 300 to 240 units total
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
@@ -6240,12 +6243,12 @@ uint16_t mode_fluid_rain(void) {
         // Distance from pixel to the exactly ideal ring radius (in sub-pixels)
         int ring_dist_sub = abs(dist_sub - drops[d].ripple_rad);
 
-        // Render a ring 2.0 pixels wide with smooth sub-pixel anti-aliasing.
-        // If ring_dist_sub is 0, brightness is 100%.
-        // If ring_dist_sub is 512 (2 pixels), brightness is 0%.
-        if (ring_dist_sub < 512) {
+        // WIDENED RIPPLE: Render a ring 4.0 pixels wide (1024 subpixels) for
+        // smooth blending If ring_dist_sub is 0, brightness is 100%. If
+        // ring_dist_sub is 1024 (4 pixels wide total), brightness is 0%.
+        if (ring_dist_sub < 1024) {
           // Inverse linear falloff from center of the ring
-          uint8_t intensity_scale = 255 - (ring_dist_sub >> 1);
+          uint8_t intensity_scale = 255 - (ring_dist_sub >> 2);
           uint8_t pixel_bri = (drops[d].bright * intensity_scale) >> 8;
           color_add = qadd8(color_add, pixel_bri);
         }
