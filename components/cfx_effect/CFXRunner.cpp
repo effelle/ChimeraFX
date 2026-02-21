@@ -6206,20 +6206,13 @@ uint16_t mode_fluid_rain(void) {
     uint8_t color_add = 0; // Colored ripple
 
     for (int d = 0; d < FLUID_RAIN_NUM_DROPS; d++) {
-      if (drops[d].phase == 0) {
-        // Falling drop (sharp point)
-        int dist = abs(i - drops[d].fall_pos);
-        if (dist == 0)
-          white_add = qadd8(white_add, drops[d].bright);
-        else if (dist == 1)
-          white_add = qadd8(white_add, drops[d].bright >> 2); // Tail
-      } else if (drops[d].phase == 1) {
+      if (drops[d].phase == 1) {
         // Impact flash (sharp point at center)
         int dist = abs(i - drops[d].center);
         if (dist == 0)
-          white_add = qadd8(white_add, 255);
+          white_add = qadd8(white_add, drops[d].bright);
         else if (dist == 1)
-          white_add = qadd8(white_add, 128);
+          white_add = qadd8(white_add, drops[d].bright >> 1);
       } else {
         // Expanding ripple ring
         int dist = abs(i - drops[d].center);
