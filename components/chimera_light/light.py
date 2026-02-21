@@ -7,7 +7,11 @@ Drop-in replacement for esp32_rmt_led_strip with:
 - Chipset-aware timing (WS2812X, SK6812 strict, WS2811)
 - Auto-detected mem_block_symbols per ESP32 variant
 - Auto RGBW from chipset (SK6812 = 4-byte), manual override available
+- all_effects: true — auto-register all ChimeraFX effects from YAML
 """
+
+import os
+import yaml
 
 import esphome.codegen as cg
 from esphome.components import light
@@ -15,8 +19,10 @@ import esphome.config_validation as cv
 from esphome import pins
 from esphome.const import (
     CONF_CHIPSET,
+    CONF_EFFECTS,
     CONF_IS_RGBW,
     CONF_MAX_REFRESH_RATE,
+    CONF_NAME,
     CONF_NUM_LEDS,
     CONF_NUMBER,
     CONF_OUTPUT_ID,
@@ -28,6 +34,7 @@ CONF_RGB_ORDER = "rgb_order"
 CONF_RMT_SYMBOLS = "rmt_symbols"
 CONF_IS_WRGB = "is_wrgb"
 CONF_DEFAULT_TRANSITION_LENGTH = "default_transition_length"
+CONF_ALL_EFFECTS = "all_effects"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
@@ -67,7 +74,47 @@ DEFAULT_ORDER = {
     "WS2811": RGBOrder.ORDER_RGB,
 }
 
-CONF_IS_WRGB = "is_wrgb"
+
+def _load_effects_yaml():
+    """Load chimera_fx_effects.yaml from the project root (sibling of components/)."""
+    this_dir = os.path.dirname(__file__)
+    # components/chimera_light/ → components/ → project root
+    project_root = os.path.dirname(os.path.dirname(this_dir))
+    yaml_path = os.path.join(project_root, "chimera_fx_effects.yaml")
+    if not os.path.isfile(yaml_path):
+        return []
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or []
+
+
+def _inject_all_effects(config):
+    """If all_effects is true, parse chimera_fx_effects.yaml and inject
+    synthetic addressable_cfx entries into the effects list.
+    User-defined effects with the same name take priority (overrides)."""
+    if not config.get(CONF_ALL_EFFECTS, False):
+        return config
+
+    user_effects = list(config.get(CONF_EFFECTS, []))
+
+    # Collect names already defined by the user (they take priority)
+    user_names = set()
+    for eff in user_effects:
+        if "addressable_cfx" in eff:
+            name = eff["addressable_cfx"].get(CONF_NAME, "")
+            if name:
+                user_names.add(name)
+
+    # Parse the YAML and inject effects not already defined by the user
+    for entry in _load_effects_yaml():
+        if "addressable_cfx" not in entry:
+            continue
+        effect_data = entry["addressable_cfx"]
+        name = effect_data.get("name", "")
+        if name and name not in user_names:
+            user_effects.append(entry)
+
+    config[CONF_EFFECTS] = user_effects
+    return config
 
 
 def _apply_defaults(config):
@@ -88,6 +135,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
             cv.Optional(CONF_IS_RGBW): cv.boolean,
             cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
+            cv.Optional(CONF_ALL_EFFECTS, default=False): cv.boolean,
             cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
                 cv.positive_time_period_milliseconds
             ),
@@ -96,6 +144,7 @@ CONFIG_SCHEMA = cv.All(
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _apply_defaults,
+    _inject_all_effects,
 )
 
 

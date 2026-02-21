@@ -22,9 +22,9 @@
     name: "Bouncing Balls"
     effect_id: 91
 
-- addressable_cfx:
-    name: "Bpm"
-    effect_id: 68
+# - addressable_cfx:
+#     name: "Bpm"
+#     effect_id: 68
 
 - addressable_cfx:
     name: "Breathe"
@@ -134,9 +134,9 @@
     name: "Percent"
     effect_id: 98
 
-- addressable_cfx:
-    name: "Phased"
-    effect_id: 105
+# - addressable_cfx:
+#     name: "Phased"
+#     effect_id: 105
 
 - addressable_cfx:
     name: "Plasma"
