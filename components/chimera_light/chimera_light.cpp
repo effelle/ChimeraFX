@@ -247,15 +247,16 @@ void ChimeraLightOutput::setup() {
 
 void ChimeraLightOutput::loop() {
   if (this->outro_cb_ != nullptr) {
-    // When the light is off, ESPHome's LightState logic drops local_brightness
-    // to 0. If we're playing an outro, we MUST force it back to 255 before
-    // writing so our pixel geometry is visible.
+    // Light is technically 'Off' so we must restore full local brightness
+    // so our pixel buffers aren't multiplied by 0 implicitly.
     this->correction_.set_local_brightness(255);
 
     bool done = this->outro_cb_();
 
-    // Force DMA flush of the generated frame
-    this->schedule_show();
+    // Force direct DMA flush of the frame!
+    // We cannot use schedule_show() here because ESPHome's LightState loop
+    // is disabled when the light is turned off, meaning it will never poll us.
+    this->write_state(nullptr);
 
     if (done) {
       // Outro finished. Reset callback and physically black out strip.
@@ -263,7 +264,7 @@ void ChimeraLightOutput::loop() {
       for (int i = 0; i < this->size(); i++) {
         (*this)[i] = Color::BLACK;
       }
-      this->schedule_show();
+      this->write_state(nullptr);
     }
   }
 }
