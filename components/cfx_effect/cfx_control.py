@@ -43,11 +43,33 @@ EXCLUDE_INTRO = 5
 EXCLUDE_TIMER = 6
 EXCLUDE_DEBUG = 9
 
+CONF_DEFAULTS = "defaults"
+CONF_DEFAULT_SPEED = "speed"
+CONF_DEFAULT_INTENSITY = "intensity"
+CONF_DEFAULT_PALETTE = "palette"
+CONF_DEFAULT_MIRROR = "mirror"
+CONF_DEFAULT_INTRO = "intro_effect"
+CONF_DEFAULT_INTRO_DURATION = "intro_duration"
+CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
+CONF_DEFAULT_TIMER = "timer"
+
+DEFAULTS_SCHEMA = cv.Schema({
+    cv.Optional(CONF_DEFAULT_SPEED): cv.int_range(min=0, max=255),
+    cv.Optional(CONF_DEFAULT_INTENSITY): cv.int_range(min=0, max=255),
+    cv.Optional(CONF_DEFAULT_PALETTE): cv.string,
+    cv.Optional(CONF_DEFAULT_MIRROR): cv.boolean,
+    cv.Optional(CONF_DEFAULT_INTRO): cv.string,
+    cv.Optional(CONF_DEFAULT_INTRO_DURATION): cv.float_range(min=0.5, max=10.0),
+    cv.Optional(CONF_DEFAULT_INTRO_USE_PALETTE): cv.boolean,
+    cv.Optional(CONF_DEFAULT_TIMER): cv.int_range(min=0, max=360),
+})
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
     cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
+    cv.Optional(CONF_DEFAULTS): DEFAULTS_SCHEMA,
 })
 
 async def to_code(config):
@@ -64,13 +86,16 @@ async def to_code(config):
     def is_included(id):
         return id not in exclude
 
+    defaults = config.get(CONF_DEFAULTS, {})
+
     # 1. Speed
     if is_included(EXCLUDE_SPEED):
+        speed_init = defaults.get(CONF_DEFAULT_SPEED, 128)
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_speed"),
             CONF_NAME: f"{name} Speed",
             CONF_ICON: "mdi:speedometer",
-            "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
+            "min_value": 0, "max_value": 255, "step": 1, "initial_value": speed_init,
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
@@ -78,16 +103,17 @@ async def to_code(config):
         }
         speed = cg.new_Pvariable(conf[CONF_ID])
         await number.register_number(speed, conf, min_value=0, max_value=255, step=1)
-        cg.add(speed.publish_state(conf["initial_value"]))
+        cg.add(speed.publish_state(speed_init))
         cg.add(var.set_speed(speed))
 
     # 2. Intensity
     if is_included(EXCLUDE_INTENSITY):
+        intensity_init = defaults.get(CONF_DEFAULT_INTENSITY, 128)
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_intensity"),
             CONF_NAME: f"{name} Intensity",
             CONF_ICON: "mdi:brightness-6",
-            "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
+            "min_value": 0, "max_value": 255, "step": 1, "initial_value": intensity_init,
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
@@ -95,11 +121,12 @@ async def to_code(config):
         }
         intensity = cg.new_Pvariable(conf[CONF_ID])
         await number.register_number(intensity, conf, min_value=0, max_value=255, step=1)
-        cg.add(intensity.publish_state(conf["initial_value"]))
+        cg.add(intensity.publish_state(intensity_init))
         cg.add(var.set_intensity(intensity))
 
     # 3. Palette
     if is_included(EXCLUDE_PALETTE):
+        palette_init = defaults.get(CONF_DEFAULT_PALETTE, "Default")
         conf = {
             CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_palette"),
             CONF_NAME: f"{name} Palette",
@@ -110,11 +137,12 @@ async def to_code(config):
         }
         palette = cg.new_Pvariable(conf[CONF_ID])
         await select.register_select(palette, conf, options=PALETTE_OPTIONS)
-        cg.add(palette.publish_state("Default"))
+        cg.add(palette.publish_state(palette_init))
         cg.add(var.set_palette(palette))
 
     # 4. Mirror
     if is_included(EXCLUDE_MIRROR):
+        mirror_init = defaults.get(CONF_DEFAULT_MIRROR, False)
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_mirror"),
             CONF_NAME: f"{name} Mirror",
@@ -122,14 +150,16 @@ async def to_code(config):
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
-            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not mirror_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
         }
         mirror = cg.new_Pvariable(conf[CONF_ID])
         await switch.register_switch(mirror, conf)
         cg.add(var.set_mirror(mirror))
+        cg.add(mirror.publish_state(mirror_init))
 
     # 5. Intro Effect
     if is_included(EXCLUDE_INTRO):
+        intro_init = defaults.get(CONF_DEFAULT_INTRO, "None")
         conf = {
             CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_intro"),
             CONF_NAME: f"{name} Intro",
@@ -140,16 +170,17 @@ async def to_code(config):
         }
         intro = cg.new_Pvariable(conf[CONF_ID])
         await select.register_select(intro, conf, options=INTRO_OPTIONS)
-        cg.add(intro.publish_state("None"))
+        cg.add(intro.publish_state(intro_init))
         cg.add(var.set_intro_effect(intro))
 
     # 6. Intro Duration
     if is_included(EXCLUDE_INTRO):
+        intro_dur_init = defaults.get(CONF_DEFAULT_INTRO_DURATION, 1.0)
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_intro_dur"),
             CONF_NAME: f"{name} Intro Duration",
             CONF_ICON: "mdi:timer-outline",
-            "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
+            "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": intro_dur_init,
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
@@ -157,11 +188,12 @@ async def to_code(config):
         }
         intro_dur = cg.new_Pvariable(conf[CONF_ID])
         await number.register_number(intro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
-        cg.add(intro_dur.publish_state(conf["initial_value"]))
+        cg.add(intro_dur.publish_state(intro_dur_init))
         cg.add(var.set_intro_duration(intro_dur))
 
     # 7. Intro Use Palette
     if is_included(EXCLUDE_INTRO):
+        intro_pal_init = defaults.get(CONF_DEFAULT_INTRO_USE_PALETTE, False)
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_intro_pal"),
             CONF_NAME: f"{name} Intro Use Palette",
@@ -169,20 +201,21 @@ async def to_code(config):
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
-            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not intro_pal_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
         }
         intro_pal = cg.new_Pvariable(conf[CONF_ID])
         await switch.register_switch(intro_pal, conf)
-        cg.add(intro_pal.publish_state(False))
+        cg.add(intro_pal.publish_state(intro_pal_init))
         cg.add(var.set_intro_use_palette(intro_pal))
 
     # 8. Timer
     if is_included(EXCLUDE_TIMER):
+        timer_init = defaults.get(CONF_DEFAULT_TIMER, 0)
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_timer"),
             CONF_NAME: f"{name} Timer (min)",
             CONF_ICON: "mdi:timer-sand",
-            "min_value": 0, "max_value": 360, "step": 1, "initial_value": 0,
+            "min_value": 0, "max_value": 360, "step": 1, "initial_value": timer_init,
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
@@ -190,8 +223,7 @@ async def to_code(config):
         }
         timer = cg.new_Pvariable(conf[CONF_ID])
         await number.register_number(timer, conf, min_value=0, max_value=360, step=1)
-        cg.add(timer.publish_state(conf["initial_value"]))
-        cg.add(timer.publish_state(conf["initial_value"]))
+        cg.add(timer.publish_state(timer_init))
         cg.add(var.set_timer(timer))
 
     # 9. Debug

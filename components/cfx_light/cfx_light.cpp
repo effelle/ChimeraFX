@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2026 Federico Leoni (effelle)
  *
- * ChimeraLight - Async DMA LED Strip Driver for ESPHome
+ * CFXLight - Async DMA LED Strip Driver for ESPHome
  *
  * Phase 1: Skeleton — pixel buffer, get_view_internal, basic setup/show.
  * Phase 2 will add async DMA fire-and-forget via rmt_transmit.
  */
 
-#include "chimera_light.h"
+#include "cfx_light.h"
 
 #ifdef USE_ESP32
 
@@ -18,9 +18,9 @@
 #endif
 
 namespace esphome {
-namespace chimera_light {
+namespace cfx_light {
 
-static const char *const TAG = "chimera_light";
+static const char *const TAG = "cfx_light";
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 
@@ -38,7 +38,7 @@ static uint32_t rmt_resolution_hz() {
 
 // --- Timing Configuration ---
 
-void ChimeraLightOutput::configure_timing_() {
+void CFXLightOutput::configure_timing_() {
   float ratio = (float)rmt_resolution_hz() / 1e09f;
 
   // All timings in nanoseconds, converted to RMT ticks via ratio
@@ -129,7 +129,7 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 
 // --- Setup ---
 
-void ChimeraLightOutput::setup() {
+void CFXLightOutput::setup() {
   size_t buffer_size = this->get_buffer_size_();
 
   // Allocate pixel buffer (internal RAM)
@@ -239,13 +239,13 @@ void ChimeraLightOutput::setup() {
     return;
   }
 
-  ESP_LOGI(TAG, "ChimeraLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
+  ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
            this->num_leds_, this->pin_, this->rmt_symbols_);
 }
 
 // --- Component Loop (Intercepts Outro Playback) ---
 
-void ChimeraLightOutput::loop() {
+void CFXLightOutput::loop() {
   if (this->outro_cb_ != nullptr) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
@@ -271,7 +271,7 @@ void ChimeraLightOutput::loop() {
 
 // --- Write State (Fire-and-Forget DMA) ---
 
-void ChimeraLightOutput::write_state(light::LightState *state) {
+void CFXLightOutput::write_state(light::LightState *state) {
   // 1. Defend against ESPHome's internal transition hijacks!
   // If we are actively running our decoupled Outro loop, ESPHome's LightState
   // is simultaneously running its own fade-to-black transition and trying to
@@ -352,7 +352,7 @@ void ChimeraLightOutput::write_state(light::LightState *state) {
 
 // --- Color View (Maps ESPHome pixel access to our buffer) ---
 
-light::ESPColorView ChimeraLightOutput::get_view_internal(int32_t index) const {
+light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
   int32_t r = 0, g = 0, b = 0;
   switch (this->rgb_order_) {
   case ORDER_RGB:
@@ -401,7 +401,7 @@ light::ESPColorView ChimeraLightOutput::get_view_internal(int32_t index) const {
 
 // --- Config Dump ---
 
-void ChimeraLightOutput::dump_config() {
+void CFXLightOutput::dump_config() {
   const char *chipset_str;
   switch (this->chipset_) {
   case CHIPSET_WS2812X:
@@ -442,7 +442,7 @@ void ChimeraLightOutput::dump_config() {
     break;
   }
   ESP_LOGCONFIG(TAG,
-                "ChimeraLight:\n"
+                "CFXLight:\n"
                 "  Pin: %u\n"
                 "  Chipset: %s\n"
                 "  LEDs: %u\n"
@@ -453,11 +453,11 @@ void ChimeraLightOutput::dump_config() {
                 this->is_rgbw_ ? "yes" : "no", order_str, this->rmt_symbols_);
 }
 
-float ChimeraLightOutput::get_setup_priority() const {
+float CFXLightOutput::get_setup_priority() const {
   return setup_priority::HARDWARE;
 }
 
-} // namespace chimera_light
+} // namespace cfx_light
 } // namespace esphome
 
 #endif // USE_ESP32

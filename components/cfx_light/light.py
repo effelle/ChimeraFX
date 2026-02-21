@@ -1,5 +1,5 @@
 """
-ChimeraLight - Async DMA LED Output for ESPHome
+CFXLight - Async DMA LED Output for ESPHome
 Copyright (c) 2026 Federico Leoni (effelle)
 
 Drop-in replacement for esp32_rmt_led_strip with:
@@ -39,13 +39,13 @@ CONF_ALL_EFFECTS = "all_effects"
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
 
-chimera_light_ns = cg.esphome_ns.namespace("chimera_light")
-ChimeraLightOutput = chimera_light_ns.class_(
-    "ChimeraLightOutput", light.AddressableLight
+cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
+CFXLightOutput = cfx_light_ns.class_(
+    "CFXLightOutput", light.AddressableLight
 )
 
-ChimeraChipset = chimera_light_ns.enum("ChimeraChipset")
-RGBOrder = chimera_light_ns.enum("RGBOrder")
+ChimeraChipset = cfx_light_ns.enum("ChimeraChipset")
+RGBOrder = cfx_light_ns.enum("RGBOrder")
 
 # Chipset enum mapping
 CHIPSETS = {
@@ -78,7 +78,7 @@ DEFAULT_ORDER = {
 def _load_effects_yaml():
     """Load chimera_fx_effects.yaml from the project root (sibling of components/)."""
     this_dir = os.path.dirname(__file__)
-    # components/chimera_light/ → components/ → project root
+    # components/cfx_light/ → components/ → project root
     project_root = os.path.dirname(os.path.dirname(this_dir))
     yaml_path = os.path.join(project_root, "chimera_fx_effects.yaml")
     if not os.path.isfile(yaml_path):
@@ -129,7 +129,7 @@ CONFIG_SCHEMA = cv.All(
     _inject_all_effects,
     light.ADDRESSABLE_LIGHT_SCHEMA.extend(
         {
-            cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(ChimeraLightOutput),
+            cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(CFXLightOutput),
             cv.Required(CONF_PIN): pins.internal_gpio_output_pin_schema,
             cv.Required(CONF_NUM_LEDS): cv.positive_not_null_int,
             cv.Required(CONF_CHIPSET): cv.one_of(*CHIPSETS, upper=True),

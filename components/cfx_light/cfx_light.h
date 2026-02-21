@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2026 Federico Leoni (effelle)
  *
- * ChimeraLight - Async DMA LED Strip Driver for ESPHome
+ * CFXLight - Async DMA LED Strip Driver for ESPHome
  * Replaces esp32_rmt_led_strip with fire-and-forget DMA output.
  */
 
@@ -22,7 +22,7 @@
 #include <functional>
 
 namespace esphome {
-namespace chimera_light {
+namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
 
@@ -50,7 +50,7 @@ struct LedParams {
   rmt_symbol_word_t reset;
 };
 
-class ChimeraLightOutput : public light::AddressableLight {
+class CFXLightOutput : public light::AddressableLight {
 public:
   void setup() override;
   void loop() override;
@@ -139,7 +139,7 @@ protected:
   optional<uint32_t> max_refresh_rate_{};
 };
 
-} // namespace chimera_light
+} // namespace cfx_light
 } // namespace esphome
 
 #endif // USE_ESP32

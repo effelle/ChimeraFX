@@ -5,7 +5,7 @@
  */
 
 #include "cfx_addressable_light_effect.h"
-#include "../chimera_light/chimera_light.h"
+#include "../cfx_light/cfx_light.h"
 #include "cfx_compat.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h" // For millis()
@@ -253,7 +253,7 @@ void CFXAddressableLightEffect::stop() {
 
   auto *state = this->get_light_state();
   if (state != nullptr && this->runner_ != nullptr) {
-    auto *out = static_cast<chimera_light::ChimeraLightOutput *>(
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(
         this->get_addressable_());
     if (out != nullptr) {
 
