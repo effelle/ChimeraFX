@@ -1099,9 +1099,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   uint32_t duration_ms = 3000;
-  number::Number *dur_num = this->outro_duration_;
+  number::Number *dur_num = this->intro_duration_;
   if (dur_num == nullptr && this->controller_ != nullptr)
-    dur_num = this->controller_->get_outro_duration();
+    dur_num = this->controller_->get_intro_duration();
 
   if (dur_num != nullptr && dur_num->has_state()) {
     duration_ms = (uint32_t)(dur_num->state * 1000.0f);
@@ -1124,12 +1124,29 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   // 1. Advance the underlying effect in the background
   runner->service();
 
+  // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our pixels!
+  // ESPHome is actively scaling the brightness down to 0.0f over the
+  // default_transition_length. We must temporarily force current_values
+  // brightness to 1.0f so the effect renders at full brightness. Our custom
+  // Outro logic (Wipe/Fade) handles the dimming.
+  float original_brightness = 0.0f;
+  auto *ls = this->get_light_state();
+  if (ls != nullptr) {
+    original_brightness = ls->current_values.get_brightness();
+    ls->current_values.set_brightness(1.0f);
+  }
+
   // 2. Render background frame onto the output buffer
   int num_leds = it.size();
   for (int i = 0; i < num_leds; i++) {
     uint32_t c = runner->_segment.getPixelColor(i);
     it[i] =
         Color((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF);
+  }
+
+  // Restore the scaling factor so we don't permanently corrupt the LightState
+  if (ls != nullptr) {
+    ls->current_values.set_brightness(original_brightness);
   }
 
   uint8_t mode = this->active_outro_mode_;
