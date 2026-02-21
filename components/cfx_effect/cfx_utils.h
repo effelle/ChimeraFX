@@ -305,8 +305,13 @@ struct FrameDiagnostics {
   uint32_t gap_count = 0;      // Frames with >50ms gap
   uint32_t last_log_time = 0;
 
-  static constexpr uint32_t TARGET_FRAME_US = 16666; // 60fps = 16.67ms
-  static constexpr uint32_t LOG_INTERVAL_MS = 2000;  // Log every 2 seconds
+  uint32_t target_frame_us =
+      16666; // Default 60fps, updated from update_interval
+  static constexpr uint32_t LOG_INTERVAL_MS = 2000; // Log every 2 seconds
+
+  void set_target_interval_ms(uint32_t interval_ms) {
+    target_frame_us = interval_ms * 1000;
+  }
 
   void reset() {
     frame_count = 0;
@@ -334,9 +339,9 @@ struct FrameDiagnostics {
       total_frame_us += delta_us;
       frame_count++;
 
-      // Detect jitter (>50% deviation from 16.67ms target)
-      if (delta_us < TARGET_FRAME_US / 2 ||
-          delta_us > TARGET_FRAME_US * 3 / 2) {
+      // Detect jitter (>50% deviation from target interval)
+      if (delta_us < target_frame_us / 2 ||
+          delta_us > target_frame_us * 3 / 2) {
         jitter_count++;
       }
 

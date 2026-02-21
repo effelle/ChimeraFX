@@ -246,6 +246,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
+    // Sync diagnostics target with configured update_interval
+    this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
