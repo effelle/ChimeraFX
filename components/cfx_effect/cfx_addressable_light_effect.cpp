@@ -175,6 +175,12 @@ void CFXAddressableLightEffect::start() {
   auto *state = this->get_light_state();
   if (state != nullptr) {
     bool is_fresh_turn_on = !state->current_values.is_on();
+
+    // Bypass intro for effects that have their own embedded startup animations
+    if (this->effect_id_ == 158 || this->effect_id_ == 159) {
+      is_fresh_turn_on = false;
+    }
+
     this->intro_active_ = is_fresh_turn_on;
 
     if (this->intro_active_ && this->controller_ == nullptr) {
@@ -253,8 +259,8 @@ void CFXAddressableLightEffect::stop() {
 
   auto *state = this->get_light_state();
   if (state != nullptr && this->runner_ != nullptr) {
-    auto *out = static_cast<cfx_light::CFXLightOutput *>(
-        this->get_addressable_());
+    auto *out =
+        static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
     if (out != nullptr) {
 
       // Resolve Outro Mode synchronously before dropping controller mapping
