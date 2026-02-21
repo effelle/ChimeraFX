@@ -60,15 +60,9 @@ void ChimeraLightOutput::configure_timing_() {
     t1l_ns = 1300;
     reset_ns = 280000;
     break;
-  case CHIPSET_WS2813:
-    t0h_ns = 350;
-    t0l_ns = 800;
-    t1h_ns = 750;
-    t1l_ns = 600;
-    reset_ns = 300000;
-    break;
-  case CHIPSET_WS2812B:
+  case CHIPSET_WS2812X:
   default:
+    // WS2812B/C/WS2813 compatible timings
     t0h_ns = 400;
     t0l_ns = 850;
     t1h_ns = 800;
@@ -341,12 +335,15 @@ light::ESPColorView ChimeraLightOutput::get_view_internal(int32_t index) const {
     b = 0;
     break;
   }
-  uint8_t multiplier = this->is_rgbw_ ? 4 : 3;
+  uint8_t multiplier = (this->is_rgbw_ || this->is_wrgb_) ? 4 : 3;
+  uint8_t white = this->is_wrgb_ ? 0 : 3;
 
-  return {this->buf_ + (index * multiplier) + r,
-          this->buf_ + (index * multiplier) + g,
-          this->buf_ + (index * multiplier) + b,
-          this->is_rgbw_ ? this->buf_ + (index * multiplier) + 3 : nullptr,
+  return {this->buf_ + (index * multiplier) + r + this->is_wrgb_,
+          this->buf_ + (index * multiplier) + g + this->is_wrgb_,
+          this->buf_ + (index * multiplier) + b + this->is_wrgb_,
+          (this->is_rgbw_ || this->is_wrgb_)
+              ? this->buf_ + (index * multiplier) + white
+              : nullptr,
           &this->effect_data_[index],
           &this->correction_};
 }
@@ -356,17 +353,14 @@ light::ESPColorView ChimeraLightOutput::get_view_internal(int32_t index) const {
 void ChimeraLightOutput::dump_config() {
   const char *chipset_str;
   switch (this->chipset_) {
-  case CHIPSET_WS2812B:
-    chipset_str = "WS2812B";
+  case CHIPSET_WS2812X:
+    chipset_str = "WS2812X";
     break;
   case CHIPSET_SK6812:
     chipset_str = "SK6812";
     break;
   case CHIPSET_WS2811:
     chipset_str = "WS2811";
-    break;
-  case CHIPSET_WS2813:
-    chipset_str = "WS2813";
     break;
   default:
     chipset_str = "UNKNOWN";

@@ -4,9 +4,9 @@ Copyright (c) 2026 Federico Leoni (effelle)
 
 Drop-in replacement for esp32_rmt_led_strip with:
 - DMA always enabled (fire-and-forget)
-- Chipset-aware timing (WS2812B, SK6812 strict, WS2811, WS2813)
+- Chipset-aware timing (WS2812X, SK6812 strict, WS2811)
 - Auto-detected mem_block_symbols per ESP32 variant
-- Auto RGBW from chipset (SK6812 = 4-byte, WS2812B = 3-byte)
+- Auto RGBW from chipset (SK6812 = 4-byte), manual override available
 """
 
 import esphome.codegen as cg
@@ -15,6 +15,8 @@ import esphome.config_validation as cv
 from esphome import pins
 from esphome.const import (
     CONF_CHIPSET,
+    CONF_DEFAULT_TRANSITION_LENGTH,
+    CONF_IS_RGBW,
     CONF_MAX_REFRESH_RATE,
     CONF_NUM_LEDS,
     CONF_NUMBER,
@@ -37,13 +39,12 @@ RGBOrder = chimera_light_ns.enum("RGBOrder")
 
 # Chipset enum mapping
 CHIPSETS = {
-    "WS2812B": ChimeraChipset.CHIPSET_WS2812B,
+    "WS2812X": ChimeraChipset.CHIPSET_WS2812X,
     "SK6812": ChimeraChipset.CHIPSET_SK6812,
     "WS2811": ChimeraChipset.CHIPSET_WS2811,
-    "WS2813": ChimeraChipset.CHIPSET_WS2813,
 }
 
-# Chipsets that use 4-byte RGBW protocol
+# Chipsets that use 4-byte RGBW protocol by default
 RGBW_CHIPSETS = {"SK6812"}
 
 # RGB byte order mapping
@@ -56,20 +57,21 @@ RGB_ORDERS = {
     "BRG": RGBOrder.ORDER_BRG,
 }
 
-# Default byte order per chipset (can be overridden in YAML)
+# Default byte order per chipset
 DEFAULT_ORDER = {
-    "WS2812B": "GRB",
-    "SK6812": "GRB",
-    "WS2811": "RGB",
-    "WS2813": "GRB",
+    "WS2812X": RGBOrder.ORDER_GRB,
+    "SK6812": RGBOrder.ORDER_GRB,
+    "WS2811": RGBOrder.ORDER_RGB,
 }
 
+CONF_IS_WRGB = "is_wrgb"
 
-def _default_rgb_order(config):
+
+def _apply_defaults(config):
     """Set default RGB order from chipset if not explicitly specified."""
     if CONF_RGB_ORDER not in config:
         chipset = config[CONF_CHIPSET]
-        config[CONF_RGB_ORDER] = DEFAULT_ORDER.get(chipset, "GRB")
+        config[CONF_RGB_ORDER] = DEFAULT_ORDER.get(chipset, RGBOrder.ORDER_GRB)
     return config
 
 
@@ -81,11 +83,16 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_NUM_LEDS): cv.positive_not_null_int,
             cv.Required(CONF_CHIPSET): cv.one_of(*CHIPSETS, upper=True),
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
+            cv.Optional(CONF_IS_RGBW): cv.boolean,
+            cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
+            cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
+                cv.positive_time_period_milliseconds
+            ),
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
         }
     ).extend(cv.COMPONENT_SCHEMA),
-    _default_rgb_order,
+    _apply_defaults,
 )
 
 
@@ -107,9 +114,15 @@ async def to_code(config):
     chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
 
-    # Auto-detect RGBW from chipset
-    is_rgbw = chipset_name in RGBW_CHIPSETS
+    # RGBW: explicit override > auto-detect from chipset
+    if CONF_IS_RGBW in config:
+        is_rgbw = config[CONF_IS_RGBW]
+    else:
+        is_rgbw = chipset_name in RGBW_CHIPSETS
     cg.add(var.set_is_rgbw(is_rgbw))
+
+    # WRGB: explicit flag (W byte before RGB, used by some SK6812 variants)
+    cg.add(var.set_is_wrgb(config[CONF_IS_WRGB]))
 
     cg.add(var.set_rgb_order(config[CONF_RGB_ORDER]))
 

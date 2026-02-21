@@ -20,16 +20,14 @@
 #include <esp_err.h>
 #include <esp_idf_version.h>
 
-
 namespace esphome {
 namespace chimera_light {
 
 // Supported LED chipsets
 enum ChimeraChipset : uint8_t {
-  CHIPSET_WS2812B,
+  CHIPSET_WS2812X, // WS2812B, WS2812C, WS2813 (compatible timings)
   CHIPSET_SK6812,
   CHIPSET_WS2811,
-  CHIPSET_WS2813,
 };
 
 // RGB byte order in the protocol
@@ -58,7 +56,7 @@ public:
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
-    if (this->is_rgbw_) {
+    if (this->is_rgbw_ || this->is_wrgb_) {
       traits.set_supported_color_modes(
           {light::ColorMode::RGB_WHITE, light::ColorMode::WHITE});
     } else {
@@ -80,6 +78,7 @@ public:
   void set_chipset(ChimeraChipset chipset) { this->chipset_ = chipset; }
   void set_rgb_order(RGBOrder order) { this->rgb_order_ = order; }
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
+  void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
@@ -88,9 +87,9 @@ public:
 protected:
   light::ESPColorView get_view_internal(int32_t index) const override;
 
-  // Buffer size: 3 bytes/pixel (RGB) or 4 bytes/pixel (RGBW)
+  // Buffer size: 3 bytes/pixel (RGB) or 4 bytes/pixel (RGBW/WRGB)
   size_t get_buffer_size_() const {
-    return this->num_leds_ * (this->is_rgbw_ ? 4 : 3);
+    return this->num_leds_ * ((this->is_rgbw_ || this->is_wrgb_) ? 4 : 3);
   }
 
   // Compute timing parameters from chipset
@@ -119,9 +118,10 @@ protected:
   // Configuration
   uint8_t pin_{0};
   uint16_t num_leds_{0};
-  ChimeraChipset chipset_{CHIPSET_WS2812B};
+  ChimeraChipset chipset_{CHIPSET_WS2812X};
   RGBOrder rgb_order_{ORDER_GRB};
   bool is_rgbw_{false};
+  bool is_wrgb_{false};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
 
   // Refresh rate limiting
