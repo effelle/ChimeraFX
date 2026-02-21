@@ -272,6 +272,15 @@ void ChimeraLightOutput::loop() {
 // --- Write State (Fire-and-Forget DMA) ---
 
 void ChimeraLightOutput::write_state(light::LightState *state) {
+  // 1. Defend against ESPHome's internal transition hijacks!
+  // If we are actively running our decoupled Outro loop, ESPHome's LightState
+  // is simultaneously running its own fade-to-black transition and trying to
+  // push those frames to the hardware. We must silently drop its incoming
+  // frames.
+  if (state != nullptr && this->outro_cb_ != nullptr) {
+    return;
+  }
+
   // Protect from refreshing too often
   uint32_t now = micros();
   if (*this->max_refresh_rate_ != 0 &&

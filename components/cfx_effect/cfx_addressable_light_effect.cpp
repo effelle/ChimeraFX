@@ -279,6 +279,25 @@ void CFXAddressableLightEffect::stop() {
         this->active_outro_mode_ = this->active_intro_mode_;
       }
 
+      // Capture Outro Duration synchronously before dropping controller mapping
+      uint32_t duration_ms = 3000;
+      number::Number *dur_num = this->intro_duration_;
+      if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+
+      if (dur_num != nullptr && dur_num->has_state()) {
+        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      } else {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr &&
+            current_state->get_default_transition_length() > 0) {
+          duration_ms = current_state->get_default_transition_length();
+        } else {
+          duration_ms = 1500;
+        }
+      }
+      this->active_outro_duration_ms_ = duration_ms;
+
       // Capture the current runner and hand it off
       CFXRunner *captured_runner = this->runner_;
       this->runner_ = nullptr; // Null here so start() creates a fresh one later
@@ -1098,21 +1117,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     return true;
   }
 
-  uint32_t duration_ms = 3000;
-  number::Number *dur_num = this->intro_duration_;
-  if (dur_num == nullptr && this->controller_ != nullptr)
-    dur_num = this->controller_->get_intro_duration();
-
-  if (dur_num != nullptr && dur_num->has_state()) {
-    duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-  } else {
-    auto *state = this->get_light_state();
-    if (state != nullptr && state->get_default_transition_length() > 0) {
-      duration_ms = state->get_default_transition_length();
-    } else {
-      duration_ms = 1500;
-    }
-  }
+  uint32_t duration_ms = this->active_outro_duration_ms_;
 
   uint32_t elapsed = millis() - this->outro_start_time_;
   float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
