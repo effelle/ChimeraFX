@@ -51,12 +51,18 @@ CONF_SET_PALETTE = "set_palette"
 CONF_SET_MIRROR = "set_mirror"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_INTRO_DURATION = "set_intro_dur"
+CONF_SET_OUTRO = "set_outro"
+CONF_SET_OUTRO_DURATION = "set_outro_dur"
 CONF_SET_TIMER = "set_timer"
 CONF_SET_INTRO_PALETTE = "set_intro_palette"
 
 # Intro Configuration
 CONF_INTRO_EFFECT = "intro_effect"
 CONF_INTRO_DURATION = "intro_duration"
+
+# Outro Configuration
+CONF_OUTRO_EFFECT = "outro_effect"
+CONF_OUTRO_DURATION = "outro_duration"
 
 # Map of Effect IDs to Names
 CFX_EFFECT_NAMES = {
@@ -87,12 +93,16 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_UPDATE_INTERVAL, default="16ms"): cv.update_interval,
         cv.Optional(CONF_INTRO_EFFECT): cv.use_id(select.Select),
         cv.Optional(CONF_INTRO_DURATION): cv.use_id(number.Number),
+        cv.Optional(CONF_OUTRO_EFFECT): cv.use_id(select.Select),
+        cv.Optional(CONF_OUTRO_DURATION): cv.use_id(number.Number),
         cv.Optional(CONF_SET_SPEED): cv.int_range(0, 255),
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
-        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=4),
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=5),
         cv.Optional(CONF_SET_INTRO_DURATION): cv.float_range(min=0.0),
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=5),
+        cv.Optional(CONF_SET_OUTRO_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
         cv.Optional(CONF_SET_INTRO_PALETTE): cv.boolean,
     },
@@ -132,6 +142,14 @@ async def cfx_effect_to_code(config, effect_id):
     if CONF_INTRO_DURATION in config:
         intro_duration = await cg.get_variable(config[CONF_INTRO_DURATION])
         cg.add(effect.set_intro_duration(intro_duration))
+
+    if CONF_OUTRO_EFFECT in config:
+        outro_effect = await cg.get_variable(config[CONF_OUTRO_EFFECT])
+        cg.add(effect.set_outro_effect(outro_effect))
+        
+    if CONF_OUTRO_DURATION in config:
+        outro_duration = await cg.get_variable(config[CONF_OUTRO_DURATION])
+        cg.add(effect.set_outro_duration(outro_duration))
     
     if CONF_SET_SPEED in config:
         cg.add(effect.set_speed_preset(config[CONF_SET_SPEED]))
@@ -145,6 +163,10 @@ async def cfx_effect_to_code(config, effect_id):
         cg.add(effect.set_intro_preset(config[CONF_SET_INTRO]))
     if CONF_SET_INTRO_DURATION in config:
         cg.add(effect.set_intro_duration_preset(config[CONF_SET_INTRO_DURATION]))
+    if CONF_SET_OUTRO in config:
+        cg.add(effect.set_outro_preset(config[CONF_SET_OUTRO]))
+    if CONF_SET_OUTRO_DURATION in config:
+        cg.add(effect.set_outro_duration_preset(config[CONF_SET_OUTRO_DURATION]))
     if CONF_SET_TIMER in config:
         cg.add(effect.set_timer_preset(config[CONF_SET_TIMER]))
     if CONF_SET_INTRO_PALETTE in config:

@@ -144,6 +144,29 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  // 9. Outro Effect
+  select::Select *outro_sel = (c && c->get_outro_effect())
+                                  ? c->get_outro_effect()
+                                  : this->outro_effect_;
+  if (outro_sel != nullptr && this->outro_preset_.has_value()) {
+    auto call = outro_sel->make_call();
+    call.set_index(this->outro_preset_.value());
+    call.perform();
+  }
+
+  // 10. Outro Duration
+  number::Number *outro_dur_num = (c && c->get_outro_duration())
+                                      ? c->get_outro_duration()
+                                      : this->outro_duration_;
+  if (outro_dur_num != nullptr && this->outro_duration_preset_.has_value()) {
+    float target = this->outro_duration_preset_.value();
+    if (outro_dur_num->state != target) {
+      auto call = outro_dur_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+  }
+
   // === END PRESETS ===
 
   // State Machine Init: Check if we are turning ON from OFF
@@ -211,6 +234,11 @@ void CFXAddressableLightEffect::start() {
       }
     } else {
     }
+  }
+
+  // Initialize Outro state tracking
+  if (state != nullptr) {
+    this->last_target_on_ = state->remote_values.is_on();
   }
 }
 
@@ -282,7 +310,43 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     this->runner_->setGamma(current_gamma);
   }
 
-  // === State Machine: Intro vs Main Effect ===
+  // === OUTRO DETECTION ===
+  auto *state = this->get_light_state();
+  if (state != nullptr) {
+    bool target_on = state->remote_values.is_on();
+    if (this->last_target_on_ && !target_on) {
+      // Light is turning off! Start Outro Animation
+      this->outro_active_ = true;
+      this->outro_start_time_ = millis();
+
+      // Resolve Outro Mode
+      this->active_outro_mode_ = INTRO_NONE; // Default
+      select::Select *outro_sel =
+          (this->controller_ && this->controller_->get_outro_effect())
+              ? this->controller_->get_outro_effect()
+              : this->outro_effect_;
+      if (outro_sel != nullptr && outro_sel->has_state()) {
+        const char *opt = outro_sel->current_option();
+        std::string s = opt ? opt : "";
+        if (s == "Wipe")
+          this->active_outro_mode_ = INTRO_MODE_WIPE;
+        else if (s == "Fade")
+          this->active_outro_mode_ = INTRO_MODE_FADE;
+        else if (s == "Center")
+          this->active_outro_mode_ = INTRO_MODE_CENTER;
+        else if (s == "Glitter")
+          this->active_outro_mode_ = INTRO_MODE_GLITTER;
+        else if (s == "Invert Intro")
+          this->active_outro_mode_ = this->active_intro_mode_;
+      } else {
+        // Fallback: Use 'Invert Intro' by default if no select is bound
+        this->active_outro_mode_ = this->active_intro_mode_;
+      }
+    }
+    this->last_target_on_ = target_on;
+  }
+
+  // === State Machine: Intro vs Main Effect vs Outro ===
   if (this->intro_active_) {
     this->run_intro(it, current_color);
 
@@ -322,6 +386,36 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
       // Ensure Main Runner is reset/started
       this->runner_->start();
+    }
+
+  } else if (this->outro_active_) {
+    // Run Main Effect behind the Outro mask
+    this->runner_->service();
+
+    // Then apply the Outro mask/erase over the buffer
+    this->run_outro(it, current_color);
+
+    // Check for Outro Completion
+    uint32_t out_dur_ms = 3000;
+    number::Number *out_dur_num = this->outro_duration_;
+    if (out_dur_num == nullptr && this->controller_ != nullptr)
+      out_dur_num = this->controller_->get_outro_duration();
+
+    // Or falback to ESPHome transition length if shorter/defined
+    if (state != nullptr) {
+      // We cap the Outro duration to the ESPHome transition length so it
+      // doesn't run while completely black
+      uint32_t trans_len = state->get_default_transition_length();
+      if (trans_len > 0)
+        out_dur_ms = trans_len;
+    }
+
+    if (out_dur_num != nullptr && out_dur_num->has_state()) {
+      out_dur_ms = (uint32_t)(out_dur_num->state * 1000.0f);
+    }
+
+    if (millis() - this->outro_start_time_ > out_dur_ms) {
+      this->outro_active_ = false;
     }
 
   } else {
@@ -990,5 +1084,108 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 }
+
+void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
+                                          const Color &target_color) {
+  uint32_t duration_ms = 3000;
+  number::Number *dur_num = this->outro_duration_;
+  if (dur_num == nullptr && this->controller_ != nullptr)
+    dur_num = this->controller_->get_outro_duration();
+
+  if (dur_num != nullptr && dur_num->has_state()) {
+    duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+  } else {
+    auto *state = this->get_light_state();
+    if (state != nullptr && state->get_default_transition_length() > 0) {
+      duration_ms = state->get_default_transition_length();
+    }
+  }
+
+  uint32_t elapsed = millis() - this->outro_start_time_;
+  float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
+  if (progress > 1.0f)
+    progress = 1.0f;
+
+  int num_leds = it.size();
+  uint8_t mode = this->active_outro_mode_;
+
+  // Control State for Mirror (affects wipe direction)
+  switch_::Switch *mirror_sw = this->mirror_;
+  if (mirror_sw == nullptr && this->controller_ != nullptr)
+    mirror_sw = this->controller_->get_mirror();
+
+  bool reverse = false;
+  if (mirror_sw != nullptr && mirror_sw->state)
+    reverse = true;
+
+  bool symmetry = false;
+  if (mode == INTRO_MODE_CENTER) {
+    symmetry = true;
+    mode = INTRO_MODE_WIPE;
+  }
+
+  switch (mode) {
+  case INTRO_MODE_WIPE: {
+    // Outro Wipe: We ERASE the light instead of filling it.
+    // Intro filled 0 -> 100%. Outro erases 100% -> 0%.
+    int logical_len = symmetry ? (num_leds / 2) : num_leds;
+    // 'lead' is how many pixels are STILL ON
+    int lead = (int)((1.0f - progress) * logical_len);
+
+    for (int i = 0; i < logical_len; i++) {
+      bool active = false;
+      if (!reverse) {
+        // Normal Wipe Intro fills 0->lead.
+        // Normal Wipe Outro erases from end towards start, so we KEEP 0->lead.
+        if (i <= lead)
+          active = true;
+      } else {
+        // Reverse Wipe Outro: Erases from start towards end, keep end.
+        if (i >= (logical_len - 1 - lead))
+          active = true;
+      }
+
+      if (!active) {
+        it[i] = Color::BLACK;
+        if (symmetry) {
+          it[num_leds - 1 - i] = Color::BLACK;
+        }
+      }
+    }
+
+    if (symmetry && (num_leds % 2 != 0)) {
+      int mid = num_leds / 2;
+      bool fill_center = (lead > 0);
+      if (!fill_center) {
+        it[mid] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_FADE: {
+    // Standard ESPHome transition handles the fade automatically.
+    // If we wanted to forcefully double-fade we could scale current buffer,
+    // but leaving it to ESPHome is cleaner visually.
+    break;
+  }
+  case INTRO_MODE_GLITTER: {
+    // Glitter Outro: More and more black pixels appear
+    uint8_t threshold = (uint8_t)(progress * 255.0f);
+    for (int i = 0; i < num_leds; i++) {
+      uint16_t hash = (i * 33) + (i * i);
+      uint8_t val = hash % 256;
+      if (val < threshold) {
+        it[i] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_NONE:
+  default:
+    // No special Outro geometry, just let ESPHome transition fade it natively.
+    break;
+  }
+}
+
 } // namespace chimera_fx
 } // namespace esphome
