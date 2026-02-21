@@ -1098,6 +1098,9 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
     auto *state = this->get_light_state();
     if (state != nullptr && state->get_default_transition_length() > 0) {
       duration_ms = state->get_default_transition_length();
+    } else {
+      // Fallback if no transition length is set in YAML
+      duration_ms = 1500;
     }
   }
 
@@ -1105,6 +1108,15 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
   float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
   if (progress > 1.0f)
     progress = 1.0f;
+
+  // If ESPHome transition is 0, we must perform the fade scaling OURSELVES
+  // because ESPHome instantly kills brightness. We check via target_values.
+  bool hardware_fade = false;
+  auto *state_ptr = this->get_light_state();
+  if (state_ptr != nullptr) {
+    hardware_fade = (state_ptr->get_default_transition_length() > 0);
+  }
+  float fade_scaler = hardware_fade ? 1.0f : (1.0f - progress);
 
   int num_leds = it.size();
   uint8_t mode = this->active_outro_mode_;
@@ -1150,6 +1162,18 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
         if (symmetry) {
           it[num_leds - 1 - i] = Color::BLACK;
         }
+      } else if (!hardware_fade) {
+        // Apply artificial fade to the remaining active pixels
+        Color c = it[i].get();
+        it[i] =
+            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+        if (symmetry) {
+          Color sc = it[num_leds - 1 - i].get();
+          it[num_leds - 1 - i] = Color(
+              (uint8_t)(sc.r * fade_scaler), (uint8_t)(sc.g * fade_scaler),
+              (uint8_t)(sc.b * fade_scaler), (uint8_t)(sc.w * fade_scaler));
+        }
       }
     }
 
@@ -1158,6 +1182,11 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
       bool fill_center = (lead > 0);
       if (!fill_center) {
         it[mid] = Color::BLACK;
+      } else if (!hardware_fade) {
+        Color c = it[mid].get();
+        it[mid] =
+            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
       }
     }
     break;
@@ -1166,6 +1195,14 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
     // Standard ESPHome transition handles the fade automatically.
     // If we wanted to forcefully double-fade we could scale current buffer,
     // but leaving it to ESPHome is cleaner visually.
+    if (!hardware_fade) {
+      for (int i = 0; i < num_leds; i++) {
+        Color c = it[i].get();
+        it[i] =
+            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+      }
+    }
     break;
   }
   case INTRO_MODE_GLITTER: {
@@ -1176,6 +1213,11 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
       uint8_t val = hash % 256;
       if (val < threshold) {
         it[i] = Color::BLACK;
+      } else if (!hardware_fade) {
+        Color c = it[i].get();
+        it[i] =
+            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
       }
     }
     break;
@@ -1183,6 +1225,14 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
   case INTRO_MODE_NONE:
   default:
     // No special Outro geometry, just let ESPHome transition fade it natively.
+    if (!hardware_fade) {
+      for (int i = 0; i < num_leds; i++) {
+        Color c = it[i].get();
+        it[i] =
+            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+      }
+    }
     break;
   }
 }

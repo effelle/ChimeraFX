@@ -163,6 +163,8 @@ public:
   void set_intro_use_palette(esphome::switch_::Switch *s) {
     intro_use_palette_ = s;
   }
+  void set_outro_effect(select::Select *s) { outro_effect_ = s; }
+  void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_timer(number::Number *n) { timer_ = n; }
 
   // Replaces set_light
@@ -210,6 +212,8 @@ public:
   esphome::switch_::Switch *get_intro_use_palette() {
     return intro_use_palette_;
   }
+  select::Select *get_outro_effect() { return outro_effect_; }
+  number::Number *get_outro_duration() { return outro_duration_; }
   number::Number *get_timer() { return timer_; }
 
   std::vector<esphome::light::LightState *> get_lights() { return lights_; }
@@ -223,6 +227,8 @@ protected:
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
   esphome::switch_::Switch *intro_use_palette_{nullptr};
+  select::Select *outro_effect_{nullptr};
+  number::Number *outro_duration_{nullptr};
   number::Number *timer_{nullptr};
 
   std::vector<esphome::light::LightState *> lights_;
