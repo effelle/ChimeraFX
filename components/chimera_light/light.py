@@ -10,8 +10,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 """
 
 import esphome.codegen as cg
-from esphome.components import esp32, light
-from esphome.components.esp32 import include_builtin_idf_component
+from esphome.components import light
 import esphome.config_validation as cv
 from esphome import pins
 from esphome.const import (
@@ -91,8 +90,12 @@ CONFIG_SCHEMA = cv.All(
 
 
 async def to_code(config):
-    # Enable ESP-IDF's RMT driver
-    include_builtin_idf_component("esp_driver_rmt")
+    # Re-enable ESP-IDF's RMT driver (newer ESPHome excludes it by default)
+    try:
+        from esphome.components.esp32 import include_builtin_idf_component
+        include_builtin_idf_component("esp_driver_rmt")
+    except ImportError:
+        pass  # Older ESPHome: RMT driver included by default
 
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
     await light.register_light(var, config)
