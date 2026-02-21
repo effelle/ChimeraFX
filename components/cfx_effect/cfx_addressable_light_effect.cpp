@@ -5,6 +5,7 @@
  */
 
 #include "cfx_addressable_light_effect.h"
+#include "../chimera_light/chimera_light.h"
 #include "cfx_compat.h"
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
@@ -249,6 +250,58 @@ void CFXAddressableLightEffect::stop() {
   intro_snapshot_.clear();
   intro_snapshot_.shrink_to_fit();
 
+  auto *state = this->get_light_state();
+  if (state != nullptr && !state->remote_values.is_on() &&
+      this->runner_ != nullptr) {
+    auto *out = static_cast<chimera_light::ChimeraLightOutput *>(
+        this->get_addressable_());
+    if (out != nullptr) {
+      this->outro_start_time_ = millis();
+
+      this->active_outro_mode_ = INTRO_NONE;
+      select::Select *out_eff = this->outro_effect_;
+      if (out_eff == nullptr && this->controller_ != nullptr)
+        out_eff = this->controller_->get_outro_effect();
+
+      if (out_eff != nullptr && out_eff->has_state()) {
+        std::string opt = out_eff->state;
+        if (opt == "Wipe")
+          this->active_outro_mode_ = INTRO_WIPE;
+        else if (opt == "Center")
+          this->active_outro_mode_ = INTRO_CENTER;
+        else if (opt == "Glitter")
+          this->active_outro_mode_ = INTRO_GLITTER;
+        else if (opt == "Fade")
+          this->active_outro_mode_ = INTRO_FADE;
+      } else if (this->outro_preset_.has_value()) {
+        this->active_outro_mode_ = *this->outro_preset_;
+      } else {
+        this->active_outro_mode_ = this->active_intro_mode_;
+      }
+
+      // Capture the current runner and hand it off
+      CFXRunner *captured_runner = this->runner_;
+      this->runner_ = nullptr; // Null here so start() creates a fresh one later
+      if (this->controller_) {
+        this->controller_->unregister_runner(captured_runner);
+      }
+
+      out->set_outro_callback([this, out, captured_runner]() -> bool {
+        bool done = this->run_outro_frame(*out, captured_runner);
+        if (done) {
+          delete captured_runner;
+        }
+        return done;
+      });
+
+      this->controller_ = nullptr;
+      this->intro_active_ = false;
+      this->outro_active_ = false;
+      return;
+    }
+  }
+
+  // Normal Stop / Cleanup
   if (this->runner_ != nullptr) {
     if (this->controller_) {
       this->controller_->unregister_runner(this->runner_);
@@ -257,6 +310,9 @@ void CFXAddressableLightEffect::stop() {
     this->runner_ = nullptr;
   }
   this->controller_ = nullptr;
+  this->intro_active_ = false;
+  this->intro_done_ = false;
+  this->outro_active_ = false;
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
@@ -299,54 +355,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting
   float current_gamma = this->get_light_state()->get_gamma_correct();
-  // setGamma checks for change internally (float comparison), so simple call is
-  // safe-ish but to avoid function call overhead we can check locally if we
-  // wanted. We'll trust setGamma or just check here. setGamma does a check but
-  // re-calcs LUT. Let's rely on setGamma's internal check (which I implemented:
-  // if (g < 0.1) ... _gamma = g ...). Wait, I didn't verify if I added a
-  // 'change check' efficiently in setGamma. Let's add a check here to be safe
-  // and efficient.
   if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
     this->runner_->setGamma(current_gamma);
   }
 
-  // === OUTRO DETECTION ===
-  auto *state = this->get_light_state();
-  if (state != nullptr) {
-    bool target_on = state->remote_values.is_on();
-    if (this->last_target_on_ && !target_on) {
-      // Light is turning off! Start Outro Animation
-      this->outro_active_ = true;
-      this->outro_start_time_ = millis();
-
-      // Resolve Outro Mode
-      this->active_outro_mode_ = INTRO_NONE; // Default
-      select::Select *outro_sel =
-          (this->controller_ && this->controller_->get_outro_effect())
-              ? this->controller_->get_outro_effect()
-              : this->outro_effect_;
-      if (outro_sel != nullptr && outro_sel->has_state()) {
-        const char *opt = outro_sel->current_option();
-        std::string s = opt ? opt : "";
-        if (s == "Wipe")
-          this->active_outro_mode_ = INTRO_MODE_WIPE;
-        else if (s == "Fade")
-          this->active_outro_mode_ = INTRO_MODE_FADE;
-        else if (s == "Center")
-          this->active_outro_mode_ = INTRO_MODE_CENTER;
-        else if (s == "Glitter")
-          this->active_outro_mode_ = INTRO_MODE_GLITTER;
-        else if (s == "Invert Intro")
-          this->active_outro_mode_ = this->active_intro_mode_;
-      } else {
-        // Fallback: Use 'Invert Intro' by default if no select is bound
-        this->active_outro_mode_ = this->active_intro_mode_;
-      }
-    }
-    this->last_target_on_ = target_on;
-  }
-
-  // === State Machine: Intro vs Main Effect vs Outro ===
+  // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
     this->run_intro(it, current_color);
 
@@ -387,38 +400,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Ensure Main Runner is reset/started
       this->runner_->start();
     }
-
-  } else if (this->outro_active_) {
-    // Run Main Effect behind the Outro mask
-    this->runner_->service();
-
-    // Then apply the Outro mask/erase over the buffer
-    this->run_outro(it, current_color);
-
-    // Check for Outro Completion
-    uint32_t out_dur_ms = 3000;
-    number::Number *out_dur_num = this->outro_duration_;
-    if (out_dur_num == nullptr && this->controller_ != nullptr)
-      out_dur_num = this->controller_->get_outro_duration();
-
-    // Or falback to ESPHome transition length if shorter/defined
-    if (state != nullptr) {
-      // We cap the Outro duration to the ESPHome transition length so it
-      // doesn't run while completely black
-      uint32_t trans_len = state->get_default_transition_length();
-      if (trans_len > 0)
-        out_dur_ms = trans_len;
-    }
-
-    if (out_dur_num != nullptr && out_dur_num->has_state()) {
-      out_dur_ms = (uint32_t)(out_dur_num->state * 1000.0f);
-    }
-
-    if (millis() - this->outro_start_time_ > out_dur_ms) {
-      this->outro_active_ = false;
-    }
-
-  } else {
     // Main CFX effect Running
     this->runner_->service();
 
@@ -1085,8 +1066,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 }
 
-void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
-                                          const Color &target_color) {
+bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
+                                                CFXRunner *runner) {
+  if (runner == nullptr)
+    return true;
+
+  auto *state = this->get_light_state();
+  if (state != nullptr && state->remote_values.is_on()) {
+    // Light turned back ON during Outro!
+    // Return true immediately so the callback is released and
+    // the captured runner is safely destroyed.
+    return true;
+  }
+
   uint32_t duration_ms = 3000;
   number::Number *dur_num = this->outro_duration_;
   if (dur_num == nullptr && this->controller_ != nullptr)
@@ -1099,7 +1091,6 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
     if (state != nullptr && state->get_default_transition_length() > 0) {
       duration_ms = state->get_default_transition_length();
     } else {
-      // Fallback if no transition length is set in YAML
       duration_ms = 1500;
     }
   }
@@ -1109,22 +1100,30 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
   if (progress > 1.0f)
     progress = 1.0f;
 
-  // If ESPHome transition is 0, we must perform the fade scaling OURSELVES
-  // because ESPHome instantly kills brightness. We check via target_values.
-  bool hardware_fade = false;
-  auto *state_ptr = this->get_light_state();
-  if (state_ptr != nullptr) {
-    hardware_fade = (state_ptr->get_default_transition_length() > 0);
-  }
-  float fade_scaler = hardware_fade ? 1.0f : (1.0f - progress);
+  float fade_scaler = 1.0f - progress;
 
+  // 1. Advance the underlying effect in the background
+  runner->service();
+
+  // 2. Render background frame onto the output buffer
   int num_leds = it.size();
+  for (int i = 0; i < num_leds; i++) {
+    uint32_t c = runner->_segment.getPixelColor(i);
+    it[i] =
+        Color((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF);
+  }
+
   uint8_t mode = this->active_outro_mode_;
 
   // Control State for Mirror (affects wipe direction)
   switch_::Switch *mirror_sw = this->mirror_;
   if (mirror_sw == nullptr && this->controller_ != nullptr)
-    mirror_sw = this->controller_->get_mirror();
+    mirror_sw = this->controller_->get_outro_effect()
+                    ? this->controller_->get_mirror()
+                    : nullptr;
+
+  if (mirror_sw == nullptr)
+    mirror_sw = this->mirror_;
 
   bool reverse = false;
   if (mirror_sw != nullptr && mirror_sw->state)
@@ -1141,29 +1140,23 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
     // Outro Wipe: We ERASE the light instead of filling it.
     // Intro filled 0 -> 100%. Outro erases 100% -> 0%.
     int logical_len = symmetry ? (num_leds / 2) : num_leds;
-    // 'lead' is how many pixels are STILL ON
     int lead = (int)((1.0f - progress) * logical_len);
 
     for (int i = 0; i < logical_len; i++) {
       bool active = false;
       if (!reverse) {
-        // Normal Wipe Intro fills 0->lead.
-        // Normal Wipe Outro erases from end towards start, so we KEEP 0->lead.
         if (i <= lead)
           active = true;
       } else {
-        // Reverse Wipe Outro: Erases from start towards end, keep end.
         if (i >= (logical_len - 1 - lead))
           active = true;
       }
 
       if (!active) {
         it[i] = Color::BLACK;
-        if (symmetry) {
+        if (symmetry)
           it[num_leds - 1 - i] = Color::BLACK;
-        }
-      } else if (!hardware_fade) {
-        // Apply artificial fade to the remaining active pixels
+      } else {
         Color c = it[i].get();
         it[i] =
             Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
@@ -1182,23 +1175,9 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
       bool fill_center = (lead > 0);
       if (!fill_center) {
         it[mid] = Color::BLACK;
-      } else if (!hardware_fade) {
+      } else {
         Color c = it[mid].get();
         it[mid] =
-            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
-      }
-    }
-    break;
-  }
-  case INTRO_MODE_FADE: {
-    // Standard ESPHome transition handles the fade automatically.
-    // If we wanted to forcefully double-fade we could scale current buffer,
-    // but leaving it to ESPHome is cleaner visually.
-    if (!hardware_fade) {
-      for (int i = 0; i < num_leds; i++) {
-        Color c = it[i].get();
-        it[i] =
             Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
                   (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
       }
@@ -1213,7 +1192,7 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
       uint8_t val = hash % 256;
       if (val < threshold) {
         it[i] = Color::BLACK;
-      } else if (!hardware_fade) {
+      } else {
         Color c = it[i].get();
         it[i] =
             Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
@@ -1222,19 +1201,19 @@ void CFXAddressableLightEffect::run_outro(light::AddressableLight &it,
     }
     break;
   }
+  case INTRO_MODE_FADE:
   case INTRO_MODE_NONE:
   default:
-    // No special Outro geometry, just let ESPHome transition fade it natively.
-    if (!hardware_fade) {
-      for (int i = 0; i < num_leds; i++) {
-        Color c = it[i].get();
-        it[i] =
-            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
-      }
+    // Manual fade scalar scaling due to hardware fade circumvention
+    for (int i = 0; i < num_leds; i++) {
+      Color c = it[i].get();
+      it[i] = Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                    (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
     }
     break;
   }
+
+  return (progress >= 1.0f);
 }
 
 } // namespace chimera_fx

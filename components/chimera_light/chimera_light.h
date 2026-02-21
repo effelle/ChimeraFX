@@ -19,9 +19,12 @@
 #include <driver/rmt_tx.h>
 #include <esp_err.h>
 #include <esp_idf_version.h>
+#include <functional>
 
 namespace esphome {
 namespace chimera_light {
+
+using OutroCallback = std::function<bool()>;
 
 // Supported LED chipsets
 enum ChimeraChipset : uint8_t {
@@ -50,9 +53,12 @@ struct LedParams {
 class ChimeraLightOutput : public light::AddressableLight {
 public:
   void setup() override;
+  void loop() override;
   void write_state(light::LightState *state) override;
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
+
+  void set_outro_callback(OutroCallback cb) { this->outro_cb_ = cb; }
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
@@ -97,6 +103,10 @@ protected:
 
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
+
+  // Callback used to execute an Outro animation after ESPHome turns the light
+  // off
+  OutroCallback outro_cb_{nullptr};
 
   // Per-pixel effect data (used by AddressableLight)
   uint8_t *effect_data_{nullptr};

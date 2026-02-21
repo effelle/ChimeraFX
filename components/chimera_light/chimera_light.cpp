@@ -243,6 +243,31 @@ void ChimeraLightOutput::setup() {
            this->num_leds_, this->pin_, this->rmt_symbols_);
 }
 
+// --- Component Loop (Intercepts Outro Playback) ---
+
+void ChimeraLightOutput::loop() {
+  if (this->outro_cb_ != nullptr) {
+    // When the light is off, ESPHome's LightState logic drops local_brightness
+    // to 0. If we're playing an outro, we MUST force it back to 255 before
+    // writing so our pixel geometry is visible.
+    this->correction_.set_local_brightness(255);
+
+    bool done = this->outro_cb_();
+
+    // Force DMA flush of the generated frame
+    this->schedule_show();
+
+    if (done) {
+      // Outro finished. Reset callback and physically black out strip.
+      this->outro_cb_ = nullptr;
+      for (int i = 0; i < this->size(); i++) {
+        (*this)[i] = Color::BLACK;
+      }
+      this->schedule_show();
+    }
+  }
+}
+
 // --- Write State (Fire-and-Forget DMA) ---
 
 void ChimeraLightOutput::write_state(light::LightState *state) {

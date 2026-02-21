@@ -64,7 +64,7 @@ public:
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);
-  void run_outro(light::AddressableLight &it, const Color &target_color);
+  bool run_outro_frame(light::AddressableLight &it, CFXRunner *runner);
 
   bool intro_active_{false};
   uint8_t active_intro_mode_{0};
@@ -141,7 +141,6 @@ protected:
   void run_controls_();
 
   bool intro_pending_{false};
-  bool last_target_on_{true};
 
   // INTRO_NONE fade-in: ramp brightness from 0→1 over default_transition_length
   uint32_t fade_in_duration_ms_{0};
