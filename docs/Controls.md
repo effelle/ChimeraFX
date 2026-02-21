@@ -15,6 +15,12 @@ cfx_effect:
       name: "LED Strip"       # The prefix name of the controller. Customizable
       light_id: led_strip     # The ID of the light you want to manage 
     
+      # Optional: Set first-boot default values for the UI entities
+      # defaults:
+      #   speed: 180
+      #   intro_effect: "Wipe"
+      #   intro_duration: 3.0
+
       # Optional: Exclude controls you don't need
       # exclude: [5, 6] # This example will exclude Intro Effects and Timer
 ```

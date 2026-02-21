@@ -7,9 +7,8 @@
     *   **ESP32-S3**: Fully supported (and recommended for new builds).
     *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.
     *   **ESP8266**: **NOT RECOMMENDED**. The old ESP8266 is stuck on the Arduino framework and simply lacks the resources to run ESPHome and ChimeraFX simultaneously. Save yourself the headache and upgrade to an ESP32. Seriously.
-*   **Frameworks** (both supported):
-    *   **ESP-IDF** (with [esp32_rmt_led_strip](https://esphome.io/components/light/esp32_rmt_led_strip.html)) 
-    *   **Arduino** (with [NeoPixelBus](https://esphome.io/components/light/neopixelbus.html))
+*   **Framework**:
+    *   **ESP-IDF**. The `cfx_light` component relies on ESP-IDF asynchronous RMT DMA drivers. The Arduino framework is **not supported**.
 
 You can install the component in two ways:
 
@@ -49,9 +48,9 @@ switch:
 ```
 ---
 
-## Framework-Specific Light Configuration
+## Light Configuration
 
-### Option A: ESP-IDF + RMT Strip (Better Performance for longer strips)
+ChimeraFX introduces its own high-performance, asynchronous DMA LED driver called `cfx_light`. This component automatically detects your ESP32 model and allocates the optimal memory blocks for flawless, jitter-free animation.
 
 ```yaml
 esp32:
@@ -60,41 +59,20 @@ esp32:
     type: esp-idf
 
 light:
-  - platform: esp32_rmt_led_strip
-    rgb_order: GRB
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
     pin: GPIO16             # Remember to select the correct pin for your board
     num_leds: 60            # Number of LEDs in your strip
-    chipset: ws2812         # Set your correct chipset 
-    max_refresh_rate: 24ms  # Recommended for clean timing
-    name: "LED Strip"       # Name of your light
-    id: led_strip           # ID of your light
+    chipset: WS2812X        # WS2812X, SK6812, WS2811
+    all_effects: true       # Magic! Automatically registers all 50+ ChimeraFX effects.
 ```
 
-For a full overview of the `esp32_rmt_led_strip` light platform, please refer to the official [ESPHome documentation](https://esphome.io/components/light/esp32_rmt_led_strip.html).
+For a full overview of the `cfx_light` platform, including how to set default animation parameters on first boot, please refer to the [cfx_light documentation](cfx_light.md).
 
-### Option B: Arduino + NeoPixelBus (Simpler)
+### Adding Effects Manually (Without `all_effects`)
 
-```yaml
-esp32:
-  board: your_board_here
-  framework:
-    type: arduino
-
-light:
-  - platform: neopixelbus
-    type: GRB
-    variant: WS2812X      # Set your correct chipset 
-    pin: GPIO16           # Remember to select the correct pin for your board
-    num_leds: 60          # Number of LEDs in your strip
-    name: "LED Strip"     # Name of your light
-    id: led_strip         # ID of your light
-```
-
-For a full overview of the `neopixelbus` light platform, please refer to the official [ESPHome documentation](https://esphome.io/components/light/neopixelbus.html).
-
-### Adding the effects
-
-You can now add the effects you like to your light component. The `effect_id` is the ID of the effect you want to use. You can find the list of effects in the [Effects](Effects-Library.md) section. 
+If you prefer not to use `all_effects: true`, you can manually include only the specific effects you want:
 
 ```yaml
     effects:
@@ -104,9 +82,8 @@ You can now add the effects you like to your light component. The `effect_id` is
       - addressable_cfx:
           # Add more effects here
 ```
-### Mass Inclusion
 
-Adding every single effect to your device configuration can be a bit of a pain, and you will likely end up with a very long file. To make it easier, you can load all 20+ effects at once using the provided `chimera_fx_effects.yaml` file.
+Alternatively, you can manually use the mass inclusion YAML file:
 
 1.  **Download** `chimera_fx_effects.yaml` from the repository root.
 2.  **Save** it to your ESPHome configuration folder (e.g. `/config/`).
@@ -114,12 +91,10 @@ Adding every single effect to your device configuration can be a bit of a pain, 
 
 ```yaml
 light:
-  - platform: esp32_rmt_led_strip # Or Neopixelbus for Arduino framework
+  - platform: cfx_light
     # ... your light config ...
     effects: !include chimera_fx_effects.yaml
 ```
-
-**Note:** Every time a new effect is added, you will need to download the updated `chimera_fx_effects.yaml` file and replace the old one. A small price to pay for convenience.
 
 ## 2. Advanced Manual Installation
 
@@ -141,10 +116,7 @@ cfx_effect: # Mandatory! Loads the component
 
 ## Dependencies
 
-The component handles its own dependencies automatically:
-
-- **Arduino**: Uses NeoPixelBus (auto-included)
-- **ESP-IDF**: Uses native RMT driver (built-in)
+The component handles its own dependencies automatically. The native `cfx_light` driver utilizes the built-in ESP-IDF RMT APIs for asynchronous hardware rendering.
 
 You don't need to install anything else manually.
 

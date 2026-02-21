@@ -27,7 +27,7 @@ This project is **not** a full WLED replacement and it will never be. Choose the
 
 ## Platform Compatibility
 
-- **Framework:** **ESP-IDF** and **Arduino**
+- **Framework:** **ESP-IDF** (Arduino is not supported by the `cfx_light` DMA driver)
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
   - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
 
@@ -79,14 +79,17 @@ Add the effects to your light:
 
 ```yaml
 light:
-  - platform: esp32_rmt_led_strip   # Or Neopixelbus for Arduino framework
+  - platform: cfx_light             # The high-performance ChimeraFX DMA driver
     id: led_strip                   # The ID of the light needed for cfx_control
-    # ... your light config ...
-    effects:
-      - addressable_cfx:
-          name: "Aurora"    # The name of the effect, can be customized
-          effect_id: 38     # See the available effects below for the ID
-    # ... Add some other effect ...
+    pin: GPIO16
+    num_leds: 60
+    chipset: WS2812X
+    all_effects: true               # Auto-loads all effects!
+    # If you prefer not to use all_effects, you can add them manually:
+    # effects:
+    #   - addressable_cfx:
+    #       name: "Aurora"    # The name of the effect, can be customized
+    #       effect_id: 38     # See the available effects below for the ID
 ```
 ---
 
