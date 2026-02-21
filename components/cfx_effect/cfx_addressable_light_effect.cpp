@@ -1198,16 +1198,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         if (symmetry)
           it[num_leds - 1 - i] = Color::BLACK;
       } else {
-        Color c = it[i].get();
-        it[i] =
-            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
-        if (symmetry) {
-          Color sc = it[num_leds - 1 - i].get();
-          it[num_leds - 1 - i] = Color(
-              (uint8_t)(sc.r * fade_scaler), (uint8_t)(sc.g * fade_scaler),
-              (uint8_t)(sc.b * fade_scaler), (uint8_t)(sc.w * fade_scaler));
-        }
+        // Keep 100% brightness of the underlying frame
+        // it[i] is already populated with runner's background frame at line
+        // 1131
       }
     }
 
@@ -1216,11 +1209,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       bool fill_center = (lead > 0);
       if (!fill_center) {
         it[mid] = Color::BLACK;
-      } else {
-        Color c = it[mid].get();
-        it[mid] =
-            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
       }
     }
     break;
@@ -1233,12 +1221,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       uint8_t val = hash % 256;
       if (val < threshold) {
         it[i] = Color::BLACK;
-      } else {
-        Color c = it[i].get();
-        it[i] =
-            Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                  (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
       }
+      // Else: Keep 100% brightness of the underlying frame
     }
     break;
   }
