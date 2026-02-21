@@ -6131,12 +6131,11 @@ uint16_t mode_fluid_rain(void) {
   uint16_t wave2 = -(t * 2);
 
   // === RAIN DROP SYSTEM ===
-  // Cycle has 3 phases:
-  // 1. Falling drop (moves fast until impact)
-  // 2. Impact flash
-  // 3. Expanding ripple (grows outward, then fades)
-  // Longer cycles = longer-lived, slower drops
-  uint16_t cycle_len = 400 - (intensity >> 1); // 400 to 272 units per cycle
+  // Cycle has 2 phases:
+  // 1. Impact flash (brief white flash at center)
+  // 2. Expanding ripple (grows outward, then fades)
+  // Longer cycles = longer-lived drops, more space between drops
+  uint16_t cycle_len = 250 - (intensity >> 1); // 250 to 122 units per cycle
 
   // Palette
   const uint32_t *pal = getPaletteByIndex(instance->_segment.palette);
@@ -6146,9 +6145,8 @@ uint16_t mode_fluid_rain(void) {
   // Pre-compute drop states
   struct {
     int center;     // Impact location
-    uint8_t phase;  // 0=falling, 1=impact, 2=ripple spreading, 3=fade
-    int fall_pos;   // Current position of falling drop (if phase 0)
-    int ripple_rad; // Current radius of ripple (if phase 2/3)
+    uint8_t phase;  // 1=impact, 2=ripple spreading, 3=fade
+    int ripple_rad; // Current radius of ripple
     uint8_t bright; // Current brightness of the active element
   } drops[FLUID_RAIN_NUM_DROPS];
 
@@ -6163,48 +6161,31 @@ uint16_t mode_fluid_rain(void) {
     drops[d].center += 7; // Generous margin
 
     // Phase timing thresholds
-    uint16_t t_impact = cycle_len / 3; // 33% time spent falling (slower fall)
-    uint16_t t_ripple = t_impact + 8;  // Brief flash
-    uint16_t t_fade = cycle_len - (cycle_len / 4); // Fade during last 25%
+    uint16_t t_ripple = cycle_len / 4; // 25% time spent as impact flash
+    uint16_t t_fade = cycle_len - (cycle_len / 3); // Fade during last 33%
 
-    if (c_phase < t_impact) {
-      // 1. FALLING: fast moving point
-      drops[d].phase = 0;
-      int start_dist =
-          len / 3; // Start closer so it doesn't move ridiculously fast
-      int current_dist = start_dist - (start_dist * c_phase / t_impact);
-
-      // Determine origin side (pseudo-random)
-      bool from_left = (cycle_num + d) % 2 == 0;
-      if (from_left) {
-        drops[d].fall_pos = drops[d].center - current_dist;
-      } else {
-        drops[d].fall_pos = drops[d].center + current_dist;
-      }
-      drops[d].bright = 255; // Falling drop is bright white
-
-    } else if (c_phase < t_ripple) {
-      // 2. IMPACT: bright flash at center
+    if (c_phase < t_ripple) {
+      // 1. IMPACT: bright flash at center that quickly dims
       drops[d].phase = 1;
-      drops[d].bright = 255;
+      drops[d].bright = 255 - (255 * c_phase / t_ripple);
 
     } else {
-      // 3 & 4. RIPPLE: expanding ring
+      // 2 & 3. RIPPLE: expanding ring
       drops[d].phase = (c_phase < t_fade) ? 2 : 3;
 
-      // Radius grows over time (slower expansion)
+      // Radius grows over time
       uint16_t time_in_ripple = c_phase - t_ripple;
-      uint16_t expand_rate = cycle_len / 12; // Radius +1 every 8% of cycle
+      uint16_t expand_rate = cycle_len / 10; // Radius +1 every 10% of cycle
       drops[d].ripple_rad = 1 + (time_in_ripple / expand_rate);
 
       // Brightness envelope
       if (drops[d].phase == 2) {
-        drops[d].bright = 200; // Strong ripple
+        drops[d].bright = 220; // Strong ripple
       } else {
         // Fade out
         uint16_t time_in_fade = c_phase - t_fade;
         uint16_t fade_duration = cycle_len - t_fade;
-        drops[d].bright = 200 - (200 * time_in_fade / fade_duration);
+        drops[d].bright = 220 - (220 * time_in_fade / fade_duration);
       }
     }
   }
