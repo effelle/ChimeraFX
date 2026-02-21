@@ -40,6 +40,7 @@ uint16_t mode_heartbeat_center(void);
 uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
+uint16_t mode_cfx_horizon_sweep(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -815,6 +816,27 @@ uint16_t mode_static(void) {
     instance->_segment.fill(instance->_segment.colors[0]);
   }
   return FRAMETIME; // Refresh rate
+}
+
+uint16_t mode_cfx_horizon_sweep(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  if (instance->_segment.palette != 255 && instance->_segment.palette != 0) {
+    uint16_t len = instance->_segment.length();
+    const uint32_t *active_palette =
+        getPaletteByIndex(instance->_segment.palette);
+
+    for (int i = 0; i < len; i++) {
+      uint8_t colorIndex = (i * 255) / (len > 1 ? len - 1 : 1);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+  } else {
+    instance->_segment.fill(instance->_segment.colors[0]);
+  }
+
+  return FRAMETIME;
 }
 
 uint16_t mode_aurora(void) {
