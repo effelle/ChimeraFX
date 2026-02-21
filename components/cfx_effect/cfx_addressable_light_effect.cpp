@@ -239,7 +239,7 @@ void CFXAddressableLightEffect::start() {
 
   // Initialize Outro state tracking
   if (state != nullptr) {
-    this->last_target_on_ = state->remote_values.is_on();
+    // last_target_on_ removed, state transitions handled natively
   }
 }
 
@@ -264,7 +264,7 @@ void CFXAddressableLightEffect::stop() {
         out_eff = this->controller_->get_outro_effect();
 
       if (out_eff != nullptr && out_eff->has_state()) {
-        std::string opt = out_eff->state;
+        std::string opt = out_eff->current_option();
         if (opt == "Wipe")
           this->active_outro_mode_ = INTRO_WIPE;
         else if (opt == "Center")
@@ -311,7 +311,6 @@ void CFXAddressableLightEffect::stop() {
   }
   this->controller_ = nullptr;
   this->intro_active_ = false;
-  this->intro_done_ = false;
   this->outro_active_ = false;
 }
 
