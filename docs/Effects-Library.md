@@ -49,7 +49,6 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 107 | **Noise Pal** | Perlin noise color movement. | **Intensity**: Zoom - **Speed**: Drift speed | Yes | WLED |
 | 101 | **Ocean** | Gentle ocean waves (Pacifica). | **Intensity**: Zoom/Scale - **Speed**: Wave speed | No | Mark Kriegsman |
 | 98 | **Percent** | Percent-based fill (Progress Bar). | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | Aircoookie |
-| 105 | **Phased** | A dynamic color mapping animation. | **Intensity**: Zoom/Density - **Speed**: Transition speed | Yes | Aircoookie |
 | 97 | **Plasma** | Multi-layer Perlin noise plasma. | **Intensity**: Frequency - **Speed**: Morph speed | Yes | Jeremy Williams |
 | 95 | **Popcorn** | Bouncing particles simulation. | **Intensity**: Particle count - **Speed**: Bounciness | Yes | Aircoookie |
 | 9 | **Rainbow** | Moving per-pixel rainbow. | **Intensity**: Zoom/Density - **Speed**: Flow speed | Yes | Harm Aldick |
