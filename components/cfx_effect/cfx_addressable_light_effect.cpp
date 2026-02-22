@@ -305,9 +305,10 @@ void CFXAddressableLightEffect::stop() {
           speed_num = this->controller_->get_speed();
 
         if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (10000ms down to 500ms)
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          // Lower speed = faster sweep (shorter duration)
           float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
         } else {
           duration_ms = 2500; // Default if speed slider is missing
         }
@@ -967,9 +968,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       speed_num = this->controller_->get_speed();
 
     if (speed_num != nullptr && speed_num->has_state()) {
-      // Map Speed (0-255) to Duration (10000ms down to 500ms)
+      // Map Speed (0-255) to Duration (500ms up to 10000ms)
+      // Lower speed = faster sweep (shorter duration)
       float speed_val = speed_num->state;
-      duration = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
+      duration = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
     } else {
       duration = 2500; // Default if speed slider is missing
     }
