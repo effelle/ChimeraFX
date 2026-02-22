@@ -472,6 +472,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       (this->get_default_palette_id_(this->effect_id_) == 255);
 
   uint32_t color;
+  Color adjusted_color = current_color;
+
   if (force_white_active && eligible_monochrome) {
     // Intelligent monochrome routing: steal the max brightness intent from RGB
     // and map purely to W hardware
@@ -479,6 +481,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                current_color.blue);
     uint8_t target_w = std::max(current_color.white, max_rgb);
     color = (uint32_t(target_w) << 24); // R, G, B are 0
+    adjusted_color = Color(0, 0, 0, target_w);
   } else {
     // Normal Mode: Pass current light color to segment natively
     color = (uint32_t(current_color.white) << 24) |
@@ -496,7 +499,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
-    this->run_intro(it, current_color);
+    this->run_intro(it, adjusted_color);
 
     // Check for Intro Completion
     uint32_t duration_ms = 3000; // Default 3s
