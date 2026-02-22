@@ -372,30 +372,32 @@ void CFXAddressableLightEffect::stop() {
       this->intro_active_ = false;
       this->outro_active_ = false;
 
-      // CRITICAL FIX: ESPHome invokes stop() BEFORE it updates
-      // remote_values.is_on() to false. We must defer the evaluation to ensure
-      // LightCall finishes writing the state variables!
-      App.scheduler.set_timeout(
-          out, "cfx_outro_startup", 1, [this, out, captured_runner]() {
-            auto *current_state = this->get_light_state();
-            if (current_state != nullptr &&
-                !current_state->remote_values.is_on()) {
-              // User genuinely clicked TURN OFF. Play the configured Outro!
-              this->outro_start_time_ = millis();
+      // Register the callback synchronously to prevent ESPHome from rendering
+      // a rogue frame of a solid color transition during the gap.
+      // We will evaluate `is_on()` inside the first frame of the callback
+      // since LightCall will have finished updating by the next `loop()`.
+      this->outro_start_time_ = 0; // Signify uninitialized start time
 
-              out->set_outro_callback([this, out, captured_runner]() -> bool {
-                bool done = this->run_outro_frame(*out, captured_runner);
-                if (done) {
-                  delete captured_runner;
-                }
-                return done;
-              });
-            } else {
-              // Effect was merely changed to a different one, or light remained
-              // ON. Safely delete without playing an Outro.
-              delete captured_runner;
-            }
-          });
+      out->set_outro_callback([this, out, captured_runner]() -> bool {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr && current_state->remote_values.is_on()) {
+          // Effect was completely changed or light remained ON.
+          // Abort the outro and delete the captured runner cleanly.
+          delete captured_runner;
+          return true;
+        }
+
+        // Initialize outro start time on the very first allowed frame
+        if (this->outro_start_time_ == 0) {
+          this->outro_start_time_ = millis();
+        }
+
+        bool done = this->run_outro_frame(*out, captured_runner);
+        if (done) {
+          delete captured_runner;
+        }
+        return done;
+      });
 
       return;
     }
@@ -865,7 +867,7 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 157:
     return 128; // Follow Us (Default Speed 128)
   case 161:
-    return 24; // Horizon Sweep (about 1.5s intro duration)
+    return 1; // Horizon Sweep (fastest speed)
   default:
     return 128; // WLED default
   }
