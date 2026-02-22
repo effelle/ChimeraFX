@@ -116,15 +116,6 @@ def _inject_all_effects(config):
     config[CONF_EFFECTS] = user_effects
     return config
 
-
-def _apply_defaults(config):
-    """Set default RGB order from chipset if not explicitly specified."""
-    if CONF_RGB_ORDER not in config:
-        chipset = config[CONF_CHIPSET]
-        config[CONF_RGB_ORDER] = DEFAULT_ORDER.get(chipset, RGBOrder.ORDER_GRB)
-    return config
-
-
 CONFIG_SCHEMA = cv.All(
     _inject_all_effects,
     light.ADDRESSABLE_LIGHT_SCHEMA.extend(
@@ -143,8 +134,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
         }
-    ).extend(cv.COMPONENT_SCHEMA),
-    _apply_defaults,
+    ).extend(cv.COMPONENT_SCHEMA)
 )
 
 
@@ -173,10 +163,15 @@ async def to_code(config):
         is_rgbw = chipset_name in RGBW_CHIPSETS
     cg.add(var.set_is_rgbw(is_rgbw))
 
-    # WRGB: explicit flag (W byte before RGB, used by some SK6812 variants)
+    # wrgb explicitly required by some variants
     cg.add(var.set_is_wrgb(config[CONF_IS_WRGB]))
 
-    cg.add(var.set_rgb_order(config[CONF_RGB_ORDER]))
+    # RGB Order: explicit > auto-detect from chipset
+    if CONF_RGB_ORDER in config:
+        rgb_order = config[CONF_RGB_ORDER]
+    else:
+        rgb_order = DEFAULT_ORDER.get(chipset_name, RGBOrder.ORDER_GRB)
+    cg.add(var.set_rgb_order(rgb_order))
 
     # 0 = auto-detect from chip variant in C++
     cg.add(var.set_rmt_symbols(config[CONF_RMT_SYMBOLS]))
