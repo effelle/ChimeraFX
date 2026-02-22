@@ -1415,12 +1415,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   // Control State for Mirror (affects wipe direction)
   switch_::Switch *mirror_sw = this->mirror_;
   if (mirror_sw == nullptr && this->controller_ != nullptr)
-    mirror_sw = this->controller_->get_outro_effect()
-                    ? this->controller_->get_mirror()
-                    : nullptr;
-
-  if (mirror_sw == nullptr)
-    mirror_sw = this->mirror_;
+    mirror_sw = this->controller_->get_mirror();
 
   bool reverse = false;
   if (mirror_sw != nullptr && mirror_sw->state)

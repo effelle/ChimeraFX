@@ -143,13 +143,27 @@ void Segment::setPixelColor(int n, uint32_t c) {
   if (n < 0 || n >= length())
     return;
 
-  // Map usage to global buffer - apply mirror (inversion) if enabled
-  int global_index = mirror ? (stop - 1 - n) : (start + n);
-
-  if (instance && instance->target_light && global_index >= 0 &&
-      global_index < instance->target_light->size()) {
+  if (instance && instance->target_light) {
     esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
-    (*instance->target_light)[global_index] = esphome_color;
+    int light_size = instance->target_light->size();
+
+    // Map usage to global buffer - apply true symmetrical mirror if enabled
+    if (mirror) {
+      int left_index = start + n;
+      int right_index = stop - 1 - n;
+
+      if (left_index >= 0 && left_index < light_size) {
+        (*instance->target_light)[left_index] = esphome_color;
+      }
+      if (right_index >= 0 && right_index < light_size) {
+        (*instance->target_light)[right_index] = esphome_color;
+      }
+    } else {
+      int global_index = start + n;
+      if (global_index >= 0 && global_index < light_size) {
+        (*instance->target_light)[global_index] = esphome_color;
+      }
+    }
   }
 }
 
@@ -157,8 +171,7 @@ uint32_t Segment::getPixelColor(int n) {
   if (n < 0 || n >= length())
     return 0;
 
-  // Apply mirror (inversion) if enabled
-  int global_index = mirror ? (stop - 1 - n) : (start + n);
+  int global_index = start + n; // Always read from left side
 
   if (instance && instance->target_light && global_index >= 0 &&
       global_index < instance->target_light->size()) {
@@ -172,7 +185,7 @@ void Segment::fill(uint32_t c) {
   if (!instance || !instance->target_light)
     return;
 
-  int len = length();
+  int len = physicalLength();
   int light_size = instance->target_light->size();
   int global_start = start;
 
@@ -207,7 +220,7 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
   uint8_t newRetention = instance->getFadeFactor(retention);
   uint8_t effectiveFade = 255 - newRetention;
 
-  int len = length();
+  int len = physicalLength();
   int light_size = instance->target_light->size();
   int global_start = start;
   esphome::light::AddressableLight &light = *instance->target_light;
@@ -240,7 +253,7 @@ void Segment::blur(uint8_t blur_amount) {
   // WLED approach: blur1d modifies in-place but effectively propagates.
   // Let's stick to simple in-place for now (WLED compat).
 
-  int len = length();
+  int len = physicalLength();
   int light_size = instance->target_light->size();
   int global_start = start;
   esphome::light::AddressableLight &light = *instance->target_light;
@@ -285,7 +298,7 @@ void Segment::blur(uint8_t blur_amount) {
 void Segment::subtractive_fade_val(uint8_t fade_amt) {
   if (!instance || !instance->target_light)
     return;
-  int len = length();
+  int len = physicalLength();
   int light_size = instance->target_light->size();
   int global_start = start;
   esphome::light::AddressableLight &light = *instance->target_light;
