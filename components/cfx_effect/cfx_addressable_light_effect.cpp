@@ -119,8 +119,8 @@ void CFXAddressableLightEffect::start() {
   select::Select *intro_sel = (c && c->get_intro_effect())
                                   ? c->get_intro_effect()
                                   : this->intro_effect_;
-  if (intro_sel != nullptr && this->intro_preset_.has_value()) {
-    // Same as Palette: Force update to be safe with Index->String mapping
+  if (!this->initial_preset_applied_ && intro_sel != nullptr &&
+      this->intro_preset_.has_value()) {
     auto call = intro_sel->make_call();
     call.set_index(this->intro_preset_.value());
     call.perform();
@@ -130,7 +130,8 @@ void CFXAddressableLightEffect::start() {
   number::Number *intro_dur_num = (c && c->get_intro_duration())
                                       ? c->get_intro_duration()
                                       : this->intro_duration_;
-  if (intro_dur_num != nullptr && this->intro_duration_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && intro_dur_num != nullptr &&
+      this->intro_duration_preset_.has_value()) {
     float target = this->intro_duration_preset_.value();
     if (intro_dur_num->state != target) {
       auto call = intro_dur_num->make_call();
@@ -143,7 +144,8 @@ void CFXAddressableLightEffect::start() {
   switch_::Switch *intro_pal_sw = (c && c->get_intro_use_palette())
                                       ? c->get_intro_use_palette()
                                       : this->intro_use_palette_;
-  if (intro_pal_sw != nullptr && this->intro_use_palette_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && intro_pal_sw != nullptr &&
+      this->intro_use_palette_preset_.has_value()) {
     bool target = this->intro_use_palette_preset_.value();
     if (intro_pal_sw->state != target) {
       if (target) {
@@ -157,7 +159,8 @@ void CFXAddressableLightEffect::start() {
   // 7.5. Force White
   switch_::Switch *force_white_sw =
       (c && c->get_force_white()) ? c->get_force_white() : this->force_white_;
-  if (force_white_sw != nullptr && this->force_white_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && force_white_sw != nullptr &&
+      this->force_white_preset_.has_value()) {
     bool target = this->force_white_preset_.value();
     if (force_white_sw->state != target) {
       if (target) {
@@ -170,7 +173,8 @@ void CFXAddressableLightEffect::start() {
 
   // 8. Timer
   number::Number *timer_num = (c) ? c->get_timer() : nullptr;
-  if (timer_num != nullptr && this->timer_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && timer_num != nullptr &&
+      this->timer_preset_.has_value()) {
     float target = (float)this->timer_preset_.value();
     if (timer_num->state != target) {
       auto call = timer_num->make_call();
@@ -183,7 +187,8 @@ void CFXAddressableLightEffect::start() {
   select::Select *outro_sel = (c && c->get_outro_effect())
                                   ? c->get_outro_effect()
                                   : this->outro_effect_;
-  if (outro_sel != nullptr && this->outro_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && outro_sel != nullptr &&
+      this->outro_preset_.has_value()) {
     auto call = outro_sel->make_call();
     call.set_index(this->outro_preset_.value());
     call.perform();
@@ -193,7 +198,8 @@ void CFXAddressableLightEffect::start() {
   number::Number *outro_dur_num = (c && c->get_outro_duration())
                                       ? c->get_outro_duration()
                                       : this->outro_duration_;
-  if (outro_dur_num != nullptr && this->outro_duration_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && outro_dur_num != nullptr &&
+      this->outro_duration_preset_.has_value()) {
     float target = this->outro_duration_preset_.value();
     if (outro_dur_num->state != target) {
       auto call = outro_dur_num->make_call();
@@ -202,7 +208,7 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // === END PRESETS ===
+  this->initial_preset_applied_ = true;
 
   // State Machine Init: Check if we are turning ON from OFF
   auto *state = this->get_light_state();
