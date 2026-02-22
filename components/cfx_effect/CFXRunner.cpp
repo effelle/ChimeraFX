@@ -2811,10 +2811,12 @@ uint16_t mode_glitter(void) {
 // --- Tricolor Chase (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
 uint16_t mode_tricolor_chase(void) {
-  // Use exact speed match from mode_chase: truncate to 16-bit to match cycle
-  // timing
-  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
-  uint16_t a = (counter * instance->_segment.length()) >> 16;
+  // Use exact speed match from mode_chase but with continuous 64-bit bounds
+  // to prevent 16-bit truncation offset jumping
+  uint32_t speed_factor = (instance->_segment.speed >> 2) + 1;
+  uint32_t a =
+      ((uint64_t)instance->now * speed_factor * instance->_segment.length()) >>
+      16;
 
   unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
   unsigned index = a % (width * 2);                           // 2 bands
@@ -4704,9 +4706,10 @@ uint16_t mode_dropping_time(void) {
   // Bidirectional waves for organic "sloshing" effect
   // Explicitly calculated to ensure opposing direction
   uint32_t ms = instance->now;
-  const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
-  if (instance->_segment.palette != 0)
-    active_palette = getPaletteByIndex(instance->_segment.palette);
+  uint8_t pal = instance->_segment.palette;
+  if (pal == 0 || pal == 255)
+    pal = 11; // Default to Ocean, prevent solid colors
+  const uint32_t *active_palette = getPaletteByIndex(pal);
 
   // Time bases for waves (sawtooth 0-255)
   // Wave 1: Moves RIGHT (x - t)
@@ -4778,19 +4781,36 @@ uint16_t mode_dropping_time(void) {
     if (state->dummyDrops[i].colIndex != 0) {
       int pos = (int)state->dummyDrops[i].pos;
       if (pos >= state->filledPixels && pos < len) {
-        uint32_t col = instance->_segment.colors[0];
-        if (col == 0)
-          col = 0xFFFFFF; // Fallback to white if no color specified
+
+        // Use Palette for Dummy Drop so it matches the Ocean/Selected palette
+        // Brightness is stored in .col (150-250 range)
+        uint8_t pal_index = (pos * 255) / len;
+
+        // Determine active palette (lock out Solid/Picker color to preserve
+        // water illusion)
+        uint8_t pal = instance->_segment.palette;
+        if (pal == 0 || pal == 255)
+          pal = 11; // Default to Ocean
+        const uint32_t *active_palette = getPaletteByIndex(pal);
+
+        CRGBW c = ColorFromPalette(active_palette, pal_index,
+                                   state->dummyDrops[i].col);
+        uint32_t head_col = RGBW32(c.r, c.g, c.b, c.w);
 
         // Draw Head
-        instance->_segment.setPixelColor(pos, col);
+        instance->_segment.setPixelColor(pos, head_col);
 
-        // Draw Faded Trail
+        // Draw Faded Trail (matching palette at previous positions)
         for (int t = 1; t <= 3; t++) {
           int tPos = pos + t;
           if (tPos >= state->filledPixels && tPos < len) {
-            instance->_segment.setPixelColor(
-                tPos, color_blend(col, 0, 255 - (75 * t)));
+            uint8_t trail_pal_index = (tPos * 255) / len;
+            uint8_t trail_bri =
+                std::max(0, (int)state->dummyDrops[i].col - (75 * t));
+            CRGBW tc =
+                ColorFromPalette(active_palette, trail_pal_index, trail_bri);
+            instance->_segment.setPixelColor(tPos,
+                                             RGBW32(tc.r, tc.g, tc.b, tc.w));
           }
         }
       }
