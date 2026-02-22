@@ -597,25 +597,30 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
   uint32_t c1 = cfx_pgm_read_dword(&palette[i]);
   uint32_t c2 = cfx_pgm_read_dword(&palette[(i + 1) & 15]);
 
-  // Lerp RGB
+  // Lerp RGBW
+  uint8_t w1 = (c1 >> 24) & 0xFF;
   uint8_t r1 = (c1 >> 16) & 0xFF;
   uint8_t g1 = (c1 >> 8) & 0xFF;
   uint8_t b1 = c1 & 0xFF;
+
+  uint8_t w2 = (c2 >> 24) & 0xFF;
   uint8_t r2 = (c2 >> 16) & 0xFF;
   uint8_t g2 = (c2 >> 8) & 0xFF;
   uint8_t b2 = c2 & 0xFF;
 
   // Safety: cast to int to avoid signed truncation when r2 < r1
+  uint8_t w = (uint8_t)std::max(0, (int)w1 + ((((int)w2 - (int)w1) * f) >> 4));
   uint8_t r = (uint8_t)std::max(0, (int)r1 + ((((int)r2 - (int)r1) * f) >> 4));
   uint8_t g = (uint8_t)std::max(0, (int)g1 + ((((int)g2 - (int)g1) * f) >> 4));
   uint8_t b = (uint8_t)std::max(0, (int)b1 + ((((int)b2 - (int)b1) * f) >> 4));
 
   // Apply brightness
+  w = (w * brightness) >> 8;
   r = (r * brightness) >> 8;
   g = (g * brightness) >> 8;
   b = (b * brightness) >> 8;
 
-  return CRGBW(r, g, b, 0); // White channel unused for simple palette
+  return CRGBW(r, g, b, w);
 }
 
 void CFXRunner::generateRandomPalette() {

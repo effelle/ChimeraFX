@@ -448,7 +448,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   this->run_controls_();
 
   // Pass current light color to segment for solid color mode (palette 255/0)
-  uint32_t color = (uint32_t(current_color.red) << 16) |
+  uint32_t color = (uint32_t(current_color.white) << 24) |
+                   (uint32_t(current_color.red) << 16) |
                    (uint32_t(current_color.green) << 8) |
                    uint32_t(current_color.blue);
   this->runner_->setColor(color);
@@ -1238,7 +1239,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint8_t map_idx = 128; // Center of palette gradient
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
         } else {
           it[mid] = c;
         }
@@ -1259,7 +1261,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
         uint32_t cp = this->runner_->_segment.color_from_palette(
             map_idx, false, true, 255, 255);
-        base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+        base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                       (cp >> 24) & 0xFF);
       }
 
       // Explicit Scaling avoiding operator ambiguity
@@ -1289,7 +1292,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
               (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
         } else {
           pixel_c = c;
         }
