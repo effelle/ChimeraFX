@@ -349,6 +349,9 @@ void CFXAddressableLightEffect::stop() {
         // Normal duration logic
         if (dur_num != nullptr && dur_num->has_state()) {
           duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+        } else if (this->outro_duration_preset_.has_value()) {
+          duration_ms =
+              (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
         } else {
           auto *current_state = this->get_light_state();
           if (current_state != nullptr &&
@@ -1097,6 +1100,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   } else {
     if (dur_num != nullptr && dur_num->has_state()) {
       duration = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
     }
   }
 

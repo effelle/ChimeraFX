@@ -103,9 +103,16 @@ def _inject_all_effects(config):
             name = eff["addressable_cfx"].get(CONF_NAME, "")
     use_intro = config.get("use_intro")
     use_outro = config.get("use_outro")
-    intro_dur_ms = config.get("intro_dur")
+    intro_dur_raw = config.get("intro_dur")
     
-    intro_dur_sec = (intro_dur_ms / 1000.0) if intro_dur_ms is not None else None
+    intro_dur_sec = None
+    if intro_dur_raw is not None:
+        try:
+            parsed_ms = cv.positive_time_period_milliseconds(intro_dur_raw)
+            intro_dur_sec = float(parsed_ms) / 1000.0
+        except Exception:
+            # Fallback if invalid format during pre-validation
+            pass
 
     # Parse the YAML and inject effects not already defined by the user
     for entry in _load_effects_yaml():
