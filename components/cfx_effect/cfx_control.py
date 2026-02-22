@@ -41,6 +41,7 @@ EXCLUDE_PALETTE = 3
 EXCLUDE_MIRROR = 4
 EXCLUDE_INTRO = 5
 EXCLUDE_TIMER = 6
+EXCLUDE_AUTOTUNE = 7
 EXCLUDE_DEBUG = 9
 
 CONF_DEFAULTS = "defaults"
@@ -52,6 +53,7 @@ CONF_DEFAULT_INTRO = "intro_effect"
 CONF_DEFAULT_INTRO_DURATION = "intro_duration"
 CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
 CONF_DEFAULT_TIMER = "timer"
+CONF_DEFAULT_AUTOTUNE = "autotune"
 
 DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_SPEED): cv.int_range(min=0, max=255),
@@ -62,6 +64,7 @@ DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_INTRO_DURATION): cv.float_range(min=0.5, max=10.0),
     cv.Optional(CONF_DEFAULT_INTRO_USE_PALETTE): cv.boolean,
     cv.Optional(CONF_DEFAULT_TIMER): cv.int_range(min=0, max=360),
+    cv.Optional(CONF_DEFAULT_AUTOTUNE): cv.boolean,
 })
 
 CONFIG_SCHEMA = cv.Schema({
@@ -226,7 +229,23 @@ async def to_code(config):
         cg.add(timer.publish_state(timer_init))
         cg.add(var.set_timer(timer))
 
-    # 9. Debug
+    # 10. Autotune
+    if is_included(EXCLUDE_AUTOTUNE):
+        autotune_init = defaults.get(CONF_DEFAULT_AUTOTUNE, True)
+        conf = {
+            CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_autotune"),
+            CONF_NAME: f"{name} Autotune",
+            CONF_ICON: "mdi:auto-fix",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+        autotune = cg.new_Pvariable(conf[CONF_ID])
+        await switch.register_switch(autotune, conf)
+        cg.add(autotune.write_state(autotune_init))
+        cg.add(var.set_autotune(autotune))
+
+    # 11. Debug
     if is_included(EXCLUDE_DEBUG):
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_debug"),

@@ -28,8 +28,19 @@ void CFXAddressableLightEffect::start() {
 
   CFXControl *c = this->controller_;
 
-  number::Number *speed_num =
+  // 0. Autotune Resolution
+  bool autotune_enabled = true; // Default to true if not found
+  switch_::Switch *autotune_sw =
+      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
 
+  if (this->autotune_preset_.has_value()) {
+    autotune_enabled = this->autotune_preset_.value();
+  } else if (autotune_sw != nullptr && autotune_sw->has_state()) {
+    autotune_enabled = autotune_sw->state;
+  }
+
+  // 1. Speed
+  number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && this->speed_preset_.has_value()) {
     float target = (float)this->speed_preset_.value();
@@ -38,8 +49,9 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (speed_num != nullptr) {
-    // No YAML preset: apply per-effect code default and sync slider
+  } else if (speed_num != nullptr && autotune_enabled) {
+    // No YAML preset: apply per-effect code default and sync slider (if
+    // Autotune ON)
     float target = (float)this->get_default_speed_(this->effect_id_);
     if (speed_num->state != target) {
       auto call = speed_num->make_call();
@@ -58,8 +70,9 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (intensity_num != nullptr) {
-    // No YAML preset: apply per-effect code default and sync slider
+  } else if (intensity_num != nullptr && autotune_enabled) {
+    // No YAML preset: apply per-effect code default and sync slider (if
+    // Autotune ON)
     float target = (float)this->get_default_intensity_(this->effect_id_);
     if (intensity_num->state != target) {
       auto call = intensity_num->make_call();
@@ -79,6 +92,13 @@ void CFXAddressableLightEffect::start() {
     // index is enforced.
     auto call = palette_sel->make_call();
     call.set_index(this->palette_preset_.value());
+    call.perform();
+  } else if (palette_sel != nullptr && autotune_enabled) {
+    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
+    // Resolve string name from ID to check current state safely, but we can
+    // just force the index
+    auto call = palette_sel->make_call();
+    call.set_index(default_pal_id);
     call.perform();
   }
 
@@ -773,11 +793,11 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 38:
     return 24; // Aurora
   case 153:
-    return 64; // Fire Dual (same as Fire 2012)
+    return 64; // Fire Dual (same as Fire)
   case 64:
     return 64; // Juggle
   case 66:
-    return 64; // Fire 2012
+    return 64; // Fire
   case 68:
     return 64; // BPM
   case 104:
@@ -787,7 +807,7 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 157:
     return 128; // Follow Us (Default Speed 128)
   case 161:
-    return 38; // Horizon Sweep (about 1.5s intro duration)
+    return 24; // Horizon Sweep (about 1.5s intro duration)
   default:
     return 128; // WLED default
   }
@@ -799,7 +819,7 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 153:
     return 160; // Fire Dual (same as Fire 2012)
   case 66:
-    return 160; // Fire 2012
+    return 160; // Fire
   case 156:
     return 40; // Follow Me (Default Intensity)
   case 157:
