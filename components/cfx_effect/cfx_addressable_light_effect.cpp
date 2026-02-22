@@ -220,7 +220,6 @@ void CFXAddressableLightEffect::start() {
         this->active_intro_mode_ = INTRO_CENTER;
       else if (s == "Glitter")
         this->active_intro_mode_ = INTRO_GLITTER;
-      this->active_intro_mode_ = INTRO_NONE;
     }
 
     // Effect 161 (Horizon Sweep) Hijack
@@ -433,13 +432,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // Check for Intro Completion
     uint32_t duration_ms = 3000; // Default 3s
 
-    // Resolve duration from local component OR linked controller
-    number::Number *dur_num = this->intro_duration_;
-    if (dur_num == nullptr && this->controller_ != nullptr)
-      dur_num = this->controller_->get_intro_duration();
+    // Effect 161 (Horizon Sweep) Hijack - Map Speed to Intro Duration
+    if (this->effect_id_ == 161) {
+      number::Number *speed_num = this->speed_;
+      if (speed_num == nullptr && this->controller_ != nullptr)
+        speed_num = this->controller_->get_speed();
 
-    if (dur_num != nullptr && dur_num->has_state()) {
-      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      if (speed_num != nullptr && speed_num->has_state()) {
+        // Map Speed (0-255) to Duration (10000ms down to 500ms)
+        float speed_val = speed_num->state;
+        duration_ms = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
+      } else {
+        duration_ms = 2500; // Default if speed slider is missing
+      }
+    } else {
+      // Resolve duration from local component OR linked controller
+      number::Number *dur_num = this->intro_duration_;
+      if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+
+      if (dur_num != nullptr && dur_num->has_state()) {
+        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      }
     }
 
     if (millis() - this->intro_start_time_ > duration_ms) {
@@ -729,6 +743,8 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 4;   // Fireworks -> Rainbow
   case 98:      // Percent
   case 152:     // Percent Center
+    return 255; // Solid
+  case 161:     // Horizon Sweep
     return 255; // Solid
 
   // Default Aurora (1) or specific handling
@@ -1061,14 +1077,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     for (int i = 0; i < logical_len; i++) {
 
-      float alpha = 0.0f;
+      float alpha =
+          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
 
       if (!reverse) {
-        // Standard: Fill from 0 -> logical_len
         if (i <= lead - blur_radius) {
-          alpha = 1.0f; // Fully solid behind the blur
+          alpha = 1.0f;
         } else if (i <= lead && blur_radius > 0) {
-          // Inside the blur radius: fade from 1.0 down to 0.0
           float distance_into_blur = exact_lead - i;
           alpha = distance_into_blur / blur_radius;
           if (alpha < 0.0f)
@@ -1077,7 +1092,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
             alpha = 1.0f;
         }
       } else {
-        // Reverse: Fill from logical_len-1 -> 0
         int rev_i = logical_len - 1 - i;
         if (rev_i <= lead - blur_radius) {
           alpha = 1.0f;
