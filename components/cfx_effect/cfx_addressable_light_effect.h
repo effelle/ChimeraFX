@@ -144,6 +144,7 @@ protected:
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
   optional<bool> autotune_preset_{};
+  optional<bool> force_white_preset_{};
   optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
   optional<bool> intro_use_palette_preset_{};
