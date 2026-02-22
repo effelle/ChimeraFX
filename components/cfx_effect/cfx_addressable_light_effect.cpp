@@ -1124,6 +1124,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color::WHITE;
   }
 
+  // Apply Force White logic to the Target Color
+  switch_::Switch *force_white_sw =
+      (this->controller_ && this->controller_->get_force_white())
+          ? this->controller_->get_force_white()
+          : this->force_white_;
+
+  if (force_white_sw != nullptr && force_white_sw->state &&
+      (this->get_default_palette_id_(this->effect_id_) == 255)) {
+    uint8_t max_rgb = std::max(std::max(c.r, c.g), c.b);
+    uint8_t target_w = std::max(c.w, max_rgb);
+    c = Color(0, 0, 0, target_w);
+  }
+
   // Check for Palette usage
   bool use_palette = false;
   uint8_t pal = 0;
