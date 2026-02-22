@@ -120,33 +120,12 @@ public:
     // Detect falling edge (ALL lights went from ON -> OFF)
     if (was_on_ && !is_any_on) {
       ESP_LOGD("chimera_fx",
-               "CFXControl: All lights turned off -> Resetting controls");
+               "CFXControl: All lights turned off -> Resetting Timer");
 
-      // Reset Speed to 128
-      if (speed_) {
-        auto call = speed_->make_call();
-        call.set_value(128);
-        call.perform();
-      }
-
-      // Reset Intensity to 128
-      if (intensity_) {
-        auto call = intensity_->make_call();
-        call.set_value(128);
-        call.perform();
-      }
-
-      // Reset Timer to 0
+      // Reset Timer to 0 (Abort Sleep Timer)
       if (timer_) {
         auto call = timer_->make_call();
         call.set_value(0);
-        call.perform();
-      }
-
-      // Reset Palette to Default
-      if (palette_) {
-        auto call = palette_->make_call();
-        call.set_option("Default");
         call.perform();
       }
     }
