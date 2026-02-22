@@ -44,6 +44,7 @@ EXCLUDE_TIMER = 6
 EXCLUDE_AUTOTUNE = 7
 EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
+EXCLUDE_OUTRO = 10
 
 CONF_DEFAULTS = "defaults"
 CONF_DEFAULT_SPEED = "speed"
@@ -56,6 +57,8 @@ CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
 CONF_DEFAULT_TIMER = "timer"
 CONF_DEFAULT_AUTOTUNE = "autotune"
 CONF_DEFAULT_FORCE_WHITE = "force_white"
+CONF_DEFAULT_OUTRO = "outro_effect"
+CONF_DEFAULT_OUTRO_DURATION = "outro_duration"
 
 DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_SPEED): cv.int_range(min=0, max=255),
@@ -68,13 +71,15 @@ DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_TIMER): cv.int_range(min=0, max=360),
     cv.Optional(CONF_DEFAULT_AUTOTUNE): cv.boolean,
     cv.Optional(CONF_DEFAULT_FORCE_WHITE): cv.boolean,
+    cv.Optional(CONF_DEFAULT_OUTRO): cv.string,
+    cv.Optional(CONF_DEFAULT_OUTRO_DURATION): cv.float_range(min=0.5, max=10.0),
 })
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
-    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
+    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
     cv.Optional(CONF_DEFAULTS): DEFAULTS_SCHEMA,
 })
 
@@ -224,6 +229,40 @@ async def to_code(config):
         await switch.register_switch(intro_pal, conf)
         cg.add(intro_pal.publish_state(intro_pal_init))
         cg.add(var.set_intro_use_palette(intro_pal))
+
+    # 7.5. Outro Effect
+    if is_included(EXCLUDE_OUTRO):
+        outro_init = defaults.get(CONF_DEFAULT_OUTRO, "None")
+        conf = {
+            CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_outro"),
+            CONF_NAME: f"{name} Outro",
+            CONF_ICON: "mdi:animation-play-outline",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+        outro = cg.new_Pvariable(conf[CONF_ID])
+        await select.register_select(outro, conf, options=INTRO_OPTIONS)
+        cg.add(outro.publish_state(outro_init))
+        cg.add(var.set_outro_effect(outro))
+
+    # 7.6. Outro Duration
+    if is_included(EXCLUDE_OUTRO):
+        outro_dur_init = defaults.get(CONF_DEFAULT_OUTRO_DURATION, 1.0)
+        conf = {
+            CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_outro_dur"),
+            CONF_NAME: f"{name} Outro Duration",
+            CONF_ICON: "mdi:timer-outline",
+            "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": outro_dur_init,
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+            CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+        }
+        outro_dur = cg.new_Pvariable(conf[CONF_ID])
+        await number.register_number(outro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
+        cg.add(outro_dur.publish_state(outro_dur_init))
+        cg.add(var.set_outro_duration(outro_dur))
 
     # 8. Timer
     if is_included(EXCLUDE_TIMER):

@@ -324,9 +324,9 @@ void CFXAddressableLightEffect::stop() {
 
       // Capture Outro Duration synchronously before dropping controller mapping
       uint32_t duration_ms = 3000;
-      number::Number *dur_num = this->intro_duration_;
+      number::Number *dur_num = this->outro_duration_;
       if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+        dur_num = this->controller_->get_outro_duration();
 
       // Effect 161 (Horizon Sweep) Hijack - Force Wipe and Use Speed for
       // Duration
