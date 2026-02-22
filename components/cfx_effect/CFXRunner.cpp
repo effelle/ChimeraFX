@@ -4756,7 +4756,7 @@ uint16_t mode_dropping_time(void) {
         state->dummyDrops[i].pos = len - 1;
         state->dummyDrops[i].vel = 0;
         state->dummyDrops[i].colIndex = 1; // Active
-        state->dummyDrops[i].bright =
+        state->dummyDrops[i].col =
             150 + cfx::hw_random8(100); // Random brightness
       }
     } else {
