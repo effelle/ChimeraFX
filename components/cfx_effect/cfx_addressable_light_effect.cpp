@@ -327,6 +327,19 @@ void CFXAddressableLightEffect::stop() {
       }
       this->active_outro_duration_ms_ = duration_ms;
 
+      // Cache Intensity for Outro (since controller is detached during Outro)
+      this->active_outro_intensity_ = 128; // fallback
+      number::Number *intensity_num = this->intensity_;
+      if (intensity_num == nullptr && this->controller_ != nullptr)
+        intensity_num = this->controller_->get_intensity();
+
+      if (intensity_num != nullptr && intensity_num->has_state()) {
+        this->active_outro_intensity_ = (uint8_t)intensity_num->state;
+      } else {
+        this->active_outro_intensity_ =
+            this->get_default_intensity_(this->effect_id_);
+      }
+
       // Capture the current runner and hand it off
       CFXRunner *captured_runner = this->runner_;
       this->runner_ = nullptr; // Null here so start() creates a fresh one later
@@ -772,6 +785,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 140; // Follow Me (Default Speed)
   case 157:
     return 128; // Follow Us (Default Speed 128)
+  case 161:
+    return 38; // Horizon Sweep (about 1.5s intro duration)
   default:
     return 128; // WLED default
   }
@@ -1285,14 +1300,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     int logical_len = symmetry ? (num_leds / 2) : num_leds;
 
     // Intensity defines blur radius (up to 50% of the strip)
-    float blur_percent = 0.0f;
-    number::Number *intensity_num = this->intensity_;
-    if (intensity_num == nullptr && this->controller_ != nullptr) {
-      intensity_num = this->controller_->get_intensity();
-    }
-    if (intensity_num != nullptr && intensity_num->has_state()) {
-      blur_percent = (intensity_num->state / 255.0f) * 0.5f;
-    }
+    // Use the cached active_outro_intensity_ because controller_ is null during
+    // Outro
+    float blur_percent = (this->active_outro_intensity_ / 255.0f) * 0.5f;
 
     int blur_radius = (int)(logical_len * blur_percent);
     float progress_erasing = 1.0f - progress;
