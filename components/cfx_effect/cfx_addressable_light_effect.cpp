@@ -121,9 +121,13 @@ void CFXAddressableLightEffect::start() {
                                   : this->intro_effect_;
   if (!this->initial_preset_applied_ && intro_sel != nullptr &&
       this->intro_preset_.has_value()) {
-    auto call = intro_sel->make_call();
-    call.set_index(this->intro_preset_.value());
-    call.perform();
+    // Only apply if still at "None" factory default — preserve user choices
+    const char *cur = intro_sel->current_option();
+    if (cur == nullptr || strcmp(cur, "None") == 0) {
+      auto call = intro_sel->make_call();
+      call.set_index(this->intro_preset_.value());
+      call.perform();
+    }
   }
 
   // 6. Intro Duration
@@ -189,9 +193,13 @@ void CFXAddressableLightEffect::start() {
                                   : this->outro_effect_;
   if (!this->initial_preset_applied_ && outro_sel != nullptr &&
       this->outro_preset_.has_value()) {
-    auto call = outro_sel->make_call();
-    call.set_index(this->outro_preset_.value());
-    call.perform();
+    // Only apply if still at "None" factory default — preserve user choices
+    const char *cur = outro_sel->current_option();
+    if (cur == nullptr || strcmp(cur, "None") == 0) {
+      auto call = outro_sel->make_call();
+      call.set_index(this->outro_preset_.value());
+      call.perform();
+    }
   }
 
   // 10. Outro Duration
