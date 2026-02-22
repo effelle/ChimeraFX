@@ -472,9 +472,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         speed_num = this->controller_->get_speed();
 
       if (speed_num != nullptr && speed_num->has_state()) {
-        // Map Speed (0-255) to Duration (10000ms down to 500ms)
+        // Map Speed (0-255) to Duration (500ms up to 10000ms)
         float speed_val = speed_num->state;
-        duration_ms = (uint32_t)(10000.0f - (speed_val / 255.0f * 9500.0f));
+        duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
       } else {
         duration_ms = 2500; // Default if speed slider is missing
       }
@@ -497,6 +497,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                          this->transition_duration_->has_state())
                             ? this->transition_duration_->state
                             : 1.5f;
+
+      if (this->effect_id_ == 161) {
+        trans_dur = 0.0f; // Instant finish for Horizon Sweep
+      }
 
       if (trans_dur > 0.0f) {
         // Snapshot Intro End State
@@ -727,7 +731,7 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 97:
     return 8; // Plasma (ID=97)
   case 63:
-    return 8; // Pride 2015
+    return 8; // Colorloop
 
   // Specific Defaults
   case 18:
@@ -735,9 +739,9 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 38:
     return 1; // Aurora -> Aurora palette
   case 53:
-    return 5; // Fire Dual -> Fire palette (same as Fire 2012)
+    return 5; // Fire Dual -> Fire palette (same as Fire)
   case 66:
-    return 5; // Fire 2012 -> Fire
+    return 5; // Fire -> Fire
   case 76:
     return 255; // Meteor -> Solid (WLED default)
   case 40:
@@ -878,6 +882,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 40; // Follow Me (Default Intensity)
   case 157:
     return 128; // Follow Us (Default Intensity 128)
+  case 161:
+    return 1; // Horizon Sweep (No blur)
   default:
     return 128; // WLED default
   }
