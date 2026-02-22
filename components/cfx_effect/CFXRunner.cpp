@@ -5798,9 +5798,10 @@ uint16_t mode_heartbeat_center(void) {
 
 /*
  * Kaleidos (ID 155)
- * N-Way Symmetrical Mirroring Effect
- * Divides the strip into 2/4/6/8 mirrored segments.
- * Even segments render forward, odd segments render backward.
+ * Enhanced N-Way Symmetrical Mirroring Effect
+ * Divides the strip into 2/4/6/8 mirrored segments that dynamically "breathe"
+ * in size. Even segments render forward, odd segments render backward. Adds
+ * prism glints at the symmetry bounds to enhance the kaleidoscope illusion.
  * Uses a scrolling palette as the source pattern.
  * Density: Hybrid approach (Option C) - dynamic fit with aliasing clamp.
  */
@@ -5812,31 +5813,42 @@ uint16_t mode_kaleidos(void) {
   if (len <= 1)
     return mode_static();
 
-  // === Symmetry Engine ===
+  // === Time Base (Speed-controlled scroll) ===
+  uint32_t ms = cfx_millis();
+  // Speed 0 = very slow, Speed 255 = fast
+  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
+
+  // === Dynamic Symmetry Engine (Option A) ===
   // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
-  // Optimized mapping: 0-63=1, 64-127=2, 128-191=3, 192-255=4
   uint8_t half_segs = 1 + (instance->_segment.intensity >> 6);
   if (half_segs > 4)
     half_segs = 4; // Safety clamp for 255
   uint8_t num_segments = half_segs * 2;
 
-  uint16_t seg_len = len / num_segments;
-  if (seg_len == 0)
-    seg_len = 1; // Safety: very short strips
+  // Calculate base segment length
+  // We use floats to preserve sub-pixel accuracy during the dynamic scaling
+  float base_seg_len = (float)len / (float)num_segments;
+
+  // Dynamic Breathing
+  // The size of the mirrors slowly expands and contracts.
+  // We use a slow sine wave based on time. We don't use Speed here so the
+  // geometry breathes independently of the color scroll speed.
+  uint8_t breath_phase = (ms >> 6) & 0xFF; // Slow wave
+  // Map sine to 0.7 - 1.3 (+/- 30% width variation) to avoid collapsing mirrors
+  // completely
+  float breath_factor = 0.7f + (cfx::sin8(breath_phase) * 0.6f / 255.0f);
+
+  float dynamic_seg_len = base_seg_len * breath_factor;
+  if (dynamic_seg_len < 2.0f)
+    dynamic_seg_len = 2.0f; // Safety minimum
 
   // === Hybrid Density (Option C) ===
-  // Dynamic: fit one full pattern cycle per segment
-  // Clamped: prevent aliasing on very short segments (min density 8)
-  uint8_t density = (seg_len > 1) ? (255 / seg_len) : 255;
+  // Dynamic: fit one full pattern cycle per base segment (keeps density
+  // consistent as it breathes)
+  uint8_t density =
+      (base_seg_len > 1.0f) ? (uint8_t)(255.0f / base_seg_len) : 255;
   if (density < 8)
     density = 8; // Floor: prevent washed-out pattern on long segments
-
-  // === Time Base (Speed-controlled scroll) ===
-  uint32_t ms = cfx_millis();
-  // Speed 0 = very slow, Speed 255 = fast
-  // Tuned: >>9 (512x div) provides WLED-like speed.
-  // Old >>12 was too slow.
-  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
 
   // === Palette ===
   const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
@@ -5847,28 +5859,59 @@ uint16_t mode_kaleidos(void) {
 
   // === Render Loop ===
   for (int i = 0; i < len; i++) {
-    // Determine which segment this pixel belongs to
-    uint16_t seg_index = i / seg_len;
-    uint16_t local_pos = i % seg_len;
+    // Determine which dynamic segment this pixel belongs to using float math
+    int seg_index = (int)((float)i / dynamic_seg_len);
+    float local_pos_f = (float)i - ((float)seg_index * dynamic_seg_len);
+    uint16_t local_pos = (uint16_t)local_pos_f;
+    uint16_t current_seg_len = (uint16_t)dynamic_seg_len;
 
-    // Handle remainder pixels: clamp to last segment
+    // Handle pixels that fall off the end due to the breathing contraction
+    // If the segments shrunk so much that the last pixel is beyond
+    // num_segments, we clamp it to the last segment logic.
     if (seg_index >= num_segments) {
       seg_index = num_segments - 1;
-      // Recalculate local_pos relative to the last segment's start
-      local_pos = i - (seg_index * seg_len);
+      local_pos = i - (seg_index * current_seg_len);
+      // It's possible for local_pos to exceed current_seg_len here if it shrunk
+      // heavily. We let it continue rendering the pattern extrapolated.
     }
 
     // Mirror Logic: Even = Forward, Odd = Backward
     uint16_t mirrored_pos = local_pos;
     if (seg_index & 0x01) {
-      mirrored_pos = (seg_len - 1) - local_pos;
+      if (local_pos < current_seg_len) {
+        mirrored_pos = (current_seg_len - 1) - local_pos;
+      } else {
+        mirrored_pos = 0; // Guard against overflow in the "tails"
+      }
     }
 
     // Calculate color index from mirrored position + scrolling time
     uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
 
-    // Draw
+    // Get base kaleidoscope color
     CRGBW c = ColorFromPalette(palette, color_index, 255);
+
+    // === Prism Glints (Option B) ===
+    // If the pixel is very close to the seam (local_pos == 0 or near
+    // current_seg_len), add a glint. We make the glint sharp.
+    if (local_pos == 0 || local_pos == (current_seg_len - 1)) {
+      // Sparkle at seams. White flash.
+      // We can modulate it slightly to make it shimmer instead of static burn.
+      uint8_t shimmer = cfx::sin8((ms >> 3) + i); // Fast localized shimmer
+
+      // Additive blend white glint
+      uint16_t r = c.r + shimmer;
+      uint16_t g = c.g + shimmer;
+      uint16_t b = c.b + shimmer;
+      uint16_t w = c.w + shimmer;
+
+      c.r = (r > 255) ? 255 : r;
+      c.g = (g > 255) ? 255 : g;
+      c.b = (b > 255) ? 255 : b;
+      c.w = (w > 255) ? 255 : w;
+    }
+
+    // Draw
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
