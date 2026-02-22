@@ -2811,11 +2811,13 @@ uint16_t mode_glitter(void) {
 // --- Tricolor Chase (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
 uint16_t mode_tricolor_chase(void) {
-  // Use exact speed match from mode_chase
-  uint16_t cycleTime = instance->now * ((instance->_segment.speed >> 2) + 1);
-  uint32_t it = (cycleTime * instance->_segment.length()) >> 16;
+  // Use exact speed match from mode_chase: truncate to 16-bit to match cycle
+  // timing
+  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
+  uint16_t a = (counter * instance->_segment.length()) >> 16;
+
   unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
-  unsigned index = it % (width * 2);                          // 2 bands
+  unsigned index = a % (width * 2);                           // 2 bands
 
   for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
     if (index > (width * 2) - 1)
