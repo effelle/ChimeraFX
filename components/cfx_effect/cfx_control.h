@@ -187,6 +187,10 @@ public:
   select::Select *get_palette() { return palette_; }
   esphome::switch_::Switch *get_mirror() { return mirror_; }
   esphome::switch_::Switch *get_autotune() { return autotune_; }
+  esphome::switch_::Switch *get_force_white() { return force_white_; }
+  void set_force_white(esphome::switch_::Switch *force_white) {
+    force_white_ = force_white;
+  }
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
   number::Number *get_intro_duration() { return intro_duration_; }
@@ -205,6 +209,7 @@ protected:
   select::Select *palette_{nullptr};
   esphome::switch_::Switch *mirror_{nullptr};
   esphome::switch_::Switch *autotune_{nullptr};
+  esphome::switch_::Switch *force_white_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};

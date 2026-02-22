@@ -42,6 +42,7 @@ EXCLUDE_MIRROR = 4
 EXCLUDE_INTRO = 5
 EXCLUDE_TIMER = 6
 EXCLUDE_AUTOTUNE = 7
+EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 
 CONF_DEFAULTS = "defaults"
@@ -54,6 +55,7 @@ CONF_DEFAULT_INTRO_DURATION = "intro_duration"
 CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
 CONF_DEFAULT_TIMER = "timer"
 CONF_DEFAULT_AUTOTUNE = "autotune"
+CONF_DEFAULT_FORCE_WHITE = "force_white"
 
 DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_SPEED): cv.int_range(min=0, max=255),
@@ -65,6 +67,7 @@ DEFAULTS_SCHEMA = cv.Schema({
     cv.Optional(CONF_DEFAULT_INTRO_USE_PALETTE): cv.boolean,
     cv.Optional(CONF_DEFAULT_TIMER): cv.int_range(min=0, max=360),
     cv.Optional(CONF_DEFAULT_AUTOTUNE): cv.boolean,
+    cv.Optional(CONF_DEFAULT_FORCE_WHITE): cv.boolean,
 })
 
 CONFIG_SCHEMA = cv.Schema({
@@ -90,6 +93,17 @@ async def to_code(config):
         return id not in exclude
 
     defaults = config.get(CONF_DEFAULTS, {})
+
+    import esphome.core as core
+    has_white_channel = False
+    if "light" in core.CORE.config:
+        light_ids = [l.id for l in config[CONF_LIGHT]]
+        for lconf in core.CORE.config["light"]:
+            lconf_id = lconf.get(CONF_ID)
+            if lconf_id and lconf_id.id in light_ids:
+                if lconf.get("is_rgbw", False) or lconf.get("is_wrgb", False) or lconf.get("chipset") == "SK6812":
+                    has_white_channel = True
+                    break
 
     # 1. Speed
     if is_included(EXCLUDE_SPEED):
@@ -245,6 +259,23 @@ async def to_code(config):
         await switch.register_switch(autotune, conf)
         cg.add(autotune.write_state(autotune_init))
         cg.add(var.set_autotune(autotune))
+
+    # 9. Force White
+    if is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
+        force_white_init = defaults.get(CONF_DEFAULT_FORCE_WHITE, False)
+        conf = {
+            CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_force_white"),
+            CONF_NAME: f"{name} Force White",
+            CONF_ICON: "mdi:lightbulb-on-outline",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not force_white_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
+        }
+        force_white = cg.new_Pvariable(conf[CONF_ID])
+        await switch.register_switch(force_white, conf)
+        cg.add(force_white.publish_state(force_white_init))
+        cg.add(var.set_force_white(force_white))
 
     # 11. Debug
     if is_included(EXCLUDE_DEBUG):

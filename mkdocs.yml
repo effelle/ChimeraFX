@@ -39,6 +39,7 @@ nav:
   - Home: index.md
   - Guide:
     - Installation: Installation.md
+    - ChimeraFX light: cfx_light.md
     - Controls: Controls.md
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md

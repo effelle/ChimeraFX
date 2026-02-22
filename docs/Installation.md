@@ -22,7 +22,6 @@ Add this to your `esphome.yaml`:
 ```yaml
 external_components:
   - source: github://effelle/ChimeraFX@main
-    components: [cfx_effect]
     refresh: always # ⚠️ See "Versioning & Stability" below
 
 cfx_effect: # Mandatory! Loads the component
@@ -45,7 +44,7 @@ Once you have a working setup, it is safer to remove `refresh: always` or pin to
 ```yaml
 number:
 select: 
-switch: 
+switch:
 ```
 ---
 
@@ -117,7 +116,7 @@ cfx_effect: # Mandatory! Loads the component
 
 ## Dependencies
 
-The component handles its own dependencies automatically. The native `cfx_light` driver utilizes the built-in ESP-IDF RMT APIs for asynchronous hardware rendering.
+The component handles its own dependencies automatically. The native `cfx_light` driver utilizes the built-in ESP-IDF RMT APIs for asynchronous hardware rendering and Neopixelbus as fallback for Arduino Framework.
 
 You don't need to install anything else manually.
 

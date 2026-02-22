@@ -30,15 +30,16 @@ cfx_effect:
 ### Generated Controls
 The component creates the following entities based on your controller name (e.g., `LED Strip`):
 
-- `LED Strip speed` (Number)
-- `LED Strip intensity` (Number)
-- `LED Strip palette` (Select)
-- `LED Strip mirror` (Switch)
-- `LED Strip intro` (Select)
-- `LED Strip use palette` (Switch)
-- `LED Strip intro duration` (Number)
-- `LED Strip timer` (Number)
-- `LED Strip debug` (Switch)
+- `LED Strip Speed` (Number)
+- `LED Strip Intensity` (Number)
+- `LED Strip Palette` (Select)
+- `LED Strip Mirror` (Switch)
+- `LED Strip Intro` (Select)
+- `LED Strip Use Palette` (Switch)
+- `LED Strip Intro Duration` (Number)
+- `LED Strip Timer` (Number)
+- `LED Strip Debug` (Switch)
+- `LED Strip Autotune` (Switch)
 
 ### Exclusion Options
 If you want to keep your dashboard clean, you can exclude specific controls by adding their IDs to the `exclude` list (e.g., `exclude: [5, 6]`).
@@ -51,6 +52,7 @@ If you want to keep your dashboard clean, you can exclude specific controls by a
 | 4 | Mirror |
 | 5 | Intro Effects (Intro, Duration, Use Palette) |
 | 6 | Timer |
+| 7 | Autotune |
 | 9 | Debug (Diagnostic) |
 
 That’s it! The effects will automatically detect this controller and respect **any** exclusions you have configured.
@@ -100,11 +102,14 @@ Controls the palette used by the effect. A palette is a set of colors that are u
 ### ID 4: Mirror
 Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro Animation too.
 
-### ID 5: Intro Animation
+### ID 5: Intro and Outro Animation
 A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support. The latter allows the intro animation to inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
 
 ### ID 6: Timer
 Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
+
+### ID 7: Autotune
+Enables or disables the effect autotune. **Defaults to OFF.** When enabled, it will automatically adjust the effect parameters to the best tested values. Can be override using presets.
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead.

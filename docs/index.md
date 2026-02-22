@@ -30,13 +30,15 @@ Visual effects are computationally expensive.
 ## Key Features
 
 *   **Native Performance**: Optimized for ESP-IDF and dual-core ESP32s.
+*   **ChimeraFX Light Platform**: A custom ESPHome light platform that allows you to run up to 4 parallel complex RGB LED effects on ESP32 devices.
 *   **Zero-Lambda Config**: Uses a clean `external_components` setup.
 *   **Rich Effect Library**: Ports of complex effects that were previously impossible or slow in pure YAML using `addressable_lambda`.
 *   **Custom Palettes**: A curated selection of palettes to choose from.
-*   **Intro Effects**: Run a special effect when the light turns on.
+*   **Intro and Outro Effects**: Run a special effect when the light turns on or off.
 *   **Presets**: Create your own effect configurations.
 *   **Timers**: Run an effect for a specific amount of time.
 *   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
+*   **Autotuning**: Automatically load default parameters and tune the effect for you .
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
 
 ## Quick Links
@@ -59,5 +61,3 @@ Donations are never expected, but always appreciated. If you find ChimeraFX usef
 This work incorporates code and logic derived from WLED and is licensed under the **European Union Public Licence v1.2 (EUPL-1.2)**.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-

@@ -1,4 +1,4 @@
-# CFX Light (`cfx_light`)
+# ChimeraFX Light Platform
 
 The `cfx_light` platform is a custom, high-performance ESPHome light component specifically designed to be the ultimate companion for ChimeraFX. 
 
@@ -72,7 +72,7 @@ light:
           set_speed: 100   # Make it much faster
 ```
 
-With the above configuration, your ESP32 will compile with all 50+ effects, but `Aurora` will use your tailored speed and palette settings out of the box.
+With the above configuration, your ESP32 will compile with all 50+ effects, but `Aurora` will use your tailored speed and palette settings out of the box. More on effect presets in the [Effect Presets](Effect-Presets.md) page.
 
 ## Hardware & Framework Support
 
@@ -80,4 +80,4 @@ With the above configuration, your ESP32 will compile with all 50+ effects, but 
 - On **ESP-IDF**, it leverages the native high-performance ESP32 RMT DMA drivers.
 - On **Arduino**, it natively builds upon `NeoPixelBus` for robust, high-speed rendering.
 
-You do not need to choose different platforms for different frameworks—`cfx_light` intelligently handles the underlying dependencies for you!
+You do not need to choose different platforms for different frameworks, `cfx_light` intelligently handles the underlying dependencies for you!
