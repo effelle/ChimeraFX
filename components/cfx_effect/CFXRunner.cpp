@@ -2811,8 +2811,9 @@ uint16_t mode_glitter(void) {
 // --- Tricolor Chase (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
 uint16_t mode_tricolor_chase(void) {
-  uint32_t cycleTime = 50 + ((255 - instance->_segment.speed) << 1);
-  uint32_t it = instance->now / cycleTime;
+  // Use exact speed match from mode_chase
+  uint16_t cycleTime = instance->now * ((instance->_segment.speed >> 2) + 1);
+  uint32_t it = (cycleTime * instance->_segment.length()) >> 16;
   unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
   unsigned index = it % (width * 2);                          // 2 bands
 
@@ -3527,15 +3528,16 @@ uint16_t mode_chaos_theory(void) {
       int center = data->sparks[s].pos;
       uint8_t bri = data->sparks[s].level;
 
-      // Helper to add brightness
+      // Helper to add brightness smoothly by blending toward white
       auto add_brightness = [&](int pos, uint8_t amount) {
         if (pos >= 0 && pos < len) {
           uint32_t existing = instance->_segment.getPixelColor(pos);
-          CRGBW bg(existing);
-          CRGBW fg(amount, amount, amount, amount);
-          CRGBW final = color_add(bg, fg);
-          instance->_segment.setPixelColor(
-              pos, RGBW32(final.r, final.g, final.b, final.w));
+
+          // Blend from the existing color towards pure white,
+          // keeping the background visible through the spike edge
+          uint32_t final = color_blend(existing, (uint32_t)0xFFFFFFFF, amount);
+
+          instance->_segment.setPixelColor(pos, final);
         }
       };
 
@@ -4745,14 +4747,50 @@ uint16_t mode_dropping_time(void) {
   }
 
   // D. Draw Drops (Dummy Drops)
+  // Ambient Update (Non-counting drops for visual texture on long timers)
+  for (int i = 0; i < 2; i++) {
+    if (state->dummyDrops[i].colIndex == 0) {
+      // Inactive - Try to spawn
+      // Requires at least 15 pixels of free fall space to be worth it
+      if (len - state->filledPixels > 15 && cfx::hw_random16(0, 300) == 0) {
+        state->dummyDrops[i].pos = len - 1;
+        state->dummyDrops[i].vel = 0;
+        state->dummyDrops[i].colIndex = 1; // Active
+        state->dummyDrops[i].bright =
+            150 + cfx::hw_random8(100); // Random brightness
+      }
+    } else {
+      // Active - Update Physics
+      state->dummyDrops[i].vel += gravity;
+      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
+
+      // Hit Water Level? -> Deactivate silently without incrementing level
+      if (state->dummyDrops[i].pos <= state->filledPixels) {
+        state->dummyDrops[i].colIndex = 0;
+      }
+    }
+  }
+
+  // Draw Dummy Drops (Alpha Trail)
   for (int i = 0; i < 2; i++) {
     if (state->dummyDrops[i].colIndex != 0) {
       int pos = (int)state->dummyDrops[i].pos;
       if (pos >= state->filledPixels && pos < len) {
         uint32_t col = instance->_segment.colors[0];
         if (col == 0)
-          col = 0x0000FF;
+          col = 0xFFFFFF; // Fallback to white if no color specified
+
+        // Draw Head
         instance->_segment.setPixelColor(pos, col);
+
+        // Draw Faded Trail
+        for (int t = 1; t <= 3; t++) {
+          int tPos = pos + t;
+          if (tPos >= state->filledPixels && tPos < len) {
+            instance->_segment.setPixelColor(
+                tPos, color_blend(col, 0, 255 - (75 * t)));
+          }
+        }
       }
     }
   }
