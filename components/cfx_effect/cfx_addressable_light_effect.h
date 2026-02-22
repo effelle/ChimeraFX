@@ -128,6 +128,7 @@ protected:
 
   uint8_t get_palette_index_();
   uint8_t get_default_palette_id_(uint8_t effect_id);
+  std::string get_palette_name_(uint8_t pal_id);
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 

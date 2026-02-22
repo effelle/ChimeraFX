@@ -231,7 +231,7 @@ async def to_code(config):
 
     # 10. Autotune
     if is_included(EXCLUDE_AUTOTUNE):
-        autotune_init = defaults.get(CONF_DEFAULT_AUTOTUNE, True)
+        autotune_init = defaults.get(CONF_DEFAULT_AUTOTUNE, False)
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_autotune"),
             CONF_NAME: f"{name} Autotune",

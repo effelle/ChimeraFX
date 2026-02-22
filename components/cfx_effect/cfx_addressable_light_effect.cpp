@@ -29,13 +29,13 @@ void CFXAddressableLightEffect::start() {
   CFXControl *c = this->controller_;
 
   // 0. Autotune Resolution
-  bool autotune_enabled = true; // Default to true if not found
+  bool autotune_enabled = false; // Default to false if not found
   switch_::Switch *autotune_sw =
       (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
 
   if (this->autotune_preset_.has_value()) {
     autotune_enabled = this->autotune_preset_.value();
-  } else if (autotune_sw != nullptr && autotune_sw->has_state()) {
+  } else if (autotune_sw != nullptr) {
     autotune_enabled = autotune_sw->state;
   }
 
@@ -95,10 +95,9 @@ void CFXAddressableLightEffect::start() {
     call.perform();
   } else if (palette_sel != nullptr && autotune_enabled) {
     uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
-    // Resolve string name from ID to check current state safely, but we can
-    // just force the index
+    std::string pal_name = this->get_palette_name_(default_pal_id);
     auto call = palette_sel->make_call();
-    call.set_index(default_pal_id);
+    call.set_option(pal_name);
     call.perform();
   }
 
@@ -784,6 +783,61 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   // Default Aurora (1) or specific handling
   default:
     return 1; // Aurora is the general default
+  }
+}
+
+std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
+  switch (pal_id) {
+  case 1:
+    return "Aurora";
+  case 2:
+    return "Forest";
+  case 3:
+    return "Halloween";
+  case 4:
+    return "Rainbow";
+  case 5:
+    return "Fire";
+  case 6:
+    return "Sunset";
+  case 7:
+    return "Ice";
+  case 8:
+    return "Party";
+  case 9:
+    return "Lava";
+  case 10:
+    return "Pastel";
+  case 11:
+    return "Ocean";
+  case 12:
+    return "HeatColors";
+  case 13:
+    return "Sakura";
+  case 14:
+    return "Rivendell";
+  case 15:
+    return "Cyberpunk";
+  case 16:
+    return "OrangeTeal";
+  case 17:
+    return "Christmas";
+  case 18:
+    return "RedBlue";
+  case 19:
+    return "Matrix";
+  case 20:
+    return "SunnyGold";
+  case 22:
+    return "Fairy";
+  case 23:
+    return "Twilight";
+  case 254:
+    return "Smart Random";
+  case 255:
+    return "Solid";
+  default:
+    return "Default";
   }
 }
 
