@@ -1749,8 +1749,8 @@ uint16_t mode_breath(void) {
     baseColor = 0xFFFFFF; // Default white if no color set
 
   for (int i = 0; i < len; i++) {
-    uint8_t fgR, fgG, fgB;
-    uint8_t bgR, bgG, bgB;
+    uint8_t fgR, fgG, fgB, fgW;
+    uint8_t bgR, bgG, bgB, bgW;
 
     // Use solid color when palette is 255 (Solid) OR 0 (Default/None)
     // This fixes the issue where Default palette ignored the user's color.
@@ -1759,6 +1759,7 @@ uint16_t mode_breath(void) {
       fgR = (baseColor >> 16) & 0xFF;
       fgG = (baseColor >> 8) & 0xFF;
       fgB = baseColor & 0xFF;
+      fgW = (baseColor >> 24) & 0xFF;
     } else {
       // Use palette color as foreground (0-19)
       const uint32_t *active_palette =
@@ -1767,6 +1768,7 @@ uint16_t mode_breath(void) {
       fgR = c.r;
       fgG = c.g;
       fgB = c.b;
+      fgW = c.w;
     }
 
     // Calculate background color from foreground (21% brightness)
@@ -1775,13 +1777,15 @@ uint16_t mode_breath(void) {
     bgR = (fgR * 54) >> 8;
     bgG = (fgG * 54) >> 8;
     bgB = (fgB * 54) >> 8;
+    bgW = (fgW * 54) >> 8;
 
     // Blend: result = background + (foreground - background) * lum / 255
     uint8_t r = bgR + (((int16_t)(fgR - bgR) * lum) >> 8);
     uint8_t g = bgG + (((int16_t)(fgG - bgG) * lum) >> 8);
     uint8_t b = bgB + (((int16_t)(fgB - bgB) * lum) >> 8);
+    uint8_t w = bgW + (((int16_t)(fgW - bgW) * lum) >> 8);
 
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
 
   return FRAMETIME;
@@ -2489,6 +2493,7 @@ uint16_t mode_meteor(void) {
       uint8_t r = (c >> 16) & 0xFF;
       uint8_t g = (c >> 8) & 0xFF;
       uint8_t b = c & 0xFF;
+      uint8_t w = (c >> 24) & 0xFF;
 
       // Multiplicative decay with random factor
       // Scale factor 200-255 for longer trail (78-100% retention per frame)
@@ -2499,8 +2504,9 @@ uint16_t mode_meteor(void) {
       r = scale8(r, scale_factor);
       g = scale8(g, scale_factor);
       b = scale8(b, scale_factor);
+      w = scale8(w, scale_factor);
 
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
     }
   }
 
@@ -2665,10 +2671,13 @@ static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
 }
 
 uint16_t mode_chase_color(void) {
+  bool do_palette =
+      (instance->_segment.palette != 255 && instance->_segment.palette != 0);
+
   return chase(instance->_segment.colors[1],
                (instance->_segment.colors[2]) ? instance->_segment.colors[2]
                                               : instance->_segment.colors[0],
-               instance->_segment.colors[0], true);
+               instance->_segment.colors[0], do_palette);
 }
 
 // --- BPM Effect (ID 68) ---
@@ -2812,11 +2821,18 @@ uint16_t mode_tricolor_chase(void) {
       index = 0;
 
     uint32_t color;
-    if (index > width - 1)
-      color = instance->_segment.color_from_palette(i, true, true,
-                                                    1); // palette
-    else
+    if (index > width - 1) {
+      if (instance->_segment.palette == 255 ||
+          instance->_segment.palette == 0) {
+        color = instance->_segment
+                    .colors[1]; // Use secondary (often black)
+                                // as background instead of Solid Foreground
+      } else {
+        color = instance->_segment.color_from_palette(i, true, true, 1);
+      }
+    } else {
       color = instance->_segment.colors[0]; // primary (solid)
+    }
 
     instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
                                      color);
@@ -4003,6 +4019,12 @@ void CFXRunner::service() {
   // Ensures effect functions operate on the correct strip context
   instance = this;
 
+  // Globally initialize PaletteSolid with the latest selected color.
+  // Any effect resolving getPaletteByIndex(255) needs this freshly populated,
+  // especially for Pure W channel support in legacy C routines like
+  // ColorFromPalette
+  fillSolidPalette(_segment.colors[0]);
+
   // Start frame diagnostics (measures time since last call)
   diagnostics.frame_start();
 
@@ -5004,8 +5026,9 @@ uint16_t mode_bouncing_balls(void) {
     uint8_t r = qadd8((existing >> 16) & 0xFF, (colorInt >> 16) & 0xFF);
     uint8_t g = qadd8((existing >> 8) & 0xFF, (colorInt >> 8) & 0xFF);
     uint8_t b = qadd8(existing & 0xFF, colorInt & 0xFF);
+    uint8_t w = qadd8((existing >> 24) & 0xFF, (colorInt >> 24) & 0xFF);
 
-    instance->_segment.setPixelColor(pixel, RGBW32(r, g, b, 0));
+    instance->_segment.setPixelColor(pixel, RGBW32(r, g, b, w));
   }
 
   return FRAMETIME;
@@ -6413,6 +6436,12 @@ uint16_t mode_fluid_rain(void) {
 // Valid Palette Implementation (Moved from line 121)
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
                                      uint8_t mcol, uint8_t pbri) {
+  // Ensure the Solid Palette cache is populated properly with the W-channel
+  // included
+  if (this->palette == 255 || this->palette == 0) {
+    fillSolidPalette(this->colors[0]);
+  }
+
   // Get Palette Data
   const uint32_t *palData = getPaletteByIndex(this->palette);
   if (!palData)
@@ -6435,7 +6464,8 @@ uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
     uint8_t r = ((color >> 16) & 0xFF) * pbri / 255;
     uint8_t g = ((color >> 8) & 0xFF) * pbri / 255;
     uint8_t b = (color & 0xFF) * pbri / 255;
-    return RGBW32(r, g, b, 0);
+    uint8_t w = ((color >> 24) & 0xFF) * pbri / 255;
+    return RGBW32(r, g, b, w);
   }
   return color;
 }
