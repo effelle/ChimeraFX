@@ -27,7 +27,7 @@ This project is **not** a full WLED replacement and it will never be. Choose the
 
 ## Platform Compatibility
 
-- **Framework:** **ESP-IDF** (Arduino is not supported by the `cfx_light` DMA driver)
+- **Framework:** **ESP-IDF** (via RMT DMA) and **Arduino** (via NeoPixelBus)
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
   - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
 
