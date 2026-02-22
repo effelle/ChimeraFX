@@ -101,8 +101,11 @@ def _inject_all_effects(config):
     for eff in user_effects:
         if "addressable_cfx" in eff:
             name = eff["addressable_cfx"].get(CONF_NAME, "")
-            if name:
-                user_names.add(name)
+    use_intro = config.get("use_intro")
+    use_outro = config.get("use_outro")
+    intro_dur_ms = config.get("intro_dur")
+    
+    intro_dur_sec = (intro_dur_ms / 1000.0) if intro_dur_ms is not None else None
 
     # Parse the YAML and inject effects not already defined by the user
     for entry in _load_effects_yaml():
@@ -112,6 +115,26 @@ def _inject_all_effects(config):
         name = effect_data.get("name", "")
         if name and name not in user_names:
             user_effects.append(entry)
+
+    # Finally, apply global use_intro / use_outro to ALL effects if they don't already have one
+    for eff in user_effects:
+        if "addressable_cfx" in eff:
+            effect_data = eff["addressable_cfx"]
+            effect_id = effect_data.get("effect_id", -1)
+            
+            # Skip hardcoded exceptions
+            if effect_id in [158, 159, 161]:
+                continue
+                
+            if use_intro is not None and "set_intro" not in effect_data:
+                effect_data["set_intro"] = use_intro
+            if use_outro is not None and "set_outro" not in effect_data:
+                effect_data["set_outro"] = use_outro
+            if intro_dur_sec is not None:
+                if "set_intro_dur" not in effect_data:
+                    effect_data["set_intro_dur"] = intro_dur_sec
+                if "set_outro_dur" not in effect_data:
+                    effect_data["set_outro_dur"] = intro_dur_sec
 
     config[CONF_EFFECTS] = user_effects
     return config
@@ -128,6 +151,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_IS_RGBW): cv.boolean,
             cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
             cv.Optional(CONF_ALL_EFFECTS, default=False): cv.boolean,
+            cv.Optional("use_intro"): cv.uint8_t,
+            cv.Optional("use_outro"): cv.uint8_t,
+            cv.Optional("intro_dur"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
                 cv.positive_time_period_milliseconds
             ),
