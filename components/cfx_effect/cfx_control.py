@@ -239,6 +239,7 @@ async def to_code(config):
             "optimistic": True,
             CONF_DISABLED_BY_DEFAULT: False,
             CONF_INTERNAL: False,
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not autotune_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
         }
         autotune = cg.new_Pvariable(conf[CONF_ID])
         await switch.register_switch(autotune, conf)
