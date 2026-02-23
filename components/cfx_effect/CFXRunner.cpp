@@ -4574,32 +4574,28 @@ uint16_t mode_dropping_time(void) {
     ESP_LOGD("CFX", "DroppingTime: RESET");
     state->init();
     state->startTime = instance->now;
+    state->lastDropTime = instance->now;
     instance->_segment.fill(0); // Start black
     instance->_segment.reset = false;
   }
 
-  // Debug Log
-  /*
-  static uint32_t last_log = 0;
-  if (instance->now - last_log > 2000) {
-    last_log = instance->now;
-    // Recalc duration for log
-    uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
-    uint32_t duration_ms = duration_min * 60 * 1000;
-    uint32_t elapsed = instance->now - state->startTime;
-    ESP_LOGD("CFX", "DT: Elapsed %u/%u ms, Filled %u", elapsed, duration_ms,
-             state->filledPixels);
-  }
-  */
-
   // 1. Calculate Time & Progress
-  // Speed 0   -> 1 minute
-  // Speed 255 -> 60 minutes
-  // Mapping: Duration (min) = 1 + (Speed * 59 / 255)
-  uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+  uint32_t now = instance->now;
+  uint32_t frameDelta = now - state->lastDropTime;
+  if (frameDelta > 1000)
+    frameDelta = 0; // Handle first run/wrap
+  state->lastDropTime = now;
+
+  // Speed 0 -> Paused. Speed 1..255 -> 1..255 minutes.
+  uint32_t duration_min = instance->_segment.speed;
+  if (duration_min == 0) {
+    // Paused: shift start time forward so elapsed doesn't grow
+    state->startTime += frameDelta;
+    duration_min = 1; // Prevent div by zero in layout logic
+  }
   uint32_t duration_ms = duration_min * 60 * 1000;
 
-  uint32_t elapsed = instance->now - state->startTime;
+  uint32_t elapsed = now - state->startTime;
   if (elapsed > duration_ms)
     elapsed = duration_ms;
 
@@ -4737,35 +4733,40 @@ uint16_t mode_dropping_time(void) {
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
+  // Global Drop Color
+  uint32_t dropColor = instance->_segment.colors[0];
+  if (dropColor == 0)
+    dropColor = 0xFFFFFF; // Fallback to white
+
   // C. Draw Drops (Filling Drop)
   if (state->fillingDropActive) {
     if (state->fillingDrop.colIndex == 1) { // Forming
       // Draw swelling drop at the top
-      CRGBW c = ColorFromPalette(active_palette, 255, state->fillingDrop.col);
-      instance->_segment.setPixelColor(len - 1, RGBW32(c.r, c.g, c.b, c.w));
+      instance->_segment.setPixelColor(
+          len - 1, color_blend(dropColor, 0, 255 - state->fillingDrop.col));
     } else if (state->fillingDrop.colIndex == 2) { // Falling
       int pos = (int)state->fillingDrop.pos;
       if (pos >= state->filledPixels && pos < len) {
-        instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
+        instance->_segment.setPixelColor(pos, dropColor); // Head
       }
       for (int t = 1; t <= 4; t++) { // Tail
         int tPos = pos + t;
         if (tPos >= state->filledPixels && tPos < len) {
           instance->_segment.setPixelColor(
-              tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+              tPos, color_blend(dropColor, 0, 255 - (64 * t)));
         }
       }
     } else if (state->fillingDrop.colIndex > 2) { // Bouncing/Splash
       int pos = (int)state->fillingDrop.pos;
       // Draw splash particle (dimmer white)
       if (pos >= state->filledPixels && pos < len) {
-        instance->_segment.setPixelColor(pos, color_blend(0xFFFFFF, 0, 150));
+        instance->_segment.setPixelColor(pos, color_blend(dropColor, 0, 150));
       }
       // Draw ripple at water level exactly
       if (state->filledPixels < len && state->filledPixels >= 0) {
         uint32_t cur = instance->_segment.getPixelColor(state->filledPixels);
         instance->_segment.setPixelColor(state->filledPixels,
-                                         color_blend(cur, 0xFFFFFF, 200));
+                                         color_blend(cur, dropColor, 200));
       }
     }
   }
@@ -4806,16 +4807,13 @@ uint16_t mode_dropping_time(void) {
     // Dummy Drop Drawing
     if (state->dummyDrops[i].colIndex != 0) {
       if (state->dummyDrops[i].colIndex == 1) { // Forming
-        CRGBW c =
-            ColorFromPalette(active_palette, 255, state->dummyDrops[i].col);
-        instance->_segment.setPixelColor(len - 1, RGBW32(c.r, c.g, c.b, c.w));
+        instance->_segment.setPixelColor(
+            len - 1, color_blend(dropColor, 0, 255 - state->dummyDrops[i].col));
       } else {
         int pos = (int)state->dummyDrops[i].pos;
         if (pos >= state->filledPixels && pos < len) {
-          uint8_t pal_index = (pos * 255) / len;
-          // Dummy drops use palette colors for a richer visual
-          CRGBW c = ColorFromPalette(active_palette, pal_index, 200);
-          uint32_t head_col = RGBW32(c.r, c.g, c.b, c.w);
+          // Dummy drops use primary color, slightly dimmer
+          uint32_t head_col = color_blend(dropColor, 0, 255 - 200);
 
           instance->_segment.setPixelColor(pos, head_col);
 
@@ -4823,12 +4821,9 @@ uint16_t mode_dropping_time(void) {
             for (int t = 1; t <= 3; t++) {
               int tPos = pos + t;
               if (tPos >= state->filledPixels && tPos < len) {
-                uint8_t trail_pal_index = (tPos * 255) / len;
                 uint8_t trail_bri = std::max(0, 200 - (60 * t));
-                CRGBW tc = ColorFromPalette(active_palette, trail_pal_index,
-                                            trail_bri);
                 instance->_segment.setPixelColor(
-                    tPos, RGBW32(tc.r, tc.g, tc.b, tc.w));
+                    tPos, color_blend(dropColor, 0, 255 - trail_bri));
               }
             }
           } else if (state->dummyDrops[i].colIndex > 2) { // Splash Ripple

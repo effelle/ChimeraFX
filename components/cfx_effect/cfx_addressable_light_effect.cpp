@@ -916,6 +916,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 64; // BPM
   case 104:
     return 60; // Sunrise
+  case 151:
+    return 15; // Dropping Time
   case 155:
     return 60; // Kaleidos
   case 156:
