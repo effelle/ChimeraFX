@@ -4541,7 +4541,7 @@ struct DroppingTimeState {
   // 2. "Dummy" drops (visual only)
   // Reusing Spark struct logic
   Spark fillingDrop;
-  Spark dummyDrops[6]; // Max 6 dummy drops active
+  Spark dummyDrops[4]; // Max 4 dummy drops active
 
   bool fillingDropActive;
 
@@ -4551,7 +4551,7 @@ struct DroppingTimeState {
     lastDropTime = 0;
     fillingDropActive = false;
     fillingDrop = Spark();
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 4; i++)
       dummyDrops[i] = Spark();
   }
 };
@@ -4734,18 +4734,15 @@ uint16_t mode_dropping_time(void) {
   }
 
   // Global Drop Color
-  uint32_t dropColor = instance->_segment.colors[0];
-  if (dropColor == 0) {
-    // If no primary color is set, extract a vibrant color from the center of
-    // the active palette. This organically matches the theme (like Ocean) and
-    // avoids pure white, while fixing the "changing color as it falls" and
-    // "palette void" issues.
-    CRGBW c = ColorFromPalette(active_palette, 128, 255);
-    dropColor = RGBW32(c.r, c.g, c.b, c.w);
-    // If the palette center happens to be black, fallback to a light water blue
-    if (dropColor == 0)
-      dropColor = 0x80C0FF;
-  }
+  // WLED's primary color (`colors[0]`) defaults to White, which causes the
+  // previous fallback mechanism to skip pulling from the palette. Here, we
+  // force the drop to organically sample the active theme (e.g., Ocean) by
+  // sampling the palette center directly.
+  CRGBW c_drop = ColorFromPalette(active_palette, 128, 255);
+  uint32_t dropColor = RGBW32(c_drop.r, c_drop.g, c_drop.b, c_drop.w);
+  // If the palette center happens to be black, fallback to a light water blue
+  if (dropColor == 0)
+    dropColor = 0x80C0FF;
 
   // C. Draw Drops (Filling Drop)
   if (state->fillingDropActive) {
@@ -4781,9 +4778,9 @@ uint16_t mode_dropping_time(void) {
   }
 
   // D. Ambient Dummy Drops Update & Render
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 4; i++) {
     if (state->dummyDrops[i].colIndex == 0) {
-      if (len - state->filledPixels > 15 && cfx::hw_random16(0, 50) == 0) {
+      if (len - state->filledPixels > 15 && cfx::hw_random16(0, 120) == 0) {
         state->dummyDrops[i].pos = len - 1;
         state->dummyDrops[i].vel = 0;
         state->dummyDrops[i].colIndex = 1; // Forming
