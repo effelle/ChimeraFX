@@ -5802,8 +5802,8 @@ uint16_t mode_heartbeat_center(void) {
  * Divides the strip into 2/4/6/8 mirrored segments that dynamically "breathe"
  * in size. Even segments render forward, odd segments render backward. Adds
  * prism glints at the symmetry bounds to enhance the kaleidoscope illusion.
- * Uses a scrolling palette as the source pattern.
- * Density: Hybrid approach (Option C) - dynamic fit with aliasing clamp.
+ * Uses a pure sub-pixel triangle wave phase engine to guarantee flawless
+ * scrolling mirrors.
  */
 uint16_t mode_kaleidos(void) {
   if (!instance)
@@ -5813,42 +5813,31 @@ uint16_t mode_kaleidos(void) {
   if (len <= 1)
     return mode_static();
 
-  // === Time Base (Speed-controlled scroll) ===
   uint32_t ms = cfx_millis();
   // Speed 0 = very slow, Speed 255 = fast
   uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
 
-  // === Dynamic Symmetry Engine (Option A) ===
+  // === Dynamic Symmetry Engine ===
   // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
   uint8_t half_segs = 1 + (instance->_segment.intensity >> 6);
   if (half_segs > 4)
     half_segs = 4; // Safety clamp for 255
-  uint8_t num_segments = half_segs * 2;
+  uint32_t num_segments = half_segs * 2;
 
-  // Calculate base segment length
-  // We use floats to preserve sub-pixel accuracy during the dynamic scaling
-  float base_seg_len = (float)len / (float)num_segments;
+  // Measure phase per pixel so that num_segments fit exactly across 'len'
+  // 1 segment = 65536 phase units. Total phase across strip = num_segments *
+  // 65536.
+  uint32_t total_base_phase = num_segments * 65536;
 
   // Dynamic Breathing
   // The size of the mirrors slowly expands and contracts.
-  // We use a slow sine wave based on time. We don't use Speed here so the
-  // geometry breathes independently of the color scroll speed.
   uint8_t breath_phase = (ms >> 6) & 0xFF; // Slow wave
-  // Map sine to 0.7 - 1.3 (+/- 30% width variation) to avoid collapsing mirrors
-  // completely
+  // Map sine to 0.7 - 1.3 (+/- 30% width variation)
   float breath_factor = 0.7f + (cfx::sin8(breath_phase) * 0.6f / 255.0f);
 
-  float dynamic_seg_len = base_seg_len * breath_factor;
-  if (dynamic_seg_len < 2.0f)
-    dynamic_seg_len = 2.0f; // Safety minimum
-
-  // === Hybrid Density (Option C) ===
-  // Dynamic: fit one full pattern cycle per base segment (keeps density
-  // consistent as it breathes)
-  uint8_t density =
-      (base_seg_len > 1.0f) ? (uint8_t)(255.0f / base_seg_len) : 255;
-  if (density < 8)
-    density = 8; // Floor: prevent washed-out pattern on long segments
+  // Phase step per pixel
+  uint32_t total_dynamic_phase = (uint32_t)(total_base_phase * breath_factor);
+  uint32_t phase_step = total_dynamic_phase / len;
 
   // === Palette ===
   const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
@@ -5858,52 +5847,51 @@ uint16_t mode_kaleidos(void) {
   }
 
   // === Render Loop ===
+  // Glint settings: glint is ~1.5 pixels wide
+  uint32_t glint_radius = phase_step + (phase_step >> 1);
+
   for (int i = 0; i < len; i++) {
-    // Determine which dynamic segment this pixel belongs to using float math
-    int seg_index = (int)((float)i / dynamic_seg_len);
-    float local_pos_f = (float)i - ((float)seg_index * dynamic_seg_len);
-    uint16_t local_pos = (uint16_t)local_pos_f;
-    uint16_t current_seg_len = (uint16_t)dynamic_seg_len;
+    uint32_t spatial_phase = i * phase_step;
 
-    // Handle pixels that fall off the end due to the breathing contraction
-    // If the segments shrunk so much that the last pixel is beyond
-    // num_segments, we clamp it to the last segment logic.
-    if (seg_index >= num_segments) {
-      seg_index = num_segments - 1;
-      local_pos = i - (seg_index * current_seg_len);
-      // It's possible for local_pos to exceed current_seg_len here if it shrunk
-      // heavily. We let it continue rendering the pattern extrapolated.
+    // Triangle wave fold
+    uint16_t cycle = (spatial_phase >> 16);
+    uint16_t fraction = spatial_phase & 0xFFFF;
+
+    uint16_t folded_phase;
+    if (cycle & 0x01) {
+      // Odd cycle: backward phase
+      folded_phase = 0xFFFF - fraction;
+    } else {
+      // Even cycle: forward phase
+      folded_phase = fraction;
     }
 
-    // Mirror Logic: Even = Forward, Odd = Backward
-    uint16_t mirrored_pos = local_pos;
-    if (seg_index & 0x01) {
-      if (local_pos < current_seg_len) {
-        mirrored_pos = (current_seg_len - 1) - local_pos;
-      } else {
-        mirrored_pos = 0; // Guard against overflow in the "tails"
-      }
-    }
-
-    // Calculate color index from mirrored position + scrolling time
-    uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
+    // Convert 0-65535 spatial phase to 0-255 color index
+    uint8_t color_index = (uint8_t)((folded_phase >> 8) + cycle_time);
 
     // Get base kaleidoscope color
     CRGBW c = ColorFromPalette(palette, color_index, 255);
 
     // === Prism Glints (Option B) ===
-    // If the pixel is very close to the seam (local_pos == 0 or near
-    // current_seg_len), add a glint. We make the glint sharp.
-    if (local_pos == 0 || local_pos == (current_seg_len - 1)) {
-      // Sparkle at seams. White flash.
-      // We can modulate it slightly to make it shimmer instead of static burn.
-      uint8_t shimmer = cfx::sin8((ms >> 3) + i); // Fast localized shimmer
+    // Distance to nearest symmetry bound (0 or 65536 equivalent in fraction)
+    uint16_t dist_to_bound = (fraction < 32768) ? fraction : (65535 - fraction);
+
+    if (dist_to_bound < glint_radius) {
+      // Identify the specific mirror seam to give each seam an independent
+      // shimmer phase
+      uint16_t seam_id = (spatial_phase + 32768) >> 16;
+      uint8_t shimmer =
+          cfx::sin8((ms >> 2) + (seam_id * 64)); // Independent seam shimmer
+
+      // Falloff the glint based on exact sub-pixel distance so it doesn't jump
+      uint8_t sub_shimmer =
+          (shimmer * (glint_radius - dist_to_bound)) / glint_radius;
 
       // Additive blend white glint
-      uint16_t r = c.r + shimmer;
-      uint16_t g = c.g + shimmer;
-      uint16_t b = c.b + shimmer;
-      uint16_t w = c.w + shimmer;
+      uint16_t r = c.r + sub_shimmer;
+      uint16_t g = c.g + sub_shimmer;
+      uint16_t b = c.b + sub_shimmer;
+      uint16_t w = c.w + sub_shimmer;
 
       c.r = (r > 255) ? 255 : r;
       c.g = (g > 255) ? 255 : g;
