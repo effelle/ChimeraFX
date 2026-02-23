@@ -2808,9 +2808,10 @@ uint16_t mode_chase_multi(void) {
   unsigned width = 1 + (instance->_segment.intensity >> 4); // 1-16
   unsigned cycle_size = width * 2;                          // 2 to 32
 
-  // Physical pixel offset based on time and speed
-  // Max speed (255) -> ~250 pixels per second.
-  uint32_t step = (instance->now * ((speed >> 1) + 1)) >> 9;
+  // WLED 16.16 fractional speed math.
+  // Yields a perfectly smooth sub-pixel physical offset without aliasing.
+  uint32_t speed_factor = (speed >> 2) + 1;
+  uint32_t step = (((uint64_t)instance->now * speed_factor * len) >> 16);
 
   for (unsigned i = 0; i < len; i++) {
     // Add step to current physical index to scroll
