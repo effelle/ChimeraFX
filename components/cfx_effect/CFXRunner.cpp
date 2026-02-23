@@ -2797,32 +2797,30 @@ uint16_t mode_glitter(void) {
   return FRAMETIME;
 }
 
-// --- Tricolor Chase (ID 54) ---
+// --- Chase Multi (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
-uint16_t mode_tricolor_chase(void) {
+uint16_t mode_chase_multi(void) {
   uint32_t speed = instance->_segment.speed;
   uint32_t len = instance->_segment.length();
 
   // Width controls the size/thickness of the pulses (1 to 16 pixels)
-  // Inverse relationship: High intensity = Fewer, larger pulses
-  // Low intensity = Many smaller pulses
-  unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
+  // Low intensity = width 1. High intensity = width 16.
+  unsigned width = 1 + (instance->_segment.intensity >> 4); // 1-16
+  unsigned cycle_size = width * 2;                          // 2 to 32
 
-  // The step is based purely on speed and time.
-  // It should NOT be modulated by width, otherwise speed changes when intensity
-  // changes.
-  uint32_t step = (instance->now * speed) >> 10;
-
-  // Total span of one pulse + gap cycle
-  unsigned cycle_size = width * 2;
+  // Physical pixel offset based on time and speed
+  // Max speed (255) -> ~250 pixels per second.
+  uint32_t step = (instance->now * ((speed >> 1) + 1)) >> 9;
 
   for (unsigned i = 0; i < len; i++) {
-    // Determine where we are in the scrolling cycle
-    unsigned index = (i * 256 / cycle_size) + step;
-    index = (index >> 8) % 2; // 0 = Gap/Background, 1 = Pulse/Foreground
+    // Add step to current physical index to scroll
+    unsigned physical_pos = i + step;
+
+    // Determine where we are in the cycle (0 to cycle_size - 1)
+    unsigned index = physical_pos % cycle_size;
 
     uint32_t color;
-    if (index == 0) { // Background
+    if (index >= width) { // Background
       if (instance->_segment.palette == 255 ||
           instance->_segment.palette == 0) {
         color = instance->_segment.colors[1]; // Use secondary (often black)
@@ -4059,8 +4057,8 @@ void CFXRunner::service() {
   case FX_MODE_CHASE_COLOR: // 28
     mode_chase_color();
     break;
-  case FX_MODE_TRICOLOR_CHASE: // 54
-    mode_tricolor_chase();
+  case FX_MODE_CHASE_MULTI: // 54
+    mode_chase_multi();
     break;
   case FX_MODE_BPM: // 68
     mode_bpm();
