@@ -237,12 +237,9 @@ public:
     colors[2] = 0x0;
   }
 
-  uint16_t physicalLength() const { return stop - start; }
-  uint16_t length() const {
-    return mirror ? physicalLength() / 2 : physicalLength();
-  }
+  uint16_t length() const { return stop - start; }
   uint16_t virtualLength() const { return length(); }
-  bool isActive() const { return on && physicalLength() > 0; }
+  bool isActive() const { return on && length() > 0; }
 
   bool allocateData(size_t len) {
     if (data && _dataLen == len)
