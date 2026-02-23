@@ -2614,46 +2614,76 @@ uint16_t mode_noisepal(void) {
 // --- Chase 2 (ID 28) ---
 static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
                       bool do_palette) {
-  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
-  uint16_t a = (counter * instance->_segment.length()) >> 16;
+  uint32_t len = instance->_segment.length();
+  uint32_t speed = instance->_segment.speed;
 
-  unsigned size =
-      1 + ((instance->_segment.intensity * instance->_segment.length()) >> 10);
+  // Size of a target sub-block.
+  // Based on intensity: Low intensity = 1 pixel. High intensity = full strip
+  // length
+  float size = 1.0f + ((float)(instance->_segment.intensity * len) / 1024.0f);
 
-  uint16_t b = a + size;
-  if (b > instance->_segment.length())
-    b -= instance->_segment.length();
-  uint16_t c = b + size;
-  if (c > instance->_segment.length())
-    c -= instance->_segment.length();
+  // Total cycle is the length of the strip, meaning 1 full rotation.
+  // We use this as the phase domain
+  float cycle_size = (float)len;
 
-  if (do_palette) {
-    for (unsigned i = 0; i < instance->_segment.length(); i++) {
-      uint32_t col = instance->_segment.color_from_palette(i, true, true, 0);
-      instance->_segment.setPixelColor(i, col);
+  // Smooth cubic speed mapping. Max ~350 pixels/sec.
+  float s = (float)speed / 255.0f;
+  float pps = 2.0f + (s * s * s) * 350.0f;
+  float offset = (instance->now * pps) / 1000.0f;
+
+  // Aliasing fade zone (0.6px minimum to prevent integer snaps at low speeds)
+  float fade_zone = 0.6f;
+
+  for (unsigned i = 0; i < len; i++) {
+    // Generate phase: [0, cycle_size)
+    // We reverse the physical offset by subtracting it so the chase goes
+    // "forward" down the strip
+    float local_phase = fmodf((float)i - offset, cycle_size);
+    if (local_phase < 0.0f)
+      local_phase += cycle_size;
+
+    uint32_t final_color = color1; // Default background (color1 or palette)
+    if (do_palette) {
+      final_color = instance->_segment.color_from_palette(i, true, true, 0);
     }
-  } else {
-    instance->_segment.fill(color1);
-  }
 
-  if (a < b) {
-    for (unsigned i = a; i < b; i++)
-      instance->_segment.setPixelColor(i, color2);
-  } else {
-    for (unsigned i = a; i < instance->_segment.length(); i++)
-      instance->_segment.setPixelColor(i, color2);
-    for (unsigned i = 0; i < b; i++)
-      instance->_segment.setPixelColor(i, color2);
-  }
+    // We have two colored blocks travelling on top of the background:
+    // Block 1 (color2) travels from [0, size]
+    // Block 2 (color3) travels from [size, 2*size]
 
-  if (b < c) {
-    for (unsigned i = b; i < c; i++)
-      instance->_segment.setPixelColor(i, color3);
-  } else {
-    for (unsigned i = b; i < instance->_segment.length(); i++)
-      instance->_segment.setPixelColor(i, color3);
-    for (unsigned i = 0; i < c; i++)
-      instance->_segment.setPixelColor(i, color3);
+    // Determine which zone we are in and how close to an edge
+    if (local_phase < size) {
+      // Zone 1 (color2)
+      float dist_start = local_phase;
+      float dist_end = size - local_phase;
+      float dist_edge = dist_start < dist_end ? dist_start : dist_end;
+
+      if (dist_edge < fade_zone) {
+        // Blend edge with background
+        float mix = 0.5f + (dist_edge / (2.0f * fade_zone));
+        final_color = color_blend(final_color, color2, (uint8_t)(mix * 255.0f));
+      } else {
+        final_color = color2;
+      }
+    } else if (local_phase < size * 2.0f) {
+      // Zone 2 (color3)
+      float local_phase_2 = local_phase - size;
+      float dist_start = local_phase_2;
+      float dist_end = size - local_phase_2;
+      float dist_edge = dist_start < dist_end ? dist_start : dist_end;
+
+      if (dist_edge < fade_zone) {
+        // Blend edge with Zone 1 (color2) or background depending on which side
+        float mix = 0.5f + (dist_edge / (2.0f * fade_zone));
+
+        uint32_t mix_target = dist_start < dist_end ? color2 : final_color;
+        final_color = color_blend(mix_target, color3, (uint8_t)(mix * 255.0f));
+      } else {
+        final_color = color3;
+      }
+    }
+
+    instance->_segment.setPixelColor(i, final_color);
   }
 
   return FRAMETIME;

@@ -906,8 +906,10 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   switch (effect_id) {
   case 38:
     return 24; // Aurora
+  case 54:
+    return 60; // Chase Multi
   case 153:
-    return 64; // Fire Dual (same as Fire)
+    return 64; // Twin Flames (same as Fire)
   case 64:
     return 64; // Juggle
   case 66:
@@ -934,8 +936,10 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
+  case 54:
+    return 70; // Chase Multi
   case 153:
-    return 160; // Fire Dual (same as Fire 2012)
+    return 160; // Twin Flames(same as Fire)
   case 66:
     return 160; // Fire
   case 155:
