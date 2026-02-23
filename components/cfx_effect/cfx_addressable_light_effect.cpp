@@ -916,6 +916,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 64; // BPM
   case 104:
     return 60; // Sunrise
+  case 155:
+    return 60; // Kaleidos
   case 156:
     return 140; // Follow Me (Default Speed)
   case 157:
@@ -934,6 +936,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 160; // Fire Dual (same as Fire 2012)
   case 66:
     return 160; // Fire
+  case 155:
+    return 150; // Kaleidos
   case 156:
     return 40; // Follow Me (Default Intensity)
   case 157:

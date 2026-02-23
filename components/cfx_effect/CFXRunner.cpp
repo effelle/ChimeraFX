@@ -4627,83 +4627,83 @@ uint16_t mode_dropping_time(void) {
   float gravity = -0.0005f - (wled_speed / 50000.0f);
   gravity *= (len - 1);
 
-  // A. Filling Drop
-  // We need to spawn a drop such that it hits the WATER LEVEL exactly when the
-  // level needs to increment? Or simpler: We just spawn drops periodically.
-  // When one hits, if it's time, we raise the level. User's request: "Every
-  // drop... leaving the leds lit." So the drop CAUSES the fill.
+  // A. Filling Drop Timing
+  // We want the drop to 'release' (finish swelling and fall) at releaseTime
+  // such that it hits the WATER LEVEL exactly at nextPixelTime.
+  uint32_t msPerPixel = duration_ms / len;
+  uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
 
-  // Let's reverse it:
-  // Calculate when the NEXT pixel should be filled.
-  // NextFillTime = (PixelIndex + 1) * (Duration / Len)
-  // We need to spawn the drop so it ARRIVES at NextFillTime.
-  // FallTime = sqrt(2 * dist / |g|)
-  // dist = (len-1) - currentLevel
-  // SpawnTime = NextFillTime - FallTime.
+  // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
+  float dist = (len - 1) - state->filledPixels;
+  if (dist < 0)
+    dist = 0;
+
+  // Approx Fall Time (ms)
+  float estFallFrames = sqrtf(2.0f * dist / (-gravity));
+  uint32_t estFallMs = (uint32_t)(estFallFrames * 15.0f); // Approx 15ms/frame
+
+  uint32_t releaseTime =
+      (nextPixelTime > estFallMs) ? (nextPixelTime - estFallMs) : 0;
+  uint32_t formingDuration = 500; // 500ms swelling time before drop falls
+  uint32_t formingTime =
+      (releaseTime > formingDuration) ? (releaseTime - formingDuration) : 0;
 
   if (state->filledPixels < len) {
-    uint32_t msPerPixel = duration_ms / len;
-    uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
-
-    // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
-    float dist = (len - 1) - state->filledPixels;
-    if (dist < 0)
-      dist = 0;
-
-    // Time to fall (frames? ms?). Gravity is in units/frame^2?
-    // In Drip effect: pos += vel; vel += gravity.
-    // Distance d = 0.5 * g * t^2 -> t = sqrt(2d/g) (in frames)
-    // Convert frames to ms (approx 15ms/frame default, but variable)
-    // Let's use a rough estimate or just spawn it slightly ahead.
-
-    // Heuristic: Just spawn it when we are close.
-    // Better: Interval based.
-    // If we simply spawn drops at `msPerPixel` interval, they will arrive at
-    // roughly the right rate. Let's try that for robustness.
-
     if (!state->fillingDropActive) {
-      // Check if it's time to spawn the next filling drop
-      // We want the drop to LAND when the timer reaches the next pixel.
-      // So we spawn it `FallTime` *before* that.
-      // Approx Fall Time (ms) ~ sqrt(2 * dist / 0.0005) * 15ms
-      // G_eff = |gravity| = 0.0005 * len roughly.
-      // Let's just spawn it if (NextPixelTime - Now) < ExpectedFallDuration
-
-      float estFallFrames = sqrtf(2.0f * dist / (-gravity));
-      uint32_t estFallMs = estFallFrames * 15; // Approx
-
-      // Add a buffer so it doesn't arrive too late
-      if (elapsed + estFallMs >= nextPixelTime) {
-        // Spawn!
+      if (elapsed >= formingTime) {
         state->fillingDropActive = true;
         state->fillingDrop.pos = len - 1;
         state->fillingDrop.vel = 0;
-        state->fillingDrop.col = 255;
-        state->fillingDrop.colIndex = 2; // Falling
+        state->fillingDrop.col = 0;      // Brightness starts at 0 for swelling
+        state->fillingDrop.colIndex = 1; // 1 = Forming
       }
     }
   }
 
-  // Update Filling Drop
+  // Update Filling Drop State Machine
   if (state->fillingDropActive) {
-    state->fillingDrop.vel += gravity;
-    state->fillingDrop.pos += state->fillingDrop.vel;
+    if (state->fillingDrop.colIndex == 1) { // Forming (Swelling)
+      if (elapsed >= releaseTime) {
+        state->fillingDrop.col = 255;
+        state->fillingDrop.colIndex = 2; // Falling!
+      } else {
+        uint32_t formElapsed = elapsed - formingTime;
+        state->fillingDrop.col = (formElapsed * 255) / formingDuration;
+        if (state->fillingDrop.col > 255)
+          state->fillingDrop.col = 255;
+      }
+    } else if (state->fillingDrop.colIndex == 2) { // Falling
+      state->fillingDrop.vel += gravity;
+      state->fillingDrop.pos += state->fillingDrop.vel;
 
-    // Hit Water Level?
-    if (state->fillingDrop.pos <= state->filledPixels) {
-      state->fillingDropActive = false;
-      state->filledPixels++;
-      if (state->filledPixels > len)
-        state->filledPixels = len;
+      // Hit Water Level? -> Transition to Splash/Bounce
+      if (state->fillingDrop.pos <= state->filledPixels) {
+        state->fillingDrop.colIndex = 5; // Bouncing/Splash
+        state->fillingDrop.pos =
+            state->filledPixels; // Lock to water surface temporarily
+        state->fillingDrop.vel =
+            sqrtf(-2.0f * gravity * 3.0f); // Small bounce velocity
+      }
+    } else if (state->fillingDrop.colIndex > 2) { // Bouncing/Splashing
+      state->fillingDrop.vel += gravity;
+      state->fillingDrop.pos += state->fillingDrop.vel;
+
+      if (state->fillingDrop.pos <= state->filledPixels) {
+        // Splash settled, commit the fill
+        state->fillingDropActive = false;
+        state->filledPixels++;
+        if (state->filledPixels > len)
+          state->filledPixels = len;
+      }
     }
   } else {
-    // Failsafe / Catch-up Logic
-    if (targetLevel > state->filledPixels) {
+    // Failsafe / Catch-up Logic if it gets severely behind
+    if (elapsed > nextPixelTime + 1500 && targetLevel > state->filledPixels) {
       state->filledPixels = targetLevel;
     }
   }
 
-  // If Duration ended, force full fill
+  // If Duration ended, force full fill safely
   if (elapsed >= duration_ms) {
     state->filledPixels = len;
   }
@@ -4717,32 +4717,20 @@ uint16_t mode_dropping_time(void) {
 
   // B. Draw Water (Ocean Logic)
   // Bidirectional waves for organic "sloshing" effect
-  // Explicitly calculated to ensure opposing direction
   uint32_t ms = instance->now;
   uint8_t pal = instance->_segment.palette;
   if (pal == 0 || pal == 255)
-    pal = 11; // Default to Ocean, prevent solid colors
+    pal = 11; // Default to Ocean to prevent flat colors
   const uint32_t *active_palette = getPaletteByIndex(pal);
 
-  // Time bases for waves (sawtooth 0-255)
-  // Wave 1: Moves RIGHT (x - t)
   uint8_t t1 = beat8(15);
-  // Wave 2: Moves LEFT (x + t)
   uint8_t t2 = beat8(18);
 
   for (int i = 0; i < state->filledPixels; i++) {
-    // x coordinates (scaled)
-    // larger multiplier = narrower waves
     uint8_t x1 = i * 4;
     uint8_t x2 = i * 7;
-
-    // Wave 1: Right moving -> sin(x - t)
     uint8_t wave1 = sin8(x1 - t1);
-
-    // Wave 2: Left moving -> sin(x + t)
     uint8_t wave2 = sin8(x2 + t2);
-
-    // Combine (Average)
     uint8_t index = (wave1 + wave2) / 2;
 
     CRGBW c = ColorFromPalette(active_palette, index, 255);
@@ -4751,79 +4739,105 @@ uint16_t mode_dropping_time(void) {
 
   // C. Draw Drops (Filling Drop)
   if (state->fillingDropActive) {
-    int pos = (int)state->fillingDrop.pos;
-    if (pos >= state->filledPixels && pos < len) {
-      instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
-    }
-    for (int t = 1; t <= 4; t++) {
-      int tPos = pos + t;
-      if (tPos >= state->filledPixels && tPos < len) {
-        instance->_segment.setPixelColor(
-            tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+    if (state->fillingDrop.colIndex == 1) { // Forming
+      // Draw swelling drop at the top
+      CRGBW c = ColorFromPalette(active_palette, 255, state->fillingDrop.col);
+      instance->_segment.setPixelColor(len - 1, RGBW32(c.r, c.g, c.b, c.w));
+    } else if (state->fillingDrop.colIndex == 2) { // Falling
+      int pos = (int)state->fillingDrop.pos;
+      if (pos >= state->filledPixels && pos < len) {
+        instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
+      }
+      for (int t = 1; t <= 4; t++) { // Tail
+        int tPos = pos + t;
+        if (tPos >= state->filledPixels && tPos < len) {
+          instance->_segment.setPixelColor(
+              tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+        }
+      }
+    } else if (state->fillingDrop.colIndex > 2) { // Bouncing/Splash
+      int pos = (int)state->fillingDrop.pos;
+      // Draw splash particle (dimmer white)
+      if (pos >= state->filledPixels && pos < len) {
+        instance->_segment.setPixelColor(pos, color_blend(0xFFFFFF, 0, 150));
+      }
+      // Draw ripple at water level exactly
+      if (state->filledPixels < len && state->filledPixels >= 0) {
+        uint32_t cur = instance->_segment.getPixelColor(state->filledPixels);
+        instance->_segment.setPixelColor(state->filledPixels,
+                                         color_blend(cur, 0xFFFFFF, 200));
       }
     }
   }
 
-  // D. Draw Drops (Dummy Drops)
-  // Ambient Update (Non-counting drops for visual texture on long timers)
+  // D. Ambient Dummy Drops Update & Render
   for (int i = 0; i < 2; i++) {
     if (state->dummyDrops[i].colIndex == 0) {
-      // Inactive - Try to spawn
-      // Requires at least 15 pixels of free fall space to be worth it
       if (len - state->filledPixels > 15 && cfx::hw_random16(0, 300) == 0) {
         state->dummyDrops[i].pos = len - 1;
         state->dummyDrops[i].vel = 0;
-        state->dummyDrops[i].colIndex = 1; // Active
-        state->dummyDrops[i].col =
-            150 + cfx::hw_random8(100); // Random brightness
+        state->dummyDrops[i].colIndex = 1; // Forming
+        state->dummyDrops[i].col = 0;
       }
-    } else {
-      // Active - Update Physics
+    } else if (state->dummyDrops[i].colIndex == 1) { // Forming
+      state->dummyDrops[i].col += 15;                // Swell speed
+      if (state->dummyDrops[i].col >= 200) { // Release generic threshold
+        state->dummyDrops[i].colIndex = 2;   // Fall
+      }
+    } else if (state->dummyDrops[i].colIndex == 2) { // Falling
       state->dummyDrops[i].vel += gravity;
       state->dummyDrops[i].pos += state->dummyDrops[i].vel;
 
-      // Hit Water Level? -> Deactivate silently without incrementing level
+      // Hit Water Level? -> Bounce
       if (state->dummyDrops[i].pos <= state->filledPixels) {
-        state->dummyDrops[i].colIndex = 0;
+        state->dummyDrops[i].pos = state->filledPixels;
+        state->dummyDrops[i].vel =
+            sqrtf(-2.0f * gravity * 3.0f); // small bounce
+        state->dummyDrops[i].colIndex = 5;
+      }
+    } else if (state->dummyDrops[i].colIndex > 2) { // Bouncing
+      state->dummyDrops[i].vel += gravity;
+      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
+      if (state->dummyDrops[i].pos <= state->filledPixels) {
+        state->dummyDrops[i].colIndex = 0; // Deactivate silently
       }
     }
-  }
 
-  // Draw Dummy Drops (Alpha Trail)
-  for (int i = 0; i < 2; i++) {
+    // Dummy Drop Drawing
     if (state->dummyDrops[i].colIndex != 0) {
-      int pos = (int)state->dummyDrops[i].pos;
-      if (pos >= state->filledPixels && pos < len) {
+      if (state->dummyDrops[i].colIndex == 1) { // Forming
+        CRGBW c =
+            ColorFromPalette(active_palette, 255, state->dummyDrops[i].col);
+        instance->_segment.setPixelColor(len - 1, RGBW32(c.r, c.g, c.b, c.w));
+      } else {
+        int pos = (int)state->dummyDrops[i].pos;
+        if (pos >= state->filledPixels && pos < len) {
+          uint8_t pal_index = (pos * 255) / len;
+          // Dummy drops use palette colors for a richer visual
+          CRGBW c = ColorFromPalette(active_palette, pal_index, 200);
+          uint32_t head_col = RGBW32(c.r, c.g, c.b, c.w);
 
-        // Use Palette for Dummy Drop so it matches the Ocean/Selected palette
-        // Brightness is stored in .col (150-250 range)
-        uint8_t pal_index = (pos * 255) / len;
+          instance->_segment.setPixelColor(pos, head_col);
 
-        // Determine active palette (lock out Solid/Picker color to preserve
-        // water illusion)
-        uint8_t pal = instance->_segment.palette;
-        if (pal == 0 || pal == 255)
-          pal = 11; // Default to Ocean
-        const uint32_t *active_palette = getPaletteByIndex(pal);
-
-        CRGBW c = ColorFromPalette(active_palette, pal_index,
-                                   state->dummyDrops[i].col);
-        uint32_t head_col = RGBW32(c.r, c.g, c.b, c.w);
-
-        // Draw Head
-        instance->_segment.setPixelColor(pos, head_col);
-
-        // Draw Faded Trail (matching palette at previous positions)
-        for (int t = 1; t <= 3; t++) {
-          int tPos = pos + t;
-          if (tPos >= state->filledPixels && tPos < len) {
-            uint8_t trail_pal_index = (tPos * 255) / len;
-            uint8_t trail_bri =
-                std::max(0, (int)state->dummyDrops[i].col - (75 * t));
-            CRGBW tc =
-                ColorFromPalette(active_palette, trail_pal_index, trail_bri);
-            instance->_segment.setPixelColor(tPos,
-                                             RGBW32(tc.r, tc.g, tc.b, tc.w));
+          if (state->dummyDrops[i].colIndex == 2) { // Tail (Only when falling)
+            for (int t = 1; t <= 3; t++) {
+              int tPos = pos + t;
+              if (tPos >= state->filledPixels && tPos < len) {
+                uint8_t trail_pal_index = (tPos * 255) / len;
+                uint8_t trail_bri = std::max(0, 200 - (60 * t));
+                CRGBW tc = ColorFromPalette(active_palette, trail_pal_index,
+                                            trail_bri);
+                instance->_segment.setPixelColor(
+                    tPos, RGBW32(tc.r, tc.g, tc.b, tc.w));
+              }
+            }
+          } else if (state->dummyDrops[i].colIndex > 2) { // Splash Ripple
+            if (state->filledPixels < len && state->filledPixels >= 0) {
+              uint32_t cur =
+                  instance->_segment.getPixelColor(state->filledPixels);
+              instance->_segment.setPixelColor(state->filledPixels,
+                                               color_blend(cur, head_col, 150));
+            }
           }
         }
       }
