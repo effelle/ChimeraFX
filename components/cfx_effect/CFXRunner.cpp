@@ -2804,36 +2804,74 @@ uint16_t mode_chase_multi(void) {
   uint32_t len = instance->_segment.length();
 
   // Width controls the size/thickness of the pulses (1 to 16 pixels)
-  // Low intensity = width 1. High intensity = width 16.
-  unsigned width = 1 + (instance->_segment.intensity >> 4); // 1-16
-  unsigned cycle_size = width * 2;                          // 2 to 32
+  float width = 1.0f + (instance->_segment.intensity / 16.0f); // 1.0 to 16.9
+  float cycle_size = width * 2.0f;
 
-  // WLED 16.16 fractional speed math.
-  // Yields a perfectly smooth sub-pixel physical offset without aliasing.
-  uint32_t speed_factor = (speed >> 2) + 1;
-  uint32_t step = (((uint64_t)instance->now * speed_factor * len) >> 16);
+  // Speed mapping: purely pixels-per-second, independent of width.
+  // Cubic curve provides extreme precision/smoothness at low speeds
+  // without sacrificing max speed. Max speed ~350 pixels/sec.
+  float s = (float)speed / 255.0f;
+  float pps = 2.0f + (s * s * s) * 350.0f;
+
+  // Convert time to infinite physical pixel offset distance
+  float offset = (instance->now * pps) / 1000.0f;
+
+  // Anti-aliasing fade zone to eliminate integer strobe jitter
+  float w_half = width * 0.45f;
+  float fade_zone = 0.6f < w_half ? 0.6f : w_half;
 
   for (unsigned i = 0; i < len; i++) {
-    // Add step to current physical index to scroll
-    unsigned physical_pos = i + step;
+    // Determine local phase. Addition of offset scrolls the wave.
+    float local_phase = fmodf((float)i + offset, cycle_size);
+    if (local_phase < 0.0f)
+      local_phase += cycle_size;
 
-    // Determine where we are in the cycle (0 to cycle_size - 1)
-    unsigned index = physical_pos % cycle_size;
+    float mix = 0.0f;
+    float dist_to_edge = 0.0f;
 
-    uint32_t color;
-    if (index >= width) { // Background
-      if (instance->_segment.palette == 255 ||
-          instance->_segment.palette == 0) {
-        color = instance->_segment.colors[1]; // Use secondary (often black)
+    if (local_phase < width) {
+      // Foreground Zone
+      dist_to_edge = local_phase < (width - local_phase)
+                         ? local_phase
+                         : (width - local_phase);
+      if (dist_to_edge < fade_zone) {
+        mix = 0.5f + (dist_to_edge / (2.0f * fade_zone));
       } else {
-        color = instance->_segment.color_from_palette(i, true, true, 1);
+        mix = 1.0f;
       }
-    } else {                                // Foreground/Pulse
-      color = instance->_segment.colors[0]; // primary (solid)
+    } else {
+      // Background Zone
+      float bg_end_dist = cycle_size - local_phase;
+      float bg_start_dist = local_phase - width;
+      dist_to_edge = bg_start_dist < bg_end_dist ? bg_start_dist : bg_end_dist;
+
+      if (dist_to_edge < fade_zone) {
+        mix = 0.5f - (dist_to_edge / (2.0f * fade_zone));
+      } else {
+        mix = 0.0f;
+      }
     }
 
-    // Assign color
-    instance->_segment.setPixelColor(len - i - 1, color);
+    uint32_t bg_color;
+    if (instance->_segment.palette == 255 || instance->_segment.palette == 0) {
+      bg_color = instance->_segment.colors[1]; // Use secondary (often black)
+    } else {
+      bg_color = instance->_segment.color_from_palette(i, true, true, 1);
+    }
+
+    uint32_t fg_color = instance->_segment.colors[0]; // primary (solid)
+
+    uint32_t final_color;
+    if (mix >= 1.0f) {
+      final_color = fg_color;
+    } else if (mix <= 0.0f) {
+      final_color = bg_color;
+    } else {
+      final_color = color_blend(bg_color, fg_color, (uint8_t)(mix * 255.0f));
+    }
+
+    // Scroll forward seamlessly
+    instance->_segment.setPixelColor(len - i - 1, final_color);
   }
   return FRAMETIME;
 }
