@@ -2800,36 +2800,41 @@ uint16_t mode_glitter(void) {
 // --- Tricolor Chase (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
 uint16_t mode_tricolor_chase(void) {
-  // Use exact speed match from mode_chase but with continuous 64-bit bounds
-  // to prevent 16-bit truncation offset jumping
-  uint32_t speed_factor = (instance->_segment.speed >> 2) + 1;
-  uint32_t a =
-      ((uint64_t)instance->now * speed_factor * instance->_segment.length()) >>
-      16;
+  uint32_t speed = instance->_segment.speed;
+  uint32_t len = instance->_segment.length();
 
+  // Width controls the size/thickness of the pulses (1 to 16 pixels)
+  // Inverse relationship: High intensity = Fewer, larger pulses
+  // Low intensity = Many smaller pulses
   unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
-  unsigned index = a % (width * 2);                           // 2 bands
 
-  for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
-    if (index > (width * 2) - 1)
-      index = 0;
+  // The step is based purely on speed and time.
+  // It should NOT be modulated by width, otherwise speed changes when intensity
+  // changes.
+  uint32_t step = (instance->now * speed) >> 10;
+
+  // Total span of one pulse + gap cycle
+  unsigned cycle_size = width * 2;
+
+  for (unsigned i = 0; i < len; i++) {
+    // Determine where we are in the scrolling cycle
+    unsigned index = (i * 256 / cycle_size) + step;
+    index = (index >> 8) % 2; // 0 = Gap/Background, 1 = Pulse/Foreground
 
     uint32_t color;
-    if (index > width - 1) {
+    if (index == 0) { // Background
       if (instance->_segment.palette == 255 ||
           instance->_segment.palette == 0) {
-        color = instance->_segment
-                    .colors[1]; // Use secondary (often black)
-                                // as background instead of Solid Foreground
+        color = instance->_segment.colors[1]; // Use secondary (often black)
       } else {
         color = instance->_segment.color_from_palette(i, true, true, 1);
       }
-    } else {
+    } else {                                // Foreground/Pulse
       color = instance->_segment.colors[0]; // primary (solid)
     }
 
-    instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
-                                     color);
+    // Assign color
+    instance->_segment.setPixelColor(len - i - 1, color);
   }
   return FRAMETIME;
 }
