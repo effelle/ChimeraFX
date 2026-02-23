@@ -1097,17 +1097,16 @@ uint16_t mode_fire_dual(void) {
   // Check for mirror mode: flames start from center toward edges
   bool mirror_mode = instance->_segment.mirror;
 
-  // Vacuum: 2 pixels in center where no fire exists (only in normal mode)
-  // In mirror mode, vacuum is at the edges
-  int vacuum = 2;
-  int half_len = (len - vacuum) / 2;
+  // Remove vacuum: The flames should meet exactly in the middle without a black
+  // gap. For odd lengths, the exact center pixel is written by both halves
+  // (perfect overlap).
+  int half_len = (len + 1) / 2;
   if (half_len < 1)
     half_len = 1; // Safety for very short strips
 
   // Scale factor: Virtual -> Physical Half
   // "Zoom": Map only the bottom 48 pixels of the 60px virtual fire to the strip
-  // This crops the top ~20% (mostly smoke/black) to ensure flames meet in the
-  // middle Fixes "vacuum too big" on long strips
+  // This crops the top ~20% (mostly smoke/black).
   float scale = (float)(VIRTUAL_HEIGHT - 12) / (float)half_len;
 
   // Helper lambda for heat-to-color conversion
@@ -1149,11 +1148,6 @@ uint16_t mode_fire_dual(void) {
       instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
     }
 
-    // Vacuum in center (between the two halves)
-    for (int j = half_len; j < len - half_len; j++) {
-      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
-    }
-
     // Right half: Center -> Right edge
     // Mirror of left half
     for (int j = 0; j < half_len; j++) {
@@ -1179,11 +1173,6 @@ uint16_t mode_fire_dual(void) {
       uint8_t r, g, b;
       heat_to_rgb(v_index, r, g, b);
       instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
-    }
-
-    // Render Vacuum (Black)
-    for (int j = half_len; j < len - half_len; j++) {
-      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
     }
 
     // Render Right Flame (len-1 -> len-1-half_len) - Mirrored
