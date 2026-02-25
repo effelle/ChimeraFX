@@ -41,7 +41,7 @@ uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
 uint16_t mode_cfx_horizon_sweep(void);
-uint16_t mode_slipstream(void);
+uint16_t mode_pulsar(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -4285,8 +4285,8 @@ void CFXRunner::service() {
   case FX_MODE_GLITTER_SWEEP: // 163
     mode_cfx_horizon_sweep();
     break;
-  case FX_MODE_SLIPSTREAM: // 164
-    mode_slipstream();
+  case FX_MODE_PULSAR: // 164
+    mode_pulsar();
     break;
   default:
     mode_static();
@@ -6606,13 +6606,12 @@ uint16_t mode_fluid_rain(void) {
   return FRAMETIME;
 }
 
-// --- Slipstream Effect (ID 164) ---
-// Continuous "Running Water" COB effect.
-// Brightness-only animation: a moving cubicwave8 phase creates even-spaced
-// pulses of light travelling in one direction. dim8_video deepens the valleys
-// so the pulses read as distinct slugs rather than a muddy sine glow.
-// No state buffers — pure math per pixel per frame.
-uint16_t mode_slipstream(void) {
+// --- Pulsar Effect (ID 164) ---
+// Stationary "expanding node" cursors that rhythmically grow outward from
+// fixed centers, then retract and vanish.  Pure brightness masking on a
+// spatial grid modulated by a temporal threshold — no traveling wave.
+// Zero state buffers — pure math per pixel per frame.
+uint16_t mode_pulsar(void) {
   if (!instance)
     return FRAMETIME;
 
@@ -6623,33 +6622,37 @@ uint16_t mode_slipstream(void) {
   uint8_t speed = instance->_segment.speed;         // 0-255
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // Time base: higher speed → faster travel.
-  // The >> 4 gives a smooth 0-65535 range at sane speeds.
-  uint32_t time_base = (instance->now * speed) >> 4;
+  // --- 1. Spatial Setup (Fixed Nodes) ---
+  // Spacing between cursor centers: low intensity = wide, high = tight.
+  uint16_t spacing = cfx_map(intensity, 0, 255, 10, 60);
+  if (spacing < 2)
+    spacing = 2; // safety floor
+  uint16_t half_space = spacing / 2;
 
-  // Pulse width: maps intensity 0-255 to 5-30 phase units per LED.
-  // Low intensity → wide pulses (few, spaced-out slugs).
-  // High intensity → narrow pulses (many rapid slugs).
-  uint16_t pulse_width = cfx_map(intensity, 0, 255, 5, 30);
+  // --- 2. Temporal Setup (The Pulse) ---
+  // Global expansion/retraction wave.
+  uint8_t time_wave = cubicwave8((uint8_t)((instance->now * speed) >> 4));
 
-  // Slow color-index drift for subtle palette variety (very slow — accent
-  // only). Advances ~1 palette step every ~8 seconds at default speed.
-  uint8_t base_color_index = (uint8_t)((instance->now >> 7) & 0xFF);
-
-  const uint32_t *active_palette =
-      getPaletteByIndex(instance->_segment.palette);
+  // --- 3. Palette (monochromatic — forced solid by is_monochromatic_) ---
+  const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t i = 0; i < len; i++) {
-    // Phase for this pixel moves "forward" as time_base grows.
-    uint8_t phase = (uint8_t)((i * pulse_width) - time_base);
+    // Distance from the nearest node center, normalised to 0-255.
+    uint16_t local_i = i % spacing;
+    uint16_t dist_from_center = (uint16_t)abs((int)local_i - (int)half_space);
+    uint8_t spatial_phase = (uint8_t)((dist_from_center * 255) / half_space);
 
-    // cubicwave8: smooth peaks and valleys (0-255), softer than sine.
-    uint8_t raw_bri = cubicwave8(phase);
+    // --- Expansion math ---
+    // time_wave high → cursor fully expanded (bri > 0 everywhere).
+    // time_wave low  → only pixels very near center stay lit.
+    // time_wave 0    → cursor fully retracted / vanished.
+    uint8_t bri = qsub8(time_wave, spatial_phase);
 
-    // dim8_video deepens the valleys, making pulses pop as distinct slugs.
-    uint8_t final_bri = dim8_video(raw_bri);
+    // Hard-edge modifier: doubles brightness with saturating add,
+    // creating a sharper cutoff at the expanding edge.
+    bri = qadd8(bri, bri);
 
-    CRGBW c = ColorFromPalette(active_palette, base_color_index, final_bri);
+    CRGBW c = ColorFromPalette(active_palette, 0, bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 

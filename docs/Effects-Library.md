@@ -20,7 +20,7 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
-| 164 | **Slipstream** | Continuous "Running Water" COB chase effect. Evenly-spaced pulses of light travel in one direction using cubicwave8 brightness modulation deepened by dim8_video for crisp, distinct slugs. Ideal for monochromatic warm white or ice blue looks. | **Intensity**: Pulse density (gap between slugs) - **Speed**: Flow speed | Yes | ChimeraFX |
+| 164 | **Pulsar** | Stationary cursors that rhythmically expand outward from fixed node centers, then retract and vanish. Uses `qsub8(time_wave, spatial_phase)` expansion masking with `qadd8` hard-edge sharpening. Designed for monochromatic solid-color looks. | **Intensity**: Node spacing (cursor density) - **Speed**: Pulse speed | No | ChimeraFX |
 | 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center. Toggle Mirror to reverse the effect. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
 
 #### ChimeraFX Monochromatic Effects:

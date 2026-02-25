@@ -159,6 +159,10 @@
     effect_id: 95
 
 - addressable_cfx:
+    name: "Pulsar"
+    effect_id: 164
+
+- addressable_cfx:
     name: "Rainbow"
     effect_id: 9
 
@@ -189,10 +193,6 @@
 - addressable_cfx:
     name: "Scanner Dual"
     effect_id: 60
-
-- addressable_cfx:
-    name: "Slipstream"
-    effect_id: 164
 
 - addressable_cfx:
     name: "Sparkle"
