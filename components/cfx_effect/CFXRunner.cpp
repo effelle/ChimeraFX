@@ -6636,9 +6636,14 @@ uint16_t mode_collider(void) {
     num_blobs = MAX_COLLIDER_BLOBS;
 
   // --- Rendering & Collision Radii ---
-  // Wide plateau radius: solid blocks of light with short faded edges.
-  // Intensity maps to cursor width: 10px (low) to 30px (high).
-  float blob_radius = 10.0f + ((float)intensity / 255.0f) * 20.0f;
+  // Radius proportional to strip length and blob count.
+  // Each blob occupies ~50% of its "slot" (len/num_blobs), leaving visible
+  // gaps.
+  float blob_radius = (float)len / (float)(num_blobs * 4);
+  if (blob_radius < 3.0f)
+    blob_radius = 3.0f;
+  if (blob_radius > 20.0f)
+    blob_radius = 20.0f;
   // Solid core = 60% of total radius. Only the outer 40% fades.
   float core_radius = blob_radius * 0.6f;
   // Collision triggers at core-to-core contact
@@ -6663,8 +6668,8 @@ uint16_t mode_collider(void) {
   }
 
   // --- Physics Step ---
-  // Max 0.5 px/frame at speed=255 for smooth sub-pixel gliding.
-  float v_scale = ((float)speed / 255.0f) * 0.5f;
+  // Max 1.0 px/frame at speed=255 for visible, smooth gliding.
+  float v_scale = (float)speed / 255.0f;
 
   for (int i = 0; i < num_blobs; i++) {
     blobs[i].pos += blobs[i].vel * v_scale;

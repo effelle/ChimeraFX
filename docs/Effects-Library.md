@@ -13,7 +13,6 @@ Please note that some WLED effects will not be ported. This includes animations 
 |:---|:---|:---|:---|:---:|:---|
 | 152 | **Center Gauge**| A symmetrical progress bar expanding smoothly from the middle to the edges. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
 | 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | No | ChimeraFX |
-| 164 | **Collider** | Traveling blobs of light that undergo elastic collisions and bounce off each other. Additive metaball rendering creates a gooey, liquid merge when blobs touch before separating. Designed for monochromatic solid-color looks. | **Intensity**: Blob count (2-8) - **Speed**: Blob velocity | No | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
 | 160 | **Fluid Rain** | A realistic liquid simulation. Raindrops hit the strip, creating organic ripples that travel, collide, and bounce off the edges. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
@@ -29,6 +28,7 @@ Specifically designed for solid color animations with premium, forced entry/exit
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
+| 164 | **Collider** | Traveling blobs of light that undergo elastic collisions and bounce off each other. Additive metaball rendering creates a gooey, liquid merge when blobs touch before separating. Designed for monochromatic solid-color looks. | **Intensity**: Blob count (2-8) - **Speed**: Blob velocity | No | ChimeraFX |
 | 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 164 | **Pulsar** | Stationary cursors that rhythmically expand outward from fixed node centers, then retract and vanish. Uses `qsub8(time_wave, spatial_phase)` expansion masking with `qadd8` hard-edge sharpening. Designed for monochromatic solid-color looks. | **Intensity**: Node spacing (cursor density) - **Speed**: Pulse speed | No | ChimeraFX |
