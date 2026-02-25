@@ -89,10 +89,11 @@ light:
 
 With the above configuration, your ESP32 will compile with all 50+ effects, but `Aurora` will use your tailored speed and palette settings out of the box. More on effect presets in the [Effect Presets](Effect-Presets.md) page.
 
-## Hardware & Framework Support
+## Hardware & Driver Architecture
 
-`cfx_light` works seamlessly on both **ESP-IDF** and **Arduino** frameworks, adapting its engine automatically:
-- On **ESP-IDF**, it leverages the native high-performance ESP32 RMT DMA drivers.
-- On **Arduino**, it natively builds upon `NeoPixelBus` for robust, high-speed rendering.
+`cfx_light` is a high-performance, asynchronous DMA driver. Unlike standard platforms that provide a broad but generic compatibility layer, `cfx_light` is specifically optimized for visual excellence and stability on the ESP32:
 
-You do not need to choose different platforms for different frameworks, `cfx_light` intelligently handles the underlying dependencies for you!
+- **Universal RMT Backend:** Whether you use the **ESP-IDF** or **Arduino** framework in ESPHome, this component leverages the native ESP32 RMT (Remote Control) peripheral directly via the IDF drivers. This ensures fire-and-forget DMA transmissions regardless of your framework choice.
+- **Curated Timing Engine:** Because we use a custom timing generator to ensure 1:1 color accuracy and zero-flicker performance, we support a curated list of the most popular 1-wire NRZ chipsets. We do not support the broad and often unstable list of older or 2-wire chipsets found in generic platforms.
+
+If your chipset is not on the supported list but uses standard 800Kbps timings, `WS2812X` is often a compatible drop-in choice.
