@@ -21,6 +21,18 @@ static const char *TAG = "chimera_fx";
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
     : light::AddressableLightEffect(name) {}
 
+CFXAddressableLightEffect::MonochromaticPreset
+CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
+  // Master dictionary for static/monochromatic effects requiring forced
+  // intros/outros
+  switch (effect_id) {
+  case 161: // Horizon Sweep
+    return {true, INTRO_WIPE, INTRO_WIPE};
+  default:
+    return {false, INTRO_NONE, INTRO_NONE};
+  }
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
@@ -246,16 +258,18 @@ void CFXAddressableLightEffect::start() {
         this->active_intro_mode_ = INTRO_GLITTER;
     }
 
-    // Effect 161 (Horizon Sweep) Hijack
-    if (this->effect_id_ == 161) {
+    // Monochromatic Preset Hijack (e.g. Effect 161 Horizon Sweep)
+    MonochromaticPreset preset =
+        this->get_monochromatic_preset_(this->effect_id_);
+    if (preset.is_active) {
       this->intro_active_ = true;
-      this->active_intro_mode_ = INTRO_WIPE;
+      this->active_intro_mode_ = preset.intro_mode;
     }
 
     // Cache for this run
     this->intro_effect_ = intro_sel;
 
-    if (this->active_intro_mode_ == INTRO_NONE && this->effect_id_ != 161) {
+    if (this->active_intro_mode_ == INTRO_NONE && !preset.is_active) {
       this->intro_active_ = false;
 
       // Use the light's default_transition_length for a smooth fade-in
@@ -319,10 +333,11 @@ void CFXAddressableLightEffect::stop() {
       if (dur_num == nullptr && this->controller_ != nullptr)
         dur_num = this->controller_->get_outro_duration();
 
-      // Effect 161 (Horizon Sweep) Hijack - Force Wipe and Use Speed for
-      // Duration
-      if (this->effect_id_ == 161) {
-        this->active_outro_mode_ = INTRO_WIPE;
+      // Monochromatic Preset Hijack
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        this->active_outro_mode_ = preset.outro_mode;
 
         number::Number *speed_num = this->speed_;
         if (speed_num == nullptr && this->controller_ != nullptr)
@@ -531,8 +546,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                             ? this->transition_duration_->state
                             : 1.5f;
 
-      if (this->effect_id_ == 161) {
-        trans_dur = 0.0f; // Instant finish for Horizon Sweep
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        trans_dur = 0.0f; // Instant finish for Monochromatic Presets
       }
 
       if (trans_dur > 0.0f) {
@@ -1134,8 +1151,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   if (dur_num == nullptr && this->controller_ != nullptr)
     dur_num = this->controller_->get_intro_duration();
 
-  // Effect 161 (Horizon Sweep) Hijack - Handle Duration logic
-  if (this->effect_id_ == 161) {
+  // Monochromatic Preset Hijack - Handle Duration logic
+  MonochromaticPreset preset =
+      this->get_monochromatic_preset_(this->effect_id_);
+  if (preset.is_active) {
     number::Number *speed_num = this->speed_;
     if (speed_num == nullptr && this->controller_ != nullptr)
       speed_num = this->controller_->get_speed();
@@ -1227,12 +1246,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
   }
 
-  // Effect 161 (Horizon Sweep) always forces palette matching Active Effect
-  // Palette
-  if (this->effect_id_ == 161 && this->runner_ != nullptr) {
+  // Monochromatic Presets always force palette matching Active Effect Palette
+  if (preset.is_active && this->runner_ != nullptr) {
     pal = this->runner_->_segment.palette;
     if (pal == 0)
-      pal = this->get_default_palette_id_(161);
+      pal = this->get_default_palette_id_(this->effect_id_);
     if (pal == 255)
       use_palette = false;
     else

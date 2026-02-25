@@ -46,12 +46,12 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 ## Features
 
 - **Native C++ Performance** — Optimized for multi-core ESP32s
-- **Clean YAML Syntax** — Simple `addressable_cfx` configuration
+- **Clean YAML Syntax** — Automatic loading of all effects or simple `addressable_cfx` configuration 
 - **Many Built-in Palettes** — Easily customizable
 - **Smooth Transitions** — Professional-grade animations
-- **Dynamic Controls** — Speed, intensity, palette, and mirror direction
-- **Intelligent Autotune** — Automatically snaps to optimal creator defaults, but instantly yields manual control when you touch a slider.
-- **Intro and Outro Animations** — Wipe, Fade, Center, and Glitter and more effects on turn-on and turn-off
+- **Dynamic Controls** — Speed, intensity, palette, and mirror direction for most of the effects
+- **Intelligent Autotune** — Automatically snaps to optimal parameter defaults, but instantly yields manual control when you touch a slider.
+- **Intro and Outro Animations** — Wipe, Fade, Center, Glitter and more effects on turn-on and turn-off
 - **Timer** — Turn off after a specified amount of time
 - **Presets** — Save and restore effect configurations
 - **Debug Logger** — Turn on/off a logger at runtime level for the component

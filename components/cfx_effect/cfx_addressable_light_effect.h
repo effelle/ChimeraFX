@@ -15,6 +15,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
+#include <cstdint>
 #include <vector>
 
 namespace esphome {
@@ -132,6 +133,14 @@ protected:
 
   uint32_t update_interval_{16};
   uint32_t last_run_{0};
+
+  struct MonochromaticPreset {
+    bool is_active;
+    uint8_t intro_mode;
+    uint8_t outro_mode;
+  };
+
+  MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
 
   uint8_t get_palette_index_();
   uint8_t get_default_palette_id_(uint8_t effect_id);
