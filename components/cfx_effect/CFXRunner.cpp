@@ -6636,15 +6636,13 @@ uint16_t mode_collider(void) {
     num_blobs = MAX_COLLIDER_BLOBS;
 
   // --- Rendering & Collision Radii ---
-  // Wide glow radius for fluid metaball look (8-15 pixels)
-  float blob_radius = (float)len / (float)(num_blobs * 3);
-  if (blob_radius < 8.0f)
-    blob_radius = 8.0f;
-  if (blob_radius > 15.0f)
-    blob_radius = 15.0f;
-
-  // Collision triggers when centers are within one full radius
-  float collision_radius = blob_radius;
+  // Wide plateau radius: solid blocks of light with short faded edges.
+  // Intensity maps to cursor width: 10px (low) to 30px (high).
+  float blob_radius = 10.0f + ((float)intensity / 255.0f) * 20.0f;
+  // Solid core = 60% of total radius. Only the outer 40% fades.
+  float core_radius = blob_radius * 0.6f;
+  // Collision triggers at core-to-core contact
+  float collision_radius = core_radius * 2.0f;
 
   // --- Allocate State ---
   size_t dataSize = sizeof(ColliderBlob) * MAX_COLLIDER_BLOBS;
@@ -6658,19 +6656,16 @@ uint16_t mode_collider(void) {
   if (instance->_segment.reset) {
     float spacing = (float)len / (float)num_blobs;
     for (int i = 0; i < MAX_COLLIDER_BLOBS; i++) {
-      // Even spacing so no immediate collisions
       blobs[i].pos = spacing * (float)i + spacing * 0.5f;
-      // Simple random direction: +1.0 or -1.0
       blobs[i].vel = (cfx::hw_random8() & 1) ? 1.0f : -1.0f;
     }
     instance->_segment.reset = false;
   }
 
   // --- Physics Step ---
-  // FIX 1: Drastically reduce velocity. Max 0.5 px/frame at speed=255.
+  // Max 0.5 px/frame at speed=255 for smooth sub-pixel gliding.
   float v_scale = ((float)speed / 255.0f) * 0.5f;
 
-  // Move blobs (sub-pixel gliding)
   for (int i = 0; i < num_blobs; i++) {
     blobs[i].pos += blobs[i].vel * v_scale;
 
@@ -6685,27 +6680,23 @@ uint16_t mode_collider(void) {
     }
   }
 
-  // FIX 2: Directional Elastic Collisions with FULL separation
+  // Directional Elastic Collisions with FULL separation
   for (int i = 0; i < num_blobs; i++) {
     for (int j = i + 1; j < num_blobs; j++) {
       float dist = fabsf(blobs[i].pos - blobs[j].pos);
 
       if (dist < collision_radius) {
-        // CRUCIAL: Only bounce if moving TOWARDS each other
         bool approaching =
             (blobs[i].pos < blobs[j].pos && blobs[i].vel > blobs[j].vel) ||
             (blobs[i].pos > blobs[j].pos && blobs[i].vel < blobs[j].vel);
 
         if (approaching) {
-          // Elastic collision: swap velocities
           float tmp = blobs[i].vel;
           blobs[i].vel = blobs[j].vel;
           blobs[j].vel = tmp;
 
-          // FULL separation: push them completely apart to collision_radius
-          // This eliminates the sticky-vibration bug entirely.
           float gap = collision_radius - dist;
-          float half_gap = gap * 0.5f + 0.5f; // +0.5 extra to guarantee clear
+          float half_gap = gap * 0.5f + 0.5f;
           if (blobs[i].pos < blobs[j].pos) {
             blobs[i].pos -= half_gap;
             blobs[j].pos += half_gap;
@@ -6714,7 +6705,6 @@ uint16_t mode_collider(void) {
             blobs[j].pos -= half_gap;
           }
 
-          // Clamp to strip bounds after separation
           blobs[i].pos = cfx_constrain(blobs[i].pos, 0.0f, (float)(len - 1));
           blobs[j].pos = cfx_constrain(blobs[j].pos, 0.0f, (float)(len - 1));
         }
@@ -6722,19 +6712,27 @@ uint16_t mode_collider(void) {
     }
   }
 
-  // --- FIX 3: Wide Metaball Rendering with dim8_video ---
+  // --- Plateau Rendering (Trapezoid Shape) ---
+  // Core (inner 60%): solid 255 brightness.
+  // Edge (outer 40%): linear fade to 0.
+  // Additive overlap: when two fade zones merge, brightness snaps to 255.
   const uint32_t *active_palette = getPaletteByIndex(255);
+  float fade_zone = blob_radius - core_radius;
 
   for (uint16_t px = 0; px < len; px++) {
     uint16_t total_energy = 0;
 
     for (int b = 0; b < num_blobs; b++) {
       float d = fabsf((float)px - blobs[b].pos);
-      if (d < blob_radius) {
-        // Linear falloff: 255 at center, 0 at edge
-        uint8_t raw_energy = 255 - (uint8_t)((d / blob_radius) * 255.0f);
-        // dim8_video softens the edges for a smooth glow
-        total_energy += dim8_video(raw_energy);
+
+      if (d <= core_radius) {
+        // Solid core: full brightness
+        total_energy += 255;
+      } else if (d < blob_radius) {
+        // Faded edge: linear falloff across the outer 40%
+        float fade_dist = d - core_radius;
+        uint8_t edge_energy = 255 - (uint8_t)((fade_dist / fade_zone) * 255.0f);
+        total_energy += edge_energy;
       }
     }
 
