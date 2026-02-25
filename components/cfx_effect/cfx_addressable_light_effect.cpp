@@ -28,9 +28,9 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   switch (effect_id) {
   case 161: // Horizon Sweep
     return {true, INTRO_WIPE, INTRO_WIPE};
-  case 162: // Center Sweep
+  case 162: // Curtain Sweep
     return {true, INTRO_CENTER, INTRO_CENTER};
-  case 163: // Glitter Sweep
+  case 163: // Stardust Sweep
     return {true, INTRO_GLITTER, INTRO_GLITTER};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
@@ -846,8 +846,8 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 152:     // Percent Center
     return 255; // Solid
   case 161:     // Horizon Sweep
-  case 162:     // Center Sweep
-  case 163:     // Glitter Sweep
+  case 162:     // Curtain Sweep
+  case 163:     // Stardust Sweep
     return 255; // Solid
 
   // Default Aurora (1) or specific handling

@@ -35,7 +35,7 @@
     effect_id: 152
 
 - addressable_cfx:
-    name: "Center Sweep"
+    name: "Curtain Sweep"
     effect_id: 162
 
 - addressable_cfx:
@@ -107,7 +107,7 @@
     effect_id: 87
 
 - addressable_cfx:
-    name: "Glitter Sweep"
+    name: "Stardust Sweep"
     effect_id: 163
 
 - addressable_cfx:
