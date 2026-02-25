@@ -6617,6 +6617,7 @@ uint16_t mode_fluid_rain(void) {
 struct ColliderBlob {
   float pos;
   float vel;
+  uint8_t phase; // Random offset for breathing oscillation
 };
 
 uint16_t mode_collider(void) {
@@ -6635,19 +6636,19 @@ uint16_t mode_collider(void) {
   if (num_blobs > MAX_COLLIDER_BLOBS)
     num_blobs = MAX_COLLIDER_BLOBS;
 
-  // --- Rendering & Collision Radii ---
-  // Radius proportional to strip length and blob count.
-  // Each blob occupies ~50% of its "slot" (len/num_blobs), leaving visible
-  // gaps.
-  float blob_radius = (float)len / (float)(num_blobs * 4);
-  if (blob_radius < 3.0f)
-    blob_radius = 3.0f;
-  if (blob_radius > 20.0f)
-    blob_radius = 20.0f;
-  // Solid core = 60% of total radius. Only the outer 40% fades.
-  float core_radius = blob_radius * 0.6f;
-  // Collision triggers at core-to-core contact
-  float collision_radius = core_radius * 2.0f;
+  // --- Dynamic Radius Bounds ---
+  // Intensity controls the breathing range (how wide blobs can stretch).
+  // Proportional to strip length so it scales to any LED count.
+  float slot = (float)len / (float)num_blobs;
+  float min_radius = slot * 0.15f; // Contracted: ~15% of slot
+  float max_radius = slot * 0.45f; // Expanded:  ~45% of slot
+  if (min_radius < 2.0f)
+    min_radius = 2.0f;
+  if (max_radius < 4.0f)
+    max_radius = 4.0f;
+
+  // Collision uses the max possible radius (worst case)
+  float collision_radius = max_radius * 0.6f * 2.0f; // core-to-core at max
 
   // --- Allocate State ---
   size_t dataSize = sizeof(ColliderBlob) * MAX_COLLIDER_BLOBS;
@@ -6663,18 +6664,18 @@ uint16_t mode_collider(void) {
     for (int i = 0; i < MAX_COLLIDER_BLOBS; i++) {
       blobs[i].pos = spacing * (float)i + spacing * 0.5f;
       blobs[i].vel = (cfx::hw_random8() & 1) ? 1.0f : -1.0f;
+      blobs[i].phase = cfx::hw_random8(); // Random breathing phase
     }
     instance->_segment.reset = false;
   }
 
   // --- Physics Step ---
-  // Max 1.0 px/frame at speed=255 for visible, smooth gliding.
+  // Max 1.0 px/frame at speed=255.
   float v_scale = (float)speed / 255.0f;
 
   for (int i = 0; i < num_blobs; i++) {
     blobs[i].pos += blobs[i].vel * v_scale;
 
-    // Wall bouncing
     if (blobs[i].pos <= 0.0f) {
       blobs[i].pos = 0.0f;
       blobs[i].vel = fabsf(blobs[i].vel);
@@ -6717,26 +6718,32 @@ uint16_t mode_collider(void) {
     }
   }
 
-  // --- Plateau Rendering (Trapezoid Shape) ---
-  // Core (inner 60%): solid 255 brightness.
-  // Edge (outer 40%): linear fade to 0.
-  // Additive overlap: when two fade zones merge, brightness snaps to 255.
+  // --- Breathing Plateau Rendering ---
+  // Each blob oscillates its radius via cubicwave8(time + phase).
+  // Core (inner 60%) stays solid 255. Outer 40% fades linearly.
+  // Additive overlap creates the liquid merge snap.
   const uint32_t *active_palette = getPaletteByIndex(255);
-  float fade_zone = blob_radius - core_radius;
+  uint8_t time_byte = (uint8_t)((instance->now >> 3) & 0xFF);
 
   for (uint16_t px = 0; px < len; px++) {
     uint16_t total_energy = 0;
 
     for (int b = 0; b < num_blobs; b++) {
+      // Per-blob breathing: oscillate radius between min and max
+      uint8_t wave = cubicwave8(time_byte + blobs[b].phase);
+      float pulse = (float)wave / 255.0f;
+      float current_radius = min_radius + pulse * (max_radius - min_radius);
+      float current_core = current_radius * 0.6f;
+      float current_fade = current_radius - current_core;
+
       float d = fabsf((float)px - blobs[b].pos);
 
-      if (d <= core_radius) {
-        // Solid core: full brightness
+      if (d <= current_core) {
         total_energy += 255;
-      } else if (d < blob_radius) {
-        // Faded edge: linear falloff across the outer 40%
-        float fade_dist = d - core_radius;
-        uint8_t edge_energy = 255 - (uint8_t)((fade_dist / fade_zone) * 255.0f);
+      } else if (d < current_radius && current_fade > 0.0f) {
+        float fade_dist = d - current_core;
+        uint8_t edge_energy =
+            255 - (uint8_t)((fade_dist / current_fade) * 255.0f);
         total_energy += edge_energy;
       }
     }
