@@ -333,44 +333,41 @@ void CFXAddressableLightEffect::stop() {
         this->active_outro_mode_ = this->active_intro_mode_;
       }
 
-      // Capture Outro Duration synchronously before dropping controller mapping
-      uint32_t duration_ms = 3000;
+      // 10. Outro Duration Logic
+      uint32_t duration_ms = 1000; // Final Default: 1.0s
       number::Number *dur_num = this->outro_duration_;
       if (dur_num == nullptr && this->controller_ != nullptr)
         dur_num = this->controller_->get_outro_duration();
 
-      // Monochromatic Preset Hijack
-      MonochromaticPreset preset =
-          this->get_monochromatic_preset_(this->effect_id_);
-      if (preset.is_active) {
-        this->active_outro_mode_ = preset.outro_mode;
-
-        number::Number *speed_num = this->speed_;
-        if (speed_num == nullptr && this->controller_ != nullptr)
-          speed_num = this->controller_->get_speed();
-
-        if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (500ms up to 10000ms)
-          // Lower speed = faster sweep (shorter duration)
-          float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-        } else {
-          duration_ms = 2500; // Default if speed slider is missing
-        }
+      if (dur_num != nullptr && dur_num->has_state()) {
+        // High Priority: UI Slider
+        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      } else if (this->outro_duration_preset_.has_value()) {
+        // Medium Priority: YAML Preset
+        duration_ms =
+            (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
       } else {
-        // Normal duration logic
-        if (dur_num != nullptr && dur_num->has_state()) {
-          duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-        } else if (this->outro_duration_preset_.has_value()) {
-          duration_ms =
-              (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+        // Monochromatic Preset Fallback: Speed Slider
+        MonochromaticPreset preset =
+            this->get_monochromatic_preset_(this->effect_id_);
+        if (preset.is_active) {
+          number::Number *speed_num = this->speed_;
+          if (speed_num == nullptr && this->controller_ != nullptr)
+            speed_num = this->controller_->get_speed();
+
+          if (speed_num != nullptr && speed_num->has_state()) {
+            // Map Speed (0-255) to Duration (500ms up to 10000ms)
+            float speed_val = speed_num->state;
+            duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          } else {
+            duration_ms = 1000; // Standard 1s default
+          }
         } else {
+          // Low Priority: Light Default Transition
           auto *current_state = this->get_light_state();
           if (current_state != nullptr &&
               current_state->get_default_transition_length() > 0) {
             duration_ms = current_state->get_default_transition_length();
-          } else {
-            duration_ms = 1500;
           }
         }
       }
@@ -516,30 +513,34 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->intro_active_) {
     this->run_intro(it, adjusted_color);
 
-    // Check for Intro Completion
-    uint32_t duration_ms = 3000; // Default 3s
+    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
+    uint32_t duration_ms = 1000; // Final Default: 1.0s
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
 
-    // Effect 161 (Horizon Sweep) Hijack - Map Speed to Intro Duration
-    if (this->effect_id_ == 161) {
-      number::Number *speed_num = this->speed_;
-      if (speed_num == nullptr && this->controller_ != nullptr)
-        speed_num = this->controller_->get_speed();
-
-      if (speed_num != nullptr && speed_num->has_state()) {
-        // Map Speed (0-255) to Duration (500ms up to 10000ms)
-        float speed_val = speed_num->state;
-        duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-      } else {
-        duration_ms = 2500; // Default if speed slider is missing
-      }
+    if (dur_num != nullptr && dur_num->has_state()) {
+      // High Priority: UI Slider
+      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      // Medium Priority: YAML Preset
+      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
     } else {
-      // Resolve duration from local component OR linked controller
-      number::Number *dur_num = this->intro_duration_;
-      if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      // Monochromatic Preset Fallback: Speed Slider
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
 
-      if (dur_num != nullptr && dur_num->has_state()) {
-        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else {
+          duration_ms = 1000; // Standard 1s default
+        }
       }
     }
 
@@ -838,6 +839,9 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 152:     // Percent Center
     return 255; // Solid
   case 161:     // Horizon Sweep
+  case 162:     // Center Sweep
+  case 163:     // Glitter Sweep
+  case 164:     // Fade Sweep
     return 255; // Solid
 
   // Default Aurora (1) or specific handling
@@ -1158,32 +1162,33 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     return;
   }
 
-  uint32_t duration = 3000;
+  uint32_t duration = 1000; // Initial Default: 1.0s
   number::Number *dur_num = this->intro_duration_;
   if (dur_num == nullptr && this->controller_ != nullptr)
     dur_num = this->controller_->get_intro_duration();
 
-  // Monochromatic Preset Hijack - Handle Duration logic
-  MonochromaticPreset preset =
-      this->get_monochromatic_preset_(this->effect_id_);
-  if (preset.is_active) {
-    number::Number *speed_num = this->speed_;
-    if (speed_num == nullptr && this->controller_ != nullptr)
-      speed_num = this->controller_->get_speed();
-
-    if (speed_num != nullptr && speed_num->has_state()) {
-      // Map Speed (0-255) to Duration (500ms up to 10000ms)
-      // Lower speed = faster sweep (shorter duration)
-      float speed_val = speed_num->state;
-      duration = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-    } else {
-      duration = 2500; // Default if speed slider is missing
-    }
+  if (dur_num != nullptr && dur_num->has_state()) {
+    // High Priority: UI Slider
+    duration = (uint32_t)(dur_num->state * 1000.0f);
+  } else if (this->intro_duration_preset_.has_value()) {
+    // Medium Priority: YAML Preset
+    duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
   } else {
-    if (dur_num != nullptr && dur_num->has_state()) {
-      duration = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->intro_duration_preset_.has_value()) {
-      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    // Monochromatic Preset Fallback: Speed Slider
+    MonochromaticPreset preset =
+        this->get_monochromatic_preset_(this->effect_id_);
+    if (preset.is_active) {
+      number::Number *speed_num = this->speed_;
+      if (speed_num == nullptr && this->controller_ != nullptr)
+        speed_num = this->controller_->get_speed();
+
+      if (speed_num != nullptr && speed_num->has_state()) {
+        // Map Speed (0-255) to Duration (500ms up to 10000ms)
+        float speed_val = speed_num->state;
+        duration = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+      } else {
+        duration = 1000; // Standard 1s default
+      }
     }
   }
 
