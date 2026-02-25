@@ -343,8 +343,6 @@ void CFXAddressableLightEffect::stop() {
 
       // 10. Outro Duration Logic
       uint32_t duration_ms = 1000; // Final Default: 1.0s
-      MonochromaticPreset preset =
-          this->get_monochromatic_preset_(this->effect_id_);
 
       number::Number *dur_num = this->outro_duration_;
       if (dur_num == nullptr && this->controller_ != nullptr)
