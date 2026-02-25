@@ -28,12 +28,12 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   switch (effect_id) {
   case 161: // Horizon Sweep
     return {true, INTRO_WIPE, INTRO_WIPE};
+  case 161: // Horizon Sweep
+    return {true, INTRO_WIPE, INTRO_WIPE};
   case 162: // Center Sweep
     return {true, INTRO_CENTER, INTRO_CENTER};
   case 163: // Glitter Sweep
     return {true, INTRO_GLITTER, INTRO_GLITTER};
-  case 164: // Fade Sweep
-    return {true, INTRO_FADE, INTRO_FADE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -251,25 +251,26 @@ void CFXAddressableLightEffect::start() {
     if (intro_sel == nullptr)
       intro_sel = this->intro_effect_;
 
-    if (intro_sel != nullptr && intro_sel->has_state()) {
-      const char *opt = intro_sel->current_option();
-      std::string s = opt ? opt : "";
-      if (s == "Wipe")
-        this->active_intro_mode_ = INTRO_WIPE;
-      else if (s == "Fade")
-        this->active_intro_mode_ = INTRO_FADE;
-      else if (s == "Center")
-        this->active_intro_mode_ = INTRO_CENTER;
-      else if (s == "Glitter")
-        this->active_intro_mode_ = INTRO_GLITTER;
-    }
-
-    // Monochromatic Preset Hijack (e.g. Effect 161 Horizon Sweep)
+    // 1. Highest Priority: Embedded Monochromatic Presets
     MonochromaticPreset preset =
         this->get_monochromatic_preset_(this->effect_id_);
     if (preset.is_active) {
       this->intro_active_ = true;
       this->active_intro_mode_ = preset.intro_mode;
+    } else {
+      // 2. Fallback to UI Selectors / YAML Presets
+      if (intro_sel != nullptr && intro_sel->has_state()) {
+        const char *opt = intro_sel->current_option();
+        std::string s = opt ? opt : "";
+        if (s == "Wipe")
+          this->active_intro_mode_ = INTRO_WIPE;
+        else if (s == "Fade")
+          this->active_intro_mode_ = INTRO_FADE;
+        else if (s == "Center")
+          this->active_intro_mode_ = INTRO_CENTER;
+        else if (s == "Glitter")
+          this->active_intro_mode_ = INTRO_GLITTER;
+      }
     }
 
     // Cache for this run
@@ -317,20 +318,29 @@ void CFXAddressableLightEffect::stop() {
       if (out_eff == nullptr && this->controller_ != nullptr)
         out_eff = this->controller_->get_outro_effect();
 
-      if (out_eff != nullptr && out_eff->has_state()) {
-        std::string opt = out_eff->current_option();
-        if (opt == "Wipe")
-          this->active_outro_mode_ = INTRO_WIPE;
-        else if (opt == "Center")
-          this->active_outro_mode_ = INTRO_CENTER;
-        else if (opt == "Glitter")
-          this->active_outro_mode_ = INTRO_GLITTER;
-        else if (opt == "Fade")
-          this->active_outro_mode_ = INTRO_FADE;
-      } else if (this->outro_preset_.has_value()) {
-        this->active_outro_mode_ = *this->outro_preset_;
+      // 1. Highest Priority: Embedded Monochromatic Presets
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+
+      if (preset.is_active) {
+        this->active_outro_mode_ = preset.outro_mode;
       } else {
-        this->active_outro_mode_ = this->active_intro_mode_;
+        // 2. Fallback to UI Selectors / YAML Presets
+        if (out_eff != nullptr && out_eff->has_state()) {
+          std::string opt = out_eff->current_option();
+          if (opt == "Wipe")
+            this->active_outro_mode_ = INTRO_WIPE;
+          else if (opt == "Center")
+            this->active_outro_mode_ = INTRO_CENTER;
+          else if (opt == "Glitter")
+            this->active_outro_mode_ = INTRO_GLITTER;
+          else if (opt == "Fade")
+            this->active_outro_mode_ = INTRO_FADE;
+        } else if (this->outro_preset_.has_value()) {
+          this->active_outro_mode_ = *this->outro_preset_;
+        } else {
+          this->active_outro_mode_ = this->active_intro_mode_;
+        }
       }
 
       // 10. Outro Duration Logic
@@ -842,7 +852,6 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 161:     // Horizon Sweep
   case 162:     // Center Sweep
   case 163:     // Glitter Sweep
-  case 164:     // Fade Sweep
     return 255; // Solid
 
   // Default Aurora (1) or specific handling
@@ -936,7 +945,6 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 161:
   case 162:
   case 163:
-  case 164:
     return 1; // Monochromatic series (fastest speed)
   default:
     return 128; // WLED default

@@ -79,10 +79,6 @@
     effect_id: 158
 
 - addressable_cfx:
-    name: "Fade Sweep"
-    effect_id: 164
-
-- addressable_cfx:
     name: "Fire"
     effect_id: 66
 
