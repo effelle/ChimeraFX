@@ -51,6 +51,10 @@
     effect_id: 54
 
 - addressable_cfx:
+    name: "Collider"
+    effect_id: 164
+
+- addressable_cfx:
     name: "Colorloop"
     effect_id: 8
 
@@ -157,10 +161,6 @@
 - addressable_cfx:
     name: "Popcorn"
     effect_id: 95
-
-- addressable_cfx:
-    name: "Pulsar"
-    effect_id: 164
 
 - addressable_cfx:
     name: "Rainbow"

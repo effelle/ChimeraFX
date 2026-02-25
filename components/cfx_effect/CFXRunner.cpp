@@ -41,7 +41,7 @@ uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
 uint16_t mode_cfx_horizon_sweep(void);
-uint16_t mode_pulsar(void);
+uint16_t mode_collider(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -4285,8 +4285,8 @@ void CFXRunner::service() {
   case FX_MODE_GLITTER_SWEEP: // 163
     mode_cfx_horizon_sweep();
     break;
-  case FX_MODE_PULSAR: // 164
-    mode_pulsar();
+  case FX_MODE_COLLIDER: // 164
+    mode_collider();
     break;
   default:
     mode_static();
@@ -6606,54 +6606,136 @@ uint16_t mode_fluid_rain(void) {
   return FRAMETIME;
 }
 
-// --- Pulsar Effect (ID 164) ---
-// Stationary "expanding node" cursors that rhythmically grow outward from
-// fixed centers, then retract and vanish.  Pure brightness masking on a
-// spatial grid modulated by a temporal threshold — no traveling wave.
-// Zero state buffers — pure math per pixel per frame.
-uint16_t mode_pulsar(void) {
+// --- Collider Effect (ID 164) ---
+// 1D Metaball Physics: traveling blobs undergo elastic collisions.
+// When two blobs touch, they pool/merge fluidly for a split second
+// (additive energy fields) before bouncing apart.
+// Stateful: allocateData holds blob positions and velocities.
+
+#define MAX_COLLIDER_BLOBS 8
+
+struct ColliderBlob {
+  float pos;
+  float vel;
+};
+
+uint16_t mode_collider(void) {
   if (!instance)
     return FRAMETIME;
 
   uint16_t len = instance->_segment.length();
-  if (len == 0)
+  if (len <= 1)
     return FRAMETIME;
 
-  uint8_t speed = instance->_segment.speed;         // 0-255
-  uint8_t intensity = instance->_segment.intensity; // 0-255
+  uint8_t speed = instance->_segment.speed;
+  uint8_t intensity = instance->_segment.intensity;
 
-  // --- 1. Spatial Setup (Fixed Nodes) ---
-  // Spacing between cursor centers: low intensity = wide, high = tight.
-  uint16_t spacing = cfx_map(intensity, 0, 255, 10, 60);
-  if (spacing < 2)
-    spacing = 2; // safety floor
-  uint16_t half_space = spacing / 2;
+  // Blob count: 2-8 based on intensity
+  uint8_t num_blobs = 2 + ((intensity * 6) >> 8);
+  if (num_blobs > MAX_COLLIDER_BLOBS)
+    num_blobs = MAX_COLLIDER_BLOBS;
 
-  // --- 2. Temporal Setup (The Pulse) ---
-  // Global expansion/retraction wave.
-  uint8_t time_wave = cubicwave8((uint8_t)((instance->now * speed) >> 4));
+  // Blob visual/collision radius (half-width)
+  uint16_t blob_width = len / (num_blobs * 2);
+  if (blob_width < 4)
+    blob_width = 4;
+  if (blob_width > 25)
+    blob_width = 25;
 
-  // --- 3. Palette (monochromatic — forced solid by is_monochromatic_) ---
+  // --- Allocate State ---
+  size_t dataSize = sizeof(ColliderBlob) * MAX_COLLIDER_BLOBS;
+  if (!instance->_segment.allocateData(dataSize))
+    return mode_static();
+
+  ColliderBlob *blobs =
+      reinterpret_cast<ColliderBlob *>(instance->_segment.data);
+
+  // --- Init on Reset ---
+  if (instance->_segment.reset) {
+    for (int i = 0; i < MAX_COLLIDER_BLOBS; i++) {
+      // Even spacing with offset
+      blobs[i].pos = (float)(i * len) / (float)num_blobs +
+                     (float)len / (float)(2 * num_blobs);
+      // Random velocity: -1.5 to +1.5, minimum magnitude 0.3
+      blobs[i].vel = ((float)cfx::hw_random8() - 128.0f) / 85.0f;
+      if (blobs[i].vel >= 0.0f && blobs[i].vel < 0.3f)
+        blobs[i].vel = 0.5f;
+      if (blobs[i].vel < 0.0f && blobs[i].vel > -0.3f)
+        blobs[i].vel = -0.5f;
+    }
+    instance->_segment.reset = false;
+  }
+
+  // --- Physics Step ---
+  float v_scale = (float)speed / 128.0f;
+
+  // Move blobs
+  for (int i = 0; i < num_blobs; i++) {
+    blobs[i].pos += blobs[i].vel * v_scale;
+
+    // Wall bouncing
+    if (blobs[i].pos <= 0.0f) {
+      blobs[i].pos = 0.0f;
+      blobs[i].vel = fabsf(blobs[i].vel);
+    }
+    if (blobs[i].pos >= (float)(len - 1)) {
+      blobs[i].pos = (float)(len - 1);
+      blobs[i].vel = -fabsf(blobs[i].vel);
+    }
+  }
+
+  // Elastic blob-blob collisions
+  for (int i = 0; i < num_blobs; i++) {
+    for (int j = i + 1; j < num_blobs; j++) {
+      float delta = blobs[i].pos - blobs[j].pos;
+      float abs_delta = fabsf(delta);
+
+      if (abs_delta < (float)blob_width) {
+        // Only swap if approaching each other
+        bool approaching = (delta > 0.0f && blobs[i].vel < blobs[j].vel) ||
+                           (delta < 0.0f && blobs[i].vel > blobs[j].vel);
+        if (approaching) {
+          // Elastic collision: swap velocities
+          float tmp = blobs[i].vel;
+          blobs[i].vel = blobs[j].vel;
+          blobs[j].vel = tmp;
+
+          // Separation bump to prevent sticking
+          float overlap = (float)blob_width - abs_delta;
+          float push = overlap * 0.55f;
+          if (delta > 0.0f) {
+            blobs[i].pos += push;
+            blobs[j].pos -= push;
+          } else {
+            blobs[i].pos -= push;
+            blobs[j].pos += push;
+          }
+        }
+      }
+    }
+  }
+
+  // --- Metaball Rendering (Additive Energy Fields) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
-  for (uint16_t i = 0; i < len; i++) {
-    // Distance from the nearest node center, normalised to 0-255.
-    uint16_t local_i = i % spacing;
-    uint16_t dist_from_center = (uint16_t)abs((int)local_i - (int)half_space);
-    uint8_t spatial_phase = (uint8_t)((dist_from_center * 255) / half_space);
+  for (uint16_t px = 0; px < len; px++) {
+    uint16_t total_energy = 0;
 
-    // --- Expansion math ---
-    // time_wave high → cursor fully expanded (bri > 0 everywhere).
-    // time_wave low  → only pixels very near center stay lit.
-    // time_wave 0    → cursor fully retracted / vanished.
-    uint8_t bri = qsub8(time_wave, spatial_phase);
+    for (int b = 0; b < num_blobs; b++) {
+      float dist = fabsf((float)px - blobs[b].pos);
+      if (dist < (float)blob_width) {
+        // Map distance 0->blob_width to phase 128->255
+        // cubicwave8(128)=255 (max), cubicwave8(255)=0 (edge)
+        uint8_t mapped = (uint8_t)((dist * 127.0f) / (float)blob_width);
+        uint8_t energy = cubicwave8(128 + mapped);
+        total_energy += energy;
+      }
+    }
 
-    // Hard-edge modifier: doubles brightness with saturating add,
-    // creating a sharper cutoff at the expanding edge.
-    bri = qadd8(bri, bri);
-
-    CRGBW c = ColorFromPalette(active_palette, 0, bri);
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    // Clamp and render
+    uint8_t final_bri = (total_energy > 255) ? 255 : (uint8_t)total_energy;
+    CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
+    instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
   }
 
   return FRAMETIME;
