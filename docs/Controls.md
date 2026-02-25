@@ -109,7 +109,12 @@ A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intr
 Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
 
 ### ID 7: Autotune
-Enables or disables the effect autotune. **Defaults to OFF.** When enabled, it will automatically adjust the effect parameters to the best tested values. Can be override using presets.
+Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the creator's recommended defaults immediately upon being selected.
+
+- **Intelligent Yield:** If you manually adjust a slider or pick a different palette while Autotune is active, the system detects your intervention and automatically toggles Autotune **OFF**, giving you full manual control instantly.
+- **Default Behavior:** If the `cfx_control` component is not used (or Autotune is excluded), the engine defaults to Autotune **ON** to ensure every effect looks its best without manual setup.
+- **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults. 
+- **Presets:** Autotune can be overridden by explicit values stored in [Presets](Presets-and-States.md).
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead.

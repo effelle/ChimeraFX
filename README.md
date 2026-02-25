@@ -48,6 +48,7 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 - **Many Built-in Palettes** — Easily customizable
 - **Smooth Transitions** — Professional-grade animations
 - **Dynamic Controls** — Speed, intensity, palette, and mirror direction
+- **Intelligent Autotune** — Automatically snaps to optimal creator defaults, but instantly yields manual control when you touch a slider.
 - **Intro Animations** — Wipe, Fade, Center, and Glitter effects on turn-on
 - **Timer** — Turn off after a specified amount of time
 - **Presets** — Save and restore effect configurations
