@@ -28,8 +28,6 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   switch (effect_id) {
   case 161: // Horizon Sweep
     return {true, INTRO_WIPE, INTRO_WIPE};
-  case 161: // Horizon Sweep
-    return {true, INTRO_WIPE, INTRO_WIPE};
   case 162: // Center Sweep
     return {true, INTRO_CENTER, INTRO_CENTER};
   case 163: // Glitter Sweep
