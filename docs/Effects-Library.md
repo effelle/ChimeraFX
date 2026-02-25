@@ -13,17 +13,24 @@ Please note that some WLED effects will not be ported. This includes animations 
 |:---|:---|:---|:---|:---:|:---|
 | 152 | **Center Gauge**| A symmetrical progress bar expanding smoothly from the middle to the edges. | **Intensity**: Percent fill - **Speed**: Smoothness | Yes | ChimeraFX |
 | 159 | **Chaos Theory** | Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos. | **Intensity**: Peak Chaos - **Speed**: Flow speed | No | ChimeraFX |
-| 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
 | 151 | **Dropping Time**| Falling drops filling a bucket. | **Speed**: Time (1-60 minutes) | Yes | ChimeraFX |
 | 158 | **Energy** | Rainbow flow with chaotic agitation and white-hot eruptions. | **Intensity**: Zoom - **Speed**: Agitation/Wipe speed | No | ChimeraFX |
 | 160 | **Fluid Rain** | A realistic liquid simulation. Raindrops hit the strip, creating organic ripples that travel, collide, and bounce off the edges. | **Intensity**: Damping (Viscosity) - **Speed**: Rainrate | Yes | ChimeraFX |
 | 156 | **Follow Me** | Single cursor running from one side to another. | **Intensity**: Fade rate - **Speed**: Cursor speed | No | ChimeraFX |
 | 157 | **Follow Us** | Three cursors running from one side to another. | **Intensity**: Cursors distance - **Speed**: Cursors speed | No | ChimeraFX |
-| 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
-| 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
 | 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center. Toggle Mirror to reverse the effect. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
+
+#### ChimeraFX Monochromatic Effects:
+
+Specifically designed for solid color animations with premium, forced entry/exit routines.
+
+| ID | Name | Description | Controls | Palette support | Author |
+|:---|:---|:---|:---|:---:|:---|
+| 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
+| 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
+| 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
 
 #### WLED-Style Effects:
 
