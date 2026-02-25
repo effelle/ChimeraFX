@@ -191,6 +191,10 @@
     effect_id: 60
 
 - addressable_cfx:
+    name: "Slipstream"
+    effect_id: 164
+
+- addressable_cfx:
     name: "Sparkle"
     effect_id: 20
 

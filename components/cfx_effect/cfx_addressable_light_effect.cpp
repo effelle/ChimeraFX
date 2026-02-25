@@ -1127,16 +1127,21 @@ void CFXAddressableLightEffect::run_controls_() {
     }
 
     // 4. Palette
-    if (c && c->get_palette()) {
-      uint8_t pal_idx = get_pal_idx(c->get_palette());
-      this->runner_->setPalette(pal_idx);
-    } else if (this->palette_) {
-      uint8_t pal_idx = get_pal_idx(this->palette_);
-      this->runner_->setPalette(pal_idx);
+    // Monochromatic effects MUST use Solid (255), ignoring user UI selection
+    if (this->effect_id_ >= 161 && this->effect_id_ <= 163) {
+      this->runner_->setPalette(255);
     } else {
-      // FALLBACK: No control component - use per-effect default
-      uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
-      this->runner_->setPalette(default_pal);
+      if (c && c->get_palette()) {
+        uint8_t pal_idx = get_pal_idx(c->get_palette());
+        this->runner_->setPalette(pal_idx);
+      } else if (this->palette_) {
+        uint8_t pal_idx = get_pal_idx(this->palette_);
+        this->runner_->setPalette(pal_idx);
+      } else {
+        // FALLBACK: No control component - use per-effect default
+        uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
+        this->runner_->setPalette(default_pal);
+      }
     }
 
     // 5. Mirror
