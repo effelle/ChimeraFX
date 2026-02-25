@@ -6631,8 +6631,9 @@ uint16_t mode_collider(void) {
   uint16_t half_space = spacing / 2;
 
   // --- 2. Traveling Wave ---
-  // Time base: higher speed → faster wave travel.
-  uint32_t time_base = (instance->now * (uint32_t)speed) >> 4;
+  // Time base: slowed down from >> 4 to >> 10 to eliminate 60Hz strobing.
+  // Now speed=255 gives ~8 full waves per second, speed=128 gives ~4/sec.
+  uint32_t time_base = (instance->now * (uint32_t)speed) >> 10;
 
   // --- 3. Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
@@ -6644,8 +6645,9 @@ uint16_t mode_collider(void) {
     uint8_t normalized_dist = (uint8_t)((dist_from_center * 255) / half_space);
 
     // Traveling expansion wave: cubicwave8 gives smooth peaks/valleys.
-    // The (i * 5) term sets the spatial frequency of the wave across nodes.
-    uint8_t expansion_power = cubicwave8((uint8_t)(time_base + (i * 5)));
+    // Increased spatial freq from i*5 to i*10 so multiple waves fit on short
+    // strips.
+    uint8_t expansion_power = cubicwave8((uint8_t)(time_base + (i * 10)));
 
     // Expansion masking: if power > distance, pixel is lit.
     // qsub8 floors at 0 — edges beyond the wave's reach stay dark.
