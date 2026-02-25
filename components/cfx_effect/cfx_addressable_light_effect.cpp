@@ -335,6 +335,9 @@ void CFXAddressableLightEffect::stop() {
 
       // 10. Outro Duration Logic
       uint32_t duration_ms = 1000; // Final Default: 1.0s
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+
       number::Number *dur_num = this->outro_duration_;
       if (dur_num == nullptr && this->controller_ != nullptr)
         dur_num = this->controller_->get_outro_duration();
@@ -348,8 +351,6 @@ void CFXAddressableLightEffect::stop() {
             (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
       } else {
         // Monochromatic Preset Fallback: Speed Slider
-        MonochromaticPreset preset =
-            this->get_monochromatic_preset_(this->effect_id_);
         if (preset.is_active) {
           number::Number *speed_num = this->speed_;
           if (speed_num == nullptr && this->controller_ != nullptr)
@@ -1167,6 +1168,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   if (dur_num == nullptr && this->controller_ != nullptr)
     dur_num = this->controller_->get_intro_duration();
 
+  MonochromaticPreset preset =
+      this->get_monochromatic_preset_(this->effect_id_);
+
   if (dur_num != nullptr && dur_num->has_state()) {
     // High Priority: UI Slider
     duration = (uint32_t)(dur_num->state * 1000.0f);
@@ -1175,8 +1179,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
   } else {
     // Monochromatic Preset Fallback: Speed Slider
-    MonochromaticPreset preset =
-        this->get_monochromatic_preset_(this->effect_id_);
     if (preset.is_active) {
       number::Number *speed_num = this->speed_;
       if (speed_num == nullptr && this->controller_ != nullptr)
