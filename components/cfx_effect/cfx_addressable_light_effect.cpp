@@ -28,6 +28,12 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   switch (effect_id) {
   case 161: // Horizon Sweep
     return {true, INTRO_WIPE, INTRO_WIPE};
+  case 162: // Center Sweep
+    return {true, INTRO_CENTER, INTRO_CENTER};
+  case 163: // Glitter Sweep
+    return {true, INTRO_GLITTER, INTRO_GLITTER};
+  case 164: // Fade Sweep
+    return {true, INTRO_FADE, INTRO_FADE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -923,7 +929,10 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 157:
     return 128; // Follow Us (Default Speed 128)
   case 161:
-    return 1; // Horizon Sweep (fastest speed)
+  case 162:
+  case 163:
+  case 164:
+    return 1; // Monochromatic series (fastest speed)
   default:
     return 128; // WLED default
   }
@@ -947,7 +956,10 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 157:
     return 128; // Follow Us (Default Intensity 128)
   case 161:
-    return 1; // Horizon Sweep (No blur)
+  case 162:
+  case 163:
+  case 164:
+    return 1; // Monochromatic series (No blur)
   default:
     return 128; // WLED default
   }

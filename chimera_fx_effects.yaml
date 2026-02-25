@@ -111,6 +111,18 @@
     effect_id: 161
 
 - addressable_cfx:
+    name: "Center Sweep"
+    effect_id: 162
+
+- addressable_cfx:
+    name: "Glitter Sweep"
+    effect_id: 163
+
+- addressable_cfx:
+    name: "Fade Sweep"
+    effect_id: 164
+
+- addressable_cfx:
     name: "Juggle"
     effect_id: 64
 

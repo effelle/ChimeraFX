@@ -4280,6 +4280,9 @@ void CFXRunner::service() {
     mode_fluid_rain();
     break;
   case FX_MODE_HORIZON_SWEEP: // 161
+  case FX_MODE_CENTER_SWEEP:  // 162
+  case FX_MODE_GLITTER_SWEEP: // 163
+  case FX_MODE_FADE_SWEEP:    // 164
     mode_cfx_horizon_sweep();
     break;
   default:
