@@ -163,6 +163,19 @@ protected:
   bool fade_in_active_{false};
 
   bool initial_preset_applied_{false};
+
+  // --- Autotune Auto-Disable (Option A) ---
+  // Snapshots of what Autotune last wrote to the UI so we can detect user
+  // overrides
+  bool autotune_active_{
+      false}; // True when Autotune is ON and managing parameters
+  float autotune_expected_speed_{-1.0f};
+  float autotune_expected_intensity_{-1.0f};
+  std::string autotune_expected_palette_{""};
+
+  // Applies per-effect defaults to UI sliders/palette and records expected
+  // values. Only touches controls that don't have a hard YAML preset.
+  void apply_autotune_defaults_();
 };
 
 } // namespace chimera_fx

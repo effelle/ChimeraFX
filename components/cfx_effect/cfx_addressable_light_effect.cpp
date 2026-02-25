@@ -29,7 +29,7 @@ void CFXAddressableLightEffect::start() {
   CFXControl *c = this->controller_;
 
   // 0. Autotune Resolution
-  bool autotune_enabled = false; // Default to false if not found
+  bool autotune_enabled = true; // Default to true if not found (Constraint)
   switch_::Switch *autotune_sw =
       (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
 
@@ -39,7 +39,13 @@ void CFXAddressableLightEffect::start() {
     autotune_enabled = autotune_sw->state;
   }
 
-  // 1. Speed
+  this->autotune_active_ = autotune_enabled;
+
+  if (autotune_enabled) {
+    this->apply_autotune_defaults_();
+  }
+
+  // 1. Speed (YAML Preset Override Only)
   number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && this->speed_preset_.has_value()) {
@@ -49,18 +55,9 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (speed_num != nullptr && autotune_enabled) {
-    // No YAML preset: apply per-effect code default and sync slider (if
-    // Autotune ON)
-    float target = (float)this->get_default_speed_(this->effect_id_);
-    if (speed_num->state != target) {
-      auto call = speed_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
   }
 
-  // 2. Intensity
+  // 2. Intensity (YAML Preset Override Only)
   number::Number *intensity_num =
       (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
   if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
@@ -70,34 +67,14 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (intensity_num != nullptr && autotune_enabled) {
-    // No YAML preset: apply per-effect code default and sync slider (if
-    // Autotune ON)
-    float target = (float)this->get_default_intensity_(this->effect_id_);
-    if (intensity_num->state != target) {
-      auto call = intensity_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
   }
 
-  // 3. Palette (Fixed: Resolve from controller)
+  // 3. Palette (YAML Preset Override Only)
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->palette_;
   if (palette_sel != nullptr && this->palette_preset_.has_value()) {
-    // NOTE: Select uses strings, but we have an index preset.
-    // Optimally we should check index, but Select component typically stores
-    // state as String. We can't easily check 'state != value' without mapping
-    // index to string. For Safety, we SKIP optimization for Dropdowns to ensure
-    // index is enforced.
     auto call = palette_sel->make_call();
     call.set_index(this->palette_preset_.value());
-    call.perform();
-  } else if (palette_sel != nullptr && autotune_enabled) {
-    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
-    std::string pal_name = this->get_palette_name_(default_pal_id);
-    auto call = palette_sel->make_call();
-    call.set_option(pal_name);
     call.perform();
   }
 
@@ -906,6 +883,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   switch (effect_id) {
   case 38:
     return 24; // Aurora
+  case 28:
+    return 110; // Chase
   case 54:
     return 60; // Chase Multi
   case 153:
@@ -936,6 +915,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
+  case 28:
+    return 40; // Chase
   case 54:
     return 70; // Chase Multi
   case 153:
@@ -970,6 +951,52 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   CFXControl *c = this->controller_;
+
+  // --- Autotune Auto-Disable State Machine ---
+  bool current_autotune_state =
+      true; // Constraint: No switch = always respect defaults
+  switch_::Switch *autotune_sw =
+      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
+  if (autotune_sw != nullptr) {
+    current_autotune_state = autotune_sw->state;
+  }
+
+  // Handle manual OFF -> ON transition
+  if (current_autotune_state && !this->autotune_active_) {
+    this->apply_autotune_defaults_();
+    this->autotune_active_ = true;
+  }
+  // Handle manual ON -> OFF transition
+  else if (!current_autotune_state && this->autotune_active_) {
+    this->autotune_active_ = false;
+  }
+  // Handle expected ON state, but detecting manual UI overrides
+  else if (current_autotune_state && this->autotune_active_ &&
+           autotune_sw != nullptr) {
+    bool manual_override = false;
+
+    number::Number *speed_num =
+        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+    if (speed_num && speed_num->state != this->autotune_expected_speed_)
+      manual_override = true;
+
+    number::Number *intensity_num =
+        (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+    if (intensity_num &&
+        intensity_num->state != this->autotune_expected_intensity_)
+      manual_override = true;
+
+    select::Select *palette_sel =
+        (c && c->get_palette()) ? c->get_palette() : this->palette_;
+    if (palette_sel && palette_sel->has_state() &&
+        palette_sel->state != this->autotune_expected_palette_)
+      manual_override = true;
+
+    if (manual_override) {
+      autotune_sw->turn_off();
+      this->autotune_active_ = false;
+    }
+  }
 
   if (this->runner_) {
     // Helper lambda for Palette Index Lookup
@@ -1553,6 +1580,57 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   return (progress >= 1.0f);
+}
+
+// --- Autotune Auto-Disable Implementation ---
+void CFXAddressableLightEffect::apply_autotune_defaults_() {
+  CFXControl *c = this->controller_;
+
+  // 1. Speed
+  number::Number *speed_num =
+      (c && c->get_speed()) ? c->get_speed() : this->speed_;
+  if (speed_num != nullptr && !this->speed_preset_.has_value()) {
+    float target = (float)this->get_default_speed_(this->effect_id_);
+    if (speed_num->state != target) {
+      auto call = speed_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+    this->autotune_expected_speed_ = target;
+  } else if (speed_num != nullptr) {
+    this->autotune_expected_speed_ = speed_num->state;
+  }
+
+  // 2. Intensity
+  number::Number *intensity_num =
+      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+  if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
+    float target = (float)this->get_default_intensity_(this->effect_id_);
+    if (intensity_num->state != target) {
+      auto call = intensity_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+    this->autotune_expected_intensity_ = target;
+  } else if (intensity_num != nullptr) {
+    this->autotune_expected_intensity_ = intensity_num->state;
+  }
+
+  // 3. Palette
+  select::Select *palette_sel =
+      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+  if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
+    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
+    std::string pal_name = this->get_palette_name_(default_pal_id);
+    if (palette_sel->state != pal_name) {
+      auto call = palette_sel->make_call();
+      call.set_option(pal_name);
+      call.perform();
+    }
+    this->autotune_expected_palette_ = pal_name;
+  } else if (palette_sel != nullptr) {
+    this->autotune_expected_palette_ = palette_sel->state;
+  }
 }
 
 } // namespace chimera_fx
