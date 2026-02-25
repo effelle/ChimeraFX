@@ -6608,8 +6608,8 @@ uint16_t mode_fluid_rain(void) {
 
 // --- Collider Effect (ID 164) ---
 // 1D Metaball Physics: traveling blobs undergo elastic collisions.
-// When two blobs touch, they pool/merge fluidly for a split second
-// (additive energy fields) before bouncing apart.
+// When two blobs touch, their energy fields pool/merge fluidly
+// (additive rendering) before bouncing apart.
 // Stateful: allocateData holds blob positions and velocities.
 
 #define MAX_COLLIDER_BLOBS 8
@@ -6635,12 +6635,16 @@ uint16_t mode_collider(void) {
   if (num_blobs > MAX_COLLIDER_BLOBS)
     num_blobs = MAX_COLLIDER_BLOBS;
 
-  // Blob visual/collision radius (half-width)
-  uint16_t blob_width = len / (num_blobs * 2);
-  if (blob_width < 4)
-    blob_width = 4;
-  if (blob_width > 25)
-    blob_width = 25;
+  // --- Rendering & Collision Radii ---
+  // Wide glow radius for fluid metaball look (8-15 pixels)
+  float blob_radius = (float)len / (float)(num_blobs * 3);
+  if (blob_radius < 8.0f)
+    blob_radius = 8.0f;
+  if (blob_radius > 15.0f)
+    blob_radius = 15.0f;
+
+  // Collision triggers when centers are within one full radius
+  float collision_radius = blob_radius;
 
   // --- Allocate State ---
   size_t dataSize = sizeof(ColliderBlob) * MAX_COLLIDER_BLOBS;
@@ -6652,24 +6656,21 @@ uint16_t mode_collider(void) {
 
   // --- Init on Reset ---
   if (instance->_segment.reset) {
+    float spacing = (float)len / (float)num_blobs;
     for (int i = 0; i < MAX_COLLIDER_BLOBS; i++) {
-      // Even spacing with offset
-      blobs[i].pos = (float)(i * len) / (float)num_blobs +
-                     (float)len / (float)(2 * num_blobs);
-      // Random velocity: -1.5 to +1.5, minimum magnitude 0.3
-      blobs[i].vel = ((float)cfx::hw_random8() - 128.0f) / 85.0f;
-      if (blobs[i].vel >= 0.0f && blobs[i].vel < 0.3f)
-        blobs[i].vel = 0.5f;
-      if (blobs[i].vel < 0.0f && blobs[i].vel > -0.3f)
-        blobs[i].vel = -0.5f;
+      // Even spacing so no immediate collisions
+      blobs[i].pos = spacing * (float)i + spacing * 0.5f;
+      // Simple random direction: +1.0 or -1.0
+      blobs[i].vel = (cfx::hw_random8() & 1) ? 1.0f : -1.0f;
     }
     instance->_segment.reset = false;
   }
 
   // --- Physics Step ---
-  float v_scale = (float)speed / 128.0f;
+  // FIX 1: Drastically reduce velocity. Max 0.5 px/frame at speed=255.
+  float v_scale = ((float)speed / 255.0f) * 0.5f;
 
-  // Move blobs
+  // Move blobs (sub-pixel gliding)
   for (int i = 0; i < num_blobs; i++) {
     blobs[i].pos += blobs[i].vel * v_scale;
 
@@ -6684,51 +6685,56 @@ uint16_t mode_collider(void) {
     }
   }
 
-  // Elastic blob-blob collisions
+  // FIX 2: Directional Elastic Collisions with FULL separation
   for (int i = 0; i < num_blobs; i++) {
     for (int j = i + 1; j < num_blobs; j++) {
-      float delta = blobs[i].pos - blobs[j].pos;
-      float abs_delta = fabsf(delta);
+      float dist = fabsf(blobs[i].pos - blobs[j].pos);
 
-      if (abs_delta < (float)blob_width) {
-        // Only swap if approaching each other
-        bool approaching = (delta > 0.0f && blobs[i].vel < blobs[j].vel) ||
-                           (delta < 0.0f && blobs[i].vel > blobs[j].vel);
+      if (dist < collision_radius) {
+        // CRUCIAL: Only bounce if moving TOWARDS each other
+        bool approaching =
+            (blobs[i].pos < blobs[j].pos && blobs[i].vel > blobs[j].vel) ||
+            (blobs[i].pos > blobs[j].pos && blobs[i].vel < blobs[j].vel);
+
         if (approaching) {
           // Elastic collision: swap velocities
           float tmp = blobs[i].vel;
           blobs[i].vel = blobs[j].vel;
           blobs[j].vel = tmp;
 
-          // Separation bump to prevent sticking
-          float overlap = (float)blob_width - abs_delta;
-          float push = overlap * 0.55f;
-          if (delta > 0.0f) {
-            blobs[i].pos += push;
-            blobs[j].pos -= push;
+          // FULL separation: push them completely apart to collision_radius
+          // This eliminates the sticky-vibration bug entirely.
+          float gap = collision_radius - dist;
+          float half_gap = gap * 0.5f + 0.5f; // +0.5 extra to guarantee clear
+          if (blobs[i].pos < blobs[j].pos) {
+            blobs[i].pos -= half_gap;
+            blobs[j].pos += half_gap;
           } else {
-            blobs[i].pos -= push;
-            blobs[j].pos += push;
+            blobs[i].pos += half_gap;
+            blobs[j].pos -= half_gap;
           }
+
+          // Clamp to strip bounds after separation
+          blobs[i].pos = cfx_constrain(blobs[i].pos, 0.0f, (float)(len - 1));
+          blobs[j].pos = cfx_constrain(blobs[j].pos, 0.0f, (float)(len - 1));
         }
       }
     }
   }
 
-  // --- Metaball Rendering (Additive Energy Fields) ---
+  // --- FIX 3: Wide Metaball Rendering with dim8_video ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t px = 0; px < len; px++) {
     uint16_t total_energy = 0;
 
     for (int b = 0; b < num_blobs; b++) {
-      float dist = fabsf((float)px - blobs[b].pos);
-      if (dist < (float)blob_width) {
-        // Map distance 0->blob_width to phase 128->255
-        // cubicwave8(128)=255 (max), cubicwave8(255)=0 (edge)
-        uint8_t mapped = (uint8_t)((dist * 127.0f) / (float)blob_width);
-        uint8_t energy = cubicwave8(128 + mapped);
-        total_energy += energy;
+      float d = fabsf((float)px - blobs[b].pos);
+      if (d < blob_radius) {
+        // Linear falloff: 255 at center, 0 at edge
+        uint8_t raw_energy = 255 - (uint8_t)((d / blob_radius) * 255.0f);
+        // dim8_video softens the edges for a smooth glow
+        total_energy += dim8_video(raw_energy);
       }
     }
 
