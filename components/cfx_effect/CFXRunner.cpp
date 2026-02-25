@@ -6607,151 +6607,55 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// 1D Metaball Physics: traveling blobs undergo elastic collisions.
-// When two blobs touch, their energy fields pool/merge fluidly
-// (additive rendering) before bouncing apart.
-// Stateful: allocateData holds blob positions and velocities.
-
-#define MAX_COLLIDER_BLOBS 8
-
-struct ColliderBlob {
-  float pos;
-  float vel;
-  uint8_t phase; // Random offset for breathing oscillation
-};
-
+// "Pulsing Grid" — stationary nodes whose light expands and retracts,
+// driven by a traveling cubicwave8 wave. When adjacent nodes expand
+// at the same time, their edges merge into solid light.
+// Zero state buffers — pure spatial math per pixel per frame.
 uint16_t mode_collider(void) {
   if (!instance)
     return FRAMETIME;
 
   uint16_t len = instance->_segment.length();
-  if (len <= 1)
+  if (len == 0)
     return FRAMETIME;
 
-  uint8_t speed = instance->_segment.speed;
-  uint8_t intensity = instance->_segment.intensity;
+  uint8_t speed = instance->_segment.speed;         // 0-255
+  uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // Blob count: 2-8 based on intensity
-  uint8_t num_blobs = 2 + ((intensity * 6) >> 8);
-  if (num_blobs > MAX_COLLIDER_BLOBS)
-    num_blobs = MAX_COLLIDER_BLOBS;
+  // --- 1. Fixed Grid ---
+  // Node spacing: distance between pulse centers.
+  // Low intensity = wide spacing (few nodes), high = tight (many nodes).
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 8, 30);
+  if (spacing < 2)
+    spacing = 2;
+  uint16_t half_space = spacing / 2;
 
-  // --- Dynamic Radius Bounds ---
-  // Intensity controls the breathing range (how wide blobs can stretch).
-  // Proportional to strip length so it scales to any LED count.
-  float slot = (float)len / (float)num_blobs;
-  float min_radius = slot * 0.15f; // Contracted: ~15% of slot
-  float max_radius = slot * 0.45f; // Expanded:  ~45% of slot
-  if (min_radius < 2.0f)
-    min_radius = 2.0f;
-  if (max_radius < 4.0f)
-    max_radius = 4.0f;
+  // --- 2. Traveling Wave ---
+  // Time base: higher speed → faster wave travel.
+  uint32_t time_base = (instance->now * (uint32_t)speed) >> 4;
 
-  // Collision uses the max possible radius (worst case)
-  float collision_radius = max_radius * 0.6f * 2.0f; // core-to-core at max
-
-  // --- Allocate State ---
-  size_t dataSize = sizeof(ColliderBlob) * MAX_COLLIDER_BLOBS;
-  if (!instance->_segment.allocateData(dataSize))
-    return mode_static();
-
-  ColliderBlob *blobs =
-      reinterpret_cast<ColliderBlob *>(instance->_segment.data);
-
-  // --- Init on Reset ---
-  if (instance->_segment.reset) {
-    float spacing = (float)len / (float)num_blobs;
-    for (int i = 0; i < MAX_COLLIDER_BLOBS; i++) {
-      blobs[i].pos = spacing * (float)i + spacing * 0.5f;
-      blobs[i].vel = (cfx::hw_random8() & 1) ? 1.0f : -1.0f;
-      blobs[i].phase = cfx::hw_random8(); // Random breathing phase
-    }
-    instance->_segment.reset = false;
-  }
-
-  // --- Physics Step ---
-  // Max 1.0 px/frame at speed=255.
-  float v_scale = (float)speed / 255.0f;
-
-  for (int i = 0; i < num_blobs; i++) {
-    blobs[i].pos += blobs[i].vel * v_scale;
-
-    if (blobs[i].pos <= 0.0f) {
-      blobs[i].pos = 0.0f;
-      blobs[i].vel = fabsf(blobs[i].vel);
-    }
-    if (blobs[i].pos >= (float)(len - 1)) {
-      blobs[i].pos = (float)(len - 1);
-      blobs[i].vel = -fabsf(blobs[i].vel);
-    }
-  }
-
-  // Directional Elastic Collisions with FULL separation
-  for (int i = 0; i < num_blobs; i++) {
-    for (int j = i + 1; j < num_blobs; j++) {
-      float dist = fabsf(blobs[i].pos - blobs[j].pos);
-
-      if (dist < collision_radius) {
-        bool approaching =
-            (blobs[i].pos < blobs[j].pos && blobs[i].vel > blobs[j].vel) ||
-            (blobs[i].pos > blobs[j].pos && blobs[i].vel < blobs[j].vel);
-
-        if (approaching) {
-          float tmp = blobs[i].vel;
-          blobs[i].vel = blobs[j].vel;
-          blobs[j].vel = tmp;
-
-          float gap = collision_radius - dist;
-          float half_gap = gap * 0.5f + 0.5f;
-          if (blobs[i].pos < blobs[j].pos) {
-            blobs[i].pos -= half_gap;
-            blobs[j].pos += half_gap;
-          } else {
-            blobs[i].pos += half_gap;
-            blobs[j].pos -= half_gap;
-          }
-
-          blobs[i].pos = cfx_constrain(blobs[i].pos, 0.0f, (float)(len - 1));
-          blobs[j].pos = cfx_constrain(blobs[j].pos, 0.0f, (float)(len - 1));
-        }
-      }
-    }
-  }
-
-  // --- Breathing Plateau Rendering ---
-  // Each blob oscillates its radius via cubicwave8(time + phase).
-  // Core (inner 60%) stays solid 255. Outer 40% fades linearly.
-  // Additive overlap creates the liquid merge snap.
+  // --- 3. Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
-  uint8_t time_byte = (uint8_t)((instance->now >> 3) & 0xFF);
 
-  for (uint16_t px = 0; px < len; px++) {
-    uint16_t total_energy = 0;
+  for (uint16_t i = 0; i < len; i++) {
+    // Distance from the nearest node center, normalised to 0-255.
+    uint16_t local_pos = i % spacing;
+    uint16_t dist_from_center = (uint16_t)abs((int)local_pos - (int)half_space);
+    uint8_t normalized_dist = (uint8_t)((dist_from_center * 255) / half_space);
 
-    for (int b = 0; b < num_blobs; b++) {
-      // Per-blob breathing: oscillate radius between min and max
-      uint8_t wave = cubicwave8(time_byte + blobs[b].phase);
-      float pulse = (float)wave / 255.0f;
-      float current_radius = min_radius + pulse * (max_radius - min_radius);
-      float current_core = current_radius * 0.6f;
-      float current_fade = current_radius - current_core;
+    // Traveling expansion wave: cubicwave8 gives smooth peaks/valleys.
+    // The (i * 5) term sets the spatial frequency of the wave across nodes.
+    uint8_t expansion_power = cubicwave8((uint8_t)(time_base + (i * 5)));
 
-      float d = fabsf((float)px - blobs[b].pos);
+    // Expansion masking: if power > distance, pixel is lit.
+    // qsub8 floors at 0 — edges beyond the wave's reach stay dark.
+    uint8_t bri = qsub8(expansion_power, normalized_dist);
 
-      if (d <= current_core) {
-        total_energy += 255;
-      } else if (d < current_radius && current_fade > 0.0f) {
-        float fade_dist = d - current_core;
-        uint8_t edge_energy =
-            255 - (uint8_t)((fade_dist / current_fade) * 255.0f);
-        total_energy += edge_energy;
-      }
-    }
+    // Amplify into solid plateaus with sharp cutoff at expanding edge.
+    bri = qadd8(bri, bri);
 
-    // Clamp and render
-    uint8_t final_bri = (total_energy > 255) ? 255 : (uint8_t)total_energy;
-    CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
-    instance->_segment.setPixelColor(px, RGBW32(c.r, c.g, c.b, c.w));
+    CRGBW c = ColorFromPalette(active_palette, 0, bri);
+    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
   return FRAMETIME;
