@@ -6607,9 +6607,11 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// "Pulsing Grid" — stationary nodes whose light expands and retracts,
-// driven by a traveling cubicwave8 wave. When adjacent nodes expand
-// at the same time, their edges merge into solid light.
+// Dual traveling sine wave interference pattern.
+// Two cubicwave8 functions with slightly different spatial frequencies
+// produce constructive interference (bright merged segments) and destructive
+// interference (dark gaps) that shift over time — creating the illusion of
+// light segments flowing, merging, and splitting.
 // Zero state buffers — pure spatial math per pixel per frame.
 uint16_t mode_collider(void) {
   if (!instance)
@@ -6622,41 +6624,40 @@ uint16_t mode_collider(void) {
   uint8_t speed = instance->_segment.speed;         // 0-255
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // --- 1. Fixed Grid ---
-  // Node spacing: distance between pulse centers.
-  // Low intensity = wide spacing (few nodes), high = tight (many nodes).
-  uint16_t spacing = cfx_map((long)intensity, 0, 255, 8, 30);
-  if (spacing < 2)
-    spacing = 2;
-  uint16_t half_space = spacing / 2;
+  // --- Time Bases ---
+  // t1 drives wave 1. t2 is t1 + 20% extra offset so the two waves
+  // travel at slightly different apparent speeds → the beat "slides".
+  uint32_t t1 = (instance->now * (uint32_t)speed) >> 6;
+  uint32_t t2 = t1 + (t1 / 5);
 
-  // --- 2. Traveling Wave ---
-  // Time base: slowed down from >> 4 to >> 10 to eliminate 60Hz strobing.
-  // Now speed=255 gives ~8 full waves per second, speed=128 gives ~4/sec.
-  uint32_t time_base = (instance->now * (uint32_t)speed) >> 10;
+  // --- Spatial Scale ---
+  // Intensity maps the wave density: low = few wide segments, high = many small
+  // ones.
+  uint16_t scale = cfx_map((long)intensity, 0, 255, 5, 30);
 
-  // --- 3. Palette (monochromatic — forced solid by is_monochromatic_) ---
+  // --- Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t i = 0; i < len; i++) {
-    // Distance from the nearest node center, normalised to 0-255.
-    uint16_t local_pos = i % spacing;
-    uint16_t dist_from_center = (uint16_t)abs((int)local_pos - (int)half_space);
-    uint8_t normalized_dist = (uint8_t)((dist_from_center * 255) / half_space);
+    // Wave 1: forward-traveling at base spatial frequency
+    uint8_t wave1 = cubicwave8((uint8_t)(t1 + (uint32_t)i * scale));
 
-    // Traveling expansion wave: cubicwave8 gives smooth peaks/valleys.
-    // Increased spatial freq from i*5 to i*10 so multiple waves fit on short
-    // strips.
-    uint8_t expansion_power = cubicwave8((uint8_t)(time_base + (i * 10)));
+    // Wave 2: same direction, slightly different spatial frequency (+2)
+    // This small difference is the "beat" frequency — drives the merge/split
+    uint8_t wave2 = cubicwave8((uint8_t)(t2 + (uint32_t)i * (scale + 2)));
 
-    // Expansion masking: if power > distance, pixel is lit.
-    // qsub8 floors at 0 — edges beyond the wave's reach stay dark.
-    uint8_t bri = qsub8(expansion_power, normalized_dist);
+    // Average the two waves
+    uint8_t combined = (wave1 / 2) + (wave2 / 2);
 
-    // Amplify into solid plateaus with sharp cutoff at expanding edge.
-    bri = qadd8(bri, bri);
+    // Threshold masking: only the peaks survive, creating solid segments.
+    // Below 140 → hard dark. Above 140 → remapped to 100-510 → clamped 255.
+    uint8_t final_bri = 0;
+    if (combined > 140) {
+      final_bri = cfx_map((long)combined, 140, 255, 100, 255);
+      final_bri = qadd8(final_bri, final_bri); // hard plateau amplification
+    }
 
-    CRGBW c = ColorFromPalette(active_palette, 0, bri);
+    CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
