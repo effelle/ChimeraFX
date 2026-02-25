@@ -46,7 +46,7 @@ EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 EXCLUDE_OUTRO = 10
 
-CONF_DEFAULTS = "defaults"
+CONF_DEFAULTS = "defaults" # Kept for backwards compatibility but ignored
 CONF_DEFAULT_SPEED = "speed"
 CONF_DEFAULT_INTENSITY = "intensity"
 CONF_DEFAULT_PALETTE = "palette"
@@ -60,27 +60,12 @@ CONF_DEFAULT_FORCE_WHITE = "force_white"
 CONF_DEFAULT_OUTRO = "outro_effect"
 CONF_DEFAULT_OUTRO_DURATION = "outro_duration"
 
-DEFAULTS_SCHEMA = cv.Schema({
-    cv.Optional(CONF_DEFAULT_SPEED): cv.int_range(min=0, max=255),
-    cv.Optional(CONF_DEFAULT_INTENSITY): cv.int_range(min=0, max=255),
-    cv.Optional(CONF_DEFAULT_PALETTE): cv.string,
-    cv.Optional(CONF_DEFAULT_MIRROR): cv.boolean,
-    cv.Optional(CONF_DEFAULT_INTRO): cv.string,
-    cv.Optional(CONF_DEFAULT_INTRO_DURATION): cv.float_range(min=0.5, max=10.0),
-    cv.Optional(CONF_DEFAULT_INTRO_USE_PALETTE): cv.boolean,
-    cv.Optional(CONF_DEFAULT_TIMER): cv.int_range(min=0, max=360),
-    cv.Optional(CONF_DEFAULT_AUTOTUNE): cv.boolean,
-    cv.Optional(CONF_DEFAULT_FORCE_WHITE): cv.boolean,
-    cv.Optional(CONF_DEFAULT_OUTRO): cv.string,
-    cv.Optional(CONF_DEFAULT_OUTRO_DURATION): cv.float_range(min=0.5, max=10.0),
-})
-
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
     cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
-    cv.Optional(CONF_DEFAULTS): DEFAULTS_SCHEMA,
+    cv.Optional(CONF_DEFAULTS): cv.Any(dict, None), # Accept but ignore
 })
 
 async def to_code(config):
@@ -112,7 +97,7 @@ async def to_code(config):
 
     # 1. Speed
     if is_included(EXCLUDE_SPEED):
-        speed_init = defaults.get(CONF_DEFAULT_SPEED, 128)
+        speed_init = 128
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_speed"),
             CONF_NAME: f"{name} Speed",
@@ -130,7 +115,7 @@ async def to_code(config):
 
     # 2. Intensity
     if is_included(EXCLUDE_INTENSITY):
-        intensity_init = defaults.get(CONF_DEFAULT_INTENSITY, 128)
+        intensity_init = 128
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_intensity"),
             CONF_NAME: f"{name} Intensity",
@@ -148,7 +133,7 @@ async def to_code(config):
 
     # 3. Palette
     if is_included(EXCLUDE_PALETTE):
-        palette_init = defaults.get(CONF_DEFAULT_PALETTE, "Default")
+        palette_init = "Default"
         conf = {
             CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_palette"),
             CONF_NAME: f"{name} Palette",
@@ -164,7 +149,7 @@ async def to_code(config):
 
     # 4. Mirror
     if is_included(EXCLUDE_MIRROR):
-        mirror_init = defaults.get(CONF_DEFAULT_MIRROR, False)
+        mirror_init = False
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_mirror"),
             CONF_NAME: f"{name} Mirror",
@@ -181,7 +166,7 @@ async def to_code(config):
 
     # 5. Intro Effect
     if is_included(EXCLUDE_INTRO):
-        intro_init = defaults.get(CONF_DEFAULT_INTRO, "None")
+        intro_init = "None"
         conf = {
             CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_intro"),
             CONF_NAME: f"{name} Intro",
@@ -197,7 +182,7 @@ async def to_code(config):
 
     # 6. Intro Duration
     if is_included(EXCLUDE_INTRO):
-        intro_dur_init = defaults.get(CONF_DEFAULT_INTRO_DURATION, 1.0)
+        intro_dur_init = 1.0
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_intro_dur"),
             CONF_NAME: f"{name} Intro Duration",
@@ -215,7 +200,7 @@ async def to_code(config):
 
     # 7. Intro Use Palette
     if is_included(EXCLUDE_INTRO):
-        intro_pal_init = defaults.get(CONF_DEFAULT_INTRO_USE_PALETTE, False)
+        intro_pal_init = False
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_intro_pal"),
             CONF_NAME: f"{name} Intro Use Palette",
@@ -232,7 +217,7 @@ async def to_code(config):
 
     # 7.5. Outro Effect
     if is_included(EXCLUDE_OUTRO):
-        outro_init = defaults.get(CONF_DEFAULT_OUTRO, "None")
+        outro_init = "None"
         conf = {
             CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_outro"),
             CONF_NAME: f"{name} Outro",
@@ -248,7 +233,7 @@ async def to_code(config):
 
     # 7.6. Outro Duration
     if is_included(EXCLUDE_OUTRO):
-        outro_dur_init = defaults.get(CONF_DEFAULT_OUTRO_DURATION, 1.0)
+        outro_dur_init = 1.0
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_outro_dur"),
             CONF_NAME: f"{name} Outro Duration",
@@ -266,7 +251,7 @@ async def to_code(config):
 
     # 8. Timer
     if is_included(EXCLUDE_TIMER):
-        timer_init = defaults.get(CONF_DEFAULT_TIMER, 0)
+        timer_init = 0
         conf = {
             CONF_ID: cv.declare_id(CFXNumber)(f"{config[CONF_ID]}_timer"),
             CONF_NAME: f"{name} Timer (min)",
@@ -284,7 +269,7 @@ async def to_code(config):
 
     # 10. Autotune
     if is_included(EXCLUDE_AUTOTUNE):
-        autotune_init = defaults.get(CONF_DEFAULT_AUTOTUNE, False)
+        autotune_init = False
         conf = {
             CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_autotune"),
             CONF_NAME: f"{name} Autotune",

@@ -15,11 +15,6 @@ cfx_effect:
       name: "LED Strip"       # The prefix name of the controller. Customizable
       light_id: led_strip     # The ID of the light you want to manage 
     
-      # Optional: Set first-boot default values for the UI entities
-      # defaults:
-      #   speed: 180
-      #   intro_effect: "Wipe"
-      #   intro_duration: 3.0
 
       # Optional: Exclude controls you don't need
       # exclude: [5, 6] # This example will exclude Intro Effects and Timer
@@ -109,7 +104,7 @@ A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intr
 Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
 
 ### ID 7: Autotune
-Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the creator's recommended defaults immediately upon being selected.
+Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the recommended defaults immediately upon being selected.
 
 - **Intelligent Yield:** If you manually adjust a slider or pick a different palette while Autotune is active, the system detects your intervention and automatically toggles Autotune **OFF**, giving you full manual control instantly.
 - **Default Behavior:** If the `cfx_control` component is not used (or Autotune is excluded), the engine defaults to Autotune **ON** to ensure every effect looks its best without manual setup.
