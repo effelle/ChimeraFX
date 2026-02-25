@@ -1018,7 +1018,7 @@ void CFXAddressableLightEffect::run_controls_() {
     select::Select *palette_sel =
         (c && c->get_palette()) ? c->get_palette() : this->palette_;
     if (palette_sel && palette_sel->has_state() &&
-        palette_sel->state != this->autotune_expected_palette_)
+        palette_sel->current_option() != this->autotune_expected_palette_)
       manual_override = true;
 
     if (manual_override) {
@@ -1652,14 +1652,14 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
   if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
     uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
     std::string pal_name = this->get_palette_name_(default_pal_id);
-    if (palette_sel->state != pal_name) {
+    if (palette_sel->current_option() != pal_name) {
       auto call = palette_sel->make_call();
       call.set_option(pal_name);
       call.perform();
     }
     this->autotune_expected_palette_ = pal_name;
   } else if (palette_sel != nullptr) {
-    this->autotune_expected_palette_ = palette_sel->state;
+    this->autotune_expected_palette_ = palette_sel->current_option();
   }
 }
 

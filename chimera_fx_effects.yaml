@@ -35,6 +35,10 @@
     effect_id: 152
 
 - addressable_cfx:
+    name: "Center Sweep"
+    effect_id: 162
+
+- addressable_cfx:
     name: "Chaos Theory"
     effect_id: 159
 
@@ -75,6 +79,10 @@
     effect_id: 158
 
 - addressable_cfx:
+    name: "Fade Sweep"
+    effect_id: 164
+
+- addressable_cfx:
     name: "Fire"
     effect_id: 66
 
@@ -103,24 +111,16 @@
     effect_id: 87
 
 - addressable_cfx:
+    name: "Glitter Sweep"
+    effect_id: 163
+
+- addressable_cfx:
     name: "HeartBeat"
     effect_id: 100
 
 - addressable_cfx:
     name: "Horizon Sweep"
     effect_id: 161
-
-- addressable_cfx:
-    name: "Center Sweep"
-    effect_id: 162
-
-- addressable_cfx:
-    name: "Glitter Sweep"
-    effect_id: 163
-
-- addressable_cfx:
-    name: "Fade Sweep"
-    effect_id: 164
 
 - addressable_cfx:
     name: "Juggle"
