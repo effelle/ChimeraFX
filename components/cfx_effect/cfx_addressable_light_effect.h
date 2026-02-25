@@ -141,6 +141,7 @@ protected:
   };
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
+  bool is_monochromatic_(uint8_t effect_id);
 
   uint8_t get_palette_index_();
   uint8_t get_default_palette_id_(uint8_t effect_id);

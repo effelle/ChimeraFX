@@ -37,6 +37,18 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   }
 }
 
+bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
+  switch (effect_id) {
+  case 161: // Horizon Sweep
+  case 162: // Curtain Sweep
+  case 163: // Stardust Sweep
+  case 164: // Slipstream
+    return true;
+  default:
+    return false;
+  }
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
@@ -736,6 +748,10 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
+  if (this->is_monochromatic_(effect_id)) {
+    return 255; // Monochromatic effects ALWAYS default to Solid
+  }
+
   switch (effect_id) {
   // Solid Defaults (255)
   case 0:
@@ -844,10 +860,6 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 4;   // Fireworks -> Rainbow
   case 98:      // Percent
   case 152:     // Percent Center
-    return 255; // Solid
-  case 161:     // Horizon Sweep
-  case 162:     // Curtain Sweep
-  case 163:     // Stardust Sweep
     return 255; // Solid
 
   // Default Aurora (1) or specific handling
@@ -967,7 +979,6 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 161:
   case 162:
   case 163:
-  case 164:
     return 1; // Monochromatic series (No blur)
   default:
     return 128; // WLED default
@@ -1128,7 +1139,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
     // 4. Palette
     // Monochromatic effects MUST use Solid (255), ignoring user UI selection
-    if (this->effect_id_ >= 161 && this->effect_id_ <= 163) {
+    if (this->is_monochromatic_(this->effect_id_)) {
       this->runner_->setPalette(255);
     } else {
       if (c && c->get_palette()) {

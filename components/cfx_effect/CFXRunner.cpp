@@ -6649,8 +6649,7 @@ uint16_t mode_slipstream(void) {
     // dim8_video deepens the valleys, making pulses pop as distinct slugs.
     uint8_t final_bri = dim8_video(raw_bri);
 
-    CRGBW c = ColorFromPalette(active_palette, base_color_index, final_bri,
-                               LINEARBLEND);
+    CRGBW c = ColorFromPalette(active_palette, base_color_index, final_bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 

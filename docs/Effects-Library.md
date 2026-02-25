@@ -29,9 +29,9 @@ Specifically designed for solid color animations with premium, forced entry/exit
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
-| 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
-| 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | Yes | ChimeraFX |
+| 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
+| 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
+| 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 
 #### WLED-Style Effects:
 
