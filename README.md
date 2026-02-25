@@ -22,7 +22,7 @@ A **Chimera** is a legendary creature composed of three animals. ChimeraFX merge
 
 This project is **not** a full WLED replacement and it will never be. Choose the right tool for your hardware:
 
-*   **Install [WLED](https://kno.wled.ge/) if:** You want the full experience (Segments, E1.31, 150+ effects) or are dedicating an MCU solely to lighting.
+*   **Install [WLED](https://kno.wled.ge/) if:** You want the full experience (E1.31, 150+ effects, audio reactive, etc.) or are dedicating an MCU solely to lighting.
 *   **Use `ChimeraFX` if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
 ## Platform Compatibility
@@ -30,6 +30,8 @@ This project is **not** a full WLED replacement and it will never be. Choose the
 - **Framework:** **ESP-IDF** (via RMT DMA) and **Arduino** (via NeoPixelBus)
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
   - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
+- **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
+  - *2-wire SPI strips (APA102, WS2801, SK9822, etc.) are **not supported**.*
 
 ### Reality Check
 
@@ -49,7 +51,7 @@ This native C++ component brings advanced lighting effects to ESPHome. Unlike th
 - **Smooth Transitions** — Professional-grade animations
 - **Dynamic Controls** — Speed, intensity, palette, and mirror direction
 - **Intelligent Autotune** — Automatically snaps to optimal creator defaults, but instantly yields manual control when you touch a slider.
-- **Intro Animations** — Wipe, Fade, Center, and Glitter effects on turn-on
+- **Intro and Outro Animations** — Wipe, Fade, Center, and Glitter and more effects on turn-on and turn-off
 - **Timer** — Turn off after a specified amount of time
 - **Presets** — Save and restore effect configurations
 - **Debug Logger** — Turn on/off a logger at runtime level for the component
@@ -96,13 +98,13 @@ light:
 
 ### Available Effects and Palettes
 
-ChimeraFX currently supports over 50+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls, plus some original effects. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
+ChimeraFX currently supports over 50+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls, plus some original effects, with some dedicated to monochromatic lighting. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
 
 #### [Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
 
 
 **Why aren't all WLED effects here?**  
-I meticulously rewrite each WLED effect to ensure it runs efficiently alongside your other ESPHome components without sacrificing visual quality. However, 2D matrix animations and effects requiring two or three separate color selections will not be ported, as they are incompatible with the current ESPHome and ChimeraFX architecture. 
+`ChimeraFX`uses a curated selection of effects. I meticulously rewrite each effect to ensure it runs efficiently alongside your other ESPHome components without sacrificing visual quality. However, 2D matrix animations and effects requiring two or three separate color selections will not be ported, as they are incompatible with the current ESPHome and ChimeraFX architecture. 
 
 ---
 

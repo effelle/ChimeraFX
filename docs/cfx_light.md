@@ -31,10 +31,25 @@ light:
 * **id** (*ID*): The ID of the light component.
 * **pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
 * **num_leds** (*int*): The total number of LEDs in your strip.
-* **chipset** (*string*): The exact LED protocol to use. Must be one of:
-  * `WS2812X` (Default for general 3-pin RGB strips)
-  * `SK6812` (For RGBW strips with a dedicated white channel)
-  * `WS2811` (For older 12V 3-LED segments)
+### Supported Chipsets
+`cfx_light` is a high-speed **1-wire (NRZ)** driver. It utilizes the ESP32 RMT peripheral to generate industrial-grade timings for the following chipsets:
+
+* **WS2812 / WS2812B / WS2813 / WS2815** (General 3-pin RGB strips)
+* **SK6812** (RGBW strips with a dedicated white channel)
+* **WS2811** (Standard 12V 3-LED segment strips)
+
+> [!WARNING]
+> **SPI strips are NOT supported.**  
+> 2-wire chipsets that require a separate Clock signal (such as **APA102, SK9822, WS2801, LPD8806**) are not compatible with this driver.
+
+### Configuration Variables
+To use a specific chipset, use the `chipset` variable in your YAML:
+
+| Parameter | Chipset Option | Description |
+|:---|:---|:---|
+| **chipset** | `WS2812X` | Standard 3-pin RGB timing (Default) |
+| | `SK6812` | 4-byte RGBW timing (GRBW order) |
+| | `WS2811` | Optimized timing for WS2811 data rates |
 
 ### Optional Parameters
 * **all_effects** (*boolean*, default: `false`): When set to `true`, the component will look at the `chimera_fx_effects.yaml` file in your project root and instantly register all effects.
