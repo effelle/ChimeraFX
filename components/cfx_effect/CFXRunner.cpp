@@ -6607,11 +6607,11 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// Dual traveling sine wave interference pattern.
-// Two cubicwave8 functions with slightly different spatial frequencies
-// produce constructive interference (bright merged segments) and destructive
-// interference (dark gaps) that shift over time — creating the illusion of
-// light segments flowing, merging, and splitting.
+// Bi-Directional Additive Waves.
+// A slow, wide wave travels forward while a fast, narrow wave travels
+// backward. They do not interact; they pass through each other like ghosts.
+// Their brightness sums up at intersections (additive blending), creating
+// a bright flash that looks like a collision.
 // Zero state buffers — pure spatial math per pixel per frame.
 uint16_t mode_collider(void) {
   if (!instance)
@@ -6624,38 +6624,31 @@ uint16_t mode_collider(void) {
   uint8_t speed = instance->_segment.speed;         // 0-255
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // --- Time Bases ---
-  // t1 is the slow base wave. t2 travels twice as fast (>>9 vs >>10).
-  // This speed difference creates the "catch-up" behavior where one wave
-  // sweeps through the other, triggering constructive interference (merges).
-  uint32_t t1 = (instance->now * (uint32_t)speed) >> 10;
-  uint32_t t2 = (instance->now * (uint32_t)speed) >> 9;
+  // --- Wave 1 (The Base): Slow, wide, forward ---
+  uint32_t t1 = (instance->now * (uint32_t)speed) >> 5;
+  uint16_t scale1 = cfx_map((long)intensity, 0, 255, 5, 15);
 
-  // --- Spatial Scale ---
-  // Intensity maps the wave density: low = few wide segments, high = many small
-  // ones.
-  uint16_t scale = cfx_map((long)intensity, 0, 255, 4, 20);
+  // --- Wave 2 (The Projectiles): Fast, narrow, backward ---
+  uint32_t t2 = (instance->now * (uint32_t)speed) >> 3;
+  uint16_t scale2 = cfx_map((long)intensity, 0, 255, 10, 30);
 
   // --- Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t i = 0; i < len; i++) {
-    // Wave 1: Slow-moving base
-    uint8_t wave1 = cubicwave8((uint8_t)(t1 + (uint32_t)i * scale));
+    // Wave 1: Traveling forward (subtract time)
+    uint8_t wave1 = cubicwave8((uint8_t)((uint32_t)i * scale1 - t1));
 
-    // Wave 2: Faster-moving wave with different spatial freq (+4)
-    uint8_t wave2 = cubicwave8((uint8_t)(t2 + (uint32_t)i * (scale + 4)));
+    // Wave 2: Traveling backward (add time)
+    uint8_t wave2 = cubicwave8((uint8_t)((uint32_t)i * scale2 + t2));
 
-    // Average the two waves
-    uint8_t combined = (wave1 / 2) + (wave2 / 2);
+    // Deepen contrast to create distinct segments/blocks
+    uint8_t w1_dim = dim8_video(wave1);
+    uint8_t w2_dim = dim8_video(wave2);
 
-    // Threshold masking: only the peaks survive, creating solid segments.
-    // Use a slightly lower threshold (130) to allow for wider segments.
-    uint8_t final_bri = 0;
-    if (combined > 130) {
-      final_bri = cfx_map((long)combined, 130, 255, 80, 255);
-      final_bri = qadd8(final_bri, final_bri); // hard plateau amplification
-    }
+    // Additive blend (Saturating add prevents overflow)
+    // When they cross, their brightness sums to create a bright flash.
+    uint8_t final_bri = qadd8(w1_dim, w2_dim);
 
     CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
