@@ -1745,8 +1745,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
 
       if (relative_pos < 0.0f) {
-        // Ahead of the eraser formation
-        alpha = 1.0f;
+        // Ahead of the eraser formation: Smoothly fade down from full
+        // background
+        if (relative_pos > -wipe_fade) {
+          alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
+        } else {
+          alpha = 1.0f;
+        }
       } else if (relative_pos <= -c1_back) {
         // Cursor 1: Pulse of Light
         float c_radius = c_size / 2.0f;
