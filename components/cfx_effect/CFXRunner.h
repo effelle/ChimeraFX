@@ -63,6 +63,8 @@ struct CRGBW {
 struct ColliderNode {
   float radius;
   float vel;
+  uint8_t glue_timer; // New: holds position for N frames
+  float offset;       // New: local drift/offset from grid center
 };
 
 // Effect Mode IDs

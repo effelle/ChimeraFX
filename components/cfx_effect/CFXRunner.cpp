@@ -6607,11 +6607,9 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// --- Collider Effect (ID 164) ---
-// Bellows Collider: Stationary nodes with expanding/contracting radii.
-// They reverse direction (bounce) when they touch their neighbors or hit
-// min/max. Stateful — uses allocateData to persist node positions and
-// velocities.
+// Chromatic Liquid Bellows: Fixed origins with slow drift.
+// Upgraded physics: colliding edges "glue" together (slow down significantly).
+// Visuals: Nodes act as portals/masks for a scrolling palette gradient.
 uint16_t mode_collider(void) {
   if (!instance)
     return FRAMETIME;
@@ -6624,31 +6622,46 @@ uint16_t mode_collider(void) {
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
   // 1. Grid Configuration
-  // Invert Intensity: High intensity = many nodes (tight spacing)
-  uint16_t spacing = cfx_map((long)intensity, 0, 255, 60, 10);
-  if (spacing < 4)
-    spacing = 4;
+  // High Intensity = denser grid (smaller spacing)
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 70, 15);
+  if (spacing < 6)
+    spacing = 6;
   uint16_t numNodes = (len + spacing - 1) / spacing;
 
-  // 2. Persistence (Re-allocation zeroes the memory)
+  // 2. Persistence
   if (!instance->_segment.allocateData(numNodes * sizeof(ColliderNode))) {
     return FRAMETIME;
   }
   ColliderNode *nodes = (ColliderNode *)instance->_segment.data;
 
-  // 3. Physics Update
+  // 3. Grid Drift (Shared global shift for origins)
+  // Slow movement of the "grid centers" over time.
+  float global_drift = (float)(instance->now % 65535) * 0.005f;
+
+  // 4. Physics Update
   float base_step = (float)speed / 128.0f;
   for (uint16_t n = 0; n < numNodes; n++) {
-    // Stagger/Auto-start if state was zeroed by re-allocation or reset
+    // Re-initialize if state is blank or reset
     if (nodes[n].vel == 0.0f || instance->_segment.reset) {
       nodes[n].radius = (float)(n % 3) * (spacing / 5.0f);
       nodes[n].vel = (n % 2 == 0 ? 1.0f : -1.0f);
+      nodes[n].glue_timer = 0;
       if (n == numNodes - 1)
         instance->_segment.reset = false;
     }
 
-    // Per-node speed variation for organic (non-synchronized) motion
-    float node_step = base_step * (0.8f + (float)(n % 4) * 0.15f);
+    // Per-node speed variation (±20%)
+    float node_step = base_step * (0.8f + (float)(n % 5) * 0.1f);
+
+    // Magnetic Glue Logic: If collision detected, slow speed to 10%
+    if (nodes[n].glue_timer > 0) {
+      node_step *= 0.1f;
+      nodes[n].glue_timer--;
+      if (nodes[n].glue_timer == 0) {
+        nodes[n].vel = -1.0f; // Done glued, start retracting
+      }
+    }
+
     nodes[n].radius += nodes[n].vel * node_step;
 
     // Bottom Bounce
@@ -6657,49 +6670,65 @@ uint16_t mode_collider(void) {
       nodes[n].vel = 1.0f;
     }
 
-    // Neighbor Collision (Bouncing)
-    // If adjacent nodes touch, both are forced into retraction mode.
-    if (n < numNodes - 1) {
-      if (nodes[n].radius + nodes[n + 1].radius >= (float)spacing) {
-        nodes[n].vel = -1.0f;
-        nodes[n + 1].vel = -1.0f;
-      }
+    // Top Limit / Safety
+    if (nodes[n].radius >= (float)spacing * 0.7f) {
+      nodes[n].radius = (float)spacing * 0.7f;
+      nodes[n].vel = -1.0f;
     }
 
-    // Safety Top Bounce (Mid-point safety)
-    if (nodes[n].radius >= (float)spacing * 0.65f) {
-      nodes[n].radius = (float)spacing * 0.65f;
-      nodes[n].vel = -1.0f;
+    // Neighbor Collision (Trigger Glue)
+    if (n < numNodes - 1) {
+      if (nodes[n].radius + nodes[n + 1].radius >= (float)spacing) {
+        // Only trigger glue if both are expanding
+        if (nodes[n].vel > 0 && nodes[n + 1].vel > 0 &&
+            nodes[n].glue_timer == 0) {
+          nodes[n].glue_timer = 30; // Wait ~0.5s at 60fps
+          nodes[n + 1].glue_timer = 30;
+        }
+      }
     }
   }
 
-  // 4. Rendering
-  instance->_segment.fill(0); // Clear background
-  const uint32_t *active_palette = getPaletteByIndex(255);
+  // 5. Rendering
+  instance->_segment.fill(0);                         // Pure dark background
+  uint8_t pal_offset = (uint8_t)(instance->now >> 4); // Scrolling speed
 
   for (uint16_t n = 0; n < numNodes; n++) {
-    uint16_t center = n * spacing + (spacing / 2);
-    float node_r = nodes[n].radius;
+    // Calculate center with drift
+    float center_f = (float)(n * spacing + (spacing / 2)) + global_drift;
+    // Wrap drift around strip length
+    while (center_f >= (float)len)
+      center_f -= (float)len;
+    while (center_f < 0.0f)
+      center_f += (float)len;
 
-    int r_start = (int)center - (int)node_r;
-    int r_stop = (int)center + (int)node_r;
+    float node_r = nodes[n].radius;
+    int r_start = (int)(center_f - node_r);
+    int r_stop = (int)(center_f + node_r);
 
     for (int i = r_start; i <= r_stop; i++) {
-      if (i < 0 || i >= (int)len)
-        continue;
+      // Circular wrap indexing
+      int idx = i;
+      if (idx < 0)
+        idx += len;
+      if (idx >= (int)len)
+        idx -= len;
+      if (idx < 0 || idx >= (int)len)
+        continue; // Final safety
 
-      // Solid brightness (square sides)
-      uint8_t bri = 255;
+      // Palette Scrolling Logic (inside the mask)
+      // Pick color based on palette offset + pixel index
+      uint8_t color_idx = (uint8_t)idx + pal_offset;
+      CRGB pulse_rgb = ColorFromPalette(instance->_segment.palette, color_idx,
+                                        255, LINEARBLEND);
 
-      // Additive blend with saturation
-      uint32_t current = instance->_segment.getPixelColor(i);
-      CRGBW pulse_col = ColorFromPalette(active_palette, 0, bri);
-
-      uint8_t r = qadd8(CFX_R(current), pulse_col.r);
-      uint8_t g = qadd8(CFX_G(current), pulse_col.g);
-      uint8_t b = qadd8(CFX_B(current), pulse_col.b);
-      uint8_t w = qadd8(CFX_W(current), pulse_col.w);
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+      // Additive pixel mixing
+      uint32_t current = instance->_segment.getPixelColor(idx);
+      uint8_t r = qadd8(CFX_R(current), pulse_rgb.r);
+      uint8_t g = qadd8(CFX_G(current), pulse_rgb.g);
+      uint8_t b = qadd8(CFX_B(current), pulse_rgb.b);
+      // No W channel for palette mixing as most palettes are RGB
+      instance->_segment.setPixelColor(idx, RGBW32(r, g, b, 0));
     }
   }
 
