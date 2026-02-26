@@ -6607,11 +6607,9 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// Bi-Directional Additive Waves.
-// A slow, wide wave travels forward while a fast, narrow wave travels
-// backward. They do not interact; they pass through each other like ghosts.
-// Their brightness sums up at intersections (additive blending), creating
-// a bright flash that looks like a collision.
+// Bi-directional Moving Grid: Two trains of light "capsules" moving in opposite
+// directions. When they cross, their brightness adds up, creating a bright
+// merged segment. This mimics additive physics without state or complex math.
 // Zero state buffers — pure spatial math per pixel per frame.
 uint16_t mode_collider(void) {
   if (!instance)
@@ -6624,31 +6622,56 @@ uint16_t mode_collider(void) {
   uint8_t speed = instance->_segment.speed;         // 0-255
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // --- Wave 1 (The Base): Slow, wide, forward ---
-  uint32_t t1 = (instance->now * (uint32_t)speed) >> 5;
-  uint16_t scale1 = cfx_map((long)intensity, 0, 255, 5, 15);
+  // --- Grid Parameters ---
+  // Spacing: Distance between node centers. Intensity maps to density.
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 12, 50);
+  if (spacing < 4)
+    spacing = 4;
+  uint16_t half_space = spacing / 2;
 
-  // --- Wave 2 (The Projectiles): Fast, narrow, backward ---
-  uint32_t t2 = (instance->now * (uint32_t)speed) >> 3;
-  uint16_t scale2 = cfx_map((long)intensity, 0, 255, 10, 30);
+  // Pulse Radius: Width of the capsule (approx 35% of spacing to leave gaps)
+  uint16_t radius = (spacing * 35) / 100;
+  if (radius < 1)
+    radius = 1;
+  // Core Radius: 70% of total radius is solid color
+  uint16_t core = (radius * 70) / 100;
+
+  // --- Time Bases ---
+  // Speed maps to movement. Slowed down for smooth flow.
+  uint32_t t_fwd = (instance->now * (uint32_t)speed) >> 8;
+  uint32_t t_bwd = (instance->now * (uint32_t)speed) >>
+                   7; // Backward slightly faster for variety
 
   // --- Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t i = 0; i < len; i++) {
-    // Wave 1: Traveling forward (subtract time)
-    uint8_t wave1 = cubicwave8((uint8_t)((uint32_t)i * scale1 - t1));
+    // Grid 1: Forward-moving node index
+    uint16_t idx1 = (i + t_fwd) % spacing;
+    uint16_t d1 = (uint16_t)abs((int)idx1 - (int)half_space);
 
-    // Wave 2: Traveling backward (add time)
-    uint8_t wave2 = cubicwave8((uint8_t)((uint32_t)i * scale2 + t2));
+    // Grid 2: Backward-moving node index (reversed strip coordinate)
+    uint16_t idx2 = (len - 1 - i + t_bwd) % spacing;
+    uint16_t d2 = (uint16_t)abs((int)idx2 - (int)half_space);
 
-    // Deepen contrast to create distinct segments/blocks
-    uint8_t w1_dim = dim8_video(wave1);
-    uint8_t w2_dim = dim8_video(wave2);
+    // Plateau Brightness Calc (lambda for efficiency)
+    auto get_plateau = [core, radius](uint16_t d) -> uint8_t {
+      if (d <= core)
+        return 255;
+      if (d >= radius)
+        return 0;
+      // Linear fade between core and edge
+      return (uint8_t)cfx_map((long)d, (long)core, (long)radius, 255, 0);
+    };
 
-    // Additive blend (Saturating add prevents overflow)
-    // When they cross, their brightness sums to create a bright flash.
-    uint8_t final_bri = qadd8(w1_dim, w2_dim);
+    uint8_t b1 = get_plateau(d1);
+    uint8_t b2 = get_plateau(d2);
+
+    // Additive blend with saturation
+    uint8_t final_bri = qadd8(b1, b2);
+
+    // Use dim8_video to sharpen the 'solid block' look
+    final_bri = dim8_video(final_bri);
 
     CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
