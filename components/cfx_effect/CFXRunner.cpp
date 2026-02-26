@@ -6623,55 +6623,56 @@ uint16_t mode_collider(void) {
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
   // 1. Grid Configuration
-  uint16_t spacing = cfx_map((long)intensity, 0, 255, 10, 60);
+  // Invert Intensity: High intensity = many nodes (tight spacing)
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 60, 10);
   if (spacing < 4)
     spacing = 4;
   uint16_t numNodes = (len + spacing - 1) / spacing;
 
-  // 2. Persistence
+  // 2. Persistence (Re-allocation zeroes the memory)
   if (!instance->_segment.allocateData(numNodes * sizeof(ColliderNode))) {
-    return FRAMETIME; // Mem failure fallback
+    return FRAMETIME;
   }
   ColliderNode *nodes = (ColliderNode *)instance->_segment.data;
 
-  // 3. Initialization/Reset
-  if (instance->_segment.reset) {
-    for (uint16_t n = 0; n < numNodes; n++) {
-      // Start with staggered radii and velocities for asynchronous pulsing
-      nodes[n].radius = (float)(n % 2 == 0 ? 0 : spacing / 3.0f);
-      nodes[n].vel = (n % 2 == 0 ? 1.0f : -1.0f);
-    }
-    instance->_segment.reset = false;
-  }
-
-  // 4. Physics Update
-  float step = (float)speed / 128.0f; // Velocity scaling
+  // 3. Physics Update
+  float base_step = (float)speed / 128.0f;
   for (uint16_t n = 0; n < numNodes; n++) {
-    nodes[n].radius += nodes[n].vel * step;
+    // Stagger/Auto-start if state was zeroed by re-allocation or reset
+    if (nodes[n].vel == 0.0f || instance->_segment.reset) {
+      nodes[n].radius = (float)(n % 3) * (spacing / 5.0f);
+      nodes[n].vel = (n % 2 == 0 ? 1.0f : -1.0f);
+      if (n == numNodes - 1)
+        instance->_segment.reset = false;
+    }
 
-    // Bottom Limit (Min Radius)
+    // Per-node speed variation for organic (non-synchronized) motion
+    float node_step = base_step * (0.8f + (float)(n % 4) * 0.15f);
+    nodes[n].radius += nodes[n].vel * node_step;
+
+    // Bottom Bounce
     if (nodes[n].radius <= 0.0f) {
       nodes[n].radius = 0.01f;
       nodes[n].vel = 1.0f;
     }
 
-    // Top Limit (Self-Safety)
-    if (nodes[n].radius > spacing) {
-      nodes[n].radius = (float)spacing;
-      nodes[n].vel = -1.0f;
-    }
-
     // Neighbor Collision (Bouncing)
-    // If this node expands into the next node's territory, both bounce back.
+    // If adjacent nodes touch, both are forced into retraction mode.
     if (n < numNodes - 1) {
       if (nodes[n].radius + nodes[n + 1].radius >= (float)spacing) {
         nodes[n].vel = -1.0f;
-        nodes[n + 1].vel = 1.0f;
+        nodes[n + 1].vel = -1.0f;
       }
+    }
+
+    // Safety Top Bounce (Mid-point safety)
+    if (nodes[n].radius >= (float)spacing * 0.65f) {
+      nodes[n].radius = (float)spacing * 0.65f;
+      nodes[n].vel = -1.0f;
     }
   }
 
-  // 5. Rendering
+  // 4. Rendering
   instance->_segment.fill(0); // Clear background
   const uint32_t *active_palette = getPaletteByIndex(255);
 
@@ -6679,24 +6680,22 @@ uint16_t mode_collider(void) {
     uint16_t center = n * spacing + (spacing / 2);
     float node_r = nodes[n].radius;
 
-    // Draw solid-ish pulse around center
-    int start = (int)center - (int)node_r;
-    int stop = (int)center + (int)node_r;
+    int r_start = (int)center - (int)node_r;
+    int r_stop = (int)center + (int)node_r;
 
-    for (int i = start; i <= stop; i++) {
+    for (int i = r_start; i <= r_stop; i++) {
       if (i < 0 || i >= (int)len)
         continue;
 
-      // Distance-based fade at edges for "squishy" merge look
       float dist = fabsf((float)i - (float)center);
       uint8_t bri = 255;
-      if (dist > (node_r * 0.7f)) {
-        // Soften the last 30% of the radius
+      if (dist > (node_r * 0.7f) && node_r > 0.5f) {
+        // Soften edges for liquid merge look
         bri = (uint8_t)cfx_map((long)(dist * 100), (long)(node_r * 70),
                                (long)(node_r * 100), 255, 0);
       }
 
-      // Additive blend with background
+      // Additive blend with saturation
       uint32_t current = instance->_segment.getPixelColor(i);
       CRGBW pulse_col = ColorFromPalette(active_palette, 0, bri);
 
