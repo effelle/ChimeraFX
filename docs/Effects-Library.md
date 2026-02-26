@@ -33,6 +33,7 @@ Specifically designed for solid color animations with premium, forced entry/exit
 | 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 165 | **Twin Pulse Sweep** | A cinematic monochromatic reveal. Dual light pulses race across the strip to lead the entry, and return to eat the light during the exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
+| 166 | **Morse Sweep** | A "hidden in plain sight" reveal. Flashes the words "ON" and "OFF" in Morse code using the current solid color. | **Intensity**: N/A - **Speed**: Morse speed | No | ChimeraFX |
 
 #### WLED-Style Effects:
 
@@ -134,6 +135,7 @@ These short animations play once when the light is turned ON.
 | 3 | **Center** | Wipe from center outwards (or inwards if reversed). |
 | 4 | **Glitter** | Random pixels sparkle as brightness increases. |
 | 5 | **Twin Pulse** | Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.|
+| 6 | **Morse Code** | Flashes "ON" in Morse code during the intro and "OFF" during the outro. Supports palette colors.|
 
 ### Transition Behavior
 When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.
