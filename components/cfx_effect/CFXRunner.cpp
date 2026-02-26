@@ -6636,7 +6636,8 @@ uint16_t mode_collider(void) {
 
   // 3. Grid Drift (Shared global shift for origins)
   // Slow movement of the "grid centers" over time.
-  float global_drift = (float)(instance->now % 65535) * 0.005f;
+  float global_drift =
+      (float)(instance->now % 65535) * 0.012f; // Increased drift
 
   // 4. Physics Update
   float base_step = (float)speed / 128.0f;
@@ -6678,12 +6679,15 @@ uint16_t mode_collider(void) {
 
     // Neighbor Collision (Trigger Glue)
     if (n < numNodes - 1) {
-      if (nodes[n].radius + nodes[n + 1].radius >= (float)spacing) {
+      // Bridge more: allow 1.5 LEDs of overlap (3 LEDs total) before
+      // glue/retraction
+      float bridge_limit = (float)spacing + 2.5f;
+      if (nodes[n].radius + nodes[n + 1].radius >= bridge_limit) {
         // Only trigger glue if both are expanding
         if (nodes[n].vel > 0 && nodes[n + 1].vel > 0 &&
             nodes[n].glue_timer == 0) {
-          nodes[n].glue_timer = 30; // Wait ~0.5s at 60fps
-          nodes[n + 1].glue_timer = 30;
+          nodes[n].glue_timer = 40; // Wait longer (~0.6s)
+          nodes[n + 1].glue_timer = 40;
         }
       }
     }

@@ -21,6 +21,7 @@ Please note that some WLED effects will not be ported. This includes animations 
 | 155 | **Kaleidos** | Symmetrical mirroring of animations. | **Intensity**: Segment count - **Speed**: Scroll speed | Yes | ChimeraFX |
 | 154 | **Reactor Beat**| A rhythmic, high-energy heartbeat pushing outward from the center. | **Intensity**: Pulse decay - **Speed**: BPM | Yes | ChimeraFX |
 | 153 | **Twin Flames** | A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center. Toggle Mirror to reverse the effect. | **Intensity**: Sparking rate - **Speed**: Cooling rate | No | ChimeraFX - Mark Kriegsman (Adapt.) |
+| 164 | **Collider** | Chromatic liquid nodes that expand from drifting origins. Collisions trigger a "sticky" bridge with additive color mixing. | **Intensity**: Grid density - **Speed**: Pulse speed | Yes | ChimeraFX |
 
 #### ChimeraFX Monochromatic Effects:
 
@@ -28,10 +29,8 @@ Specifically designed for solid color animations with premium, forced entry/exit
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
-| 164 | **Collider** | Traveling blobs of light that undergo elastic collisions and bounce off each other. Additive metaball rendering creates a gooey, liquid merge when blobs touch before separating. Designed for monochromatic solid-color looks. | **Intensity**: Node count (2-8) - **Speed**: Nodes velocity | No | ChimeraFX |
 | 162 | **Curtain Sweep** | A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
-| 164 | **Pulsar** | Stationary cursors that rhythmically expand outward from fixed node centers, then retract and vanish. Uses `qsub8(time_wave, spatial_phase)` expansion masking with `qadd8` hard-edge sharpening. Designed for monochromatic solid-color looks. | **Intensity**: Node spacing (cursor density) - **Speed**: Pulse speed | No | ChimeraFX |
 | 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 
 #### WLED-Style Effects:
