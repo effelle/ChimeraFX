@@ -748,123 +748,82 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   if (this->is_monochromatic_(effect_id)) {
-    return 255; // Monochromatic effects ALWAYS default to Solid
+    return 255; // Monochromatic series ALWAYS defaults to Solid
   }
 
   switch (effect_id) {
-  // Solid Defaults (255)
-  case 0:
-    return 255; // Static
-  case 1:
-    return 255; // Blink
-  case 2:
-    return 255; // Breath
-  case 3:
-    return 255; // Wipe
-  case 4:
-    return 255; // Wipe Random
-  case 6:
-    return 255; // Wipe Sweep (ID=6)
-  case 91:
-    return 255; // Bouncing Balls
-  case 23:
-    return 255; // Strobe -> Solid
-  case 24:
-    return 255; // Strobe Rainbow -> Solid
-  case 25:
-    return 255; // Multi Strobe -> Solid
-  case 26:
-    return 255; // Blink Rainbow -> Solid
-  case 20:
-  case 21:      // Sparkle / Flash Sparkle
-  case 22:      // Hyper Sparkle
+  case 0:       // Static
+  case 1:       // Blink
+  case 2:       // Breath
+  case 3:       // Wipe
+  case 4:       // Wipe Random
+  case 6:       // Sweep
+  case 15:      // Running Lights
+  case 16:      // Saw
+  case 18:      // Dissolve
+  case 20:      // Sparkle
+  case 21:      // Sparkle Dark
+  case 22:      // Sparkle+
+  case 23:      // Strobe
+  case 24:      // Strobe Rainbow
+  case 25:      // Multi Strobe
+  case 26:      // Blink Rainbow
+  case 28:      // Chase
+  case 40:      // Scanner
+  case 54:      // Chase Tri
+  case 60:      // Scanner Dual
+  case 68:      // BPM
+  case 76:      // Meteor
+  case 91:      // Bouncing Balls
   case 95:      // Popcorn
   case 96:      // Drip
+  case 98:      // Percent
   case 100:     // Heartbeat
-  case 154:     // HeartBeat Center
-    return 255; // Solid Palette by default
+  case 152:     // Center Gauge
+  case 154:     // Reactor Beat
+  case 156:     // Follow Me
   case 157:     // Follow Us
   case 164:     // Collider
-    return 255; // Solid Palette
+    return 255; // Defaults to Solid
 
-  // Rainbow Defaults (4)
-  case 7:
-    return 4; // Dynamic
-  case 8:
-    return 4; // Rainbow (ID=8)
-  case 9:
-    return 4; // Rainbow Cycle (Color Loop) (ID=9)
-  case 64:
-    return 4; // Juggle
-  case 74:
-    return 4; // ColorTwinkle
-  case 79:
-    return 4; // Ripple
-  case 105:
-    return 4; // Phased
-  case 107:
-    return 4; // Noise Pal
-  case 110:
-    return 4; // Flow
+  case 7:     // Dynamic
+  case 8:     // Rainbow
+  case 9:     // Colorloop (WLED Cycle)
+  case 64:    // Juggle
+  case 74:    // Color Twinkle
+  case 79:    // Ripple
+  case 87:    // Glitter
+  case 90:    // Fireworks
+  case 105:   // Phased
+  case 107:   // Noise Pal
+  case 110:   // Flow
+  case 155:   // Kaleidos
+    return 4; // Defaults to Rainbow
 
-  // Party Defaults (8)
-  case 97:
-    return 8; // Plasma (ID=97)
-  case 63:
-    return 8; // Colorloop
+  case 63:    // Colorloop (ChimeraFX internal mapping)
+  case 97:    // Plasma
+    return 8; // Defaults to Party
 
-  // Specific Defaults
-  case 18:
-    return 255; // Dissolve -> Solid (User override)
-  case 38:
-    return 1; // Aurora -> Aurora palette
-  case 53:
-    return 5; // Fire Dual -> Fire palette (same as Fire)
-  case 66:
-    return 5; // Fire -> Fire
-  case 76:
-    return 255; // Meteor -> Solid (WLED default)
-  case 40:
-    return 255; // Scanner -> Solid
-  case 60:
-    return 255; // Scanner Dual -> Solid
-  case 101:
-    return 11; // Pacifica -> Pacifica
-  case 104:
-    return 12; // Sunrise -> HeatColors
-  case 151:
-    return 11; // Dropping Time -> Ocean
-  case 155:
-    return 4; // Kaleidos -> Rainbow
-  case 160:
-    return 11; // Fluid Rain -> Ocean
-  case 156:
-    return 255; // Follow Me -> Solid (Use Primary Color)
+  case 66:    // Fire
+  case 53:    // Twin Flames
+    return 5; // Defaults to Fire Palette
 
-  // New effects
-  case 28:
-    return 255; // Chase → Solid
-  case 54:
-    return 255; // Tricolor Chase → Solid
-  case 68:
-    return 255; // BPM → Solid
-  case 15:
-    return 255; // Running Lights → Solid
-  case 16:
-    return 255; // Saw -> Solid
-  case 52:
-    return 13; // Running Dual -> Sakura
-  case 87:
-    return 4; // Glitter -> Rainbow
-  case 90:
-    return 4;   // Fireworks -> Rainbow
-  case 98:      // Percent
-  case 152:     // Percent Center
-    return 255; // Solid
+  case 101:    // Ocean (Pacifica)
+  case 151:    // Dropping Time
+  case 160:    // Fluid Rain
+    return 11; // Defaults to Ocean
 
-  // Default Aurora (1) or specific handling
+  case 38:    // Aurora
+    return 1; // Defaults to Aurora Palette
+
+  case 104:    // Sunrise
+    return 12; // Defaults to HeatColors
+
+  case 52:     // Running Dual
+    return 13; // Defaults to Sakura
+
   default:
-    return 1; // Aurora is the general default
+    return 1; // General fallback to Aurora
   }
 }
 
@@ -954,6 +913,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 162:
   case 163:
     return 1; // Monochromatic series (fastest speed)
+  case 164:
+    return 100; // Collider (Default Speed)
   default:
     return 128; // WLED default
   }
@@ -980,6 +941,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 162:
   case 163:
     return 1; // Monochromatic series (No blur)
+  case 164:
+    return 170; // Collider (Default Intensity)
   default:
     return 128; // WLED default
   }
