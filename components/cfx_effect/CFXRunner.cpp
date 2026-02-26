@@ -6607,6 +6607,7 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
+// --- Collider Effect (ID 164) ---
 // Bellows Collider: Stationary nodes with expanding/contracting radii.
 // They reverse direction (bounce) when they touch their neighbors or hit
 // min/max. Stateful — uses allocateData to persist node positions and
@@ -6687,13 +6688,8 @@ uint16_t mode_collider(void) {
       if (i < 0 || i >= (int)len)
         continue;
 
-      float dist = fabsf((float)i - (float)center);
+      // Solid brightness (square sides)
       uint8_t bri = 255;
-      if (dist > (node_r * 0.7f) && node_r > 0.5f) {
-        // Soften edges for liquid merge look
-        bri = (uint8_t)cfx_map((long)(dist * 100), (long)(node_r * 70),
-                               (long)(node_r * 100), 255, 0);
-      }
 
       // Additive blend with saturation
       uint32_t current = instance->_segment.getPixelColor(i);
@@ -6709,7 +6705,6 @@ uint16_t mode_collider(void) {
 
   return FRAMETIME;
 }
-
 // Valid Palette Implementation (Moved from line 121)
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
                                      uint8_t mcol, uint8_t pbri) {
