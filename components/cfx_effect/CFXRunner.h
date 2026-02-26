@@ -201,7 +201,7 @@ struct ColliderNode {
 #define INTRO_FADE 2
 #define INTRO_CENTER 3
 #define INTRO_GLITTER 4
-#define INTRO_METEOR_WIPE 5
+#define INTRO_TWIN_PULSE 5
 
 #define MODE_COUNT 119
 

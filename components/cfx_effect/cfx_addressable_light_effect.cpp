@@ -279,8 +279,8 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_CENTER;
         else if (s == "Glitter")
           this->active_intro_mode_ = INTRO_GLITTER;
-        else if (s == "Meteor Wipe")
-          this->active_intro_mode_ = INTRO_METEOR_WIPE;
+        else if (s == "Twin Pulse")
+          this->active_intro_mode_ = INTRO_TWIN_PULSE;
       }
     }
 
@@ -347,8 +347,8 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_GLITTER;
           else if (opt == "Fade")
             this->active_outro_mode_ = INTRO_FADE;
-          else if (opt == "Meteor Wipe")
-            this->active_outro_mode_ = INTRO_METEOR_WIPE;
+          else if (opt == "Twin Pulse")
+            this->active_outro_mode_ = INTRO_TWIN_PULSE;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {
@@ -1431,8 +1431,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     break;
   }
-  case INTRO_MODE_METEOR_WIPE: {
-    // Dual Faded Cursors + Soft Wipe
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Intro
     // 1. First cursor (symmetric fade up/down)
     // 2. Wide Gap
     // 3. Second cursor (symmetric fade up/down)
@@ -1442,9 +1442,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // Define proportional sizes based on segment length
     float length = (float)num_leds;
-    float c_size = length * 0.06f; // Each cursor is 6% of strip
-    if (c_size < 2.0f)
-      c_size = 2.0f;
+    float c_size = length * 0.08f; // Each cursor is 8% of strip
+    if (c_size < 3.0f)
+      c_size = 3.0f;
     float short_gap = length * 0.12f; // Gap between cursors (increased to 12%)
     if (short_gap < 1.0f)
       short_gap = 1.0f;
@@ -1702,6 +1702,91 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         it[i] = Color::BLACK;
       }
       // Else: Keep 100% brightness of the underlying frame
+    }
+    break;
+  }
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Outro (Option B: Forward Chase)
+    // The formation (Two pulses + trailing void) races forward.
+    // Progress 0.0: Full light.
+    // Progress 1.0: Full black.
+
+    float length = (float)num_leds;
+    float c_size = length * 0.08f;
+    if (c_size < 3.0f)
+      c_size = 3.0f;
+    float short_gap = length * 0.12f;
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.10f;
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f;
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
+
+    // Layout (identical to intro but relative to the "Eraser Head")
+    // Leading edge (Eraser Head) is the front of the formation.
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
+
+    // Total distance to cover so the void (w_solid) clears the strip
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
+
+    for (int i = 0; i < num_leds; i++) {
+      int idx = reverse ? (num_leds - 1 - i) : i;
+      float fi = (float)i;
+      float relative_pos = head_pos - fi;
+      float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
+
+      if (relative_pos < 0.0f) {
+        // Ahead of the eraser formation
+        alpha = 1.0f;
+      } else if (relative_pos <= -c1_back) {
+        // Cursor 1: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -c2_front) {
+        // Short Gap (Black)
+        alpha = 0.0f;
+      } else if (relative_pos <= -c2_back) {
+        // Cursor 2: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -w_front) {
+        // Long Gap (Black)
+        alpha = 0.0f;
+      } else {
+        // The Void behind the formation
+        alpha = 0.0f;
+      }
+
+      // Apply alpha to existing buffer color
+      if (alpha <= 0.0f) {
+        it[idx] = Color::BLACK;
+      } else if (alpha < 1.0f) {
+        Color cur = it[idx].get();
+        it[idx] = Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
+                        (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+      }
     }
     break;
   }

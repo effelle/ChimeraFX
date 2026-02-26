@@ -132,7 +132,7 @@ These short animations play once when the light is turned ON.
 | 2 | **Fade** | Smooth brightness fade-in. |
 | 3 | **Center** | Wipe from center outwards (or inwards if reversed). |
 | 4 | **Glitter** | Random pixels sparkle as brightness increases. |
-| 5 | **Meteor Wipe** | High brightness head with a fading tail that settles into a solid background fill.|
+| 5 | **Twin Pulse** | Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.|
 
 ### Transition Behavior
 When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.
