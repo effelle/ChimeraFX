@@ -1432,32 +1432,59 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_METEOR_WIPE: {
-    // P0: Locked speeds across the strip
+    // Option A: "Three Zone" Math
+    // P0: Locked speeds across the strip (cursor and wipe move together)
     // P1: 10% dark gap distance
-    // P2: Pure white meteor, colored wipe background
+    // P2: Both the cursor and the trailing wipe inherit the selected palette.
 
     float gap_size = (float)num_leds * 0.10f;
     if (gap_size < 1.0f)
       gap_size = 1.0f;
-    float tail_size = 6.0f; // Fixed crisp 6-pixel tail
-    float offset = gap_size + tail_size;
+    float cursor_radius = (float)num_leds * 0.05f; // Cursor is 10% wide total
+    if (cursor_radius < 1.0f)
+      cursor_radius = 1.0f;
 
-    // Wipe position travels from -offset to num_leds
-    // Meteor position stays exactly 'offset' ahead of the Wipe
-    float wipe_pos = (progress * ((float)num_leds + offset)) - offset;
-    float meteor_pos = wipe_pos + offset;
+    // The wipe head trails behind the cursor center by:
+    // cursor_radius (the back half of the cursor) + gap_size.
+    float wipe_offset = cursor_radius + gap_size;
+
+    // We want the animation to start with the cursor just entering the strip,
+    // and finish when the wipe has fully covered the strip.
+    // So the "head" (cursor center) goes from 0 to (num_leds + wipe_offset).
+    float total_distance = (float)num_leds + wipe_offset;
+    float cursor_center = progress * total_distance;
+    float wipe_head = cursor_center - wipe_offset;
+
+    // To make the wipe's leading edge soft, we fade it over a short distance
+    float wipe_fade_len = (float)num_leds * 0.05f;
+    if (wipe_fade_len < 1.0f)
+      wipe_fade_len = 1.0f;
 
     for (int i = 0; i < num_leds; i++) {
       int idx = reverse ? (num_leds - 1 - i) : i;
       float fi = (float)i;
+      float alpha = 0.0f;
 
-      if (fi <= wipe_pos + 1.0f) {
-        // Background Wipe with anti-aliasing edge
-        float alpha = 1.0f;
-        if (fi > wipe_pos) {
-          alpha = wipe_pos + 1.0f - fi;
+      // Check Zone 1: Cursor
+      float dist_to_cursor = abs(cursor_center - fi);
+      if (dist_to_cursor < cursor_radius) {
+        // Triangular fade: 1.0 at center, 0.0 at edges
+        alpha = 1.0f - (dist_to_cursor / cursor_radius);
+      }
+      // Check Zone 2: Background Wipe
+      else if (fi <= wipe_head) {
+        float dist_to_wipe_head = wipe_head - fi;
+        if (dist_to_wipe_head < wipe_fade_len) {
+          // Fade in the leading edge of the wipe
+          alpha = dist_to_wipe_head / wipe_fade_len;
+        } else {
+          // Solid wipe body
+          alpha = 1.0f;
         }
+      }
 
+      // Render the pixel if it's in a lit zone
+      if (alpha > 0.0f) {
         Color base_c = c;
         if (use_palette && this->runner_) {
           uint8_t map_idx =
@@ -1471,23 +1498,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         it[idx] =
             Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
                   (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
-      } else if (fi <= meteor_pos) {
-        // Meteor Head and Tail
-        float dist = meteor_pos - fi;
-        if (dist <= tail_size) {
-          // Sharp exponential decay for the crisp white meteor tail
-          float factor = powf(0.55f, dist);
-          uint8_t bri = (uint8_t)(255.0f * factor);
-          if (bri > 5) {
-            it[idx] = Color(bri, bri, bri, bri); // Pure white spark
-          } else {
-            it[idx] = Color::BLACK; // Clean gap
-          }
-        } else {
-          it[idx] = Color::BLACK; // The dark gap between tail and wipe
-        }
       } else {
-        it[idx] = Color::BLACK; // Ahead of the meteor
+        it[idx] = Color::BLACK; // Dark gap or unreached area
       }
     }
     break;
