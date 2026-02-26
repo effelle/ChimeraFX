@@ -30,7 +30,7 @@ PALETTE_OPTIONS = [
     "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid", "Fairy", "Twilight", "Smart Random"
 ]
 
-INTRO_OPTIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse"]
+INTRO_OPTIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse", "Morse Code"]
 
 CONF_LIGHT = "light_id"
 CONF_EXCLUDE = "exclude"

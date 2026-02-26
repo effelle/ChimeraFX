@@ -202,6 +202,7 @@ struct ColliderNode {
 #define INTRO_CENTER 3
 #define INTRO_GLITTER 4
 #define INTRO_TWIN_PULSE 5
+#define INTRO_MORSE 6
 
 #define MODE_COUNT 119
 

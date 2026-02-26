@@ -66,7 +66,8 @@ public:
     INTRO_MODE_FADE = 2,
     INTRO_MODE_CENTER = 3,
     INTRO_MODE_GLITTER = 4,
-    INTRO_MODE_TWIN_PULSE = 5
+    INTRO_MODE_TWIN_PULSE = 5,
+    INTRO_MODE_MORSE = 6
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);
