@@ -32,6 +32,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_CENTER, INTRO_CENTER};
   case 163: // Stardust Sweep
     return {true, INTRO_GLITTER, INTRO_GLITTER};
+  case 165: // Twin Pulse Sweep
+    return {true, INTRO_TWIN_PULSE, INTRO_TWIN_PULSE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -42,6 +44,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 161: // Horizon Sweep
   case 162: // Curtain Sweep
   case 163: // Stardust Sweep
+  case 165: // Twin Pulse Sweep
     return true;
   default:
     return false;
