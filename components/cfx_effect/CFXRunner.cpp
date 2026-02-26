@@ -6707,31 +6707,41 @@ uint16_t mode_collider(void) {
       center_f += (float)len;
 
     float node_r = nodes[n].radius;
-    int r_start = (int)(center_f - node_r);
-    int r_stop = (int)(center_f + node_r);
+    // Render range: floor to ceil + safety padding for anti-alias bleed
+    int r_start = (int)floorf(center_f - node_r - 1.0f);
+    int r_stop = (int)ceilf(center_f + node_r + 1.0f);
 
     for (int i = r_start; i <= r_stop; i++) {
+      // Distance from center for anti-aliasing
+      float dist = fabsf((float)i - center_f);
+
+      // Coverage calculation: 100% inside, 0% outside, linear slope at boundary
+      // Slope width is 1.0 pixel for sub-pixel smoothing.
+      float coverage = node_r - dist + 0.5f;
+      if (coverage <= 0.0f)
+        continue;
+      if (coverage > 1.0f)
+        coverage = 1.0f;
+
+      uint8_t bri = (uint8_t)(coverage * 255.0f);
+
       // Circular wrap indexing
       int idx = i;
-      if (idx < 0)
+      while (idx < 0)
         idx += len;
-      if (idx >= (int)len)
+      while (idx >= (int)len)
         idx -= len;
-      if (idx < 0 || idx >= (int)len)
-        continue; // Final safety
 
       // Palette Scrolling Logic (inside the mask)
-      // Pick color based on palette offset + pixel index
       uint8_t color_idx = (uint8_t)idx + pal_offset;
       const uint32_t *palData = getPaletteByIndex(instance->_segment.palette);
-      CRGBW pulse_rgbw = ColorFromPalette(palData, color_idx, 255);
+      CRGBW pulse_rgbw = ColorFromPalette(palData, color_idx, bri);
 
       // Additive pixel mixing
       uint32_t current = instance->_segment.getPixelColor(idx);
       uint8_t r = qadd8(CFX_R(current), pulse_rgbw.r);
       uint8_t g = qadd8(CFX_G(current), pulse_rgbw.g);
       uint8_t b = qadd8(CFX_B(current), pulse_rgbw.b);
-      // No W channel for palette mixing as most palettes are RGB
       instance->_segment.setPixelColor(idx, RGBW32(r, g, b, 0));
     }
   }
