@@ -42,7 +42,6 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 161: // Horizon Sweep
   case 162: // Curtain Sweep
   case 163: // Stardust Sweep
-  case 164: // Slipstream
     return true;
   default:
     return false;
