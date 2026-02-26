@@ -1555,6 +1555,39 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     break;
   }
+  case INTRO_MODE_MORSE: {
+    uint32_t speed = this->active_intro_speed_;
+    uint32_t unit_ms = 150 - (speed * 120 / 255);
+    uint32_t elapsed_m = millis() - this->intro_start_time_;
+    uint32_t current_bit = elapsed_m / unit_ms;
+
+    uint64_t mask = 0b1110111011100011101ULL;
+    uint8_t total_bits = 19;
+
+    bool is_on = false;
+    if (current_bit >= total_bits) {
+      is_on = true; // Hold ON after sequence
+    } else {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    }
+
+    for (int i = 0; i < num_leds; i++) {
+      if (is_on) {
+        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
+        if (this->runner_) {
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          it[i] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                        (cp >> 24) & 0xFF);
+        } else {
+          it[i] = target_color;
+        }
+      } else {
+        it[i] = Color::BLACK;
+      }
+    }
+    break;
+  }
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < num_leds; i++) {
@@ -1801,6 +1834,28 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         Color cur = it[idx].get();
         it[idx] = Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
                         (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_MORSE: {
+    uint32_t unit_ms = 150 - (this->active_outro_intensity_ * 120 / 255);
+    uint32_t elapsed_morse = millis() - this->outro_start_time_;
+    uint32_t current_bit = elapsed_morse / unit_ms;
+
+    uint64_t mask = 0b11101110111000101011101000101011101ULL;
+    uint8_t total_bits = 35;
+
+    bool is_on = false;
+    if (current_bit < total_bits) {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    } else {
+      is_on = false; // Hold OFF after sequence
+    }
+
+    if (!is_on) {
+      for (int i = 0; i < num_leds; i++) {
+        it[i] = Color::BLACK;
       }
     }
     break;
