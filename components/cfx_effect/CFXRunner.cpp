@@ -6607,10 +6607,10 @@ uint16_t mode_fluid_rain(void) {
 }
 
 // --- Collider Effect (ID 164) ---
-// Bi-directional Moving Grid: Two trains of light "capsules" moving in opposite
-// directions. When they cross, their brightness adds up, creating a bright
-// merged segment. This mimics additive physics without state or complex math.
-// Zero state buffers — pure spatial math per pixel per frame.
+// Bellows Collider: Stationary nodes with expanding/contracting radii.
+// They reverse direction (bounce) when they touch their neighbors or hit
+// min/max. Stateful — uses allocateData to persist node positions and
+// velocities.
 uint16_t mode_collider(void) {
   if (!instance)
     return FRAMETIME;
@@ -6622,59 +6622,90 @@ uint16_t mode_collider(void) {
   uint8_t speed = instance->_segment.speed;         // 0-255
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
-  // --- Grid Parameters ---
-  // Spacing: Distance between node centers. Intensity maps to density.
-  uint16_t spacing = cfx_map((long)intensity, 0, 255, 12, 50);
+  // 1. Grid Configuration
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 10, 60);
   if (spacing < 4)
     spacing = 4;
-  uint16_t half_space = spacing / 2;
+  uint16_t numNodes = (len + spacing - 1) / spacing;
 
-  // Pulse Radius: Width of the capsule (approx 35% of spacing to leave gaps)
-  uint16_t radius = (spacing * 35) / 100;
-  if (radius < 1)
-    radius = 1;
-  // Core Radius: 70% of total radius is solid color
-  uint16_t core = (radius * 70) / 100;
+  // 2. Persistence
+  if (!instance->_segment.allocateData(numNodes * sizeof(ColliderNode))) {
+    return FRAMETIME; // Mem failure fallback
+  }
+  ColliderNode *nodes = (ColliderNode *)instance->_segment.data;
 
-  // --- Time Bases ---
-  // Speed maps to movement. Slowed down for smooth flow.
-  uint32_t t_fwd = (instance->now * (uint32_t)speed) >> 8;
-  uint32_t t_bwd = (instance->now * (uint32_t)speed) >>
-                   7; // Backward slightly faster for variety
+  // 3. Initialization/Reset
+  if (instance->_segment.reset) {
+    for (uint16_t n = 0; n < numNodes; n++) {
+      // Start with staggered radii and velocities for asynchronous pulsing
+      nodes[n].radius = (float)(n % 2 == 0 ? 0 : spacing / 3.0f);
+      nodes[n].vel = (n % 2 == 0 ? 1.0f : -1.0f);
+    }
+    instance->_segment.reset = false;
+  }
 
-  // --- Palette (monochromatic — forced solid by is_monochromatic_) ---
+  // 4. Physics Update
+  float step = (float)speed / 128.0f; // Velocity scaling
+  for (uint16_t n = 0; n < numNodes; n++) {
+    nodes[n].radius += nodes[n].vel * step;
+
+    // Bottom Limit (Min Radius)
+    if (nodes[n].radius <= 0.0f) {
+      nodes[n].radius = 0.01f;
+      nodes[n].vel = 1.0f;
+    }
+
+    // Top Limit (Self-Safety)
+    if (nodes[n].radius > spacing) {
+      nodes[n].radius = (float)spacing;
+      nodes[n].vel = -1.0f;
+    }
+
+    // Neighbor Collision (Bouncing)
+    // If this node expands into the next node's territory, both bounce back.
+    if (n < numNodes - 1) {
+      if (nodes[n].radius + nodes[n + 1].radius >= (float)spacing) {
+        nodes[n].vel = -1.0f;
+        nodes[n + 1].vel = 1.0f;
+      }
+    }
+  }
+
+  // 5. Rendering
+  instance->_segment.fill(0); // Clear background
   const uint32_t *active_palette = getPaletteByIndex(255);
 
-  for (uint16_t i = 0; i < len; i++) {
-    // Grid 1: Forward-moving node index
-    uint16_t idx1 = (i + t_fwd) % spacing;
-    uint16_t d1 = (uint16_t)abs((int)idx1 - (int)half_space);
+  for (uint16_t n = 0; n < numNodes; n++) {
+    uint16_t center = n * spacing + (spacing / 2);
+    float node_r = nodes[n].radius;
 
-    // Grid 2: Backward-moving node index (reversed strip coordinate)
-    uint16_t idx2 = (len - 1 - i + t_bwd) % spacing;
-    uint16_t d2 = (uint16_t)abs((int)idx2 - (int)half_space);
+    // Draw solid-ish pulse around center
+    int start = (int)center - (int)node_r;
+    int stop = (int)center + (int)node_r;
 
-    // Plateau Brightness Calc (lambda for efficiency)
-    auto get_plateau = [core, radius](uint16_t d) -> uint8_t {
-      if (d <= core)
-        return 255;
-      if (d >= radius)
-        return 0;
-      // Linear fade between core and edge
-      return (uint8_t)cfx_map((long)d, (long)core, (long)radius, 255, 0);
-    };
+    for (int i = start; i <= stop; i++) {
+      if (i < 0 || i >= (int)len)
+        continue;
 
-    uint8_t b1 = get_plateau(d1);
-    uint8_t b2 = get_plateau(d2);
+      // Distance-based fade at edges for "squishy" merge look
+      float dist = fabsf((float)i - (float)center);
+      uint8_t bri = 255;
+      if (dist > (node_r * 0.7f)) {
+        // Soften the last 30% of the radius
+        bri = (uint8_t)cfx_map((long)(dist * 100), (long)(node_r * 70),
+                               (long)(node_r * 100), 255, 0);
+      }
 
-    // Additive blend with saturation
-    uint8_t final_bri = qadd8(b1, b2);
+      // Additive blend with background
+      uint32_t current = instance->_segment.getPixelColor(i);
+      CRGBW pulse_col = ColorFromPalette(active_palette, 0, bri);
 
-    // Use dim8_video to sharpen the 'solid block' look
-    final_bri = dim8_video(final_bri);
-
-    CRGBW c = ColorFromPalette(active_palette, 0, final_bri);
-    instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      uint8_t r = qadd8(CFX_R(current), pulse_col.r);
+      uint8_t g = qadd8(CFX_G(current), pulse_col.g);
+      uint8_t b = qadd8(CFX_B(current), pulse_col.b);
+      uint8_t w = qadd8(CFX_W(current), pulse_col.w);
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
+    }
   }
 
   return FRAMETIME;

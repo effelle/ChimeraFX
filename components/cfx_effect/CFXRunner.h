@@ -60,6 +60,11 @@ struct CRGBW {
 #define RESET_REQ (uint16_t)0x0020
 #define SELECTED (uint16_t)0x0001
 
+struct ColliderNode {
+  float radius;
+  float vel;
+};
+
 // Effect Mode IDs
 #define FX_MODE_STATIC 0
 #define FX_MODE_BLINK 1
