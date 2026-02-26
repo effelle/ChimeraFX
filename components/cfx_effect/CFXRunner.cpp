@@ -5720,17 +5720,31 @@ bool CFXRunner::serviceIntro() {
       uint16_t pos = rand() % len;
       _segment.setPixelColor(pos, _intro_color);
     }
-  } else if (_intro_mode == INTRO_CENTER) {
-    // Center Wipe: From center to edges
-    uint16_t center = len / 2;
-    uint16_t limit = (uint16_t)((len / 2) * progress);
+  } else if (_intro_mode == INTRO_METEOR_WIPE) {
+    // Meteor Wipe: High brightness head with fading tail that settles at a
+    // baseline floor
+    float head_pos = (float)len * progress;
+    uint8_t floor_bri = 102; // ~40% floor
 
     for (int i = 0; i < len; i++) {
-      int dist = abs(i - center);
-      if (dist <= limit) {
-        _segment.setPixelColor(i, _intro_color);
+      int idx = _segment.mirror ? (len - 1 - i) : i;
+
+      if ((float)i <= head_pos) {
+        float dist = head_pos - (float)i;
+        // Exponential decay: 0.88^dist
+        float factor = powf(0.88f, dist);
+        uint8_t bri = (uint8_t)(255.0f * factor);
+        if (bri < floor_bri)
+          bri = floor_bri;
+
+        uint8_t r = (CFX_R(_intro_color) * bri) >> 8;
+        uint8_t g = (CFX_G(_intro_color) * bri) >> 8;
+        uint8_t b = (CFX_B(_intro_color) * bri) >> 8;
+        uint8_t w = (CFX_W(_intro_color) * bri) >> 8;
+
+        _segment.setPixelColor(idx, RGBW32(r, g, b, w));
       } else {
-        _segment.setPixelColor(i, 0);
+        _segment.setPixelColor(idx, 0);
       }
     }
   }

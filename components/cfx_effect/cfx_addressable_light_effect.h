@@ -65,7 +65,8 @@ public:
     INTRO_MODE_WIPE = 1,
     INTRO_MODE_FADE = 2,
     INTRO_MODE_CENTER = 3,
-    INTRO_MODE_GLITTER = 4
+    INTRO_MODE_GLITTER = 4,
+    INTRO_MODE_METEOR_WIPE = 5
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);

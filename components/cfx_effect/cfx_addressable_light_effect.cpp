@@ -279,6 +279,8 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_CENTER;
         else if (s == "Glitter")
           this->active_intro_mode_ = INTRO_GLITTER;
+        else if (s == "Meteor Wipe")
+          this->active_intro_mode_ = INTRO_METEOR_WIPE;
       }
     }
 
@@ -345,6 +347,8 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_GLITTER;
           else if (opt == "Fade")
             this->active_outro_mode_ = INTRO_FADE;
+          else if (opt == "Meteor Wipe")
+            this->active_outro_mode_ = INTRO_METEOR_WIPE;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {
