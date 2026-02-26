@@ -292,6 +292,18 @@ void CFXAddressableLightEffect::start() {
       }
     }
 
+    // Cache Speed for Intro (since Morse needs it for unit_ms)
+    this->active_intro_speed_ = 128; // fallback
+    number::Number *speed_num =
+        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+    if (speed_num != nullptr && speed_num->has_state()) {
+      this->active_intro_speed_ = (uint8_t)speed_num->state;
+    } else if (this->speed_preset_.has_value()) {
+      this->active_intro_speed_ = this->speed_preset_.value();
+    } else {
+      this->active_intro_speed_ = this->get_default_speed_(this->effect_id_);
+    }
+
     // Cache for this run
     this->intro_effect_ = intro_sel;
 
