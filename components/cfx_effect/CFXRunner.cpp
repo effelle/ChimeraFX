@@ -6719,14 +6719,14 @@ uint16_t mode_collider(void) {
       // Palette Scrolling Logic (inside the mask)
       // Pick color based on palette offset + pixel index
       uint8_t color_idx = (uint8_t)idx + pal_offset;
-      CRGB pulse_rgb = ColorFromPalette(instance->_segment.palette, color_idx,
-                                        255, LINEARBLEND);
+      const uint32_t *palData = getPaletteByIndex(instance->_segment.palette);
+      CRGBW pulse_rgbw = ColorFromPalette(palData, color_idx, 255);
 
       // Additive pixel mixing
       uint32_t current = instance->_segment.getPixelColor(idx);
-      uint8_t r = qadd8(CFX_R(current), pulse_rgb.r);
-      uint8_t g = qadd8(CFX_G(current), pulse_rgb.g);
-      uint8_t b = qadd8(CFX_B(current), pulse_rgb.b);
+      uint8_t r = qadd8(CFX_R(current), pulse_rgbw.r);
+      uint8_t g = qadd8(CFX_G(current), pulse_rgbw.g);
+      uint8_t b = qadd8(CFX_B(current), pulse_rgbw.b);
       // No W channel for palette mixing as most palettes are RGB
       instance->_segment.setPixelColor(idx, RGBW32(r, g, b, 0));
     }
