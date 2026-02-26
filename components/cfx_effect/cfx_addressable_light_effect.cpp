@@ -34,7 +34,7 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_GLITTER, INTRO_GLITTER};
   case 165: // Twin Pulse Sweep
     return {true, INTRO_TWIN_PULSE, INTRO_TWIN_PULSE};
-  case 166: // Morse Sweep
+  case 166: // Transmission
     return {true, INTRO_MORSE, INTRO_MORSE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
@@ -47,7 +47,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 162: // Curtain Sweep
   case 163: // Stardust Sweep
   case 165: // Twin Pulse Sweep
-  case 166: // Morse Sweep
+  case 166: // Transmission
     return true;
   default:
     return false;

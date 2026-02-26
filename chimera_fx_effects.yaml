@@ -194,10 +194,6 @@
 
 
 - addressable_cfx:
-    name: "Morse Sweep"
-    effect_id: 166
-
-- addressable_cfx:
     name: "Multi Strobe"
     effect_id: 25
 
@@ -332,6 +328,12 @@
 - addressable_cfx:
     name: "Sunrise"
     effect_id: 104
+
+
+
+- addressable_cfx:
+    name: "Transmission"
+    effect_id: 166
 
 
 
