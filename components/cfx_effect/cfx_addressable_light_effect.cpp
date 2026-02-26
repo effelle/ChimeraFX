@@ -1432,58 +1432,101 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_METEOR_WIPE: {
-    // Option A: "Three Zone" Math
-    // P0: Locked speeds across the strip (cursor and wipe move together)
-    // P1: 10% dark gap distance
-    // P2: Both the cursor and the trailing wipe inherit the selected palette.
+    // Dual Solid Cursors + Soft Wipe + Anti-aliasing
+    // 1. First cursor (solid, anti-aliased edges)
+    // 2. Short Gap
+    // 3. Second cursor (solid, anti-aliased edges)
+    // 4. Long Gap
+    // 5. Main Wipe (soft leading edge)
+    // Everything moves strictly proportionally to `progress`.
 
-    float gap_size = (float)num_leds * 0.10f;
-    if (gap_size < 1.0f)
-      gap_size = 1.0f;
-    float cursor_radius = (float)num_leds * 0.05f; // Cursor is 10% wide total
-    if (cursor_radius < 1.0f)
-      cursor_radius = 1.0f;
+    // Define proportional sizes based on segment length
+    float length = (float)num_leds;
+    float c_size = length * 0.04f; // Each cursor is 4% of strip
+    if (c_size < 1.0f)
+      c_size = 1.0f;
+    float short_gap = length * 0.02f; // Gap between cursors
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.08f; // Gap before wipe
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f; // Leading edge fade of wipe
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
 
-    // The wipe head trails behind the cursor center by:
-    // cursor_radius (the back half of the cursor) + gap_size.
-    float wipe_offset = cursor_radius + gap_size;
+    // Calculate layout offsets from the leading edge (cursor 1 front)
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
 
-    // We want the animation to start with the cursor just entering the strip,
-    // and finish when the wipe has fully covered the strip.
-    // So the "head" (cursor center) goes from 0 to (num_leds + wipe_offset).
-    float total_distance = (float)num_leds + wipe_offset;
-    float cursor_center = progress * total_distance;
-    float wipe_head = cursor_center - wipe_offset;
-
-    // To make the wipe's leading edge soft, we fade it over a short distance
-    float wipe_fade_len = (float)num_leds * 0.05f;
-    if (wipe_fade_len < 1.0f)
-      wipe_fade_len = 1.0f;
+    // Total distance the leading edge must travel to pull the solid wipe
+    // entirely across the strip.
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
 
     for (int i = 0; i < num_leds; i++) {
       int idx = reverse ? (num_leds - 1 - i) : i;
       float fi = (float)i;
+
+      // Calculate this pixel's relative position behind the traveling head
+      float relative_pos = head_pos - fi;
       float alpha = 0.0f;
 
-      // Check Zone 1: Cursor
-      float dist_to_cursor = abs(cursor_center - fi);
-      if (dist_to_cursor < cursor_radius) {
-        // Triangular fade: 1.0 at center, 0.0 at edges
-        alpha = 1.0f - (dist_to_cursor / cursor_radius);
+      if (relative_pos < 0.0f) {
+        // Ahead of the entire formation
+        alpha = 0.0f;
       }
-      // Check Zone 2: Background Wipe
-      else if (fi <= wipe_head) {
-        float dist_to_wipe_head = wipe_head - fi;
-        if (dist_to_wipe_head < wipe_fade_len) {
-          // Fade in the leading edge of the wipe
-          alpha = dist_to_wipe_head / wipe_fade_len;
+      // --- CURSOR 1 ---
+      else if (relative_pos <= -c1_back) {
+        // Inside or on the edge of Cursor 1
+        if (relative_pos < 1.0f) {
+          alpha = relative_pos; // Front anti-aliasing edge
+        } else if (relative_pos > (-c1_back - 1.0f)) {
+          alpha = (-c1_back) - relative_pos; // Back anti-aliasing edge
         } else {
-          // Solid wipe body
-          alpha = 1.0f;
+          alpha = 1.0f; // Solid body
+        }
+      }
+      // --- SHORT GAP ---
+      else if (relative_pos < -c2_front) {
+        alpha = 0.0f;
+      }
+      // --- CURSOR 2 ---
+      else if (relative_pos <= -c2_back) {
+        float internal_pos = relative_pos + c2_front; // 0 at front of c2
+        if (internal_pos < 1.0f) {
+          alpha = internal_pos; // Front anti-aliasing edge
+        } else if (internal_pos > (c_size - 1.0f)) {
+          alpha = c_size - internal_pos; // Back anti-aliasing edge
+        } else {
+          alpha = 1.0f; // Solid body
+        }
+      }
+      // --- LONG GAP ---
+      else if (relative_pos < -w_front) {
+        alpha = 0.0f;
+      }
+      // --- WIPE ---
+      else {
+        float internal_pos = relative_pos + w_front; // 0 at wipe front edge
+        if (internal_pos < wipe_fade) {
+          alpha = internal_pos / wipe_fade; // Soft leading edge
+        } else {
+          alpha = 1.0f; // Solid block
         }
       }
 
-      // Render the pixel if it's in a lit zone
+      // Clamp alpha to safe rendering limits
+      if (alpha < 0.0f)
+        alpha = 0.0f;
+      if (alpha > 1.0f)
+        alpha = 1.0f;
+
+      // Render Pixel
       if (alpha > 0.0f) {
         Color base_c = c;
         if (use_palette && this->runner_) {
@@ -1499,7 +1542,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
             Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
                   (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
       } else {
-        it[idx] = Color::BLACK; // Dark gap or unreached area
+        it[idx] = Color::BLACK;
       }
     }
     break;
