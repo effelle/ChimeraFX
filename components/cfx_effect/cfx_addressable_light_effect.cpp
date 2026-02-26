@@ -1432,21 +1432,31 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_METEOR_WIPE: {
-    // Meteor Wipe: High brightness head with a fading tail
-    // that settles at a baseline floor.
-    float head_pos = (float)num_leds * progress;
-    uint8_t floor_bri = 102; // ~40% floor
+    // P0: Locked speeds across the strip
+    // P1: 10% dark gap distance
+    // P2: Pure white meteor, colored wipe background
+
+    float gap_size = (float)num_leds * 0.10f;
+    if (gap_size < 1.0f)
+      gap_size = 1.0f;
+    float tail_size = 6.0f; // Fixed crisp 6-pixel tail
+    float offset = gap_size + tail_size;
+
+    // Wipe position travels from -offset to num_leds
+    // Meteor position stays exactly 'offset' ahead of the Wipe
+    float wipe_pos = (progress * ((float)num_leds + offset)) - offset;
+    float meteor_pos = wipe_pos + offset;
 
     for (int i = 0; i < num_leds; i++) {
       int idx = reverse ? (num_leds - 1 - i) : i;
+      float fi = (float)i;
 
-      if ((float)i <= head_pos) {
-        float dist = head_pos - (float)i;
-        // Exponential decay: 0.88^dist
-        float factor = powf(0.88f, dist);
-        uint8_t bri = (uint8_t)(255.0f * factor);
-        if (bri < floor_bri)
-          bri = floor_bri;
+      if (fi <= wipe_pos + 1.0f) {
+        // Background Wipe with anti-aliasing edge
+        float alpha = 1.0f;
+        if (fi > wipe_pos) {
+          alpha = wipe_pos + 1.0f - fi;
+        }
 
         Color base_c = c;
         if (use_palette && this->runner_) {
@@ -1458,10 +1468,26 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                          (cp >> 24) & 0xFF);
         }
 
-        it[idx] = Color((base_c.r * bri) / 255, (base_c.g * bri) / 255,
-                        (base_c.b * bri) / 255, (base_c.w * bri) / 255);
+        it[idx] =
+            Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
+                  (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
+      } else if (fi <= meteor_pos) {
+        // Meteor Head and Tail
+        float dist = meteor_pos - fi;
+        if (dist <= tail_size) {
+          // Sharp exponential decay for the crisp white meteor tail
+          float factor = powf(0.55f, dist);
+          uint8_t bri = (uint8_t)(255.0f * factor);
+          if (bri > 5) {
+            it[idx] = Color(bri, bri, bri, bri); // Pure white spark
+          } else {
+            it[idx] = Color::BLACK; // Clean gap
+          }
+        } else {
+          it[idx] = Color::BLACK; // The dark gap between tail and wipe
+        }
       } else {
-        it[idx] = Color::BLACK;
+        it[idx] = Color::BLACK; // Ahead of the meteor
       }
     }
     break;
