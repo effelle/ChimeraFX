@@ -6625,35 +6625,35 @@ uint16_t mode_collider(void) {
   uint8_t intensity = instance->_segment.intensity; // 0-255
 
   // --- Time Bases ---
-  // t1 drives wave 1. t2 is t1 + 20% extra offset so the two waves
-  // travel at slightly different apparent speeds → the beat "slides".
-  uint32_t t1 = (instance->now * (uint32_t)speed) >> 6;
-  uint32_t t2 = t1 + (t1 / 5);
+  // t1 is the slow base wave. t2 travels twice as fast (>>9 vs >>10).
+  // This speed difference creates the "catch-up" behavior where one wave
+  // sweeps through the other, triggering constructive interference (merges).
+  uint32_t t1 = (instance->now * (uint32_t)speed) >> 10;
+  uint32_t t2 = (instance->now * (uint32_t)speed) >> 9;
 
   // --- Spatial Scale ---
   // Intensity maps the wave density: low = few wide segments, high = many small
   // ones.
-  uint16_t scale = cfx_map((long)intensity, 0, 255, 5, 30);
+  uint16_t scale = cfx_map((long)intensity, 0, 255, 4, 20);
 
   // --- Palette (monochromatic — forced solid by is_monochromatic_) ---
   const uint32_t *active_palette = getPaletteByIndex(255);
 
   for (uint16_t i = 0; i < len; i++) {
-    // Wave 1: forward-traveling at base spatial frequency
+    // Wave 1: Slow-moving base
     uint8_t wave1 = cubicwave8((uint8_t)(t1 + (uint32_t)i * scale));
 
-    // Wave 2: same direction, slightly different spatial frequency (+2)
-    // This small difference is the "beat" frequency — drives the merge/split
-    uint8_t wave2 = cubicwave8((uint8_t)(t2 + (uint32_t)i * (scale + 2)));
+    // Wave 2: Faster-moving wave with different spatial freq (+4)
+    uint8_t wave2 = cubicwave8((uint8_t)(t2 + (uint32_t)i * (scale + 4)));
 
     // Average the two waves
     uint8_t combined = (wave1 / 2) + (wave2 / 2);
 
     // Threshold masking: only the peaks survive, creating solid segments.
-    // Below 140 → hard dark. Above 140 → remapped to 100-510 → clamped 255.
+    // Use a slightly lower threshold (130) to allow for wider segments.
     uint8_t final_bri = 0;
-    if (combined > 140) {
-      final_bri = cfx_map((long)combined, 140, 255, 100, 255);
+    if (combined > 130) {
+      final_bri = cfx_map((long)combined, 130, 255, 80, 255);
       final_bri = qadd8(final_bri, final_bri); // hard plateau amplification
     }
 
