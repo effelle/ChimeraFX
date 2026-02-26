@@ -1432,23 +1432,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_METEOR_WIPE: {
-    // Dual Solid Cursors + Soft Wipe + Anti-aliasing
-    // 1. First cursor (solid, anti-aliased edges)
-    // 2. Short Gap
-    // 3. Second cursor (solid, anti-aliased edges)
+    // Dual Faded Cursors + Soft Wipe
+    // 1. First cursor (symmetric fade up/down)
+    // 2. Wide Gap
+    // 3. Second cursor (symmetric fade up/down)
     // 4. Long Gap
     // 5. Main Wipe (soft leading edge)
     // Everything moves strictly proportionally to `progress`.
 
     // Define proportional sizes based on segment length
     float length = (float)num_leds;
-    float c_size = length * 0.04f; // Each cursor is 4% of strip
-    if (c_size < 1.0f)
-      c_size = 1.0f;
-    float short_gap = length * 0.02f; // Gap between cursors
+    float c_size = length * 0.06f; // Each cursor is 6% of strip
+    if (c_size < 2.0f)
+      c_size = 2.0f;
+    float short_gap = length * 0.12f; // Gap between cursors (increased to 12%)
     if (short_gap < 1.0f)
       short_gap = 1.0f;
-    float long_gap = length * 0.08f; // Gap before wipe
+    float long_gap = length * 0.10f; // Gap before wipe (10%)
     if (long_gap < 1.0f)
       long_gap = 1.0f;
     float wipe_fade = length * 0.05f; // Leading edge fade of wipe
@@ -1456,6 +1456,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       wipe_fade = 1.0f;
 
     // Calculate layout offsets from the leading edge (cursor 1 front)
+    // These are negative offsets behind the traveling head
     float c1_front = 0.0f;
     float c1_back = c1_front - c_size;
     float c2_front = c1_back - short_gap;
@@ -1463,7 +1464,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     float w_front = c2_back - long_gap;
     float w_solid = w_front - wipe_fade;
 
-    // Total distance the leading edge must travel to pull the solid wipe
+    // Total distance the front must travel to pull the solid wipe
     // entirely across the strip.
     float total_distance = length - w_solid;
     float head_pos = (progress * total_distance) + c1_front;
@@ -1473,6 +1474,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       float fi = (float)i;
 
       // Calculate this pixel's relative position behind the traveling head
+      // positive value means it is behind the head_pos
       float relative_pos = head_pos - fi;
       float alpha = 0.0f;
 
@@ -1482,13 +1484,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
       // --- CURSOR 1 ---
       else if (relative_pos <= -c1_back) {
-        // Inside or on the edge of Cursor 1
-        if (relative_pos < 1.0f) {
-          alpha = relative_pos; // Front anti-aliasing edge
-        } else if (relative_pos > (-c1_back - 1.0f)) {
-          alpha = (-c1_back) - relative_pos; // Back anti-aliasing edge
-        } else {
-          alpha = 1.0f; // Solid body
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
         }
       }
       // --- SHORT GAP ---
@@ -1497,13 +1497,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
       // --- CURSOR 2 ---
       else if (relative_pos <= -c2_back) {
-        float internal_pos = relative_pos + c2_front; // 0 at front of c2
-        if (internal_pos < 1.0f) {
-          alpha = internal_pos; // Front anti-aliasing edge
-        } else if (internal_pos > (c_size - 1.0f)) {
-          alpha = c_size - internal_pos; // Back anti-aliasing edge
-        } else {
-          alpha = 1.0f; // Solid body
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
         }
       }
       // --- LONG GAP ---
