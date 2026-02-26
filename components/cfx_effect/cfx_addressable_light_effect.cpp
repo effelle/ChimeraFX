@@ -337,7 +337,9 @@ void CFXAddressableLightEffect::stop() {
   intro_snapshot_.clear();
   intro_snapshot_.shrink_to_fit();
 
+  CFXControl *c = this->controller_;
   auto *state = this->get_light_state();
+
   if (state != nullptr && this->runner_ != nullptr) {
     auto *out =
         static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
@@ -346,8 +348,8 @@ void CFXAddressableLightEffect::stop() {
       // Resolve Outro Mode synchronously before dropping controller mapping
       this->active_outro_mode_ = INTRO_NONE;
       select::Select *out_eff = this->outro_effect_;
-      if (out_eff == nullptr && this->controller_ != nullptr)
-        out_eff = this->controller_->get_outro_effect();
+      if (out_eff == nullptr && c != nullptr)
+        out_eff = c->get_outro_effect();
 
       // 1. Highest Priority: Embedded Monochromatic Presets
       MonochromaticPreset preset =
@@ -382,8 +384,8 @@ void CFXAddressableLightEffect::stop() {
       uint32_t duration_ms = 1000; // Final Default: 1.0s
 
       number::Number *dur_num = this->outro_duration_;
-      if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_outro_duration();
+      if (dur_num == nullptr && c != nullptr)
+        dur_num = c->get_outro_duration();
 
       if (dur_num != nullptr && dur_num->has_state()) {
         // High Priority: UI Slider
@@ -396,8 +398,6 @@ void CFXAddressableLightEffect::stop() {
 
       // Morse Code Timing Override
       if (this->active_outro_mode_ == INTRO_MODE_MORSE) {
-        // Use cached active_outro_intensity_ (populated just below) or fetch
-        // fresh
         uint8_t current_speed = 128;
         number::Number *intensity_num =
             (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
@@ -406,84 +406,94 @@ void CFXAddressableLightEffect::stop() {
         }
         uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
         duration_ms = 35 * unit_ms;
+      } else if (preset.is_active) {
+        // Monochromatic Preset Fallback: Speed Slider
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && c != nullptr)
+          speed_num = c->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        }
+      } else {
+        // Low Priority: Light Default Transition
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr &&
+            current_state->get_default_transition_length() > 0) {
+          duration_ms = current_state->get_default_transition_length();
+        }
       }
-      // Low Priority: Light Default Transition
-      auto *current_state = this->get_light_state();
-      if (current_state != nullptr &&
-          current_state->get_default_transition_length() > 0) {
-        duration_ms = current_state->get_default_transition_length();
+      this->active_outro_duration_ms_ = duration_ms;
+
+      // Cache Intensity for Outro (since controller is detached during Outro)
+      this->active_outro_intensity_ = 128; // fallback
+      number::Number *intensity_num = this->intensity_;
+      if (intensity_num == nullptr && c != nullptr)
+        intensity_num = c->get_intensity();
+
+      if (intensity_num != nullptr && intensity_num->has_state()) {
+        this->active_outro_intensity_ = (uint8_t)intensity_num->state;
+      } else {
+        this->active_outro_intensity_ =
+            this->get_default_intensity_(this->effect_id_);
       }
+
+      // Capture the current runner and hand it off
+      CFXRunner *captured_runner = this->runner_;
+      this->runner_ = nullptr; // Null here so start() creates a fresh one later
+      if (c) {
+        c->unregister_runner(captured_runner);
+      }
+
+      // Safely detach from effect runner system
+      this->controller_ = nullptr;
+      this->intro_active_ = false;
+      this->outro_active_ = false;
+
+      // Register the callback synchronously to prevent ESPHome from rendering
+      // a rogue frame of a solid color transition during the gap.
+      // We will evaluate `is_on()` inside the first frame of the callback
+      // since LightCall will have finished updating by the next `loop()`.
+      this->outro_start_time_ = 0; // Signify uninitialized start time
+
+      out->set_outro_callback([this, out, captured_runner]() -> bool {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr && current_state->remote_values.is_on()) {
+          // Effect was completely changed or light remained ON.
+          // Abort the outro and delete the captured runner cleanly.
+          delete captured_runner;
+          return true;
+        }
+
+        // Initialize outro start time on the very first allowed frame
+        if (this->outro_start_time_ == 0) {
+          this->outro_start_time_ = millis();
+        }
+
+        bool done = this->run_outro_frame(*out, captured_runner);
+        if (done) {
+          delete captured_runner;
+        }
+        return done;
+      });
+
+      return;
     }
   }
-  this->active_outro_duration_ms_ = duration_ms;
 
-  // Cache Intensity for Outro (since controller is detached during Outro)
-  this->active_outro_intensity_ = 128; // fallback
-  number::Number *intensity_num = this->intensity_;
-  if (intensity_num == nullptr && this->controller_ != nullptr)
-    intensity_num = this->controller_->get_intensity();
-
-  if (intensity_num != nullptr && intensity_num->has_state()) {
-    this->active_outro_intensity_ = (uint8_t)intensity_num->state;
-  } else {
-    this->active_outro_intensity_ =
-        this->get_default_intensity_(this->effect_id_);
+  // Normal Stop / Cleanup (Failsafe)
+  if (this->runner_ != nullptr) {
+    if (this->controller_) {
+      this->controller_->unregister_runner(this->runner_);
+    }
+    delete this->runner_; // Destructor calls deallocateData()
+    this->runner_ = nullptr;
   }
-
-  // Capture the current runner and hand it off
-  CFXRunner *captured_runner = this->runner_;
-  this->runner_ = nullptr; // Null here so start() creates a fresh one later
-  if (this->controller_) {
-    this->controller_->unregister_runner(captured_runner);
-  }
-
-  // Safely detach from effect runner system
   this->controller_ = nullptr;
   this->intro_active_ = false;
   this->outro_active_ = false;
-
-  // Register the callback synchronously to prevent ESPHome from rendering
-  // a rogue frame of a solid color transition during the gap.
-  // We will evaluate `is_on()` inside the first frame of the callback
-  // since LightCall will have finished updating by the next `loop()`.
-  this->outro_start_time_ = 0; // Signify uninitialized start time
-
-  out->set_outro_callback([this, out, captured_runner]() -> bool {
-    auto *current_state = this->get_light_state();
-    if (current_state != nullptr && current_state->remote_values.is_on()) {
-      // Effect was completely changed or light remained ON.
-      // Abort the outro and delete the captured runner cleanly.
-      delete captured_runner;
-      return true;
-    }
-
-    // Initialize outro start time on the very first allowed frame
-    if (this->outro_start_time_ == 0) {
-      this->outro_start_time_ = millis();
-    }
-
-    bool done = this->run_outro_frame(*out, captured_runner);
-    if (done) {
-      delete captured_runner;
-    }
-    return done;
-  });
-
-  return;
-}
-}
-
-// Normal Stop / Cleanup (Failsafe)
-if (this->runner_ != nullptr) {
-  if (this->controller_) {
-    this->controller_->unregister_runner(this->runner_);
-  }
-  delete this->runner_; // Destructor calls deallocateData()
-  this->runner_ = nullptr;
-}
-this->controller_ = nullptr;
-this->intro_active_ = false;
-this->outro_active_ = false;
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
@@ -1186,416 +1196,430 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   } else if (this->intro_duration_preset_.has_value()) {
     // Medium Priority: YAML Preset
     duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-  }
-}
+  } else if (preset.is_active) {
+    // Monochromatic Preset Fallback: Speed Slider
+    number::Number *speed_num = this->speed_;
+    if (speed_num == nullptr && this->controller_ != nullptr)
+      speed_num = this->controller_->get_speed();
 
-// Morse Code Timing Override
-if (this->active_intro_mode_ == INTRO_MODE_MORSE) {
-  uint32_t speed_val = this->active_intro_speed_;
-  uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
-  duration = 19 * unit_ms;
-}
-
-if (duration == 0)
-  duration = 1; // Prevent div by zero
-
-float progress = (float)elapsed / (float)duration;
-if (progress > 1.0f)
-  progress = 1.0f;
-
-// 2. Determine Mode
-// Use the pre-resolved mode from start() to avoid async issues
-uint8_t mode = this->active_intro_mode_;
-
-// 3. Setup Color/Palette
-// Use Target Color (remote_values) to ensure visibility during fade-in
-Color c = target_color;
-auto *state = this->get_light_state();
-if (state) {
-  auto v = state->remote_values;
-  c = Color((uint8_t)(v.get_red() * 255), (uint8_t)(v.get_green() * 255),
-            (uint8_t)(v.get_blue() * 255), (uint8_t)(v.get_white() * 255));
-}
-if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
-  c = Color::WHITE;
-}
-
-// Apply Force White logic to the Target Color
-switch_::Switch *force_white_sw =
-    (this->controller_ && this->controller_->get_force_white())
-        ? this->controller_->get_force_white()
-        : this->force_white_;
-
-if (force_white_sw != nullptr && force_white_sw->state &&
-    (this->get_default_palette_id_(this->effect_id_) == 255)) {
-  uint8_t max_rgb = std::max(std::max(c.r, c.g), c.b);
-  uint8_t target_w = std::max(c.w, max_rgb);
-  c = Color(0, 0, 0, target_w);
-}
-
-// Check for Palette usage
-bool use_palette = false;
-uint8_t pal = 0;
-
-// New Feature: "Intro Use Palette" - Inherit from Runner's active effect
-// Explicitly handle switch state to avoid fall-through to Legacy auto-mode
-if (this->intro_use_palette_) {
-  if (this->intro_use_palette_->state && this->runner_) {
-    pal = this->runner_->_segment.palette;
-    if (pal == 0) {
-      // If Effect is using Default (0), resolve its Natural Palette ID
-      pal = this->get_default_palette_id_(this->runner_->getMode());
+    if (speed_num != nullptr && speed_num->has_state()) {
+      // Map Speed (0-255) to Duration (500ms up to 10000ms)
+      float speed_val = speed_num->state;
+      duration = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
     }
+  }
 
-    // Fix: If resolved palette is Solid (255), ignore the switch and use
-    // direct color This ensures we use the Target Color (c) instead of the
-    // runner's Fading Color
-    if (pal == 255) {
-      use_palette = false;
+  // Morse Code Timing Override
+  if (this->active_intro_mode_ == INTRO_MODE_MORSE) {
+    uint32_t speed_val = this->active_intro_speed_;
+    uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
+    duration = 19 * unit_ms;
+  }
+
+  if (duration == 0)
+    duration = 1; // Prevent div by zero
+
+  float progress = (float)elapsed / (float)duration;
+  if (progress > 1.0f)
+    progress = 1.0f;
+
+  // 2. Determine Mode
+  // Use the pre-resolved mode from start() to avoid async issues
+  uint8_t mode = this->active_intro_mode_;
+
+  // 3. Setup Color/Palette
+  // Use Target Color (remote_values) to ensure visibility during fade-in
+  Color c = target_color;
+  auto *state = this->get_light_state();
+  if (state) {
+    auto v = state->remote_values;
+    c = Color((uint8_t)(v.get_red() * 255), (uint8_t)(v.get_green() * 255),
+              (uint8_t)(v.get_blue() * 255), (uint8_t)(v.get_white() * 255));
+  }
+  if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
+    c = Color::WHITE;
+  }
+
+  // Apply Force White logic to the Target Color
+  switch_::Switch *force_white_sw =
+      (this->controller_ && this->controller_->get_force_white())
+          ? this->controller_->get_force_white()
+          : this->force_white_;
+
+  if (force_white_sw != nullptr && force_white_sw->state &&
+      (this->get_default_palette_id_(this->effect_id_) == 255)) {
+    uint8_t max_rgb = std::max(std::max(c.r, c.g), c.b);
+    uint8_t target_w = std::max(c.w, max_rgb);
+    c = Color(0, 0, 0, target_w);
+  }
+
+  // Check for Palette usage
+  bool use_palette = false;
+  uint8_t pal = 0;
+
+  // New Feature: "Intro Use Palette" - Inherit from Runner's active effect
+  // Explicitly handle switch state to avoid fall-through to Legacy auto-mode
+  if (this->intro_use_palette_) {
+    if (this->intro_use_palette_->state && this->runner_) {
+      pal = this->runner_->_segment.palette;
+      if (pal == 0) {
+        // If Effect is using Default (0), resolve its Natural Palette ID
+        pal = this->get_default_palette_id_(this->runner_->getMode());
+      }
+
+      // Fix: If resolved palette is Solid (255), ignore the switch and use
+      // direct color This ensures we use the Target Color (c) instead of the
+      // runner's Fading Color
+      if (pal == 255) {
+        use_palette = false;
+      } else {
+        use_palette = true;
+      }
     } else {
-      use_palette = true;
+      // Switch is OFF or Missing Runner -> Force Solid
+      use_palette = false;
     }
   } else {
-    // Switch is OFF or Missing Runner -> Force Solid
-    use_palette = false;
-  }
-} else {
-  // Legacy Behavior: Use explicit Intro Palette setting (if any)
-  pal = this->get_palette_index_();
-  if (pal > 0 && this->runner_ != nullptr) {
-    use_palette = true;
-  }
-}
-
-// Monochromatic Presets always force palette matching Active Effect Palette
-if (preset.is_active && this->runner_ != nullptr) {
-  pal = this->runner_->_segment.palette;
-  if (pal == 0)
-    pal = this->get_default_palette_id_(this->effect_id_);
-  if (pal == 255)
-    use_palette = false;
-  else
-    use_palette = true;
-}
-
-if (use_palette && this->runner_ != nullptr) {
-  // Force update the runner's palette immediately
-  this->runner_->_segment.palette = pal;
-}
-
-int num_leds = it.size();
-
-// Control State
-switch_::Switch *mirror_sw = this->mirror_;
-if (mirror_sw == nullptr && this->controller_ != nullptr)
-  mirror_sw = this->controller_->get_mirror();
-
-bool reverse = false;
-if (mirror_sw != nullptr && mirror_sw->state)
-  reverse = true;
-
-// Symmetry determined by Mode
-bool symmetry = false;
-if (mode == INTRO_MODE_CENTER) {
-  symmetry = true;
-  mode = INTRO_MODE_WIPE; // Use Wipe logic with symmetry
-}
-
-switch (mode) {
-case INTRO_MODE_WIPE: {
-  int logical_len = symmetry ? (num_leds / 2) : num_leds;
-
-  // Intensity defines blur radius (up to 50% of the strip)
-  float blur_percent = 0.0f;
-  number::Number *intensity_num = this->intensity_;
-  if (intensity_num == nullptr && this->controller_ != nullptr) {
-    intensity_num = this->controller_->get_intensity();
-  }
-  if (intensity_num != nullptr && intensity_num->has_state()) {
-    blur_percent = (intensity_num->state / 255.0f) * 0.5f;
+    // Legacy Behavior: Use explicit Intro Palette setting (if any)
+    pal = this->get_palette_index_();
+    if (pal > 0 && this->runner_ != nullptr) {
+      use_palette = true;
+    }
   }
 
-  int blur_radius = (int)(logical_len * blur_percent);
-  float exact_lead = progress * (logical_len + blur_radius);
-  int lead = (int)exact_lead;
+  // Monochromatic Presets always force palette matching Active Effect Palette
+  if (preset.is_active && this->runner_ != nullptr) {
+    pal = this->runner_->_segment.palette;
+    if (pal == 0)
+      pal = this->get_default_palette_id_(this->effect_id_);
+    if (pal == 255)
+      use_palette = false;
+    else
+      use_palette = true;
+  }
 
-  for (int i = 0; i < logical_len; i++) {
+  if (use_palette && this->runner_ != nullptr) {
+    // Force update the runner's palette immediately
+    this->runner_->_segment.palette = pal;
+  }
 
-    float alpha = 0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+  int num_leds = it.size();
 
-    if (!reverse) {
-      if (i <= lead - blur_radius) {
-        alpha = 1.0f;
-      } else if (i <= lead && blur_radius > 0) {
-        float distance_into_blur = exact_lead - i;
-        alpha = distance_into_blur / blur_radius;
-        if (alpha < 0.0f)
-          alpha = 0.0f;
-        if (alpha > 1.0f)
+  // Control State
+  switch_::Switch *mirror_sw = this->mirror_;
+  if (mirror_sw == nullptr && this->controller_ != nullptr)
+    mirror_sw = this->controller_->get_mirror();
+
+  bool reverse = false;
+  if (mirror_sw != nullptr && mirror_sw->state)
+    reverse = true;
+
+  // Symmetry determined by Mode
+  bool symmetry = false;
+  if (mode == INTRO_MODE_CENTER) {
+    symmetry = true;
+    mode = INTRO_MODE_WIPE; // Use Wipe logic with symmetry
+  }
+
+  switch (mode) {
+  case INTRO_MODE_WIPE: {
+    int logical_len = symmetry ? (num_leds / 2) : num_leds;
+
+    // Intensity defines blur radius (up to 50% of the strip)
+    float blur_percent = 0.0f;
+    number::Number *intensity_num = this->intensity_;
+    if (intensity_num == nullptr && this->controller_ != nullptr) {
+      intensity_num = this->controller_->get_intensity();
+    }
+    if (intensity_num != nullptr && intensity_num->has_state()) {
+      blur_percent = (intensity_num->state / 255.0f) * 0.5f;
+    }
+
+    int blur_radius = (int)(logical_len * blur_percent);
+    float exact_lead = progress * (logical_len + blur_radius);
+    int lead = (int)exact_lead;
+
+    for (int i = 0; i < logical_len; i++) {
+
+      float alpha =
+          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+
+      if (!reverse) {
+        if (i <= lead - blur_radius) {
           alpha = 1.0f;
-      }
-    } else {
-      int rev_i = logical_len - 1 - i;
-      if (rev_i <= lead - blur_radius) {
-        alpha = 1.0f;
-      } else if (rev_i <= lead && blur_radius > 0) {
-        float distance_into_blur = exact_lead - rev_i;
-        alpha = distance_into_blur / blur_radius;
-        if (alpha < 0.0f)
-          alpha = 0.0f;
-        if (alpha > 1.0f)
+        } else if (i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
+      } else {
+        int rev_i = logical_len - 1 - i;
+        if (rev_i <= lead - blur_radius) {
           alpha = 1.0f;
+        } else if (rev_i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - rev_i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
+      }
+
+      Color pixel_c = Color::BLACK;
+      if (alpha > 0.0f) {
+        if (use_palette) {
+          uint8_t map_idx =
+              (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+        } else {
+          pixel_c = c; // Solid Color
+        }
+
+        // Apply Alpha Blending to Background (Black)
+        if (alpha < 1.0f) {
+          pixel_c =
+              Color((uint8_t)(pixel_c.r * alpha), (uint8_t)(pixel_c.g * alpha),
+                    (uint8_t)(pixel_c.b * alpha), (uint8_t)(pixel_c.w * alpha));
+        }
+      }
+
+      // Apply
+      it[i] = pixel_c;
+      if (symmetry) {
+        it[num_leds - 1 - i] = pixel_c;
       }
     }
-
-    Color pixel_c = Color::BLACK;
-    if (alpha > 0.0f) {
-      if (use_palette) {
-        uint8_t map_idx =
-            (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
-        uint32_t cp = this->runner_->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
-        pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+    if (symmetry && (num_leds % 2 != 0)) {
+      int mid = num_leds / 2;
+      bool fill_center = (progress >= 1.0f) || (reverse && lead > 0);
+      if (fill_center) {
+        if (use_palette && this->runner_) {
+          uint8_t map_idx = 128; // Center of palette gradient
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
+        } else {
+          it[mid] = c;
+        }
       } else {
-        pixel_c = c; // Solid Color
-      }
-
-      // Apply Alpha Blending to Background (Black)
-      if (alpha < 1.0f) {
-        pixel_c =
-            Color((uint8_t)(pixel_c.r * alpha), (uint8_t)(pixel_c.g * alpha),
-                  (uint8_t)(pixel_c.b * alpha), (uint8_t)(pixel_c.w * alpha));
+        it[mid] = Color::BLACK;
       }
     }
-
-    // Apply
-    it[i] = pixel_c;
-    if (symmetry) {
-      it[num_leds - 1 - i] = pixel_c;
-    }
+    break;
   }
-  if (symmetry && (num_leds % 2 != 0)) {
-    int mid = num_leds / 2;
-    bool fill_center = (progress >= 1.0f) || (reverse && lead > 0);
-    if (fill_center) {
-      if (use_palette && this->runner_) {
-        uint8_t map_idx = 128; // Center of palette gradient
-        uint32_t cp = this->runner_->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
-        it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                        (cp >> 24) & 0xFF);
-      } else {
-        it[mid] = c;
-      }
-    } else {
-      it[mid] = Color::BLACK;
-    }
-  }
-  break;
-}
-case INTRO_MODE_FADE: {
-  // Global Dimming
-  uint8_t brightness = (uint8_t)(progress * 255.0f);
+  case INTRO_MODE_FADE: {
+    // Global Dimming
+    uint8_t brightness = (uint8_t)(progress * 255.0f);
 
-  for (int i = 0; i < num_leds; i++) {
-    Color base_c = c;
-    if (use_palette) {
-      // Map whole strip to spectrum for Fade
-      uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-      uint32_t cp = this->runner_->_segment.color_from_palette(map_idx, false,
-                                                               true, 255, 255);
-      base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                     (cp >> 24) & 0xFF);
-    }
-
-    // Explicit Scaling avoiding operator ambiguity
-    it[i] = Color((base_c.r * brightness) / 255, (base_c.g * brightness) / 255,
-                  (base_c.b * brightness) / 255, (base_c.w * brightness) / 255);
-  }
-  break;
-}
-case INTRO_MODE_GLITTER: {
-  // Dissolve / Glitter Effect
-  // Random pixels turn on based on progress
-  uint8_t threshold = (uint8_t)(progress * 255.0f);
-
-  for (int i = 0; i < num_leds; i++) {
-    // Deterministic pseudo-random value for this pixel position
-    // so it stays ON once it turns ON (Dissolve behavior)
-    uint16_t hash = (i * 33) + (i * i);
-    uint8_t val = hash % 256;
-
-    bool active = (threshold >= val);
-
-    Color pixel_c = Color::BLACK;
-    if (active) {
-      if (use_palette) {
-        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-        uint32_t cp = this->runner_->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
-        pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                        (cp >> 24) & 0xFF);
-      } else {
-        pixel_c = c;
-      }
-    }
-    it[i] = pixel_c;
-  }
-  break;
-}
-case INTRO_MODE_TWIN_PULSE: {
-  // Twin Pulse Intro
-  // 1. First cursor (symmetric fade up/down)
-  // 2. Wide Gap
-  // 3. Second cursor (symmetric fade up/down)
-  // 4. Long Gap
-  // 5. Main Wipe (soft leading edge)
-  // Everything moves strictly proportionally to `progress`.
-
-  // Define proportional sizes based on segment length
-  float length = (float)num_leds;
-  float c_size = length * 0.08f; // Each cursor is 8% of strip
-  if (c_size < 3.0f)
-    c_size = 3.0f;
-  float short_gap = length * 0.12f; // Gap between cursors (increased to 12%)
-  if (short_gap < 1.0f)
-    short_gap = 1.0f;
-  float long_gap = length * 0.10f; // Gap before wipe (10%)
-  if (long_gap < 1.0f)
-    long_gap = 1.0f;
-  float wipe_fade = length * 0.05f; // Leading edge fade of wipe
-  if (wipe_fade < 1.0f)
-    wipe_fade = 1.0f;
-
-  // Calculate layout offsets from the leading edge (cursor 1 front)
-  // These are negative offsets behind the traveling head
-  float c1_front = 0.0f;
-  float c1_back = c1_front - c_size;
-  float c2_front = c1_back - short_gap;
-  float c2_back = c2_front - c_size;
-  float w_front = c2_back - long_gap;
-  float w_solid = w_front - wipe_fade;
-
-  // Total distance the front must travel to pull the solid wipe
-  // entirely across the strip.
-  float total_distance = length - w_solid;
-  float head_pos = (progress * total_distance) + c1_front;
-
-  for (int i = 0; i < num_leds; i++) {
-    int idx = reverse ? (num_leds - 1 - i) : i;
-    float fi = (float)i;
-
-    // Calculate this pixel's relative position behind the traveling head
-    // positive value means it is behind the head_pos
-    float relative_pos = head_pos - fi;
-    float alpha = 0.0f;
-
-    if (relative_pos < 0.0f) {
-      // Ahead of the entire formation
-      alpha = 0.0f;
-    }
-    // --- CURSOR 1 ---
-    else if (relative_pos <= -c1_back) {
-      float c_radius = c_size / 2.0f;
-      float center_pos = (-c1_front + -c1_back) / 2.0f;
-      float dist_to_center = abs(relative_pos - center_pos);
-      if (dist_to_center < c_radius) {
-        alpha = 1.0f - (dist_to_center / c_radius);
-      }
-    }
-    // --- SHORT GAP ---
-    else if (relative_pos < -c2_front) {
-      alpha = 0.0f;
-    }
-    // --- CURSOR 2 ---
-    else if (relative_pos <= -c2_back) {
-      float c_radius = c_size / 2.0f;
-      float center_pos = (-c2_front + -c2_back) / 2.0f;
-      float dist_to_center = abs(relative_pos - center_pos);
-      if (dist_to_center < c_radius) {
-        alpha = 1.0f - (dist_to_center / c_radius);
-      }
-    }
-    // --- LONG GAP ---
-    else if (relative_pos < -w_front) {
-      alpha = 0.0f;
-    }
-    // --- WIPE ---
-    else {
-      float internal_pos = relative_pos + w_front; // 0 at wipe front edge
-      if (internal_pos < wipe_fade) {
-        alpha = internal_pos / wipe_fade; // Soft leading edge
-      } else {
-        alpha = 1.0f; // Solid block
-      }
-    }
-
-    // Clamp alpha to safe rendering limits
-    if (alpha < 0.0f)
-      alpha = 0.0f;
-    if (alpha > 1.0f)
-      alpha = 1.0f;
-
-    // Render Pixel
-    if (alpha > 0.0f) {
+    for (int i = 0; i < num_leds; i++) {
       Color base_c = c;
-      if (use_palette && this->runner_) {
-        uint8_t map_idx =
-            (uint8_t)((idx * 255) / (num_leds > 0 ? num_leds : 1));
+      if (use_palette) {
+        // Map whole strip to spectrum for Fade
+        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
         uint32_t cp = this->runner_->_segment.color_from_palette(
             map_idx, false, true, 255, 255);
         base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
                        (cp >> 24) & 0xFF);
       }
 
-      it[idx] = Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
-                      (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
-    } else {
-      it[idx] = Color::BLACK;
+      // Explicit Scaling avoiding operator ambiguity
+      it[i] =
+          Color((base_c.r * brightness) / 255, (base_c.g * brightness) / 255,
+                (base_c.b * brightness) / 255, (base_c.w * brightness) / 255);
     }
+    break;
   }
-  break;
-}
-case INTRO_MODE_MORSE: {
-  uint32_t speed = this->active_intro_speed_;
-  uint32_t unit_ms = 80 + ((255 - speed) * 100 / 255);
-  uint32_t elapsed_m = millis() - this->intro_start_time_;
-  uint32_t current_bit = elapsed_m / unit_ms;
+  case INTRO_MODE_GLITTER: {
+    // Dissolve / Glitter Effect
+    // Random pixels turn on based on progress
+    uint8_t threshold = (uint8_t)(progress * 255.0f);
 
-  uint64_t mask = 0b1110111011100011101ULL;
-  uint8_t total_bits = 19;
+    for (int i = 0; i < num_leds; i++) {
+      // Deterministic pseudo-random value for this pixel position
+      // so it stays ON once it turns ON (Dissolve behavior)
+      uint16_t hash = (i * 33) + (i * i);
+      uint8_t val = hash % 256;
 
-  bool is_on = false;
-  if (current_bit >= total_bits) {
-    is_on = true; // Hold ON after sequence
-  } else {
-    is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
-  }
+      bool active = (threshold >= val);
 
-  for (int i = 0; i < num_leds; i++) {
-    if (is_on) {
-      uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-      if (this->runner_) {
-        uint32_t cp = this->runner_->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
-        it[i] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                      (cp >> 24) & 0xFF);
-      } else {
-        it[i] = target_color;
+      Color pixel_c = Color::BLACK;
+      if (active) {
+        if (use_palette) {
+          uint8_t map_idx =
+              (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
+        } else {
+          pixel_c = c;
+        }
       }
+      it[i] = pixel_c;
+    }
+    break;
+  }
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Intro
+    // 1. First cursor (symmetric fade up/down)
+    // 2. Wide Gap
+    // 3. Second cursor (symmetric fade up/down)
+    // 4. Long Gap
+    // 5. Main Wipe (soft leading edge)
+    // Everything moves strictly proportionally to `progress`.
+
+    // Define proportional sizes based on segment length
+    float length = (float)num_leds;
+    float c_size = length * 0.08f; // Each cursor is 8% of strip
+    if (c_size < 3.0f)
+      c_size = 3.0f;
+    float short_gap = length * 0.12f; // Gap between cursors (increased to 12%)
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.10f; // Gap before wipe (10%)
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f; // Leading edge fade of wipe
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
+
+    // Calculate layout offsets from the leading edge (cursor 1 front)
+    // These are negative offsets behind the traveling head
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
+
+    // Total distance the front must travel to pull the solid wipe
+    // entirely across the strip.
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
+
+    for (int i = 0; i < num_leds; i++) {
+      int idx = reverse ? (num_leds - 1 - i) : i;
+      float fi = (float)i;
+
+      // Calculate this pixel's relative position behind the traveling head
+      // positive value means it is behind the head_pos
+      float relative_pos = head_pos - fi;
+      float alpha = 0.0f;
+
+      if (relative_pos < 0.0f) {
+        // Ahead of the entire formation
+        alpha = 0.0f;
+      }
+      // --- CURSOR 1 ---
+      else if (relative_pos <= -c1_back) {
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        }
+      }
+      // --- SHORT GAP ---
+      else if (relative_pos < -c2_front) {
+        alpha = 0.0f;
+      }
+      // --- CURSOR 2 ---
+      else if (relative_pos <= -c2_back) {
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        }
+      }
+      // --- LONG GAP ---
+      else if (relative_pos < -w_front) {
+        alpha = 0.0f;
+      }
+      // --- WIPE ---
+      else {
+        float internal_pos = relative_pos + w_front; // 0 at wipe front edge
+        if (internal_pos < wipe_fade) {
+          alpha = internal_pos / wipe_fade; // Soft leading edge
+        } else {
+          alpha = 1.0f; // Solid block
+        }
+      }
+
+      // Clamp alpha to safe rendering limits
+      if (alpha < 0.0f)
+        alpha = 0.0f;
+      if (alpha > 1.0f)
+        alpha = 1.0f;
+
+      // Render Pixel
+      if (alpha > 0.0f) {
+        Color base_c = c;
+        if (use_palette && this->runner_) {
+          uint8_t map_idx =
+              (uint8_t)((idx * 255) / (num_leds > 0 ? num_leds : 1));
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                         (cp >> 24) & 0xFF);
+        }
+
+        it[idx] =
+            Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
+                  (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
+      } else {
+        it[idx] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_MORSE: {
+    uint32_t speed = this->active_intro_speed_;
+    uint32_t unit_ms = 80 + ((255 - speed) * 100 / 255);
+    uint32_t elapsed_m = millis() - this->intro_start_time_;
+    uint32_t current_bit = elapsed_m / unit_ms;
+
+    uint64_t mask = 0b1110111011100011101ULL;
+    uint8_t total_bits = 19;
+
+    bool is_on = false;
+    if (current_bit >= total_bits) {
+      is_on = true; // Hold ON after sequence
     } else {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    }
+
+    for (int i = 0; i < num_leds; i++) {
+      if (is_on) {
+        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
+        if (this->runner_) {
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          it[i] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                        (cp >> 24) & 0xFF);
+        } else {
+          it[i] = target_color;
+        }
+      } else {
+        it[i] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_NONE:
+  default:
+    for (int i = 0; i < num_leds; i++) {
       it[i] = Color::BLACK;
     }
+    break;
   }
-  break;
-}
-case INTRO_MODE_NONE:
-default:
-  for (int i = 0; i < num_leds; i++) {
-    it[i] = Color::BLACK;
-  }
-  break;
-}
 }
 
 bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
