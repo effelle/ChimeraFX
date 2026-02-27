@@ -21,36 +21,27 @@ This is the central repository for all ChimeraFX effects. Each effect is designe
 
 ## Main Effects
 
-### 38 | Aurora
+??? abstract "38 | Aurora &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
 
-??? abstract "38 | Aurora"
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/aurora.webm" type="video/webm">
+        </video>
+        
+        *Northern lights animation with drifting waves and horizontal color movements.*
 
-    <div class="cfx-dashboard">
-    <div class="cfx-visual">
-    <video loop muted playsinline autoplay preload="none">
-    <source src="/ChimeraFX/assets/effects/aurora.webm" type="video/webm">
-    </video>
-    </div>
-    <div class="cfx-data" markdown="1">
+    === "⚙️ Controls"
+        | Parameter | Default | Function Description |
+        | :--- | :--- | :--- |
+        | **Intensity** | `128` | **Wave width**: determines how broad the light bands are. |
+        | **Speed** | `128` | **Drift speed**: controls the horizontal movement velocity. |
+        | **Palette** | — | **Not Supported**: Aurora is locked to its internal rainbow colors. |
 
-<div class="cfx-meta" markdown="1">
-:octicons-package-16: **v1.0.0** | :material-speedometer: **Load:** Low | :material-palette: **Palette:** ❌ Locked
-</div>
+    === "💻 Config"
+        ```yaml
+        - name: "Aurora"
+          id: 38
+        ```
+        **Note:** This effect does support presets.
 
-| Parameter | Default | Function |
-| :--- | :--- | :--- |
-| **Speed** | `128` | Drift speed |
-| **Intensity** | `128` | Wave width |
-
-<div class="cfx-desc" markdown="1">
-Northern lights animation with drifting waves and horizontal color movements.
-</div>
-
-```yaml
-- name: "Aurora"
-  id: 38
-  intensity: 128
-  speed: 128
-```
-    </div>
-    </div>
+    :material-lightbulb-outline: **Tip:** Aurora looks best on dense strips (>60 LEDs/m) where the smooth color drifting can be fully appreciated.
