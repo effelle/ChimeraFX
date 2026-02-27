@@ -8,8 +8,6 @@
     *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.
     *   **ESP8266**: **NOT RECOMMENDED**. The old ESP8266 is stuck on the Arduino framework and simply lacks the resources to run ESPHome and ChimeraFX simultaneously. Save yourself the headache and upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported!
-    *   **ESP-IDF**: Uses the native asynchronous RMT DMA drivers.
-    *   **Arduino**: Automatically relies on NeoPixelBus under the hood.
 
 You can install the component in two ways:
 
@@ -46,6 +44,7 @@ number:
 select: 
 switch:
 ```
+
 ---
 
 ## Light Configuration
@@ -68,7 +67,7 @@ light:
     all_effects: true       # Magic! Automatically registers all ChimeraFX effects.
 ```
 
-For a full overview of the `cfx_light` platform, including how to set default animation parameters on first boot, please refer to the [cfx_light documentation](cfx_light.md).
+For a full overview of the `cfx_light` platform, please refer to the [cfx_light documentation](cfx_light.md).
 
 ### Adding Effects Manually (Without `all_effects`)
 

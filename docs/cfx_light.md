@@ -1,12 +1,11 @@
 # ChimeraFX Light Platform
 
-The `cfx_light` platform is a custom, high-performance ESPHome light component specifically designed to be the ultimate companion for ChimeraFX. 
-
-While you can run ChimeraFX effects on top of standard `esp32_rmt_led_strip` or `neopixelbus` platforms, the `cfx_light` platform offers significant advantages. It wraps the native ESP-IDF RMT driver with opinionated optimizations tailored for heavy lifting and seamless effect integration.
+The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome light component specifically designed to be the ultimate companion for ChimeraFX. 
+`cfx_light` wraps the native ESP-IDF RMT driver with opinionated optimizations tailored for heavy lifting and seamless effect integration.
 
 ## Why use `cfx_light`?
 
-1. **Auto-injection (`all_effects`)**: The biggest feature! By simply setting `all_effects: true`, `cfx_light` will automatically parse and inject all 50+ ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks.
+1. **Auto-injection (`all_effects`)**: The biggest feature! By simply setting `all_effects: true`, `cfx_light` will automatically parse and inject all ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks.
 2. **Chipset-Aware Intelligence**: Native understanding of WS2812, WS2811, and SK6812 timing requirements.
 3. **Optimized Memory Allocation**: ESPHome's standard RMT driver occasionally struggles with symbol buffering on different chips (like S3 vs Classic). `cfx_light` automatically sets the optimal RMT memory boundaries for your exact silicon, eliminating the "flickering" or "data corruption" issues associated with large LED strips.
 4. **Automatic RGBW Handling**: If you select `SK6812`, it automatically configures the 4-byte protocol and `GRBW` formatting without requiring manual overrides (although you can still override them if you have a weird LED strip variant).
@@ -24,6 +23,9 @@ light:
     num_leds: 300
     chipset: WS2812X
     all_effects: true
+    use_intro: 1         # Global Wipe intro
+    use_outro: 2         # Global Fade outro
+    intro_dur: 1000ms    # 1s duration
 ```
 
 ### Required Parameters
@@ -57,8 +59,11 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
-* **max_refresh_rate** (*Time*, default: `16ms`): Controls the ESPHome frame limit. `16ms` achieves ~62 FPS.
+* **max_refresh_rate** (*Time*, default: `16ms`): Controls the ESPHome frame limit. `16ms` could achieve ~62 FPS.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration.
+* **use_intro** (*int*, 0-6): Force a specific global Intro Animation for all effects.
+* **use_outro** (*int*, 0-6): Force a specific global Outro Animation for all effects.
+* **intro_dur** (*Time*): Sets the duration for both global intros and outros.
 
 ---
 

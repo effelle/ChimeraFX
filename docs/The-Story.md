@@ -58,4 +58,4 @@ It's hard to find another analogy that fits so well.
 
 `ChimeraFX` wasn't easy to build, it was born from a lot of trial, error, and dad-duties but also from a lot of coffee (trust me on this one), and a lot of "why isn't this working?" moments.
 
-I hope you enjoy using it as much as I enjoyed building it, and if you find **ChimeraFX** useful and would like to support the time and effort put into porting these effects, donations are never expected but always greatly appreciated!
+I hope you enjoy using it as much as I enjoyed building it, and if you find **ChimeraFX** useful and would like to support the time and effort put into porting these effects, [donations](https://www.buymeacoffee.com/effelle) are never expected but always greatly appreciated!

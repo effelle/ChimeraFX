@@ -95,10 +95,10 @@ Control slider to manage the intensity of the effect. Depending on the effect, t
 Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette this was a deliberate choice by me to make them more realistic. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
 
 ### ID 4: Mirror
-Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro Animation too.
+Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro and Outro Animations too.
 
 ### ID 5: Intro and Outro Animation
-A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support. The latter allows the intro animation to inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro Animations](Effects-Library.md#intro-animations) section.
+A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support. The latter allows the intro animation to inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
 
 ### ID 6: Timer
 Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
@@ -109,7 +109,7 @@ Enables or disables **Intelligent Autotune**. When enabled, the effect will auto
 - **Intelligent Yield:** If you manually adjust a slider or pick a different palette while Autotune is active, the system detects your intervention and automatically toggles Autotune **OFF**, giving you full manual control instantly.
 - **Default Behavior:** If the `cfx_control` component is not used (or Autotune is excluded), the engine defaults to Autotune **ON** to ensure every effect looks its best without manual setup.
 - **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults. 
-- **Presets:** Autotune can be overridden by explicit values stored in [Presets](Presets-and-States.md).
+- **Presets:** Autotune can be overridden by explicit values stored in [Effect Presets](Effect-Presets.md).
 
 ### ID 9: Debug
-Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead.
+Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead. See [Troubleshooting](Troubleshooting.md) for more details.
