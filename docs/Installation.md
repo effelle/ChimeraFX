@@ -113,10 +113,18 @@ cfx_effect: # Mandatory! Loads the component
 
 **Note:** This method requires you to manually update files when I release improvements or new effects.
 
+---
+
+Independently of the installation method, you are now ready to [configure your controls](Controls.md).
+
+---
+
 ## Dependencies
 
 The component handles its own dependencies automatically. The native `cfx_light` driver utilizes the built-in ESP-IDF RMT APIs for asynchronous hardware rendering and Neopixelbus as fallback for Arduino Framework.
 
 You don't need to install anything else manually.
+
+
 
 ---
