@@ -35,6 +35,8 @@ CONF_RMT_SYMBOLS = "rmt_symbols"
 CONF_IS_WRGB = "is_wrgb"
 CONF_DEFAULT_TRANSITION_LENGTH = "default_transition_length"
 CONF_ALL_EFFECTS = "all_effects"
+CONF_VISUALIZER_IP = "visualizer_ip"
+CONF_VISUALIZER_PORT = "visualizer_port"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
@@ -166,6 +168,8 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
+            cv.Optional(CONF_VISUALIZER_IP): cv.string,
+            cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
         }
     ).extend(cv.COMPONENT_SCHEMA)
 )
@@ -211,3 +215,7 @@ async def to_code(config):
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
+
+    if CONF_VISUALIZER_IP in config:
+        cg.add(var.set_visualizer_ip(config[CONF_VISUALIZER_IP]))
+        cg.add(var.set_visualizer_port(config[CONF_VISUALIZER_PORT]))

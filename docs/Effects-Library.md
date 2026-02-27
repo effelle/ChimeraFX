@@ -1,13 +1,10 @@
-# Available Effects, Palettes and Intros
-
-If you’re wondering why all WLED effects aren't available yet, here is the answer:
-
-Bringing WLED effects to ChimeraFX is a meticulous process. Each effect is partially rewritten to 'squeeze' every bit of performance out of the hardware with minimal resource overhead. My goal is to preserve the original look while ensuring the code runs perfectly within ESPHome alongside your other components.
-Please note that some WLED effects will not be ported. This includes animations designed specifically for 2D matrix, as well as effects that rely on WLED's ability to select two or three distinct colors (Secondary/Tertiary), as these features exceed the current capabilities of ESPHome and ChimeraFX.
+# Available Effects, Palettes, Intros and Outros
 
 ### Effect List
 
 #### ChimeraFX Original Effects:
+
+A suite of original, high-performance animations exclusive to ChimeraFX:
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---|
@@ -33,9 +30,11 @@ Specifically designed for solid color animations with premium, forced entry/exit
 | 161 | **Horizon Sweep** | A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 163 | **Stardust Sweep** | A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
 | 165 | **Twin Pulse Sweep** | A cinematic monochromatic reveal. Dual light pulses race across the strip to lead the entry, and return to eat the light during the exit. | **Intensity**: Edge blur radius - **Speed**: Sweep duration | No | ChimeraFX |
-| 166 | **Morse Sweep** | A "hidden in plain sight" reveal. Flashes the words "ON" and "OFF" in Morse code using the current solid color. | **Intensity**: N/A - **Speed**: Morse speed | No | ChimeraFX |
+| 166 | **Transmission** | A clever "hidden in plain sight" transition. The strip broadcasts "ON" and "OFF" in authentic Morse code during power cycles using your selected color. | **Intensity**: N/A - **Speed**: Transmission rate | No | ChimeraFX |
 
 #### WLED-Style Effects:
+
+Cherry picked from WLED effects library:
 
 | ID | Name | Description | Controls | Palette support | Author |
 |:---|:---|:---|:---|:---:|:---:|
@@ -84,7 +83,7 @@ Specifically designed for solid color animations with premium, forced entry/exit
 
 ### A few notes on the credits:
 *   **ChimeraFX:** Custom effects developed specifically for this component by Federico Leoni.
-*   **Aircoookie:** Lead developer of WLED. Most core effect logic is derived from his work.
+*   **Aircoookie:** Lead developer of WLED. Most core effect logic is derived from his huge work.
 *   **Mark Kriegsman:** Godfather of high-quality LED math. Responsible for Fire, Juggle, and many FastLED classics.
 *   **Tweaking4All:** Creator of the iconic Bouncing Balls physics logic.
 
@@ -123,19 +122,19 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 ---
 
-## Intro Animations
+## Intro and Outro Animations
 
-These short animations play once when the light is turned ON.
+These short animations play once when the light is turned ON or OFF.
 
 | ID | Animation Name | Description |
 |:---|:---|:---|
-| 0 | **None** | Standard behavior (Main effect starts immediately). |
+| 0 | **None** | Standard behavior. Main effect starts immediately or will respect the transition time. |
 | 1 | **Wipe** | Linear wipe from start to end (respects Mirror). |
 | 2 | **Fade** | Smooth brightness fade-in. |
 | 3 | **Center** | Wipe from center outwards (or inwards if reversed). |
 | 4 | **Glitter** | Random pixels sparkle as brightness increases. |
 | 5 | **Twin Pulse** | Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.|
-| 6 | **Morse Code** | Flashes "ON" in Morse code during the intro and "OFF" during the outro. Supports palette colors.|
+| 6 | **Morse Code** | Flashes "ON" in Morse code during the intro and "OFF" during the outro. |
 
 ### Transition Behavior
 When the Intro Duration ends, the Intro Effect will **Dissolve** (Soft Fairy Dust) into the Main Effect over 1.5 seconds. This creates a seamless, premium startup experience.

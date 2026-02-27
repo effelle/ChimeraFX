@@ -281,6 +281,14 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
 
+  // 1.5. Visualizer UDP Broadcast
+  if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
+    this->udp_.beginPacket(this->visualizer_ip_.c_str(),
+                           this->visualizer_port_);
+    this->udp_.write(this->buf_, this->get_buffer_size_());
+    this->udp_.endPacket();
+  }
+
   // Protect from refreshing too often
   uint32_t now = micros();
   if (*this->max_refresh_rate_ != 0 &&
