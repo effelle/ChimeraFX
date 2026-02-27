@@ -100,6 +100,9 @@ public:
   }
 
 protected:
+  static const uint8_t VISUALIZER_TYPE_PIXELS = 0x00;
+  static const uint8_t VISUALIZER_TYPE_METADATA = 0x01;
+
   light::ESPColorView get_view_internal(int32_t index) const override;
 
   // Buffer size: 3 bytes/pixel (RGB) or 4 bytes/pixel (RGBW/WRGB)
