@@ -100,8 +100,10 @@ public:
   }
 
 protected:
-  static const uint8_t VISUALIZER_TYPE_PIXELS = 0x00;
-  static const uint8_t VISUALIZER_TYPE_METADATA = 0x01;
+  enum VisualizerPacketType : uint8_t {
+    VISUALIZER_TYPE_PIXELS = 0x00,
+    VISUALIZER_TYPE_METADATA = 0x01,
+  };
 
   light::ESPColorView get_view_internal(int32_t index) const override;
 
