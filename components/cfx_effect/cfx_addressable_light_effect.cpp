@@ -380,24 +380,15 @@ void CFXAddressableLightEffect::stop() {
         }
       }
 
-      // 10. Outro Duration Logic
-      uint32_t duration_ms = 1000; // Final Default: 1.0s
+      // 10. Outro Duration Priority Chain
+      uint32_t duration_ms = 1000; // Hard Default
 
       number::Number *dur_num = this->outro_duration_;
       if (dur_num == nullptr && c != nullptr)
         dur_num = c->get_outro_duration();
 
-      if (dur_num != nullptr && dur_num->has_state()) {
-        // High Priority: UI Slider
-        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-      } else if (this->outro_duration_preset_.has_value()) {
-        // Medium Priority: YAML Preset
-        duration_ms =
-            (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
-      }
-
-      // Morse Code Timing Override
       if (this->active_outro_mode_ == INTRO_MODE_MORSE) {
+        // A. Highest: Morse Code Timing (Message length based)
         uint8_t current_speed = 128;
         number::Number *intensity_num =
             (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
@@ -406,19 +397,25 @@ void CFXAddressableLightEffect::stop() {
         }
         uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
         duration_ms = 35 * unit_ms;
+      } else if (dur_num != nullptr && dur_num->has_state()) {
+        // B. High: UI Slider
+        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      } else if (this->outro_duration_preset_.has_value()) {
+        // C. Medium: YAML Preset
+        duration_ms =
+            (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
       } else if (preset.is_active) {
-        // Monochromatic Preset Fallback: Speed Slider
+        // D. Fallback: Monochromatic Mode Speed Slider
         number::Number *speed_num = this->speed_;
         if (speed_num == nullptr && c != nullptr)
           speed_num = c->get_speed();
 
         if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (500ms up to 10000ms)
           float speed_val = speed_num->state;
           duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
         }
       } else {
-        // Low Priority: Light Default Transition
+        // E. Lowest: Light Default Transition
         auto *current_state = this->get_light_state();
         if (current_state != nullptr &&
             current_state->get_default_transition_length() > 0) {
