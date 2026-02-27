@@ -228,6 +228,13 @@ void CFXAddressableLightEffect::start() {
 
   this->initial_preset_applied_ = true;
 
+  // Visualizer: Notify metadata
+  auto *out =
+      static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+  if (out != nullptr) {
+    out->send_visualizer_metadata(this->name_);
+  }
+
   // State Machine Init: Check if we are turning ON from OFF
   auto *state = this->get_light_state();
   if (state != nullptr) {
