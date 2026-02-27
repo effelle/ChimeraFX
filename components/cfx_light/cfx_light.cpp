@@ -10,7 +10,9 @@
 #include "cfx_light.h"
 
 #ifdef USE_WIFI
-#include <WiFiUdp.h>
+#include <lwip/inet.h>
+#include <lwip/sockets.h>
+
 #endif
 
 #ifdef USE_ESP32
@@ -288,13 +290,17 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // 1.5. Visualizer UDP Broadcast
 #ifdef USE_WIFI
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
-    if (this->udp_ == nullptr) {
-      this->udp_ = new WiFiUDP();
+    if (this->socket_fd_ < 0) {
+      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     }
-    this->udp_->beginPacket(this->visualizer_ip_.c_str(),
-                            this->visualizer_port_);
-    this->udp_->write(this->buf_, this->get_buffer_size_());
-    this->udp_->endPacket();
+    if (this->socket_fd_ >= 0) {
+      struct sockaddr_in dest_addr;
+      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
+      dest_addr.sin_family = AF_INET;
+      dest_addr.sin_port = htons(this->visualizer_port_);
+      sendto(this->socket_fd_, this->buf_, this->get_buffer_size_(), 0,
+             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    }
   }
 #endif
 

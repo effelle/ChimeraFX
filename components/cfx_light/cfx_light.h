@@ -22,7 +22,6 @@
 #include <functional>
 
 namespace esphome {
-class WiFiUDP;
 
 namespace cfx_light {
 
@@ -148,7 +147,7 @@ protected:
   optional<uint32_t> max_refresh_rate_{};
 
   // Visualizer
-  WiFiUDP *udp_{nullptr};
+  int socket_fd_{-1};
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
