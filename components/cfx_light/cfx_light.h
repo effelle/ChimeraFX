@@ -56,6 +56,7 @@ public:
   void setup() override;
   void loop() override;
   void write_state(light::LightState *state) override;
+  void send_visualizer_metadata(const std::string &name);
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
 

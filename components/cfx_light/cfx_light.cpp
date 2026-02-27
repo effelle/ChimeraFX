@@ -324,6 +324,64 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
   this->last_refresh_ = now;
   this->mark_shown_();
+
+  // Wait for previous DMA transmission to complete (safety valve)
+  // At 300 LEDs = ~9ms, this returns instantly if 16ms+ has passed
+  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 15);
+  if (error != ESP_OK) {
+    ESP_LOGE(TAG, "RMT TX timeout");
+    this->status_set_warning();
+    return;
+  }
+
+  // Copy pixel buffer → RMT buffer and fire
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
+#else
+  // Pre-5.3: encode bytes → RMT symbols manually
+  size_t buffer_size = this->get_buffer_size_();
+  size_t sz = 0;
+  uint8_t *psrc = this->buf_;
+  rmt_symbol_word_t *pdest = this->rmt_buf_;
+  while (sz < buffer_size) {
+    uint8_t b = *psrc;
+    for (int i = 0; i < 8; i++) {
+      pdest->val = (b & (1 << (7 - i))) ? this->params_.bit1.val
+                                        : this->params_.bit0.val;
+      pdest++;
+    }
+    sz++;
+    psrc++;
+  }
+  if (this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0) {
+    pdest->val = this->params_.reset.val;
+    pdest++;
+  }
+#endif
+
+  // Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
+  rmt_transmit_config_t config;
+  memset(&config, 0, sizeof(config));
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
+                       this->get_buffer_size_(), &config);
+#else
+  size_t len =
+      this->get_buffer_size_() * 8 +
+      ((this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0)
+           ? 1
+           : 0);
+  error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
+                       len * sizeof(rmt_symbol_word_t), &config);
+#endif
+
+  if (error != ESP_OK) {
+    ESP_LOGE(TAG, "RMT TX error");
+    this->status_set_warning();
+    return;
+  }
+  this->status_clear_warning();
 }
 
 void CFXLightOutput::send_visualizer_metadata(const std::string &name) {
@@ -350,65 +408,6 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name) {
     }
   }
 #endif
-}
-
-// Wait for previous DMA transmission to complete (safety valve)
-// At 300 LEDs = ~9ms, this returns instantly if 16ms+ has passed
-esp_err_t error = rmt_tx_wait_all_done(this->channel_, 15);
-if (error != ESP_OK) {
-  ESP_LOGE(TAG, "RMT TX timeout");
-  this->status_set_warning();
-  return;
-}
-
-// Copy pixel buffer → RMT buffer and fire
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
-#else
-// Pre-5.3: encode bytes → RMT symbols manually
-size_t buffer_size = this->get_buffer_size_();
-size_t sz = 0;
-uint8_t *psrc = this->buf_;
-rmt_symbol_word_t *pdest = this->rmt_buf_;
-while (sz < buffer_size) {
-  uint8_t b = *psrc;
-  for (int i = 0; i < 8; i++) {
-    pdest->val =
-        (b & (1 << (7 - i))) ? this->params_.bit1.val : this->params_.bit0.val;
-    pdest++;
-  }
-  sz++;
-  psrc++;
-}
-if (this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0) {
-  pdest->val = this->params_.reset.val;
-  pdest++;
-}
-#endif
-
-// Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
-rmt_transmit_config_t config;
-memset(&config, 0, sizeof(config));
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
-                     this->get_buffer_size_(), &config);
-#else
-size_t len =
-    this->get_buffer_size_() * 8 +
-    ((this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0)
-         ? 1
-         : 0);
-error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
-                     len * sizeof(rmt_symbol_word_t), &config);
-#endif
-
-if (error != ESP_OK) {
-  ESP_LOGE(TAG, "RMT TX error");
-  this->status_set_warning();
-  return;
-}
-this->status_clear_warning();
 }
 
 // --- Color View (Maps ESPHome pixel access to our buffer) ---
