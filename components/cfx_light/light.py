@@ -39,7 +39,7 @@ CONF_VISUALIZER_IP = "visualizer_ip"
 CONF_VISUALIZER_PORT = "visualizer_port"
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32"]
+DEPENDENCIES = ["esp32", "wifi"]
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(

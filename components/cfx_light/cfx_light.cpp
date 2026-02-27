@@ -9,6 +9,10 @@
 
 #include "cfx_light.h"
 
+#ifdef USE_WIFI
+#include <WiFiUdp.h>
+#endif
+
 #ifdef USE_ESP32
 
 #include "esphome/core/log.h"
@@ -282,12 +286,17 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 
   // 1.5. Visualizer UDP Broadcast
+#ifdef USE_WIFI
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
-    this->udp_.beginPacket(this->visualizer_ip_.c_str(),
-                           this->visualizer_port_);
-    this->udp_.write(this->buf_, this->get_buffer_size_());
-    this->udp_.endPacket();
+    if (this->udp_ == nullptr) {
+      this->udp_ = new WiFiUDP();
+    }
+    this->udp_->beginPacket(this->visualizer_ip_.c_str(),
+                            this->visualizer_port_);
+    this->udp_->write(this->buf_, this->get_buffer_size_());
+    this->udp_->endPacket();
   }
+#endif
 
   // Protect from refreshing too often
   uint32_t now = micros();

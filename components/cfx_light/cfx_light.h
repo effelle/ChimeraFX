@@ -15,7 +15,6 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 
-#include <WiFiUdp.h>
 #include <driver/gpio.h>
 #include <driver/rmt_tx.h>
 #include <esp_err.h>
@@ -23,6 +22,8 @@
 #include <functional>
 
 namespace esphome {
+class WiFiUDP;
+
 namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
@@ -147,7 +148,7 @@ protected:
   optional<uint32_t> max_refresh_rate_{};
 
   // Visualizer
-  WiFiUDP udp_;
+  WiFiUDP *udp_{nullptr};
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
