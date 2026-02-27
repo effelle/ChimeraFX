@@ -40,58 +40,66 @@ body {
 }
 
 /* --- ChimeraFX Effect Dashboard --- */
-.cfx-effect-dashboard {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1.5rem;
+.cfx-dashboard {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 1.2rem;
     background: #292B2A;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    padding: 1.2rem;
+    padding: 1rem;
     margin: 1rem 0;
+    align-items: start;
 }
 
-.cfx-effect-dashboard video {
-    border-radius: 6px;
+.cfx-visual {
+    position: relative;
+    width: 100%;
+}
+
+.cfx-visual video {
+    border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.05);
     display: block;
     width: 100%;
 }
 
-.cfx-visual-column {
-    flex: 1.5 1 400px;
-    min-width: 300px;
-}
-
-.cfx-data-column {
-    flex: 1 1 250px;
+.cfx-data {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.6rem;
 }
 
-.cfx-data-column table {
+.cfx-data table {
     margin: 0 !important;
     width: 100%;
+    font-size: 0.85em;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-.cfx-metadata-row {
-    font-size: 0.9em;
+.cfx-meta {
+    font-size: 0.85em;
     display: flex;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    opacity: 0.9;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 8px;
+    opacity: 0.8;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 4px;
 }
 
-@media (max-width: 768px) {
-    .cfx-effect-dashboard {
+.cfx-desc {
+    font-size: 0.8em;
+    opacity: 0.7;
+    font-style: italic;
+    margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .cfx-dashboard {
+        grid-template-columns: 1fr;
         padding: 0.8rem;
-        gap: 1rem;
-    }
-    .cfx-visual-column, .cfx-data-column {
-        flex: 1 1 100%;
     }
 }

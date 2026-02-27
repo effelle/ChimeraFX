@@ -25,22 +25,32 @@ This is the central repository for all ChimeraFX effects. Each effect is designe
 
 ??? abstract "38 | Aurora"
 
-    <div class="cfx-effect-dashboard">
-        <div class="cfx-visual-column">
-            <video loop muted playsinline autoplay preload="none">
-                <source src="/ChimeraFX/assets/effects/aurora.webm" type="video/webm">
-            </video>
-        </div>
-        <div class="cfx-data-column" markdown="1">
-<div class="cfx-metadata-row" markdown="1">
-**Palette:** :material-close-circle: Locked | **Load:** :material-speedometer: Low | **Add:** v1.0.0
+    <div class="cfx-dashboard">
+    <div class="cfx-visual">
+    <video loop muted playsinline autoplay preload="none">
+    <source src="/ChimeraFX/assets/effects/aurora.webm" type="video/webm">
+    </video>
+    </div>
+    <div class="cfx-data" markdown="1">
+
+<div class="cfx-meta" markdown="1">
+:octicons-package-16: **v1.0.0** | :material-speedometer: **Load:** Low | :material-palette: **Palette:** ❌ Locked
 </div>
 
-| Param | Default | Description |
+| Parameter | Default | Function |
 | :--- | :--- | :--- |
 | **Speed** | `128` | Drift speed |
 | **Intensity** | `128` | Wave width |
 
-*Northern lights animation with drifting waves and horizontal color movements.*
-        </div>
+<div class="cfx-desc" markdown="1">
+Northern lights animation with drifting waves and horizontal color movements.
+</div>
+
+```yaml
+- name: "Aurora"
+  id: 38
+  intensity: 128
+  speed: 128
+```
+    </div>
     </div>
