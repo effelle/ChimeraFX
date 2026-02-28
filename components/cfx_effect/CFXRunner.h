@@ -315,6 +315,7 @@ public:
   }
 
   uint8_t getMode() const { return _mode; }
+  uint8_t getPalette() const { return _segment.palette; }
 
   double _virtual_now = 0;
   float _accum_ms = 0;

@@ -264,7 +264,7 @@ void CFXAddressableLightEffect::start() {
   }
 
   // State Machine Init: Check if we are turning ON from OFF
-  auto *state = this->get_state();
+  auto *state = this->get_light_state();
   if (state != nullptr) {
     bool is_fresh_turn_on = !state->current_values.is_on();
 
