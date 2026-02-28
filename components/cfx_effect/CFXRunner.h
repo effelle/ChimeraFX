@@ -60,6 +60,13 @@ struct CRGBW {
 #define RESET_REQ (uint16_t)0x0020
 #define SELECTED (uint16_t)0x0001
 
+struct ColliderNode {
+  float radius;
+  float vel;
+  uint8_t glue_timer; // New: holds position for N frames
+  float offset;       // New: local drift/offset from grid center
+};
+
 // Effect Mode IDs
 #define FX_MODE_STATIC 0
 #define FX_MODE_BLINK 1
@@ -115,7 +122,7 @@ struct CRGBW {
 #define FX_MODE_FAIRYTWINKLE 51
 #define FX_MODE_RUNNING_DUAL 52
 #define FX_MODE_FIRE_DUAL 153
-#define FX_MODE_TRICOLOR_CHASE 54
+#define FX_MODE_CHASE_MULTI 54
 #define FX_MODE_TRICOLOR_WIPE 55
 #define FX_MODE_TRICOLOR_FADE 56
 #define FX_MODE_LIGHTNING 57
@@ -184,14 +191,20 @@ struct CRGBW {
 #define FX_MODE_ENERGY 158
 #define FX_MODE_CHAOS_THEORY 159
 #define FX_MODE_FLUID_RAIN 160
+#define FX_MODE_HORIZON_SWEEP 161
+#define FX_MODE_CENTER_SWEEP 162
+#define FX_MODE_GLITTER_SWEEP 163
+#define FX_MODE_COLLIDER 164
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
 #define INTRO_FADE 2
 #define INTRO_CENTER 3
 #define INTRO_GLITTER 4
+#define INTRO_TWIN_PULSE 5
+#define INTRO_MORSE 6
 
-#define MODE_COUNT 116
+#define MODE_COUNT 119
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 
@@ -302,6 +315,7 @@ public:
   }
 
   uint8_t getMode() const { return _mode; }
+  uint8_t getPalette() const { return _segment.palette; }
 
   double _virtual_now = 0;
   float _accum_ms = 0;

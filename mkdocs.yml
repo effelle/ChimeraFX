@@ -35,10 +35,13 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+extra_javascript:
+  - assets/js/lazy_accordion.js
 nav:
   - Home: index.md
   - Guide:
     - Installation: Installation.md
+    - ChimeraFX light: cfx_light.md
     - Controls: Controls.md
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md
@@ -62,5 +65,7 @@ markdown_extensions:
   - admonition
   - pymdownx.details
   - pymdownx.superfences
+  - md_in_html
   - pymdownx.tabbed:
-      alternate_style: true
+      alternate_style: true           # Allows markdown inside HTML divs
+ 

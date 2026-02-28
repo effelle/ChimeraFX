@@ -1,14 +1,16 @@
 {
     "name": "ChimeraFX",
-    "version": "1.1.2",
-    "description": "WLED effects running natively within ESPHome",
+    "version": "1.2.1",
+    "description": "WLED-style effects running natively within ESPHome",
     "keywords": [
         "esphome",
         "wled",
         "led",
         "effects",
         "addressable",
-        "esp32"
+        "esp32",
+        "addressable-led",
+        "light-effects"
     ],
     "repository": {
         "type": "git",

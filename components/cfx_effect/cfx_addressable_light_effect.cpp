@@ -5,7 +5,9 @@
  */
 
 #include "cfx_addressable_light_effect.h"
+#include "../cfx_light/cfx_light.h"
 #include "cfx_compat.h"
+#include "esphome/core/application.h"
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
@@ -19,15 +21,80 @@ static const char *TAG = "chimera_fx";
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
     : light::AddressableLightEffect(name) {}
 
+CFXAddressableLightEffect::MonochromaticPreset
+CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
+  // Master dictionary for static/monochromatic effects requiring forced
+  // intros/outros
+  switch (effect_id) {
+  case 161: // Horizon Sweep
+    return {true, INTRO_WIPE, INTRO_WIPE};
+  case 162: // Curtain Sweep
+    return {true, INTRO_CENTER, INTRO_CENTER};
+  case 163: // Stardust Sweep
+    return {true, INTRO_GLITTER, INTRO_GLITTER};
+  case 165: // Twin Pulse Sweep
+    return {true, INTRO_TWIN_PULSE, INTRO_TWIN_PULSE};
+  case 166: // Transmission
+    return {true, INTRO_MORSE, INTRO_MORSE};
+  default:
+    return {false, INTRO_NONE, INTRO_NONE};
+  }
+}
+
+bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
+  switch (effect_id) {
+  case 161: // Horizon Sweep
+  case 162: // Curtain Sweep
+  case 163: // Stardust Sweep
+  case 165: // Twin Pulse Sweep
+  case 166: // Transmission
+    return true;
+  default:
+    return false;
+  }
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
+
+  // Find controller early
+  if (this->controller_ == nullptr) {
+    this->controller_ = CFXControl::find(this->get_light_state());
+  }
+
+  // Allocate Runner early so we can use it for metadata fallback
+  if (this->runner_ == nullptr) {
+    auto *it = (light::AddressableLight *)this->get_light_state()->get_output();
+    if (it != nullptr) {
+      this->runner_ = new CFXRunner(it);
+      this->runner_->setMode(this->effect_id_);
+      this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+    }
+  }
 
   this->run_controls_();
 
   CFXControl *c = this->controller_;
 
-  number::Number *speed_num =
+  // 0. Autotune Resolution
+  bool autotune_enabled = true; // Default to true if not found (Constraint)
+  switch_::Switch *autotune_sw =
+      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
 
+  if (this->autotune_preset_.has_value()) {
+    autotune_enabled = this->autotune_preset_.value();
+  } else if (autotune_sw != nullptr) {
+    autotune_enabled = autotune_sw->state;
+  }
+
+  this->autotune_active_ = autotune_enabled;
+
+  if (autotune_enabled) {
+    this->apply_autotune_defaults_();
+  }
+
+  // 1. Speed (YAML Preset Override Only)
+  number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && this->speed_preset_.has_value()) {
     float target = (float)this->speed_preset_.value();
@@ -36,17 +103,9 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (speed_num != nullptr) {
-    // No YAML preset: apply per-effect code default and sync slider
-    float target = (float)this->get_default_speed_(this->effect_id_);
-    if (speed_num->state != target) {
-      auto call = speed_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
   }
 
-  // 2. Intensity
+  // 2. Intensity (YAML Preset Override Only)
   number::Number *intensity_num =
       (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
   if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
@@ -56,25 +115,12 @@ void CFXAddressableLightEffect::start() {
       call.set_value(target);
       call.perform();
     }
-  } else if (intensity_num != nullptr) {
-    // No YAML preset: apply per-effect code default and sync slider
-    float target = (float)this->get_default_intensity_(this->effect_id_);
-    if (intensity_num->state != target) {
-      auto call = intensity_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
   }
 
-  // 3. Palette (Fixed: Resolve from controller)
+  // 3. Palette (YAML Preset Override Only)
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->palette_;
   if (palette_sel != nullptr && this->palette_preset_.has_value()) {
-    // NOTE: Select uses strings, but we have an index preset.
-    // Optimally we should check index, but Select component typically stores
-    // state as String. We can't easily check 'state != value' without mapping
-    // index to string. For Safety, we SKIP optimization for Dropdowns to ensure
-    // index is enforced.
     auto call = palette_sel->make_call();
     call.set_index(this->palette_preset_.value());
     call.perform();
@@ -98,18 +144,23 @@ void CFXAddressableLightEffect::start() {
   select::Select *intro_sel = (c && c->get_intro_effect())
                                   ? c->get_intro_effect()
                                   : this->intro_effect_;
-  if (intro_sel != nullptr && this->intro_preset_.has_value()) {
-    // Same as Palette: Force update to be safe with Index->String mapping
-    auto call = intro_sel->make_call();
-    call.set_index(this->intro_preset_.value());
-    call.perform();
+  if (!this->initial_preset_applied_ && intro_sel != nullptr &&
+      this->intro_preset_.has_value()) {
+    // Only apply if still at "None" factory default — preserve user choices
+    const char *cur = intro_sel->current_option();
+    if (cur == nullptr || strcmp(cur, "None") == 0) {
+      auto call = intro_sel->make_call();
+      call.set_index(this->intro_preset_.value());
+      call.perform();
+    }
   }
 
   // 6. Intro Duration
   number::Number *intro_dur_num = (c && c->get_intro_duration())
                                       ? c->get_intro_duration()
                                       : this->intro_duration_;
-  if (intro_dur_num != nullptr && this->intro_duration_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && intro_dur_num != nullptr &&
+      this->intro_duration_preset_.has_value()) {
     float target = this->intro_duration_preset_.value();
     if (intro_dur_num->state != target) {
       auto call = intro_dur_num->make_call();
@@ -122,7 +173,8 @@ void CFXAddressableLightEffect::start() {
   switch_::Switch *intro_pal_sw = (c && c->get_intro_use_palette())
                                       ? c->get_intro_use_palette()
                                       : this->intro_use_palette_;
-  if (intro_pal_sw != nullptr && this->intro_use_palette_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && intro_pal_sw != nullptr &&
+      this->intro_use_palette_preset_.has_value()) {
     bool target = this->intro_use_palette_preset_.value();
     if (intro_pal_sw->state != target) {
       if (target) {
@@ -133,9 +185,25 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  // 7.5. Force White
+  switch_::Switch *force_white_sw =
+      (c && c->get_force_white()) ? c->get_force_white() : this->force_white_;
+  if (!this->initial_preset_applied_ && force_white_sw != nullptr &&
+      this->force_white_preset_.has_value()) {
+    bool target = this->force_white_preset_.value();
+    if (force_white_sw->state != target) {
+      if (target) {
+        force_white_sw->turn_on();
+      } else {
+        force_white_sw->turn_off();
+      }
+    }
+  }
+
   // 8. Timer
   number::Number *timer_num = (c) ? c->get_timer() : nullptr;
-  if (timer_num != nullptr && this->timer_preset_.has_value()) {
+  if (!this->initial_preset_applied_ && timer_num != nullptr &&
+      this->timer_preset_.has_value()) {
     float target = (float)this->timer_preset_.value();
     if (timer_num->state != target) {
       auto call = timer_num->make_call();
@@ -144,12 +212,67 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // === END PRESETS ===
+  // 9. Outro Effect
+  select::Select *outro_sel = (c && c->get_outro_effect())
+                                  ? c->get_outro_effect()
+                                  : this->outro_effect_;
+  if (!this->initial_preset_applied_ && outro_sel != nullptr &&
+      this->outro_preset_.has_value()) {
+    // Only apply if still at "None" factory default — preserve user choices
+    const char *cur = outro_sel->current_option();
+    if (cur == nullptr || strcmp(cur, "None") == 0) {
+      auto call = outro_sel->make_call();
+      call.set_index(this->outro_preset_.value());
+      call.perform();
+    }
+  }
+
+  // 10. Outro Duration
+  number::Number *outro_dur_num = (c && c->get_outro_duration())
+                                      ? c->get_outro_duration()
+                                      : this->outro_duration_;
+  if (!this->initial_preset_applied_ && outro_dur_num != nullptr &&
+      this->outro_duration_preset_.has_value()) {
+    float target = this->outro_duration_preset_.value();
+    if (outro_dur_num->state != target) {
+      auto call = outro_dur_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+  }
+
+  this->initial_preset_applied_ = true;
+
+  // Visualizer: Notify metadata
+  auto *out = static_cast<cfx_light::CFXLightOutput *>(
+      this->get_light_state()->get_output());
+  if (out != nullptr) {
+    std::string pal_name = "";
+    if (palette_sel && palette_sel->has_state()) {
+      const char *opt = palette_sel->current_option();
+      if (opt != nullptr)
+        pal_name = opt;
+    }
+
+    // Resolve "Default" to actual palette name if possible
+    if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
+      pal_name = this->get_palette_name_(this->runner_->getPalette());
+    }
+
+    out->send_visualizer_metadata(this->get_name(), pal_name);
+    this->last_sent_palette_ = pal_name;
+  }
 
   // State Machine Init: Check if we are turning ON from OFF
   auto *state = this->get_light_state();
   if (state != nullptr) {
     bool is_fresh_turn_on = !state->current_values.is_on();
+
+    // Bypass intro for effects that have their own embedded startup animations
+    if (this->effect_id_ == 158 || this->effect_id_ == 159) {
+      is_fresh_turn_on = false;
+    }
+
     this->intro_active_ = is_fresh_turn_on;
 
     if (this->intro_active_ && this->controller_ == nullptr) {
@@ -178,25 +301,48 @@ void CFXAddressableLightEffect::start() {
     if (intro_sel == nullptr)
       intro_sel = this->intro_effect_;
 
-    if (intro_sel != nullptr && intro_sel->has_state()) {
-      const char *opt = intro_sel->current_option();
-      std::string s = opt ? opt : "";
-      if (s == "Wipe")
-        this->active_intro_mode_ = INTRO_WIPE;
-      else if (s == "Fade")
-        this->active_intro_mode_ = INTRO_FADE;
-      else if (s == "Center")
-        this->active_intro_mode_ = INTRO_CENTER;
-      else if (s == "Glitter")
-        this->active_intro_mode_ = INTRO_GLITTER;
-      else
-        this->active_intro_mode_ = INTRO_NONE;
+    // 1. Highest Priority: Embedded Monochromatic Presets
+    MonochromaticPreset preset =
+        this->get_monochromatic_preset_(this->effect_id_);
+    if (preset.is_active) {
+      this->intro_active_ = true;
+      this->active_intro_mode_ = preset.intro_mode;
+    } else {
+      // 2. Fallback to UI Selectors / YAML Presets
+      if (intro_sel != nullptr && intro_sel->has_state()) {
+        const char *opt = intro_sel->current_option();
+        std::string s = opt ? opt : "";
+        if (s == "Wipe")
+          this->active_intro_mode_ = INTRO_WIPE;
+        else if (s == "Fade")
+          this->active_intro_mode_ = INTRO_FADE;
+        else if (s == "Center")
+          this->active_intro_mode_ = INTRO_CENTER;
+        else if (s == "Glitter")
+          this->active_intro_mode_ = INTRO_GLITTER;
+        else if (s == "Twin Pulse")
+          this->active_intro_mode_ = INTRO_TWIN_PULSE;
+        else if (s == "Morse Code")
+          this->active_intro_mode_ = INTRO_MODE_MORSE;
+      }
+    }
+
+    // Cache Speed for Intro (since Morse needs it for unit_ms)
+    this->active_intro_speed_ = 128; // fallback
+    number::Number *speed_num =
+        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+    if (speed_num != nullptr && speed_num->has_state()) {
+      this->active_intro_speed_ = (uint8_t)speed_num->state;
+    } else if (this->speed_preset_.has_value()) {
+      this->active_intro_speed_ = this->speed_preset_.value();
+    } else {
+      this->active_intro_speed_ = this->get_default_speed_(this->effect_id_);
     }
 
     // Cache for this run
     this->intro_effect_ = intro_sel;
 
-    if (this->active_intro_mode_ == INTRO_NONE) {
+    if (this->active_intro_mode_ == INTRO_NONE && !preset.is_active) {
       this->intro_active_ = false;
 
       // Use the light's default_transition_length for a smooth fade-in
@@ -212,6 +358,11 @@ void CFXAddressableLightEffect::start() {
     } else {
     }
   }
+
+  // Initialize Outro state tracking
+  if (state != nullptr) {
+    // last_target_on_ removed, state transitions handled natively
+  }
 }
 
 void CFXAddressableLightEffect::stop() {
@@ -221,6 +372,150 @@ void CFXAddressableLightEffect::stop() {
   intro_snapshot_.clear();
   intro_snapshot_.shrink_to_fit();
 
+  CFXControl *c = this->controller_;
+  auto *state = this->get_light_state();
+
+  if (state != nullptr && this->runner_ != nullptr) {
+    auto *out =
+        static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+    if (out != nullptr) {
+
+      // Resolve Outro Mode synchronously before dropping controller mapping
+      this->active_outro_mode_ = INTRO_NONE;
+      select::Select *out_eff = this->outro_effect_;
+      if (out_eff == nullptr && c != nullptr)
+        out_eff = c->get_outro_effect();
+
+      // 1. Highest Priority: Embedded Monochromatic Presets
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+
+      if (preset.is_active) {
+        this->active_outro_mode_ = preset.outro_mode;
+      } else {
+        // 2. Fallback to UI Selectors / YAML Presets
+        if (out_eff != nullptr && out_eff->has_state()) {
+          std::string opt = out_eff->current_option();
+          if (opt == "Wipe")
+            this->active_outro_mode_ = INTRO_WIPE;
+          else if (opt == "Center")
+            this->active_outro_mode_ = INTRO_CENTER;
+          else if (opt == "Glitter")
+            this->active_outro_mode_ = INTRO_GLITTER;
+          else if (opt == "Fade")
+            this->active_outro_mode_ = INTRO_FADE;
+          else if (opt == "Twin Pulse")
+            this->active_outro_mode_ = INTRO_TWIN_PULSE;
+          else if (opt == "Morse Code")
+            this->active_outro_mode_ = INTRO_MODE_MORSE;
+        } else if (this->outro_preset_.has_value()) {
+          this->active_outro_mode_ = *this->outro_preset_;
+        } else {
+          this->active_outro_mode_ = this->active_intro_mode_;
+        }
+      }
+
+      // 10. Outro Duration Priority Chain
+      uint32_t duration_ms = 1000; // Hard Default
+
+      number::Number *dur_num = this->outro_duration_;
+      if (dur_num == nullptr && c != nullptr)
+        dur_num = c->get_outro_duration();
+
+      if (this->active_outro_mode_ == INTRO_MODE_MORSE) {
+        // A. Highest: Morse Code Timing (Message length based)
+        uint8_t current_speed = 128;
+        number::Number *intensity_num =
+            (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+        if (intensity_num != nullptr && intensity_num->has_state()) {
+          current_speed = (uint8_t)intensity_num->state;
+        }
+        uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
+        duration_ms = 35 * unit_ms;
+      } else if (dur_num != nullptr && dur_num->has_state()) {
+        // B. High: UI Slider
+        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+      } else if (this->outro_duration_preset_.has_value()) {
+        // C. Medium: YAML Preset
+        duration_ms =
+            (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+      } else if (preset.is_active) {
+        // D. Fallback: Monochromatic Mode Speed Slider
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && c != nullptr)
+          speed_num = c->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        }
+      } else {
+        // E. Lowest: Light Default Transition
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr &&
+            current_state->get_default_transition_length() > 0) {
+          duration_ms = current_state->get_default_transition_length();
+        }
+      }
+      this->active_outro_duration_ms_ = duration_ms;
+
+      // Cache Intensity for Outro (since controller is detached during Outro)
+      this->active_outro_intensity_ = 128; // fallback
+      number::Number *intensity_num = this->intensity_;
+      if (intensity_num == nullptr && c != nullptr)
+        intensity_num = c->get_intensity();
+
+      if (intensity_num != nullptr && intensity_num->has_state()) {
+        this->active_outro_intensity_ = (uint8_t)intensity_num->state;
+      } else {
+        this->active_outro_intensity_ =
+            this->get_default_intensity_(this->effect_id_);
+      }
+
+      // Capture the current runner and hand it off
+      CFXRunner *captured_runner = this->runner_;
+      this->runner_ = nullptr; // Null here so start() creates a fresh one later
+      if (c) {
+        c->unregister_runner(captured_runner);
+      }
+
+      // Safely detach from effect runner system
+      this->controller_ = nullptr;
+      this->intro_active_ = false;
+      this->outro_active_ = false;
+
+      // Register the callback synchronously to prevent ESPHome from rendering
+      // a rogue frame of a solid color transition during the gap.
+      // We will evaluate `is_on()` inside the first frame of the callback
+      // since LightCall will have finished updating by the next `loop()`.
+      this->outro_start_time_ = 0; // Signify uninitialized start time
+
+      out->set_outro_callback([this, out, captured_runner]() -> bool {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr && current_state->remote_values.is_on()) {
+          // Effect was completely changed or light remained ON.
+          // Abort the outro and delete the captured runner cleanly.
+          delete captured_runner;
+          return true;
+        }
+
+        // Initialize outro start time on the very first allowed frame
+        if (this->outro_start_time_ == 0) {
+          this->outro_start_time_ = millis();
+        }
+
+        bool done = this->run_outro_frame(*out, captured_runner);
+        if (done) {
+          delete captured_runner;
+        }
+        return done;
+      });
+
+      return;
+    }
+  }
+
+  // Normal Stop / Cleanup (Failsafe)
   if (this->runner_ != nullptr) {
     if (this->controller_) {
       this->controller_->unregister_runner(this->runner_);
@@ -229,6 +524,8 @@ void CFXAddressableLightEffect::stop() {
     this->runner_ = nullptr;
   }
   this->controller_ = nullptr;
+  this->intro_active_ = false;
+  this->outro_active_ = false;
 }
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
@@ -242,11 +539,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   this->last_run_ = now;
 
-  // --- Start Runner --- on first apply
+  // --- Ensure Runner ---
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
-    // Sync diagnostics target with configured update_interval
     this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
   }
 
@@ -262,40 +558,75 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Update controls via Controller or Local entities
   this->run_controls_();
 
-  // Pass current light color to segment for solid color mode (palette 255/0)
-  uint32_t color = (uint32_t(current_color.red) << 16) |
-                   (uint32_t(current_color.green) << 8) |
-                   uint32_t(current_color.blue);
+  // Retrieve Force White Switch State
+  switch_::Switch *force_white_sw =
+      (this->controller_ && this->controller_->get_force_white())
+          ? this->controller_->get_force_white()
+          : this->force_white_;
+
+  bool force_white_active = force_white_sw != nullptr && force_white_sw->state;
+  bool eligible_monochrome =
+      (this->get_default_palette_id_(this->effect_id_) == 255);
+
+  uint32_t color;
+  Color adjusted_color = current_color;
+
+  if (force_white_active && eligible_monochrome) {
+    // Intelligent monochrome routing: steal the max brightness intent from RGB
+    // and map purely to W hardware
+    uint8_t max_rgb = std::max(std::max(current_color.red, current_color.green),
+                               current_color.blue);
+    uint8_t target_w = std::max(current_color.white, max_rgb);
+    color = (uint32_t(target_w) << 24); // R, G, B are 0
+    adjusted_color = Color(0, 0, 0, target_w);
+  } else {
+    // Normal Mode: Pass current light color to segment natively
+    color = (uint32_t(current_color.white) << 24) |
+            (uint32_t(current_color.red) << 16) |
+            (uint32_t(current_color.green) << 8) | uint32_t(current_color.blue);
+  }
   this->runner_->setColor(color);
 
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting
   float current_gamma = this->get_light_state()->get_gamma_correct();
-  // setGamma checks for change internally (float comparison), so simple call is
-  // safe-ish but to avoid function call overhead we can check locally if we
-  // wanted. We'll trust setGamma or just check here. setGamma does a check but
-  // re-calcs LUT. Let's rely on setGamma's internal check (which I implemented:
-  // if (g < 0.1) ... _gamma = g ...). Wait, I didn't verify if I added a
-  // 'change check' efficiently in setGamma. Let's add a check here to be safe
-  // and efficient.
   if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
     this->runner_->setGamma(current_gamma);
   }
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
-    this->run_intro(it, current_color);
+    this->run_intro(it, adjusted_color);
 
-    // Check for Intro Completion
-    uint32_t duration_ms = 3000; // Default 3s
-
-    // Resolve duration from local component OR linked controller
+    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
+    uint32_t duration_ms = 1000; // Final Default: 1.0s
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
       dur_num = this->controller_->get_intro_duration();
 
     if (dur_num != nullptr && dur_num->has_state()) {
+      // High Priority: UI Slider
       duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      // Medium Priority: YAML Preset
+      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    } else {
+      // Monochromatic Preset Fallback: Speed Slider
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else {
+          duration_ms = 1000; // Standard 1s default
+        }
+      }
     }
 
     if (millis() - this->intro_start_time_ > duration_ms) {
@@ -306,6 +637,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                          this->transition_duration_->has_state())
                             ? this->transition_duration_->state
                             : 1.5f;
+
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        trans_dur = 0.0f; // Instant finish for Monochromatic Presets
+      }
 
       if (trans_dur > 0.0f) {
         // Snapshot Intro End State
@@ -323,7 +660,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Ensure Main Runner is reset/started
       this->runner_->start();
     }
-
   } else {
     // Main CFX effect Running
     this->runner_->service();
@@ -478,119 +814,138 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
+  if (this->is_monochromatic_(effect_id)) {
+    return 255; // Monochromatic series ALWAYS defaults to Solid
+  }
+
   switch (effect_id) {
-  // Solid Defaults (255)
-  case 0:
-    return 255; // Static
-  case 1:
-    return 255; // Blink
-  case 2:
-    return 255; // Breath
-  case 3:
-    return 255; // Wipe
-  case 4:
-    return 255; // Wipe Random
-  case 6:
-    return 255; // Wipe Sweep (ID=6)
-  case 91:
-    return 255; // Bouncing Balls
-  case 23:
-    return 255; // Strobe -> Solid
-  case 24:
-    return 255; // Strobe Rainbow -> Solid
-  case 25:
-    return 255; // Multi Strobe -> Solid
-  case 26:
-    return 255; // Blink Rainbow -> Solid
-  case 20:
-  case 21:      // Sparkle / Flash Sparkle
-  case 22:      // Hyper Sparkle
+  case 0:       // Static
+  case 1:       // Blink
+  case 2:       // Breath
+  case 3:       // Wipe
+  case 4:       // Wipe Random
+  case 6:       // Sweep
+  case 15:      // Running Lights
+  case 16:      // Saw
+  case 18:      // Dissolve
+  case 20:      // Sparkle
+  case 21:      // Sparkle Dark
+  case 22:      // Sparkle+
+  case 23:      // Strobe
+  case 24:      // Strobe Rainbow
+  case 25:      // Multi Strobe
+  case 26:      // Blink Rainbow
+  case 28:      // Chase
+  case 40:      // Scanner
+  case 54:      // Chase Tri
+  case 60:      // Scanner Dual
+  case 68:      // BPM
+  case 76:      // Meteor
+  case 91:      // Bouncing Balls
   case 95:      // Popcorn
   case 96:      // Drip
-  case 100:     // Heartbeat
-  case 154:     // HeartBeat Center
-    return 255; // Solid Palette by default
-  case 157:     // Follow Us
-    return 255; // Solid Palette
-
-  // Rainbow Defaults (4)
-  case 7:
-    return 4; // Dynamic
-  case 8:
-    return 4; // Rainbow (ID=8)
-  case 9:
-    return 4; // Rainbow Cycle (Color Loop) (ID=9)
-  case 64:
-    return 4; // Juggle
-  case 74:
-    return 4; // ColorTwinkle
-  case 79:
-    return 4; // Ripple
-  case 105:
-    return 4; // Phased
-  case 107:
-    return 4; // Noise Pal
-  case 110:
-    return 4; // Flow
-
-  // Party Defaults (8)
-  case 97:
-    return 8; // Plasma (ID=97)
-  case 63:
-    return 8; // Pride 2015
-
-  // Specific Defaults
-  case 18:
-    return 255; // Dissolve -> Solid (User override)
-  case 38:
-    return 1; // Aurora -> Aurora palette
-  case 53:
-    return 5; // Fire Dual -> Fire palette (same as Fire 2012)
-  case 66:
-    return 5; // Fire 2012 -> Fire
-  case 76:
-    return 255; // Meteor -> Solid (WLED default)
-  case 40:
-    return 255; // Scanner -> Solid
-  case 60:
-    return 255; // Scanner Dual -> Solid
-  case 101:
-    return 11; // Pacifica -> Pacifica
-  case 104:
-    return 12; // Sunrise -> HeatColors
-  case 151:
-    return 11; // Dropping Time -> Ocean
-  case 155:
-    return 4; // Kaleidos -> Rainbow
-  case 160:
-    return 11; // Fluid Rain -> Ocean
-  case 156:
-    return 255; // Follow Me -> Solid (Use Primary Color)
-
-  // New effects
-  case 28:
-    return 255; // Chase → Solid
-  case 54:
-    return 255; // Tricolor Chase → Solid
-  case 68:
-    return 255; // BPM → Solid
-  case 15:
-    return 255; // Running Lights → Solid
-  case 16:
-    return 255; // Saw -> Solid
-  case 52:
-    return 13; // Running Dual -> Sakura
-  case 87:
-    return 4; // Glitter -> Rainbow
-  case 90:
-    return 4;   // Fireworks -> Rainbow
   case 98:      // Percent
-  case 152:     // Percent Center
-    return 255; // Solid
+  case 100:     // Heartbeat
+  case 152:     // Center Gauge
+  case 154:     // Reactor Beat
+  case 156:     // Follow Me
+  case 157:     // Follow Us
+  case 164:     // Collider
+    return 255; // Defaults to Solid
 
-  // Default Aurora (1) or specific handling
+  case 7:     // Dynamic
+  case 8:     // Rainbow
+  case 9:     // Colorloop (WLED Cycle)
+  case 64:    // Juggle
+  case 74:    // Color Twinkle
+  case 79:    // Ripple
+  case 87:    // Glitter
+  case 90:    // Fireworks
+  case 105:   // Phased
+  case 107:   // Noise Pal
+  case 110:   // Flow
+  case 155:   // Kaleidos
+    return 4; // Defaults to Rainbow
+
+  case 63:    // Colorloop (ChimeraFX internal mapping)
+  case 97:    // Plasma
+    return 8; // Defaults to Party
+
+  case 66:    // Fire
+  case 53:    // Twin Flames
+    return 5; // Defaults to Fire Palette
+
+  case 101:    // Ocean (Pacifica)
+  case 151:    // Dropping Time
+  case 160:    // Fluid Rain
+    return 11; // Defaults to Ocean
+
+  case 38:    // Aurora
+    return 1; // Defaults to Aurora Palette
+
+  case 104:    // Sunrise
+    return 12; // Defaults to HeatColors
+
+  case 52:     // Running Dual
+    return 13; // Defaults to Sakura
+
   default:
-    return 1; // Aurora is the general default
+    return 1; // General fallback to Aurora
+  }
+}
+
+std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
+  switch (pal_id) {
+  case 1:
+    return "Aurora";
+  case 2:
+    return "Forest";
+  case 3:
+    return "Halloween";
+  case 4:
+    return "Rainbow";
+  case 5:
+    return "Fire";
+  case 6:
+    return "Sunset";
+  case 7:
+    return "Ice";
+  case 8:
+    return "Party";
+  case 9:
+    return "Lava";
+  case 10:
+    return "Pastel";
+  case 11:
+    return "Ocean";
+  case 12:
+    return "HeatColors";
+  case 13:
+    return "Sakura";
+  case 14:
+    return "Rivendell";
+  case 15:
+    return "Cyberpunk";
+  case 16:
+    return "OrangeTeal";
+  case 17:
+    return "Christmas";
+  case 18:
+    return "RedBlue";
+  case 19:
+    return "Matrix";
+  case 20:
+    return "SunnyGold";
+  case 22:
+    return "Fairy";
+  case 23:
+    return "Twilight";
+  case 254:
+    return "Smart Random";
+  case 255:
+    return "Solid";
+  default:
+    return "Default";
   }
 }
 
@@ -599,20 +954,34 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   switch (effect_id) {
   case 38:
     return 24; // Aurora
+  case 28:
+    return 110; // Chase
+  case 54:
+    return 60; // Chase Multi
   case 153:
-    return 64; // Fire Dual (same as Fire 2012)
+    return 64; // Twin Flames (same as Fire)
   case 64:
     return 64; // Juggle
   case 66:
-    return 64; // Fire 2012
+    return 64; // Fire
   case 68:
     return 64; // BPM
   case 104:
     return 60; // Sunrise
+  case 151:
+    return 15; // Dropping Time
+  case 155:
+    return 60; // Kaleidos
   case 156:
     return 140; // Follow Me (Default Speed)
   case 157:
     return 128; // Follow Us (Default Speed 128)
+  case 161:
+  case 162:
+  case 163:
+    return 1; // Monochromatic series (fastest speed)
+  case 164:
+    return 100; // Collider (Default Speed)
   default:
     return 128; // WLED default
   }
@@ -621,14 +990,26 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
+  case 28:
+    return 40; // Chase
+  case 54:
+    return 70; // Chase Multi
   case 153:
-    return 160; // Fire Dual (same as Fire 2012)
+    return 160; // Twin Flames(same as Fire)
   case 66:
-    return 160; // Fire 2012
+    return 160; // Fire
+  case 155:
+    return 150; // Kaleidos
   case 156:
     return 40; // Follow Me (Default Intensity)
   case 157:
     return 128; // Follow Us (Default Intensity 128)
+  case 161:
+  case 162:
+  case 163:
+    return 1; // Monochromatic series (No blur)
+  case 164:
+    return 170; // Collider (Default Intensity)
   default:
     return 128; // WLED default
   }
@@ -649,6 +1030,91 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   CFXControl *c = this->controller_;
+
+  select::Select *palette_sel =
+      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+
+  // --- Autotune Auto-Disable State Machine ---
+  bool current_autotune_state =
+      true; // Constraint: No switch = always respect defaults
+  switch_::Switch *autotune_sw =
+      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
+  if (autotune_sw != nullptr) {
+    current_autotune_state = autotune_sw->state;
+  }
+
+  // Handle manual OFF -> ON transition
+  if (current_autotune_state && !this->autotune_active_) {
+    this->apply_autotune_defaults_();
+    this->autotune_active_ = true;
+  }
+  // Handle manual ON -> OFF transition
+  else if (!current_autotune_state && this->autotune_active_) {
+    this->autotune_active_ = false;
+  }
+  // Handle expected ON state, but detecting manual UI overrides
+  else if (current_autotune_state && this->autotune_active_ &&
+           autotune_sw != nullptr) {
+    bool manual_override = false;
+
+    number::Number *speed_num =
+        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+    if (speed_num && speed_num->state != this->autotune_expected_speed_)
+      manual_override = true;
+
+    number::Number *intensity_num =
+        (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+    if (intensity_num &&
+        intensity_num->state != this->autotune_expected_intensity_)
+      manual_override = true;
+
+    if (palette_sel && palette_sel->has_state() &&
+        palette_sel->current_option() != this->autotune_expected_palette_)
+      manual_override = true;
+
+    if (manual_override) {
+      autotune_sw->turn_off();
+      this->autotune_active_ = false;
+    }
+  }
+
+  // --- Visualizer: Dynamic Palette Sync ---
+  if (palette_sel && palette_sel->has_state()) {
+    const char *opt = palette_sel->current_option();
+    std::string current_pal = opt ? opt : "";
+    if (!current_pal.empty() && current_pal != this->last_sent_palette_) {
+      auto *out = static_cast<cfx_light::CFXLightOutput *>(
+          this->get_light_state()->get_output());
+      if (out != nullptr) {
+        out->send_visualizer_metadata(this->get_name(), current_pal);
+      }
+      this->last_sent_palette_ = current_pal;
+    }
+  }
+
+  // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
+  uint32_t now = millis();
+  if (now - this->last_metadata_refresh_ > 5000) {
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(
+        this->get_light_state()->get_output());
+    if (out != nullptr) {
+      std::string pal_name = "";
+      if (palette_sel && palette_sel->has_state()) {
+        const char *opt = palette_sel->current_option();
+        if (opt != nullptr)
+          pal_name = opt;
+      }
+
+      // Deep Palette Resolution: If UI says "Default", ask the runner what's
+      // actually rendering
+      if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
+        pal_name = this->get_palette_name_(this->runner_->getPalette());
+      }
+
+      out->send_visualizer_metadata(this->get_name(), pal_name);
+    }
+    this->last_metadata_refresh_ = now;
+  }
 
   if (this->runner_) {
     // Helper lambda for Palette Index Lookup
@@ -715,7 +1181,6 @@ void CFXAddressableLightEffect::run_controls_() {
         // runner_->getMode() (Current/Old Effect) This ensures that when
         // switching effects, we get the default palette of the NEW effect.
         return this->get_default_palette_id_(this->effect_id_);
-        return 1; // Fallback to Aurora if no runner
       }
       return 0; // Unknown palette name
     };
@@ -741,16 +1206,21 @@ void CFXAddressableLightEffect::run_controls_() {
     }
 
     // 4. Palette
-    if (c && c->get_palette()) {
-      uint8_t pal_idx = get_pal_idx(c->get_palette());
-      this->runner_->setPalette(pal_idx);
-    } else if (this->palette_) {
-      uint8_t pal_idx = get_pal_idx(this->palette_);
-      this->runner_->setPalette(pal_idx);
+    // Monochromatic effects MUST use Solid (255), ignoring user UI selection
+    if (this->is_monochromatic_(this->effect_id_)) {
+      this->runner_->setPalette(255);
     } else {
-      // FALLBACK: No control component - use per-effect default
-      uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
-      this->runner_->setPalette(default_pal);
+      if (c && c->get_palette()) {
+        uint8_t pal_idx = get_pal_idx(c->get_palette());
+        this->runner_->setPalette(pal_idx);
+      } else if (this->palette_) {
+        uint8_t pal_idx = get_pal_idx(this->palette_);
+        this->runner_->setPalette(pal_idx);
+      } else {
+        // FALLBACK: No control component - use per-effect default
+        uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
+        this->runner_->setPalette(default_pal);
+      }
     }
 
     // 5. Mirror
@@ -781,14 +1251,40 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     return;
   }
 
-  uint32_t duration = 3000;
+  uint32_t duration = 1000; // Initial Default: 1.0s
   number::Number *dur_num = this->intro_duration_;
   if (dur_num == nullptr && this->controller_ != nullptr)
     dur_num = this->controller_->get_intro_duration();
 
+  MonochromaticPreset preset =
+      this->get_monochromatic_preset_(this->effect_id_);
+
   if (dur_num != nullptr && dur_num->has_state()) {
+    // High Priority: UI Slider
     duration = (uint32_t)(dur_num->state * 1000.0f);
+  } else if (this->intro_duration_preset_.has_value()) {
+    // Medium Priority: YAML Preset
+    duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+  } else if (preset.is_active) {
+    // Monochromatic Preset Fallback: Speed Slider
+    number::Number *speed_num = this->speed_;
+    if (speed_num == nullptr && this->controller_ != nullptr)
+      speed_num = this->controller_->get_speed();
+
+    if (speed_num != nullptr && speed_num->has_state()) {
+      // Map Speed (0-255) to Duration (500ms up to 10000ms)
+      float speed_val = speed_num->state;
+      duration = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+    }
   }
+
+  // Morse Code Timing Override
+  if (this->active_intro_mode_ == INTRO_MODE_MORSE) {
+    uint32_t speed_val = this->active_intro_speed_;
+    uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
+    duration = 19 * unit_ms;
+  }
+
   if (duration == 0)
     duration = 1; // Prevent div by zero
 
@@ -811,6 +1307,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
   if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
     c = Color::WHITE;
+  }
+
+  // Apply Force White logic to the Target Color
+  switch_::Switch *force_white_sw =
+      (this->controller_ && this->controller_->get_force_white())
+          ? this->controller_->get_force_white()
+          : this->force_white_;
+
+  if (force_white_sw != nullptr && force_white_sw->state &&
+      (this->get_default_palette_id_(this->effect_id_) == 255)) {
+    uint8_t max_rgb = std::max(std::max(c.r, c.g), c.b);
+    uint8_t target_w = std::max(c.w, max_rgb);
+    c = Color(0, 0, 0, target_w);
   }
 
   // Check for Palette usage
@@ -847,6 +1356,17 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
   }
 
+  // Monochromatic Presets always force palette matching Active Effect Palette
+  if (preset.is_active && this->runner_ != nullptr) {
+    pal = this->runner_->_segment.palette;
+    if (pal == 0)
+      pal = this->get_default_palette_id_(this->effect_id_);
+    if (pal == 255)
+      use_palette = false;
+    else
+      use_palette = true;
+  }
+
   if (use_palette && this->runner_ != nullptr) {
     // Force update the runner's palette immediately
     this->runner_->_segment.palette = pal;
@@ -873,38 +1393,68 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   switch (mode) {
   case INTRO_MODE_WIPE: {
     int logical_len = symmetry ? (num_leds / 2) : num_leds;
-    int lead = (int)(progress * logical_len);
 
-    // Safety: ensure lead covers full range at 100%
-    if (progress >= 1.0f)
-      lead = logical_len + 1;
+    // Intensity defines blur radius (up to 50% of the strip)
+    float blur_percent = 0.0f;
+    number::Number *intensity_num = this->intensity_;
+    if (intensity_num == nullptr && this->controller_ != nullptr) {
+      intensity_num = this->controller_->get_intensity();
+    }
+    if (intensity_num != nullptr && intensity_num->has_state()) {
+      blur_percent = (intensity_num->state / 255.0f) * 0.5f;
+    }
+
+    int blur_radius = (int)(logical_len * blur_percent);
+    float exact_lead = progress * (logical_len + blur_radius);
+    int lead = (int)exact_lead;
 
     for (int i = 0; i < logical_len; i++) {
-      bool active = false;
+
+      float alpha =
+          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+
       if (!reverse) {
-        // Standard: Fill from start (0) to lead
-        if (i <= lead)
-          active = true;
+        if (i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       } else {
-        // Reverse: Fill from end (logical_len-1) back to 0
-        // For Wipe: End -> Start
-        // For Center: Center -> Edges
-        if (i >= (logical_len - 1 - lead))
-          active = true;
+        int rev_i = logical_len - 1 - i;
+        if (rev_i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (rev_i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - rev_i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
       }
 
       Color pixel_c = Color::BLACK;
-      if (active) {
+      if (alpha > 0.0f) {
         if (use_palette) {
-          // Map i to 0-255 for palette (Gradient Wipe)
           uint8_t map_idx =
               (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
-          // Get color from runner
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
           pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
         } else {
-          pixel_c = c;
+          pixel_c = c; // Solid Color
+        }
+
+        // Apply Alpha Blending to Background (Black)
+        if (alpha < 1.0f) {
+          pixel_c =
+              Color((uint8_t)(pixel_c.r * alpha), (uint8_t)(pixel_c.g * alpha),
+                    (uint8_t)(pixel_c.b * alpha), (uint8_t)(pixel_c.w * alpha));
         }
       }
 
@@ -922,7 +1472,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint8_t map_idx = 128; // Center of palette gradient
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+          it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
         } else {
           it[mid] = c;
         }
@@ -943,7 +1494,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
         uint32_t cp = this->runner_->_segment.color_from_palette(
             map_idx, false, true, 255, 255);
-        base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+        base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                       (cp >> 24) & 0xFF);
       }
 
       // Explicit Scaling avoiding operator ambiguity
@@ -973,12 +1525,160 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
               (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                          (cp >> 24) & 0xFF);
         } else {
           pixel_c = c;
         }
       }
       it[i] = pixel_c;
+    }
+    break;
+  }
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Intro
+    // 1. First cursor (symmetric fade up/down)
+    // 2. Wide Gap
+    // 3. Second cursor (symmetric fade up/down)
+    // 4. Long Gap
+    // 5. Main Wipe (soft leading edge)
+    // Everything moves strictly proportionally to `progress`.
+
+    // Define proportional sizes based on segment length
+    float length = (float)num_leds;
+    float c_size = length * 0.08f; // Each cursor is 8% of strip
+    if (c_size < 3.0f)
+      c_size = 3.0f;
+    float short_gap = length * 0.12f; // Gap between cursors (increased to 12%)
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.10f; // Gap before wipe (10%)
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f; // Leading edge fade of wipe
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
+
+    // Calculate layout offsets from the leading edge (cursor 1 front)
+    // These are negative offsets behind the traveling head
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
+
+    // Total distance the front must travel to pull the solid wipe
+    // entirely across the strip.
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
+
+    for (int i = 0; i < num_leds; i++) {
+      int idx = reverse ? (num_leds - 1 - i) : i;
+      float fi = (float)i;
+
+      // Calculate this pixel's relative position behind the traveling head
+      // positive value means it is behind the head_pos
+      float relative_pos = head_pos - fi;
+      float alpha = 0.0f;
+
+      if (relative_pos < 0.0f) {
+        // Ahead of the entire formation
+        alpha = 0.0f;
+      }
+      // --- CURSOR 1 ---
+      else if (relative_pos <= -c1_back) {
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        }
+      }
+      // --- SHORT GAP ---
+      else if (relative_pos < -c2_front) {
+        alpha = 0.0f;
+      }
+      // --- CURSOR 2 ---
+      else if (relative_pos <= -c2_back) {
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        }
+      }
+      // --- LONG GAP ---
+      else if (relative_pos < -w_front) {
+        alpha = 0.0f;
+      }
+      // --- WIPE ---
+      else {
+        float internal_pos = relative_pos + w_front; // 0 at wipe front edge
+        if (internal_pos < wipe_fade) {
+          alpha = internal_pos / wipe_fade; // Soft leading edge
+        } else {
+          alpha = 1.0f; // Solid block
+        }
+      }
+
+      // Clamp alpha to safe rendering limits
+      if (alpha < 0.0f)
+        alpha = 0.0f;
+      if (alpha > 1.0f)
+        alpha = 1.0f;
+
+      // Render Pixel
+      if (alpha > 0.0f) {
+        Color base_c = c;
+        if (use_palette && this->runner_) {
+          uint8_t map_idx =
+              (uint8_t)((idx * 255) / (num_leds > 0 ? num_leds : 1));
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                         (cp >> 24) & 0xFF);
+        }
+
+        it[idx] =
+            Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
+                  (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
+      } else {
+        it[idx] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_MORSE: {
+    uint32_t speed = this->active_intro_speed_;
+    uint32_t unit_ms = 80 + ((255 - speed) * 100 / 255);
+    uint32_t elapsed_m = millis() - this->intro_start_time_;
+    uint32_t current_bit = elapsed_m / unit_ms;
+
+    uint64_t mask = 0b1110111011100011101ULL;
+    uint8_t total_bits = 19;
+
+    bool is_on = false;
+    if (current_bit >= total_bits) {
+      is_on = true; // Hold ON after sequence
+    } else {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    }
+
+    for (int i = 0; i < num_leds; i++) {
+      if (is_on) {
+        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
+        if (this->runner_) {
+          uint32_t cp = this->runner_->_segment.color_from_palette(
+              map_idx, false, true, 255, 255);
+          it[i] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                        (cp >> 24) & 0xFF);
+        } else {
+          it[i] = target_color;
+        }
+      } else {
+        it[i] = Color::BLACK;
+      }
     }
     break;
   }
@@ -990,5 +1690,335 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 }
+
+bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
+                                                CFXRunner *runner) {
+  if (runner == nullptr)
+    return true;
+
+  auto *state = this->get_light_state();
+  if (state != nullptr && state->remote_values.is_on()) {
+    // Light turned back ON during Outro!
+    // Return true immediately so the callback is released and
+    // the captured runner is safely destroyed.
+    return true;
+  }
+
+  uint32_t duration_ms = this->active_outro_duration_ms_;
+
+  uint32_t elapsed = millis() - this->outro_start_time_;
+  float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
+  if (progress > 1.0f)
+    progress = 1.0f;
+
+  float fade_scaler = 1.0f - progress;
+
+  // 1. Advance the underlying effect in the background
+  runner->service();
+
+  // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our pixels!
+  // ESPHome is actively scaling the brightness down to 0.0f over the
+  // default_transition_length. We must temporarily force current_values
+  // brightness to 1.0f so the effect renders at full brightness. Our custom
+  // Outro logic (Wipe/Fade) handles the dimming.
+  float original_brightness = 0.0f;
+  auto *ls = this->get_light_state();
+  if (ls != nullptr) {
+    original_brightness = ls->current_values.get_brightness();
+    ls->current_values.set_brightness(1.0f);
+  }
+
+  // 2. Render background frame onto the output buffer
+  int num_leds = it.size();
+  for (int i = 0; i < num_leds; i++) {
+    uint32_t c = runner->_segment.getPixelColor(i);
+    it[i] =
+        Color((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF);
+  }
+
+  // Restore the scaling factor so we don't permanently corrupt the LightState
+  if (ls != nullptr) {
+    ls->current_values.set_brightness(original_brightness);
+  }
+
+  uint8_t mode = this->active_outro_mode_;
+
+  // Control State for Mirror (affects wipe direction)
+  switch_::Switch *mirror_sw = this->mirror_;
+  if (mirror_sw == nullptr && this->controller_ != nullptr)
+    mirror_sw = this->controller_->get_mirror();
+
+  bool reverse = false;
+  if (mirror_sw != nullptr && mirror_sw->state)
+    reverse = true;
+
+  bool symmetry = false;
+  if (mode == INTRO_MODE_CENTER) {
+    symmetry = true;
+    mode = INTRO_MODE_WIPE;
+  }
+
+  switch (mode) {
+  case INTRO_MODE_WIPE: {
+    int logical_len = symmetry ? (num_leds / 2) : num_leds;
+
+    // Intensity defines blur radius (up to 50% of the strip)
+    // Use the cached active_outro_intensity_ because controller_ is null during
+    // Outro
+    float blur_percent = (this->active_outro_intensity_ / 255.0f) * 0.5f;
+
+    int blur_radius = (int)(logical_len * blur_percent);
+    float progress_erasing = 1.0f - progress;
+    float exact_lead = progress_erasing * (logical_len + blur_radius);
+    int lead = (int)exact_lead;
+
+    for (int i = 0; i < logical_len; i++) {
+
+      float alpha =
+          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+
+      if (!reverse) {
+        if (i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
+      } else {
+        int rev_i = logical_len - 1 - i;
+        if (rev_i <= lead - blur_radius) {
+          alpha = 1.0f;
+        } else if (rev_i <= lead && blur_radius > 0) {
+          float distance_into_blur = exact_lead - rev_i;
+          alpha = distance_into_blur / blur_radius;
+          if (alpha < 0.0f)
+            alpha = 0.0f;
+          if (alpha > 1.0f)
+            alpha = 1.0f;
+        }
+      }
+
+      if (alpha == 0.0f) {
+        it[i] = Color::BLACK;
+        if (symmetry)
+          it[num_leds - 1 - i] = Color::BLACK;
+      } else if (alpha < 1.0f) {
+        // Dim the background frame by alpha
+        Color c1 = it[i].get();
+        it[i] = Color((uint8_t)(c1.r * alpha), (uint8_t)(c1.g * alpha),
+                      (uint8_t)(c1.b * alpha), (uint8_t)(c1.w * alpha));
+        if (symmetry) {
+          Color c2 = it[num_leds - 1 - i].get();
+          it[num_leds - 1 - i] =
+              Color((uint8_t)(c2.r * alpha), (uint8_t)(c2.g * alpha),
+                    (uint8_t)(c2.b * alpha), (uint8_t)(c2.w * alpha));
+        }
+      }
+    }
+
+    if (symmetry && (num_leds % 2 != 0)) {
+      int mid = num_leds / 2;
+      bool fill_center = (lead > 0);
+      if (!fill_center) {
+        it[mid] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_GLITTER: {
+    // Glitter Outro: More and more black pixels appear
+    uint8_t threshold = (uint8_t)(progress * 255.0f);
+    for (int i = 0; i < num_leds; i++) {
+      uint16_t hash = (i * 33) + (i * i);
+      uint8_t val = hash % 256;
+      if (val < threshold) {
+        it[i] = Color::BLACK;
+      }
+      // Else: Keep 100% brightness of the underlying frame
+    }
+    break;
+  }
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Outro (Option B: Forward Chase)
+    // The formation (Two pulses + trailing void) races forward.
+    // Progress 0.0: Full light.
+    // Progress 1.0: Full black.
+
+    float length = (float)num_leds;
+    float c_size = length * 0.08f;
+    if (c_size < 3.0f)
+      c_size = 3.0f;
+    float short_gap = length * 0.12f;
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.10f;
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f;
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
+
+    // Layout (identical to intro but relative to the "Eraser Head")
+    // Leading edge (Eraser Head) is the front of the formation.
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
+
+    // Total distance to cover so the void (w_solid) clears the strip
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
+
+    for (int i = 0; i < num_leds; i++) {
+      int idx = reverse ? (num_leds - 1 - i) : i;
+      float fi = (float)i;
+      float relative_pos = head_pos - fi;
+      float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
+
+      if (relative_pos < 0.0f) {
+        // Ahead of the eraser formation: Smoothly fade down from full
+        // background
+        if (relative_pos > -wipe_fade) {
+          alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
+        } else {
+          alpha = 1.0f;
+        }
+      } else if (relative_pos <= -c1_back) {
+        // Cursor 1: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -c2_front) {
+        // Short Gap (Black)
+        alpha = 0.0f;
+      } else if (relative_pos <= -c2_back) {
+        // Cursor 2: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -w_front) {
+        // Long Gap (Black)
+        alpha = 0.0f;
+      } else {
+        // The Void behind the formation
+        alpha = 0.0f;
+      }
+
+      // Apply alpha to existing buffer color
+      if (alpha <= 0.0f) {
+        it[idx] = Color::BLACK;
+      } else if (alpha < 1.0f) {
+        Color cur = it[idx].get();
+        it[idx] = Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
+                        (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_MORSE: {
+    uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
+    uint32_t elapsed_morse = millis() - this->outro_start_time_;
+    uint32_t current_bit = elapsed_morse / unit_ms;
+
+    uint64_t mask = 0b11101110111000101011101000101011101ULL;
+    uint8_t total_bits = 35;
+
+    bool is_on = false;
+    if (current_bit < total_bits) {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    } else {
+      is_on = false; // Hold OFF after sequence
+    }
+
+    if (!is_on) {
+      for (int i = 0; i < num_leds; i++) {
+        it[i] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_FADE:
+  case INTRO_MODE_NONE:
+  default:
+    // Manual fade scalar scaling due to hardware fade circumvention
+    for (int i = 0; i < num_leds; i++) {
+      Color c = it[i].get();
+      it[i] = Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                    (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+    }
+    break;
+  }
+
+  return (progress >= 1.0f);
+}
+
+// --- Autotune Auto-Disable Implementation ---
+void CFXAddressableLightEffect::apply_autotune_defaults_() {
+  CFXControl *c = this->controller_;
+
+  // 1. Speed
+  number::Number *speed_num =
+      (c && c->get_speed()) ? c->get_speed() : this->speed_;
+  if (speed_num != nullptr && !this->speed_preset_.has_value()) {
+    float target = (float)this->get_default_speed_(this->effect_id_);
+    if (speed_num->state != target) {
+      auto call = speed_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+    this->autotune_expected_speed_ = target;
+  } else if (speed_num != nullptr) {
+    this->autotune_expected_speed_ = speed_num->state;
+  }
+
+  // 2. Intensity
+  number::Number *intensity_num =
+      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+  if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
+    float target = (float)this->get_default_intensity_(this->effect_id_);
+    if (intensity_num->state != target) {
+      auto call = intensity_num->make_call();
+      call.set_value(target);
+      call.perform();
+    }
+    this->autotune_expected_intensity_ = target;
+  } else if (intensity_num != nullptr) {
+    this->autotune_expected_intensity_ = intensity_num->state;
+  }
+
+  // 3. Palette
+  select::Select *palette_sel =
+      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+  if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
+    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
+    std::string pal_name = this->get_palette_name_(default_pal_id);
+    if (palette_sel->current_option() != pal_name) {
+      auto call = palette_sel->make_call();
+      call.set_option(pal_name);
+      call.perform();
+    }
+    this->autotune_expected_palette_ = pal_name;
+  } else if (palette_sel != nullptr) {
+    this->autotune_expected_palette_ = palette_sel->current_option();
+  }
+}
+
 } // namespace chimera_fx
 } // namespace esphome

@@ -15,6 +15,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
+#include <cstdint>
 #include <vector>
 
 namespace esphome {
@@ -35,6 +36,10 @@ public:
   }
   void set_palette(select::Select *palette) { this->palette_ = palette; }
   void set_mirror(switch_::Switch *mirror) { this->mirror_ = mirror; }
+  void set_autotune(switch_::Switch *autotune) { this->autotune_ = autotune; }
+  void set_force_white(switch_::Switch *force_white) {
+    this->force_white_ = force_white;
+  }
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
   }
@@ -49,6 +54,8 @@ public:
   void set_intro_use_palette(switch_::Switch *s) {
     this->intro_use_palette_ = s;
   }
+  void set_outro_effect(select::Select *s) { this->outro_effect_ = s; }
+  void set_outro_duration(number::Number *n) { this->outro_duration_ = n; }
   void set_debug(switch_::Switch *s) { this->debug_switch_ = s; }
 
   select::Select *get_intro_effect() { return this->intro_effect_; }
@@ -58,13 +65,24 @@ public:
     INTRO_MODE_WIPE = 1,
     INTRO_MODE_FADE = 2,
     INTRO_MODE_CENTER = 3,
-    INTRO_MODE_GLITTER = 4
+    INTRO_MODE_GLITTER = 4,
+    INTRO_MODE_TWIN_PULSE = 5,
+    INTRO_MODE_MORSE = 6
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);
+  bool run_outro_frame(light::AddressableLight &it, CFXRunner *runner);
+
   bool intro_active_{false};
   uint8_t active_intro_mode_{0};
+  uint8_t active_intro_speed_{128};
   uint32_t intro_start_time_{0};
+
+  bool outro_active_{false};
+  uint8_t active_outro_mode_{0};
+  uint32_t active_outro_duration_ms_{1500};
+  uint8_t active_outro_intensity_{128};
+  uint32_t outro_start_time_{0};
 
   void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
   void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
@@ -72,10 +90,16 @@ public:
   void set_intro_use_palette_preset(bool v) {
     this->intro_use_palette_preset_ = v;
   }
+  void set_outro_preset(uint8_t v) { this->outro_preset_ = v; }
+  void set_outro_duration_preset(float v) { this->outro_duration_preset_ = v; }
   void set_timer_preset(uint16_t v) { this->timer_preset_ = v; }
   void set_intensity_preset(uint8_t v) { this->intensity_preset_ = v; }
   void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
   void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
+  void set_autotune_preset(bool v) { this->autotune_preset_ = v; }
+  void set_force_white_preset(bool preset) {
+    this->force_white_preset_ = preset;
+  }
 
   void set_controller(CFXControl *controller) {
     this->controller_ = controller;
@@ -87,11 +111,15 @@ protected:
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};
   switch_::Switch *mirror_{nullptr};
+  switch_::Switch *autotune_{nullptr};
+  switch_::Switch *force_white_{nullptr};
   select::Select *transition_effect_{nullptr};
   number::Number *transition_duration_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
   switch_::Switch *intro_use_palette_{nullptr};
+  select::Select *outro_effect_{nullptr};
+  number::Number *outro_duration_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
 
   enum TransitionState {
@@ -109,8 +137,18 @@ protected:
   uint32_t update_interval_{16};
   uint32_t last_run_{0};
 
+  struct MonochromaticPreset {
+    bool is_active;
+    uint8_t intro_mode;
+    uint8_t outro_mode;
+  };
+
+  MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
+  bool is_monochromatic_(uint8_t effect_id);
+
   uint8_t get_palette_index_();
   uint8_t get_default_palette_id_(uint8_t effect_id);
+  std::string get_palette_name_(uint8_t pal_id);
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 
@@ -118,9 +156,13 @@ protected:
   optional<uint8_t> intensity_preset_{};
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
+  optional<bool> autotune_preset_{};
+  optional<bool> force_white_preset_{};
   optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
   optional<bool> intro_use_palette_preset_{};
+  optional<uint8_t> outro_preset_{};
+  optional<float> outro_duration_preset_{};
   optional<uint16_t> timer_preset_{};
 
   CFXControl *controller_{nullptr};
@@ -132,6 +174,23 @@ protected:
   uint32_t fade_in_duration_ms_{0};
   uint32_t fade_in_start_ms_{0};
   bool fade_in_active_{false};
+
+  bool initial_preset_applied_{false};
+
+  // --- Autotune Auto-Disable (Option A) ---
+  // Snapshots of what Autotune last wrote to the UI so we can detect user
+  // overrides
+  bool autotune_active_{
+      false}; // True when Autotune is ON and managing parameters
+  float autotune_expected_speed_{-1.0f};
+  float autotune_expected_intensity_{-1.0f};
+  std::string autotune_expected_palette_{""};
+  std::string last_sent_palette_{""};
+  uint32_t last_metadata_refresh_{0};
+
+  // Applies per-effect defaults to UI sliders/palette and records expected
+  // values. Only touches controls that don't have a hard YAML preset.
+  void apply_autotune_defaults_();
 };
 
 } // namespace chimera_fx

@@ -40,6 +40,8 @@ uint16_t mode_heartbeat_center(void);
 uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
+uint16_t mode_cfx_horizon_sweep(void);
+uint16_t mode_collider(void);
 
 // Global time provider for FastLED timing functions
 uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
@@ -596,25 +598,30 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
   uint32_t c1 = cfx_pgm_read_dword(&palette[i]);
   uint32_t c2 = cfx_pgm_read_dword(&palette[(i + 1) & 15]);
 
-  // Lerp RGB
+  // Lerp RGBW
+  uint8_t w1 = (c1 >> 24) & 0xFF;
   uint8_t r1 = (c1 >> 16) & 0xFF;
   uint8_t g1 = (c1 >> 8) & 0xFF;
   uint8_t b1 = c1 & 0xFF;
+
+  uint8_t w2 = (c2 >> 24) & 0xFF;
   uint8_t r2 = (c2 >> 16) & 0xFF;
   uint8_t g2 = (c2 >> 8) & 0xFF;
   uint8_t b2 = c2 & 0xFF;
 
   // Safety: cast to int to avoid signed truncation when r2 < r1
+  uint8_t w = (uint8_t)std::max(0, (int)w1 + ((((int)w2 - (int)w1) * f) >> 4));
   uint8_t r = (uint8_t)std::max(0, (int)r1 + ((((int)r2 - (int)r1) * f) >> 4));
   uint8_t g = (uint8_t)std::max(0, (int)g1 + ((((int)g2 - (int)g1) * f) >> 4));
   uint8_t b = (uint8_t)std::max(0, (int)b1 + ((((int)b2 - (int)b1) * f) >> 4));
 
   // Apply brightness
+  w = (w * brightness) >> 8;
   r = (r * brightness) >> 8;
   g = (g * brightness) >> 8;
   b = (b * brightness) >> 8;
 
-  return CRGBW(r, g, b, 0); // White channel unused for simple palette
+  return CRGBW(r, g, b, w);
 }
 
 void CFXRunner::generateRandomPalette() {
@@ -815,6 +822,27 @@ uint16_t mode_static(void) {
     instance->_segment.fill(instance->_segment.colors[0]);
   }
   return FRAMETIME; // Refresh rate
+}
+
+uint16_t mode_cfx_horizon_sweep(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  if (instance->_segment.palette != 255 && instance->_segment.palette != 0) {
+    uint16_t len = instance->_segment.length();
+    const uint32_t *active_palette =
+        getPaletteByIndex(instance->_segment.palette);
+
+    for (int i = 0; i < len; i++) {
+      uint8_t colorIndex = (i * 255) / (len > 1 ? len - 1 : 1);
+      CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
+      instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+    }
+  } else {
+    instance->_segment.fill(instance->_segment.colors[0]);
+  }
+
+  return FRAMETIME;
 }
 
 uint16_t mode_aurora(void) {
@@ -1070,17 +1098,16 @@ uint16_t mode_fire_dual(void) {
   // Check for mirror mode: flames start from center toward edges
   bool mirror_mode = instance->_segment.mirror;
 
-  // Vacuum: 2 pixels in center where no fire exists (only in normal mode)
-  // In mirror mode, vacuum is at the edges
-  int vacuum = 2;
-  int half_len = (len - vacuum) / 2;
+  // Remove vacuum: The flames should meet exactly in the middle without a black
+  // gap. For odd lengths, the exact center pixel is written by both halves
+  // (perfect overlap).
+  int half_len = (len + 1) / 2;
   if (half_len < 1)
     half_len = 1; // Safety for very short strips
 
   // Scale factor: Virtual -> Physical Half
   // "Zoom": Map only the bottom 48 pixels of the 60px virtual fire to the strip
-  // This crops the top ~20% (mostly smoke/black) to ensure flames meet in the
-  // middle Fixes "vacuum too big" on long strips
+  // This crops the top ~20% (mostly smoke/black).
   float scale = (float)(VIRTUAL_HEIGHT - 12) / (float)half_len;
 
   // Helper lambda for heat-to-color conversion
@@ -1122,11 +1149,6 @@ uint16_t mode_fire_dual(void) {
       instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
     }
 
-    // Vacuum in center (between the two halves)
-    for (int j = half_len; j < len - half_len; j++) {
-      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
-    }
-
     // Right half: Center -> Right edge
     // Mirror of left half
     for (int j = 0; j < half_len; j++) {
@@ -1152,11 +1174,6 @@ uint16_t mode_fire_dual(void) {
       uint8_t r, g, b;
       heat_to_rgb(v_index, r, g, b);
       instance->_segment.setPixelColor(j, RGBW32(r, g, b, 0));
-    }
-
-    // Render Vacuum (Black)
-    for (int j = half_len; j < len - half_len; j++) {
-      instance->_segment.setPixelColor(j, RGBW32(0, 0, 0, 0));
     }
 
     // Render Right Flame (len-1 -> len-1-half_len) - Mirrored
@@ -1722,8 +1739,8 @@ uint16_t mode_breath(void) {
     baseColor = 0xFFFFFF; // Default white if no color set
 
   for (int i = 0; i < len; i++) {
-    uint8_t fgR, fgG, fgB;
-    uint8_t bgR, bgG, bgB;
+    uint8_t fgR, fgG, fgB, fgW;
+    uint8_t bgR, bgG, bgB, bgW;
 
     // Use solid color when palette is 255 (Solid) OR 0 (Default/None)
     // This fixes the issue where Default palette ignored the user's color.
@@ -1732,6 +1749,7 @@ uint16_t mode_breath(void) {
       fgR = (baseColor >> 16) & 0xFF;
       fgG = (baseColor >> 8) & 0xFF;
       fgB = baseColor & 0xFF;
+      fgW = (baseColor >> 24) & 0xFF;
     } else {
       // Use palette color as foreground (0-19)
       const uint32_t *active_palette =
@@ -1740,6 +1758,7 @@ uint16_t mode_breath(void) {
       fgR = c.r;
       fgG = c.g;
       fgB = c.b;
+      fgW = c.w;
     }
 
     // Calculate background color from foreground (21% brightness)
@@ -1748,13 +1767,15 @@ uint16_t mode_breath(void) {
     bgR = (fgR * 54) >> 8;
     bgG = (fgG * 54) >> 8;
     bgB = (fgB * 54) >> 8;
+    bgW = (fgW * 54) >> 8;
 
     // Blend: result = background + (foreground - background) * lum / 255
     uint8_t r = bgR + (((int16_t)(fgR - bgR) * lum) >> 8);
     uint8_t g = bgG + (((int16_t)(fgG - bgG) * lum) >> 8);
     uint8_t b = bgB + (((int16_t)(fgB - bgB) * lum) >> 8);
+    uint8_t w = bgW + (((int16_t)(fgW - bgW) * lum) >> 8);
 
-    instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+    instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
   }
 
   return FRAMETIME;
@@ -2462,6 +2483,7 @@ uint16_t mode_meteor(void) {
       uint8_t r = (c >> 16) & 0xFF;
       uint8_t g = (c >> 8) & 0xFF;
       uint8_t b = c & 0xFF;
+      uint8_t w = (c >> 24) & 0xFF;
 
       // Multiplicative decay with random factor
       // Scale factor 200-255 for longer trail (78-100% retention per frame)
@@ -2472,8 +2494,9 @@ uint16_t mode_meteor(void) {
       r = scale8(r, scale_factor);
       g = scale8(g, scale_factor);
       b = scale8(b, scale_factor);
+      w = scale8(w, scale_factor);
 
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, 0));
+      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
     }
   }
 
@@ -2592,56 +2615,89 @@ uint16_t mode_noisepal(void) {
 // --- Chase 2 (ID 28) ---
 static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
                       bool do_palette) {
-  uint16_t counter = instance->now * ((instance->_segment.speed >> 2) + 1);
-  uint16_t a = (counter * instance->_segment.length()) >> 16;
+  uint32_t len = instance->_segment.length();
+  uint32_t speed = instance->_segment.speed;
 
-  unsigned size =
-      1 + ((instance->_segment.intensity * instance->_segment.length()) >> 10);
+  // Size of a target sub-block.
+  // Based on intensity: Low intensity = 1 pixel. High intensity = full strip
+  // length
+  float size = 1.0f + ((float)(instance->_segment.intensity * len) / 1024.0f);
 
-  uint16_t b = a + size;
-  if (b > instance->_segment.length())
-    b -= instance->_segment.length();
-  uint16_t c = b + size;
-  if (c > instance->_segment.length())
-    c -= instance->_segment.length();
+  // Total cycle is the length of the strip, meaning 1 full rotation.
+  // We use this as the phase domain
+  float cycle_size = (float)len;
 
-  if (do_palette) {
-    for (unsigned i = 0; i < instance->_segment.length(); i++) {
-      uint32_t col = instance->_segment.color_from_palette(i, true, true, 0);
-      instance->_segment.setPixelColor(i, col);
+  // Smooth cubic speed mapping. Max ~350 pixels/sec.
+  float s = (float)speed / 255.0f;
+  float pps = 2.0f + (s * s * s) * 350.0f;
+  float offset = (instance->now * pps) / 1000.0f;
+
+  // Aliasing fade zone (0.6px minimum to prevent integer snaps at low speeds)
+  float fade_zone = 0.6f;
+
+  for (unsigned i = 0; i < len; i++) {
+    // Generate phase: [0, cycle_size)
+    // We reverse the physical offset by subtracting it so the chase goes
+    // "forward" down the strip
+    float local_phase = fmodf((float)i - offset, cycle_size);
+    if (local_phase < 0.0f)
+      local_phase += cycle_size;
+
+    uint32_t final_color = color1; // Default background (color1 or palette)
+    if (do_palette) {
+      final_color = instance->_segment.color_from_palette(i, true, true, 0);
     }
-  } else {
-    instance->_segment.fill(color1);
-  }
 
-  if (a < b) {
-    for (unsigned i = a; i < b; i++)
-      instance->_segment.setPixelColor(i, color2);
-  } else {
-    for (unsigned i = a; i < instance->_segment.length(); i++)
-      instance->_segment.setPixelColor(i, color2);
-    for (unsigned i = 0; i < b; i++)
-      instance->_segment.setPixelColor(i, color2);
-  }
+    // We have two colored blocks travelling on top of the background:
+    // Block 1 (color2) travels from [0, size]
+    // Block 2 (color3) travels from [size, 2*size]
 
-  if (b < c) {
-    for (unsigned i = b; i < c; i++)
-      instance->_segment.setPixelColor(i, color3);
-  } else {
-    for (unsigned i = b; i < instance->_segment.length(); i++)
-      instance->_segment.setPixelColor(i, color3);
-    for (unsigned i = 0; i < c; i++)
-      instance->_segment.setPixelColor(i, color3);
+    // Determine which zone we are in and how close to an edge
+    if (local_phase < size) {
+      // Zone 1 (color2)
+      float dist_start = local_phase;
+      float dist_end = size - local_phase;
+      float dist_edge = dist_start < dist_end ? dist_start : dist_end;
+
+      if (dist_edge < fade_zone) {
+        // Blend edge with background
+        float mix = 0.5f + (dist_edge / (2.0f * fade_zone));
+        final_color = color_blend(final_color, color2, (uint8_t)(mix * 255.0f));
+      } else {
+        final_color = color2;
+      }
+    } else if (local_phase < size * 2.0f) {
+      // Zone 2 (color3)
+      float local_phase_2 = local_phase - size;
+      float dist_start = local_phase_2;
+      float dist_end = size - local_phase_2;
+      float dist_edge = dist_start < dist_end ? dist_start : dist_end;
+
+      if (dist_edge < fade_zone) {
+        // Blend edge with Zone 1 (color2) or background depending on which side
+        float mix = 0.5f + (dist_edge / (2.0f * fade_zone));
+
+        uint32_t mix_target = dist_start < dist_end ? color2 : final_color;
+        final_color = color_blend(mix_target, color3, (uint8_t)(mix * 255.0f));
+      } else {
+        final_color = color3;
+      }
+    }
+
+    instance->_segment.setPixelColor(i, final_color);
   }
 
   return FRAMETIME;
 }
 
 uint16_t mode_chase_color(void) {
+  bool do_palette =
+      (instance->_segment.palette != 255 && instance->_segment.palette != 0);
+
   return chase(instance->_segment.colors[1],
                (instance->_segment.colors[2]) ? instance->_segment.colors[2]
                                               : instance->_segment.colors[0],
-               instance->_segment.colors[0], true);
+               instance->_segment.colors[0], do_palette);
 }
 
 // --- BPM Effect (ID 68) ---
@@ -2772,27 +2828,81 @@ uint16_t mode_glitter(void) {
   return FRAMETIME;
 }
 
-// --- Tricolor Chase (ID 54) ---
+// --- Chase Multi (ID 54) ---
 // Simplified to 2-band chase: primary color + palette
-uint16_t mode_tricolor_chase(void) {
-  uint32_t cycleTime = 50 + ((255 - instance->_segment.speed) << 1);
-  uint32_t it = instance->now / cycleTime;
-  unsigned width = (1 + (instance->_segment.intensity >> 4)); // 1-16
-  unsigned index = it % (width * 2);                          // 2 bands
+uint16_t mode_chase_multi(void) {
+  uint32_t speed = instance->_segment.speed;
+  uint32_t len = instance->_segment.length();
 
-  for (unsigned i = 0; i < instance->_segment.length(); i++, index++) {
-    if (index > (width * 2) - 1)
-      index = 0;
+  // Width controls the size/thickness of the pulses (1 to 16 pixels)
+  float width = 1.0f + (instance->_segment.intensity / 16.0f); // 1.0 to 16.9
+  float cycle_size = width * 2.0f;
 
-    uint32_t color;
-    if (index > width - 1)
-      color = instance->_segment.color_from_palette(i, true, true,
-                                                    1); // palette
-    else
-      color = instance->_segment.colors[0]; // primary (solid)
+  // Speed mapping: purely pixels-per-second, independent of width.
+  // Cubic curve provides extreme precision/smoothness at low speeds
+  // without sacrificing max speed. Max speed ~350 pixels/sec.
+  float s = (float)speed / 255.0f;
+  float pps = 2.0f + (s * s * s) * 350.0f;
 
-    instance->_segment.setPixelColor(instance->_segment.length() - i - 1,
-                                     color);
+  // Convert time to infinite physical pixel offset distance
+  float offset = (instance->now * pps) / 1000.0f;
+
+  // Anti-aliasing fade zone to eliminate integer strobe jitter
+  float w_half = width * 0.45f;
+  float fade_zone = 0.6f < w_half ? 0.6f : w_half;
+
+  for (unsigned i = 0; i < len; i++) {
+    // Determine local phase. Addition of offset scrolls the wave.
+    float local_phase = fmodf((float)i + offset, cycle_size);
+    if (local_phase < 0.0f)
+      local_phase += cycle_size;
+
+    float mix = 0.0f;
+    float dist_to_edge = 0.0f;
+
+    if (local_phase < width) {
+      // Foreground Zone
+      dist_to_edge = local_phase < (width - local_phase)
+                         ? local_phase
+                         : (width - local_phase);
+      if (dist_to_edge < fade_zone) {
+        mix = 0.5f + (dist_to_edge / (2.0f * fade_zone));
+      } else {
+        mix = 1.0f;
+      }
+    } else {
+      // Background Zone
+      float bg_end_dist = cycle_size - local_phase;
+      float bg_start_dist = local_phase - width;
+      dist_to_edge = bg_start_dist < bg_end_dist ? bg_start_dist : bg_end_dist;
+
+      if (dist_to_edge < fade_zone) {
+        mix = 0.5f - (dist_to_edge / (2.0f * fade_zone));
+      } else {
+        mix = 0.0f;
+      }
+    }
+
+    uint32_t bg_color;
+    if (instance->_segment.palette == 255 || instance->_segment.palette == 0) {
+      bg_color = instance->_segment.colors[1]; // Use secondary (often black)
+    } else {
+      bg_color = instance->_segment.color_from_palette(i, true, true, 1);
+    }
+
+    uint32_t fg_color = instance->_segment.colors[0]; // primary (solid)
+
+    uint32_t final_color;
+    if (mix >= 1.0f) {
+      final_color = fg_color;
+    } else if (mix <= 0.0f) {
+      final_color = bg_color;
+    } else {
+      final_color = color_blend(bg_color, fg_color, (uint8_t)(mix * 255.0f));
+    }
+
+    // Scroll forward seamlessly
+    instance->_segment.setPixelColor(len - i - 1, final_color);
   }
   return FRAMETIME;
 }
@@ -3484,15 +3594,16 @@ uint16_t mode_chaos_theory(void) {
       int center = data->sparks[s].pos;
       uint8_t bri = data->sparks[s].level;
 
-      // Helper to add brightness
+      // Helper to add brightness smoothly by blending toward white
       auto add_brightness = [&](int pos, uint8_t amount) {
         if (pos >= 0 && pos < len) {
           uint32_t existing = instance->_segment.getPixelColor(pos);
-          CRGBW bg(existing);
-          CRGBW fg(amount, amount, amount, amount);
-          CRGBW final = color_add(bg, fg);
-          instance->_segment.setPixelColor(
-              pos, RGBW32(final.r, final.g, final.b, final.w));
+
+          // Blend from the existing color towards pure white,
+          // keeping the background visible through the spike edge
+          uint32_t final = color_blend(existing, (uint32_t)0xFFFFFFFF, amount);
+
+          instance->_segment.setPixelColor(pos, final);
         }
       };
 
@@ -3976,6 +4087,12 @@ void CFXRunner::service() {
   // Ensures effect functions operate on the correct strip context
   instance = this;
 
+  // Globally initialize PaletteSolid with the latest selected color.
+  // Any effect resolving getPaletteByIndex(255) needs this freshly populated,
+  // especially for Pure W channel support in legacy C routines like
+  // ColorFromPalette
+  fillSolidPalette(_segment.colors[0]);
+
   // Start frame diagnostics (measures time since last call)
   diagnostics.frame_start();
 
@@ -4010,8 +4127,8 @@ void CFXRunner::service() {
   case FX_MODE_CHASE_COLOR: // 28
     mode_chase_color();
     break;
-  case FX_MODE_TRICOLOR_CHASE: // 54
-    mode_tricolor_chase();
+  case FX_MODE_CHASE_MULTI: // 54
+    mode_chase_multi();
     break;
   case FX_MODE_BPM: // 68
     mode_bpm();
@@ -4162,6 +4279,14 @@ void CFXRunner::service() {
     break;
   case FX_MODE_FLUID_RAIN: // 160
     mode_fluid_rain();
+    break;
+  case FX_MODE_HORIZON_SWEEP: // 161
+  case FX_MODE_CENTER_SWEEP:  // 162
+  case FX_MODE_GLITTER_SWEEP: // 163
+    mode_cfx_horizon_sweep();
+    break;
+  case FX_MODE_COLLIDER: // 164
+    mode_collider();
     break;
   default:
     mode_static();
@@ -4470,7 +4595,7 @@ struct DroppingTimeState {
   // 2. "Dummy" drops (visual only)
   // Reusing Spark struct logic
   Spark fillingDrop;
-  Spark dummyDrops[2]; // Max 2 dummy drops active
+  Spark dummyDrops[4]; // Max 4 dummy drops active
 
   bool fillingDropActive;
 
@@ -4480,7 +4605,7 @@ struct DroppingTimeState {
     lastDropTime = 0;
     fillingDropActive = false;
     fillingDrop = Spark();
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 4; i++)
       dummyDrops[i] = Spark();
   }
 };
@@ -4503,32 +4628,28 @@ uint16_t mode_dropping_time(void) {
     ESP_LOGD("CFX", "DroppingTime: RESET");
     state->init();
     state->startTime = instance->now;
+    state->lastDropTime = instance->now;
     instance->_segment.fill(0); // Start black
     instance->_segment.reset = false;
   }
 
-  // Debug Log
-  /*
-  static uint32_t last_log = 0;
-  if (instance->now - last_log > 2000) {
-    last_log = instance->now;
-    // Recalc duration for log
-    uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
-    uint32_t duration_ms = duration_min * 60 * 1000;
-    uint32_t elapsed = instance->now - state->startTime;
-    ESP_LOGD("CFX", "DT: Elapsed %u/%u ms, Filled %u", elapsed, duration_ms,
-             state->filledPixels);
-  }
-  */
-
   // 1. Calculate Time & Progress
-  // Speed 0   -> 1 minute
-  // Speed 255 -> 60 minutes
-  // Mapping: Duration (min) = 1 + (Speed * 59 / 255)
-  uint32_t duration_min = 1 + (instance->_segment.speed * 59 / 255);
+  uint32_t now = instance->now;
+  uint32_t frameDelta = now - state->lastDropTime;
+  if (frameDelta > 1000)
+    frameDelta = 0; // Handle first run/wrap
+  state->lastDropTime = now;
+
+  // Speed 0 -> Paused. Speed 1..255 -> 1..255 minutes.
+  uint32_t duration_min = instance->_segment.speed;
+  if (duration_min == 0) {
+    // Paused: shift start time forward so elapsed doesn't grow
+    state->startTime += frameDelta;
+    duration_min = 1; // Prevent div by zero in layout logic
+  }
   uint32_t duration_ms = duration_min * 60 * 1000;
 
-  uint32_t elapsed = instance->now - state->startTime;
+  uint32_t elapsed = now - state->startTime;
   if (elapsed > duration_ms)
     elapsed = duration_ms;
 
@@ -4556,83 +4677,83 @@ uint16_t mode_dropping_time(void) {
   float gravity = -0.0005f - (wled_speed / 50000.0f);
   gravity *= (len - 1);
 
-  // A. Filling Drop
-  // We need to spawn a drop such that it hits the WATER LEVEL exactly when the
-  // level needs to increment? Or simpler: We just spawn drops periodically.
-  // When one hits, if it's time, we raise the level. User's request: "Every
-  // drop... leaving the leds lit." So the drop CAUSES the fill.
+  // A. Filling Drop Timing
+  // We want the drop to 'release' (finish swelling and fall) at releaseTime
+  // such that it hits the WATER LEVEL exactly at nextPixelTime.
+  uint32_t msPerPixel = duration_ms / len;
+  uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
 
-  // Let's reverse it:
-  // Calculate when the NEXT pixel should be filled.
-  // NextFillTime = (PixelIndex + 1) * (Duration / Len)
-  // We need to spawn the drop so it ARRIVES at NextFillTime.
-  // FallTime = sqrt(2 * dist / |g|)
-  // dist = (len-1) - currentLevel
-  // SpawnTime = NextFillTime - FallTime.
+  // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
+  float dist = (len - 1) - state->filledPixels;
+  if (dist < 0)
+    dist = 0;
+
+  // Approx Fall Time (ms)
+  float estFallFrames = sqrtf(2.0f * dist / (-gravity));
+  uint32_t estFallMs = (uint32_t)(estFallFrames * 15.0f); // Approx 15ms/frame
+
+  uint32_t releaseTime =
+      (nextPixelTime > estFallMs) ? (nextPixelTime - estFallMs) : 0;
+  uint32_t formingDuration = 500; // 500ms swelling time before drop falls
+  uint32_t formingTime =
+      (releaseTime > formingDuration) ? (releaseTime - formingDuration) : 0;
 
   if (state->filledPixels < len) {
-    uint32_t msPerPixel = duration_ms / len;
-    uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
-
-    // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
-    float dist = (len - 1) - state->filledPixels;
-    if (dist < 0)
-      dist = 0;
-
-    // Time to fall (frames? ms?). Gravity is in units/frame^2?
-    // In Drip effect: pos += vel; vel += gravity.
-    // Distance d = 0.5 * g * t^2 -> t = sqrt(2d/g) (in frames)
-    // Convert frames to ms (approx 15ms/frame default, but variable)
-    // Let's use a rough estimate or just spawn it slightly ahead.
-
-    // Heuristic: Just spawn it when we are close.
-    // Better: Interval based.
-    // If we simply spawn drops at `msPerPixel` interval, they will arrive at
-    // roughly the right rate. Let's try that for robustness.
-
     if (!state->fillingDropActive) {
-      // Check if it's time to spawn the next filling drop
-      // We want the drop to LAND when the timer reaches the next pixel.
-      // So we spawn it `FallTime` *before* that.
-      // Approx Fall Time (ms) ~ sqrt(2 * dist / 0.0005) * 15ms
-      // G_eff = |gravity| = 0.0005 * len roughly.
-      // Let's just spawn it if (NextPixelTime - Now) < ExpectedFallDuration
-
-      float estFallFrames = sqrtf(2.0f * dist / (-gravity));
-      uint32_t estFallMs = estFallFrames * 15; // Approx
-
-      // Add a buffer so it doesn't arrive too late
-      if (elapsed + estFallMs >= nextPixelTime) {
-        // Spawn!
+      if (elapsed >= formingTime) {
         state->fillingDropActive = true;
         state->fillingDrop.pos = len - 1;
         state->fillingDrop.vel = 0;
-        state->fillingDrop.col = 255;
-        state->fillingDrop.colIndex = 2; // Falling
+        state->fillingDrop.col = 0;      // Brightness starts at 0 for swelling
+        state->fillingDrop.colIndex = 1; // 1 = Forming
       }
     }
   }
 
-  // Update Filling Drop
+  // Update Filling Drop State Machine
   if (state->fillingDropActive) {
-    state->fillingDrop.vel += gravity;
-    state->fillingDrop.pos += state->fillingDrop.vel;
+    if (state->fillingDrop.colIndex == 1) { // Forming (Swelling)
+      if (elapsed >= releaseTime) {
+        state->fillingDrop.col = 255;
+        state->fillingDrop.colIndex = 2; // Falling!
+      } else {
+        uint32_t formElapsed = elapsed - formingTime;
+        state->fillingDrop.col = (formElapsed * 255) / formingDuration;
+        if (state->fillingDrop.col > 255)
+          state->fillingDrop.col = 255;
+      }
+    } else if (state->fillingDrop.colIndex == 2) { // Falling
+      state->fillingDrop.vel += gravity;
+      state->fillingDrop.pos += state->fillingDrop.vel;
 
-    // Hit Water Level?
-    if (state->fillingDrop.pos <= state->filledPixels) {
-      state->fillingDropActive = false;
-      state->filledPixels++;
-      if (state->filledPixels > len)
-        state->filledPixels = len;
+      // Hit Water Level? -> Transition to Splash/Bounce
+      if (state->fillingDrop.pos <= state->filledPixels) {
+        state->fillingDrop.colIndex = 5; // Bouncing/Splash
+        state->fillingDrop.pos =
+            state->filledPixels; // Lock to water surface temporarily
+        state->fillingDrop.vel =
+            sqrtf(-2.0f * gravity * 3.0f); // Small bounce velocity
+      }
+    } else if (state->fillingDrop.colIndex > 2) { // Bouncing/Splashing
+      state->fillingDrop.vel += gravity;
+      state->fillingDrop.pos += state->fillingDrop.vel;
+
+      if (state->fillingDrop.pos <= state->filledPixels) {
+        // Splash settled, commit the fill
+        state->fillingDropActive = false;
+        state->filledPixels++;
+        if (state->filledPixels > len)
+          state->filledPixels = len;
+      }
     }
   } else {
-    // Failsafe / Catch-up Logic
-    if (targetLevel > state->filledPixels) {
+    // Failsafe / Catch-up Logic if it gets severely behind
+    if (elapsed > nextPixelTime + 1500 && targetLevel > state->filledPixels) {
       state->filledPixels = targetLevel;
     }
   }
 
-  // If Duration ended, force full fill
+  // If Duration ended, force full fill safely
   if (elapsed >= duration_ms) {
     state->filledPixels = len;
   }
@@ -4646,61 +4767,134 @@ uint16_t mode_dropping_time(void) {
 
   // B. Draw Water (Ocean Logic)
   // Bidirectional waves for organic "sloshing" effect
-  // Explicitly calculated to ensure opposing direction
   uint32_t ms = instance->now;
-  const uint32_t *active_palette = getPaletteByIndex(11); // Ocean
-  if (instance->_segment.palette != 0)
-    active_palette = getPaletteByIndex(instance->_segment.palette);
+  uint8_t pal = instance->_segment.palette;
+  if (pal == 0 || pal == 255)
+    pal = 11; // Default to Ocean to prevent flat colors
+  const uint32_t *active_palette = getPaletteByIndex(pal);
 
-  // Time bases for waves (sawtooth 0-255)
-  // Wave 1: Moves RIGHT (x - t)
   uint8_t t1 = beat8(15);
-  // Wave 2: Moves LEFT (x + t)
   uint8_t t2 = beat8(18);
 
   for (int i = 0; i < state->filledPixels; i++) {
-    // x coordinates (scaled)
-    // larger multiplier = narrower waves
     uint8_t x1 = i * 4;
     uint8_t x2 = i * 7;
-
-    // Wave 1: Right moving -> sin(x - t)
     uint8_t wave1 = sin8(x1 - t1);
-
-    // Wave 2: Left moving -> sin(x + t)
     uint8_t wave2 = sin8(x2 + t2);
-
-    // Combine (Average)
     uint8_t index = (wave1 + wave2) / 2;
 
     CRGBW c = ColorFromPalette(active_palette, index, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
+  // Global Drop Color
+  // WLED's primary color (`colors[0]`) defaults to White, which causes the
+  // previous fallback mechanism to skip pulling from the palette. Here, we
+  // force the drop to organically sample the active theme (e.g., Ocean) by
+  // sampling the palette center directly.
+  CRGBW c_drop = ColorFromPalette(active_palette, 128, 255);
+  uint32_t dropColor = RGBW32(c_drop.r, c_drop.g, c_drop.b, c_drop.w);
+  // If the palette center happens to be black, fallback to a light water blue
+  if (dropColor == 0)
+    dropColor = 0x80C0FF;
+
   // C. Draw Drops (Filling Drop)
   if (state->fillingDropActive) {
-    int pos = (int)state->fillingDrop.pos;
-    if (pos >= state->filledPixels && pos < len) {
-      instance->_segment.setPixelColor(pos, 0xFFFFFF); // Head
-    }
-    for (int t = 1; t <= 4; t++) {
-      int tPos = pos + t;
-      if (tPos >= state->filledPixels && tPos < len) {
-        instance->_segment.setPixelColor(
-            tPos, color_blend(0xFFFFFF, 0, 255 - (64 * t)));
+    if (state->fillingDrop.colIndex == 1) { // Forming
+      // Draw swelling drop at the top
+      instance->_segment.setPixelColor(
+          len - 1, color_blend(dropColor, 0, 255 - state->fillingDrop.col));
+    } else if (state->fillingDrop.colIndex == 2) { // Falling
+      int pos = (int)state->fillingDrop.pos;
+      if (pos >= state->filledPixels && pos < len) {
+        instance->_segment.setPixelColor(pos, dropColor); // Head
+      }
+      for (int t = 1; t <= 4; t++) { // Tail
+        int tPos = pos + t;
+        if (tPos >= state->filledPixels && tPos < len) {
+          instance->_segment.setPixelColor(
+              tPos, color_blend(dropColor, 0, 255 - (64 * t)));
+        }
+      }
+    } else if (state->fillingDrop.colIndex > 2) { // Bouncing/Splash
+      int pos = (int)state->fillingDrop.pos;
+      // Draw splash particle (dimmer white)
+      if (pos >= state->filledPixels && pos < len) {
+        instance->_segment.setPixelColor(pos, color_blend(dropColor, 0, 150));
+      }
+      // Draw ripple at water level exactly
+      if (state->filledPixels < len && state->filledPixels >= 0) {
+        uint32_t cur = instance->_segment.getPixelColor(state->filledPixels);
+        instance->_segment.setPixelColor(state->filledPixels,
+                                         color_blend(cur, dropColor, 200));
       }
     }
   }
 
-  // D. Draw Drops (Dummy Drops)
-  for (int i = 0; i < 2; i++) {
+  // D. Ambient Dummy Drops Update & Render
+  for (int i = 0; i < 4; i++) {
+    if (state->dummyDrops[i].colIndex == 0) {
+      if (len - state->filledPixels > 15 && cfx::hw_random16(0, 120) == 0) {
+        state->dummyDrops[i].pos = len - 1;
+        state->dummyDrops[i].vel = 0;
+        state->dummyDrops[i].colIndex = 1; // Forming
+        state->dummyDrops[i].col = 0;
+      }
+    } else if (state->dummyDrops[i].colIndex == 1) { // Forming
+      state->dummyDrops[i].col += 15;                // Swell speed
+      if (state->dummyDrops[i].col >= 200) { // Release generic threshold
+        state->dummyDrops[i].colIndex = 2;   // Fall
+      }
+    } else if (state->dummyDrops[i].colIndex == 2) { // Falling
+      state->dummyDrops[i].vel += gravity;
+      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
+
+      // Hit Water Level? -> Bounce
+      if (state->dummyDrops[i].pos <= state->filledPixels) {
+        state->dummyDrops[i].pos = state->filledPixels;
+        state->dummyDrops[i].vel =
+            sqrtf(-2.0f * gravity * 3.0f); // small bounce
+        state->dummyDrops[i].colIndex = 5;
+      }
+    } else if (state->dummyDrops[i].colIndex > 2) { // Bouncing
+      state->dummyDrops[i].vel += gravity;
+      state->dummyDrops[i].pos += state->dummyDrops[i].vel;
+      if (state->dummyDrops[i].pos <= state->filledPixels) {
+        state->dummyDrops[i].colIndex = 0; // Deactivate silently
+      }
+    }
+
+    // Dummy Drop Drawing
     if (state->dummyDrops[i].colIndex != 0) {
-      int pos = (int)state->dummyDrops[i].pos;
-      if (pos >= state->filledPixels && pos < len) {
-        uint32_t col = instance->_segment.colors[0];
-        if (col == 0)
-          col = 0x0000FF;
-        instance->_segment.setPixelColor(pos, col);
+      if (state->dummyDrops[i].colIndex == 1) { // Forming
+        instance->_segment.setPixelColor(
+            len - 1, color_blend(dropColor, 0, 255 - state->dummyDrops[i].col));
+      } else {
+        int pos = (int)state->dummyDrops[i].pos;
+        if (pos >= state->filledPixels && pos < len) {
+          // Dummy drops use primary color, slightly dimmer
+          uint32_t head_col = color_blend(dropColor, 0, 255 - 200);
+
+          instance->_segment.setPixelColor(pos, head_col);
+
+          if (state->dummyDrops[i].colIndex == 2) { // Tail (Only when falling)
+            for (int t = 1; t <= 3; t++) {
+              int tPos = pos + t;
+              if (tPos >= state->filledPixels && tPos < len) {
+                uint8_t trail_bri = std::max(0, 200 - (60 * t));
+                instance->_segment.setPixelColor(
+                    tPos, color_blend(dropColor, 0, 255 - trail_bri));
+              }
+            }
+          } else if (state->dummyDrops[i].colIndex > 2) { // Splash Ripple
+            if (state->filledPixels < len && state->filledPixels >= 0) {
+              uint32_t cur =
+                  instance->_segment.getPixelColor(state->filledPixels);
+              instance->_segment.setPixelColor(state->filledPixels,
+                                               color_blend(cur, head_col, 150));
+            }
+          }
+        }
       }
     }
   }
@@ -4974,8 +5168,9 @@ uint16_t mode_bouncing_balls(void) {
     uint8_t r = qadd8((existing >> 16) & 0xFF, (colorInt >> 16) & 0xFF);
     uint8_t g = qadd8((existing >> 8) & 0xFF, (colorInt >> 8) & 0xFF);
     uint8_t b = qadd8(existing & 0xFF, colorInt & 0xFF);
+    uint8_t w = qadd8((existing >> 24) & 0xFF, (colorInt >> 24) & 0xFF);
 
-    instance->_segment.setPixelColor(pixel, RGBW32(r, g, b, 0));
+    instance->_segment.setPixelColor(pixel, RGBW32(r, g, b, w));
   }
 
   return FRAMETIME;
@@ -5525,19 +5720,6 @@ bool CFXRunner::serviceIntro() {
       uint16_t pos = rand() % len;
       _segment.setPixelColor(pos, _intro_color);
     }
-  } else if (_intro_mode == INTRO_CENTER) {
-    // Center Wipe: From center to edges
-    uint16_t center = len / 2;
-    uint16_t limit = (uint16_t)((len / 2) * progress);
-
-    for (int i = 0; i < len; i++) {
-      int dist = abs(i - center);
-      if (dist <= limit) {
-        _segment.setPixelColor(i, _intro_color);
-      } else {
-        _segment.setPixelColor(i, 0);
-      }
-    }
   }
 
   return false; // Still running
@@ -5672,11 +5854,12 @@ uint16_t mode_heartbeat_center(void) {
 
 /*
  * Kaleidos (ID 155)
- * N-Way Symmetrical Mirroring Effect
- * Divides the strip into 2/4/6/8 mirrored segments.
- * Even segments render forward, odd segments render backward.
- * Uses a scrolling palette as the source pattern.
- * Density: Hybrid approach (Option C) - dynamic fit with aliasing clamp.
+ * Enhanced N-Way Symmetrical Mirroring Effect
+ * Divides the strip into 2/4/6/8 mirrored segments that dynamically "breathe"
+ * in size. Even segments render forward, odd segments render backward. Adds
+ * prism glints at the symmetry bounds to enhance the kaleidoscope illusion.
+ * Uses a pure sub-pixel triangle wave phase engine to guarantee flawless
+ * scrolling mirrors.
  */
 uint16_t mode_kaleidos(void) {
   if (!instance)
@@ -5686,31 +5869,31 @@ uint16_t mode_kaleidos(void) {
   if (len <= 1)
     return mode_static();
 
-  // === Symmetry Engine ===
+  uint32_t ms = cfx_millis();
+  // Speed 0 = very slow, Speed 255 = fast
+  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
+
+  // === Dynamic Symmetry Engine ===
   // Map intensity 0-255 to 1-4, then double to guarantee even: 2, 4, 6, 8
-  // Optimized mapping: 0-63=1, 64-127=2, 128-191=3, 192-255=4
   uint8_t half_segs = 1 + (instance->_segment.intensity >> 6);
   if (half_segs > 4)
     half_segs = 4; // Safety clamp for 255
-  uint8_t num_segments = half_segs * 2;
+  uint32_t num_segments = half_segs * 2;
 
-  uint16_t seg_len = len / num_segments;
-  if (seg_len == 0)
-    seg_len = 1; // Safety: very short strips
+  // Measure phase per pixel so that num_segments fit exactly across 'len'
+  // 1 segment = 65536 phase units. Total phase across strip = num_segments *
+  // 65536.
+  uint32_t total_base_phase = num_segments * 65536;
 
-  // === Hybrid Density (Option C) ===
-  // Dynamic: fit one full pattern cycle per segment
-  // Clamped: prevent aliasing on very short segments (min density 8)
-  uint8_t density = (seg_len > 1) ? (255 / seg_len) : 255;
-  if (density < 8)
-    density = 8; // Floor: prevent washed-out pattern on long segments
+  // Dynamic Breathing
+  // The size of the mirrors slowly expands and contracts.
+  uint8_t breath_phase = (ms >> 6) & 0xFF; // Slow wave
+  // Map sine to 0.7 - 1.3 (+/- 30% width variation)
+  float breath_factor = 0.7f + (cfx::sin8(breath_phase) * 0.6f / 255.0f);
 
-  // === Time Base (Speed-controlled scroll) ===
-  uint32_t ms = cfx_millis();
-  // Speed 0 = very slow, Speed 255 = fast
-  // Tuned: >>9 (512x div) provides WLED-like speed.
-  // Old >>12 was too slow.
-  uint32_t cycle_time = (ms * (uint32_t)(instance->_segment.speed + 1)) >> 9;
+  // Phase step per pixel
+  uint32_t total_dynamic_phase = (uint32_t)(total_base_phase * breath_factor);
+  uint32_t phase_step = total_dynamic_phase / len;
 
   // === Palette ===
   const uint32_t *palette = getPaletteByIndex(instance->_segment.palette);
@@ -5720,29 +5903,59 @@ uint16_t mode_kaleidos(void) {
   }
 
   // === Render Loop ===
+  // Glint settings: glint is ~1.5 pixels wide
+  uint32_t glint_radius = phase_step + (phase_step >> 1);
+
   for (int i = 0; i < len; i++) {
-    // Determine which segment this pixel belongs to
-    uint16_t seg_index = i / seg_len;
-    uint16_t local_pos = i % seg_len;
+    uint32_t spatial_phase = i * phase_step;
 
-    // Handle remainder pixels: clamp to last segment
-    if (seg_index >= num_segments) {
-      seg_index = num_segments - 1;
-      // Recalculate local_pos relative to the last segment's start
-      local_pos = i - (seg_index * seg_len);
+    // Triangle wave fold
+    uint16_t cycle = (spatial_phase >> 16);
+    uint16_t fraction = spatial_phase & 0xFFFF;
+
+    uint16_t folded_phase;
+    if (cycle & 0x01) {
+      // Odd cycle: backward phase
+      folded_phase = 0xFFFF - fraction;
+    } else {
+      // Even cycle: forward phase
+      folded_phase = fraction;
     }
 
-    // Mirror Logic: Even = Forward, Odd = Backward
-    uint16_t mirrored_pos = local_pos;
-    if (seg_index & 0x01) {
-      mirrored_pos = (seg_len - 1) - local_pos;
-    }
+    // Convert 0-65535 spatial phase to 0-255 color index
+    uint8_t color_index = (uint8_t)((folded_phase >> 8) + cycle_time);
 
-    // Calculate color index from mirrored position + scrolling time
-    uint8_t color_index = (uint8_t)((mirrored_pos * density) + cycle_time);
+    // Get base kaleidoscope color
+    CRGBW c = ColorFromPalette(palette, color_index, 255);
+
+    // === Prism Glints (Option B) ===
+    // Distance to nearest symmetry bound (0 or 65536 equivalent in fraction)
+    uint16_t dist_to_bound = (fraction < 32768) ? fraction : (65535 - fraction);
+
+    if (dist_to_bound < glint_radius) {
+      // Identify the specific mirror seam to give each seam an independent
+      // shimmer phase
+      uint16_t seam_id = (spatial_phase + 32768) >> 16;
+      uint8_t shimmer =
+          cfx::sin8((ms >> 2) + (seam_id * 64)); // Independent seam shimmer
+
+      // Falloff the glint based on exact sub-pixel distance so it doesn't jump
+      uint8_t sub_shimmer =
+          (shimmer * (glint_radius - dist_to_bound)) / glint_radius;
+
+      // Additive blend white glint
+      uint16_t r = c.r + sub_shimmer;
+      uint16_t g = c.g + sub_shimmer;
+      uint16_t b = c.b + sub_shimmer;
+      uint16_t w = c.w + sub_shimmer;
+
+      c.r = (r > 255) ? 255 : r;
+      c.g = (g > 255) ? 255 : g;
+      c.b = (b > 255) ? 255 : b;
+      c.w = (w > 255) ? 255 : w;
+    }
 
     // Draw
-    CRGBW c = ColorFromPalette(palette, color_index, 255);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
   }
 
@@ -6380,9 +6593,157 @@ uint16_t mode_fluid_rain(void) {
   return FRAMETIME;
 }
 
+// --- Collider Effect (ID 164) ---
+// Chromatic Liquid Bellows: Fixed origins with slow drift.
+// Upgraded physics: colliding edges "glue" together (slow down significantly).
+// Visuals: Nodes act as portals/masks for a scrolling palette gradient.
+uint16_t mode_collider(void) {
+  if (!instance)
+    return FRAMETIME;
+
+  uint16_t len = instance->_segment.length();
+  if (len == 0)
+    return FRAMETIME;
+
+  uint8_t speed = instance->_segment.speed;         // 0-255
+  uint8_t intensity = instance->_segment.intensity; // 0-255
+
+  // 1. Grid Configuration
+  // High Intensity = denser grid (smaller spacing)
+  uint16_t spacing = cfx_map((long)intensity, 0, 255, 70, 15);
+  if (spacing < 6)
+    spacing = 6;
+  uint16_t numNodes = (len + spacing - 1) / spacing;
+
+  // 2. Persistence
+  if (!instance->_segment.allocateData(numNodes * sizeof(ColliderNode))) {
+    return FRAMETIME;
+  }
+  ColliderNode *nodes = (ColliderNode *)instance->_segment.data;
+
+  // 3. Grid Drift (Shared global shift for origins)
+  // Slow movement of the "grid centers" over time.
+  float global_drift =
+      (float)(instance->now % 65535) * 0.012f; // Increased drift
+
+  // 4. Physics Update
+  float base_step = (float)speed / 128.0f;
+  for (uint16_t n = 0; n < numNodes; n++) {
+    // Re-initialize if state is blank or reset
+    if (nodes[n].vel == 0.0f || instance->_segment.reset) {
+      nodes[n].radius = (float)(n % 3) * (spacing / 5.0f);
+      nodes[n].vel = (n % 2 == 0 ? 1.0f : -1.0f);
+      nodes[n].glue_timer = 0;
+      if (n == numNodes - 1)
+        instance->_segment.reset = false;
+    }
+
+    // Per-node speed variation (±20%)
+    float node_step = base_step * (0.8f + (float)(n % 5) * 0.1f);
+
+    // Magnetic Glue Logic: If collision detected, slow speed to 10%
+    if (nodes[n].glue_timer > 0) {
+      node_step *= 0.1f;
+      nodes[n].glue_timer--;
+      if (nodes[n].glue_timer == 0) {
+        nodes[n].vel = -1.0f; // Done glued, start retracting
+      }
+    }
+
+    nodes[n].radius += nodes[n].vel * node_step;
+
+    // Bottom Bounce
+    if (nodes[n].radius <= 0.0f) {
+      nodes[n].radius = 0.01f;
+      nodes[n].vel = 1.0f;
+    }
+
+    // Top Limit / Safety
+    if (nodes[n].radius >= (float)spacing * 0.7f) {
+      nodes[n].radius = (float)spacing * 0.7f;
+      nodes[n].vel = -1.0f;
+    }
+
+    // Neighbor Collision (Trigger Glue)
+    if (n < numNodes - 1) {
+      // Bridge more: allow 1.5 LEDs of overlap (3 LEDs total) before
+      // glue/retraction
+      float bridge_limit = (float)spacing + 2.5f;
+      if (nodes[n].radius + nodes[n + 1].radius >= bridge_limit) {
+        // Only trigger glue if both are expanding
+        if (nodes[n].vel > 0 && nodes[n + 1].vel > 0 &&
+            nodes[n].glue_timer == 0) {
+          nodes[n].glue_timer = 40; // Wait longer (~0.6s)
+          nodes[n + 1].glue_timer = 40;
+        }
+      }
+    }
+  }
+
+  // 5. Rendering
+  instance->_segment.fill(0);                         // Pure dark background
+  uint8_t pal_offset = (uint8_t)(instance->now >> 4); // Scrolling speed
+
+  for (uint16_t n = 0; n < numNodes; n++) {
+    // Calculate center with drift
+    float center_f = (float)(n * spacing + (spacing / 2)) + global_drift;
+    // Wrap drift around strip length
+    while (center_f >= (float)len)
+      center_f -= (float)len;
+    while (center_f < 0.0f)
+      center_f += (float)len;
+
+    float node_r = nodes[n].radius;
+    // Render range: floor to ceil + safety padding for anti-alias bleed
+    int r_start = (int)floorf(center_f - node_r - 1.0f);
+    int r_stop = (int)ceilf(center_f + node_r + 1.0f);
+
+    for (int i = r_start; i <= r_stop; i++) {
+      // Distance from center for anti-aliasing
+      float dist = fabsf((float)i - center_f);
+
+      // Coverage calculation: 100% inside, 0% outside, linear slope at boundary
+      // Slope width is 1.0 pixel for sub-pixel smoothing.
+      float coverage = node_r - dist + 0.5f;
+      if (coverage <= 0.0f)
+        continue;
+      if (coverage > 1.0f)
+        coverage = 1.0f;
+
+      uint8_t bri = (uint8_t)(coverage * 255.0f);
+
+      // Circular wrap indexing
+      int idx = i;
+      while (idx < 0)
+        idx += len;
+      while (idx >= (int)len)
+        idx -= len;
+
+      // Palette Scrolling Logic (inside the mask)
+      uint8_t color_idx = (uint8_t)idx + pal_offset;
+      const uint32_t *palData = getPaletteByIndex(instance->_segment.palette);
+      CRGBW pulse_rgbw = ColorFromPalette(palData, color_idx, bri);
+
+      // Additive pixel mixing
+      uint32_t current = instance->_segment.getPixelColor(idx);
+      uint8_t r = qadd8(CFX_R(current), pulse_rgbw.r);
+      uint8_t g = qadd8(CFX_G(current), pulse_rgbw.g);
+      uint8_t b = qadd8(CFX_B(current), pulse_rgbw.b);
+      instance->_segment.setPixelColor(idx, RGBW32(r, g, b, 0));
+    }
+  }
+
+  return FRAMETIME;
+}
 // Valid Palette Implementation (Moved from line 121)
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
                                      uint8_t mcol, uint8_t pbri) {
+  // Ensure the Solid Palette cache is populated properly with the W-channel
+  // included
+  if (this->palette == 255 || this->palette == 0) {
+    fillSolidPalette(this->colors[0]);
+  }
+
   // Get Palette Data
   const uint32_t *palData = getPaletteByIndex(this->palette);
   if (!palData)
@@ -6405,7 +6766,8 @@ uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
     uint8_t r = ((color >> 16) & 0xFF) * pbri / 255;
     uint8_t g = ((color >> 8) & 0xFF) * pbri / 255;
     uint8_t b = (color & 0xFF) * pbri / 255;
-    return RGBW32(r, g, b, 0);
+    uint8_t w = ((color >> 24) & 0xFF) * pbri / 255;
+    return RGBW32(r, g, b, w);
   }
   return color;
 }

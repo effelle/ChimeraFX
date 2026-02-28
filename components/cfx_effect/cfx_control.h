@@ -120,33 +120,12 @@ public:
     // Detect falling edge (ALL lights went from ON -> OFF)
     if (was_on_ && !is_any_on) {
       ESP_LOGD("chimera_fx",
-               "CFXControl: All lights turned off -> Resetting controls");
+               "CFXControl: All lights turned off -> Resetting Timer");
 
-      // Reset Speed to 128
-      if (speed_) {
-        auto call = speed_->make_call();
-        call.set_value(128);
-        call.perform();
-      }
-
-      // Reset Intensity to 128
-      if (intensity_) {
-        auto call = intensity_->make_call();
-        call.set_value(128);
-        call.perform();
-      }
-
-      // Reset Timer to 0
+      // Reset Timer to 0 (Abort Sleep Timer)
       if (timer_) {
         auto call = timer_->make_call();
         call.set_value(0);
-        call.perform();
-      }
-
-      // Reset Palette to Default
-      if (palette_) {
-        auto call = palette_->make_call();
-        call.set_option("Default");
         call.perform();
       }
     }
@@ -157,12 +136,15 @@ public:
   void set_intensity(number::Number *n) { intensity_ = n; }
   void set_palette(select::Select *s) { palette_ = s; }
   void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
+  void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
   void set_intro_duration(number::Number *n) { intro_duration_ = n; }
   void set_intro_use_palette(esphome::switch_::Switch *s) {
     intro_use_palette_ = s;
   }
+  void set_outro_effect(select::Select *s) { outro_effect_ = s; }
+  void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_timer(number::Number *n) { timer_ = n; }
 
   // Replaces set_light
@@ -204,12 +186,19 @@ public:
   number::Number *get_intensity() { return intensity_; }
   select::Select *get_palette() { return palette_; }
   esphome::switch_::Switch *get_mirror() { return mirror_; }
+  esphome::switch_::Switch *get_autotune() { return autotune_; }
+  esphome::switch_::Switch *get_force_white() { return force_white_; }
+  void set_force_white(esphome::switch_::Switch *force_white) {
+    force_white_ = force_white;
+  }
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
   number::Number *get_intro_duration() { return intro_duration_; }
   esphome::switch_::Switch *get_intro_use_palette() {
     return intro_use_palette_;
   }
+  select::Select *get_outro_effect() { return outro_effect_; }
+  number::Number *get_outro_duration() { return outro_duration_; }
   number::Number *get_timer() { return timer_; }
 
   std::vector<esphome::light::LightState *> get_lights() { return lights_; }
@@ -219,10 +208,14 @@ protected:
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};
   esphome::switch_::Switch *mirror_{nullptr};
+  esphome::switch_::Switch *autotune_{nullptr};
+  esphome::switch_::Switch *force_white_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
   esphome::switch_::Switch *intro_use_palette_{nullptr};
+  select::Select *outro_effect_{nullptr};
+  number::Number *outro_duration_{nullptr};
   number::Number *timer_{nullptr};
 
   std::vector<esphome::light::LightState *> lights_;

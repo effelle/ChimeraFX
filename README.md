@@ -1,108 +1,60 @@
-
 ![ChimeraFX](media/ChimeraFX_new_banner_github.png)
 
-# ChimeraFX: Made for ESPHome
+# ChimeraFX: Advanced LED Effects Engine for ESPHome
 
+*A high-performance C++ rendering engine bringing premium fluid simulations, architectural transitions, and optimized WLED classics natively into your ESPHome and Home Assistant ecosystem.*
 
-> **High-performance WLED-style effects running natively within ESPHome.**
+Unlike the old `addressable_lambda` method, this implementation runs as a proper native component optimized for the ESP-IDF framework, freeing up your YAML and maximizing frame rates.
+
+### Getting Started
+
+**[Read the Official Documentation](https://effelle.github.io/ChimeraFX/)**
+
+The documentation includes everything you need:
+- [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
+- [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---
 
-## The Lore of the Chimera
+### Key Features
 
-A **Chimera** is a legendary creature composed of three animals. ChimeraFX merges three worlds:
-
-- **The Lion (Power):** Raw WLED logic and effects — the proven algorithms that make lights come alive.
-- **The Goat (Structure):** The reliable ESPHome framework — robust, maintainable, and Home Assistant native.
-- **The Serpent (Connection):** My custom abstraction layer — the binding force that seamlessly connects them.
+* **Zero YAML Overhead** — Pure C++ implementation for maximum ESP32 frame rates.
+* **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
+* **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
+* **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
+* **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
+* **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
+* **100% Home Assistant Native** — Instantly exposes speed, intensity, palette, and other controls.
+* **Built-in Toolkit** — Supports Presets, Timers, and a runtime Debug Logger.
 
 ---
 
-### Is this for me?
+### Beyond WLED (The Philosophy)
 
-This project is **not** a full WLED replacement and it will never be. Choose the right tool for your hardware:
+ChimeraFX stands as a distinct, high-performance lighting engine. It bridges the gap between hand-tuned open-source favorites and **exclusive original algorithms** designed specifically for architectural integration and fluid motion.
 
-*   **Install [WLED](https://kno.wled.ge/) if:** You want the full experience (Segments, E1.31, 150+ effects) or are dedicating an MCU solely to lighting.
-*   **Use `ChimeraFX` if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
+Every effect in this library is selected for visual fidelity and rewritten for maximum efficiency. To ensure your device remains fast, responsive, and stable, unoptimized 2D matrix effects or animations requiring multi-color segment layering are intentionally excluded in favor of streamlined, high-speed rendering.
 
-## Platform Compatibility
+#### Is this for me?
+This project is **not** a full WLED replacement. Choose the right tool for your hardware:
+* **Install [WLED](https://kno.wled.ge/) if:** You want the full lighting-only experience (SPI strips, E1.31, 150+ effects, sound reactivity).
+* **Use ChimeraFX if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
-- **Framework:** **ESP-IDF** and **Arduino**
+---
+
+### Platform Compatibility
+
+- **Framework:** **ESP-IDF** and **Arduino** (via RMT DMA)
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
   - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
+- **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
+  - *2-wire SPI strips (APA102, WS2801, etc.) are **not supported**.*
 
-### Reality Check
-
-**Your mileage may vary.**
-Visual effects are computationally expensive.
-*   **Hardware:** An ESP32 is highly recommended due to its dual-core architecture.
-*   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
-*   **Optimization:** This library is optimized for ESP-IDF, but hardware resources are finite. Manage your load accordingly.
-
-This native C++ component brings advanced lighting effects to ESPHome. Unlike the old `addressable_lambda` method, this implementation runs as a proper component optimized for the **ESP-IDF** framework.
-
-## Features
-
-- **Native C++ Performance** — Optimized for multi-core ESP32s
-- **Clean YAML Syntax** — Simple `addressable_cfx` configuration
-- **Many Built-in Palettes** — Easily customizable
-- **Smooth Transitions** — Professional-grade animations
-- **Dynamic Controls** — Speed, intensity, palette, and mirror direction
-- **Intro Animations** — Wipe, Fade, Center, and Glitter effects on turn-on
-- **Timer** — Turn off after a specified amount of time
-- **Presets** — Save and restore effect configurations
-- **Debug Logger** — Turn on/off a logger at runtime level for the component
+> **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.
 
 ---
 
-## Quick Start
-
-See the [Wiki](https://effelle.github.io/ChimeraFX/) for a complete and detailed installation and configuration guide.
-
-Add the component to your ESPHome YAML:
-
-```yaml
-external_components:
-  - source: github://effelle/ChimeraFX@main
-    components: [cfx_effect]
-
-cfx_effect:
-  cfx_control:
-    - id: my_cfx_controller   # The ID of the controller generator, customizable
-      name: "LED Strip"       # The prefix name of the controller, customizable
-      light_id: led_strip     # The ID of the light you want to control 
-```
-
-**Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
-
-Add the effects to your light:
-
-```yaml
-light:
-  - platform: esp32_rmt_led_strip   # Or Neopixelbus for Arduino framework
-    id: led_strip                   # The ID of the light needed for cfx_control
-    # ... your light config ...
-    effects:
-      - addressable_cfx:
-          name: "Aurora"    # The name of the effect, can be customized
-          effect_id: 38     # See the available effects below for the ID
-    # ... Add some other effect ...
-```
----
-
-### Available Effects and Palettes
-
-ChimeraFX currently supports over 50+ effects optimized for the ESP32—including Aurora, Fire, Rainbow, Meteor, Ocean, and Bouncing Balls, plus some original effects. The component also includes a wide variety of built-in palettes, giving you complete creative control over your lighting.
-
-#### [Click here to see the full Effect and Palette List](https://effelle.github.io/ChimeraFX/Effects-Library)
-
-
-**Why aren't all WLED effects here?**  
-I meticulously rewrite each WLED effect to ensure it runs efficiently alongside your other ESPHome components without sacrificing visual quality. However, 2D matrix animations and effects requiring two or three separate color selections will not be ported, as they are incompatible with the current ESPHome and ChimeraFX architecture. 
-
----
-
-## Credits
+### Credits
 
 - **[WLED](https://github.com/wled/WLED)** by Aircoookie — Original effect algorithms
 - **[ESPHome](https://github.com/esphome/esphome)** by ESPHome — Framework integration
@@ -110,21 +62,17 @@ I meticulously rewrite each WLED effect to ensure it runs efficiently alongside 
 
 ---
 
-## License
+### Support the Project
 
-**EUPL-1.2** (European Union Public Licence) — See [LICENSE](LICENSE) for details.
-
----
-
-## Support the Project
-
-If you find **ChimeraFX** useful and would like to support the time and effort put into porting these effects, donations are never expected but always greatly appreciated!
+If you find **ChimeraFX** useful and would like to support the time and effort put into engineering this component, donations are never expected but always greatly appreciated!
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/effelle)
 
 ---
 
-## Legal Disclaimer
+### License & Legal Disclaimer
+
+**EUPL-1.2** (European Union Public Licence) — See [LICENSE](LICENSE) for details.
 
 **ChimeraFX** is an independent project. It is not affiliated with, maintained by, or endorsed by the WLED project, the ESPHome project, or Nabu Casa. WLED, ESPHome, and Nabu Casa are trademarks of their respective owners.
 

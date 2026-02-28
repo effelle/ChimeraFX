@@ -9,12 +9,6 @@
     width: 2rem;
 }
 
-/* Style secondary text/paragraphs (e.g., light grey) */
-/* .md-typeset p,
-.md-typeset ul {
-    color: #666666;
-} */
-
 .md-grid {
     max-width: initial;
 }
@@ -23,10 +17,6 @@
 .md-typeset h2 {
     color: #FCFEE9;
 }
-
-/* .md-typeset a {
-    color: #75163F !important;
-} */
 
 p {
     text-align: justify;
@@ -39,15 +29,12 @@ p {
 
 .md-header {
     color: #FCFEE9;
-    /* Change the text color in the main header */
 }
 
 body {
     color: #FCFEE9;
 }
 
-
-/* Dark mode: change slate background to a dark gray */
 [data-md-color-scheme="slate"] {
     --md-default-bg-color: #1D1C1A;
 }
