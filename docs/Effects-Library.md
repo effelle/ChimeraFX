@@ -1,5 +1,5 @@
 <style>
-  /* 1. Target the first column (ID) */
+  /* Target the first column (ID) */
   .md-typeset table th:nth-child(1), 
   .md-typeset table td:nth-child(1) {
     width: 40px !important;       /* Force a small width */
@@ -10,6 +10,29 @@
     white-space: nowrap !important;
   }
 
+  /* 1. Shrink accordion title padding and font size on mobile */
+  @media screen and (max-width: 45em) {
+    .md-typeset details summary {
+      padding-left: 2.5rem !important; /* Space for the opening arrow */
+      padding-top: 0.4rem !important;
+      padding-bottom: 0.4rem !important;
+      font-size: 0.65rem !important;   /* Slightly smaller text */
+    }
+    
+    /* 2. Reduce the gap between your custom icons/labels */
+    .md-typeset details summary ::marker, 
+    .md-typeset details summary {
+      letter-spacing: -0.02em; /* Tighten character spacing slightly */
+    }
+  }
+
+  /* 3. Global fix: Reduce the "dead space" created by &nbsp; */
+  .md-typeset details summary span.extra-info {
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px; /* Use CSS gaps instead of multiple &nbsp; */
+  }
 </style>
 
 # Available Effects, Palettes, Intros and Outros
