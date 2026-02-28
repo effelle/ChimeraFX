@@ -185,6 +185,8 @@ protected:
   float autotune_expected_speed_{-1.0f};
   float autotune_expected_intensity_{-1.0f};
   std::string autotune_expected_palette_{""};
+  std::string last_sent_palette_{""};
+  uint32_t last_metadata_refresh_{0};
 
   // Applies per-effect defaults to UI sliders/palette and records expected
   // values. Only touches controls that don't have a hard YAML preset.

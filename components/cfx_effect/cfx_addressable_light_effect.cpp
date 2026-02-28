@@ -57,6 +57,21 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
+  // Find controller early
+  if (this->controller_ == nullptr) {
+    this->controller_ = CFXControl::find(this->get_light_state());
+  }
+
+  // Allocate Runner early so we can use it for metadata fallback
+  if (this->runner_ == nullptr) {
+    auto *it = (light::AddressableLight *)this->get_light_state()->get_output();
+    if (it != nullptr) {
+      this->runner_ = new CFXRunner(it);
+      this->runner_->setMode(this->effect_id_);
+      this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+    }
+  }
+
   this->run_controls_();
 
   CFXControl *c = this->controller_;
@@ -229,14 +244,27 @@ void CFXAddressableLightEffect::start() {
   this->initial_preset_applied_ = true;
 
   // Visualizer: Notify metadata
-  auto *out =
-      static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+  auto *out = static_cast<cfx_light::CFXLightOutput *>(
+      this->get_light_state()->get_output());
   if (out != nullptr) {
-    out->send_visualizer_metadata(this->name_);
+    std::string pal_name = "";
+    if (palette_sel && palette_sel->has_state()) {
+      const char *opt = palette_sel->current_option();
+      if (opt != nullptr)
+        pal_name = opt;
+    }
+
+    // Resolve "Default" to actual palette name if possible
+    if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
+      pal_name = this->get_palette_name_(this->runner_->getPalette());
+    }
+
+    out->send_visualizer_metadata(this->get_name(), pal_name);
+    this->last_sent_palette_ = pal_name;
   }
 
   // State Machine Init: Check if we are turning ON from OFF
-  auto *state = this->get_light_state();
+  auto *state = this->get_state();
   if (state != nullptr) {
     bool is_fresh_turn_on = !state->current_values.is_on();
 
@@ -511,11 +539,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   this->last_run_ = now;
 
-  // --- Start Runner --- on first apply
+  // --- Ensure Runner ---
   if (this->runner_ == nullptr) {
     this->runner_ = new CFXRunner(&it);
     this->runner_->setMode(this->effect_id_);
-    // Sync diagnostics target with configured update_interval
     this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
   }
 
@@ -1004,6 +1031,9 @@ void CFXAddressableLightEffect::run_controls_() {
 
   CFXControl *c = this->controller_;
 
+  select::Select *palette_sel =
+      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+
   // --- Autotune Auto-Disable State Machine ---
   bool current_autotune_state =
       true; // Constraint: No switch = always respect defaults
@@ -1038,8 +1068,6 @@ void CFXAddressableLightEffect::run_controls_() {
         intensity_num->state != this->autotune_expected_intensity_)
       manual_override = true;
 
-    select::Select *palette_sel =
-        (c && c->get_palette()) ? c->get_palette() : this->palette_;
     if (palette_sel && palette_sel->has_state() &&
         palette_sel->current_option() != this->autotune_expected_palette_)
       manual_override = true;
@@ -1048,6 +1076,44 @@ void CFXAddressableLightEffect::run_controls_() {
       autotune_sw->turn_off();
       this->autotune_active_ = false;
     }
+  }
+
+  // --- Visualizer: Dynamic Palette Sync ---
+  if (palette_sel && palette_sel->has_state()) {
+    const char *opt = palette_sel->current_option();
+    std::string current_pal = opt ? opt : "";
+    if (!current_pal.empty() && current_pal != this->last_sent_palette_) {
+      auto *out = static_cast<cfx_light::CFXLightOutput *>(
+          this->get_light_state()->get_output());
+      if (out != nullptr) {
+        out->send_visualizer_metadata(this->get_name(), current_pal);
+      }
+      this->last_sent_palette_ = current_pal;
+    }
+  }
+
+  // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
+  uint32_t now = millis();
+  if (now - this->last_metadata_refresh_ > 5000) {
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(
+        this->get_light_state()->get_output());
+    if (out != nullptr) {
+      std::string pal_name = "";
+      if (palette_sel && palette_sel->has_state()) {
+        const char *opt = palette_sel->current_option();
+        if (opt != nullptr)
+          pal_name = opt;
+      }
+
+      // Deep Palette Resolution: If UI says "Default", ask the runner what's
+      // actually rendering
+      if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
+        pal_name = this->get_palette_name_(this->runner_->getPalette());
+      }
+
+      out->send_visualizer_metadata(this->get_name(), pal_name);
+    }
+    this->last_metadata_refresh_ = now;
   }
 
   if (this->runner_) {
@@ -1115,7 +1181,6 @@ void CFXAddressableLightEffect::run_controls_() {
         // runner_->getMode() (Current/Old Effect) This ensures that when
         // switching effects, we get the default palette of the NEW effect.
         return this->get_default_palette_id_(this->effect_id_);
-        return 1; // Fallback to Aurora if no runner
       }
       return 0; // Unknown palette name
     };

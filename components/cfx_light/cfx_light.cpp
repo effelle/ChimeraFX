@@ -384,7 +384,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   this->status_clear_warning();
 }
 
-void CFXLightOutput::send_visualizer_metadata(const std::string &name) {
+void CFXLightOutput::send_visualizer_metadata(const std::string &name,
+                                              const std::string &palette) {
 #ifdef USE_WIFI
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
     if (this->socket_fd_ < 0) {
@@ -402,6 +403,10 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name) {
       pkt.push_back('F');
       pkt.push_back('X'); // Magic Header
       pkt.insert(pkt.end(), name.begin(), name.end());
+      if (!palette.empty()) {
+        pkt.push_back(':');
+        pkt.insert(pkt.end(), palette.begin(), palette.end());
+      }
 
       sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
              (struct sockaddr *)&dest_addr, sizeof(dest_addr));

@@ -71,13 +71,14 @@ For a full overview of the `cfx_light` platform, please refer to the [cfx_light 
 
 ### Adding Effects Manually (Without `all_effects`)
 
-If you prefer not to use `all_effects: true`, you can manually include only the specific effects you want:
+If you prefer not to use `all_effects: true`, or want to create custom [presets](Effect-Presets.md) you can manually include specific effects:
 
 ```yaml
     effects:
       - addressable_cfx:
-          name: "Ocean"   # Name of the effect. Customizable.
-          effect_id: 101  # ID of the effect. Required.
+          name: "Kaleidos" # The display name of the effect (Required, customizable)
+          effect_id: 155   # The ChimeraFX effect ID (Required)
+
       - addressable_cfx:
           # Add more effects here
 ```
@@ -115,7 +116,7 @@ cfx_effect: # Mandatory! Loads the component
 
 ---
 
-Independently of the installation method, you are now ready to [configure your controls](Controls.md).
+#### Regardless of the installation method you chose, you are now ready to [configure your controls](Controls.md).
 
 ---
 

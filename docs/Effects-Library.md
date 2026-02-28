@@ -1519,6 +1519,11 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 ---
 
+| ID | Palette Name | Description | Preview |
+|:---|:---|:---|:---|
+| 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Snapshot_Static.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } | 
+
+
 ## Intro and Outro Animations
 
 These short animations play once when the light is turned ON or OFF.

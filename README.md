@@ -64,7 +64,7 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 
 ### Support the Project
 
-If you find **ChimeraFX** useful and would like to support the time and effort put into engineering these effects, donations are never expected but always greatly appreciated!
+If you find **ChimeraFX** useful and would like to support the time and effort put into engineering this component, donations are never expected but always greatly appreciated!
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/effelle)
 
