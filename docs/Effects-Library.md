@@ -1490,38 +1490,33 @@ A hand-picked selection of the community's best effects, meticulously optimized 
 
 You can assign any of these palettes to compatible effects using the `palette` selector.
 
-| ID | Palette Name | Description |
-|:---|:---|:---|
-| 0 | **Default** | Uses the effect's hardcoded colors. |
-| 1 | **Aurora** | Northern lights colors. |
-| 2 | **Forest** | Earth greens, browns, and mossy tones. |
-| 3 | **Halloween** | Orange and purple mix. |
-| 4 | **Rainbow** | Full HSV spectrum cycle. |
-| 5 | **Fire** | Intense reds, oranges, and yellows. |
-| 6 | **Sunset** | Purple, red, orange, and yellow gradients. |
-| 7 | **Ice** | Cool whites, blues, and cyans. |
-| 8 | **Party** | Vibrant high-contrast mixed colors. |
-| 9 | **Lava** | Black, red, and orange deep heatmap. |
-| 10 | **Pastel** | Soft, desaturated soothing colors. |
-| 11 | **Ocean** | Deep blues, cyans, and white crests. |
-| 12 | **HeatColors** | Traditional heatmap colors. |
-| 13 | **Sakura** | Pink and white cherry blossom tones. |
-| 14 | **Rivendell** | Fantasy forest greens and blues. |
-| 15 | **Cyberpunk** | Neon pink, blue, and purple. |
-| 16 | **OrangeTeal** | Modern cinematic contrast. |
-| 17 | **Christmas** | Red and green holiday mix. |
-| 18 | **RedBlue** | Simple red and blue gradient. |
-| 19 | **Matrix** | Digital rain greens. |
-| 20 | **SunnyGold** | Bright gold and yellow. |
-| 21 | **Solid** | Solid color (uses primary color). |
-| 22 | **Fairy** | Magical pinks and purples. |
-| 23 | **Twilight** | Dusk blues and purples. |
-
----
-
 | ID | Palette Name | Description | Preview |
 |:---|:---|:---|:---|
-| 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Snapshot_Static.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } | 
+| 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Aurora.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 17 | **Christmas** | Red and green holiday mix. | ![Christmas](/ChimeraFX/assets/palettes/Christmas.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 15 | **Cyberpunk** | Neon pink, blue, and purple. | ![Cyberpunk](/ChimeraFX/assets/palettes/Cyberpunk.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 0 | **Default** | Uses the effect's hardcoded colors. | ![Default](/ChimeraFX/assets/palettes/Default.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 22 | **Fairy** | Magical pinks and purples. | ![Fairy](/ChimeraFX/assets/palettes/Fairy.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 5 | **Fire** | Intense reds, oranges, and yellows. | ![Fire](/ChimeraFX/assets/palettes/Fire.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 2 | **Forest** | Earth greens, browns, and mossy tones. | ![Forest](/ChimeraFX/assets/palettes/Forest.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 3 | **Halloween** | Orange and purple mix. | ![Halloween](/ChimeraFX/assets/palettes/Halloween.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 12 | **HeatColors** | Traditional heatmap colors. | ![HeatColors](/ChimeraFX/assets/palettes/HeatColors.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 7 | **Ice** | Cool whites, blues, and cyans. | ![Ice](/ChimeraFX/assets/palettes/Ice.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 9 | **Lava** | Black, red, and orange deep heatmap. | ![Lava](/ChimeraFX/assets/palettes/Lava.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 19 | **Matrix** | Digital rain greens. | ![Matrix](/ChimeraFX/assets/palettes/Matrix.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 11 | **Ocean** | Deep blues, cyans, and white crests. | ![Ocean](/ChimeraFX/assets/palettes/Ocean.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 16 | **OrangeTeal** | Modern cinematic contrast. | ![OrangeTeal](/ChimeraFX/assets/palettes/OrangeTeal.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 8 | **Party** | Vibrant high-contrast mixed colors. | ![Party](/ChimeraFX/assets/palettes/Party.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 10 | **Pastel** | Soft, desaturated soothing colors. | ![Pastel](/ChimeraFX/assets/palettes/Pastel.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 4 | **Rainbow** | Full HSV spectrum cycle. | ![Rainbow](/ChimeraFX/assets/palettes/Rainbow.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 18 | **RedBlue** | Simple red and blue gradient. | ![RedBlue](/ChimeraFX/assets/palettes/RedBlue.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 14 | **Rivendell** | Fantasy forest greens and blues. | ![Rivendell](/ChimeraFX/assets/palettes/Rivendell.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 13 | **Sakura** | Pink and white cherry blossom tones. | ![Sakura](/ChimeraFX/assets/palettes/Sakura.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 254 | **Smart Random** | Dynamic, intelligent color combinations. | ![Smart Random](/ChimeraFX/assets/palettes/Smart_Random.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 21 | **Solid** | Solid color (uses primary color). | ![Solid](/ChimeraFX/assets/palettes/Solid.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 20 | **SunnyGold** | Bright gold and yellow. | ![SunnyGold](/ChimeraFX/assets/palettes/SunnyGold.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 6 | **Sunset** | Purple, red, orange, and yellow gradients. | ![Sunset](/ChimeraFX/assets/palettes/Sunset.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 23 | **Twilight** | Dusk blues and purples. | ![Twilight](/ChimeraFX/assets/palettes/Twilight.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 
 
 ## Intro and Outro Animations
