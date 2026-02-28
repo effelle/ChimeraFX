@@ -1495,14 +1495,13 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Aurora.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 17 | **Christmas** | Red and green holiday mix. | ![Christmas](/ChimeraFX/assets/palettes/Christmas.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 15 | **Cyberpunk** | Neon pink, blue, and purple. | ![Cyberpunk](/ChimeraFX/assets/palettes/Cyberpunk.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
-| 0 | **Default** | Uses the effect's hardcoded colors. | ![Default](/ChimeraFX/assets/palettes/Default.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
+| 0 | **Default** | Uses the effect's hardcoded colors. |  |
 | 22 | **Fairy** | Magical pinks and purples. | ![Fairy](/ChimeraFX/assets/palettes/Fairy.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 5 | **Fire** | Intense reds, oranges, and yellows. | ![Fire](/ChimeraFX/assets/palettes/Fire.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 2 | **Forest** | Earth greens, browns, and mossy tones. | ![Forest](/ChimeraFX/assets/palettes/Forest.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 3 | **Halloween** | Orange and purple mix. | ![Halloween](/ChimeraFX/assets/palettes/Halloween.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 12 | **HeatColors** | Traditional heatmap colors. | ![HeatColors](/ChimeraFX/assets/palettes/HeatColors.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 7 | **Ice** | Cool whites, blues, and cyans. | ![Ice](/ChimeraFX/assets/palettes/Ice.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
-| 9 | **Lava** | Black, red, and orange deep heatmap. | ![Lava](/ChimeraFX/assets/palettes/Lava.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 19 | **Matrix** | Digital rain greens. | ![Matrix](/ChimeraFX/assets/palettes/Matrix.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 11 | **Ocean** | Deep blues, cyans, and white crests. | ![Ocean](/ChimeraFX/assets/palettes/Ocean.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
 | 16 | **OrangeTeal** | Modern cinematic contrast. | ![OrangeTeal](/ChimeraFX/assets/palettes/OrangeTeal.png){ width="160" style="border-radius: 2px; border: 1px solid #333; " } |
