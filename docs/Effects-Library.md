@@ -16,13 +16,13 @@
       padding-left: 2.5rem !important; /* Space for the opening arrow */
       padding-top: 0.4rem !important;
       padding-bottom: 0.4rem !important;
-      font-size: 0.65rem !important;   /* Slightly smaller text */
+      /* font-size: 0.65rem !important;   Slightly smaller text */
     }
     
     /* 2. Reduce the gap between your custom icons/labels */
     .md-typeset details summary ::marker, 
-    .md-typeset details summary {
-      letter-spacing: -0.02em; /* Tighten character spacing slightly */
+    /* .md-typeset details summary {
+      letter-spacing: -0.02em; Tighten character spacing slightly */
     }
   }
 
@@ -52,7 +52,7 @@ Today, ChimeraFX is a precision-engineered lighting engine offering a curated su
 
 These are the flagship animations of ChimeraFX. They feature advanced fluid simulations, chaos theory, and custom physics engines not found in any other library.
 
-??? abstract "152 | Center Gauge &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "152 | Center Gauge <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -77,7 +77,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 152
         ```
 
-??? abstract "159 | Chaos Theory &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: High &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "159 | Chaos Theory <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: High  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -102,7 +102,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 159
         ```
 
-??? abstract "164 | Collider &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "164 | Collider <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -127,7 +127,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 164
         ```
 
-??? abstract "151 | Dropping Time &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "151 | Dropping Time <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -152,7 +152,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 151
         ```
 
-??? abstract "158 | Energy &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: High &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "158 | Energy <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: High  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -177,7 +177,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 158
         ```
 
-??? abstract "160 | Fluid Rain &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: High &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "160 | Fluid Rain <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: High  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -202,7 +202,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 160
         ```
 
-??? abstract "156 | Follow Me &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "156 | Follow Me <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -227,7 +227,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 156
         ```
 
-??? abstract "157 | Follow Us &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "157 | Follow Us <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -252,7 +252,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 157
         ```
 
-??? abstract "155 | Kaleidos &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "155 | Kaleidos <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -277,7 +277,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 155
         ```
 
-??? abstract "154 | Reactor Beat &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "154 | Reactor Beat <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -302,7 +302,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 154
         ```
 
-??? abstract "153 | Twin Flames &nbsp;&nbsp; :material-tag-outline: v1.2.1 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "153 | Twin Flames <span class='extra-info'>:material-tag-outline: 1.2.1  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -334,7 +334,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
 
 Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling, and feature integrated "Horizon Sweep" transitions for seamless power-on/off sequences.
 
-??? abstract "162 | Curtain Sweep &nbsp;&nbsp; :material-tag-outline: v1.3.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "162 | Curtain Sweep <span class='extra-info'>:material-tag-outline: 1.3.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -359,7 +359,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 162
         ```
 
-??? abstract "161 | Horizon Sweep &nbsp;&nbsp; :material-tag-outline: v1.3.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "161 | Horizon Sweep <span class='extra-info'>:material-tag-outline: 1.3.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -384,7 +384,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 161
         ```
 
-??? abstract "163 | Stardust Sweep &nbsp;&nbsp; :material-tag-outline: v1.3.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "163 | Stardust Sweep <span class='extra-info'>:material-tag-outline: 1.3.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -409,7 +409,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 163
         ```
 
-??? abstract "165 | Twin Pulse Sweep &nbsp;&nbsp; :material-tag-outline: v1.3.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "165 | Twin Pulse Sweep <span class='extra-info'>:material-tag-outline: 1.3.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -434,7 +434,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 165
         ```
 
-??? abstract "166 | Morse Sweep &nbsp;&nbsp; :material-tag-outline: v1.3.1 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "166 | Morse Sweep <span class='extra-info'>:material-tag-outline: 1.3.1  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -466,7 +466,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
 A hand-picked selection of the community's best effects, meticulously optimized and rewritten to run natively within the ChimeraFX engine with zero overhead.
 
-??? abstract "38 | Aurora &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "38 | Aurora <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -491,7 +491,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 38
         ```
 
-??? abstract "1 | Blink &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "1 | Blink <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -516,7 +516,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 1
         ```
 
-??? abstract "26 | Blink Rainbow &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "26 | Blink Rainbow <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -541,7 +541,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 26
         ```
 
-??? abstract "91 | Bouncing Balls &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "91 | Bouncing Balls <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -566,7 +566,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 91
         ```
 
-??? abstract "2 | Breathe &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "2 | Breathe <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -591,7 +591,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 2
         ```
 
-??? abstract "28 | Chase &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "28 | Chase <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -616,7 +616,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 28
         ```
 
-??? abstract "54 | Chase tri &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "54 | Chase tri <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -641,7 +641,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 54
         ```
 
-??? abstract "8 | Colorloop &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "8 | Colorloop <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -666,7 +666,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 8
         ```
 
-??? abstract "74 | Colortwinkle &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "74 | Colortwinkle <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -691,7 +691,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 74
         ```
 
-??? abstract "63 | Colorwaves &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "63 | Colorwaves <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -716,7 +716,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 63
         ```
 
-??? abstract "18 | Dissolve &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "18 | Dissolve <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -741,7 +741,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 18
         ```
 
-??? abstract "96 | Drip &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "96 | Drip <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -766,7 +766,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 96
         ```
 
-??? abstract "66 | Fire &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "66 | Fire <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -791,7 +791,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 66
         ```
 
-??? abstract "90 | Fireworks &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "90 | Fireworks <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -816,7 +816,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 90
         ```
 
-??? abstract "110 | Flow &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "110 | Flow <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -841,7 +841,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 110
         ```
 
-??? abstract "87 | Glitter &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "87 | Glitter <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -866,7 +866,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 87
         ```
 
-??? abstract "100 | HeartBeat &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "100 | HeartBeat <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -891,7 +891,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 100
         ```
 
-??? abstract "64 | Juggle &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "64 | Juggle <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -916,7 +916,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 64
         ```
 
-??? abstract "76 | Meteor &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "76 | Meteor <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -941,7 +941,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 76
         ```
 
-??? abstract "25 | Multi Strobe &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "25 | Multi Strobe <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -965,7 +965,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               name: "Multi Strobe"
               effect_id: 25
         ```
-??? abstract "107 | Noise Pal &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "107 | Noise Pal <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -990,7 +990,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 107
         ```
 
-??? abstract "101 | Ocean &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ❌"
+??? abstract "101 | Ocean <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ❌</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1015,7 +1015,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 101
         ```
 
-??? abstract "98 | Percent &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "98 | Percent <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1040,7 +1040,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 98
         ```
 
-??? abstract "97 | Plasma &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "97 | Plasma <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1065,7 +1065,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 97
         ```
 
-??? abstract "95 | Popcorn &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Mid &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "95 | Popcorn <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1090,7 +1090,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 95
         ```
 
-??? abstract "9 | Rainbow &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "9 | Rainbow <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1115,7 +1115,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 9
         ```
 
-??? abstract "79 | Ripple &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "79 | Ripple <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1140,7 +1140,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 79
         ```
 
-??? abstract "52 | Running Dual &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "52 | Running Dual <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1165,7 +1165,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 52
         ```
 
-??? abstract "15 | Running lights &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "15 | Running lights <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1190,7 +1190,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 15
         ```
 
-??? abstract "16 | Saw &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "16 | Saw <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1215,7 +1215,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 16
         ```
 
-??? abstract "40 | Scanner &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "40 | Scanner <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1240,7 +1240,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 40
         ```
 
-??? abstract "60 | Scanner Dual &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "60 | Scanner Dual <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1265,7 +1265,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 60
         ```
 
-??? abstract "20 | Sparkle &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "20 | Sparkle <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1290,7 +1290,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 20
         ```
 
-??? abstract "22 | Sparkle + &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "22 | Sparkle + <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1315,7 +1315,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 22
         ```
 
-??? abstract "21 | Sparkle Dark &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "21 | Sparkle Dark <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1340,7 +1340,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 21
         ```
 
-??? abstract "0 | Static &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "0 | Static <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1365,7 +1365,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 0
         ```
 
-??? abstract "23 | Strobe &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: High &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "23 | Strobe <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: High  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1390,7 +1390,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 23
         ```
 
-??? abstract "24 | Strobe Rainbow &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: High &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "24 | Strobe Rainbow <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: High  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1415,7 +1415,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 24
         ```
 
-??? abstract "104 | Sunrise &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "104 | Sunrise <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1440,7 +1440,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 104
         ```
 
-??? abstract "6 | Sweep &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "6 | Sweep <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1465,7 +1465,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 6
         ```
 
-??? abstract "3 | Wipe &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "3 | Wipe <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1490,7 +1490,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 3
         ```
 
-??? abstract "4 | Wipe Random &nbsp;&nbsp; :material-tag-outline: v1.0.0 &nbsp;&nbsp; :material-speedometer: Low &nbsp;&nbsp; :material-palette: ✅"
+??? abstract "4 | Wipe Random <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Low  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
