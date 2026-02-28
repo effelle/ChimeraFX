@@ -1,3 +1,17 @@
+<style>
+  /* 1. Target the first column (ID) */
+  .md-typeset table th:nth-child(1), 
+  .md-typeset table td:nth-child(1) {
+    width: 40px !important;       /* Force a small width */
+    min-width: 40px !important;   /* Prevent theme from expanding it */
+    padding-left: 8px !important; /* Reduce default theme padding */
+    padding-right: 8px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+</style>
+
 # Available Effects, Palettes, Intros and Outros
 
 ## Beyond the Port: A New Standard
@@ -1491,7 +1505,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
 You can assign any of these palettes to compatible effects using the `palette` selector.
 
 | ID | Palette Name | Description | Preview |
-|:--:|:---|:---|:---|
+|:---|:---|:---|:---|
 | 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Aurora.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 17 | **Christmas** | Red and green holiday mix. | ![Christmas](/ChimeraFX/assets/palettes/Christmas.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 15 | **Cyberpunk** | Neon pink, blue, and purple. | ![Cyberpunk](/ChimeraFX/assets/palettes/Cyberpunk.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
