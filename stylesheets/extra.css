@@ -1,0 +1,40 @@
+.md-header__button.md-logo {
+    margin: 0;
+    padding: 0;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+    height: 2rem;
+    width: 2rem;
+}
+
+.md-grid {
+    max-width: initial;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+    color: #FCFEE9;
+}
+
+p {
+    text-align: justify;
+}
+
+:root>* {
+    --md-primary-fg-color: #292B2A;
+    --md-typeset-a-color: #3498db;
+}
+
+.md-header {
+    color: #FCFEE9;
+}
+
+body {
+    color: #FCFEE9;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-default-bg-color: #1D1C1A;
+}
