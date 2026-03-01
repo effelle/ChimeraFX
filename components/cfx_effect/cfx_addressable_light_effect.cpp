@@ -696,7 +696,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
-    this->run_intro(it, adjusted_color);
+    // Run intro on ALL segments (swap-on-service pattern)
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        ::instance = r;
+        this->run_intro(it, adjusted_color);
+      }
+    } else {
+      this->run_intro(it, adjusted_color);
+    }
 
     // 2. Resolve Intro Completion Duration (Priority Hierarchy)
     uint32_t duration_ms = 1000; // Final Default: 1.0s
