@@ -780,6 +780,21 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->runner_->service();
     }
 
+    // Apply user brightness to all rendered pixels
+    // cfx_light::write_state() sends raw bytes to DMA without brightness
+    // scaling, so we must apply it here after all runners render.
+    auto *bri_state = this->get_light_state();
+    if (bri_state != nullptr) {
+      float bri = bri_state->remote_values.get_brightness();
+      if (bri < 0.99f) { // Skip if already at full brightness
+        for (int i = 0; i < it.size(); i++) {
+          Color pc = it[i].get();
+          it[i] = Color((uint8_t)(pc.r * bri), (uint8_t)(pc.g * bri),
+                        (uint8_t)(pc.b * bri), (uint8_t)(pc.w * bri));
+        }
+      }
+    }
+
     // Handle INTRO_NONE fade-in (brightness ramp 0→1)
     if (this->fade_in_active_) {
       uint32_t elapsed = millis() - this->fade_in_start_ms_;
