@@ -45,6 +45,7 @@ EXCLUDE_AUTOTUNE = 7
 EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 EXCLUDE_OUTRO = 10
+EXCLUDE_TARGET_SEGMENT = 11
 
 CONF_DEFAULTS = "defaults" # Kept for backwards compatibility but ignored
 CONF_DEFAULT_SPEED = "speed"
@@ -64,7 +65,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
-    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
+    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=11)),
     cv.Optional(CONF_DEFAULTS): cv.Any(dict, None), # Accept but ignore
 })
 
@@ -317,3 +318,31 @@ async def to_code(config):
         await switch.register_switch(debug, conf)
         cg.add(debug.publish_state(False))
         cg.add(var.set_debug(debug))
+
+    # 12. Target Segment (only when cfx_light has segments defined)
+    if is_included(EXCLUDE_TARGET_SEGMENT):
+        segment_ids = []
+        if "light" in core.CORE.config:
+            light_ids = [l.id for l in config[CONF_LIGHT]]
+            for lconf in core.CORE.config["light"]:
+                lconf_id = lconf.get(CONF_ID)
+                if lconf_id and lconf_id.id in light_ids:
+                    for seg in lconf.get("segments", []):
+                        seg_id = seg.get("id", "")
+                        if seg_id and seg_id not in segment_ids:
+                            segment_ids.append(seg_id)
+
+        if segment_ids:
+            target_options = ["All Segments"] + segment_ids
+            conf = {
+                CONF_ID: cv.declare_id(CFXSelect)(f"{config[CONF_ID]}_target_seg"),
+                CONF_NAME: f"{name} Target Segment",
+                CONF_ICON: "mdi:view-split-horizontal",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+            }
+            target_seg = cg.new_Pvariable(conf[CONF_ID])
+            await select.register_select(target_seg, conf, options=target_options)
+            cg.add(target_seg.publish_state("All Segments"))
+            cg.add(var.set_target_segment(target_seg))

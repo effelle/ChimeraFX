@@ -76,6 +76,7 @@ void CFXAddressableLightEffect::start() {
           r->_segment.start = def.start;
           r->_segment.stop = def.stop;
           r->_segment.mirror = def.mirror;
+          r->set_segment_id(def.id);
           r->setMode(this->effect_id_);
           r->diagnostics.set_target_interval_ms(this->update_interval_);
           this->segment_runners_.push_back(r);
@@ -610,6 +611,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         r->_segment.start = def.start;
         r->_segment.stop = def.stop;
         r->_segment.mirror = def.mirror;
+        r->set_segment_id(def.id);
         r->setMode(this->effect_id_);
         r->diagnostics.set_target_interval_ms(this->update_interval_);
         this->segment_runners_.push_back(r);

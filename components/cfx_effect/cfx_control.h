@@ -56,7 +56,8 @@ public:
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_) {
-          r->setSpeed((uint8_t)value);
+          if (should_target_runner_(r))
+            r->setSpeed((uint8_t)value);
         }
       });
     }
@@ -65,7 +66,8 @@ public:
     if (this->intensity_) {
       this->intensity_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_) {
-          r->setIntensity((uint8_t)value);
+          if (should_target_runner_(r))
+            r->setIntensity((uint8_t)value);
         }
       });
     }
@@ -74,7 +76,8 @@ public:
     if (this->mirror_) {
       this->mirror_->add_on_state_callback([this](bool value) {
         for (auto *r : this->runners_) {
-          r->setMirror(value);
+          if (should_target_runner_(r))
+            r->setMirror(value);
         }
       });
     }
@@ -96,13 +99,15 @@ public:
       this->palette_->add_on_state_callback(
           [this](const std::string &value, size_t index) {
             for (auto *r : this->runners_) {
-              uint8_t pal_idx;
-              if (value == "Default") {
-                pal_idx = this->get_default_palette_id_(r->getMode());
-              } else {
-                pal_idx = this->get_palette_index_(value);
+              if (should_target_runner_(r)) {
+                uint8_t pal_idx;
+                if (value == "Default") {
+                  pal_idx = this->get_default_palette_id_(r->getMode());
+                } else {
+                  pal_idx = this->get_palette_index_(value);
+                }
+                r->setPalette(pal_idx);
               }
-              r->setPalette(pal_idx);
             }
           });
     }
@@ -146,6 +151,8 @@ public:
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_timer(number::Number *n) { timer_ = n; }
+  void set_target_segment(select::Select *s) { target_segment_ = s; }
+  select::Select *get_target_segment() { return target_segment_; }
 
   // Replaces set_light
   void add_light(esphome::light::LightState *light) {
@@ -217,6 +224,7 @@ protected:
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
   number::Number *timer_{nullptr};
+  select::Select *target_segment_{nullptr};
 
   std::vector<esphome::light::LightState *> lights_;
   std::vector<CFXRunner *> runners_; // Registered active runners
@@ -302,6 +310,17 @@ protected:
     if (name == "Default")
       return 0; // Handled by fallback in effect
     return 0;
+  }
+
+  // Target Segment filter: returns true if the runner matches the current
+  // target, or if target is "All Segments" / unset (broadcast to all).
+  bool should_target_runner_(CFXRunner *r) const {
+    if (!target_segment_ || !target_segment_->has_state())
+      return true;
+    auto state = target_segment_->state;
+    if (state.empty() || state == "All Segments")
+      return true;
+    return r->get_segment_id() == state;
   }
 };
 
