@@ -62,13 +62,39 @@ void CFXAddressableLightEffect::start() {
     this->controller_ = CFXControl::find(this->get_light_state());
   }
 
-  // Allocate Runner early so we can use it for metadata fallback
+  // Allocate Runner(s) early so we can use them for metadata fallback
   if (this->runner_ == nullptr) {
     auto *it = (light::AddressableLight *)this->get_light_state()->get_output();
     if (it != nullptr) {
-      this->runner_ = new CFXRunner(it);
-      this->runner_->setMode(this->effect_id_);
-      this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+#ifdef USE_ESP32
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
+      const auto &seg_defs = cfx_out->get_segment_defs();
+
+      if (!seg_defs.empty() && !this->segments_initialized_) {
+        for (const auto &def : seg_defs) {
+          auto *r = new CFXRunner(it);
+          r->_segment.start = def.start;
+          r->_segment.stop = def.stop;
+          r->_segment.mirror = def.mirror;
+          r->setMode(this->effect_id_);
+          r->diagnostics.set_target_interval_ms(this->update_interval_);
+          this->segment_runners_.push_back(r);
+        }
+        this->runner_ = this->segment_runners_[0];
+        this->segments_initialized_ = true;
+        ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
+                 this->segment_runners_.size(), this->get_name());
+      } else {
+#endif
+        this->runner_ = new CFXRunner(it);
+        this->runner_->setMode(this->effect_id_);
+        this->runner_->diagnostics.set_target_interval_ms(
+            this->update_interval_);
+        ESP_LOGI("chimera_fx", "Single-segment mode runner created for %s",
+                 this->get_name());
+#ifdef USE_ESP32
+      }
+#endif
     }
   }
 
@@ -553,6 +579,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // --- Ensure Runner(s) ---
   if (this->runner_ == nullptr) {
+#ifdef USE_ESP32
     // Check if cfx_light has segment definitions
     auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(&it);
     const auto &seg_defs = cfx_out->get_segment_defs();
@@ -571,14 +598,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Primary runner = first segment (used by intro/outro/control logic)
       this->runner_ = this->segment_runners_[0];
       this->segments_initialized_ = true;
-      ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created",
-               this->segment_runners_.size());
+      ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
+               this->segment_runners_.size(), this->get_name());
     } else {
+#endif
       // Single-runner mode (backward compatible)
       this->runner_ = new CFXRunner(&it);
       this->runner_->setMode(this->effect_id_);
       this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+#ifdef USE_ESP32
     }
+#endif
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
