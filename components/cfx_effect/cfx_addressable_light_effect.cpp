@@ -498,31 +498,24 @@ void CFXAddressableLightEffect::stop() {
             this->get_default_intensity_(this->effect_id_);
       }
 
-      // Capture the current runner and hand it off for outro
+      // Capture ALL segment runners for the outro (or just the primary for
+      // single-runner)
       CFXRunner *captured_runner = this->runner_;
       this->runner_ = nullptr; // Null here so start() creates a fresh one later
+      std::vector<CFXRunner *> captured_runners;
 
-      // Capture and clean up ALL segment runners to prevent memory leaks
-      // The captured_runner (segment_runners_[0]) is kept alive for the outro.
-      // All other segment runners are deleted immediately.
-      std::vector<CFXRunner *> extra_runners;
       if (!this->segment_runners_.empty()) {
         for (auto *r : this->segment_runners_) {
           if (c)
             c->unregister_runner(r);
-          if (r != captured_runner) {
-            extra_runners.push_back(r);
-          }
+          captured_runners.push_back(r);
         }
         this->segment_runners_.clear();
         this->segments_initialized_ = false;
-      } else if (c) {
-        c->unregister_runner(captured_runner);
-      }
-
-      // Delete extra segment runners now (they are not needed for outro)
-      for (auto *r : extra_runners) {
-        delete r;
+      } else {
+        if (c)
+          c->unregister_runner(captured_runner);
+        captured_runners.push_back(captured_runner);
       }
 
       // Safely detach from effect runner system
@@ -532,16 +525,15 @@ void CFXAddressableLightEffect::stop() {
 
       // Register the callback synchronously to prevent ESPHome from rendering
       // a rogue frame of a solid color transition during the gap.
-      // We will evaluate `is_on()` inside the first frame of the callback
-      // since LightCall will have finished updating by the next `loop()`.
       this->outro_start_time_ = 0; // Signify uninitialized start time
 
-      out->set_outro_callback([this, out, captured_runner]() -> bool {
+      out->set_outro_callback([this, out, captured_runners]() -> bool {
         auto *current_state = this->get_light_state();
         if (current_state != nullptr && current_state->remote_values.is_on()) {
           // Effect was completely changed or light remained ON.
-          // Abort the outro and delete the captured runner cleanly.
-          delete captured_runner;
+          // Abort the outro and delete all captured runners cleanly.
+          for (auto *r : captured_runners)
+            delete r;
           return true;
         }
 
@@ -550,9 +542,16 @@ void CFXAddressableLightEffect::stop() {
           this->outro_start_time_ = millis();
         }
 
-        bool done = this->run_outro_frame(*out, captured_runner);
+        // Run outro frame on ALL captured segment runners
+        bool done = false;
+        for (auto *r : captured_runners) {
+          ::instance = r;
+          done = this->run_outro_frame(*out, r);
+        }
+
         if (done) {
-          delete captured_runner;
+          for (auto *r : captured_runners)
+            delete r;
         }
         return done;
       });
