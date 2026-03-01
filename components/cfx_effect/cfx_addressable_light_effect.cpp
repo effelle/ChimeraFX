@@ -1426,12 +1426,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       use_palette = true;
   }
 
-  if (use_palette && this->runner_ != nullptr) {
+  if (use_palette && ::instance != nullptr) {
     // Force update the runner's palette immediately
-    this->runner_->_segment.palette = pal;
+    ::instance->_segment.palette = pal;
   }
 
-  int num_leds = it.size();
+  // Segment Aware Bounds
+  int seg_start = 0;
+  int seg_stop = it.size();
+  int seg_len = it.size();
+  if (::instance != nullptr) {
+    seg_start = ::instance->_segment.start;
+    seg_stop = ::instance->_segment.stop;
+    seg_len = ::instance->_segment.length();
+  }
 
   // Control State
   switch_::Switch *mirror_sw = this->mirror_;
@@ -1451,9 +1459,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
   switch (mode) {
   case INTRO_MODE_WIPE: {
-    int logical_len = symmetry ? (num_leds / 2) : num_leds;
+    int logical_len = symmetry ? (seg_len / 2) : seg_len;
 
-    // Intensity defines blur radius (up to 50% of the strip)
+    // Intensity defines blur radius (up to 50% of the segment)
     float blur_percent = 0.0f;
     number::Number *intensity_num = this->intensity_;
     if (intensity_num == nullptr && this->controller_ != nullptr) {
@@ -1518,13 +1526,17 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
 
       // Apply
-      it[i] = pixel_c;
-      if (symmetry) {
-        it[num_leds - 1 - i] = pixel_c;
+      // Respect segment bounds and mirror
+      int global_idx1 = seg_start + i;
+      int global_idx2 = seg_stop - 1 - i;
+
+      it[global_idx1] = pixel_c;
+      if (symmetry && global_idx2 >= 0) {
+        it[global_idx2] = pixel_c;
       }
     }
-    if (symmetry && (num_leds % 2 != 0)) {
-      int mid = num_leds / 2;
+    if (symmetry && (seg_len % 2 != 0)) {
+      int mid = seg_start + (seg_len / 2);
       bool fill_center = (progress >= 1.0f) || (reverse && lead > 0);
       if (fill_center) {
         if (use_palette && this->runner_) {
@@ -1546,19 +1558,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // Global Dimming
     uint8_t brightness = (uint8_t)(progress * 255.0f);
 
-    for (int i = 0; i < num_leds; i++) {
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
       Color base_c = c;
-      if (use_palette) {
-        // Map whole strip to spectrum for Fade
-        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-        uint32_t cp = this->runner_->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
+      if (use_palette && ::instance) {
+        // Map whole segment to spectrum for Fade
+        uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
+        uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                              true, 255, 255);
         base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
                        (cp >> 24) & 0xFF);
       }
 
       // Explicit Scaling avoiding operator ambiguity
-      it[i] =
+      it[global_idx] =
           Color((base_c.r * brightness) / 255, (base_c.g * brightness) / 255,
                 (base_c.b * brightness) / 255, (base_c.w * brightness) / 255);
     }
@@ -1569,28 +1582,28 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // Random pixels turn on based on progress
     uint8_t threshold = (uint8_t)(progress * 255.0f);
 
-    for (int i = 0; i < num_leds; i++) {
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
       // Deterministic pseudo-random value for this pixel position
       // so it stays ON once it turns ON (Dissolve behavior)
-      uint16_t hash = (i * 33) + (i * i);
+      uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
       uint8_t val = hash % 256;
 
       bool active = (threshold >= val);
 
       Color pixel_c = Color::BLACK;
       if (active) {
-        if (use_palette) {
-          uint8_t map_idx =
-              (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-          uint32_t cp = this->runner_->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
+        if (use_palette && ::instance) {
+          uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
+          uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                                true, 255, 255);
           pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
                           (cp >> 24) & 0xFF);
         } else {
           pixel_c = c;
         }
       }
-      it[i] = pixel_c;
+      it[global_idx] = pixel_c;
     }
     break;
   }
@@ -1604,7 +1617,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // Everything moves strictly proportionally to `progress`.
 
     // Define proportional sizes based on segment length
-    float length = (float)num_leds;
+    float length = (float)seg_len;
     float c_size = length * 0.08f; // Each cursor is 8% of strip
     if (c_size < 3.0f)
       c_size = 3.0f;
@@ -1632,9 +1645,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     float total_distance = length - w_solid;
     float head_pos = (progress * total_distance) + c1_front;
 
-    for (int i = 0; i < num_leds; i++) {
-      int idx = reverse ? (num_leds - 1 - i) : i;
-      float fi = (float)i;
+    for (int i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i;
+      int global_idx = seg_start + idx;
+      float fi = (float)idx;
 
       // Calculate this pixel's relative position behind the traveling head
       // positive value means it is behind the head_pos
@@ -1690,20 +1704,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       // Render Pixel
       if (alpha > 0.0f) {
         Color base_c = c;
-        if (use_palette && this->runner_) {
+        if (use_palette && ::instance) {
           uint8_t map_idx =
-              (uint8_t)((idx * 255) / (num_leds > 0 ? num_leds : 1));
-          uint32_t cp = this->runner_->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
+              (uint8_t)((idx * 255) / (seg_len > 0 ? seg_len : 1));
+          uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                                true, 255, 255);
           base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
                          (cp >> 24) & 0xFF);
         }
 
-        it[idx] =
+        it[global_idx] =
             Color((uint8_t)(base_c.r * alpha), (uint8_t)(base_c.g * alpha),
                   (uint8_t)(base_c.b * alpha), (uint8_t)(base_c.w * alpha));
       } else {
-        it[idx] = Color::BLACK;
+        it[global_idx] = Color::BLACK;
       }
     }
     break;
@@ -1724,27 +1738,28 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
     }
 
-    for (int i = 0; i < num_leds; i++) {
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
       if (is_on) {
-        uint8_t map_idx = (uint8_t)((i * 255) / (num_leds > 0 ? num_leds : 1));
-        if (this->runner_) {
-          uint32_t cp = this->runner_->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
-          it[i] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                        (cp >> 24) & 0xFF);
+        uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
+        if (::instance) {
+          uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                                true, 255, 255);
+          it[global_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                                 (cp >> 24) & 0xFF);
         } else {
-          it[i] = target_color;
+          it[global_idx] = target_color;
         }
       } else {
-        it[i] = Color::BLACK;
+        it[global_idx] = Color::BLACK;
       }
     }
     break;
   }
   case INTRO_MODE_NONE:
   default:
-    for (int i = 0; i < num_leds; i++) {
-      it[i] = Color::BLACK;
+    for (int i = 0; i < seg_len; i++) {
+      it[seg_start + i] = Color::BLACK;
     }
     break;
   }
@@ -1788,10 +1803,14 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   // 2. Render background frame onto the output buffer
-  int num_leds = it.size();
-  for (int i = 0; i < num_leds; i++) {
+  int seg_start = runner->_segment.start;
+  int seg_stop = runner->_segment.stop;
+  int seg_len = runner->_segment.length();
+
+  for (int i = 0; i < seg_len; i++) {
+    int global_idx = seg_start + i;
     uint32_t c = runner->_segment.getPixelColor(i);
-    it[i] =
+    it[global_idx] =
         Color((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF);
   }
 
@@ -1819,7 +1838,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
   switch (mode) {
   case INTRO_MODE_WIPE: {
-    int logical_len = symmetry ? (num_leds / 2) : num_leds;
+    int logical_len = symmetry ? (seg_len / 2) : seg_len;
 
     // Intensity defines blur radius (up to 50% of the strip)
     // Use the cached active_outro_intensity_ because controller_ is null during
@@ -1862,25 +1881,26 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       }
 
       if (alpha == 0.0f) {
-        it[i] = Color::BLACK;
+        it[seg_start + i] = Color::BLACK;
         if (symmetry)
-          it[num_leds - 1 - i] = Color::BLACK;
+          it[seg_stop - 1 - i] = Color::BLACK;
       } else if (alpha < 1.0f) {
         // Dim the background frame by alpha
-        Color c1 = it[i].get();
-        it[i] = Color((uint8_t)(c1.r * alpha), (uint8_t)(c1.g * alpha),
-                      (uint8_t)(c1.b * alpha), (uint8_t)(c1.w * alpha));
+        Color c1 = it[seg_start + i].get();
+        it[seg_start + i] =
+            Color((uint8_t)(c1.r * alpha), (uint8_t)(c1.g * alpha),
+                  (uint8_t)(c1.b * alpha), (uint8_t)(c1.w * alpha));
         if (symmetry) {
-          Color c2 = it[num_leds - 1 - i].get();
-          it[num_leds - 1 - i] =
+          Color c2 = it[seg_stop - 1 - i].get();
+          it[seg_stop - 1 - i] =
               Color((uint8_t)(c2.r * alpha), (uint8_t)(c2.g * alpha),
                     (uint8_t)(c2.b * alpha), (uint8_t)(c2.w * alpha));
         }
       }
     }
 
-    if (symmetry && (num_leds % 2 != 0)) {
-      int mid = num_leds / 2;
+    if (symmetry && (seg_len % 2 != 0)) {
+      int mid = seg_start + (seg_len / 2);
       bool fill_center = (lead > 0);
       if (!fill_center) {
         it[mid] = Color::BLACK;
@@ -1891,11 +1911,12 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_GLITTER: {
     // Glitter Outro: More and more black pixels appear
     uint8_t threshold = (uint8_t)(progress * 255.0f);
-    for (int i = 0; i < num_leds; i++) {
-      uint16_t hash = (i * 33) + (i * i);
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
       uint8_t val = hash % 256;
       if (val < threshold) {
-        it[i] = Color::BLACK;
+        it[global_idx] = Color::BLACK;
       }
       // Else: Keep 100% brightness of the underlying frame
     }
@@ -1907,7 +1928,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     // Progress 0.0: Full light.
     // Progress 1.0: Full black.
 
-    float length = (float)num_leds;
+    float length = (float)seg_len;
     float c_size = length * 0.08f;
     if (c_size < 3.0f)
       c_size = 3.0f;
@@ -1934,9 +1955,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     float total_distance = length - w_solid;
     float head_pos = (progress * total_distance) + c1_front;
 
-    for (int i = 0; i < num_leds; i++) {
-      int idx = reverse ? (num_leds - 1 - i) : i;
-      float fi = (float)i;
+    for (int i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i;
+      int global_idx = seg_start + idx;
+      float fi = (float)idx;
       float relative_pos = head_pos - fi;
       float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
 
@@ -1982,11 +2004,12 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
       // Apply alpha to existing buffer color
       if (alpha <= 0.0f) {
-        it[idx] = Color::BLACK;
+        it[global_idx] = Color::BLACK;
       } else if (alpha < 1.0f) {
-        Color cur = it[idx].get();
-        it[idx] = Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
-                        (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+        Color cur = it[global_idx].get();
+        it[global_idx] =
+            Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
+                  (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
       }
     }
     break;
@@ -2007,8 +2030,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     if (!is_on) {
-      for (int i = 0; i < num_leds; i++) {
-        it[i] = Color::BLACK;
+      for (int i = 0; i < seg_len; i++) {
+        it[seg_start + i] = Color::BLACK;
       }
     }
     break;
@@ -2017,10 +2040,12 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_NONE:
   default:
     // Manual fade scalar scaling due to hardware fade circumvention
-    for (int i = 0; i < num_leds; i++) {
-      Color c = it[i].get();
-      it[i] = Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                    (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      Color c = it[global_idx].get();
+      it[global_idx] =
+          Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
     }
     break;
   }

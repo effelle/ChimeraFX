@@ -182,8 +182,8 @@ void Segment::fill(uint32_t c) {
   esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
 
   for (int i = 0; i < len; i++) {
-    int global_index = global_start + i;
-    if (global_index < light_size) {
+    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    if (global_index >= 0 && global_index < light_size) {
       light[global_index] = esphome_color;
     }
   }
@@ -214,8 +214,8 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = global_start + i;
-    if (global_index < light_size) {
+    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    if (global_index >= 0 && global_index < light_size) {
       // Read directly from ESPHome buffer for speed
       esphome::Color c = light[global_index].get();
       // Use standard bit math with Gamma-Corrected effectiveFade
@@ -247,26 +247,39 @@ void Segment::blur(uint8_t blur_amount) {
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = global_start + i;
-    if (global_index >= light_size)
+    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    if (global_index < 0 || global_index >= light_size)
       continue;
 
     // Get current color
     esphome::Color c = light[global_index].get();
 
-    // Get neighbors (clamped to segment)
-    // Left
-    esphome::Color left = c;
-    if (i > 0) {
-      if ((global_index - 1) >= 0)
-        left = light[global_index - 1].get();
+    // Get neighbors (respecting mirror direction context)
+    // Local left/right translate to absolute neighbors depending on mirror
+    int left_index = mirror ? (global_index + 1) : (global_index - 1);
+    int right_index = mirror ? (global_index - 1) : (global_index + 1);
+
+    // Clamp to segment boundaries
+    if (mirror) {
+      if (left_index >= stop)
+        left_index = global_index;
+      if (right_index < start)
+        right_index = global_index;
+    } else {
+      if (left_index < start)
+        left_index = global_index;
+      if (right_index >= stop)
+        right_index = global_index;
     }
 
-    // Right
+    esphome::Color left = c;
+    if (left_index >= 0 && left_index < light_size) {
+      left = light[left_index].get();
+    }
+
     esphome::Color right = c;
-    if (i < len - 1) {
-      if ((global_index + 1) < light_size)
-        right = light[global_index + 1].get();
+    if (right_index >= 0 && right_index < light_size) {
+      right = light[right_index].get();
     }
 
     // Blur Kernel: (C*keep + (L+R)*seep) / 256
@@ -292,8 +305,8 @@ void Segment::subtractive_fade_val(uint8_t fade_amt) {
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = global_start + i;
-    if (global_index >= light_size)
+    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    if (global_index < 0 || global_index >= light_size)
       continue;
 
     esphome::Color c = light[global_index].get();
