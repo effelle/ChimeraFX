@@ -616,7 +616,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 28
         ```
 
-??? abstract "54 | Chase tri <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
+??? abstract "54 | Chase multi <span class='extra-info'>:material-tag-outline: 1.0.0  :material-speedometer: Mid  :material-palette: ✅</span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">

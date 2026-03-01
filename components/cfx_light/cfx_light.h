@@ -20,12 +20,29 @@
 #include <esp_err.h>
 #include <esp_idf_version.h>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace esphome {
 
 namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
+
+// --- Segment Infrastructure (Phase 1) ---
+
+#define MAX_CFX_SEGMENTS 6
+
+struct CFXSegmentDef {
+  std::string id;
+  uint16_t start;
+  uint16_t stop;
+  bool mirror;
+  uint8_t intro_mode;      // 0 = inherit root default
+  uint8_t outro_mode;      // 0 = inherit root default
+  float intro_duration_s;  // 0.0 = inherit root default
+  float outro_duration_s;  // 0.0 = inherit root default
+};
 
 // Supported LED chipsets
 enum ChimeraChipset : uint8_t {
@@ -90,6 +107,36 @@ public:
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
+  }
+
+  // --- Segment configuration (codegen setters) ---
+  void add_segment_def(const std::string &id, uint16_t start, uint16_t stop,
+                       bool mirror, uint8_t intro, uint8_t outro,
+                       float intro_dur, float outro_dur) {
+    if (segment_defs_.size() >= MAX_CFX_SEGMENTS) return;
+    segment_defs_.push_back({id, start, stop, mirror, intro, outro, intro_dur, outro_dur});
+  }
+  const std::vector<CFXSegmentDef> &get_segment_defs() const { return segment_defs_; }
+  bool has_segments() const { return !segment_defs_.empty(); }
+
+  // Root-level intro/outro defaults (inherited by segments with value 0)
+  void set_default_intro_mode(uint8_t v) { default_intro_mode_ = v; }
+  void set_default_outro_mode(uint8_t v) { default_outro_mode_ = v; }
+  void set_default_intro_dur(float v) { default_intro_dur_s_ = v; }
+  void set_default_outro_dur(float v) { default_outro_dur_s_ = v; }
+
+  // Resolve inheritance: per-segment value if set, otherwise root default
+  uint8_t resolve_intro_mode(const CFXSegmentDef &seg) const {
+    return seg.intro_mode != 0 ? seg.intro_mode : default_intro_mode_;
+  }
+  uint8_t resolve_outro_mode(const CFXSegmentDef &seg) const {
+    return seg.outro_mode != 0 ? seg.outro_mode : default_outro_mode_;
+  }
+  float resolve_intro_dur(const CFXSegmentDef &seg) const {
+    return seg.intro_duration_s > 0.0f ? seg.intro_duration_s : default_intro_dur_s_;
+  }
+  float resolve_outro_dur(const CFXSegmentDef &seg) const {
+    return seg.outro_duration_s > 0.0f ? seg.outro_duration_s : default_outro_dur_s_;
   }
 
   // Visualizer setters
@@ -157,6 +204,13 @@ protected:
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
+
+  // --- Segment definitions (Phase 1) ---
+  std::vector<CFXSegmentDef> segment_defs_;
+  uint8_t default_intro_mode_{0};
+  uint8_t default_outro_mode_{0};
+  float default_intro_dur_s_{0.0f};
+  float default_outro_dur_s_{0.0f};
 };
 
 } // namespace cfx_light

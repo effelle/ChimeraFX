@@ -134,6 +134,12 @@ protected:
 
   CFXRunner *runner_{nullptr};
 
+  // Multi-segment support (Phase 1): all runners including runner_
+  // When segments are configured, runner_ points to segment_runners_[0].
+  // When no segments, segment_runners_ is empty and runner_ works alone.
+  std::vector<CFXRunner *> segment_runners_;
+  bool segments_initialized_{false};
+
   uint32_t update_interval_{16};
   uint32_t last_run_{0};
 

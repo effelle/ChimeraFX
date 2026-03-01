@@ -516,6 +516,19 @@ void CFXLightOutput::dump_config() {
                 "  RMT Symbols: %" PRIu32,
                 this->pin_, chipset_str, this->num_leds_,
                 this->is_rgbw_ ? "yes" : "no", order_str, this->rmt_symbols_);
+
+  // Segment layout
+  if (!this->segment_defs_.empty()) {
+    ESP_LOGCONFIG(TAG, "  Segments: %u", this->segment_defs_.size());
+    for (size_t i = 0; i < this->segment_defs_.size(); i++) {
+      const auto &seg = this->segment_defs_[i];
+      ESP_LOGCONFIG(
+          TAG, "    [%u] \"%s\": %u→%u (%u LEDs)%s  intro=%u outro=%u", i,
+          seg.id.c_str(), seg.start, seg.stop, seg.stop - seg.start,
+          seg.mirror ? " [MIRROR]" : "", this->resolve_intro_mode(seg),
+          this->resolve_outro_mode(seg));
+    }
+  }
 }
 
 float CFXLightOutput::get_setup_priority() const {

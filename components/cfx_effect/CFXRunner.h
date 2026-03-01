@@ -317,6 +317,10 @@ public:
   uint8_t getMode() const { return _mode; }
   uint8_t getPalette() const { return _segment.palette; }
 
+  // Phase 2 hook: returns animation progress as 0-100%.
+  // Stub for now — will be filled per progressive effect.
+  uint8_t progress_pct() const { return 0; }
+
   double _virtual_now = 0;
   float _accum_ms = 0;
 

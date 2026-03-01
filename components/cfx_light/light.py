@@ -38,6 +38,16 @@ CONF_ALL_EFFECTS = "all_effects"
 CONF_VISUALIZER_IP = "visualizer_ip"
 CONF_VISUALIZER_PORT = "visualizer_port"
 
+# Segment configuration keys (Phase 1)
+CONF_SEGMENTS = "segments"
+CONF_SEGMENT_ID = "id"
+CONF_SEGMENT_START = "start"
+CONF_SEGMENT_STOP = "stop"
+CONF_SEGMENT_MIRROR = "mirror"
+CONF_SEGMENT_USE_INTRO = "use_intro"
+CONF_SEGMENT_USE_OUTRO = "use_outro"
+CONF_SEGMENT_INTRO_DUR = "intro_dur"
+
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32", "wifi"]
 
@@ -75,6 +85,71 @@ DEFAULT_ORDER = {
     "SK6812": RGBOrder.ORDER_GRB,
     "WS2811": RGBOrder.ORDER_RGB,
 }
+
+
+# --- Segment Schema & Validation (Phase 1) ---
+
+SEGMENT_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_SEGMENT_ID): cv.string,
+        cv.Required(CONF_SEGMENT_START): cv.uint16_t,
+        cv.Required(CONF_SEGMENT_STOP): cv.uint16_t,
+        cv.Optional(CONF_SEGMENT_MIRROR, default=False): cv.boolean,
+        cv.Optional(CONF_SEGMENT_USE_INTRO): cv.uint8_t,
+        cv.Optional(CONF_SEGMENT_USE_OUTRO): cv.uint8_t,
+        cv.Optional(CONF_SEGMENT_INTRO_DUR): cv.positive_time_period_milliseconds,
+    }
+)
+
+MAX_CFX_SEGMENTS = 6
+
+
+def _validate_segments(config):
+    """Validate segment definitions: bounds, overlaps, uniqueness, count."""
+    segments = config.get(CONF_SEGMENTS, [])
+    if not segments:
+        return config
+
+    num_leds = config[CONF_NUM_LEDS]
+
+    if len(segments) > MAX_CFX_SEGMENTS:
+        raise cv.Invalid(
+            f"Too many segments: {len(segments)} (max {MAX_CFX_SEGMENTS})"
+        )
+
+    seen_ids = set()
+    ranges = []
+
+    for i, seg in enumerate(segments):
+        seg_id = seg[CONF_SEGMENT_ID]
+        start = seg[CONF_SEGMENT_START]
+        stop = seg[CONF_SEGMENT_STOP]
+
+        if stop <= start:
+            raise cv.Invalid(
+                f"Segment '{seg_id}': stop ({stop}) must be > start ({start})"
+            )
+        if stop > num_leds:
+            raise cv.Invalid(
+                f"Segment '{seg_id}': stop ({stop}) exceeds num_leds ({num_leds})"
+            )
+        if seg_id in seen_ids:
+            raise cv.Invalid(f"Duplicate segment id: '{seg_id}'")
+        seen_ids.add(seg_id)
+        ranges.append((start, stop, seg_id))
+
+    # Check for overlaps (sort by start, then check consecutive)
+    ranges.sort(key=lambda r: r[0])
+    for i in range(1, len(ranges)):
+        prev_start, prev_stop, prev_id = ranges[i - 1]
+        curr_start, curr_stop, curr_id = ranges[i]
+        if curr_start < prev_stop:
+            raise cv.Invalid(
+                f"Segments '{prev_id}' ({prev_start}-{prev_stop}) "
+                f"and '{curr_id}' ({curr_start}-{curr_stop}) overlap"
+            )
+
+    return config
 
 
 def _load_effects_yaml():
@@ -170,8 +245,11 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
+            # Segment definitions (Phase 1)
+            cv.Optional(CONF_SEGMENTS): cv.ensure_list(SEGMENT_SCHEMA),
         }
-    ).extend(cv.COMPONENT_SCHEMA)
+    ).extend(cv.COMPONENT_SCHEMA),
+    _validate_segments,  # Must run AFTER schema accepts the 'segments' key
 )
 
 
@@ -219,3 +297,33 @@ async def to_code(config):
     if CONF_VISUALIZER_IP in config:
         cg.add(var.set_visualizer_ip(config[CONF_VISUALIZER_IP]))
         cg.add(var.set_visualizer_port(config[CONF_VISUALIZER_PORT]))
+
+    # --- Segment codegen (Phase 1) ---
+    # Root-level intro/outro defaults (segments inherit these)
+    if "use_intro" in config:
+        cg.add(var.set_default_intro_mode(config["use_intro"]))
+    if "use_outro" in config:
+        cg.add(var.set_default_outro_mode(config["use_outro"]))
+    if "intro_dur" in config:
+        intro_dur_ms = config["intro_dur"]
+        cg.add(var.set_default_intro_dur(float(intro_dur_ms) / 1000.0))
+        cg.add(var.set_default_outro_dur(float(intro_dur_ms) / 1000.0))
+
+    for seg in config.get(CONF_SEGMENTS, []):
+        seg_id = seg[CONF_SEGMENT_ID]
+        seg_start = seg[CONF_SEGMENT_START]
+        seg_stop = seg[CONF_SEGMENT_STOP]
+        seg_mirror = seg.get(CONF_SEGMENT_MIRROR, False)
+        seg_intro = seg.get(CONF_SEGMENT_USE_INTRO, 0)
+        seg_outro = seg.get(CONF_SEGMENT_USE_OUTRO, 0)
+
+        seg_intro_dur = 0.0
+        if CONF_SEGMENT_INTRO_DUR in seg:
+            seg_intro_dur = float(seg[CONF_SEGMENT_INTRO_DUR]) / 1000.0
+
+        cg.add(
+            var.add_segment_def(
+                seg_id, seg_start, seg_stop, seg_mirror,
+                seg_intro, seg_outro, seg_intro_dur, seg_intro_dur
+            )
+        )

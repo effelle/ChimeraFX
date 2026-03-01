@@ -516,11 +516,23 @@ void CFXAddressableLightEffect::stop() {
   }
 
   // Normal Stop / Cleanup (Failsafe)
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      if (r != this->runner_ && this->controller_) {
+        this->controller_->unregister_runner(r);
+      }
+      if (r != this->runner_) {
+        delete r;
+      }
+    }
+    this->segment_runners_.clear();
+    this->segments_initialized_ = false;
+  }
   if (this->runner_ != nullptr) {
     if (this->controller_) {
       this->controller_->unregister_runner(this->runner_);
     }
-    delete this->runner_; // Destructor calls deallocateData()
+    delete this->runner_;
     this->runner_ = nullptr;
   }
   this->controller_ = nullptr;
@@ -539,11 +551,34 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   this->last_run_ = now;
 
-  // --- Ensure Runner ---
+  // --- Ensure Runner(s) ---
   if (this->runner_ == nullptr) {
-    this->runner_ = new CFXRunner(&it);
-    this->runner_->setMode(this->effect_id_);
-    this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+    // Check if cfx_light has segment definitions
+    auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(&it);
+    const auto &seg_defs = cfx_out->get_segment_defs();
+
+    if (!seg_defs.empty() && !this->segments_initialized_) {
+      // Multi-segment mode: create one runner per segment def
+      for (const auto &def : seg_defs) {
+        auto *r = new CFXRunner(&it);
+        r->_segment.start = def.start;
+        r->_segment.stop = def.stop;
+        r->_segment.mirror = def.mirror;
+        r->setMode(this->effect_id_);
+        r->diagnostics.set_target_interval_ms(this->update_interval_);
+        this->segment_runners_.push_back(r);
+      }
+      // Primary runner = first segment (used by intro/outro/control logic)
+      this->runner_ = this->segment_runners_[0];
+      this->segments_initialized_ = true;
+      ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created",
+               this->segment_runners_.size());
+    } else {
+      // Single-runner mode (backward compatible)
+      this->runner_ = new CFXRunner(&it);
+      this->runner_->setMode(this->effect_id_);
+      this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
+    }
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
@@ -585,13 +620,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             (uint32_t(current_color.red) << 16) |
             (uint32_t(current_color.green) << 8) | uint32_t(current_color.blue);
   }
-  this->runner_->setColor(color);
+  // Sync color to all runners
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      r->setColor(color);
+    }
+  } else {
+    this->runner_->setColor(color);
+  }
 
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting
   float current_gamma = this->get_light_state()->get_gamma_correct();
-  if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
-    this->runner_->setGamma(current_gamma);
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      if (abs(r->_gamma - current_gamma) > 0.01f) {
+        r->setGamma(current_gamma);
+      }
+    }
+  } else {
+    if (abs(this->runner_->_gamma - current_gamma) > 0.01f) {
+      this->runner_->setGamma(current_gamma);
+    }
   }
 
   // === State Machine: Intro vs Main Effect ===
@@ -661,8 +711,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->runner_->start();
     }
   } else {
-    // Main CFX effect Running
-    this->runner_->service();
+    // Main CFX effect Running — Multi-Segment Swap-on-Service
+    if (!this->segment_runners_.empty()) {
+      // Multi-segment: iterate all runners, swapping the global instance
+      extern CFXRunner *instance;
+      for (auto *r : this->segment_runners_) {
+        instance = r;
+        r->service();
+      }
+    } else {
+      // Single runner (backward compatible)
+      this->runner_->service();
+    }
 
     // Handle INTRO_NONE fade-in (brightness ramp 0→1)
     if (this->fade_in_active_) {
