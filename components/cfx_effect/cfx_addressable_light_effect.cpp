@@ -498,11 +498,31 @@ void CFXAddressableLightEffect::stop() {
             this->get_default_intensity_(this->effect_id_);
       }
 
-      // Capture the current runner and hand it off
+      // Capture the current runner and hand it off for outro
       CFXRunner *captured_runner = this->runner_;
       this->runner_ = nullptr; // Null here so start() creates a fresh one later
-      if (c) {
+
+      // Capture and clean up ALL segment runners to prevent memory leaks
+      // The captured_runner (segment_runners_[0]) is kept alive for the outro.
+      // All other segment runners are deleted immediately.
+      std::vector<CFXRunner *> extra_runners;
+      if (!this->segment_runners_.empty()) {
+        for (auto *r : this->segment_runners_) {
+          if (c)
+            c->unregister_runner(r);
+          if (r != captured_runner) {
+            extra_runners.push_back(r);
+          }
+        }
+        this->segment_runners_.clear();
+        this->segments_initialized_ = false;
+      } else if (c) {
         c->unregister_runner(captured_runner);
+      }
+
+      // Delete extra segment runners now (they are not needed for outro)
+      for (auto *r : extra_runners) {
+        delete r;
       }
 
       // Safely detach from effect runner system
@@ -1108,14 +1128,18 @@ void CFXAddressableLightEffect::run_controls_() {
   // 1. Find controller if not linked
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
-    if (this->controller_ && this->runner_) {
-      this->controller_->register_runner(this->runner_);
-    }
   }
 
-  if (this->controller_ && this->runner_) {
-    // Ensure registration happens even if controller was found previously
-    this->controller_->register_runner(this->runner_);
+  // 2. Register ALL runners with the controller (segment runners or single
+  // runner)
+  if (this->controller_) {
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        this->controller_->register_runner(r);
+      }
+    } else if (this->runner_) {
+      this->controller_->register_runner(this->runner_);
+    }
   }
 
   CFXControl *c = this->controller_;
