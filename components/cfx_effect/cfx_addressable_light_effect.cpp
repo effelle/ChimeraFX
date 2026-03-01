@@ -1442,6 +1442,16 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color(0, 0, 0, target_w);
   }
 
+  // Apply user brightness scaling to target color
+  float user_brightness = 1.0f;
+  if (state) {
+    user_brightness = state->remote_values.get_brightness();
+    if (user_brightness < 0.01f)
+      user_brightness = 0.01f;
+  }
+  c = Color((uint8_t)(c.r * user_brightness), (uint8_t)(c.g * user_brightness),
+            (uint8_t)(c.b * user_brightness), (uint8_t)(c.w * user_brightness));
+
   // Check for Palette usage
   bool use_palette = false;
   uint8_t pal = 0;
@@ -1573,7 +1583,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
               (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
           uint32_t cp = this->runner_->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF, 0);
+          pixel_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
+                          (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
+                          (uint8_t)((cp & 0xFF) * user_brightness), 0);
         } else {
           pixel_c = c; // Solid Color
         }
@@ -1627,8 +1639,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
         uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
                                                               true, 255, 255);
-        base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                       (cp >> 24) & 0xFF);
+        base_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
+                       (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
+                       (uint8_t)((cp & 0xFF) * user_brightness),
+                       (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
       }
 
       // Explicit Scaling avoiding operator ambiguity
@@ -1658,8 +1672,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
           uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
                                                                 true, 255, 255);
-          pixel_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                          (cp >> 24) & 0xFF);
+          pixel_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
+                          (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
+                          (uint8_t)((cp & 0xFF) * user_brightness),
+                          (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
         } else {
           pixel_c = c;
         }
@@ -1770,8 +1786,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
               (uint8_t)((idx * 255) / (seg_len > 0 ? seg_len : 1));
           uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
                                                                 true, 255, 255);
-          base_c = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                         (cp >> 24) & 0xFF);
+          base_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
+                         (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
+                         (uint8_t)((cp & 0xFF) * user_brightness),
+                         (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
         }
 
         it[global_idx] =
@@ -1806,10 +1824,16 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         if (::instance) {
           uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
                                                                 true, 255, 255);
-          it[global_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                                 (cp >> 24) & 0xFF);
+          it[global_idx] =
+              Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
+                    (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
+                    (uint8_t)((cp & 0xFF) * user_brightness),
+                    (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
         } else {
-          it[global_idx] = target_color;
+          it[global_idx] = Color((uint8_t)(target_color.r * user_brightness),
+                                 (uint8_t)(target_color.g * user_brightness),
+                                 (uint8_t)(target_color.b * user_brightness),
+                                 (uint8_t)(target_color.w * user_brightness));
         }
       } else {
         it[global_idx] = Color::BLACK;
@@ -1857,13 +1881,19 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   // brightness to 1.0f so the effect renders at full brightness. Our custom
   // Outro logic (Wipe/Fade) handles the dimming.
   float original_brightness = 0.0f;
+  float user_brightness = 1.0f;
   auto *ls = this->get_light_state();
   if (ls != nullptr) {
     original_brightness = ls->current_values.get_brightness();
+    // Capture user's intended brightness BEFORE forcing to 1.0
+    user_brightness = ls->remote_values.get_brightness();
+    if (user_brightness < 0.01f)
+      user_brightness = 0.01f;
     ls->current_values.set_brightness(1.0f);
   }
 
-  // 2. Render background frame onto the output buffer
+  // 2. Render background frame onto the output buffer (scaled by user
+  // brightness)
   int seg_start = runner->_segment.start;
   int seg_stop = runner->_segment.stop;
   int seg_len = runner->_segment.length();
@@ -1871,8 +1901,11 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   for (int i = 0; i < seg_len; i++) {
     int global_idx = seg_start + i;
     uint32_t c = runner->_segment.getPixelColor(i);
-    it[global_idx] =
-        Color((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF);
+    uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
+    uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
+    uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
+    uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
+    it[global_idx] = Color(r, g, b, w);
   }
 
   // Restore the scaling factor so we don't permanently corrupt the LightState
