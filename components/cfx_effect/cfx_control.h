@@ -9,6 +9,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 #include <algorithm>
+#include <cstring>
 #include <vector>
 
 namespace esphome {
@@ -317,10 +318,10 @@ protected:
   bool should_target_runner_(CFXRunner *r) const {
     if (!target_segment_ || !target_segment_->has_state())
       return true;
-    auto state = target_segment_->state;
-    if (state.empty() || state == "All Segments")
+    const char *opt = target_segment_->current_option();
+    if (opt == nullptr || strcmp(opt, "All Segments") == 0)
       return true;
-    return r->get_segment_id() == state;
+    return r->get_segment_id() == opt;
   }
 };
 

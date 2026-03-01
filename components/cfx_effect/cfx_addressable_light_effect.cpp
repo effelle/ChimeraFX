@@ -1321,50 +1321,49 @@ void CFXAddressableLightEffect::run_controls_() {
       }
       return 0; // Unknown palette name
     };
-    // 2. Speed
-    if (c && c->get_speed())
-      this->runner_->setSpeed((uint8_t)c->get_speed()->state);
-    else if (this->speed_)
-      this->runner_->setSpeed((uint8_t)this->speed_->state);
-    else {
-      // FALLBACK: No control component - use per-effect default
-      this->runner_->setSpeed(this->get_default_speed_(this->effect_id_));
-    }
+    // Speed/Intensity/Palette/Mirror PULL — only when NO controller exists.
+    // When a controller IS present, these are managed by PUSH callbacks
+    // in cfx_control.h which respect the Target Segment filter.
+    if (!c) {
+      // 2. Speed (standalone mode)
+      if (this->speed_)
+        this->runner_->setSpeed((uint8_t)this->speed_->state);
+      else
+        this->runner_->setSpeed(this->get_default_speed_(this->effect_id_));
 
-    // 3. Intensity
-    if (c && c->get_intensity())
-      this->runner_->setIntensity((uint8_t)c->get_intensity()->state);
-    else if (this->intensity_)
-      this->runner_->setIntensity((uint8_t)this->intensity_->state);
-    else {
-      // FALLBACK: No control component - use per-effect default
-      this->runner_->setIntensity(
-          this->get_default_intensity_(this->effect_id_));
-    }
+      // 3. Intensity (standalone mode)
+      if (this->intensity_)
+        this->runner_->setIntensity((uint8_t)this->intensity_->state);
+      else
+        this->runner_->setIntensity(
+            this->get_default_intensity_(this->effect_id_));
 
-    // 4. Palette
-    // Monochromatic effects MUST use Solid (255), ignoring user UI selection
-    if (this->is_monochromatic_(this->effect_id_)) {
-      this->runner_->setPalette(255);
-    } else {
-      if (c && c->get_palette()) {
-        uint8_t pal_idx = get_pal_idx(c->get_palette());
-        this->runner_->setPalette(pal_idx);
+      // 4. Palette (standalone mode)
+      if (this->is_monochromatic_(this->effect_id_)) {
+        this->runner_->setPalette(255);
       } else if (this->palette_) {
         uint8_t pal_idx = get_pal_idx(this->palette_);
         this->runner_->setPalette(pal_idx);
       } else {
-        // FALLBACK: No control component - use per-effect default
-        uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
-        this->runner_->setPalette(default_pal);
+        this->runner_->setPalette(
+            this->get_default_palette_id_(this->effect_id_));
+      }
+
+      // 5. Mirror (standalone mode)
+      if (this->mirror_)
+        this->runner_->setMirror(this->mirror_->state);
+    } else {
+      // Controller present: only enforce monochromatic palette override
+      // (PUSH callbacks don't know about monochromatic constraints)
+      if (this->is_monochromatic_(this->effect_id_)) {
+        if (!this->segment_runners_.empty()) {
+          for (auto *r : this->segment_runners_)
+            r->setPalette(255);
+        } else {
+          this->runner_->setPalette(255);
+        }
       }
     }
-
-    // 5. Mirror
-    if (c && c->get_mirror())
-      this->runner_->setMirror(c->get_mirror()->state);
-    else if (this->mirror_)
-      this->runner_->setMirror(this->mirror_->state);
 
     // 6. Intro Use Palette
     if (c && c->get_intro_use_palette())
