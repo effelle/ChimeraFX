@@ -714,9 +714,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // Main CFX effect Running — Multi-Segment Swap-on-Service
     if (!this->segment_runners_.empty()) {
       // Multi-segment: iterate all runners, swapping the global instance
-      extern CFXRunner *instance;
       for (auto *r : this->segment_runners_) {
-        instance = r;
+        ::instance = r;
         r->service();
       }
     } else {
