@@ -251,14 +251,84 @@ protected:
   }
 
   uint8_t get_default_palette_id_(uint8_t effect_id) {
-    // Basic defaults for PUSH logic
-    if (effect_id == 18)
+    // Monochromatic series always defaults to Solid
+    if (effect_id == 161 || effect_id == 162 || effect_id == 163)
       return 255;
-    if (effect_id == 38)
-      return 1;
-    if (effect_id == 153)
-      return 5;
-    return 1;
+
+    switch (effect_id) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 6:
+    case 15:
+    case 16:
+    case 18:
+    case 20:
+    case 21:
+    case 22:
+    case 23:
+    case 24:
+    case 25:
+    case 26:
+    case 28:
+    case 40:
+    case 54:
+    case 60:
+    case 68:
+    case 76:
+    case 91:
+    case 95:
+    case 96:
+    case 98:
+    case 100:
+    case 152:
+    case 154:
+    case 156:
+    case 157:
+    case 164:
+      return 255; // Solid
+
+    case 7:
+    case 8:
+    case 9:
+    case 64:
+    case 74:
+    case 79:
+    case 87:
+    case 90:
+    case 105:
+    case 107:
+    case 110:
+    case 155:
+      return 4; // Rainbow
+
+    case 63:
+    case 97:
+      return 8; // Party
+
+    case 66:
+    case 53:
+      return 5; // Fire
+
+    case 101:
+    case 151:
+    case 160:
+      return 11; // Ocean
+
+    case 38:
+      return 1; // Aurora
+
+    case 104:
+      return 12; // HeatColors
+
+    case 52:
+      return 13; // Sakura
+
+    default:
+      return 1; // General fallback to Aurora
+    }
   }
 
   uint8_t get_palette_index_(const std::string &name) {
