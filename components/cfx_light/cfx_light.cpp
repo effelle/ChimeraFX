@@ -454,16 +454,18 @@ void CFXLightOutput::write_state(light::LightState *state) {
   this->last_refresh_ = now;
   this->mark_shown_();
 
-  // Wait for previous DMA transmission to complete (safety valve)
-  // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
-  int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
-  if (timeout_ms < 15)
-    timeout_ms = 15; // Minimum 15ms
-
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, timeout_ms);
-  if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX timeout (Wait: %dms, LEDs: %d)", timeout_ms,
-             this->num_leds_);
+  // Wait for previous DMA transmission to complete (safety valve).
+  // CRITICAL: We use 0ms (non-blocking) so out-of-phase virtual segments do not
+  // lock the entire ESP32 RTOS loop for 18+ms while waiting for the strip to
+  // finish painting.
+  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 0);
+  if (error == ESP_ERR_TIMEOUT) {
+    // DMA is still physically transmitting the previous frame!
+    // Simply defer this flush to the next ESPHome loop and return immediately.
+    this->schedule_show();
+    return;
+  } else if (error != ESP_OK) {
+    ESP_LOGE(TAG, "RMT TX error state check failed");
     this->status_set_warning();
     return;
   }
