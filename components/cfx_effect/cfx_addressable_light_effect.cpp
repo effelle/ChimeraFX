@@ -8,6 +8,7 @@
 #include "../cfx_light/cfx_light.h"
 #include "cfx_compat.h"
 #include "esphome/core/application.h"
+#include "esphome/core/color.h"
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
@@ -60,6 +61,27 @@ void CFXAddressableLightEffect::start() {
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
+  }
+
+  // Prevent leaking if start() is called while runner_ is already initialized
+  // (e.g. rapid toggles)
+  if (this->runner_ != nullptr) {
+    if (this->controller_) {
+      this->controller_->unregister_runner(this->runner_);
+    }
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        if (r != this->runner_ && this->controller_) {
+          this->controller_->unregister_runner(r);
+        }
+        if (r != this->runner_)
+          delete r;
+      }
+      this->segment_runners_.clear();
+      this->segments_initialized_ = false;
+    }
+    delete this->runner_;
+    this->runner_ = nullptr;
   }
 
   // Allocate Runner(s) early so we can use them for metadata fallback
@@ -490,25 +512,23 @@ void CFXAddressableLightEffect::stop() {
             this->get_default_intensity_(this->effect_id_);
       }
 
-      // Capture ALL segment runners for the outro (or just the primary for
-      // single-runner)
-      CFXRunner *captured_runner = this->runner_;
-      this->runner_ = nullptr; // Null here so start() creates a fresh one later
-      std::vector<CFXRunner *> captured_runners;
+      // Capture ALL segment runners for the outro
+      auto captured_runners = std::make_shared<std::vector<CFXRunner *>>();
 
       if (!this->segment_runners_.empty()) {
         for (auto *r : this->segment_runners_) {
           if (c)
             c->unregister_runner(r);
-          captured_runners.push_back(r);
+          captured_runners->push_back(r);
         }
         this->segment_runners_.clear();
         this->segments_initialized_ = false;
       } else {
         if (c)
-          c->unregister_runner(captured_runner);
-        captured_runners.push_back(captured_runner);
+          c->unregister_runner(this->runner_);
+        captured_runners->push_back(this->runner_);
       }
+      this->runner_ = nullptr; // Null here so start() creates a fresh one later
 
       // Safely detach from effect runner system
       this->controller_ = nullptr;
@@ -524,8 +544,9 @@ void CFXAddressableLightEffect::stop() {
         if (current_state != nullptr && current_state->remote_values.is_on()) {
           // Effect was completely changed or light remained ON.
           // Abort the outro and delete all captured runners cleanly.
-          for (auto *r : captured_runners)
+          for (auto *r : *captured_runners)
             delete r;
+          captured_runners->clear();
           return true;
         }
 
@@ -536,14 +557,15 @@ void CFXAddressableLightEffect::stop() {
 
         // Run outro frame on ALL captured segment runners
         bool done = false;
-        for (auto *r : captured_runners) {
+        for (auto *r : *captured_runners) {
           ::instance = r;
           done = this->run_outro_frame(*out, r);
         }
 
         if (done) {
-          for (auto *r : captured_runners)
+          for (auto *r : *captured_runners)
             delete r;
+          captured_runners->clear();
         }
         return done;
       });
@@ -590,40 +612,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // --- Ensure Runner(s) ---
   if (this->runner_ == nullptr) {
-#ifdef USE_ESP32
-    // Check if running on master CFXLightOutput via the securely injected flag
-    std::vector<cfx_light::CFXSegmentDef> seg_defs;
-    if (!this->is_virtual_segment_) {
-      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(&it);
-      seg_defs = cfx_out->get_segment_defs();
-    }
-
-    if (!seg_defs.empty() && !this->segments_initialized_) {
-      // Multi-segment mode: create one runner per segment def
-      for (const auto &def : seg_defs) {
-        auto *r = new CFXRunner(&it);
-        r->_segment.start = def.start;
-        r->_segment.stop = def.stop;
-        r->_segment.mirror = def.mirror;
-        r->set_segment_id(def.id);
-        r->setMode(this->effect_id_);
-        r->diagnostics.set_target_interval_ms(this->update_interval_);
-        this->segment_runners_.push_back(r);
-      }
-      // Primary runner = first segment (used by intro/outro/control logic)
-      this->runner_ = this->segment_runners_[0];
-      this->segments_initialized_ = true;
-      ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
-               this->segment_runners_.size(), this->get_name());
-    } else {
-#endif
-      // Single-runner mode (backward compatible)
-      this->runner_ = new CFXRunner(&it);
-      this->runner_->setMode(this->effect_id_);
-      this->runner_->diagnostics.set_target_interval_ms(this->update_interval_);
-#ifdef USE_ESP32
-    }
-#endif
+    ESP_LOGE(
+        "chimera_fx",
+        "Runner is null in apply()! This should be initialized in start().");
+    return;
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
