@@ -17,7 +17,10 @@
 
 #ifdef USE_ESP32
 
+#include "esphome/components/light/light_state.h"
 #include "esphome/core/log.h"
+#include <cmath>
+
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -285,6 +288,42 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // frames.
   if (state != nullptr && this->outro_cb_ != nullptr) {
     return;
+  }
+
+  // 1.2 Phase 2: Master -> Segment State Synchronization
+  // When the Master light is toggled or its brightness changes, we want to
+  // push that state down to all virtual segments.
+  if (state != nullptr && !this->segment_light_states_.empty()) {
+    static bool is_syncing = false;
+    if (!is_syncing) {
+      is_syncing = true;
+
+      bool master_on = state->current_values.is_on();
+      float master_brightness = state->current_values.get_brightness();
+
+      for (auto *seg_state : this->segment_light_states_) {
+        bool needs_update = false;
+        auto call = seg_state->make_call();
+
+        if (seg_state->current_values.is_on() != master_on) {
+          call.set_state(master_on);
+          needs_update = true;
+        }
+
+        // Only sync brightness if it actually changed to avoid overriding
+        // segment-level tweaks constantly
+        if (master_on && std::abs(seg_state->current_values.get_brightness() -
+                                  master_brightness) > 0.01f) {
+          call.set_brightness(master_brightness);
+          needs_update = true;
+        }
+
+        if (needs_update) {
+          call.perform();
+        }
+      }
+      is_syncing = false;
+    }
   }
 
   // 1.5. Visualizer UDP Broadcast

@@ -73,9 +73,26 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     
+    import esphome.core as core
+    
+    # 1. Add explicitly configured lights (Master lights)
     for light_id in config[CONF_LIGHT]:
         light_state = await cg.get_variable(light_id)
         cg.add(var.add_light(light_state))
+        
+    # 2. Add Phase 2 Virtual Segment Lights automatically if they exist on the targeted master lights
+    if "light" in core.CORE.config:
+        light_ids = [l.id for l in config[CONF_LIGHT]]
+        for lconf in core.CORE.config["light"]:
+            lconf_id = lconf.get(CONF_ID)
+            if lconf_id and lconf_id.id in light_ids:
+                # If this targeted light has virtual segments, add them to the control too
+                if hasattr(lconf, "get") and lconf.get("segments"):
+                    for seg in lconf["segments"]:
+                        seg_light_id = seg.get("light_id")
+                        if seg_light_id:
+                            seg_state = await cg.get_variable(seg_light_id)
+                            cg.add(var.add_light(seg_state))
     
     name = config[CONF_NAME]
     exclude = [int(x) for x in config[CONF_EXCLUDE]]

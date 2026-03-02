@@ -380,6 +380,7 @@ async def to_code(config):
         from esphome.components.cfx_effect import cfx_effect_to_code, CFXAddressableLightEffect
 
         seg_idx = segments.index(seg)
+        effect_vars = []
         for eff in config.get(CONF_EFFECTS, []):
             if "addressable_cfx" in eff:
                 eff_conf = eff["addressable_cfx"]
@@ -390,5 +391,11 @@ async def to_code(config):
                 unique_id = CoreID(unique_str, is_declaration=True, type=CFXAddressableLightEffect)
                 
                 # Manually run the effect's codegen
-                effect_var = await cfx_effect_to_code(eff_conf, unique_id)
-                cg.add(light_state.add_effects([effect_var]))
+                effect_var = await cfx_effect_to_code(eff_conf, unique_id, is_virtual_segment=True)
+                effect_vars.append(effect_var)
+                
+        if effect_vars:
+            cg.add(light_state.add_effects(effect_vars))
+            
+        # Register the segment with the parent output so it can sync on/off and brightness
+        cg.add(var.add_segment_light_state(light_state))

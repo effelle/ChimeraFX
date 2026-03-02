@@ -127,6 +127,14 @@ public:
   }
   bool has_segments() const { return !segment_defs_.empty(); }
 
+  // Phase 2: Register virtual segment lights for state synchronization
+  void add_segment_light_state(light::LightState *state) {
+    segment_light_states_.push_back(state);
+  }
+  const std::vector<light::LightState *> &get_segment_light_states() const {
+    return segment_light_states_;
+  }
+
   // Root-level intro/outro defaults (inherited by segments with value 0)
   void set_default_intro_mode(uint8_t v) { default_intro_mode_ = v; }
   void set_default_outro_mode(uint8_t v) { default_outro_mode_ = v; }
@@ -200,7 +208,11 @@ protected:
   uint8_t pin_{0};
   uint16_t num_leds_{0};
   ChimeraChipset chipset_{CHIPSET_WS2812X};
-  RGBOrder rgb_order_{ORDER_GRB};
+  RGBOrder rgb_order_{RGB_ORDER_GRB};
+  std::vector<CFXSegmentDef> segment_defs_;
+  std::vector<light::LightState *> segment_light_states_;
+
+  uint8_t default_intro_mode_{0}; // 0 = auto-detect from chip variant
   bool is_rgbw_{false};
   bool is_wrgb_{false};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
