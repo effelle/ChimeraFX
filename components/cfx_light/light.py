@@ -351,19 +351,22 @@ async def to_code(config):
         # Phase 2: Create virtual segment light + independent LightState
         parent_id_str = str(config[CONF_OUTPUT_ID].id)
 
-        vl_var_id = cv.declare_id(CFXVirtualSegmentLight)(
-            f"{parent_id_str}_vseg_{seg_id}"
+        from esphome.core import ID as CoreID
+
+        vl_id = CoreID(
+            f"{parent_id_str}_vseg_{seg_id}",
+            is_declaration=True, type=CFXVirtualSegmentLight
         )
-        vl = cg.new_Pvariable(vl_var_id, var, seg_start, seg_stop, seg_id)
-        await cg.register_component(vl, {})
+        vl = cg.Pvariable(vl_id, var, seg_start, seg_stop, seg_id)
 
         # Build segment light config: same effects as parent, unique name
         seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
         seg_light_config = dict(config)
-        seg_light_config[CONF_ID] = cv.declare_id(light.LightState)(
-            f"{parent_id_str}_ls_{seg_id}"
+        seg_light_config[CONF_ID] = CoreID(
+            f"{parent_id_str}_ls_{seg_id}",
+            is_declaration=True, type=light.LightState
         )
         seg_light_config[CONF_NAME] = seg_name
-        seg_light_config[CONF_OUTPUT_ID] = vl_var_id
+        seg_light_config[CONF_OUTPUT_ID] = vl_id
 
         await light.register_light(vl, seg_light_config)
