@@ -3475,10 +3475,17 @@ uint16_t mode_chaos_theory(void) {
     uint32_t intro_elapsed = instance->now - data->intro_start;
     const uint32_t INTRO_DURATION = 1500; // 1.5s build-up
 
+    // Calculate a safe intensity-scaled "white" to prevent brownouts
+    uint8_t spark_bri = instance->_segment.intensity;
+    // Don't go completely dark if intensity is very low
+    if (spark_bri < 30)
+      spark_bri = 30;
+
     if (intro_elapsed >= INTRO_DURATION) {
       data->intro_done = true;
       // Flash white to signify "Birth of Chaos"
-      instance->_segment.fill(RGBW32(255, 255, 255, 255));
+      instance->_segment.fill(
+          RGBW32(spark_bri, spark_bri, spark_bri, spark_bri));
       return FRAMETIME;
     }
 
@@ -3502,8 +3509,9 @@ uint16_t mode_chaos_theory(void) {
     for (int k = 0; k < spawn_count; k++) {
       // Random position
       uint16_t pos = cfx::hw_random16() % (len ? len : 1);
-      // Sparkling white
-      instance->_segment.setPixelColor(pos, RGBW32(255, 255, 255, 255));
+      // Sparkling white (scaled safely)
+      instance->_segment.setPixelColor(
+          pos, RGBW32(spark_bri, spark_bri, spark_bri, spark_bri));
     }
 
     return FRAMETIME;
