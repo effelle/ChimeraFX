@@ -444,31 +444,26 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif
   this->status_clear_warning();
 
-  // Calculate exact hardware transmission time (WS281x = 800kHz)
-  // RGB takes ~30us, RGBW takes ~40us per LED. We use 45us for absolute safety
-  // plus 2000us baseline padding for RTOS overhead.
-  uint32_t min_refresh_us = (this->num_leds_ * 45) + 2000;
-  uint32_t required_refresh = (*this->max_refresh_rate_ > min_refresh_us)
-                                  ? *this->max_refresh_rate_
-                                  : min_refresh_us;
-
-  // Protect from refreshing while previous DMA is physically transmitting.
-  // By tracking time natively, we eliminate the need to "poll" the RMT driver,
-  // which causes aggressive ESP-IDF error logging (flush timeouts) when busy.
+  // Protect from refreshing too often
   uint32_t now = micros();
-  if ((now - this->last_refresh_) < required_refresh) {
-    this->schedule_show(); // Try again on next ESPHome tick
+  if (*this->max_refresh_rate_ != 0 &&
+      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+    this->schedule_show();
     return;
   }
   this->last_refresh_ = now;
   this->mark_shown_();
 
-  // Safety valve: Clear the physical DMA flag.
-  // Because min_refresh_us guarantees the wire is idle, this returns instantly
-  // without blocking the processor.
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 100);
+  // Wait for previous DMA transmission to complete (safety valve)
+  // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
+  int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
+  if (timeout_ms < 15)
+    timeout_ms = 15; // Minimum 15ms
+
+  esp_err_t error = rmt_tx_wait_all_done(this->channel_, timeout_ms);
   if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX fatal lockup state");
+    ESP_LOGE(TAG, "RMT TX timeout (Wait: %dms, LEDs: %d)", timeout_ms,
+             this->num_leds_);
     this->status_set_warning();
     return;
   }
