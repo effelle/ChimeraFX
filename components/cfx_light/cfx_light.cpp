@@ -370,11 +370,36 @@ void CFXLightOutput::loop() {
 void CFXLightOutput::write_state(light::LightState *state) {
   // 1. Defend against ESPHome's internal transition hijacks!
   // If we are actively running our decoupled Outro loop, ESPHome's LightState
+  // 1. Defend against ESPHome's internal transition hijacks!
+  // If we are actively running our decoupled Outro loop, ESPHome's LightState
   // is simultaneously running its own fade-to-black transition and trying to
   // push those frames to the hardware. We must silently drop its incoming
   // frames.
   if (state != nullptr && this->outro_cb_ != nullptr) {
     return;
+  }
+
+  // 1.2 Prevent Master Light from leaking into OFF segments.
+  // Because the Master light sits underneath the segments and spans the whole
+  // strip, when it is turned ON to support an active segment, it will try to
+  // paint the entire strip. Once a segment is completely OFF, ESPHome's engine
+  // skips it and it stops rendering black, allowing the Master's undercoat to
+  // bleed through. We must aggressively scrub OFF segments to black.
+  if (!this->segment_light_states_.empty()) {
+    for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
+      auto *seg_state = this->segment_light_states_[i];
+      // Only scrub if the segment is fully functionally and physically off
+      // (avoids abruptly snipping the transition fade-out)
+      if (!seg_state->remote_values.is_on() &&
+          !seg_state->current_values.is_on()) {
+        const auto &def = this->segment_defs_[i];
+        for (int p = def.start; p <= def.stop; p++) {
+          if (p < this->size()) {
+            (*this)[p] = light::Color::BLACK;
+          }
+        }
+      }
+    }
   }
 
   // 1.5. Visualizer UDP Broadcast
