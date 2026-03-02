@@ -3470,17 +3470,51 @@ uint16_t mode_chaos_theory(void) {
   uint32_t dt = instance->now - data->last_millis;
   data->last_millis = instance->now;
 
-  // --- Phase 1: Embedded Glitter Intro (Depricated due to extreme current
-  // transients) ---
+  // --- Phase 1: Embedded Glitter Intro ---
+  // A controlled explosion of white sparks that fade to reveal the chaos
+  // underneath. Power Limit: We only spawn a few sparks per frame to avoid
+  // current transients.
+  const uint32_t intro_duration_ms = 4000;
   if (!data->intro_done) {
-    data->intro_done = true;
-    // Skip straight to Phase 2 to prevent power limit violations
+    uint32_t elapsed = instance->now - data->intro_start;
+    if (elapsed > intro_duration_ms) {
+      data->intro_done = true;
+      // Start Phase 2 on a clean slate
+      instance->_segment.fill(0);
+    } else {
+      // 1. Fade existing sparks out slowly
+      instance->_segment.fadeToBlackBy(40);
+
+      // 2. Spawn new sparks. Density peaks at beginning, tapers to zero.
+      // Progress: 255 (start) -> 0 (end)
+      uint8_t progress = 255 - ((elapsed * 255) / intro_duration_ms);
+
+      // Calculate max sparks per frame based on strip length and progress
+      // Limit to max 2% of LEDs per frame at absolute peak to prevent power
+      // spikes
+      uint16_t max_sparks_frame = (len > 50) ? (len / 50) : 1;
+      if (max_sparks_frame > 5)
+        max_sparks_frame = 5; // Hard cap
+
+      // Scale spawn probability by progress
+      uint8_t spawn_chance = cfx::scale8(180, progress); // High initial density
+
+      if (cfx::hw_random8() < spawn_chance) {
+        uint8_t sparks_to_spawn = (cfx::hw_random8() % max_sparks_frame) + 1;
+        for (uint8_t s = 0; s < sparks_to_spawn; s++) {
+          uint16_t pos = cfx::hw_random16() % (len ? len : 1);
+          // Modulate brightness slightly
+          uint8_t bri = 180 + cfx::hw_random8(75);
+          instance->_segment.setPixelColor(pos, RGBW32(bri, bri, bri, bri));
+        }
+      }
+      return FRAMETIME; // Yield rendering here during intro
+    }
   }
 
   // --- Phase 2: The Chaos Engine (Running State) ---
 
   // 1. Agitation Engine (Literal Port from Energy ID 158)
-  ESP_LOGW("chimera_fx", "ChaosTheory - len: %d, calc noise...", len);
   uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
   uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
   uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
@@ -3508,13 +3542,11 @@ uint16_t mode_chaos_theory(void) {
   }
 
   // 2. Render Background
-  ESP_LOGW("chimera_fx", "ChaosTheory - checking palette...");
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
   if (active_palette[0] == 0 && active_palette[15] == 0) {
     instance->generateRandomPalette();
   }
 
-  ESP_LOGW("chimera_fx", "ChaosTheory - rendering bg loop...");
   for (int i = 0; i < len; i++) {
     // Map position to 0-255 using exact Energy math
     uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
@@ -3547,7 +3579,6 @@ uint16_t mode_chaos_theory(void) {
       cfx::hw_random8() <
           (sharp_beat >>
            2)) { // Reduced spawn rate slightly to prevent burst overlap
-    ESP_LOGW("chimera_fx", "ChaosTheory - attempting to trigger spike...");
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
@@ -3557,8 +3588,6 @@ uint16_t mode_chaos_theory(void) {
       }
     }
   }
-
-  ESP_LOGW("chimera_fx", "ChaosTheory - updating spikes...");
 
   // Provide bloom range
   uint16_t spark_radius = (len / 60) + 1;
@@ -3593,7 +3622,6 @@ uint16_t mode_chaos_theory(void) {
   }
 
   // Draw Spikes (Additive Blend)
-  ESP_LOGW("chimera_fx", "ChaosTheory - drawing spikes...");
   for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
     if (data->sparks[s].level > 0) {
       int center = data->sparks[s].pos;
