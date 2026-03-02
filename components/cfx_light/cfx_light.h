@@ -38,10 +38,10 @@ struct CFXSegmentDef {
   uint16_t start;
   uint16_t stop;
   bool mirror;
-  uint8_t intro_mode;      // 0 = inherit root default
-  uint8_t outro_mode;      // 0 = inherit root default
-  float intro_duration_s;  // 0.0 = inherit root default
-  float outro_duration_s;  // 0.0 = inherit root default
+  uint8_t intro_mode;     // 0 = inherit root default
+  uint8_t outro_mode;     // 0 = inherit root default
+  float intro_duration_s; // 0.0 = inherit root default
+  float outro_duration_s; // 0.0 = inherit root default
 };
 
 // Supported LED chipsets
@@ -73,7 +73,8 @@ public:
   void setup() override;
   void loop() override;
   void write_state(light::LightState *state) override;
-  void send_visualizer_metadata(const std::string &name, const std::string &palette = "");
+  void send_visualizer_metadata(const std::string &name,
+                                const std::string &palette = "");
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
 
@@ -97,6 +98,9 @@ public:
 
   void dump_config() override;
 
+  // Public accessor for effect_data_ (used by virtual segment lights)
+  uint8_t *get_effect_data() { return effect_data_; }
+
   // Config setters (called by __init__.py codegen)
   void set_pin(uint8_t pin) { this->pin_ = pin; }
   void set_num_leds(uint16_t num_leds) { this->num_leds_ = num_leds; }
@@ -113,10 +117,14 @@ public:
   void add_segment_def(const std::string &id, uint16_t start, uint16_t stop,
                        bool mirror, uint8_t intro, uint8_t outro,
                        float intro_dur, float outro_dur) {
-    if (segment_defs_.size() >= MAX_CFX_SEGMENTS) return;
-    segment_defs_.push_back({id, start, stop, mirror, intro, outro, intro_dur, outro_dur});
+    if (segment_defs_.size() >= MAX_CFX_SEGMENTS)
+      return;
+    segment_defs_.push_back(
+        {id, start, stop, mirror, intro, outro, intro_dur, outro_dur});
   }
-  const std::vector<CFXSegmentDef> &get_segment_defs() const { return segment_defs_; }
+  const std::vector<CFXSegmentDef> &get_segment_defs() const {
+    return segment_defs_;
+  }
   bool has_segments() const { return !segment_defs_.empty(); }
 
   // Root-level intro/outro defaults (inherited by segments with value 0)
@@ -133,10 +141,12 @@ public:
     return seg.outro_mode != 0 ? seg.outro_mode : default_outro_mode_;
   }
   float resolve_intro_dur(const CFXSegmentDef &seg) const {
-    return seg.intro_duration_s > 0.0f ? seg.intro_duration_s : default_intro_dur_s_;
+    return seg.intro_duration_s > 0.0f ? seg.intro_duration_s
+                                       : default_intro_dur_s_;
   }
   float resolve_outro_dur(const CFXSegmentDef &seg) const {
-    return seg.outro_duration_s > 0.0f ? seg.outro_duration_s : default_outro_dur_s_;
+    return seg.outro_duration_s > 0.0f ? seg.outro_duration_s
+                                       : default_outro_dur_s_;
   }
 
   // Visualizer setters

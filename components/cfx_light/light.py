@@ -20,6 +20,7 @@ from esphome import pins
 from esphome.const import (
     CONF_CHIPSET,
     CONF_EFFECTS,
+    CONF_ID,
     CONF_IS_RGBW,
     CONF_MAX_REFRESH_RATE,
     CONF_NAME,
@@ -41,6 +42,7 @@ CONF_VISUALIZER_PORT = "visualizer_port"
 # Segment configuration keys (Phase 1)
 CONF_SEGMENTS = "segments"
 CONF_SEGMENT_ID = "id"
+CONF_SEGMENT_NAME = "name"
 CONF_SEGMENT_START = "start"
 CONF_SEGMENT_STOP = "stop"
 CONF_SEGMENT_MIRROR = "mirror"
@@ -54,6 +56,9 @@ DEPENDENCIES = ["esp32", "wifi"]
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
     "CFXLightOutput", light.AddressableLight
+)
+CFXVirtualSegmentLight = cfx_light_ns.class_(
+    "CFXVirtualSegmentLight", light.AddressableLight
 )
 
 ChimeraChipset = cfx_light_ns.enum("ChimeraChipset")
@@ -92,6 +97,7 @@ DEFAULT_ORDER = {
 SEGMENT_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_SEGMENT_ID): cv.string,
+        cv.Optional(CONF_SEGMENT_NAME): cv.string,
         cv.Required(CONF_SEGMENT_START): cv.uint16_t,
         cv.Required(CONF_SEGMENT_STOP): cv.uint16_t,
         cv.Optional(CONF_SEGMENT_MIRROR, default=False): cv.boolean,
@@ -262,9 +268,22 @@ async def to_code(config):
         pass  # Older ESPHome: RMT driver included by default
 
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
-    await light.register_light(var, config)
-    await cg.register_component(var, config)
 
+    segments = config.get(CONF_SEGMENTS, [])
+
+    if segments:
+        # --- Phase 2: Per-segment light entities ---
+        # Register parent as master light (no effects, acts as global relay)
+        master_config = dict(config)
+        master_config[CONF_EFFECTS] = []  # No effects on master
+        await light.register_light(var, master_config)
+        await cg.register_component(var, config)
+    else:
+        # No segments: original single-light behavior
+        await light.register_light(var, config)
+        await cg.register_component(var, config)
+
+    # --- Hardware configuration (always) ---
     cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
 
@@ -298,8 +317,7 @@ async def to_code(config):
         cg.add(var.set_visualizer_ip(config[CONF_VISUALIZER_IP]))
         cg.add(var.set_visualizer_port(config[CONF_VISUALIZER_PORT]))
 
-    # --- Segment codegen (Phase 1) ---
-    # Root-level intro/outro defaults (segments inherit these)
+    # --- Root-level intro/outro defaults ---
     if "use_intro" in config:
         cg.add(var.set_default_intro_mode(config["use_intro"]))
     if "use_outro" in config:
@@ -309,7 +327,8 @@ async def to_code(config):
         cg.add(var.set_default_intro_dur(float(intro_dur_ms) / 1000.0))
         cg.add(var.set_default_outro_dur(float(intro_dur_ms) / 1000.0))
 
-    for seg in config.get(CONF_SEGMENTS, []):
+    # --- Segment codegen ---
+    for seg in segments:
         seg_id = seg[CONF_SEGMENT_ID]
         seg_start = seg[CONF_SEGMENT_START]
         seg_stop = seg[CONF_SEGMENT_STOP]
@@ -321,9 +340,29 @@ async def to_code(config):
         if CONF_SEGMENT_INTRO_DUR in seg:
             seg_intro_dur = float(seg[CONF_SEGMENT_INTRO_DUR]) / 1000.0
 
+        # Register segment definition on parent (for C++ access)
         cg.add(
             var.add_segment_def(
                 seg_id, seg_start, seg_stop, seg_mirror,
                 seg_intro, seg_outro, seg_intro_dur, seg_intro_dur
             )
         )
+
+        # Phase 2: Create virtual segment light + independent LightState
+        vl_var_id = cv.declare_id(CFXVirtualSegmentLight)(
+            f"{config[CONF_OUTPUT_ID]}_{seg_id}"
+        )
+        vl = cg.new_Pvariable(vl_var_id, var, seg_start, seg_stop, seg_id)
+        await cg.register_component(vl, {})
+
+        # Build segment light config: same effects as parent, unique name
+        seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
+        seg_light_config = dict(config)
+        seg_light_config[CONF_ID] = cv.declare_id(light.LightState)(
+            f"{config[CONF_OUTPUT_ID]}_light_{seg_id}"
+        )
+        seg_light_config[CONF_NAME] = seg_name
+        # Keep the original effects list for each segment
+        seg_light_config[CONF_OUTPUT_ID] = vl_var_id
+
+        await light.register_light(vl, seg_light_config)
