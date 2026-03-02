@@ -58,7 +58,10 @@ public:
     // Nothing to do — parent owns all hardware
   }
 
-  void dump_config() override;
+  void dump_config() override {
+    ESP_LOGCONFIG("cfx_vseg", "  Virtual Segment '%s': LEDs %u-%u (%d pixels)",
+                  seg_id_.c_str(), start_, stop_, this->size());
+  }
 
   // --- Segment identity ---
 
