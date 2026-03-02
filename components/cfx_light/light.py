@@ -58,7 +58,7 @@ CFXLightOutput = cfx_light_ns.class_(
     "CFXLightOutput", light.AddressableLight
 )
 CFXVirtualSegmentLight = cfx_light_ns.class_(
-    "CFXVirtualSegmentLight", light.AddressableLight
+    "CFXVirtualSegmentLight", light.AddressableLight, cg.Component
 )
 
 ChimeraChipset = cfx_light_ns.enum("ChimeraChipset")
@@ -349,8 +349,10 @@ async def to_code(config):
         )
 
         # Phase 2: Create virtual segment light + independent LightState
+        parent_id_str = str(config[CONF_OUTPUT_ID].id)
+
         vl_var_id = cv.declare_id(CFXVirtualSegmentLight)(
-            f"{config[CONF_OUTPUT_ID]}_{seg_id}"
+            f"{parent_id_str}_vseg_{seg_id}"
         )
         vl = cg.new_Pvariable(vl_var_id, var, seg_start, seg_stop, seg_id)
         await cg.register_component(vl, {})
@@ -359,10 +361,9 @@ async def to_code(config):
         seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
         seg_light_config = dict(config)
         seg_light_config[CONF_ID] = cv.declare_id(light.LightState)(
-            f"{config[CONF_OUTPUT_ID]}_light_{seg_id}"
+            f"{parent_id_str}_ls_{seg_id}"
         )
         seg_light_config[CONF_NAME] = seg_name
-        # Keep the original effects list for each segment
         seg_light_config[CONF_OUTPUT_ID] = vl_var_id
 
         await light.register_light(vl, seg_light_config)
