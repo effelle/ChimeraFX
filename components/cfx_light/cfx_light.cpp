@@ -170,11 +170,10 @@ void CFXLightOutput::setup() {
   // Auto-detect RMT symbol buffer size from chip variant
   // These match ESPHome's proven defaults — larger buffers reduce
   // interrupt-refill frequency, preventing glitches on multi-strip setups
-  if (this->rmt_symbols_ == 0) {
-#if defined(CONFIG_IDF_TARGET_ESP32)
-    this->rmt_symbols_ = 192; // Classic: 512 total (2 strips × 192 = 384, safe)
-#elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    this->rmt_symbols_ = 192; // S2: 256 total
+  if (this->rmt_symbols_ == 0 || this->rmt_symbols_ == 192) {
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
+    this->rmt_symbols_ =
+        512; // High buffer to prevent TX wait_all_done flush timeouts
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
     this->rmt_symbols_ =
         192; // S3/P4: 192 total (with DMA, effectively unlimited)
@@ -455,10 +454,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   this->mark_shown_();
 
   // Wait for previous DMA transmission to complete (safety valve)
-  // At 300 LEDs = ~9ms, this returns instantly if 16ms+ has passed
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 15);
+  // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
+  int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
+  if (timeout_ms < 15)
+    timeout_ms = 15; // Minimum 15ms
+
+  esp_err_t error = rmt_tx_wait_all_done(this->channel_, timeout_ms);
   if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX timeout");
+    ESP_LOGE(TAG, "RMT TX timeout (Wait: %dms, LEDs: %d)", timeout_ms,
+             this->num_leds_);
     this->status_set_warning();
     return;
   }
