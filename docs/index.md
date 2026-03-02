@@ -1,4 +1,4 @@
-
+![ChimeraFX](assets/ChimeraFX_new_banner_github.png)
 
 # Welcome to ChimeraFX
 
@@ -11,7 +11,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 ### Is this for me?
 **ChimeraFX** is not intended to be a full WLED replacement. You should choose the tool that best fits your hardware and requirements:
  
-*   **Install [WLED](https://kno.wled.ge/) if:** You want the complete WLED experience (Segments, E1.31/DDP support, 150+ effects, 2D matrix) and are dedicating an MCU solely to lighting.
+*   **Install [WLED](https://kno.wled.ge/) if:** You want the complete WLED experience (E1.31/DDP support, 150+ effects, 2D matrix, audio reactive effects, etc.) and are dedicating an MCU solely to lighting.
 *   **Use `ChimeraFX` if:** You want to consolidate! If you need a single ESP32 to handle sensors, relays, or switches **and** run smooth, high-quality lighting effects simultaneously, ChimeraFX is for you.
 
 ### Reality Check
@@ -20,6 +20,12 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 Visual effects are computationally expensive.
 
 *   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices may function, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
+
+*   **Physical Framerate Limits:** The WS281x protocol is strictly bound to 800kHz (taking ~30 µs to transmit data for each RGB pixel, and ~40 µs for RGBW). Therefore, the physical length of your strip dictates your maximum possible framerate, unaffected by the ESP32's processing power:
+    *   To maintain a smooth **30 FPS** (~33ms per frame):
+        *   **RGB (WS2812/WS2811)**: Maximum ~800 to 900 LEDs per ESP32 data pin.
+        *   **RGBW (SK6812)**: Maximum ~600 to 700 LEDs per ESP32 data pin.
+    *   Pushing past these limits (e.g., 1000+ LEDs on a single pin) will strictly drop your framerate simply because the binary data takes longer to travel down the wire.
 
 *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
 
