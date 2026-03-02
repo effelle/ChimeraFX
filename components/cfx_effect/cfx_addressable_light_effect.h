@@ -101,6 +101,10 @@ public:
     this->force_white_preset_ = preset;
   }
 
+  void set_virtual_segment(bool virtual_segment) {
+    this->is_virtual_segment_ = virtual_segment;
+  }
+
   void set_controller(CFXControl *controller) {
     this->controller_ = controller;
   }
