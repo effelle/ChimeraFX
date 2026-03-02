@@ -345,9 +345,9 @@ async def to_code(config):
                 lconf_id = lconf.get(CONF_ID)
                 if lconf_id and lconf_id.id in light_ids:
                     for seg in lconf.get("segments", []):
-                        seg_id = seg.get("id", "")
-                        if seg_id and seg_id not in segment_ids:
-                            segment_ids.append(seg_id)
+                        seg_name = str(seg.get(CONF_NAME, ""))
+                        if seg_name and seg_name not in segment_ids:
+                            segment_ids.append(seg_name)
 
         if segment_ids:
             target_options = ["All Segments"] + segment_ids

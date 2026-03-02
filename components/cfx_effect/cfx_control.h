@@ -112,6 +112,33 @@ public:
             }
           });
     }
+
+    // --- PULL: Target Segment Selection ---
+    if (this->target_segment_) {
+      this->target_segment_->add_on_state_callback(
+          [this](const std::string &value, size_t index) {
+            for (auto *r : this->runners_) {
+              if (should_target_runner_(r)) {
+                // Pull state from the active runner and update UI elements
+                // without re-triggering their push callbacks to the strip!
+                if (this->speed_ && this->speed_->state != r->getSpeed()) {
+                  this->speed_->publish_state(r->getSpeed());
+                }
+                if (this->intensity_ &&
+                    this->intensity_->state != r->getIntensity()) {
+                  this->intensity_->publish_state(r->getIntensity());
+                }
+                if (this->mirror_ && this->mirror_->state != r->getMirror()) {
+                  this->mirror_->publish_state(r->getMirror());
+                }
+                if (this->debug_ && this->debug_->state != r->getDebug()) {
+                  this->debug_->publish_state(r->getDebug());
+                }
+                break; // Only pull from the FIRST matching runner
+              }
+            }
+          });
+    }
   }
 
   void loop() override {
