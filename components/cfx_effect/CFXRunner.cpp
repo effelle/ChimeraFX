@@ -3480,6 +3480,7 @@ uint16_t mode_chaos_theory(void) {
   // --- Phase 2: The Chaos Engine (Running State) ---
 
   // 1. Agitation Engine (Literal Port from Energy ID 158)
+  ESP_LOGW("chimera_fx", "ChaosTheory - len: %d, calc noise...", len);
   uint8_t raw_noise = cfx::inoise8(instance->now >> 3, 42);
   uint32_t chaos = (uint32_t)raw_noise * raw_noise; // 0..65025
   uint32_t chaos_mult = cfx::cfx_map(chaos, 0, 65025, 50, 1280);
@@ -3507,11 +3508,13 @@ uint16_t mode_chaos_theory(void) {
   }
 
   // 2. Render Background
+  ESP_LOGW("chimera_fx", "ChaosTheory - checking palette...");
   const uint32_t *active_palette = instance->_currentRandomPaletteBuffer;
   if (active_palette[0] == 0 && active_palette[15] == 0) {
     instance->generateRandomPalette();
   }
 
+  ESP_LOGW("chimera_fx", "ChaosTheory - rendering bg loop...");
   for (int i = 0; i < len; i++) {
     // Map position to 0-255 using exact Energy math
     uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
@@ -3544,6 +3547,7 @@ uint16_t mode_chaos_theory(void) {
       cfx::hw_random8() <
           (sharp_beat >>
            2)) { // Reduced spawn rate slightly to prevent burst overlap
+    ESP_LOGW("chimera_fx", "ChaosTheory - attempting to trigger spike...");
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
@@ -3553,6 +3557,8 @@ uint16_t mode_chaos_theory(void) {
       }
     }
   }
+
+  ESP_LOGW("chimera_fx", "ChaosTheory - updating spikes...");
 
   // Provide bloom range
   uint16_t spark_radius = (len / 60) + 1;
@@ -3587,6 +3593,7 @@ uint16_t mode_chaos_theory(void) {
   }
 
   // Draw Spikes (Additive Blend)
+  ESP_LOGW("chimera_fx", "ChaosTheory - drawing spikes...");
   for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
     if (data->sparks[s].level > 0) {
       int center = data->sparks[s].pos;
