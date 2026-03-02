@@ -444,28 +444,31 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif
   this->status_clear_warning();
 
-  // Protect from refreshing too often
+  // Calculate exact hardware transmission time (WS281x = 800kHz)
+  // RGB takes ~30us, RGBW takes ~40us per LED. We use 45us for absolute safety
+  // plus 2000us baseline padding for RTOS overhead.
+  uint32_t min_refresh_us = (this->num_leds_ * 45) + 2000;
+  uint32_t required_refresh = (*this->max_refresh_rate_ > min_refresh_us)
+                                  ? *this->max_refresh_rate_
+                                  : min_refresh_us;
+
+  // Protect from refreshing while previous DMA is physically transmitting.
+  // By tracking time natively, we eliminate the need to "poll" the RMT driver,
+  // which causes aggressive ESP-IDF error logging (flush timeouts) when busy.
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
-    this->schedule_show();
+  if ((now - this->last_refresh_) < required_refresh) {
+    this->schedule_show(); // Try again on next ESPHome tick
     return;
   }
   this->last_refresh_ = now;
   this->mark_shown_();
 
-  // Wait for previous DMA transmission to complete (safety valve).
-  // CRITICAL: We use 0ms (non-blocking) so out-of-phase virtual segments do not
-  // lock the entire ESP32 RTOS loop for 18+ms while waiting for the strip to
-  // finish painting.
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 0);
-  if (error == ESP_ERR_TIMEOUT) {
-    // DMA is still physically transmitting the previous frame!
-    // Simply defer this flush to the next ESPHome loop and return immediately.
-    this->schedule_show();
-    return;
-  } else if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX error state check failed");
+  // Safety valve: Clear the physical DMA flag.
+  // Because min_refresh_us guarantees the wire is idle, this returns instantly
+  // without blocking the processor.
+  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 100);
+  if (error != ESP_OK) {
+    ESP_LOGE(TAG, "RMT TX fatal lockup state");
     this->status_set_warning();
     return;
   }
