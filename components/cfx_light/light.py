@@ -368,8 +368,6 @@ async def to_code(config):
             ),
             "disabled_by_default": False,
             "internal": False,
-            "entity_category": None,
-            "icon": "",
             "restore_mode": config.get("restore_mode", "ALWAYS_OFF"),
         }
 
