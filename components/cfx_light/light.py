@@ -357,7 +357,7 @@ async def to_code(config):
             f"{parent_id_str}_vseg_{seg_id}",
             is_declaration=True, type=CFXVirtualSegmentLight
         )
-        vl = cg.Pvariable(vl_id, var, seg_start, seg_stop, seg_id)
+        vl = cg.new_Pvariable(vl_id, var, seg_start, seg_stop, seg_id)
 
         # Build segment light config: same effects as parent, unique name
         seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
