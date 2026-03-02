@@ -252,12 +252,15 @@ void CFXLightOutput::setup() {
   if (this->master_light_state_ != nullptr &&
       !this->segment_light_states_.empty()) {
 
-    // Wire up listeners. When ANY of these lights change their remote values,
-    // our on_light_remote_values_update() method will be called.
-    this->master_light_state_->add_remote_values_listener(this);
+    // Wire up listeners.
+    this->master_listener_ = new MasterListener(this);
+    this->master_light_state_->add_remote_values_listener(
+        this->master_listener_);
 
     for (auto *seg_state : this->segment_light_states_) {
-      seg_state->add_remote_values_listener(this);
+      auto *listener = new SegmentListener(this);
+      this->segment_listeners_.push_back(listener);
+      seg_state->add_remote_values_listener(listener);
     }
   }
 
@@ -266,82 +269,74 @@ void CFXLightOutput::setup() {
 }
 
 // --- Dynamic State Synchronization ---
-// Fired when the User clicks anything in Home Assistant on the Master or
-// Segments
-void CFXLightOutput::on_light_remote_values_update() {
+
+void CFXLightOutput::on_master_update() {
   if (this->master_light_state_ == nullptr ||
       this->segment_light_states_.empty()) {
     return;
   }
 
-  static bool is_syncing = false;
-  if (is_syncing)
+  if (this->is_syncing_)
     return;
-
-  is_syncing = true; // Lock recursion
+  this->is_syncing_ = true; // Lock recursion
 
   bool master_on = this->master_light_state_->remote_values.is_on();
   float master_brightness =
       this->master_light_state_->remote_values.get_brightness();
 
-  // 1. TOP-DOWN: Did the MASTER change? Sync down to segments
-  // We check if any segment doesn't match the master. If there's a mismatch,
-  // it either means the master flipped, OR a segment flipped.
-  // We track the previous known state of the master to determine direction.
-  static bool prev_master_on = false;
-  static float prev_master_brightness = -1.0f;
+  // TOP-DOWN SYNC
+  for (auto *seg_state : this->segment_light_states_) {
+    bool state_changed = seg_state->remote_values.is_on() != master_on;
+    bool bright_changed =
+        master_on && std::abs(seg_state->remote_values.get_brightness() -
+                              master_brightness) > 0.01f;
 
-  bool master_changed =
-      (master_on != prev_master_on) ||
-      std::abs(master_brightness - prev_master_brightness) > 0.01f;
+    if (state_changed || bright_changed) {
+      auto call = seg_state->make_call();
+      if (state_changed)
+        call.set_state(master_on);
+      if (bright_changed)
+        call.set_brightness(master_brightness);
 
-  if (master_changed) {
-    // TOP-DOWN SYNC
-    for (auto *seg_state : this->segment_light_states_) {
-      bool state_changed = seg_state->remote_values.is_on() != master_on;
-      bool bright_changed =
-          master_on && std::abs(seg_state->remote_values.get_brightness() -
-                                master_brightness) > 0.01f;
-
-      if (state_changed || bright_changed) {
-        auto call = seg_state->make_call();
-        if (state_changed)
-          call.set_state(master_on);
-        if (bright_changed)
-          call.set_brightness(master_brightness);
-
-        ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
-                 seg_state->get_name().c_str(), master_on);
-        call.perform();
-      }
-    }
-
-    prev_master_on = master_on;
-    prev_master_brightness = master_brightness;
-  } else {
-    // BOTTOM-UP SYNC (A segment changed)
-    bool is_any_segment_on = false;
-    for (auto *s : this->segment_light_states_) {
-      if (s->remote_values.is_on()) {
-        is_any_segment_on = true;
-        break;
-      }
-    }
-
-    if (master_on != is_any_segment_on) {
-      auto call = this->master_light_state_->make_call();
-      call.set_state(is_any_segment_on);
-      ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
-               is_any_segment_on);
+      ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
+               seg_state->get_name().c_str(), master_on);
       call.perform();
-
-      // Update our tracker so the NEXT pass doesn't think the master manually
-      // changed
-      prev_master_on = is_any_segment_on;
     }
   }
 
-  is_syncing = false; // Unlock
+  this->is_syncing_ = false; // Unlock
+}
+
+void CFXLightOutput::on_segment_update() {
+  if (this->master_light_state_ == nullptr ||
+      this->segment_light_states_.empty()) {
+    return;
+  }
+
+  if (this->is_syncing_)
+    return;
+  this->is_syncing_ = true; // Lock recursion
+
+  bool master_on = this->master_light_state_->remote_values.is_on();
+
+  // BOTTOM-UP SYNC (A segment changed)
+  bool is_any_segment_on = false;
+  for (auto *s : this->segment_light_states_) {
+    if (s->remote_values.is_on()) {
+      is_any_segment_on = true;
+      break;
+    }
+  }
+
+  if (master_on != is_any_segment_on) {
+    auto call = this->master_light_state_->make_call();
+    call.set_state(is_any_segment_on);
+    ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
+             is_any_segment_on);
+    call.perform();
+  }
+
+  this->is_syncing_ = false; // Unlock
 }
 
 // --- Component Loop (Intercepts Outro Playback) ---

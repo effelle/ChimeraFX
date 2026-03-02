@@ -68,13 +68,13 @@ struct LedParams {
   rmt_symbol_word_t reset;
 };
 
-class CFXLightOutput : public light::AddressableLight,
-                       public light::LightRemoteValuesListener {
+class CFXLightOutput : public light::AddressableLight {
 public:
   void setup() override;
   void loop() override;
   void write_state(light::LightState *state) override;
-  void on_light_remote_values_update() override;
+  void on_master_update();
+  void on_segment_update();
   void send_visualizer_metadata(const std::string &name,
                                 const std::string &palette = "");
   float get_setup_priority() const override;
@@ -241,6 +241,34 @@ protected:
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
+
+  // State synchronization listeners
+  class MasterListener : public light::LightRemoteValuesListener {
+  public:
+    MasterListener(CFXLightOutput *parent) : parent_(parent) {}
+    void on_light_remote_values_update() override {
+      parent_->on_master_update();
+    }
+
+  private:
+    CFXLightOutput *parent_;
+  };
+
+  class SegmentListener : public light::LightRemoteValuesListener {
+  public:
+    SegmentListener(CFXLightOutput *parent) : parent_(parent) {}
+    void on_light_remote_values_update() override {
+      parent_->on_segment_update();
+    }
+
+  private:
+    CFXLightOutput *parent_;
+  };
+
+  MasterListener *master_listener_{nullptr};
+  std::vector<SegmentListener *> segment_listeners_;
+
+  bool is_syncing_{false};
 };
 
 } // namespace cfx_light
