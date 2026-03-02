@@ -393,4 +393,4 @@ async def to_code(config):
                 
                 # Manually run the effect's codegen
                 effect_var = await cfx_effect_to_code(eff_conf, unique_id)
-                cg.add(light_state.add_effect(effect_var))
+                cg.add(light_state.add_effects([effect_var]))
