@@ -386,6 +386,12 @@ async def to_code(config):
             CONF_DEFAULT_TRANSITION_LENGTH: config.get(
                 CONF_DEFAULT_TRANSITION_LENGTH, 0
             ),
+            # Required ESPHome entity keys
+            "disabled_by_default": False,
+            "internal": False,
+            "entity_category": None,
+            "icon": "",
+            "restore_mode": config.get("restore_mode", "ALWAYS_OFF"),
         }
 
         await light.register_light(vl, seg_light_config)
