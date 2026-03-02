@@ -67,11 +67,14 @@ void CFXAddressableLightEffect::start() {
     auto *it = (light::AddressableLight *)this->get_light_state()->get_output();
     if (it != nullptr) {
 #ifdef USE_ESP32
-      // dynamic_cast: returns nullptr for CFXVirtualSegmentLight (Phase 2)
-      // Virtual segment lights are single-runner by design
-      auto *cfx_out = dynamic_cast<cfx_light::CFXLightOutput *>(it);
-      const auto &seg_defs = cfx_out ? cfx_out->get_segment_defs()
-                                     : std::vector<cfx_light::CFXSegmentDef>();
+      // Virtual segment lights are single-runner by design.
+      // We check the flag injected by Python codegen to avoid illegal
+      // dynamic_cast (-fno-rtti)
+      std::vector<cfx_light::CFXSegmentDef> seg_defs;
+      if (!this->is_virtual_segment_) {
+        auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
+        seg_defs = cfx_out->get_segment_defs();
+      }
 
       if (!seg_defs.empty() && !this->segments_initialized_) {
         for (const auto &def : seg_defs) {
@@ -603,11 +606,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // --- Ensure Runner(s) ---
   if (this->runner_ == nullptr) {
 #ifdef USE_ESP32
-    // Check if cfx_light has segment definitions
-    // dynamic_cast: returns nullptr for CFXVirtualSegmentLight (Phase 2)
-    auto *cfx_out = dynamic_cast<cfx_light::CFXLightOutput *>(&it);
-    const auto &seg_defs = cfx_out ? cfx_out->get_segment_defs()
-                                   : std::vector<cfx_light::CFXSegmentDef>();
+    // Check if running on master CFXLightOutput via the securely injected flag
+    std::vector<cfx_light::CFXSegmentDef> seg_defs;
+    if (!this->is_virtual_segment_) {
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(&it);
+      seg_defs = cfx_out->get_segment_defs();
+    }
 
     if (!seg_defs.empty() && !this->segments_initialized_) {
       // Multi-segment mode: create one runner per segment def

@@ -110,7 +110,7 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
     },
 )
-async def cfx_effect_to_code(config, effect_id):
+async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
     """Generate code for addressable_cfx effect."""
     name = config.get(CONF_NAME) 
     eid = config[CONF_EFFECT_ID]
@@ -122,6 +122,9 @@ async def cfx_effect_to_code(config, effect_id):
     cg.add(effect.set_update_interval(config[CONF_UPDATE_INTERVAL]))
     cg.add(effect.set_effect_id(config[CONF_EFFECT_ID]))
     
+    if is_virtual_segment:
+        cg.add(effect.set_virtual_segment(True))
+        
     if CONF_SPEED in config:
         speed_var = await cg.get_variable(config[CONF_SPEED])
         cg.add(effect.set_speed(speed_var))

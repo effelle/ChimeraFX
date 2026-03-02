@@ -139,6 +139,7 @@ protected:
   // When no segments, segment_runners_ is empty and runner_ works alone.
   std::vector<CFXRunner *> segment_runners_;
   bool segments_initialized_{false};
+  bool is_virtual_segment_{false};
 
   uint32_t update_interval_{16};
   uint32_t last_run_{0};
