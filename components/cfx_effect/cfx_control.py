@@ -57,7 +57,7 @@ CONF_DEFAULT_INTRO_DURATION = "intro_duration"
 CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
 CONF_DEFAULT_TIMER = "timer"
 CONF_DEFAULT_AUTOTUNE = "autotune"
-CONF_DEFAULT_FORCE_WHITE = "force_white"
+
 CONF_DEFAULT_OUTRO = "outro_effect"
 CONF_DEFAULT_OUTRO_DURATION = "outro_duration"
 
@@ -302,22 +302,6 @@ async def to_code(config):
         cg.add(autotune.write_state(autotune_init))
         cg.add(var.set_autotune(autotune))
 
-    # 9. Force White
-    if is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
-        force_white_init = defaults.get(CONF_DEFAULT_FORCE_WHITE, False)
-        conf = {
-            CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_force_white"),
-            CONF_NAME: f"{name} Force White",
-            CONF_ICON: "mdi:lightbulb-on-outline",
-            "optimistic": True,
-            CONF_DISABLED_BY_DEFAULT: False,
-            CONF_INTERNAL: False,
-            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not force_white_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
-        }
-        force_white = cg.new_Pvariable(conf[CONF_ID])
-        await switch.register_switch(force_white, conf)
-        cg.add(force_white.publish_state(force_white_init))
-        cg.add(var.set_force_white(force_white))
 
     # 11. Debug
     if is_included(EXCLUDE_DEBUG):

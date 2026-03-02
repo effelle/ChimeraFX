@@ -37,9 +37,6 @@ public:
   void set_palette(select::Select *palette) { this->palette_ = palette; }
   void set_mirror(switch_::Switch *mirror) { this->mirror_ = mirror; }
   void set_autotune(switch_::Switch *autotune) { this->autotune_ = autotune; }
-  void set_force_white(switch_::Switch *force_white) {
-    this->force_white_ = force_white;
-  }
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
   }
@@ -97,9 +94,6 @@ public:
   void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
   void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
   void set_autotune_preset(bool v) { this->autotune_preset_ = v; }
-  void set_force_white_preset(bool preset) {
-    this->force_white_preset_ = preset;
-  }
 
   void set_virtual_segment(bool virtual_segment) {
     this->is_virtual_segment_ = virtual_segment;
@@ -116,7 +110,6 @@ protected:
   select::Select *palette_{nullptr};
   switch_::Switch *mirror_{nullptr};
   switch_::Switch *autotune_{nullptr};
-  switch_::Switch *force_white_{nullptr};
   select::Select *transition_effect_{nullptr};
   number::Number *transition_duration_{nullptr};
   select::Select *intro_effect_{nullptr};
@@ -168,7 +161,6 @@ protected:
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
   optional<bool> autotune_preset_{};
-  optional<bool> force_white_preset_{};
   optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
   optional<bool> intro_use_palette_preset_{};

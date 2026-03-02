@@ -3470,51 +3470,11 @@ uint16_t mode_chaos_theory(void) {
   uint32_t dt = instance->now - data->last_millis;
   data->last_millis = instance->now;
 
-  // --- Phase 1: Embedded Glitter Intro ---
+  // --- Phase 1: Embedded Glitter Intro (Depricated due to extreme current
+  // transients) ---
   if (!data->intro_done) {
-    uint32_t intro_elapsed = instance->now - data->intro_start;
-    const uint32_t INTRO_DURATION = 1500; // 1.5s build-up
-
-    // Calculate a safe intensity-scaled "white" to prevent brownouts
-    uint8_t spark_bri = instance->_segment.intensity;
-    // Don't go completely dark if intensity is very low
-    if (spark_bri < 30)
-      spark_bri = 30;
-
-    if (intro_elapsed >= INTRO_DURATION) {
-      data->intro_done = true;
-      // Flash white to signify "Birth of Chaos"
-      instance->_segment.fill(
-          RGBW32(spark_bri, spark_bri, spark_bri, spark_bri));
-      return FRAMETIME;
-    }
-
-    // Fade existing sparks slightly (leave trails)
-    instance->_segment.fadeToBlackBy(40);
-
-    // Spawn glitter based on progress (accelerating density)
-    // Progress 0.0 -> 1.0 (approximated 0-255)
-    uint8_t progress = (intro_elapsed * 255) / INTRO_DURATION;
-
-    // Density increases with progress
-    // Scale spawn count by length to ensure density on long strips
-    // Base: at least 1 pixel. Max: len / 10 pixels per frame.
-    int max_spawn = (len / 10) + 1;
-    long spawn_count = (long(progress) * max_spawn) / 255;
-
-    // Always spawn at least one in the second half
-    if (spawn_count == 0 && progress > 128)
-      spawn_count = 1;
-
-    for (int k = 0; k < spawn_count; k++) {
-      // Random position
-      uint16_t pos = cfx::hw_random16() % (len ? len : 1);
-      // Sparkling white (scaled safely)
-      instance->_segment.setPixelColor(
-          pos, RGBW32(spark_bri, spark_bri, spark_bri, spark_bri));
-    }
-
-    return FRAMETIME;
+    data->intro_done = true;
+    // Skip straight to Phase 2 to prevent power limit violations
   }
 
   // --- Phase 2: The Chaos Engine (Running State) ---
@@ -3581,12 +3541,14 @@ uint16_t mode_chaos_theory(void) {
   // global beat strikes. The higher the beat peak, the higher the probability
   // of spawning a spark.
   if (raw_noise > 120 && sharp_beat > 128 &&
-      cfx::hw_random8() < (sharp_beat >> 1)) {
+      cfx::hw_random8() <
+          (sharp_beat >>
+           2)) { // Reduced spawn rate slightly to prevent burst overlap
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
       if (data->sparks[s].level == 0) {
         data->sparks[s].pos = cfx::hw_random16() % (len ? len : 1);
-        data->sparks[s].level = 255; // Maximum bright explosion on the beat
-        data->sparks[s].building = false; // Instant pop, then fade
+        data->sparks[s].level = 10; // Start dim to avoid instant power step
+        data->sparks[s].building = true; // Build smoothly over a few frames
         break;
       }
     }
@@ -3597,15 +3559,30 @@ uint16_t mode_chaos_theory(void) {
   if (spark_radius > 4)
     spark_radius = 4;
 
-  // Update Spikes
+  // Update Spikes (Smooth build-up to avoid power transient steps)
+  uint8_t spike_max = instance->_segment.intensity;
+  if (spike_max < 50)
+    spike_max = 50;
+
   for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
     if (data->sparks[s].level > 0) {
-      // Fade
-      uint8_t fade = 5; // Fixed fade rate
-      if (data->sparks[s].level <= fade)
-        data->sparks[s].level = 0;
-      else
-        data->sparks[s].level -= fade;
+      if (data->sparks[s].building) {
+        uint16_t next =
+            data->sparks[s].level + (dt); // Fast build, but not instant
+        if (next >= spike_max) {
+          data->sparks[s].level = spike_max;
+          data->sparks[s].building = false;
+        } else {
+          data->sparks[s].level = (uint8_t)next;
+        }
+      } else {
+        // Fade
+        uint8_t fade = 5; // Fixed fade rate
+        if (data->sparks[s].level <= fade)
+          data->sparks[s].level = 0;
+        else
+          data->sparks[s].level -= fade;
+      }
     }
   }
 
@@ -3620,9 +3597,10 @@ uint16_t mode_chaos_theory(void) {
         if (pos >= 0 && pos < len) {
           uint32_t existing = instance->_segment.getPixelColor(pos);
 
-          // Blend from the existing color towards pure white,
-          // keeping the background visible through the spike edge
-          uint32_t final = color_blend(existing, (uint32_t)0xFFFFFFFF, amount);
+          // Blend from the existing color towards pure RGB white (no W channel
+          // to save power), keeping the background visible through the spike
+          // edge
+          uint32_t final = color_blend(existing, (uint32_t)0x00FFFFFF, amount);
 
           instance->_segment.setPixelColor(pos, final);
         }

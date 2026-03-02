@@ -218,21 +218,6 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // 7.5. Force White
-  switch_::Switch *force_white_sw =
-      (c && c->get_force_white()) ? c->get_force_white() : this->force_white_;
-  if (!this->initial_preset_applied_ && force_white_sw != nullptr &&
-      this->force_white_preset_.has_value()) {
-    bool target = this->force_white_preset_.value();
-    if (force_white_sw->state != target) {
-      if (target) {
-        force_white_sw->turn_on();
-      } else {
-        force_white_sw->turn_off();
-      }
-    }
-  }
-
   // 8. Timer
   number::Number *timer_num = (c) ? c->get_timer() : nullptr;
   if (!this->initial_preset_applied_ && timer_num != nullptr &&
@@ -653,35 +638,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Update controls via Controller or Local entities
   this->run_controls_();
 
-  // Retrieve Force White Switch State
-  switch_::Switch *force_white_sw =
-      (this->controller_ && this->controller_->get_force_white())
-          ? this->controller_->get_force_white()
-          : this->force_white_;
-
-  bool force_white_active = force_white_sw != nullptr && force_white_sw->state;
-  // Only truly monochromatic effects (161-163) can route purely to W channel.
-  // Other Solid-palette effects (Collider, Dissolve, BPM, etc.) use RGB from
-  // colors[0] and would render black if RGB is zeroed.
-  bool eligible_monochrome = this->is_monochromatic_(this->effect_id_);
-
-  uint32_t color;
-  Color adjusted_color = current_color;
-
-  if (force_white_active && eligible_monochrome) {
-    // Intelligent monochrome routing: steal the max brightness intent from RGB
-    // and map purely to W hardware
-    uint8_t max_rgb = std::max(std::max(current_color.red, current_color.green),
-                               current_color.blue);
-    uint8_t target_w = std::max(current_color.white, max_rgb);
-    color = (uint32_t(target_w) << 24); // R, G, B are 0
-    adjusted_color = Color(0, 0, 0, target_w);
-  } else {
-    // Normal Mode: Pass current light color to segment natively
-    color = (uint32_t(current_color.white) << 24) |
-            (uint32_t(current_color.red) << 16) |
-            (uint32_t(current_color.green) << 8) | uint32_t(current_color.blue);
-  }
+  // Normal Mode: Pass current light color to segment natively
+  uint32_t color = (uint32_t(current_color.white) << 24) |
+                   (uint32_t(current_color.red) << 16) |
+                   (uint32_t(current_color.green) << 8) |
+                   uint32_t(current_color.blue);
   // Sync color to all runners
   if (!this->segment_runners_.empty()) {
     for (auto *r : this->segment_runners_) {
@@ -1454,19 +1415,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
   if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
     c = Color::WHITE;
-  }
-
-  // Apply Force White logic to the Target Color
-  switch_::Switch *force_white_sw =
-      (this->controller_ && this->controller_->get_force_white())
-          ? this->controller_->get_force_white()
-          : this->force_white_;
-
-  if (force_white_sw != nullptr && force_white_sw->state &&
-      (this->get_default_palette_id_(this->effect_id_) == 255)) {
-    uint8_t max_rgb = std::max(std::max(c.r, c.g), c.b);
-    uint8_t target_w = std::max(c.w, max_rgb);
-    c = Color(0, 0, 0, target_w);
   }
 
   // Apply user brightness scaling to target color
