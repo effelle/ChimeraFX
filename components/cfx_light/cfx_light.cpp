@@ -247,8 +247,101 @@ void CFXLightOutput::setup() {
     return;
   }
 
+  // --- Phase 2: Set up Event-Driven State Synchronization ---
+  // Decoupled from the high-frequency DMA write loop to prevent recursion!
+  if (this->master_light_state_ != nullptr &&
+      !this->segment_light_states_.empty()) {
+
+    // Wire up listeners. When ANY of these lights change their remote values,
+    // our on_light_remote_values_update() method will be called.
+    this->master_light_state_->add_remote_values_listener(this);
+
+    for (auto *seg_state : this->segment_light_states_) {
+      seg_state->add_remote_values_listener(this);
+    }
+  }
+
   ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
            this->num_leds_, this->pin_, this->rmt_symbols_);
+}
+
+// --- Dynamic State Synchronization ---
+// Fired when the User clicks anything in Home Assistant on the Master or
+// Segments
+void CFXLightOutput::on_light_remote_values_update() {
+  if (this->master_light_state_ == nullptr ||
+      this->segment_light_states_.empty()) {
+    return;
+  }
+
+  static bool is_syncing = false;
+  if (is_syncing)
+    return;
+
+  is_syncing = true; // Lock recursion
+
+  bool master_on = this->master_light_state_->remote_values.is_on();
+  float master_brightness =
+      this->master_light_state_->remote_values.get_brightness();
+
+  // 1. TOP-DOWN: Did the MASTER change? Sync down to segments
+  // We check if any segment doesn't match the master. If there's a mismatch,
+  // it either means the master flipped, OR a segment flipped.
+  // We track the previous known state of the master to determine direction.
+  static bool prev_master_on = false;
+  static float prev_master_brightness = -1.0f;
+
+  bool master_changed =
+      (master_on != prev_master_on) ||
+      std::abs(master_brightness - prev_master_brightness) > 0.01f;
+
+  if (master_changed) {
+    // TOP-DOWN SYNC
+    for (auto *seg_state : this->segment_light_states_) {
+      bool state_changed = seg_state->remote_values.is_on() != master_on;
+      bool bright_changed =
+          master_on && std::abs(seg_state->remote_values.get_brightness() -
+                                master_brightness) > 0.01f;
+
+      if (state_changed || bright_changed) {
+        auto call = seg_state->make_call();
+        if (state_changed)
+          call.set_state(master_on);
+        if (bright_changed)
+          call.set_brightness(master_brightness);
+
+        ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
+                 seg_state->get_name().c_str(), master_on);
+        call.perform();
+      }
+    }
+
+    prev_master_on = master_on;
+    prev_master_brightness = master_brightness;
+  } else {
+    // BOTTOM-UP SYNC (A segment changed)
+    bool is_any_segment_on = false;
+    for (auto *s : this->segment_light_states_) {
+      if (s->remote_values.is_on()) {
+        is_any_segment_on = true;
+        break;
+      }
+    }
+
+    if (master_on != is_any_segment_on) {
+      auto call = this->master_light_state_->make_call();
+      call.set_state(is_any_segment_on);
+      ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
+               is_any_segment_on);
+      call.perform();
+
+      // Update our tracker so the NEXT pass doesn't think the master manually
+      // changed
+      prev_master_on = is_any_segment_on;
+    }
+  }
+
+  is_syncing = false; // Unlock
 }
 
 // --- Component Loop (Intercepts Outro Playback) ---
@@ -288,157 +381,103 @@ void CFXLightOutput::write_state(light::LightState *state) {
   if (state != nullptr && this->outro_cb_ != nullptr) {
     return;
   }
+}
 
-  // 1.2 Phase 2: Master <-> Segment State Synchronization
-  // Ensure we don't infinitely recurse when propagating states
-  static bool is_syncing = false;
-
-  if (state != nullptr && !this->segment_light_states_.empty() && !is_syncing) {
-    is_syncing = true; // Lock synchronization
-
-    // TOP-DOWN SYNC: Update originated from the Master light
-    if (state == this->get_master_light_state()) {
-      bool master_on = state->current_values.is_on();
-      float master_brightness = state->current_values.get_brightness();
-
-      for (auto *seg_state : this->segment_light_states_) {
-        bool state_changed = seg_state->current_values.is_on() != master_on;
-        bool bright_changed =
-            master_on && std::abs(seg_state->current_values.get_brightness() -
-                                  master_brightness) > 0.01f;
-
-        if (state_changed || bright_changed) {
-          auto call = seg_state->make_call();
-          if (state_changed)
-            call.set_state(master_on);
-          if (bright_changed)
-            call.set_brightness(master_brightness);
-
-          ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
-                   seg_state->get_name().c_str(), master_on);
-          call.perform();
-        }
-      }
-    }
-    // BOTTOM-UP SYNC: Update originated from one of the Segment lights
-    else {
-      bool is_any_segment_on = false;
-      for (auto *seg_state : this->segment_light_states_) {
-        if (seg_state->current_values.is_on()) {
-          is_any_segment_on = true;
-          break;
-        }
-      }
-
-      light::LightState *master_state = this->get_master_light_state();
-      if (master_state != nullptr &&
-          master_state->current_values.is_on() != is_any_segment_on) {
-        auto call = master_state->make_call();
-        call.set_state(is_any_segment_on);
-        ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
-                 is_any_segment_on);
-        call.perform();
-      }
-    }
-
-    is_syncing = false; // Unlock synchronization
-  }
-
-  // 1.5. Visualizer UDP Broadcast
+// 1.5. Visualizer UDP Broadcast
 #ifdef USE_WIFI
-  if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
-    if (this->socket_fd_ < 0) {
-      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    }
-    if (this->socket_fd_ >= 0) {
-      struct sockaddr_in dest_addr;
-      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
-      dest_addr.sin_family = AF_INET;
-      dest_addr.sin_port = htons(this->visualizer_port_);
-
-      // Prepend Type Header (0x00 = Pixels)
-      // To avoid sendmsg issues, we'll use a local buffer for small strips
-      // or a vector for larger ones.
-      size_t buf_len = this->get_buffer_size_();
-      std::vector<uint8_t> pkt;
-      pkt.reserve(buf_len + 1);
-      pkt.push_back(VISUALIZER_TYPE_PIXELS);
-      pkt.insert(pkt.end(), this->buf_, this->buf_ + buf_len);
-
-      sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
-             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-    }
+if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
+  if (this->socket_fd_ < 0) {
+    this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   }
+  if (this->socket_fd_ >= 0) {
+    struct sockaddr_in dest_addr;
+    dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(this->visualizer_port_);
+
+    // Prepend Type Header (0x00 = Pixels)
+    // To avoid sendmsg issues, we'll use a local buffer for small strips
+    // or a vector for larger ones.
+    size_t buf_len = this->get_buffer_size_();
+    std::vector<uint8_t> pkt;
+    pkt.reserve(buf_len + 1);
+    pkt.push_back(VISUALIZER_TYPE_PIXELS);
+    pkt.insert(pkt.end(), this->buf_, this->buf_ + buf_len);
+
+    sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
+           (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+  }
+}
 #endif
-  this->status_clear_warning();
+this->status_clear_warning();
 
-  // Protect from refreshing too often
-  uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
-    this->schedule_show();
-    return;
-  }
-  this->last_refresh_ = now;
-  this->mark_shown_();
+// Protect from refreshing too often
+uint32_t now = micros();
+if (*this->max_refresh_rate_ != 0 &&
+    (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  this->schedule_show();
+  return;
+}
+this->last_refresh_ = now;
+this->mark_shown_();
 
-  // Wait for previous DMA transmission to complete (safety valve)
-  // At 300 LEDs = ~9ms, this returns instantly if 16ms+ has passed
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, 15);
-  if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX timeout");
-    this->status_set_warning();
-    return;
-  }
+// Wait for previous DMA transmission to complete (safety valve)
+// At 300 LEDs = ~9ms, this returns instantly if 16ms+ has passed
+esp_err_t error = rmt_tx_wait_all_done(this->channel_, 15);
+if (error != ESP_OK) {
+  ESP_LOGE(TAG, "RMT TX timeout");
+  this->status_set_warning();
+  return;
+}
 
-  // Copy pixel buffer → RMT buffer and fire
+// Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
+memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
 #else
-  // Pre-5.3: encode bytes → RMT symbols manually
-  size_t buffer_size = this->get_buffer_size_();
-  size_t sz = 0;
-  uint8_t *psrc = this->buf_;
-  rmt_symbol_word_t *pdest = this->rmt_buf_;
-  while (sz < buffer_size) {
-    uint8_t b = *psrc;
-    for (int i = 0; i < 8; i++) {
-      pdest->val = (b & (1 << (7 - i))) ? this->params_.bit1.val
-                                        : this->params_.bit0.val;
-      pdest++;
-    }
-    sz++;
-    psrc++;
-  }
-  if (this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0) {
-    pdest->val = this->params_.reset.val;
+// Pre-5.3: encode bytes → RMT symbols manually
+size_t buffer_size = this->get_buffer_size_();
+size_t sz = 0;
+uint8_t *psrc = this->buf_;
+rmt_symbol_word_t *pdest = this->rmt_buf_;
+while (sz < buffer_size) {
+  uint8_t b = *psrc;
+  for (int i = 0; i < 8; i++) {
+    pdest->val =
+        (b & (1 << (7 - i))) ? this->params_.bit1.val : this->params_.bit0.val;
     pdest++;
   }
+  sz++;
+  psrc++;
+}
+if (this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0) {
+  pdest->val = this->params_.reset.val;
+  pdest++;
+}
 #endif
 
-  // Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
-  rmt_transmit_config_t config;
-  memset(&config, 0, sizeof(config));
+// Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
+rmt_transmit_config_t config;
+memset(&config, 0, sizeof(config));
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
-                       this->get_buffer_size_(), &config);
+error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
+                     this->get_buffer_size_(), &config);
 #else
-  size_t len =
-      this->get_buffer_size_() * 8 +
-      ((this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0)
-           ? 1
-           : 0);
-  error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
-                       len * sizeof(rmt_symbol_word_t), &config);
+size_t len =
+    this->get_buffer_size_() * 8 +
+    ((this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0)
+         ? 1
+         : 0);
+error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
+                     len * sizeof(rmt_symbol_word_t), &config);
 #endif
 
-  if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX error");
-    this->status_set_warning();
-    return;
-  }
-  this->status_clear_warning();
+if (error != ESP_OK) {
+  ESP_LOGE(TAG, "RMT TX error");
+  this->status_set_warning();
+  return;
+}
+this->status_clear_warning();
 }
 
 void CFXLightOutput::send_visualizer_metadata(const std::string &name,

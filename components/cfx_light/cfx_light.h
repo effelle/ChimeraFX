@@ -68,10 +68,13 @@ struct LedParams {
   rmt_symbol_word_t reset;
 };
 
-class CFXLightOutput : public light::AddressableLight {
+class CFXLightOutput : public light::AddressableLight,
+                       public light::LightRemoteValuesListener {
 public:
   void setup() override;
   void loop() override;
+  void write_state(light::LightState *state) override;
+  void on_light_remote_values_update() override;
   void write_state(light::LightState *state) override;
   void send_visualizer_metadata(const std::string &name,
                                 const std::string &palette = "");
