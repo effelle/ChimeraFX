@@ -115,27 +115,26 @@ public:
   }
 
   void loop() override {
-    bool is_any_on = false;
-    for (auto *l : lights_) {
-      if (l->remote_values.is_on()) {
-        is_any_on = true;
-        break;
-      }
-    }
+    if (lights_.empty())
+      return;
 
-    // Detect falling edge (ALL lights went from ON -> OFF)
-    if (was_on_ && !is_any_on) {
-      ESP_LOGD("chimera_fx",
-               "CFXControl: All lights turned off -> Resetting Timer");
+    // Use ONLY the primary Master light (index 0) to determine global ON/OFF
+    // state Do not aggregate segment states here, as Master sync handles
+    // aggregation.
+    bool master_on = lights_[0]->remote_values.is_on();
 
+    // Detect falling edge (Master light went from ON -> OFF)
+    if (was_on_ && !master_on) {
       // Reset Timer to 0 (Abort Sleep Timer)
-      if (timer_) {
+      if (timer_ && timer_->state != 0.0f) {
+        ESP_LOGD("chimera_fx",
+                 "CFXControl: Master light turned off -> Resetting Timer");
         auto call = timer_->make_call();
         call.set_value(0);
         call.perform();
       }
     }
-    was_on_ = is_any_on;
+    was_on_ = master_on;
   }
 
   void set_speed(number::Number *n) { speed_ = n; }

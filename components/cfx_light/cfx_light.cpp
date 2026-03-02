@@ -21,7 +21,6 @@
 #include "esphome/core/log.h"
 #include <cmath>
 
-
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
 #endif
@@ -290,40 +289,59 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
 
-  // 1.2 Phase 2: Master -> Segment State Synchronization
-  // When the Master light is toggled or its brightness changes, we want to
-  // push that state down to all virtual segments.
-  if (state != nullptr && !this->segment_light_states_.empty()) {
-    static bool is_syncing = false;
-    if (!is_syncing) {
-      is_syncing = true;
+  // 1.2 Phase 2: Master <-> Segment State Synchronization
+  // Ensure we don't infinitely recurse when propagating states
+  static bool is_syncing = false;
 
+  if (state != nullptr && !this->segment_light_states_.empty() && !is_syncing) {
+    is_syncing = true; // Lock synchronization
+
+    // TOP-DOWN SYNC: Update originated from the Master light
+    if (state == this->get_light_state()) {
       bool master_on = state->current_values.is_on();
       float master_brightness = state->current_values.get_brightness();
 
       for (auto *seg_state : this->segment_light_states_) {
-        bool needs_update = false;
-        auto call = seg_state->make_call();
+        bool state_changed = seg_state->current_values.is_on() != master_on;
+        bool bright_changed =
+            master_on && std::abs(seg_state->current_values.get_brightness() -
+                                  master_brightness) > 0.01f;
 
-        if (seg_state->current_values.is_on() != master_on) {
-          call.set_state(master_on);
-          needs_update = true;
-        }
+        if (state_changed || bright_changed) {
+          auto call = seg_state->make_call();
+          if (state_changed)
+            call.set_state(master_on);
+          if (bright_changed)
+            call.set_brightness(master_brightness);
 
-        // Only sync brightness if it actually changed to avoid overriding
-        // segment-level tweaks constantly
-        if (master_on && std::abs(seg_state->current_values.get_brightness() -
-                                  master_brightness) > 0.01f) {
-          call.set_brightness(master_brightness);
-          needs_update = true;
-        }
-
-        if (needs_update) {
+          ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
+                   seg_state->get_name().c_str(), master_on);
           call.perform();
         }
       }
-      is_syncing = false;
     }
+    // BOTTOM-UP SYNC: Update originated from one of the Segment lights
+    else {
+      bool is_any_segment_on = false;
+      for (auto *seg_state : this->segment_light_states_) {
+        if (seg_state->current_values.is_on()) {
+          is_any_segment_on = true;
+          break;
+        }
+      }
+
+      light::LightState *master_state = this->get_light_state();
+      if (master_state != nullptr &&
+          master_state->current_values.is_on() != is_any_segment_on) {
+        auto call = master_state->make_call();
+        call.set_state(is_any_segment_on);
+        ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
+                 is_any_segment_on);
+        call.perform();
+      }
+    }
+
+    is_syncing = false; // Unlock synchronization
   }
 
   // 1.5. Visualizer UDP Broadcast
