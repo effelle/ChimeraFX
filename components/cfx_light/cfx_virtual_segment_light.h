@@ -68,6 +68,7 @@ public:
   const std::string &get_segment_id() const { return seg_id_; }
   uint16_t get_start() const { return start_; }
   uint16_t get_stop() const { return stop_; }
+  CFXLightOutput *get_parent() const { return parent_; }
 
 protected:
   CFXLightOutput *parent_;

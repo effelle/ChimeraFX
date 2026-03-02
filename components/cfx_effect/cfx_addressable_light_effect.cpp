@@ -6,6 +6,7 @@
 
 #include "cfx_addressable_light_effect.h"
 #include "../cfx_light/cfx_light.h"
+#include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_compat.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
@@ -416,8 +417,20 @@ void CFXAddressableLightEffect::stop() {
   auto *state = this->get_light_state();
 
   if (state != nullptr && this->runner_ != nullptr) {
-    auto *out =
-        static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+    cfx_light::CFXLightOutput *out = nullptr;
+#ifdef USE_ESP32
+    if (this->is_virtual_segment_) {
+      auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+          this->get_addressable_());
+      if (vseg)
+        out = vseg->get_parent();
+    } else {
+#endif
+      out = static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+#ifdef USE_ESP32
+    }
+#endif
+
     if (out != nullptr) {
 
       // Resolve Outro Mode synchronously before dropping controller mapping
