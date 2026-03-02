@@ -386,8 +386,8 @@ async def to_code(config):
             if "addressable_cfx" in eff:
                 eff_conf = eff["addressable_cfx"]
                 # Must generate a globally unique ID string so we don't crash new_Pvariable
-                base_id_str = eff_conf.get(CONF_ID, CoreID("fallback")).id
-                unique_str = f"{base_id_str}_seg{seg_idx}"
+                eff_num = eff_conf.get("effect_id", "unk")
+                unique_str = f"cfx_eff_s{seg_idx}_e{eff_num}"
 
                 unique_id = CoreID(unique_str, is_declaration=True, type=CFXAddressableLightEffect)
                 
