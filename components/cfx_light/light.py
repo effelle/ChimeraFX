@@ -357,31 +357,35 @@ async def to_code(config):
             seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id
         )
 
-        # Build segment light config with unique name
-        seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
-        seg_light_config = dict(config)
-        seg_light_config[CONF_ID] = seg[CONF_SEGMENT_LIGHT_ID]
-        seg_light_config[CONF_NAME] = seg_name
-        seg_light_config[CONF_OUTPUT_ID] = seg[CONF_SEGMENT_OUTPUT_ID]
+        # Build segment light config FROM SCRATCH (not copying parent config
+        # which carries hidden ESPHome internal state that causes ID collisions)
+        import copy
+        from esphome.core import ID as CoreID
 
-        # Effects: first segment reuses original IDs, others get unique copies
+        seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
         seg_idx = segments.index(seg)
-        if seg_idx == 0:
-            seg_light_config[CONF_EFFECTS] = config.get(CONF_EFFECTS, [])
-        else:
-            import copy
-            from esphome.core import ID as CoreID
-            new_effects = []
-            for eff in config.get(CONF_EFFECTS, []):
-                eff_copy = copy.deepcopy(eff)
-                for eff_type, eff_conf in eff_copy.items():
-                    if isinstance(eff_conf, dict) and CONF_ID in eff_conf:
-                        old_id = eff_conf[CONF_ID]
-                        eff_conf[CONF_ID] = CoreID(
-                            f"{old_id.id}_s{seg_idx}",
-                            is_declaration=True, type=old_id.type
-                        )
-                new_effects.append(eff_copy)
-            seg_light_config[CONF_EFFECTS] = new_effects
+
+        # Generate unique effects for each segment
+        seg_effects = []
+        for eff in config.get(CONF_EFFECTS, []):
+            eff_copy = copy.deepcopy(eff)
+            for eff_type, eff_conf in eff_copy.items():
+                if isinstance(eff_conf, dict) and CONF_ID in eff_conf:
+                    old_id = eff_conf[CONF_ID]
+                    eff_conf[CONF_ID] = CoreID(
+                        f"{old_id.id}_s{seg_idx}",
+                        is_declaration=True, type=old_id.type
+                    )
+            seg_effects.append(eff_copy)
+
+        seg_light_config = {
+            CONF_ID: seg[CONF_SEGMENT_LIGHT_ID],
+            CONF_NAME: seg_name,
+            CONF_OUTPUT_ID: seg[CONF_SEGMENT_OUTPUT_ID],
+            CONF_EFFECTS: seg_effects,
+            CONF_DEFAULT_TRANSITION_LENGTH: config.get(
+                CONF_DEFAULT_TRANSITION_LENGTH, 0
+            ),
+        }
 
         await light.register_light(vl, seg_light_config)
