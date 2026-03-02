@@ -651,8 +651,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           : this->force_white_;
 
   bool force_white_active = force_white_sw != nullptr && force_white_sw->state;
-  bool eligible_monochrome =
-      (this->get_default_palette_id_(this->effect_id_) == 255);
+  // Only truly monochromatic effects (161-163) can route purely to W channel.
+  // Other Solid-palette effects (Collider, Dissolve, BPM, etc.) use RGB from
+  // colors[0] and would render black if RGB is zeroed.
+  bool eligible_monochrome = this->is_monochromatic_(this->effect_id_);
 
   uint32_t color;
   Color adjusted_color = current_color;
