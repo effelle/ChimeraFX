@@ -357,36 +357,15 @@ async def to_code(config):
             seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id
         )
 
-        # Build segment light config FROM SCRATCH (not copying parent config
-        # which carries hidden ESPHome internal state that causes ID collisions)
-        import copy
-        from esphome.core import ID as CoreID
-
-        seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
-        seg_idx = segments.index(seg)
-
-        # Generate unique effects for each segment
-        seg_effects = []
-        for eff in config.get(CONF_EFFECTS, []):
-            eff_copy = copy.deepcopy(eff)
-            for eff_type, eff_conf in eff_copy.items():
-                if isinstance(eff_conf, dict) and CONF_ID in eff_conf:
-                    old_id = eff_conf[CONF_ID]
-                    eff_conf[CONF_ID] = CoreID(
-                        f"{old_id.id}_s{seg_idx}",
-                        is_declaration=True, type=old_id.type
-                    )
-            seg_effects.append(eff_copy)
-
+        # Prepare segment config WITHOUT effects to avoid ESPHome's internal collision
         seg_light_config = {
             CONF_ID: seg[CONF_SEGMENT_LIGHT_ID],
-            CONF_NAME: seg_name,
+            CONF_NAME: seg[CONF_SEGMENT_NAME] if CONF_SEGMENT_NAME in seg else seg_id,
             CONF_OUTPUT_ID: seg[CONF_SEGMENT_OUTPUT_ID],
-            CONF_EFFECTS: seg_effects,
+            CONF_EFFECTS: [],  # Skip internal effect registration
             CONF_DEFAULT_TRANSITION_LENGTH: config.get(
                 CONF_DEFAULT_TRANSITION_LENGTH, 0
             ),
-            # Required ESPHome entity keys
             "disabled_by_default": False,
             "internal": False,
             "entity_category": None,
@@ -394,4 +373,24 @@ async def to_code(config):
             "restore_mode": config.get("restore_mode", "ALWAYS_OFF"),
         }
 
+        # Register the LightState (without effects)
         await light.register_light(vl, seg_light_config)
+        light_state = await cg.get_variable(seg[CONF_SEGMENT_LIGHT_ID])
+
+        # Manually create strictly unique effects and attach them to the segment
+        from esphome.core import ID as CoreID
+        from esphome.components.cfx_effect import cfx_effect_to_code, CFXAddressableLightEffect
+
+        seg_idx = segments.index(seg)
+        for eff in config.get(CONF_EFFECTS, []):
+            if "addressable_cfx" in eff:
+                eff_conf = eff["addressable_cfx"]
+                # Must generate a globally unique ID string so we don't crash new_Pvariable
+                base_id_str = eff_conf.get(CONF_ID, CoreID("fallback")).id
+                unique_str = f"{base_id_str}_seg{seg_idx}"
+
+                unique_id = CoreID(unique_str, is_declaration=True, type=CFXAddressableLightEffect)
+                
+                # Manually run the effect's codegen
+                effect_var = await cfx_effect_to_code(eff_conf, unique_id)
+                cg.add(light_state.add_effect(effect_var))
