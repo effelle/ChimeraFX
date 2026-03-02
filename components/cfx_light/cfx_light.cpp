@@ -297,7 +297,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     is_syncing = true; // Lock synchronization
 
     // TOP-DOWN SYNC: Update originated from the Master light
-    if (state == this->get_light_state()) {
+    if (state == this->get_master_light_state()) {
       bool master_on = state->current_values.is_on();
       float master_brightness = state->current_values.get_brightness();
 
@@ -330,7 +330,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
         }
       }
 
-      light::LightState *master_state = this->get_light_state();
+      light::LightState *master_state = this->get_master_light_state();
       if (master_state != nullptr &&
           master_state->current_values.is_on() != is_any_segment_on) {
         auto call = master_state->make_call();

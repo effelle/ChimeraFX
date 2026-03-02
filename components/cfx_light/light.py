@@ -280,11 +280,13 @@ async def to_code(config):
         # Register parent as master light (no effects, acts as global relay)
         master_config = dict(config)
         master_config[CONF_EFFECTS] = []  # No effects on master
-        await light.register_light(var, master_config)
+        light_state = await light.register_light(var, master_config)
+        cg.add(var.set_master_light_state(light_state))
         await cg.register_component(var, config)
     else:
         # No segments: original single-light behavior
-        await light.register_light(var, config)
+        light_state = await light.register_light(var, config)
+        cg.add(var.set_master_light_state(light_state))
         await cg.register_component(var, config)
 
     # --- Hardware configuration (always) ---
