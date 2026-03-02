@@ -673,10 +673,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
         ::instance = r;
-        this->run_intro(it, adjusted_color);
+        this->run_intro(it, current_color);
       }
     } else {
-      this->run_intro(it, adjusted_color);
+      this->run_intro(it, current_color);
     }
 
     // 2. Resolve Intro Completion Duration (Priority Hierarchy)
