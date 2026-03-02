@@ -49,6 +49,8 @@ CONF_SEGMENT_MIRROR = "mirror"
 CONF_SEGMENT_USE_INTRO = "use_intro"
 CONF_SEGMENT_USE_OUTRO = "use_outro"
 CONF_SEGMENT_INTRO_DUR = "intro_dur"
+CONF_SEGMENT_OUTPUT_ID = "output_id"
+CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32", "wifi"]
@@ -98,6 +100,8 @@ SEGMENT_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_SEGMENT_ID): cv.string,
         cv.Optional(CONF_SEGMENT_NAME): cv.string,
+        cv.GenerateID(CONF_SEGMENT_OUTPUT_ID): cv.declare_id(CFXVirtualSegmentLight),
+        cv.GenerateID(CONF_SEGMENT_LIGHT_ID): cv.declare_id(light.LightState),
         cv.Required(CONF_SEGMENT_START): cv.uint16_t,
         cv.Required(CONF_SEGMENT_STOP): cv.uint16_t,
         cv.Optional(CONF_SEGMENT_MIRROR, default=False): cv.boolean,
@@ -349,24 +353,15 @@ async def to_code(config):
         )
 
         # Phase 2: Create virtual segment light + independent LightState
-        parent_id_str = str(config[CONF_OUTPUT_ID].id)
-
-        from esphome.core import ID as CoreID
-
-        vl_id = CoreID(
-            f"{parent_id_str}_vseg_{seg_id}",
-            is_declaration=True, type=CFXVirtualSegmentLight
+        vl = cg.new_Pvariable(
+            seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id
         )
-        vl = cg.new_Pvariable(vl_id, var, seg_start, seg_stop, seg_id)
 
         # Build segment light config: same effects as parent, unique name
         seg_name = seg.get(CONF_SEGMENT_NAME, seg_id)
         seg_light_config = dict(config)
-        seg_light_config[CONF_ID] = CoreID(
-            f"{parent_id_str}_ls_{seg_id}",
-            is_declaration=True, type=light.LightState
-        )
+        seg_light_config[CONF_ID] = seg[CONF_SEGMENT_LIGHT_ID]
         seg_light_config[CONF_NAME] = seg_name
-        seg_light_config[CONF_OUTPUT_ID] = vl_id
+        seg_light_config[CONF_OUTPUT_ID] = seg[CONF_SEGMENT_OUTPUT_ID]
 
         await light.register_light(vl, seg_light_config)
