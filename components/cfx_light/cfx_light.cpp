@@ -395,7 +395,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p <= def.stop; p++) {
           if (p < this->size()) {
-            (*this)[p] = light::Color::BLACK;
+            (*this)[p] = esphome::Color::BLACK;
           }
         }
       }
