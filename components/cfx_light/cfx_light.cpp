@@ -284,12 +284,21 @@ void CFXLightOutput::on_master_update() {
   float master_brightness =
       this->master_light_state_->remote_values.get_brightness();
 
+  bool master_state_changed = (master_on != this->prev_master_state_);
+  this->prev_master_state_ = master_on;
+
   // TOP-DOWN SYNC
   for (auto *seg_state : this->segment_light_states_) {
-    bool state_changed = seg_state->remote_values.is_on() != master_on;
-    bool bright_changed =
-        master_on && std::abs(seg_state->remote_values.get_brightness() -
-                              master_brightness) > 0.01f;
+    // Only force ON/OFF cascade if the Master state actually flipped
+    bool state_changed =
+        master_state_changed && (seg_state->remote_values.is_on() != master_on);
+
+    // Only update brightness if the segment is currently ON (or is becoming ON)
+    bool is_seg_on =
+        state_changed ? master_on : seg_state->remote_values.is_on();
+    bool bright_changed = master_on && is_seg_on &&
+                          std::abs(seg_state->remote_values.get_brightness() -
+                                   master_brightness) > 0.01f;
 
     if (state_changed || bright_changed) {
       auto call = seg_state->make_call();
@@ -329,6 +338,11 @@ void CFXLightOutput::on_segment_update() {
   }
 
   if (master_on != is_any_segment_on) {
+    // We are commanding the master to change state.
+    // Update prev_master_state_ so that unexpected/deferred incoming Master
+    // listener callbacks don't overreact and force all segments ON!
+    this->prev_master_state_ = is_any_segment_on;
+
     auto call = this->master_light_state_->make_call();
     call.set_state(is_any_segment_on);
     ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",

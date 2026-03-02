@@ -269,6 +269,7 @@ protected:
   std::vector<SegmentListener *> segment_listeners_;
 
   bool is_syncing_{false};
+  bool prev_master_state_{false};
 };
 
 } // namespace cfx_light
