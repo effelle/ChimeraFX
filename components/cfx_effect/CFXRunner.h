@@ -308,6 +308,7 @@ public:
   ~CFXRunner() { _segment.deallocateData(); }
 
   void setDebug(bool state) { diagnostics.enabled = state; }
+  bool getDebug() const { return diagnostics.enabled; }
   void setName(const char *name) { _name = name; }
 
   void service();
@@ -337,11 +338,14 @@ public:
       _segment.speed = s;
     }
   }
+  uint8_t getSpeed() const { return _segment.speed; }
+
   void setIntensity(uint8_t i) {
     if (_segment.intensity != i) {
       _segment.intensity = i;
     }
   }
+  uint8_t getIntensity() const { return _segment.intensity; }
   void setPalette(uint8_t p) {
     if (_segment.palette != p) {
       _segment.palette = p;
@@ -354,6 +358,7 @@ public:
       _segment.mirror = m;
     }
   }
+  bool getMirror() const { return _segment.mirror; }
   void setColor(uint32_t c) { _segment.colors[0] = c; }
   void generateRandomPalette();
 
