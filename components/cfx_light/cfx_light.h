@@ -208,11 +208,15 @@ protected:
   uint8_t pin_{0};
   uint16_t num_leds_{0};
   ChimeraChipset chipset_{CHIPSET_WS2812X};
-  RGBOrder rgb_order_{RGB_ORDER_GRB};
+  RGBOrder rgb_order_{ORDER_GRB};
   std::vector<CFXSegmentDef> segment_defs_;
   std::vector<light::LightState *> segment_light_states_;
 
   uint8_t default_intro_mode_{0}; // 0 = auto-detect from chip variant
+  uint8_t default_outro_mode_{0};
+  float default_intro_dur_s_{0.0f};
+  float default_outro_dur_s_{0.0f};
+
   bool is_rgbw_{false};
   bool is_wrgb_{false};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
@@ -226,13 +230,6 @@ protected:
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
-
-  // --- Segment definitions (Phase 1) ---
-  std::vector<CFXSegmentDef> segment_defs_;
-  uint8_t default_intro_mode_{0};
-  uint8_t default_outro_mode_{0};
-  float default_intro_dur_s_{0.0f};
-  float default_outro_dur_s_{0.0f};
 };
 
 } // namespace cfx_light
