@@ -35,12 +35,8 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // We intentionally DO NOT call parent_->schedule_show() here.
-    // The parent CFXLightOutput component runs on its own continuous loop()
-    // and enforces single-frame DMA writes via max_refresh_rate.
-    // Allowing segments to trigger the parent effectively multiplies the
-    // hardware framerate requests by N segments, flooding the RMT/I2S DMA and
-    // causing TX timeouts.
+    // Delegate DMA trigger to parent — only parent drives hardware
+    parent_->schedule_show();
   }
 
   light::LightTraits get_traits() override {

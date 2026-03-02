@@ -170,10 +170,11 @@ void CFXLightOutput::setup() {
   // Auto-detect RMT symbol buffer size from chip variant
   // These match ESPHome's proven defaults — larger buffers reduce
   // interrupt-refill frequency, preventing glitches on multi-strip setups
-  if (this->rmt_symbols_ == 0 || this->rmt_symbols_ == 192) {
-#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
-    this->rmt_symbols_ =
-        512; // High buffer to prevent TX wait_all_done flush timeouts
+  if (this->rmt_symbols_ == 0) {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    this->rmt_symbols_ = 192; // Classic: 512 total (2 strips × 192 = 384, safe)
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    this->rmt_symbols_ = 192; // S2: 256 total
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
     this->rmt_symbols_ =
         192; // S3/P4: 192 total (with DMA, effectively unlimited)
