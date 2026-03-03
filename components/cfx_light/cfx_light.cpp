@@ -412,21 +412,14 @@ void CFXLightOutput::loop() {
 // --- Write State (Fire-and-Forget DMA) ---
 
 void CFXLightOutput::write_state(light::LightState *state) {
-  // 1. Defend against ESPHome painting the entire strip.
-  // Non-segmented: Only block during outro (ESPHome's fade-to-black
+  // 1. Defend against ESPHome's internal rendering conflicts.
+  // Non-segmented: Block during outro (ESPHome's fade-to-black
   //   transition would overwrite our outro animation).
-  // Segmented: ALWAYS block Master-sourced calls. The Master LightState
-  //   paints the entire strip with its color on every frame, overwriting
-  //   what segment effects are rendering (causes stroboscopic flicker).
-  //   Segment effects drive the DMA via schedule_show() which calls
-  //   write_state(nullptr), so those pass through.
-  if (state != nullptr) {
-    if (this->has_segments()) {
-      return; // Always block Master calls in segmented mode
-    }
-    if (!this->outro_cbs_.empty()) {
-      return; // Block during outro in non-segmented mode
-    }
+  // Segmented: Allow through — the Master LightState paints the buffer
+  //   but segment effects overwrite their regions every frame via apply().
+  //   The scrubbing code below handles OFF segments.
+  if (state != nullptr && !this->has_segments() && !this->outro_cbs_.empty()) {
+    return;
   }
 
   // 1.2 Prevent Master Light from leaking into OFF segments.
