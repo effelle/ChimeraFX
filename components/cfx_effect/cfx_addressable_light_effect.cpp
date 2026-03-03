@@ -595,8 +595,8 @@ void CFXAddressableLightEffect::stop() {
 
           return;
         }
+      } // end if (!is_virtual_segment_)
 #endif
-      }
     }
 
     // Normal Stop / Cleanup (Failsafe)
