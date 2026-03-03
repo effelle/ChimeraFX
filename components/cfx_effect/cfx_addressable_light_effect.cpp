@@ -14,7 +14,6 @@
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
-
 namespace esphome {
 namespace chimera_fx {
 
@@ -128,6 +127,16 @@ void CFXAddressableLightEffect::start() {
       }
 #endif
     }
+  }
+
+  // Pre-seed the segment cache with this effect's default palette
+  // so that run_controls_() picks up the correct value on first frame
+  if (this->controller_) {
+    std::string seg_name = this->get_light_state()->get_name();
+    uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
+    if (this->is_monochromatic_(this->effect_id_))
+      default_pal = 255;
+    this->controller_->segment_states_[seg_name].palette = default_pal;
   }
 
   this->run_controls_();
@@ -1172,6 +1181,18 @@ void CFXAddressableLightEffect::run_controls_() {
   else if (current_autotune_state && this->autotune_active_ &&
            autotune_sw != nullptr) {
     bool manual_override = false;
+    // Only check the shared palette selector for the CURRENTLY TARGETED
+    // segment. Non-target segments would falsely detect a mismatch because the
+    // shared palette selector reflects a different segment's state.
+    bool is_currently_target = false;
+    if (c && c->get_target_segment() && c->get_target_segment()->has_state()) {
+      std::string target_name = c->get_target_segment()->current_option();
+      std::string seg_name = this->get_light_state()->get_name();
+      is_currently_target =
+          (target_name == seg_name || target_name == "All Segments");
+    } else if (!c) {
+      is_currently_target = true; // Standalone mode
+    }
 
     number::Number *speed_num =
         (c && c->get_speed()) ? c->get_speed() : this->speed_;
@@ -1184,7 +1205,7 @@ void CFXAddressableLightEffect::run_controls_() {
         intensity_num->state != this->autotune_expected_intensity_)
       manual_override = true;
 
-    if (palette_sel && palette_sel->has_state() &&
+    if (is_currently_target && palette_sel && palette_sel->has_state() &&
         palette_sel->current_option() != this->autotune_expected_palette_)
       manual_override = true;
 
