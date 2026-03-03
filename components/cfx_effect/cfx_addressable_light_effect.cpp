@@ -547,43 +547,47 @@ void CFXAddressableLightEffect::stop() {
       this->intro_active_ = false;
       this->outro_active_ = false;
 
-      // Register the callback synchronously to prevent ESPHome from rendering
-      // a rogue frame of a solid color transition during the gap.
-      this->outro_start_time_ = 0; // Signify uninitialized start time
+      auto *output = this->get_light_state()->get_output();
+      auto *it_light = static_cast<light::AddressableLight *>(output);
+#ifdef USE_ESP32
+      auto *out = static_cast<cfx_light::CFXLightOutput *>(output);
+      if (out != nullptr) {
+        out->add_outro_callback([this, it_light, captured_runners]() -> bool {
+          auto *current_state = this->get_light_state();
+          if (current_state != nullptr &&
+              current_state->remote_values.is_on()) {
+            // Effect was completely changed or light remained ON.
+            // Abort the outro and delete all captured runners cleanly.
+            for (auto *r : *captured_runners)
+              delete r;
+            captured_runners->clear();
+            return true;
+          }
 
-      out->add_outro_callback([this, it_light, captured_runners]() -> bool {
-        auto *current_state = this->get_light_state();
-        if (current_state != nullptr && current_state->remote_values.is_on()) {
-          // Effect was completely changed or light remained ON.
-          // Abort the outro and delete all captured runners cleanly.
-          for (auto *r : *captured_runners)
-            delete r;
-          captured_runners->clear();
-          return true;
-        }
+          // Initialize outro start time on the very first allowed frame
+          if (this->outro_start_time_ == 0) {
+            this->outro_start_time_ = millis();
+          }
 
-        // Initialize outro start time on the very first allowed frame
-        if (this->outro_start_time_ == 0) {
-          this->outro_start_time_ = millis();
-        }
+          // Run outro frame on ALL captured segment runners
+          bool done = false;
+          for (auto *r : *captured_runners) {
+            ::instance = r;
+            done = this->run_outro_frame(*it_light, r);
+          }
+          ::instance = nullptr;
 
-        // Run outro frame on ALL captured segment runners
-        bool done = false;
-        for (auto *r : *captured_runners) {
-          ::instance = r;
-          done = this->run_outro_frame(*it_light, r);
-        }
-        ::instance = nullptr;
+          if (done) {
+            for (auto *r : *captured_runners)
+              delete r;
+            captured_runners->clear();
+          }
+          return done;
+        });
 
-        if (done) {
-          for (auto *r : *captured_runners)
-            delete r;
-          captured_runners->clear();
-        }
-        return done;
-      });
-
-      return;
+        return;
+      }
+#endif
     }
   }
 
@@ -1216,10 +1220,9 @@ void CFXAddressableLightEffect::run_controls_() {
   // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
   uint32_t now = millis();
   if (now - this->last_metadata_refresh_ > 5000) {
-    auto *output = this->get_light_state()->get_output();
-    auto *it_light = static_cast<light::AddressableLight *>(output);
-#ifdef USE_ESP32
-    if (output != nullptr) {
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(
+        this->get_light_state()->get_output());
+    if (out != nullptr) {
       std::string pal_name = "";
       if (palette_sel && palette_sel->has_state()) {
         const char *opt = palette_sel->current_option();
