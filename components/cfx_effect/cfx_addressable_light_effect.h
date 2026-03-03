@@ -174,6 +174,7 @@ protected:
   void run_controls_();
 
   bool intro_pending_{false};
+  bool pending_power_on_{false};
 
   // INTRO_NONE fade-in: ramp brightness from 0→1 over default_transition_length
   uint32_t fade_in_duration_ms_{0};
