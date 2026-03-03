@@ -9,13 +9,19 @@
 #pragma once
 
 #include "CFXRunner.h"
-#include "cfx_control.h"
 #include "esphome/components/light/addressable_light_effect.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
+#include "esphome/core/color.h"
 #include "esphome/core/component.h"
 #include <cstdint>
+#include <vector>
+
+namespace esphome {
+namespace chimera_fx {
+
+class CFXControl;
 #include <vector>
 
 namespace esphome {

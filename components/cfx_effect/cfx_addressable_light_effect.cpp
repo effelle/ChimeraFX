@@ -1303,34 +1303,56 @@ void CFXAddressableLightEffect::run_controls_() {
     // in cfx_control.h which respect the Target Segment filter.
     if (!c) {
       // 2. Speed (standalone mode)
-      if (this->speed_)
-        this->runner_->setSpeed((uint8_t)this->speed_->state);
-      else
-        this->runner_->setSpeed(this->get_default_speed_(this->effect_id_));
+      uint8_t current_speed = this->get_default_speed_(this->effect_id_);
+      if (this->speed_) {
+        current_speed = (uint8_t)this->speed_->state;
+      }
+      this->runner_->setSpeed(current_speed);
 
       // 3. Intensity (standalone mode)
-      if (this->intensity_)
-        this->runner_->setIntensity((uint8_t)this->intensity_->state);
-      else
-        this->runner_->setIntensity(
-            this->get_default_intensity_(this->effect_id_));
+      uint8_t current_intensity =
+          this->get_default_intensity_(this->effect_id_);
+      if (this->intensity_) {
+        current_intensity = (uint8_t)this->intensity_->state;
+      }
+      this->runner_->setIntensity(current_intensity);
 
       // 4. Palette (standalone mode)
+      uint8_t current_palette = this->get_default_palette_id_(this->effect_id_);
       if (this->is_monochromatic_(this->effect_id_)) {
-        this->runner_->setPalette(255);
+        current_palette = 255;
       } else if (this->palette_) {
-        uint8_t pal_idx = get_pal_idx(this->palette_);
-        this->runner_->setPalette(pal_idx);
-      } else {
-        this->runner_->setPalette(
-            this->get_default_palette_id_(this->effect_id_));
+        current_palette = get_pal_idx(this->palette_);
       }
+      this->runner_->setPalette(current_palette);
 
       // 5. Mirror (standalone mode)
-      if (this->mirror_)
-        this->runner_->setMirror(this->mirror_->state);
+      bool current_mirror = false;
+      if (this->mirror_) {
+        current_mirror = this->mirror_->state;
+      }
+      this->runner_->setMirror(current_mirror);
     } else {
-      // Controller present: only enforce monochromatic palette override
+      // Controller present: Load the multiplexer cache values for this segment
+      auto it = c->segment_states_.find(this->get_state()->get_name());
+      if (it != c->segment_states_.end()) {
+        const auto &state = it->second;
+        if (!this->segment_runners_.empty()) {
+          for (auto *r : this->segment_runners_) {
+            r->setSpeed(state.speed);
+            r->setIntensity(state.intensity);
+            r->setPalette(state.palette);
+            r->setMirror(state.mirror);
+          }
+        } else {
+          this->runner_->setSpeed(state.speed);
+          this->runner_->setIntensity(state.intensity);
+          this->runner_->setPalette(state.palette);
+          this->runner_->setMirror(state.mirror);
+        }
+      }
+
+      // Enforce monochromatic palette override
       // (PUSH callbacks don't know about monochromatic constraints)
       if (this->is_monochromatic_(this->effect_id_)) {
         if (!this->segment_runners_.empty()) {
@@ -2130,16 +2152,30 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 // --- Autotune Auto-Disable Implementation ---
 void CFXAddressableLightEffect::apply_autotune_defaults_() {
   CFXControl *c = this->controller_;
+  std::string my_name = this->get_state()->get_name();
+  bool is_target = false;
+
+  if (c && c->get_target_segment()) {
+    std::string current_target = c->get_target_segment()->state;
+    is_target = (current_target == my_name);
+  } else if (!c) {
+    is_target = true; // Standalone mode
+  }
 
   // 1. Speed
   number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->speed_;
   if (speed_num != nullptr && !this->speed_preset_.has_value()) {
     float target = (float)this->get_default_speed_(this->effect_id_);
-    if (speed_num->state != target) {
-      auto call = speed_num->make_call();
-      call.set_value(target);
-      call.perform();
+    if (c && !is_target) {
+      c->segment_states_[my_name].speed = (uint8_t)target;
+      this->runner_->setSpeed((uint8_t)target);
+    } else {
+      if (speed_num->state != target) {
+        auto call = speed_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
     }
     this->autotune_expected_speed_ = target;
   } else if (speed_num != nullptr) {
@@ -2151,10 +2187,15 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
       (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
   if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
     float target = (float)this->get_default_intensity_(this->effect_id_);
-    if (intensity_num->state != target) {
-      auto call = intensity_num->make_call();
-      call.set_value(target);
-      call.perform();
+    if (c && !is_target) {
+      c->segment_states_[my_name].intensity = (uint8_t)target;
+      this->runner_->setIntensity((uint8_t)target);
+    } else {
+      if (intensity_num->state != target) {
+        auto call = intensity_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
     }
     this->autotune_expected_intensity_ = target;
   } else if (intensity_num != nullptr) {
@@ -2167,10 +2208,16 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
   if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
     uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
     std::string pal_name = this->get_palette_name_(default_pal_id);
-    if (palette_sel->current_option() != pal_name) {
-      auto call = palette_sel->make_call();
-      call.set_option(pal_name);
-      call.perform();
+
+    if (c && !is_target) {
+      c->segment_states_[my_name].palette = default_pal_id;
+      this->runner_->setPalette(default_pal_id);
+    } else {
+      if (palette_sel->current_option() != pal_name) {
+        auto call = palette_sel->make_call();
+        call.set_option(pal_name);
+        call.perform();
+      }
     }
     this->autotune_expected_palette_ = pal_name;
   } else if (palette_sel != nullptr) {

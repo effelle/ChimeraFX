@@ -10,7 +10,18 @@
 #include "esphome/core/helpers.h"
 #include <algorithm>
 #include <cstring>
+#include <map>
 #include <vector>
+
+#include "esphome/components/light/light_state.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/select/select.h"
+#include "esphome/components/switch/switch.h"
+#include "esphome/core/automation.h"
+#include "esphome/core/component.h"
+#include "esphome/core/helpers.h"
+
+#include "cfx_addressable_light_effect.h"
 
 namespace esphome {
 namespace chimera_fx {
@@ -34,6 +45,15 @@ public:
 
 class CFXControl : public Component {
 public:
+  struct SegmentState {
+    uint8_t speed = 128;
+    uint8_t intensity = 128;
+    uint8_t palette = 0;
+    bool mirror = false;
+    bool autotune = false;
+  };
+  std::map<std::string, SegmentState> segment_states_;
+
   static std::vector<CFXControl *> instances;
 
   static CFXControl *find(light::LightState *light) {
@@ -53,9 +73,25 @@ public:
                          [this]() { this->on_timer_tick_(); });
     }
 
+    // Initialize the cache state for each light segment
+    for (auto *l : this->lights_) {
+      this->segment_states_[l->get_name()] = SegmentState();
+    }
+
     // --- PUSH: Speed ---
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
+        std::string target =
+            (this->target_segment_ && this->target_segment_->has_state())
+                ? this->target_segment_->state
+                : "All Segments";
+        if (target == "All Segments") {
+          for (auto &pair : this->segment_states_)
+            pair.second.speed = (uint8_t)value;
+        } else {
+          this->segment_states_[target].speed = (uint8_t)value;
+        }
+
         for (auto *r : this->runners_) {
           if (should_target_runner_(r))
             r->setSpeed((uint8_t)value);
@@ -66,6 +102,17 @@ public:
     // --- PUSH: Intensity ---
     if (this->intensity_) {
       this->intensity_->add_on_state_callback([this](float value) {
+        std::string target =
+            (this->target_segment_ && this->target_segment_->has_state())
+                ? this->target_segment_->state
+                : "All Segments";
+        if (target == "All Segments") {
+          for (auto &pair : this->segment_states_)
+            pair.second.intensity = (uint8_t)value;
+        } else {
+          this->segment_states_[target].intensity = (uint8_t)value;
+        }
+
         for (auto *r : this->runners_) {
           if (should_target_runner_(r))
             r->setIntensity((uint8_t)value);
@@ -76,6 +123,17 @@ public:
     // --- PUSH: Mirror ---
     if (this->mirror_) {
       this->mirror_->add_on_state_callback([this](bool value) {
+        std::string target =
+            (this->target_segment_ && this->target_segment_->has_state())
+                ? this->target_segment_->state
+                : "All Segments";
+        if (target == "All Segments") {
+          for (auto &pair : this->segment_states_)
+            pair.second.mirror = value;
+        } else {
+          this->segment_states_[target].mirror = value;
+        }
+
         for (auto *r : this->runners_) {
           if (should_target_runner_(r))
             r->setMirror(value);
@@ -86,6 +144,10 @@ public:
     // --- PUSH: Debug ---
     if (this->debug_) {
       this->debug_->add_on_state_callback([this](bool value) {
+        // Debug applies globally across all segments
+        for (auto &pair : this->segment_states_)
+          pair.second.debug = value;
+
         for (auto *r : this->runners_) {
           r->setDebug(value);
         }
@@ -99,15 +161,32 @@ public:
     if (this->palette_) {
       this->palette_->add_on_state_callback(
           [this](const std::string &value, size_t index) {
+            uint8_t static_pal_idx;
+            if (value != "Default") {
+              static_pal_idx = this->get_palette_index_(value);
+            }
+
+            uint8_t pal_idx = (value == "Default") ? 0 : static_pal_idx;
+            std::string target =
+                (this->target_segment_ && this->target_segment_->has_state())
+                    ? this->target_segment_->state
+                    : "All Segments";
+            if (target == "All Segments") {
+              for (auto &pair : this->segment_states_)
+                pair.second.palette = pal_idx;
+            } else {
+              this->segment_states_[target].palette = pal_idx;
+            }
+
             for (auto *r : this->runners_) {
               if (should_target_runner_(r)) {
-                uint8_t pal_idx;
+                uint8_t r_pal_idx;
                 if (value == "Default") {
-                  pal_idx = this->get_default_palette_id_(r->getMode());
+                  r_pal_idx = this->get_default_palette_id_(r->getMode());
                 } else {
-                  pal_idx = this->get_palette_index_(value);
+                  r_pal_idx = static_pal_idx;
                 }
-                r->setPalette(pal_idx);
+                r->setPalette(r_pal_idx);
               }
             }
           });
@@ -117,26 +196,23 @@ public:
     if (this->target_segment_) {
       this->target_segment_->add_on_state_callback(
           [this](const std::string &value, size_t index) {
-            for (auto *r : this->runners_) {
-              if (should_target_runner_(r)) {
-                // Pull state from the active runner and update UI elements
-                // without re-triggering their push callbacks to the strip!
-                if (this->speed_ && this->speed_->state != r->getSpeed()) {
-                  this->speed_->publish_state(r->getSpeed());
-                }
-                if (this->intensity_ &&
-                    this->intensity_->state != r->getIntensity()) {
-                  this->intensity_->publish_state(r->getIntensity());
-                }
-                if (this->mirror_ && this->mirror_->state != r->getMirror()) {
-                  this->mirror_->publish_state(r->getMirror());
-                }
-                if (this->debug_ && this->debug_->state != r->getDebug()) {
-                  this->debug_->publish_state(r->getDebug());
-                }
-                break; // Only pull from the FIRST matching runner
-              }
+            if (value == "All Segments")
+              return; // Keep broad changes visible in the UI
+
+            auto &state = this->segment_states_[value];
+            if (this->speed_ && this->speed_->state != state.speed) {
+              this->speed_->publish_state(state.speed);
             }
+            if (this->intensity_ &&
+                this->intensity_->state != state.intensity) {
+              this->intensity_->publish_state(state.intensity);
+            }
+            if (this->mirror_ && this->mirror_->state != state.mirror) {
+              this->mirror_->publish_state(state.mirror);
+            }
+            // Palette is string-based, so reverse mapping is needed if we
+            // wanted to pull it correctly, but for now slider sync is the main
+            // focus per the user report.
           });
     }
   }
@@ -415,6 +491,17 @@ protected:
     if (opt == nullptr || strcmp(opt, "All Segments") == 0)
       return true;
     return r->get_segment_id() == opt;
+  }
+
+  // Target Light filter: Used to lookup the cached configuration of a Segment
+  // even when it is currently "turned off" and has no active Runner.
+  bool should_target_light_(esphome::light::LightState *l) const {
+    if (!target_segment_ || !target_segment_->has_state())
+      return true;
+    const char *opt = target_segment_->current_option();
+    if (opt == nullptr || strcmp(opt, "All Segments") == 0)
+      return true;
+    return l->get_name() == opt;
   }
 };
 
