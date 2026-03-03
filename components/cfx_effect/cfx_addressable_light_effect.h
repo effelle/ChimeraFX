@@ -22,10 +22,6 @@ namespace esphome {
 namespace chimera_fx {
 
 class CFXControl;
-#include <vector>
-
-namespace esphome {
-namespace chimera_fx {
 
 class CFXAddressableLightEffect : public light::AddressableLightEffect {
 public:
