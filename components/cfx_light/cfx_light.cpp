@@ -356,21 +356,33 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
-  if (this->outro_cb_ != nullptr) {
+  if (!this->outro_cbs_.empty()) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
     this->correction_.set_local_brightness(255);
 
-    bool done = this->outro_cb_();
+    for (auto it = this->outro_cbs_.begin(); it != this->outro_cbs_.end();) {
+      bool done = (*it)();
+      if (done) {
+        it = this->outro_cbs_.erase(it);
+      } else {
+        ++it;
+      }
+    }
 
     // Force direct DMA flush of the frame!
     // We cannot use schedule_show() here because ESPHome's LightState loop
     // is disabled when the light is turned off, meaning it will never poll us.
     this->write_state(nullptr);
 
-    if (done) {
-      // Outro finished. Reset callback and physically black out strip.
-      this->outro_cb_ = nullptr;
+    if (this->outro_cbs_.empty()) {
+      // Outro finished. Reset local brightness and physically black out strip.
+      this->correction_.set_local_brightness(
+          this->get_master_light_state()
+              ? this->get_master_light_state()
+                        ->current_values.get_brightness() *
+                    255
+              : 0);
       for (int i = 0; i < this->size(); i++) {
         (*this)[i] = Color::BLACK;
       }
@@ -389,7 +401,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // is simultaneously running its own fade-to-black transition and trying to
   // push those frames to the hardware. We must silently drop its incoming
   // frames.
-  if (state != nullptr && this->outro_cb_ != nullptr) {
+  if (state != nullptr && !this->outro_cbs_.empty()) {
     return;
   }
 

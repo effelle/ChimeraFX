@@ -80,7 +80,7 @@ public:
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
 
-  void set_outro_callback(OutroCallback cb) { this->outro_cb_ = cb; }
+  void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
@@ -192,9 +192,9 @@ protected:
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
 
-  // Callback used to execute an Outro animation after ESPHome turns the light
+  // Callbacks used to execute Outro animations after ESPHome turns the light
   // off
-  OutroCallback outro_cb_{nullptr};
+  std::vector<OutroCallback> outro_cbs_;
 
   // Per-pixel effect data (used by AddressableLight)
   uint8_t *effect_data_{nullptr};

@@ -551,7 +551,7 @@ void CFXAddressableLightEffect::stop() {
       // a rogue frame of a solid color transition during the gap.
       this->outro_start_time_ = 0; // Signify uninitialized start time
 
-      out->set_outro_callback([this, out, captured_runners]() -> bool {
+      out->add_outro_callback([this, it_light, captured_runners]() -> bool {
         auto *current_state = this->get_light_state();
         if (current_state != nullptr && current_state->remote_values.is_on()) {
           // Effect was completely changed or light remained ON.
@@ -571,7 +571,7 @@ void CFXAddressableLightEffect::stop() {
         bool done = false;
         for (auto *r : *captured_runners) {
           ::instance = r;
-          done = this->run_outro_frame(*out, r);
+          done = this->run_outro_frame(*it_light, r);
         }
         ::instance = nullptr;
 
@@ -1216,9 +1216,10 @@ void CFXAddressableLightEffect::run_controls_() {
   // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
   uint32_t now = millis();
   if (now - this->last_metadata_refresh_ > 5000) {
-    auto *out = static_cast<cfx_light::CFXLightOutput *>(
-        this->get_light_state()->get_output());
-    if (out != nullptr) {
+    auto *output = this->get_light_state()->get_output();
+    auto *it_light = static_cast<light::AddressableLight *>(output);
+#ifdef USE_ESP32
+    if (output != nullptr) {
       std::string pal_name = "";
       if (palette_sel && palette_sel->has_state()) {
         const char *opt = palette_sel->current_option();
