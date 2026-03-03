@@ -82,6 +82,10 @@ public:
 
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
 
+  // Segment rendering uses this instead of schedule_show() to bypass
+  // the Master LightState's color rendering pipeline.
+  void request_segment_flush() { this->segment_needs_flush_ = true; }
+
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
     if (this->is_rgbw_ || this->is_wrgb_) {
@@ -322,6 +326,7 @@ protected:
 
   bool is_syncing_{false};
   bool prev_master_state_{false};
+  bool segment_needs_flush_{false};
 };
 
 } // namespace cfx_light

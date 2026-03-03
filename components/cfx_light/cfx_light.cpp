@@ -398,6 +398,15 @@ void CFXLightOutput::loop() {
       this->write_state(nullptr);
     }
   }
+
+  // Segment-driven DMA flush: segments render to the parent buffer and
+  // set this flag via request_segment_flush(). We flush directly here
+  // to bypass the Master LightState's rendering pipeline (which would
+  // overwrite segment pixels with the Master's own color).
+  if (this->segment_needs_flush_) {
+    this->segment_needs_flush_ = false;
+    this->write_state(nullptr);
+  }
 }
 
 // --- Write State (Fire-and-Forget DMA) ---

@@ -39,8 +39,10 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // Delegate DMA trigger to parent — only parent drives hardware
-    parent_->schedule_show();
+    // Use the dedicated segment flush path instead of schedule_show().
+    // schedule_show() goes through the Master's LightState which applies
+    // its own color rendering to the entire buffer, overwriting our pixels.
+    parent_->request_segment_flush();
   }
 
   light::LightTraits get_traits() override {
