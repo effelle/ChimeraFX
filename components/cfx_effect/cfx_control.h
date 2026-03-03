@@ -51,6 +51,7 @@ public:
     uint8_t palette = 0;
     bool mirror = false;
     bool autotune = false;
+    bool debug = false;
   };
   std::map<std::string, SegmentState> segment_states_;
 

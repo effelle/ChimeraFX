@@ -8,10 +8,12 @@
 #include "../cfx_light/cfx_light.h"
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_compat.h"
+#include "cfx_control.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
+
 
 namespace esphome {
 namespace chimera_fx {
@@ -1334,7 +1336,7 @@ void CFXAddressableLightEffect::run_controls_() {
       this->runner_->setMirror(current_mirror);
     } else {
       // Controller present: Load the multiplexer cache values for this segment
-      auto it = c->segment_states_.find(this->get_state()->get_name());
+      auto it = c->segment_states_.find(this->get_light_state()->get_name());
       if (it != c->segment_states_.end()) {
         const auto &state = it->second;
         if (!this->segment_runners_.empty()) {
@@ -2152,7 +2154,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 // --- Autotune Auto-Disable Implementation ---
 void CFXAddressableLightEffect::apply_autotune_defaults_() {
   CFXControl *c = this->controller_;
-  std::string my_name = this->get_state()->get_name();
+  std::string my_name = this->get_light_state()->get_name();
   bool is_target = false;
 
   if (c && c->get_target_segment()) {
