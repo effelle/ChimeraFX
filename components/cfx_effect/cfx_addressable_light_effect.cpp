@@ -554,48 +554,44 @@ void CFXAddressableLightEffect::stop() {
       auto *output = this->get_light_state()->get_output();
       auto *it_light = static_cast<light::AddressableLight *>(output);
 #ifdef USE_ESP32
-      // Only register outro on the parent CFXLightOutput — for virtual
-      // segments, get_output() returns CFXVirtualSegmentLight which
-      // cannot be cast to CFXLightOutput.
-      if (!this->is_virtual_segment_) {
-        auto *out = static_cast<cfx_light::CFXLightOutput *>(output);
-        if (out != nullptr) {
-          out->add_outro_callback([this, it_light, captured_runners]() -> bool {
-            auto *current_state = this->get_light_state();
-            if (current_state != nullptr &&
-                current_state->remote_values.is_on()) {
-              // Effect was completely changed or light remained ON.
-              // Abort the outro and delete all captured runners cleanly.
-              for (auto *r : *captured_runners)
-                delete r;
-              captured_runners->clear();
-              return true;
-            }
+      // `out` is already correctly set above (via vseg->get_parent() for
+      // virtual segments, or direct cast for non-virtual). Register outro.
+      if (out != nullptr) {
+        out->add_outro_callback([this, it_light, captured_runners]() -> bool {
+          auto *current_state = this->get_light_state();
+          if (current_state != nullptr &&
+              current_state->remote_values.is_on()) {
+            // Effect was completely changed or light remained ON.
+            // Abort the outro and delete all captured runners cleanly.
+            for (auto *r : *captured_runners)
+              delete r;
+            captured_runners->clear();
+            return true;
+          }
 
-            // Initialize outro start time on the very first allowed frame
-            if (this->outro_start_time_ == 0) {
-              this->outro_start_time_ = millis();
-            }
+          // Initialize outro start time on the very first allowed frame
+          if (this->outro_start_time_ == 0) {
+            this->outro_start_time_ = millis();
+          }
 
-            // Run outro frame on ALL captured segment runners
-            bool done = false;
-            for (auto *r : *captured_runners) {
-              ::instance = r;
-              done = this->run_outro_frame(*it_light, r);
-            }
-            ::instance = nullptr;
+          // Run outro frame on ALL captured segment runners
+          bool done = false;
+          for (auto *r : *captured_runners) {
+            ::instance = r;
+            done = this->run_outro_frame(*it_light, r);
+          }
+          ::instance = nullptr;
 
-            if (done) {
-              for (auto *r : *captured_runners)
-                delete r;
-              captured_runners->clear();
-            }
-            return done;
-          });
+          if (done) {
+            for (auto *r : *captured_runners)
+              delete r;
+            captured_runners->clear();
+          }
+          return done;
+        });
 
-          return;
-        }
-      } // end if (!is_virtual_segment_)
+        return;
+      }
 #endif
     }
 
