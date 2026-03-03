@@ -144,11 +144,15 @@ void Segment::setPixelColor(int n, uint32_t c) {
   if (n < 0 || n >= length())
     return;
 
-  // Map usage to global buffer - apply mirror (inversion) if enabled
-  int global_index = mirror ? (stop - 1 - n) : (start + n);
+  if (!instance || !instance->target_light)
+    return;
+  int light_size = instance->target_light->size();
+  int offset = (light_size == length()) ? 0 : start;
 
-  if (instance && instance->target_light && global_index >= 0 &&
-      global_index < instance->target_light->size()) {
+  // Map usage to global buffer - apply mirror (inversion) if enabled
+  int global_index = mirror ? (offset + length() - 1 - n) : (offset + n);
+
+  if (global_index >= 0 && global_index < light_size) {
     esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
     (*instance->target_light)[global_index] = esphome_color;
   }
@@ -158,11 +162,15 @@ uint32_t Segment::getPixelColor(int n) {
   if (n < 0 || n >= length())
     return 0;
 
-  // Apply mirror (inversion) if enabled
-  int global_index = mirror ? (stop - 1 - n) : (start + n);
+  if (!instance || !instance->target_light)
+    return 0;
+  int light_size = instance->target_light->size();
+  int offset = (light_size == length()) ? 0 : start;
 
-  if (instance && instance->target_light && global_index >= 0 &&
-      global_index < instance->target_light->size()) {
+  // Apply mirror (inversion) if enabled
+  int global_index = mirror ? (offset + length() - 1 - n) : (offset + n);
+
+  if (global_index >= 0 && global_index < light_size) {
     esphome::Color c = (*instance->target_light)[global_index].get();
     return RGBW32(c.r, c.g, c.b, c.w);
   }
@@ -175,14 +183,14 @@ void Segment::fill(uint32_t c) {
 
   int len = length();
   int light_size = instance->target_light->size();
-  int global_start = start;
+  int offset = (light_size == len) ? 0 : start;
 
   // Optimized tight loop: Resolve pointers once
   esphome::light::AddressableLight &light = *instance->target_light;
   esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
 
   for (int i = 0; i < len; i++) {
-    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    int global_index = mirror ? (offset + len - 1 - i) : (offset + i);
     if (global_index >= 0 && global_index < light_size) {
       light[global_index] = esphome_color;
     }
@@ -210,11 +218,11 @@ void Segment::fadeToBlackBy(uint8_t fadeBy) {
 
   int len = length();
   int light_size = instance->target_light->size();
-  int global_start = start;
+  int offset = (light_size == len) ? 0 : start;
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    int global_index = mirror ? (offset + len - 1 - i) : (offset + i);
     if (global_index >= 0 && global_index < light_size) {
       // Read directly from ESPHome buffer for speed
       esphome::Color c = light[global_index].get();
@@ -243,11 +251,13 @@ void Segment::blur(uint8_t blur_amount) {
 
   int len = length();
   int light_size = instance->target_light->size();
-  int global_start = start;
+  int offset = (light_size == len) ? 0 : start;
+  int limit_start = offset;
+  int limit_stop = offset + len;
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    int global_index = mirror ? (offset + len - 1 - i) : (offset + i);
     if (global_index < 0 || global_index >= light_size)
       continue;
 
@@ -261,14 +271,14 @@ void Segment::blur(uint8_t blur_amount) {
 
     // Clamp to segment boundaries
     if (mirror) {
-      if (left_index >= stop)
+      if (left_index >= limit_stop)
         left_index = global_index;
-      if (right_index < start)
+      if (right_index < limit_start)
         right_index = global_index;
     } else {
-      if (left_index < start)
+      if (left_index < limit_start)
         left_index = global_index;
-      if (right_index >= stop)
+      if (right_index >= limit_stop)
         right_index = global_index;
     }
 
@@ -301,11 +311,11 @@ void Segment::subtractive_fade_val(uint8_t fade_amt) {
     return;
   int len = length();
   int light_size = instance->target_light->size();
-  int global_start = start;
+  int offset = (light_size == len) ? 0 : start;
   esphome::light::AddressableLight &light = *instance->target_light;
 
   for (int i = 0; i < len; i++) {
-    int global_index = mirror ? (stop - 1 - i) : (global_start + i);
+    int global_index = mirror ? (offset + len - 1 - i) : (offset + i);
     if (global_index < 0 || global_index >= light_size)
       continue;
 

@@ -1516,13 +1516,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   // Segment Aware Bounds
-  int seg_start = 0;
-  int seg_stop = it.size();
   int seg_len = it.size();
+  int seg_start = 0;
+  int seg_stop = seg_len;
   if (::instance != nullptr) {
-    seg_start = ::instance->_segment.start;
-    seg_stop = ::instance->_segment.stop;
     seg_len = ::instance->_segment.length();
+    seg_start = (it.size() == seg_len) ? 0 : ::instance->_segment.start;
+    seg_stop = seg_start + seg_len;
   }
 
   // Control State
@@ -1907,9 +1907,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
   // 2. Render background frame onto the output buffer (scaled by user
   // brightness)
-  int seg_start = runner->_segment.start;
-  int seg_stop = runner->_segment.stop;
   int seg_len = runner->_segment.length();
+  int seg_start = (it.size() == seg_len) ? 0 : runner->_segment.start;
+  int seg_stop = seg_start + seg_len;
 
   for (int i = 0; i < seg_len; i++) {
     int global_idx = seg_start + i;
