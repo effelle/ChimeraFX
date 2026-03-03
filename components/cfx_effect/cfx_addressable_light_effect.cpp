@@ -573,6 +573,7 @@ void CFXAddressableLightEffect::stop() {
           ::instance = r;
           done = this->run_outro_frame(*out, r);
         }
+        ::instance = nullptr;
 
         if (done) {
           for (auto *r : *captured_runners)
@@ -613,11 +614,18 @@ void CFXAddressableLightEffect::stop() {
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                       const Color &current_color) {
+  // Defensive: Ensure global instance points to OUR runner before any logic
+  // This prevents "strip bleeding" if apply() returns early due to throttle.
+  if (this->runner_ != nullptr) {
+    ::instance = this->runner_;
+  }
+
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
+    ::instance = nullptr;
     return; // Not time for update yet
   }
   this->last_run_ = now;
@@ -627,6 +635,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     ESP_LOGE(
         "chimera_fx",
         "Runner is null in apply()! This should be initialized in start().");
+    ::instance = nullptr;
     return;
   }
 
@@ -680,6 +689,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         this->run_intro(it, current_color);
       }
     } else {
+      ::instance = this->runner_;
       this->run_intro(it, current_color);
     }
 
@@ -833,6 +843,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   it.schedule_show();
+  ::instance = nullptr;
 }
 
 uint8_t CFXAddressableLightEffect::get_palette_index_() {
@@ -1457,11 +1468,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // New Feature: "Intro Use Palette" - Inherit from Runner's active effect
   // Explicitly handle switch state to avoid fall-through to Legacy auto-mode
   if (this->intro_use_palette_) {
-    if (this->intro_use_palette_->state && this->runner_) {
-      pal = this->runner_->_segment.palette;
+    if (this->intro_use_palette_->state && ::instance) {
+      pal = ::instance->_segment.palette;
       if (pal == 0) {
         // If Effect is using Default (0), resolve its Natural Palette ID
-        pal = this->get_default_palette_id_(this->runner_->getMode());
+        pal = this->get_default_palette_id_(::instance->getMode());
       }
 
       // Fix: If resolved palette is Solid (255), ignore the switch and use
@@ -1576,11 +1587,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
       Color pixel_c = Color::BLACK;
       if (alpha > 0.0f) {
-        if (use_palette) {
+        if (use_palette && ::instance) {
           uint8_t map_idx =
               (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
-          uint32_t cp = this->runner_->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
+          uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                                true, 255, 255);
           pixel_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
                           (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
                           (uint8_t)((cp & 0xFF) * user_brightness), 0);
@@ -1610,10 +1621,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       int mid = seg_start + (seg_len / 2);
       bool fill_center = (progress >= 1.0f) || (reverse && lead > 0);
       if (fill_center) {
-        if (use_palette && this->runner_) {
+        if (use_palette && ::instance) {
           uint8_t map_idx = 128; // Center of palette gradient
-          uint32_t cp = this->runner_->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
+          uint32_t cp = ::instance->_segment.color_from_palette(map_idx, false,
+                                                                true, 255, 255);
           it[mid] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
                           (cp >> 24) & 0xFF);
         } else {
@@ -2152,7 +2163,7 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
   bool is_target = false;
 
   if (c && c->get_target_segment()) {
-    std::string current_target = c->get_target_segment()->state;
+    std::string current_target = c->get_target_segment()->current_option();
     is_target = (current_target == my_name);
   } else if (!c) {
     is_target = true; // Standalone mode
