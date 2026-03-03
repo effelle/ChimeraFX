@@ -84,7 +84,7 @@ public:
       this->speed_->add_on_state_callback([this](float value) {
         std::string target =
             (this->target_segment_ && this->target_segment_->has_state())
-                ? this->target_segment_->state
+                ? this->target_segment_->current_option()
                 : "All Segments";
         if (target == "All Segments") {
           for (auto &pair : this->segment_states_)
@@ -105,7 +105,7 @@ public:
       this->intensity_->add_on_state_callback([this](float value) {
         std::string target =
             (this->target_segment_ && this->target_segment_->has_state())
-                ? this->target_segment_->state
+                ? this->target_segment_->current_option()
                 : "All Segments";
         if (target == "All Segments") {
           for (auto &pair : this->segment_states_)
@@ -126,7 +126,7 @@ public:
       this->mirror_->add_on_state_callback([this](bool value) {
         std::string target =
             (this->target_segment_ && this->target_segment_->has_state())
-                ? this->target_segment_->state
+                ? this->target_segment_->current_option()
                 : "All Segments";
         if (target == "All Segments") {
           for (auto &pair : this->segment_states_)
@@ -170,7 +170,7 @@ public:
             uint8_t pal_idx = (value == "Default") ? 0 : static_pal_idx;
             std::string target =
                 (this->target_segment_ && this->target_segment_->has_state())
-                    ? this->target_segment_->state
+                    ? this->target_segment_->current_option()
                     : "All Segments";
             if (target == "All Segments") {
               for (auto &pair : this->segment_states_)

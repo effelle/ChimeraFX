@@ -831,9 +831,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->state_ = TRANSITION_NONE;
     }
   }
-}
 
-it.schedule_show();
+  it.schedule_show();
 }
 
 uint8_t CFXAddressableLightEffect::get_palette_index_() {
