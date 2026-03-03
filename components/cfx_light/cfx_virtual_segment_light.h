@@ -82,7 +82,7 @@ protected:
   // Per-segment brightness correction — isolates this segment from changes
   // to the parent Master Light's shared correction_ (e.g. outro brightness
   // overrides).
-  mutable light::ColorCorrection correction_;
+  mutable light::ESPColorCorrection correction_;
 };
 
 } // namespace cfx_light

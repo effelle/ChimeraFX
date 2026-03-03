@@ -108,7 +108,7 @@ public:
   // per-segment brightness from the Master's shared correction_.
   light::ESPColorView
   get_view_with_correction(int32_t index,
-                           const light::ColorCorrection *correction) const {
+                           const light::ESPColorCorrection *correction) const {
     int32_t r = 0, g = 0, b = 0;
     switch (this->rgb_order_) {
     case ORDER_RGB:
