@@ -383,13 +383,31 @@ void CFXLightOutput::loop() {
       this->write_state(nullptr);
     }
   }
+
+  // Segment-driven DMA flush: segments write pixels to the parent buffer and
+  // call request_segment_flush() instead of schedule_show(). We flush here
+  // with write_state(nullptr) which bypasses the Master mute guard below,
+  // ensuring segment pixels reach the hardware without the Master paint.
+  if (this->segment_needs_flush_) {
+    this->segment_needs_flush_ = false;
+    this->write_state(nullptr);
+  }
 }
 
 // --- Write State (Fire-and-Forget DMA) ---
 
 void CFXLightOutput::write_state(light::LightState *state) {
+  // 1. Master Mute: When segments are active, the Master LightState's
+  // rendering pipeline is suppressed. The Master paints the entire strip with
+  // its ON-state color (white) on every frame — this overwrites segment pixels
+  // and creates a white flash. Muting it here forces all pixel rendering to
+  // go through the segment-driven flush path (write_state(nullptr)) instead.
+  // Non-segmented lights and outro DMA (nullptr calls) pass through unchanged.
+  if (state != nullptr && this->has_segments()) {
+    return; // Master muted — segments own the pixel buffer
+  }
   if (state != nullptr && !this->outro_cbs_.empty()) {
-    return;
+    return; // Block Master during outro on non-segmented lights
   }
 
   // 1.2 Prevent Master Light from leaking into OFF segments.

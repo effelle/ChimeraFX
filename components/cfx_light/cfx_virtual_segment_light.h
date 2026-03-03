@@ -35,8 +35,12 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // Delegate DMA trigger to parent — only parent drives hardware
-    parent_->schedule_show();
+    // Use request_segment_flush() instead of schedule_show().
+    // schedule_show() queues a DMA via the Master LightState pipeline, which
+    // is now muted for segmented lights (write_state guard). The segment flush
+    // path fires write_state(nullptr) from CFXLightOutput::loop() which
+    // bypasses the mute guard and delivers segment pixels to hardware.
+    parent_->request_segment_flush();
   }
 
   light::LightTraits get_traits() override {
