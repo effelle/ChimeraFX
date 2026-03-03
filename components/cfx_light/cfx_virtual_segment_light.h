@@ -30,19 +30,13 @@ public:
   int32_t size() const override { return stop_ - start_; }
 
   light::ESPColorView get_view_internal(int32_t index) const override {
-    // Zero-copy pixel access to parent's buffer, but with our OWN
-    // ColorCorrection so brightness changes on the Master don't affect us.
-    // We replicate the parent's get_view_internal logic but substitute
-    // our local correction_ pointer.
-    return parent_->get_view_with_correction(start_ + index,
-                                             &this->correction_);
+    // Zero-copy: access parent's buffer via public operator[]
+    return (*parent_)[start_ + index];
   }
 
   void write_state(light::LightState *state) override {
-    // Use the dedicated segment flush path instead of schedule_show().
-    // schedule_show() goes through the Master's LightState which applies
-    // its own color rendering to the entire buffer, overwriting our pixels.
-    parent_->request_segment_flush();
+    // Delegate DMA trigger to parent — only parent drives hardware
+    parent_->schedule_show();
   }
 
   light::LightTraits get_traits() override {
@@ -81,10 +75,6 @@ protected:
   uint16_t start_;
   uint16_t stop_;
   std::string seg_id_;
-  // Per-segment brightness correction — isolates this segment from changes
-  // to the parent Master Light's shared correction_ (e.g. outro brightness
-  // overrides).
-  mutable light::ESPColorCorrection correction_;
 };
 
 } // namespace cfx_light
