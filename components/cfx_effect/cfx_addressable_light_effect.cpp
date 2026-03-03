@@ -60,10 +60,6 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
-  // Defer auto power-on to first apply() frame to avoid recursive
-  // perform() calls that overflow the ESP32 stack.
-  this->pending_power_on_ = true;
-
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
@@ -630,18 +626,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
-
-  // Deferred auto power-on: if the light is OFF when an effect starts,
-  // force it ON here (safe: runs with a fresh stack, not inside start()).
-  if (this->pending_power_on_) {
-    this->pending_power_on_ = false;
-    auto *power_state = this->get_light_state();
-    if (power_state != nullptr && !power_state->remote_values.is_on()) {
-      auto call = power_state->make_call();
-      call.set_state(true);
-      call.perform();
-    }
-  }
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
