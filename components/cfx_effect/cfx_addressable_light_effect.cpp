@@ -1214,7 +1214,7 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   // --- Visualizer: Dynamic Palette Sync ---
-  if (palette_sel && palette_sel->has_state()) {
+  if (!this->is_virtual_segment_ && palette_sel && palette_sel->has_state()) {
     const char *opt = palette_sel->current_option();
     std::string current_pal = opt ? opt : "";
     if (!current_pal.empty() && current_pal != this->last_sent_palette_) {
@@ -1228,173 +1228,176 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
-  uint32_t now = millis();
-  if (now - this->last_metadata_refresh_ > 5000) {
-    auto *out = static_cast<cfx_light::CFXLightOutput *>(
-        this->get_light_state()->get_output());
-    if (out != nullptr) {
-      std::string pal_name = "";
-      if (palette_sel && palette_sel->has_state()) {
-        const char *opt = palette_sel->current_option();
-        if (opt != nullptr)
-          pal_name = opt;
-      }
+  if (!this->is_virtual_segment_) {
+    uint32_t now = millis();
+    if (now - this->last_metadata_refresh_ > 5000) {
+      auto *out = static_cast<cfx_light::CFXLightOutput *>(
+          this->get_light_state()->get_output());
+      if (out != nullptr) {
+        std::string pal_name = "";
+        if (palette_sel && palette_sel->has_state()) {
+          const char *opt = palette_sel->current_option();
+          if (opt != nullptr)
+            pal_name = opt;
+        }
 
-      // Deep Palette Resolution: If UI says "Default", ask the runner what's
-      // actually rendering
-      if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
-        pal_name = this->get_palette_name_(this->runner_->getPalette());
-      }
+        // Deep Palette Resolution: If UI says "Default", ask the runner what's
+        // actually rendering
+        if ((pal_name.empty() || pal_name == "Default") && this->runner_) {
+          pal_name = this->get_palette_name_(this->runner_->getPalette());
+        }
 
-      out->send_visualizer_metadata(this->get_name(), pal_name);
+        out->send_visualizer_metadata(this->get_name(), pal_name);
+      }
+      this->last_metadata_refresh_ = now;
     }
-    this->last_metadata_refresh_ = now;
-  }
 
-  if (this->runner_) {
-    // Helper lambda for Palette Index Lookup
-    // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
-    auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
-      if (!sel || !sel->has_state())
-        return 0;
-      const char *opt = sel->current_option();
-      if (!opt)
-        return 0;
+    if (this->runner_) {
+      // Helper lambda for Palette Index Lookup
+      // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
+      auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
+        if (!sel || !sel->has_state())
+          return 0;
+        const char *opt = sel->current_option();
+        if (!opt)
+          return 0;
 
-      // Use strcmp instead of std::string to avoid heap allocation every
-      // frame
-      if (strcmp(opt, "Aurora") == 0)
-        return 1;
-      if (strcmp(opt, "Forest") == 0)
-        return 2;
-      if (strcmp(opt, "Halloween") == 0)
-        return 3;
-      if (strcmp(opt, "Rainbow") == 0)
-        return 4;
-      if (strcmp(opt, "Fire") == 0)
-        return 5;
-      if (strcmp(opt, "Sunset") == 0)
-        return 6;
-      if (strcmp(opt, "Ice") == 0)
-        return 7;
-      if (strcmp(opt, "Party") == 0)
-        return 8;
-      if (strcmp(opt, "Lava") == 0)
-        return 9;
-      if (strcmp(opt, "Pastel") == 0)
-        return 10;
-      if (strcmp(opt, "Ocean") == 0)
-        return 11;
-      if (strcmp(opt, "HeatColors") == 0)
-        return 12;
-      if (strcmp(opt, "Sakura") == 0)
-        return 13;
-      if (strcmp(opt, "Rivendell") == 0)
-        return 14;
-      if (strcmp(opt, "Cyberpunk") == 0)
-        return 15;
-      if (strcmp(opt, "OrangeTeal") == 0)
-        return 16;
-      if (strcmp(opt, "Christmas") == 0)
-        return 17;
-      if (strcmp(opt, "RedBlue") == 0)
-        return 18;
-      if (strcmp(opt, "Matrix") == 0)
-        return 19;
-      if (strcmp(opt, "SunnyGold") == 0)
-        return 20;
-      if (strcmp(opt, "None") == 0 || strcmp(opt, "Solid") == 0)
-        return 255;
-      if (strcmp(opt, "Smart Random") == 0)
-        return 254;
-      if (strcmp(opt, "Fairy") == 0)
-        return 22;
-      if (strcmp(opt, "Twilight") == 0)
-        return 23;
-      if (strcmp(opt, "Default") == 0) {
-        // Resolve the natural default for this effect
-        // FIX: Use this->effect_id_ (Requested Effect) instead of
-        // runner_->getMode() (Current/Old Effect) This ensures that when
-        // switching effects, we get the default palette of the NEW effect.
-        return this->get_default_palette_id_(this->effect_id_);
-      }
-      return 0; // Unknown palette name
-    };
-    // Speed/Intensity/Palette/Mirror PULL — only when NO controller exists.
-    // When a controller IS present, these are managed by PUSH callbacks
-    // in cfx_control.h which respect the Target Segment filter.
-    if (!c) {
-      // 2. Speed (standalone mode)
-      uint8_t current_speed = this->get_default_speed_(this->effect_id_);
-      if (this->speed_) {
-        current_speed = (uint8_t)this->speed_->state;
-      }
-      this->runner_->setSpeed(current_speed);
+        // Use strcmp instead of std::string to avoid heap allocation every
+        // frame
+        if (strcmp(opt, "Aurora") == 0)
+          return 1;
+        if (strcmp(opt, "Forest") == 0)
+          return 2;
+        if (strcmp(opt, "Halloween") == 0)
+          return 3;
+        if (strcmp(opt, "Rainbow") == 0)
+          return 4;
+        if (strcmp(opt, "Fire") == 0)
+          return 5;
+        if (strcmp(opt, "Sunset") == 0)
+          return 6;
+        if (strcmp(opt, "Ice") == 0)
+          return 7;
+        if (strcmp(opt, "Party") == 0)
+          return 8;
+        if (strcmp(opt, "Lava") == 0)
+          return 9;
+        if (strcmp(opt, "Pastel") == 0)
+          return 10;
+        if (strcmp(opt, "Ocean") == 0)
+          return 11;
+        if (strcmp(opt, "HeatColors") == 0)
+          return 12;
+        if (strcmp(opt, "Sakura") == 0)
+          return 13;
+        if (strcmp(opt, "Rivendell") == 0)
+          return 14;
+        if (strcmp(opt, "Cyberpunk") == 0)
+          return 15;
+        if (strcmp(opt, "OrangeTeal") == 0)
+          return 16;
+        if (strcmp(opt, "Christmas") == 0)
+          return 17;
+        if (strcmp(opt, "RedBlue") == 0)
+          return 18;
+        if (strcmp(opt, "Matrix") == 0)
+          return 19;
+        if (strcmp(opt, "SunnyGold") == 0)
+          return 20;
+        if (strcmp(opt, "None") == 0 || strcmp(opt, "Solid") == 0)
+          return 255;
+        if (strcmp(opt, "Smart Random") == 0)
+          return 254;
+        if (strcmp(opt, "Fairy") == 0)
+          return 22;
+        if (strcmp(opt, "Twilight") == 0)
+          return 23;
+        if (strcmp(opt, "Default") == 0) {
+          // Resolve the natural default for this effect
+          // FIX: Use this->effect_id_ (Requested Effect) instead of
+          // runner_->getMode() (Current/Old Effect) This ensures that when
+          // switching effects, we get the default palette of the NEW effect.
+          return this->get_default_palette_id_(this->effect_id_);
+        }
+        return 0; // Unknown palette name
+      };
+      // Speed/Intensity/Palette/Mirror PULL — only when NO controller exists.
+      // When a controller IS present, these are managed by PUSH callbacks
+      // in cfx_control.h which respect the Target Segment filter.
+      if (!c) {
+        // 2. Speed (standalone mode)
+        uint8_t current_speed = this->get_default_speed_(this->effect_id_);
+        if (this->speed_) {
+          current_speed = (uint8_t)this->speed_->state;
+        }
+        this->runner_->setSpeed(current_speed);
 
-      // 3. Intensity (standalone mode)
-      uint8_t current_intensity =
-          this->get_default_intensity_(this->effect_id_);
-      if (this->intensity_) {
-        current_intensity = (uint8_t)this->intensity_->state;
-      }
-      this->runner_->setIntensity(current_intensity);
+        // 3. Intensity (standalone mode)
+        uint8_t current_intensity =
+            this->get_default_intensity_(this->effect_id_);
+        if (this->intensity_) {
+          current_intensity = (uint8_t)this->intensity_->state;
+        }
+        this->runner_->setIntensity(current_intensity);
 
-      // 4. Palette (standalone mode)
-      uint8_t current_palette = this->get_default_palette_id_(this->effect_id_);
-      if (this->is_monochromatic_(this->effect_id_)) {
-        current_palette = 255;
-      } else if (this->palette_) {
-        current_palette = get_pal_idx(this->palette_);
-      }
-      this->runner_->setPalette(current_palette);
+        // 4. Palette (standalone mode)
+        uint8_t current_palette =
+            this->get_default_palette_id_(this->effect_id_);
+        if (this->is_monochromatic_(this->effect_id_)) {
+          current_palette = 255;
+        } else if (this->palette_) {
+          current_palette = get_pal_idx(this->palette_);
+        }
+        this->runner_->setPalette(current_palette);
 
-      // 5. Mirror (standalone mode)
-      bool current_mirror = false;
-      if (this->mirror_) {
-        current_mirror = this->mirror_->state;
-      }
-      this->runner_->setMirror(current_mirror);
-    } else {
-      // Controller present: Load the multiplexer cache values for this
-      // segment
-      auto it = c->segment_states_.find(this->get_light_state()->get_name());
-      if (it != c->segment_states_.end()) {
-        const auto &state = it->second;
-        if (!this->segment_runners_.empty()) {
-          for (auto *r : this->segment_runners_) {
-            r->setSpeed(state.speed);
-            r->setIntensity(state.intensity);
-            r->setPalette(state.palette);
-            r->setMirror(state.mirror);
+        // 5. Mirror (standalone mode)
+        bool current_mirror = false;
+        if (this->mirror_) {
+          current_mirror = this->mirror_->state;
+        }
+        this->runner_->setMirror(current_mirror);
+      } else {
+        // Controller present: Load the multiplexer cache values for this
+        // segment
+        auto it = c->segment_states_.find(this->get_light_state()->get_name());
+        if (it != c->segment_states_.end()) {
+          const auto &state = it->second;
+          if (!this->segment_runners_.empty()) {
+            for (auto *r : this->segment_runners_) {
+              r->setSpeed(state.speed);
+              r->setIntensity(state.intensity);
+              r->setPalette(state.palette);
+              r->setMirror(state.mirror);
+            }
+          } else {
+            this->runner_->setSpeed(state.speed);
+            this->runner_->setIntensity(state.intensity);
+            this->runner_->setPalette(state.palette);
+            this->runner_->setMirror(state.mirror);
           }
-        } else {
-          this->runner_->setSpeed(state.speed);
-          this->runner_->setIntensity(state.intensity);
-          this->runner_->setPalette(state.palette);
-          this->runner_->setMirror(state.mirror);
+        }
+
+        // Enforce monochromatic palette override
+        // (PUSH callbacks don't know about monochromatic constraints)
+        if (this->is_monochromatic_(this->effect_id_)) {
+          if (!this->segment_runners_.empty()) {
+            for (auto *r : this->segment_runners_)
+              r->setPalette(255);
+          } else {
+            this->runner_->setPalette(255);
+          }
         }
       }
 
-      // Enforce monochromatic palette override
-      // (PUSH callbacks don't know about monochromatic constraints)
-      if (this->is_monochromatic_(this->effect_id_)) {
-        if (!this->segment_runners_.empty()) {
-          for (auto *r : this->segment_runners_)
-            r->setPalette(255);
-        } else {
-          this->runner_->setPalette(255);
-        }
-      }
+      // 6. Intro Use Palette
+      if (c && c->get_intro_use_palette())
+        this->intro_use_palette_ = c->get_intro_use_palette();
+
+      // 7. Debug
+      if (c && c->get_debug())
+        this->debug_switch_ = c->get_debug();
     }
-
-    // 6. Intro Use Palette
-    if (c && c->get_intro_use_palette())
-      this->intro_use_palette_ = c->get_intro_use_palette();
-
-    // 7. Debug
-    if (c && c->get_debug())
-      this->debug_switch_ = c->get_debug();
-  }
+  } // end if (!is_virtual_segment_)
 }
 
 // Intro Routine Implementation
