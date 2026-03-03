@@ -357,9 +357,14 @@ void CFXLightOutput::on_segment_update() {
 
 void CFXLightOutput::loop() {
   if (!this->outro_cbs_.empty()) {
-    // Light is technically 'Off' so we must restore full local brightness
-    // so our pixel buffers aren't multiplied by 0 implicitly.
-    this->correction_.set_local_brightness(255);
+    // Non-segmented lights: The Master's correction is the only one in play,
+    // so we must force full brightness to prevent ESPHome's fade-to-black
+    // from zeroing out our outro pixels.
+    // Segmented lights: Each segment has its OWN correction, so we leave
+    // the Master's correction alone to avoid spiking active segments.
+    if (!this->has_segments()) {
+      this->correction_.set_local_brightness(255);
+    }
 
     for (auto it = this->outro_cbs_.begin(); it != this->outro_cbs_.end();) {
       bool done = (*it)();
@@ -377,15 +382,19 @@ void CFXLightOutput::loop() {
 
     if (this->outro_cbs_.empty()) {
       // Outro finished. Reset local brightness and physically black out strip.
-      this->correction_.set_local_brightness(
-          this->get_master_light_state()
-              ? this->get_master_light_state()
-                        ->current_values.get_brightness() *
-                    255
-              : 0);
-      for (int i = 0; i < this->size(); i++) {
-        (*this)[i] = Color::BLACK;
+      if (!this->has_segments()) {
+        this->correction_.set_local_brightness(
+            this->get_master_light_state()
+                ? this->get_master_light_state()
+                          ->current_values.get_brightness() *
+                      255
+                : 0);
+        for (int i = 0; i < this->size(); i++) {
+          (*this)[i] = Color::BLACK;
+        }
       }
+      // Segmented lights: each outro callback already blacks out its own
+      // pixel range via run_outro_frame, so no global wipe needed.
       this->write_state(nullptr);
     }
   }
@@ -395,13 +404,10 @@ void CFXLightOutput::loop() {
 
 void CFXLightOutput::write_state(light::LightState *state) {
   // 1. Defend against ESPHome's internal transition hijacks!
-  // If we are actively running our decoupled Outro loop, ESPHome's LightState
-  // 1. Defend against ESPHome's internal transition hijacks!
-  // If we are actively running our decoupled Outro loop, ESPHome's LightState
-  // is simultaneously running its own fade-to-black transition and trying to
-  // push those frames to the hardware. We must silently drop its incoming
-  // frames.
-  if (state != nullptr && !this->outro_cbs_.empty()) {
+  // Non-segmented: Block all incoming frames while outro is active.
+  // Segmented: Allow frames through — active segments must keep rendering
+  // while other segments run their outros independently.
+  if (state != nullptr && !this->outro_cbs_.empty() && !this->has_segments()) {
     return;
   }
 

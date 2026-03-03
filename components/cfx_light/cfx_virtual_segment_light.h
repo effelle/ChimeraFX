@@ -30,8 +30,12 @@ public:
   int32_t size() const override { return stop_ - start_; }
 
   light::ESPColorView get_view_internal(int32_t index) const override {
-    // Zero-copy: access parent's buffer via public operator[]
-    return (*parent_)[start_ + index];
+    // Zero-copy pixel access to parent's buffer, but with our OWN
+    // ColorCorrection so brightness changes on the Master don't affect us.
+    // We replicate the parent's get_view_internal logic but substitute
+    // our local correction_ pointer.
+    return parent_->get_view_with_correction(start_ + index,
+                                             &this->correction_);
   }
 
   void write_state(light::LightState *state) override {
@@ -75,6 +79,10 @@ protected:
   uint16_t start_;
   uint16_t stop_;
   std::string seg_id_;
+  // Per-segment brightness correction — isolates this segment from changes
+  // to the parent Master Light's shared correction_ (e.g. outro brightness
+  // overrides).
+  mutable light::ColorCorrection correction_;
 };
 
 } // namespace cfx_light

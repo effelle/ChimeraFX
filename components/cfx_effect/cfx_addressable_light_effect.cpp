@@ -1899,20 +1899,23 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   runner->service();
 
   // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our pixels!
-  // ESPHome is actively scaling the brightness down to 0.0f over the
-  // default_transition_length. We must temporarily force current_values
-  // brightness to 1.0f so the effect renders at full brightness. Our custom
-  // Outro logic (Wipe/Fade) handles the dimming.
+  // Non-segmented: ESPHome is actively fading brightness to 0.0f. We must
+  //   temporarily force it to 1.0f so the outro renders visibly.
+  // Segmented (virtual segments): Each segment has its OWN ColorCorrection
+  //   that is independent from the Master. Skip the Master brightness hack
+  //   to avoid corrupting it for other concurrently-active segments.
   float original_brightness = 0.0f;
   float user_brightness = 1.0f;
   auto *ls = this->get_light_state();
   if (ls != nullptr) {
     original_brightness = ls->current_values.get_brightness();
-    // Capture user's intended brightness BEFORE forcing to 1.0
+    // Capture user's intended brightness BEFORE any override
     user_brightness = ls->remote_values.get_brightness();
     if (user_brightness < 0.01f)
       user_brightness = 0.01f;
-    ls->current_values.set_brightness(1.0f);
+    if (!this->is_virtual_segment_) {
+      ls->current_values.set_brightness(1.0f);
+    }
   }
 
   // 2. Render background frame onto the output buffer (scaled by user
@@ -1932,7 +1935,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   // Restore the scaling factor so we don't permanently corrupt the LightState
-  if (ls != nullptr) {
+  if (ls != nullptr && !this->is_virtual_segment_) {
     ls->current_values.set_brightness(original_brightness);
   }
 

@@ -103,6 +103,58 @@ public:
   // Public accessor for effect_data_ (used by virtual segment lights)
   uint8_t *get_effect_data() { return effect_data_; }
 
+  // Build a color view for the given pixel index but with a custom
+  // ColorCorrection pointer. Used by CFXVirtualSegmentLight to isolate
+  // per-segment brightness from the Master's shared correction_.
+  light::ESPColorView
+  get_view_with_correction(int32_t index,
+                           const light::ColorCorrection *correction) const {
+    int32_t r = 0, g = 0, b = 0;
+    switch (this->rgb_order_) {
+    case ORDER_RGB:
+      r = 0;
+      g = 1;
+      b = 2;
+      break;
+    case ORDER_RBG:
+      r = 0;
+      g = 2;
+      b = 1;
+      break;
+    case ORDER_GRB:
+      r = 1;
+      g = 0;
+      b = 2;
+      break;
+    case ORDER_GBR:
+      r = 2;
+      g = 0;
+      b = 1;
+      break;
+    case ORDER_BGR:
+      r = 2;
+      g = 1;
+      b = 0;
+      break;
+    case ORDER_BRG:
+      r = 1;
+      g = 2;
+      b = 0;
+      break;
+    }
+    uint8_t multiplier = (this->is_rgbw_ || this->is_wrgb_) ? 4 : 3;
+    uint8_t white = this->is_wrgb_ ? 0 : 3;
+
+    return {this->buf_ + (index * multiplier) + r + this->is_wrgb_,
+            this->buf_ + (index * multiplier) + g + this->is_wrgb_,
+            this->buf_ + (index * multiplier) + b + this->is_wrgb_,
+            (this->is_rgbw_ || this->is_wrgb_)
+                ? this->buf_ + (index * multiplier) + white
+                : nullptr,
+            &this->effect_data_[index],
+            correction};
+  }
+
   // Config setters (called by __init__.py codegen)
   void set_pin(uint8_t pin) { this->pin_ = pin; }
   void set_num_leds(uint16_t num_leds) { this->num_leds_ = num_leds; }
