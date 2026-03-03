@@ -60,6 +60,29 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
+  // Immediately black out our pixel range to prevent ESPHome's base start()
+  // from flashing white. The base class paints the ON-state color (usually
+  // white) and schedules a DMA flush. By zeroing our pixels here we overwrite
+  // that before the DMA fires, eliminating the white flash at effect start.
+  auto *it = static_cast<light::AddressableLight *>(
+      this->get_light_state()->get_output());
+  if (it != nullptr) {
+    int start_px = 0;
+    int end_px = it->size();
+    if (this->is_virtual_segment_ && this->runner_ == nullptr) {
+      // Runner not yet created — we'll black out after runner creation below
+    } else if (this->runner_ != nullptr) {
+      int seg_len = this->runner_->_segment.length();
+      if (it->size() != seg_len) { // actual segment (not whole strip)
+        start_px = this->runner_->_segment.start;
+        end_px = this->runner_->_segment.stop;
+      }
+    }
+    for (int i = start_px; i < end_px; i++) {
+      (*it)[i] = Color::BLACK;
+    }
+  }
+
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
