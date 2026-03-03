@@ -60,6 +60,16 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
+  // If the light is currently OFF, force it ON so the effect starts rendering
+  // immediately. This matches WLED behavior where selecting an effect implies
+  // Power ON.
+  auto *state = this->get_light_state();
+  if (state != nullptr && !state->remote_values.is_on()) {
+    auto call = state->make_call();
+    call.set_state(true);
+    call.perform();
+  }
+
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
