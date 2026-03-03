@@ -79,7 +79,7 @@ public:
 
   bool outro_active_{false};
   uint8_t active_outro_mode_{0};
-  uint32_t active_outro_duration_ms_{1500};
+  uint32_t active_outro_duration_ms_{0};
   uint8_t active_outro_intensity_{128};
   uint32_t outro_start_time_{0};
 

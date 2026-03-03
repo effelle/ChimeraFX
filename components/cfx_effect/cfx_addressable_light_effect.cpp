@@ -396,18 +396,6 @@ void CFXAddressableLightEffect::start() {
 
     if (this->active_intro_mode_ == INTRO_NONE && !preset.is_active) {
       this->intro_active_ = false;
-
-      // Use the light's default_transition_length for a smooth fade-in
-      auto *ls = this->get_light_state();
-      if (ls != nullptr) {
-        uint32_t trans_ms = ls->get_default_transition_length();
-        if (trans_ms > 0) {
-          this->fade_in_active_ = true;
-          this->fade_in_start_ms_ = millis();
-          this->fade_in_duration_ms_ = trans_ms;
-        }
-      }
-    } else {
     }
   }
 
@@ -755,6 +743,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       }
 
       // Ensure Main Runner is reset/started
+      ::instance = this->runner_;
       this->runner_->start();
     }
   } else {
@@ -767,6 +756,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       }
     } else {
       // Single runner (backward compatible)
+      ::instance = this->runner_;
       this->runner_->service();
     }
 
@@ -775,7 +765,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // scaling, so we must apply it here after all runners render.
     auto *bri_state = this->get_light_state();
     if (bri_state != nullptr) {
-      float bri = bri_state->remote_values.get_brightness();
+      float bri = bri_state->current_values.get_brightness();
       if (bri < 0.99f) { // Skip if already at full brightness
         for (int i = 0; i < it.size(); i++) {
           Color pc = it[i].get();
@@ -784,82 +774,66 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         }
       }
     }
-
-    // Handle INTRO_NONE fade-in (brightness ramp 0→1)
-    if (this->fade_in_active_) {
-      uint32_t elapsed = millis() - this->fade_in_start_ms_;
-      if (elapsed >= this->fade_in_duration_ms_) {
-        this->fade_in_active_ = false; // Fade complete
-      } else {
-        float progress = (float)elapsed / (float)this->fade_in_duration_ms_;
-        // Scale all pixel brightness by progress
-        for (int i = 0; i < it.size(); i++) {
-          Color c = it[i].get();
-          it[i] = Color((uint8_t)(c.r * progress), (uint8_t)(c.g * progress),
-                        (uint8_t)(c.b * progress), (uint8_t)(c.w * progress));
-        }
-      }
-    }
-
-    // Handle Intro→Main Blending
-    if (this->state_ == TRANSITION_RUNNING) {
-      uint32_t trans_elapsed = millis() - this->transition_start_ms_;
-      float trans_dur_ms = (this->transition_duration_
-                                ? this->transition_duration_->state * 1000.0f
-                                : 1500.0f);
-
-      // Soft Dissolve (Fairy Dust with Crossfade) Logic
-      const float softness = 0.2f; // Configurable softness
-      // Scale progress to ensure all pixels complete transition even with
-      // softness delay
-      float progress =
-          ((float)trans_elapsed / trans_dur_ms) * (1.0f + softness);
-
-      // Seed for deterministic random mask
-      uint32_t seed = this->transition_start_ms_;
-
-      for (int i = 0; i < it.size(); i++) {
-        if (i >= this->intro_snapshot_.size())
-          break; // Safety
-
-        // Generate stable random threshold for this pixel [0.0, 1.0]
-        uint32_t h = i + seed;
-        h = ((h >> 16) ^ h) * 0x45d9f3b;
-        h = ((h >> 16) ^ h) * 0x45d9f3b;
-        h = (h >> 16) ^ h;
-        float threshold = (h & 0xFF) / 255.0f;
-
-        // Calculate mix factor based on progress relative to threshold
-        // If progress < threshold, mix is 0 (Intro).
-        // If progress > threshold + softness, mix is 1 (Main).
-        // In between, it linearly interpolates.
-        float diff = (progress - threshold) / softness;
-        float mix = diff < 0.0f ? 0.0f : (diff > 1.0f ? 1.0f : diff);
-
-        if (mix < 1.0f) {
-          if (mix <= 0.0f) {
-            it[i] = this->intro_snapshot_[i];
-          } else {
-            // Blend Intro -> Main
-            Color buf = this->intro_snapshot_[i];
-            Color main = it[i].get();
-            uint8_t r = (uint8_t)(buf.r * (1.0f - mix) + main.r * mix);
-            uint8_t g = (uint8_t)(buf.g * (1.0f - mix) + main.g * mix);
-            uint8_t b = (uint8_t)(buf.b * (1.0f - mix) + main.b * mix);
-            uint8_t w = (uint8_t)(buf.w * (1.0f - mix) + main.w * mix);
-            it[i] = Color(r, g, b, w);
-          }
-        }
-      }
-
-      // End transition when fully complete
-      if (progress >= (1.0f + softness)) {
-        this->state_ = TRANSITION_NONE;
-      }
-    }
   }
 
-  it.schedule_show();
+  // Handle Intro→Main Blending
+  if (this->state_ == TRANSITION_RUNNING) {
+    uint32_t trans_elapsed = millis() - this->transition_start_ms_;
+    float trans_dur_ms = (this->transition_duration_
+                              ? this->transition_duration_->state * 1000.0f
+                              : 1500.0f);
+
+    // Soft Dissolve (Fairy Dust with Crossfade) Logic
+    const float softness = 0.2f; // Configurable softness
+    // Scale progress to ensure all pixels complete transition even with
+    // softness delay
+    float progress = ((float)trans_elapsed / trans_dur_ms) * (1.0f + softness);
+
+    // Seed for deterministic random mask
+    uint32_t seed = this->transition_start_ms_;
+
+    for (int i = 0; i < it.size(); i++) {
+      if (i >= this->intro_snapshot_.size())
+        break; // Safety
+
+      // Generate stable random threshold for this pixel [0.0, 1.0]
+      uint32_t h = i + seed;
+      h = ((h >> 16) ^ h) * 0x45d9f3b;
+      h = ((h >> 16) ^ h) * 0x45d9f3b;
+      h = (h >> 16) ^ h;
+      float threshold = (h & 0xFF) / 255.0f;
+
+      // Calculate mix factor based on progress relative to threshold
+      // If progress < threshold, mix is 0 (Intro).
+      // If progress > threshold + softness, mix is 1 (Main).
+      // In between, it linearly interpolates.
+      float diff = (progress - threshold) / softness;
+      float mix = diff < 0.0f ? 0.0f : (diff > 1.0f ? 1.0f : diff);
+
+      if (mix < 1.0f) {
+        if (mix <= 0.0f) {
+          it[i] = this->intro_snapshot_[i];
+        } else {
+          // Blend Intro -> Main
+          Color buf = this->intro_snapshot_[i];
+          Color main = it[i].get();
+          uint8_t r = (uint8_t)(buf.r * (1.0f - mix) + main.r * mix);
+          uint8_t g = (uint8_t)(buf.g * (1.0f - mix) + main.g * mix);
+          uint8_t b = (uint8_t)(buf.b * (1.0f - mix) + main.b * mix);
+          uint8_t w = (uint8_t)(buf.w * (1.0f - mix) + main.w * mix);
+          it[i] = Color(r, g, b, w);
+        }
+      }
+    }
+
+    // End transition when fully complete
+    if (progress >= (1.0f + softness)) {
+      this->state_ = TRANSITION_NONE;
+    }
+  }
+}
+
+it.schedule_show();
 }
 
 uint8_t CFXAddressableLightEffect::get_palette_index_() {
