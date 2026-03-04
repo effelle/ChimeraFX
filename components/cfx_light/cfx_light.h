@@ -113,6 +113,7 @@ public:
   void set_rgb_order(RGBOrder order) { this->rgb_order_ = order; }
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
+  bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
