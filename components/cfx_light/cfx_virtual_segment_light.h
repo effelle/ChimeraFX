@@ -35,11 +35,29 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // Use request_segment_flush() instead of schedule_show().
-    // schedule_show() queues a DMA via the Master LightState pipeline, which
-    // is now muted for segmented lights (write_state guard). The segment flush
-    // path fires write_state(nullptr) from CFXLightOutput::loop() which
-    // bypasses the mute guard and delivers segment pixels to hardware.
+    // When an effect is active and the transition engine calls write_state,
+    // suppress the flush. The transition engine writes the ON-state color
+    // (white) to the buffer and calls write_state repeatedly during the
+    // transition period — flushing this would create a white flash before
+    // the effect can render. Effects drive DMA via schedule_show() below.
+    //
+    // For plain ON with no effect (state non-null, no effect name), we DO
+    // flush so the white ON-state is visible correctly.
+    if (state != nullptr) {
+      const char *effect_name = state->remote_values.get_effect_name().c_str();
+      if (effect_name != nullptr && effect_name[0] != '\0') {
+        return; // Effect is active — suppress transition-engine flush
+      }
+    }
+    parent_->request_segment_flush();
+  }
+
+  void schedule_show() override {
+    // Effect-driven DMA: when an effect calls schedule_show() at the end of
+    // its apply() frame, route through request_segment_flush() instead of
+    // the normal ESPHome pipeline. This bypasses the Master mute guard
+    // (write_state guard checks state != nullptr) and delivers effect pixels
+    // directly to hardware via CFXLightOutput::loop().
     parent_->request_segment_flush();
   }
 
