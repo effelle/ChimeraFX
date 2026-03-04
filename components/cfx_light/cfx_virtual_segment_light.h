@@ -35,29 +35,14 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // When an effect is active and the transition engine calls write_state,
-    // suppress the flush. The transition engine writes the ON-state color
-    // (white) to the buffer and calls write_state repeatedly during the
-    // transition period — flushing this would create a white flash before
-    // the effect can render. Effects drive DMA via schedule_show() below.
-    //
-    // For plain ON with no effect (state non-null, no effect name), we DO
-    // flush so the white ON-state is visible correctly.
-    if (state != nullptr) {
-      const char *effect_name = state->remote_values.get_effect_name().c_str();
-      if (effect_name != nullptr && effect_name[0] != '\0') {
-        return; // Effect is active — suppress transition-engine flush
-      }
+    // Suppress transition-engine flushes when an effect is active.
+    // ESPHome's transition engine calls write_state(state) repeatedly during
+    // the ON-transition period, painting white to the buffer each time.
+    // Flushing during this window causes the white flash before the effect
+    // renders. An active effect drives DMA via the post-apply() write_state.
+    if (state != nullptr && !state->get_effect_name().empty()) {
+      return; // Effect active — suppress transition-engine flush
     }
-    parent_->request_segment_flush();
-  }
-
-  void schedule_show() override {
-    // Effect-driven DMA: when an effect calls schedule_show() at the end of
-    // its apply() frame, route through request_segment_flush() instead of
-    // the normal ESPHome pipeline. This bypasses the Master mute guard
-    // (write_state guard checks state != nullptr) and delivers effect pixels
-    // directly to hardware via CFXLightOutput::loop().
     parent_->request_segment_flush();
   }
 
