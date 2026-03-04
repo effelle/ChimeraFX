@@ -395,6 +395,37 @@ void CFXLightOutput::loop() {
   }
 }
 
+// --- Update State (Handles Brightness & Solid Colors) ---
+
+void CFXLightOutput::update_state(light::LightState *state) {
+  auto val = state->current_values;
+  auto max_brightness = to_uint8_scale(val.get_brightness() * val.get_state());
+  this->correction_.set_local_brightness(max_brightness);
+
+  if (this->has_segments()) {
+    // Segmented mode: Master LightState is muted.
+    // Individual segments handle their own update_state().
+    return;
+  }
+
+  if (this->is_effect_active()) {
+    // Effect handles its own pixel math in apply().
+    return;
+  }
+
+  // Solid color logic for non-segmented lights
+  Color c = light::color_from_light_color_values(val);
+
+  // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer
+  if (this->force_white_sw_ != nullptr && this->force_white_sw_->state &&
+      this->has_white_channel()) {
+    cfx::apply_force_white(c.r, c.g, c.b, c.w);
+  }
+
+  this->all() = c;
+  this->schedule_show();
+}
+
 // --- Write State (Fire-and-Forget DMA) ---
 
 void CFXLightOutput::write_state(light::LightState *state) {
@@ -458,32 +489,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 #endif
   this->status_clear_warning();
-
-  // FORCE WHITE: Convert RGB white component to pure W channel.
-  // Applied here in write_state() to cover ALL rendering paths universally:
-  // effects, intros, outros, monochromatic presets, and solid master colors.
-  // Lazy discovery: find the CFXControl's force_white switch on first call.
-  if (this->force_white_sw_ == nullptr &&
-      this->master_light_state_ != nullptr) {
-    auto *ctrl = chimera_fx::CFXControl::find(this->master_light_state_);
-    if (ctrl != nullptr && ctrl->get_force_white() != nullptr) {
-      this->force_white_sw_ = ctrl->get_force_white();
-    }
-  }
-  if (this->force_white_sw_ != nullptr && this->force_white_sw_->state &&
-      this->has_white_channel()) {
-    for (int i = 0; i < this->size(); i++) {
-      auto view = (*this)[i];
-      uint8_t r = view.get_red_raw();
-      uint8_t g = view.get_green_raw();
-      uint8_t b = view.get_blue_raw();
-      uint8_t w = view.get_white_raw();
-      uint8_t min_rgb = std::min({r, g, b});
-      if (min_rgb > 0) {
-        view.set_rgbw(r - min_rgb, g - min_rgb, b - min_rgb, w + min_rgb);
-      }
-    }
-  }
 
   // Protect from refreshing too often
   uint32_t now = micros();

@@ -153,7 +153,17 @@ void Segment::setPixelColor(int n, uint32_t c) {
   int global_index = mirror ? (offset + length() - 1 - n) : (offset + n);
 
   if (global_index >= 0 && global_index < light_size) {
-    esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
+    uint8_t r = CFX_R(c);
+    uint8_t g = CFX_G(c);
+    uint8_t b = CFX_B(c);
+    uint8_t w = CFX_W(c);
+
+    // Apply native force_white BEFORE hitting the ESPHome gamma cache
+    if (instance->force_white_active_) {
+      cfx::apply_force_white(r, g, b, w);
+    }
+
+    esphome::Color esphome_color(r, g, b, w);
     (*instance->target_light)[global_index] = esphome_color;
   }
 }
@@ -187,7 +197,18 @@ void Segment::fill(uint32_t c) {
 
   // Optimized tight loop: Resolve pointers once
   esphome::light::AddressableLight &light = *instance->target_light;
-  esphome::Color esphome_color(CFX_R(c), CFX_G(c), CFX_B(c), CFX_W(c));
+
+  uint8_t r = CFX_R(c);
+  uint8_t g = CFX_G(c);
+  uint8_t b = CFX_B(c);
+  uint8_t w = CFX_W(c);
+
+  // Apply native force_white BEFORE hitting the ESPHome gamma cache
+  if (instance->force_white_active_) {
+    cfx::apply_force_white(r, g, b, w);
+  }
+
+  esphome::Color esphome_color(r, g, b, w);
 
   for (int i = 0; i < len; i++) {
     int global_index = mirror ? (offset + len - 1 - i) : (offset + i);

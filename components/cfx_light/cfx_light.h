@@ -16,7 +16,6 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 
-
 #include <driver/gpio.h>
 #include <driver/rmt_tx.h>
 #include <esp_err.h>
@@ -75,6 +74,7 @@ public:
   void setup() override;
   void loop() override;
   void write_state(light::LightState *state) override;
+  void update_state(light::LightState *state) override;
   void on_master_update();
   void on_segment_update();
   void send_visualizer_metadata(const std::string &name,
@@ -143,6 +143,9 @@ public:
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
   void set_force_white_switch(switch_::Switch *sw) {
     this->force_white_sw_ = sw;
+  }
+  switch_::Switch *get_force_white_switch() const {
+    return this->force_white_sw_;
   }
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {

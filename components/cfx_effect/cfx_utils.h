@@ -291,6 +291,21 @@ inline uint32_t color_wheel(uint8_t pos) {
 // Gamma inverse placeholder (can be extended later)
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
+/**
+ * FORCE WHITE: Centralized math to shift the common RGB component to the White
+ * channel. Applied BEFORE gamma correction to maintain linear physics.
+ */
+inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
+  uint8_t min_rgb = std::min({r, g, b});
+  if (min_rgb > 0) {
+    r -= min_rgb;
+    g -= min_rgb;
+    b -= min_rgb;
+    uint16_t new_w = (uint16_t)w + min_rgb;
+    w = (new_w > 255) ? 255 : (uint8_t)new_w;
+  }
+}
+
 // ============================================================================
 // Frame Diagnostics (Runtime controllabe)
 

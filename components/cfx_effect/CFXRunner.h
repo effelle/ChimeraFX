@@ -380,6 +380,8 @@ public:
   CRGBPalette16 _currentRandomPalette;
   uint32_t _currentRandomPaletteBuffer[16];
 
+  bool force_white_active_ = false;
+
 private:
   RunnerState _state = STATE_RUNNING;
   uint8_t _intro_mode = INTRO_NONE;

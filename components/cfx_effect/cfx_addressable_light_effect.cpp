@@ -69,12 +69,9 @@ void CFXAddressableLightEffect::start() {
   if (this->is_virtual_segment_) {
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
-      this->saved_transition_length_ = ls->get_default_transition_length();
-      ls->set_default_transition_length(0);
-      // NOTE: We no longer snap current_values = remote_values here.
-      // That caused a brightness spike (full brightness frame 0, then
-      // transformer overwrites to ~0 on frame 1). Instead, the effect
-      // now reads remote_values.get_brightness() directly (stable target).
+      // NOTE: We no longer zero the default transition length here.
+      // The transformer bypass in cfx_virtual_segment_light.h already prevents
+      // the white flash, so we can let the native brightness transition run.
     }
   }
 
@@ -201,6 +198,20 @@ void CFXAddressableLightEffect::start() {
 
   if (autotune_enabled) {
     this->apply_autotune_defaults_();
+  }
+
+  // Pass force_white flag down to the underlying Native CFXRunners
+  // so they can shift RGB->W natively, avoiding ESPColorView double-gamma crush
+  bool fw_active = false;
+  if (c && c->get_force_white()) {
+    fw_active = c->get_force_white()->state;
+  }
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      r->force_white_active_ = fw_active;
+    }
+  } else {
+    this->runner_->force_white_active_ = fw_active;
   }
 
   // 1. Speed (YAML Preset Override Only)
@@ -838,10 +849,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // scaling, so we must apply it here after all runners render.
     auto *bri_state = this->get_light_state();
     if (bri_state != nullptr) {
-      // BUG 11 FIX: Use remote_values (stable target) instead of
-      // current_values (overwritten by transformer each frame).
-      // current_values causes spike: frame 0 = full, frame 1 = ~0.
-      float bri = bri_state->remote_values.get_brightness();
+      // BUG 11 FIX: Restore smooth transitional math but prevent double-fading
+      float bri = bri_state->current_values.get_brightness();
+      float state_mul = bri_state->current_values.get_state();
+
+      // If Intro or Outro is running, they provide their own visual ramp.
+      // Do not multiply by the light's transitioning `get_state()` or else
+      // they will double-fade during the ON/OFF transition.
+      if (this->state_ == TRANSITION_RUNNING || this->state_ == OUTRO_RUNNING) {
+        state_mul = 1.0f;
+      }
+      bri *= state_mul;
+
       if (bri < 0.99f) { // Skip if already at full brightness
         for (int i = 0; i < it.size(); i++) {
           Color pc = it[i].get();
@@ -1523,11 +1542,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   uint8_t mode = this->active_intro_mode_;
 
   // 3. Setup Color/Palette
-  // Use Target Color (remote_values) to ensure visibility during fade-in
+  // BUG 11 FIX: Use Current Color (current_values) for smooth fade-in
   Color c = target_color;
   auto *state = this->get_light_state();
   if (state) {
-    auto v = state->remote_values;
+    auto v = state->current_values;
     c = Color((uint8_t)(v.get_red() * 255), (uint8_t)(v.get_green() * 255),
               (uint8_t)(v.get_blue() * 255), (uint8_t)(v.get_white() * 255));
   }
@@ -1535,15 +1554,22 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color::WHITE;
   }
 
-  // Apply user brightness scaling to target color
+  // Apply user brightness scaling from current state
   float user_brightness = 1.0f;
   if (state) {
-    user_brightness = state->remote_values.get_brightness();
+    user_brightness = state->current_values.get_brightness();
     if (user_brightness < 0.01f)
       user_brightness = 0.01f;
   }
   c = Color((uint8_t)(c.r * user_brightness), (uint8_t)(c.g * user_brightness),
             (uint8_t)(c.b * user_brightness), (uint8_t)(c.w * user_brightness));
+
+  // BUG 13 FIX: Apply force_white to Intro transitions
+  if (this->controller_ != nullptr &&
+      this->controller_->get_force_white() != nullptr &&
+      this->controller_->get_force_white()->state) {
+    cfx::apply_force_white(c.r, c.g, c.b, c.w);
+  }
 
   // Check for Palette usage
   bool use_palette = false;
@@ -2001,6 +2027,14 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
     uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
     uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
+
+    // BUG 13 FIX: Apply force_white to Outro transitions
+    if (this->controller_ != nullptr &&
+        this->controller_->get_force_white() != nullptr &&
+        this->controller_->get_force_white()->state) {
+      cfx::apply_force_white(r, g, b, w);
+    }
+
     it[global_idx] = Color(r, g, b, w);
   }
 
