@@ -89,12 +89,10 @@ public:
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
-    if (this->is_rgbw_ || this->is_wrgb_) {
-      traits.set_supported_color_modes(
-          {light::ColorMode::RGB_WHITE, light::ColorMode::WHITE});
-    } else {
-      traits.set_supported_color_modes({light::ColorMode::RGB});
-    }
+    // Use BRIGHTNESS mode to present a simple dimmable light in Home Assistant.
+    // The actual colors are managed internally by the WLED effect engine and
+    // palettes.
+    traits.set_supported_color_modes({light::ColorMode::BRIGHTNESS});
     return traits;
   }
 
