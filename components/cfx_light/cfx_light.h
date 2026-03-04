@@ -11,9 +11,11 @@
 
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/light/light_output.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
+
 
 #include <driver/gpio.h>
 #include <driver/rmt_tx.h>
@@ -80,6 +82,22 @@ public:
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
 
+  // Override update_state to prevent the master's transition from corrupting
+  // segment rendering. The master's LightState::loop() calls update_state()
+  // during transitions, which sets correction_.set_local_brightness() to a
+  // ramping value AND paints this->all() with the transition color. Since
+  // segments use zero-copy into the parent's buffer, this scales ALL segment
+  // pixels through the correction layer, causing visible brightness spikes.
+  void update_state(light::LightState *state) override {
+    if (this->has_segments()) {
+      // Force full brightness correction — segments handle their own brightness
+      // via remote_values in CFXAddressableLightEffect::apply().
+      this->correction_.set_local_brightness(255);
+      return;
+    }
+    light::AddressableLight::update_state(state);
+  }
+
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
   bool has_outro() const { return !this->outro_cbs_.empty(); }
 
@@ -123,6 +141,9 @@ public:
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
+  void set_force_white_switch(switch_::Switch *sw) {
+    this->force_white_sw_ = sw;
+  }
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
@@ -243,6 +264,7 @@ protected:
 
   bool is_rgbw_{false};
   bool is_wrgb_{false};
+  switch_::Switch *force_white_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
 
   // Refresh rate limiting

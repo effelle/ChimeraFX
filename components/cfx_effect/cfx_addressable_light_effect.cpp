@@ -849,23 +849,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                         (uint8_t)(pc.b * bri), (uint8_t)(pc.w * bri));
         }
       }
-
-      // BUG 13 FIX: force_white — convert RGB white to pure W channel.
-      // When enabled on SK6812 strips, extract the common white component
-      // from RGB and move it to the dedicated W channel for better color.
-      CFXControl *fw_c = this->controller_;
-      switch_::Switch *fw_sw =
-          (fw_c && fw_c->get_force_white()) ? fw_c->get_force_white() : nullptr;
-      if (fw_sw != nullptr && fw_sw->state) {
-        for (int i = 0; i < it.size(); i++) {
-          Color pc = it[i].get();
-          uint8_t min_rgb = std::min({pc.r, pc.g, pc.b});
-          if (min_rgb > 0) {
-            it[i] = Color(pc.r - min_rgb, pc.g - min_rgb, pc.b - min_rgb,
-                          pc.w + min_rgb);
-          }
-        }
-      }
     }
   }
 
