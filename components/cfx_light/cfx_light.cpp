@@ -8,6 +8,7 @@
  */
 
 #include "cfx_light.h"
+#include "esphome/components/cfx_effect/cfx_control.h"
 
 #ifdef USE_WIFI
 #include <lwip/inet.h>
