@@ -852,6 +852,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+  // For virtual segment lights, write_state(state) is suppressed when an
+  // effect is active (to prevent the white-flash race condition). We must
+  // explicitly request a DMA flush here so the effect pixels reach hardware.
+  if (this->is_virtual_segment_) {
+    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(&it);
+    vseg->get_parent()->request_segment_flush();
+  }
+
   it.schedule_show();
   ::instance = nullptr;
 }
