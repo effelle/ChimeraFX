@@ -81,6 +81,7 @@ public:
   int32_t size() const override { return this->num_leds_; }
 
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
+  bool has_outro() const { return !this->outro_cbs_.empty(); }
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.

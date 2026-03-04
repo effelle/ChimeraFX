@@ -38,6 +38,13 @@ public:
     // Delegate DMA to parent via the segment-flush path.
     // write_state(nullptr) is called from CFXLightOutput::loop() when
     // segment_needs_flush_ is set, bypassing the Master mute guard.
+    //
+    // Suppress flush while parent has an outro in progress: the OFF-transition
+    // engine also calls write_state(state) while fading to black, which would
+    // race with the outro and overwrite the outro frames with transition
+    // pixels.
+    if (parent_->has_outro())
+      return;
     parent_->request_segment_flush();
   }
 
