@@ -410,21 +410,18 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return; // Block Master during outro on non-segmented lights
   }
 
-  // 1.2 Prevent Master Light from leaking into OFF segments.
-  // Because the Master light sits underneath the segments and spans the whole
-  // strip, when it is turned ON to support an active segment, it will try to
-  // paint the entire strip. Once a segment is completely OFF, ESPHome's engine
-  // skips it and it stops rendering black, allowing the Master's undercoat to
-  // bleed through. We must aggressively scrub OFF segments to black.
-  if (!this->segment_light_states_.empty()) {
+  // 1.2 Prevent Master paint from bleeding into OFF segments.
+  // Skip during outro — the outro renders into the OFF segment's range;
+  // scrubbing would erase the outro pixels before the DMA fires.
+  if (!this->outro_cbs_.empty()) {
+    // Outro is rendering — let it own the buffer, no scrub.
+  } else if (!this->segment_light_states_.empty()) {
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      // Only scrub if the segment is fully functionally and physically off
-      // (avoids abruptly snipping the transition fade-out)
       if (!seg_state->remote_values.is_on() &&
           !seg_state->current_values.is_on()) {
         const auto &def = this->segment_defs_[i];
-        for (int p = def.start; p <= def.stop; p++) {
+        for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
             (*this)[p] = esphome::Color::BLACK;
           }

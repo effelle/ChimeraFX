@@ -63,15 +63,20 @@ public:
     light::AddressableLight::loop();
   }
 
+  // BUG 8 FIX: The LightState's OFF transition continuously calls
+  // update_state(), which paints ALL segment pixels toward black via
+  // AddressableLight::update_state(). Since our get_view_internal() is
+  // zero-copy into the parent's buffer, this overwrites outro frames
+  // before DMA fires. Intercept here to skip painting during outro.
+  void update_state(light::LightState *state) override {
+    if (parent_->has_outro())
+      return;
+    light::AddressableLight::update_state(state);
+  }
+
   void write_state(light::LightState *state) override {
     // Delegate DMA to parent via the segment-flush path.
-    // write_state(nullptr) is called from CFXLightOutput::loop() when
-    // segment_needs_flush_ is set, bypassing the Master mute guard.
-    //
-    // Suppress flush while parent has an outro in progress: the OFF-transition
-    // engine also calls write_state(state) while fading to black, which would
-    // race with the outro and overwrite the outro frames with transition
-    // pixels.
+    // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
     parent_->request_segment_flush();
