@@ -82,22 +82,6 @@ public:
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
 
-  // Override update_state to prevent the master's transition from corrupting
-  // segment rendering. The master's LightState::loop() calls update_state()
-  // during transitions, which sets correction_.set_local_brightness() to a
-  // ramping value AND paints this->all() with the transition color. Since
-  // segments use zero-copy into the parent's buffer, this scales ALL segment
-  // pixels through the correction layer, causing visible brightness spikes.
-  void update_state(light::LightState *state) override {
-    if (this->has_segments()) {
-      // Force full brightness correction — segments handle their own brightness
-      // via remote_values in CFXAddressableLightEffect::apply().
-      this->correction_.set_local_brightness(255);
-      return;
-    }
-    light::AddressableLight::update_state(state);
-  }
-
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
   bool has_outro() const { return !this->outro_cbs_.empty(); }
 

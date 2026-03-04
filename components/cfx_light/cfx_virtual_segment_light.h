@@ -10,11 +10,10 @@
 
 #ifdef USE_ESP32
 
-#include "cfx_effect/cfx_utils.h"
+#include "../cfx_effect/cfx_utils.h"
 #include "cfx_light.h"
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/core/component.h"
-
 
 #include <string>
 

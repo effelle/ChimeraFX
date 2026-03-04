@@ -8,7 +8,7 @@
  */
 
 #include "cfx_light.h"
-#include "esphome/components/cfx_effect/cfx_control.h"
+#include "../cfx_effect/cfx_control.h"
 
 #ifdef USE_WIFI
 #include <lwip/inet.h>
@@ -399,7 +399,8 @@ void CFXLightOutput::loop() {
 
 void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
-  auto max_brightness = to_uint8_scale(val.get_brightness() * val.get_state());
+  auto max_brightness =
+      light::to_uint8_scale(val.get_brightness() * val.get_state());
   this->correction_.set_local_brightness(max_brightness);
 
   if (this->has_segments()) {
