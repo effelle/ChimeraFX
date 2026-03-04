@@ -35,14 +35,9 @@ public:
   }
 
   void write_state(light::LightState *state) override {
-    // Suppress transition-engine flushes when an effect is active.
-    // ESPHome's transition engine calls write_state(state) repeatedly during
-    // the ON-transition period, painting white to the buffer each time.
-    // Flushing during this window causes the white flash before the effect
-    // renders. An active effect drives DMA via the post-apply() write_state.
-    if (state != nullptr && !state->get_effect_name().empty()) {
-      return; // Effect active — suppress transition-engine flush
-    }
+    // Delegate DMA to parent via the segment-flush path.
+    // write_state(nullptr) is called from CFXLightOutput::loop() when
+    // segment_needs_flush_ is set, bypassing the Master mute guard.
     parent_->request_segment_flush();
   }
 

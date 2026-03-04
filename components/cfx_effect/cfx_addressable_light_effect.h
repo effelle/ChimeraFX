@@ -196,6 +196,10 @@ protected:
   // Applies per-effect defaults to UI sliders/palette and records expected
   // values. Only touches controls that don't have a hard YAML preset.
   void apply_autotune_defaults_();
+
+  // Transition length saved/restored around effect runs for virtual segments
+  // to prevent the white flash from ESPHome's transition engine.
+  uint32_t saved_transition_length_{0};
 };
 
 } // namespace chimera_fx

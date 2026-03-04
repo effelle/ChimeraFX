@@ -60,6 +60,20 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
+  // Zero the default transition length for virtual segment lights while an
+  // effect is running. ESPHome's transition engine (default 500ms) repeatedly
+  // writes the ON-state color (white) to the buffer and flushes DMA for the
+  // full transition period — causing a prolonged white flash before the effect
+  // renders. Setting it to 0 makes the ON instant; the intro animation handles
+  // the visual ramp instead. Restored in stop() for normal ON/OFF behavior.
+  if (this->is_virtual_segment_) {
+    auto *ls = this->get_light_state();
+    if (ls != nullptr) {
+      this->saved_transition_length_ = ls->get_default_transition_length();
+      ls->set_default_transition_length(0);
+    }
+  }
+
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
@@ -415,6 +429,14 @@ void CFXAddressableLightEffect::stop() {
   // Clear intro snapshot vector to reclaim RAM
   intro_snapshot_.clear();
   intro_snapshot_.shrink_to_fit();
+
+  // Restore default transition length zeroed in start() for virtual segments
+  if (this->is_virtual_segment_ && this->saved_transition_length_ > 0) {
+    auto *ls = this->get_light_state();
+    if (ls != nullptr)
+      ls->set_default_transition_length(this->saved_transition_length_);
+    this->saved_transition_length_ = 0;
+  }
 
   CFXControl *c = this->controller_;
   auto *state = this->get_light_state();
@@ -850,14 +872,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (progress >= (1.0f + softness)) {
       this->state_ = TRANSITION_NONE;
     }
-  }
-
-  // For virtual segment lights, write_state(state) is suppressed when an
-  // effect is active (to prevent the white-flash race condition). We must
-  // explicitly request a DMA flush here so the effect pixels reach hardware.
-  if (this->is_virtual_segment_) {
-    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(&it);
-    vseg->get_parent()->request_segment_flush();
   }
 
   it.schedule_show();
