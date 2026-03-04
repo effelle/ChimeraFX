@@ -96,6 +96,7 @@ public:
   void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
   void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
   void set_autotune_preset(bool v) { this->autotune_preset_ = v; }
+  void set_force_white_preset(bool v) { this->force_white_preset_ = v; }
 
   void set_virtual_segment(bool virtual_segment) {
     this->is_virtual_segment_ = virtual_segment;
@@ -163,6 +164,7 @@ protected:
   optional<uint8_t> palette_preset_{};
   optional<bool> mirror_preset_{};
   optional<bool> autotune_preset_{};
+  optional<bool> force_white_preset_{};
   optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
   optional<bool> intro_use_palette_preset_{};

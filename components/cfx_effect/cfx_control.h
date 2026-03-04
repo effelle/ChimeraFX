@@ -246,6 +246,7 @@ public:
   void set_palette(select::Select *s) { palette_ = s; }
   void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
   void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
+  void set_force_white(esphome::switch_::Switch *s) { force_white_ = s; }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
   void set_intro_duration(number::Number *n) { intro_duration_ = n; }
@@ -298,6 +299,7 @@ public:
   select::Select *get_palette() { return palette_; }
   esphome::switch_::Switch *get_mirror() { return mirror_; }
   esphome::switch_::Switch *get_autotune() { return autotune_; }
+  esphome::switch_::Switch *get_force_white() { return force_white_; }
 
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
@@ -317,6 +319,7 @@ protected:
   select::Select *palette_{nullptr};
   esphome::switch_::Switch *mirror_{nullptr};
   esphome::switch_::Switch *autotune_{nullptr};
+  esphome::switch_::Switch *force_white_{nullptr};
 
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};

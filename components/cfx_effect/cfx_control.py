@@ -302,6 +302,23 @@ async def to_code(config):
         cg.add(autotune.write_state(autotune_init))
         cg.add(var.set_autotune(autotune))
 
+    # 9. Force White (SK6812 RGBW only — forces pure W channel)
+    if is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
+        force_white_init = False
+        conf = {
+            CONF_ID: cv.declare_id(CFXSwitch)(f"{config[CONF_ID]}_force_white"),
+            CONF_NAME: f"{name} Force White",
+            CONF_ICON: "mdi:white-balance-sunny",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+            CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+        }
+        force_white = cg.new_Pvariable(conf[CONF_ID])
+        await switch.register_switch(force_white, conf)
+        cg.add(force_white.publish_state(force_white_init))
+        cg.add(var.set_force_white(force_white))
+
 
     # 11. Debug
     if is_included(EXCLUDE_DEBUG):
