@@ -126,7 +126,8 @@ protected:
     TRANSITION_NONE,
     TRANSITION_ENTRY,
     TRANSITION_EXIT,
-    TRANSITION_RUNNING
+    TRANSITION_RUNNING,
+    OUTRO_RUNNING
   };
   TransitionState state_{TRANSITION_NONE};
   uint32_t transition_start_ms_{0};

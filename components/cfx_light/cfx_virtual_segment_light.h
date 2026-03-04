@@ -72,7 +72,7 @@ public:
 
     auto val = state->current_values;
     auto max_brightness =
-        to_uint8_scale(val.get_brightness() * val.get_state());
+        light::to_uint8_scale(val.get_brightness() * val.get_state());
     this->correction_.set_local_brightness(max_brightness);
 
     if (this->is_effect_active())
