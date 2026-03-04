@@ -53,7 +53,7 @@ CONF_SEGMENT_OUTPUT_ID = "output_id"
 CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32", "wifi"]
+DEPENDENCIES = ["esp32"]
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
