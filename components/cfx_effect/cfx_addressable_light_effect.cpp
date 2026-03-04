@@ -71,10 +71,10 @@ void CFXAddressableLightEffect::start() {
     if (ls != nullptr) {
       this->saved_transition_length_ = ls->get_default_transition_length();
       ls->set_default_transition_length(0);
-      // Snap current_values to remote_values to kill any in-flight transition
-      // that was already started before we zeroed the length. Without this,
-      // the first frame still shows white from the running transformer.
-      ls->current_values = ls->remote_values;
+      // NOTE: We no longer snap current_values = remote_values here.
+      // That caused a brightness spike (full brightness frame 0, then
+      // transformer overwrites to ~0 on frame 1). Instead, the effect
+      // now reads remote_values.get_brightness() directly (stable target).
     }
   }
 
@@ -164,6 +164,22 @@ void CFXAddressableLightEffect::start() {
     if (this->is_monochromatic_(this->effect_id_))
       default_pal = 255;
     this->controller_->segment_states_[seg_name].palette = default_pal;
+
+    // BUG 12 FIX: Also push the default palette to the UI selector.
+    // Without this, the PUSH callback from the HA Select reads "Default"
+    // or "Rainbow" and overwrites our cache on frame 2+.
+    // This is exactly what apply_autotune_defaults_() does.
+    select::Select *palette_sel = this->controller_->get_palette()
+                                      ? this->controller_->get_palette()
+                                      : this->palette_;
+    if (palette_sel != nullptr) {
+      std::string pal_name = this->get_palette_name_(default_pal);
+      if (palette_sel->current_option() != pal_name) {
+        auto call = palette_sel->make_call();
+        call.set_option(pal_name);
+        call.perform();
+      }
+    }
   }
 
   this->run_controls_();
@@ -822,12 +838,32 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // scaling, so we must apply it here after all runners render.
     auto *bri_state = this->get_light_state();
     if (bri_state != nullptr) {
-      float bri = bri_state->current_values.get_brightness();
+      // BUG 11 FIX: Use remote_values (stable target) instead of
+      // current_values (overwritten by transformer each frame).
+      // current_values causes spike: frame 0 = full, frame 1 = ~0.
+      float bri = bri_state->remote_values.get_brightness();
       if (bri < 0.99f) { // Skip if already at full brightness
         for (int i = 0; i < it.size(); i++) {
           Color pc = it[i].get();
           it[i] = Color((uint8_t)(pc.r * bri), (uint8_t)(pc.g * bri),
                         (uint8_t)(pc.b * bri), (uint8_t)(pc.w * bri));
+        }
+      }
+
+      // BUG 13 FIX: force_white — convert RGB white to pure W channel.
+      // When enabled on SK6812 strips, extract the common white component
+      // from RGB and move it to the dedicated W channel for better color.
+      CFXControl *fw_c = this->controller_;
+      switch_::Switch *fw_sw =
+          (fw_c && fw_c->get_force_white()) ? fw_c->get_force_white() : nullptr;
+      if (fw_sw != nullptr && fw_sw->state) {
+        for (int i = 0; i < it.size(); i++) {
+          Color pc = it[i].get();
+          uint8_t min_rgb = std::min({pc.r, pc.g, pc.b});
+          if (min_rgb > 0) {
+            it[i] = Color(pc.r - min_rgb, pc.g - min_rgb, pc.b - min_rgb,
+                          pc.w + min_rgb);
+          }
         }
       }
     }
