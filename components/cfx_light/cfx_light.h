@@ -89,10 +89,19 @@ public:
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
-    // Use BRIGHTNESS mode to present a simple dimmable light in Home Assistant.
-    // The actual colors are managed internally by the WLED effect engine and
-    // palettes.
-    traits.set_supported_color_modes({light::ColorMode::BRIGHTNESS});
+    if (this->has_segments()) {
+      // Segmented mode: main switch is dim-only (like WLED).
+      // Individual segment entities expose their own RGB controls.
+      traits.set_supported_color_modes({light::ColorMode::BRIGHTNESS});
+    } else {
+      // Non-segmented mode: full color control on the main switch.
+      if (this->has_white_channel()) {
+        traits.set_supported_color_modes(
+            {light::ColorMode::RGB_WHITE, light::ColorMode::WHITE});
+      } else {
+        traits.set_supported_color_modes({light::ColorMode::RGB});
+      }
+    }
     return traits;
   }
 
