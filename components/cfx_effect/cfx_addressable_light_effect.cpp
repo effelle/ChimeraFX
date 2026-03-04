@@ -83,6 +83,10 @@ void CFXAddressableLightEffect::start() {
   // be enormous, progress clamps to 1.0, and the outro completes invisibly.
   this->outro_start_time_ = 0;
 
+  // Reset palette sync flag so we enforce the effect's default on the first
+  // frame
+  this->palette_synced_ = false;
+
   // Find controller early
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
@@ -1390,7 +1394,20 @@ void CFXAddressableLightEffect::run_controls_() {
         // segment
         auto it = c->segment_states_.find(this->get_light_state()->get_name());
         if (it != c->segment_states_.end()) {
-          const auto &state = it->second;
+          auto &state = it->second;
+
+          // BUG 4 FIX: Ensure the effect's default palette is used on the very
+          // first frame, regardless of what the UI selector (or PUSH callbacks)
+          // tries to enforce right at startup.
+          if (!this->palette_synced_) {
+            uint8_t default_pal =
+                this->get_default_palette_id_(this->effect_id_);
+            if (this->is_monochromatic_(this->effect_id_))
+              default_pal = 255;
+            state.palette = default_pal;
+            this->palette_synced_ = true;
+          }
+
           if (!this->segment_runners_.empty()) {
             for (auto *r : this->segment_runners_) {
               r->setSpeed(state.speed);

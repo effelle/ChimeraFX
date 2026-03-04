@@ -140,6 +140,7 @@ protected:
   std::vector<CFXRunner *> segment_runners_;
   bool segments_initialized_{false};
   bool is_virtual_segment_{false};
+  bool palette_synced_{false};
 
   uint32_t update_interval_{16};
   uint32_t last_run_{0};
