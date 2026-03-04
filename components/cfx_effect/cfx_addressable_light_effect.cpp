@@ -61,7 +61,7 @@ void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
   // Zero the default transition length for virtual segment lights while an
-  // effect is running. ESPHome's transition engine (default 500ms) repeatedly
+  // effect is running. ESPHome's transition engine (default 1s) repeatedly
   // writes the ON-state color (white) to the buffer and flushes DMA for the
   // full transition period — causing a prolonged white flash before the effect
   // renders. Setting it to 0 makes the ON instant; the intro animation handles
@@ -71,8 +71,17 @@ void CFXAddressableLightEffect::start() {
     if (ls != nullptr) {
       this->saved_transition_length_ = ls->get_default_transition_length();
       ls->set_default_transition_length(0);
+      // Snap current_values to remote_values to kill any in-flight transition
+      // that was already started before we zeroed the length. Without this,
+      // the first frame still shows white from the running transformer.
+      ls->current_values = ls->remote_values;
     }
   }
+
+  // Defensive reset: ensure outro_start_time_ is clean for the next outro.
+  // Without this, a stale timestamp from a previous outro causes elapsed to
+  // be enormous, progress clamps to 1.0, and the outro completes invisibly.
+  this->outro_start_time_ = 0;
 
   // Find controller early
   if (this->controller_ == nullptr) {
@@ -588,6 +597,7 @@ void CFXAddressableLightEffect::stop() {
             for (auto *r : *captured_runners)
               delete r;
             captured_runners->clear();
+            this->outro_start_time_ = 0; // Reset for the NEXT outro
             return true;
           }
 
@@ -608,6 +618,7 @@ void CFXAddressableLightEffect::stop() {
             for (auto *r : *captured_runners)
               delete r;
             captured_runners->clear();
+            this->outro_start_time_ = 0; // Reset for the NEXT outro
           }
           return done;
         });
