@@ -116,7 +116,9 @@ async def to_code(config):
             var_id = core.ID(f"{config[CONF_ID].id}_{idx}", is_declaration=True, type=CFXControl)
             
         var = cg.new_Pvariable(var_id)
-        await cg.register_component(var, config)
+        # Primary instance uses the full config; siblings use {} to avoid
+        # collisions in ESPHome's component ID registry.
+        await cg.register_component(var, config if idx == 0 else {})
         cg.add(var.set_light(target["state"]))
         
         t_name = target["name"]
