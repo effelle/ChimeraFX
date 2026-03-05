@@ -96,8 +96,6 @@ async def to_code(config):
     has_segments = len(all_targets) > 1
 
     for idx, target in enumerate(all_targets):
-        # Master light power is native Light entity. 
-        # Segments have native Light entities (+ their controls).
         is_effect_target = not has_segments or idx > 0
 
         if idx == 0:
@@ -116,16 +114,21 @@ async def to_code(config):
         t_id = f"{config[CONF_ID].id}_{idx}"
         has_white_channel = target["has_white"]
 
-        # Entity Order according to User QoL Request:
+        # Base conf for all entities to avoid KeyErrors in setup_entity
+        base_entity_conf = {
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+
         # 1. Autotune
         if is_effect_target and is_included(EXCLUDE_AUTOTUNE):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_autotune"),
                 CONF_NAME: f"{t_name} Autotune",
                 CONF_ICON: "mdi:auto-fix",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: "config",
             }
             autotune = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(autotune, conf)
@@ -135,12 +138,12 @@ async def to_code(config):
         # 2. Force White
         if is_effect_target and is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
                 CONF_NAME: f"{t_name} Force White",
                 CONF_ICON: "mdi:white-balance-sunny",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: "config",
             }
             force_white = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(force_white, conf)
@@ -150,12 +153,12 @@ async def to_code(config):
         # 3. Mirror
         if is_effect_target and is_included(EXCLUDE_MIRROR):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_mirror"),
                 CONF_NAME: f"{t_name} Mirror",
                 CONF_ICON: "mdi:swap-horizontal",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: "config",
             }
             mirror = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(mirror, conf)
@@ -165,11 +168,11 @@ async def to_code(config):
         # 4. Palette
         if is_effect_target and is_included(EXCLUDE_PALETTE):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_palette"),
                 CONF_NAME: f"{t_name} Palette",
                 CONF_ICON: "mdi:palette",
                 "optimistic": True,
-                CONF_ENTITY_CATEGORY: "config",
             }
             palette = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(palette, conf, options=PALETTE_OPTIONS)
@@ -179,11 +182,11 @@ async def to_code(config):
         # 5. Intro & Intro Duration
         if is_effect_target and is_included(EXCLUDE_INTRO):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_intro"),
                 CONF_NAME: f"{t_name} Intro",
                 CONF_ICON: "mdi:animation-play",
                 "optimistic": True,
-                CONF_ENTITY_CATEGORY: "config",
             }
             intro = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(intro, conf, options=INTRO_OPTIONS)
@@ -191,13 +194,13 @@ async def to_code(config):
             cg.add(var.set_intro_effect(intro))
 
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intro_dur"),
                 CONF_NAME: f"{t_name} Intro Duration",
                 CONF_ICON: "mdi:timer-outline",
                 "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-                CONF_ENTITY_CATEGORY: "config",
             }
             intro_dur = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(intro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
@@ -207,11 +210,11 @@ async def to_code(config):
         # 6. Outro & Outro Duration
         if is_effect_target and is_included(EXCLUDE_OUTRO):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
                 CONF_NAME: f"{t_name} Outro",
                 CONF_ICON: "mdi:animation-play-outline",
                 "optimistic": True,
-                CONF_ENTITY_CATEGORY: "config",
             }
             outro = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(outro, conf, options=INTRO_OPTIONS)
@@ -219,13 +222,13 @@ async def to_code(config):
             cg.add(var.set_outro_effect(outro))
 
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_outro_dur"),
                 CONF_NAME: f"{t_name} Outro Duration",
                 CONF_ICON: "mdi:timer-outline",
                 "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-                CONF_ENTITY_CATEGORY: "config",
             }
             outro_dur = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(outro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
@@ -235,28 +238,28 @@ async def to_code(config):
         # 7. Intro Use Palette
         if is_effect_target and is_included(EXCLUDE_INTRO):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
                 CONF_NAME: f"{t_name} Intro Use Palette",
                 CONF_ICON: "mdi:palette-swatch-variant",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: "config",
             }
             intro_pal = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(intro_pal, conf)
             cg.add(intro_pal.publish_state(False))
             cg.add(var.set_intro_use_palette(intro_pal))
 
-        # 8. Speed (Grouped with Intensity/Timer at bottom)
+        # 8. Speed
         if is_effect_target and is_included(EXCLUDE_SPEED):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_speed"),
                 CONF_NAME: f"{t_name} Speed",
                 CONF_ICON: "mdi:speedometer",
                 "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-                CONF_ENTITY_CATEGORY: "config",
             }
             speed = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(speed, conf, min_value=0, max_value=255, step=1)
@@ -266,44 +269,45 @@ async def to_code(config):
         # 9. Intensity
         if is_effect_target and is_included(EXCLUDE_INTENSITY):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intensity"),
                 CONF_NAME: f"{t_name} Intensity",
                 CONF_ICON: "mdi:brightness-6",
                 "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-                CONF_ENTITY_CATEGORY: "config",
             }
             intensity = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(intensity, conf, min_value=0, max_value=255, step=1)
             cg.add(intensity.publish_state(128))
             cg.add(var.set_intensity(intensity))
 
-        # 10. Timer
+        # 10. Timer (LAST in segment list per User QoL)
         if is_effect_target and is_included(EXCLUDE_TIMER):
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_timer"),
                 CONF_NAME: f"{t_name} Timer (min)",
                 CONF_ICON: "mdi:timer-sand",
                 "min_value": 0, "max_value": 360, "step": 1, "initial_value": 0,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-                CONF_ENTITY_CATEGORY: "config",
             }
             timer = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(timer, conf, min_value=0, max_value=360, step=1)
             cg.add(timer.publish_state(0))
             cg.add(var.set_timer(timer))
 
-        # 11. Debug (ONLY on Master, Diagnostic category)
+        # 11. Debug (ONLY on Master, Diagnostic category, placed LAST in Master block)
         if is_included(EXCLUDE_DEBUG) and idx == 0:
             conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_debug"),
                 CONF_NAME: f"{t_name} Debug",
                 CONF_ICON: "mdi:bug",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: "diagnostic",
+                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)
