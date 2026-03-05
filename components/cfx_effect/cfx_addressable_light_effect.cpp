@@ -162,19 +162,32 @@ void CFXAddressableLightEffect::start() {
       default_pal = 255;
     this->controller_->segment_states_[seg_name].palette = default_pal;
 
-    // BUG 12 FIX: Also push the default palette to the UI selector.
+    // BUG 12 FIX: Also push the default palette to the UI selector if targeted.
     // Without this, the PUSH callback from the HA Select reads "Default"
     // or "Rainbow" and overwrites our cache on frame 2+.
-    // This is exactly what apply_autotune_defaults_() does.
-    select::Select *palette_sel = this->controller_->get_palette()
-                                      ? this->controller_->get_palette()
-                                      : this->palette_;
-    if (palette_sel != nullptr) {
-      std::string pal_name = this->get_palette_name_(default_pal);
-      if (palette_sel->current_option() != pal_name) {
-        auto call = palette_sel->make_call();
-        call.set_option(pal_name);
-        call.perform();
+    // Regression FIX: Only push to the global selector if this segment is the
+    // currently selected target (or All Segments), avoiding stealing.
+    bool is_target = false;
+    if (this->controller_ && this->controller_->get_target_segment()) {
+      std::string current_target =
+          this->controller_->get_target_segment()->current_option();
+      is_target =
+          (current_target == seg_name || current_target == "All Segments");
+    } else {
+      is_target = true;
+    }
+
+    if (is_target) {
+      select::Select *palette_sel = this->controller_->get_palette()
+                                        ? this->controller_->get_palette()
+                                        : this->palette_;
+      if (palette_sel != nullptr) {
+        std::string pal_name = this->get_palette_name_(default_pal);
+        if (palette_sel->current_option() != pal_name) {
+          auto call = palette_sel->make_call();
+          call.set_option(pal_name);
+          call.perform();
+        }
       }
     }
   }
@@ -714,14 +727,27 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
-  if (this->debug_switch_ && this->runner_) {
-    this->runner_->setDebug(this->debug_switch_->state);
-    if (this->get_light_state()) {
-      this->runner_->setName(this->get_light_state()->get_name().c_str());
-    }
+  bool debug_active = false;
+  if (this->controller_ && this->controller_->get_debug()) {
+    debug_active = this->controller_->get_debug()->state;
+  } else if (this->debug_switch_) {
+    debug_active = this->debug_switch_->state;
   }
 
-  // Update speed from Number component
+  std::string runner_name =
+      this->get_light_state() ? this->get_light_state()->get_name() : "";
+
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      r->setDebug(debug_active);
+      if (!runner_name.empty())
+        r->setName(runner_name.c_str());
+    }
+  } else if (this->runner_) {
+    this->runner_->setDebug(debug_active);
+    if (!runner_name.empty())
+      this->runner_->setName(runner_name.c_str());
+  } // Update speed from Number component
   // Update controls via Controller or Local entities
   this->run_controls_();
 
@@ -2299,7 +2325,7 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 
   if (c && c->get_target_segment()) {
     std::string current_target = c->get_target_segment()->current_option();
-    is_target = (current_target == my_name);
+    is_target = (current_target == my_name || current_target == "All Segments");
   } else if (!c) {
     is_target = true; // Standalone mode
   }

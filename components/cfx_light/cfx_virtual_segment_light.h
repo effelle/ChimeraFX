@@ -71,12 +71,20 @@ public:
     }
 
     auto val = state->current_values;
-    auto max_brightness =
-        light::to_uint8_scale(val.get_brightness() * val.get_state());
-    this->correction_.set_local_brightness(max_brightness);
 
     if (this->is_effect_active())
       return;
+
+    // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
+    // AddressableLightTransformer handle the per-pixel fade natively.
+    if (state->is_transformer_active()) {
+      return;
+    }
+
+    // We are NOT in a transition. Apply the manual brightness correction.
+    auto max_brightness =
+        light::to_uint8_scale(val.get_brightness() * val.get_state());
+    this->correction_.set_local_brightness(max_brightness);
 
     // Solid Color for segments
     Color c = light::color_from_light_color_values(val);

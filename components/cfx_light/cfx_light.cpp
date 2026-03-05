@@ -427,9 +427,6 @@ void CFXLightOutput::loop() {
 
 void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
-  auto max_brightness =
-      light::to_uint8_scale(val.get_brightness() * val.get_state());
-  this->correction_.set_local_brightness(max_brightness);
 
   if (this->has_segments()) {
     // Segmented mode: Master LightState is muted.
@@ -443,12 +440,17 @@ void CFXLightOutput::update_state(light::LightState *state) {
   }
 
   // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
-  // AddressableLightTransformer handle the per-pixel fade. We only set
-  // brightness correction above; painting solid color here would override
-  // the smooth fade with an instant jump to the target color.
+  // AddressableLightTransformer handle the per-pixel fade.
+  // Painting solid color or overriding the transformer's local_brightness
+  // would break the native visual transition (acting as a delay or jump).
   if (state->is_transformer_active()) {
     return;
   }
+
+  // We are NOT in a transition. Apply the manual brightness correction.
+  auto max_brightness =
+      light::to_uint8_scale(val.get_brightness() * val.get_state());
+  this->correction_.set_local_brightness(max_brightness);
 
   // Solid color logic for non-segmented lights (no transition, no effect)
   Color c = light::color_from_light_color_values(val);
