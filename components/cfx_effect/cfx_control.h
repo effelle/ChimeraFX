@@ -151,8 +151,8 @@ public:
         return;
     }
     ESP_LOGD("chimera_fx",
-             "CFXControl: Registering runner to controller for light %p",
-             this->light_);
+             "CFXControl[%p]: Registering runner. global_debug_enabled_: %d",
+             this, global_debug_enabled_);
     this->runners_.push_back(runner);
 
     if (speed_ && speed_->has_state())
