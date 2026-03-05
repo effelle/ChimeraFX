@@ -708,11 +708,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
-  bool debug_active = false;
+  bool debug_active =
+      CFXControl::global_debug_enabled_; // Default to Master global state
   if (this->controller_ && this->controller_->get_debug()) {
-    debug_active = this->controller_->get_debug()->state;
+    debug_active = this->controller_->get_debug()->state; // Master local state
   } else if (this->debug_switch_) {
-    debug_active = this->debug_switch_->state;
+    debug_active = this->debug_switch_->state; // Legacy fallback
   }
 
   std::string runner_name = this->get_light_state()

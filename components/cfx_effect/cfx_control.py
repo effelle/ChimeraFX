@@ -120,13 +120,12 @@ async def to_code(config):
             CONF_INTERNAL: False,
         }
 
-        # HA SORTING: Prefix adding to force grouping and alphabetical exactness
         # 1. Autotune
         if is_effect_target and is_included(EXCLUDE_AUTOTUNE):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_autotune"),
-                CONF_NAME: f"{t_name} 01 Autotune",
+                CONF_NAME: f"{t_name} Autotune",
                 CONF_ICON: "mdi:auto-fix",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
@@ -136,12 +135,12 @@ async def to_code(config):
             cg.add(autotune.write_state(False))
             cg.add(var.set_autotune(autotune))
 
-        # 2. Force White (Shares 01 block)
+        # 2. Force White
         if is_effect_target and is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
-                CONF_NAME: f"{t_name} 01 Force White",
+                CONF_NAME: f"{t_name} Force White",
                 CONF_ICON: "mdi:white-balance-sunny",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
@@ -156,7 +155,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_mirror"),
-                CONF_NAME: f"{t_name} 02 Mirror",
+                CONF_NAME: f"{t_name} Mirror",
                 CONF_ICON: "mdi:swap-horizontal",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
@@ -171,7 +170,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_palette"),
-                CONF_NAME: f"{t_name} 03 Palette",
+                CONF_NAME: f"{t_name} Palette",
                 CONF_ICON: "mdi:palette",
                 "optimistic": True,
             }
@@ -185,7 +184,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_speed"),
-                CONF_NAME: f"{t_name} 04 Speed",
+                CONF_NAME: f"{t_name} Speed",
                 CONF_ICON: "mdi:speedometer",
                 "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
                 "optimistic": True,
@@ -201,7 +200,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intensity"),
-                CONF_NAME: f"{t_name} 05 Intensity",
+                CONF_NAME: f"{t_name} Intensity",
                 CONF_ICON: "mdi:brightness-6",
                 "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
                 "optimistic": True,
@@ -217,7 +216,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_intro"),
-                CONF_NAME: f"{t_name} 06 Intro",
+                CONF_NAME: f"{t_name} Intro",
                 CONF_ICON: "mdi:animation-play",
                 "optimistic": True,
             }
@@ -229,7 +228,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intro_dur"),
-                CONF_NAME: f"{t_name} 06 Intro Duration",
+                CONF_NAME: f"{t_name} Intro Duration",
                 CONF_ICON: "mdi:timer-outline",
                 "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
@@ -245,7 +244,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
-                CONF_NAME: f"{t_name} 07 Outro",
+                CONF_NAME: f"{t_name} Outro",
                 CONF_ICON: "mdi:animation-play-outline",
                 "optimistic": True,
             }
@@ -257,7 +256,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_outro_dur"),
-                CONF_NAME: f"{t_name} 07 Outro Duration",
+                CONF_NAME: f"{t_name} Outro Duration",
                 CONF_ICON: "mdi:timer-outline",
                 "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
@@ -273,7 +272,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
-                CONF_NAME: f"{t_name} 08 Intro Use Palette",
+                CONF_NAME: f"{t_name} Intro Use Palette",
                 CONF_ICON: "mdi:palette-swatch-variant",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
@@ -288,7 +287,7 @@ async def to_code(config):
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_timer"),
-                CONF_NAME: f"{t_name} 09 Timer (min)",
+                CONF_NAME: f"{t_name} Timer (min)",
                 CONF_ICON: "mdi:timer-sand",
                 "min_value": 0, "max_value": 360, "step": 1, "initial_value": 0,
                 "optimistic": True,
@@ -299,16 +298,15 @@ async def to_code(config):
             cg.add(timer.publish_state(0))
             cg.add(var.set_timer(timer))
 
-        # 11. Debug (ONLY on Master, Diagnostic category, placed LAST in Master block)
+        # 11. Debug (ONLY on Master, placed LAST in Master block)
         if is_included(EXCLUDE_DEBUG) and idx == 0:
             conf = {
                 **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_debug"),
-                CONF_NAME: f"{t_name} 99 Debug",
+                CONF_NAME: f"{t_name} Debug",
                 CONF_ICON: "mdi:bug",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)
