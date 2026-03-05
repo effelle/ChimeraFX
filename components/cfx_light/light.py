@@ -188,6 +188,8 @@ def _inject_all_effects(config):
     for eff in user_effects:
         if "addressable_cfx" in eff:
             name = eff["addressable_cfx"].get(CONF_NAME, "")
+            if name:
+                user_names.add(name)
     use_intro = config.get("use_intro")
     use_outro = config.get("use_outro")
     intro_dur_raw = config.get("intro_dur")
@@ -385,12 +387,12 @@ async def to_code(config):
 
         seg_idx = segments.index(seg)
         effect_vars = []
-        for eff in config.get(CONF_EFFECTS, []):
+        for eff_idx, eff in enumerate(config.get(CONF_EFFECTS, [])):
             if "addressable_cfx" in eff:
                 eff_conf = eff["addressable_cfx"]
                 # Must generate a globally unique ID string so we don't crash new_Pvariable
                 eff_num = eff_conf.get("effect_id", "unk")
-                unique_str = f"cfx_eff_s{seg_idx}_e{eff_num}"
+                unique_str = f"cfx_eff_s{seg_idx}_e{eff_num}_{eff_idx}"
 
                 unique_id = CoreID(unique_str, is_declaration=True, type=CFXAddressableLightEffect)
                 
