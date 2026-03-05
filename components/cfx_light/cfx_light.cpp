@@ -265,6 +265,26 @@ void CFXLightOutput::setup() {
     }
   }
 
+  // QoL FIX: Live force_white reactivity for solid colors
+  // If no effect is active, toggling the switch must immediately repaint
+  // the current solid color with/without the RGB->W conversion.
+  if (this->force_white_sw_ != nullptr) {
+    this->force_white_sw_->add_on_state_callback([this](bool state) {
+      if (this->is_effect_active() || this->has_segments())
+        return;
+
+      if (this->state_parent_ != nullptr) {
+        auto val = this->state_parent_->current_values;
+        Color c = light::color_from_light_color_values(val);
+        if (state && this->has_white_channel()) {
+          cfx::apply_force_white(c.r, c.g, c.b, c.w);
+        }
+        this->all() = c;
+        this->schedule_show();
+      }
+    });
+  }
+
   ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
            this->num_leds_, this->pin_, this->rmt_symbols_);
 }
@@ -422,7 +442,15 @@ void CFXLightOutput::update_state(light::LightState *state) {
     return;
   }
 
-  // Solid color logic for non-segmented lights
+  // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
+  // AddressableLightTransformer handle the per-pixel fade. We only set
+  // brightness correction above; painting solid color here would override
+  // the smooth fade with an instant jump to the target color.
+  if (state->is_transformer_active()) {
+    return;
+  }
+
+  // Solid color logic for non-segmented lights (no transition, no effect)
   Color c = light::color_from_light_color_values(val);
 
   // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer

@@ -1225,6 +1225,20 @@ void CFXAddressableLightEffect::run_controls_() {
 
   CFXControl *c = this->controller_;
 
+  // QoL FIX: Live force_white sync — re-read the switch every frame so
+  // toggling it mid-effect takes effect immediately (not just at start()).
+  bool fw_active = false;
+  if (c && c->get_force_white()) {
+    fw_active = c->get_force_white()->state;
+  }
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      r->force_white_active_ = fw_active;
+    }
+  } else if (this->runner_) {
+    this->runner_->force_white_active_ = fw_active;
+  }
+
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->palette_;
 
