@@ -303,6 +303,10 @@ void CFXLightOutput::on_master_update() {
 
     if (state_changed || bright_changed) {
       auto call = seg_state->make_call();
+      // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer which
+      // paints RGB white directly into the pixel buffer during transitions.
+      // CFX effects handle their own visual transitions (intros/outros).
+      call.set_transition_length(0);
       if (state_changed)
         call.set_state(master_on);
       if (bright_changed)
@@ -346,6 +350,10 @@ void CFXLightOutput::on_segment_update() {
 
     auto call = this->master_light_state_->make_call();
     call.set_state(is_any_segment_on);
+    // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer.
+    // The master has no effect_active_ flag, so the transformer iterates
+    // ALL parent pixels and paints RGB white — contaminating segment buffers.
+    call.set_transition_length(0);
     ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
              is_any_segment_on);
     call.perform();
