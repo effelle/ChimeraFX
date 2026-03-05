@@ -338,7 +338,7 @@ async def to_code(config):
             cg.add(var.set_force_white(force_white))
 
         # 11. Debug
-        if is_included(EXCLUDE_DEBUG):
+        if is_included(EXCLUDE_DEBUG) and idx == 0:
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_debug"),
                 CONF_NAME: f"{t_name} Debug",

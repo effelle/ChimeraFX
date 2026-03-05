@@ -155,15 +155,15 @@ void CFXAddressableLightEffect::start() {
 
   // Pre-seed the UI with this effect's default palette
   if (this->controller_) {
-    uint8_t default_pal = this->get_default_palette_id_(this->effect_id_);
-    if (this->is_monochromatic_(this->effect_id_))
-      default_pal = 255;
-
     select::Select *palette_sel_init = this->controller_->get_palette()
                                            ? this->controller_->get_palette()
                                            : this->palette_;
     if (palette_sel_init != nullptr) {
-      std::string pal_name = this->get_palette_name_(default_pal);
+      std::string pal_name = "Default";
+      if (this->is_monochromatic_(this->effect_id_)) {
+        pal_name = "Solid";
+      }
+
       if (palette_sel_init->current_option() != pal_name) {
         auto call = palette_sel_init->make_call();
         call.set_option(pal_name);

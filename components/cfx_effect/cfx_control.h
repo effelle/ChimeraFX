@@ -93,18 +93,8 @@ public:
     if (this->palette_) {
       this->palette_->add_on_state_callback(
           [this](const std::string &value, size_t index) {
-            uint8_t static_pal_idx = 0;
-            if (value != "Default") {
-              static_pal_idx = this->get_palette_index_(value);
-            }
-
+            uint8_t r_pal_idx = this->get_palette_index_(value);
             for (auto *r : this->runners_) {
-              uint8_t r_pal_idx;
-              if (value == "Default") {
-                r_pal_idx = this->get_default_palette_id_(r->getMode());
-              } else {
-                r_pal_idx = static_pal_idx;
-              }
               r->setPalette(r_pal_idx);
             }
           });
@@ -161,11 +151,9 @@ public:
     if (debug_ && debug_->has_state())
       runner->setDebug(debug_->state);
     if (palette_ && palette_->has_state()) {
-      std::string opt = palette_->state;
+      std::string opt = palette_->current_option().str();
       if (opt.length() > 0) {
-        uint8_t pal_idx = (opt == "Default")
-                              ? this->get_default_palette_id_(runner->getMode())
-                              : get_palette_index_(opt);
+        uint8_t pal_idx = get_palette_index_(opt);
         runner->setPalette(pal_idx);
       }
     }
@@ -229,87 +217,6 @@ protected:
         call.perform();
       }
       timer_->publish_state(val);
-    }
-  }
-
-  uint8_t get_default_palette_id_(uint8_t effect_id) {
-    // Monochromatic series always defaults to Solid
-    if (effect_id == 161 || effect_id == 162 || effect_id == 163)
-      return 255;
-
-    switch (effect_id) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-    case 4:
-    case 6:
-    case 15:
-    case 16:
-    case 18:
-    case 20:
-    case 21:
-    case 22:
-    case 23:
-    case 24:
-    case 25:
-    case 26:
-    case 28:
-    case 40:
-    case 54:
-    case 60:
-    case 68:
-    case 76:
-    case 91:
-    case 95:
-    case 96:
-    case 98:
-    case 100:
-    case 152:
-    case 154:
-    case 156:
-    case 157:
-    case 164:
-      return 255; // Solid
-
-    case 7:
-    case 8:
-    case 9:
-    case 64:
-    case 74:
-    case 79:
-    case 87:
-    case 90:
-    case 105:
-    case 107:
-    case 110:
-    case 155:
-      return 4; // Rainbow
-
-    case 63:
-    case 97:
-      return 8; // Party
-
-    case 66:
-    case 53:
-      return 5; // Fire
-
-    case 101:
-    case 151:
-    case 160:
-      return 11; // Ocean
-
-    case 38:
-      return 1; // Aurora
-
-    case 104:
-      return 12; // HeatColors
-
-    case 52:
-      return 13; // Sakura
-
-    default:
-      return 1; // General fallback to Aurora
     }
   }
 
