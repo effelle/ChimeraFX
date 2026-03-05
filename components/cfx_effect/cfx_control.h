@@ -161,7 +161,7 @@ public:
     if (debug_ && debug_->has_state())
       runner->setDebug(debug_->state);
     if (palette_ && palette_->has_state()) {
-      auto opt = palette_->current_option();
+      std::string opt = palette_->state;
       if (opt.length() > 0) {
         uint8_t pal_idx = (opt == "Default")
                               ? this->get_default_palette_id_(runner->getMode())
