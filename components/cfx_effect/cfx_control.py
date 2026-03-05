@@ -307,7 +307,7 @@ async def to_code(config):
                 CONF_ICON: "mdi:bug",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
+                CONF_ENTITY_CATEGORY: "diagnostic",
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)
