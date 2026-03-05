@@ -96,7 +96,8 @@ async def to_code(config):
     has_segments = len(all_targets) > 1
 
     for idx, target in enumerate(all_targets):
-        # If there are segments, the Master (idx=0) should NOT have effect entities
+        # Master light power is native Light entity. 
+        # Segments have native Light entities (+ their controls).
         is_effect_target = not has_segments or idx > 0
 
         if idx == 0:
@@ -115,220 +116,194 @@ async def to_code(config):
         t_id = f"{config[CONF_ID].id}_{idx}"
         has_white_channel = target["has_white"]
 
-        # Reordered Entities according to User QoL Request:
+        # Entity Order according to User QoL Request:
         # 1. Autotune
         if is_effect_target and is_included(EXCLUDE_AUTOTUNE):
-            autotune_init = False
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_autotune"),
                 CONF_NAME: f"{t_name} Autotune",
                 CONF_ICON: "mdi:auto-fix",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+                CONF_ENTITY_CATEGORY: "config",
             }
             autotune = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(autotune, conf)
-            cg.add(autotune.write_state(autotune_init))
+            cg.add(autotune.write_state(False))
             cg.add(var.set_autotune(autotune))
 
         # 2. Force White
         if is_effect_target and is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
-            force_white_init = False
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
                 CONF_NAME: f"{t_name} Force White",
                 CONF_ICON: "mdi:white-balance-sunny",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+                CONF_ENTITY_CATEGORY: "config",
             }
             force_white = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(force_white, conf)
-            cg.add(force_white.publish_state(force_white_init))
+            cg.add(force_white.publish_state(False))
             cg.add(var.set_force_white(force_white))
 
         # 3. Mirror
         if is_effect_target and is_included(EXCLUDE_MIRROR):
-            mirror_init = False
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_mirror"),
                 CONF_NAME: f"{t_name} Mirror",
                 CONF_ICON: "mdi:swap-horizontal",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+                CONF_ENTITY_CATEGORY: "config",
             }
             mirror = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(mirror, conf)
-            cg.add(mirror.publish_state(mirror_init))
             cg.add(var.set_mirror(mirror))
+            cg.add(mirror.publish_state(False))
 
         # 4. Palette
         if is_effect_target and is_included(EXCLUDE_PALETTE):
-            palette_init = "Default"
             conf = {
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_palette"),
                 CONF_NAME: f"{t_name} Palette",
                 CONF_ICON: "mdi:palette",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
+                CONF_ENTITY_CATEGORY: "config",
             }
             palette = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(palette, conf, options=PALETTE_OPTIONS)
-            cg.add(palette.publish_state(palette_init))
+            cg.add(palette.publish_state("Default"))
             cg.add(var.set_palette(palette))
 
-        # 5. Speed
-        if is_effect_target and is_included(EXCLUDE_SPEED):
-            speed_init = 128
-            conf = {
-                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_speed"),
-                CONF_NAME: f"{t_name} Speed",
-                CONF_ICON: "mdi:speedometer",
-                "min_value": 0, "max_value": 255, "step": 1, "initial_value": speed_init,
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-            }
-            speed = cg.new_Pvariable(conf[CONF_ID])
-            await number.register_number(speed, conf, min_value=0, max_value=255, step=1)
-            cg.add(speed.publish_state(speed_init))
-            cg.add(var.set_speed(speed))
-
-        # 6. Intensity
-        if is_effect_target and is_included(EXCLUDE_INTENSITY):
-            intensity_init = 128
-            conf = {
-                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intensity"),
-                CONF_NAME: f"{t_name} Intensity",
-                CONF_ICON: "mdi:brightness-6",
-                "min_value": 0, "max_value": 255, "step": 1, "initial_value": intensity_init,
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-            }
-            intensity = cg.new_Pvariable(conf[CONF_ID])
-            await number.register_number(intensity, conf, min_value=0, max_value=255, step=1)
-            cg.add(intensity.publish_state(intensity_init))
-            cg.add(var.set_intensity(intensity))
-
-        # 7. Intro & Intro Duration
+        # 5. Intro & Intro Duration
         if is_effect_target and is_included(EXCLUDE_INTRO):
-            intro_init = "None"
             conf = {
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_intro"),
                 CONF_NAME: f"{t_name} Intro",
                 CONF_ICON: "mdi:animation-play",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
+                CONF_ENTITY_CATEGORY: "config",
             }
             intro = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(intro, conf, options=INTRO_OPTIONS)
-            cg.add(intro.publish_state(intro_init))
+            cg.add(intro.publish_state("None"))
             cg.add(var.set_intro_effect(intro))
 
-            intro_dur_init = 1.0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intro_dur"),
                 CONF_NAME: f"{t_name} Intro Duration",
                 CONF_ICON: "mdi:timer-outline",
-                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": intro_dur_init,
+                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+                CONF_ENTITY_CATEGORY: "config",
             }
             intro_dur = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(intro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
-            cg.add(intro_dur.publish_state(intro_dur_init))
+            cg.add(intro_dur.publish_state(1.0))
             cg.add(var.set_intro_duration(intro_dur))
 
-        # 8. Outro & Outro Duration
+        # 6. Outro & Outro Duration
         if is_effect_target and is_included(EXCLUDE_OUTRO):
-            outro_init = "None"
             conf = {
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
                 CONF_NAME: f"{t_name} Outro",
                 CONF_ICON: "mdi:animation-play-outline",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
+                CONF_ENTITY_CATEGORY: "config",
             }
             outro = cg.new_Pvariable(conf[CONF_ID])
             await select.register_select(outro, conf, options=INTRO_OPTIONS)
-            cg.add(outro.publish_state(outro_init))
+            cg.add(outro.publish_state("None"))
             cg.add(var.set_outro_effect(outro))
 
-            outro_dur_init = 1.0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_outro_dur"),
                 CONF_NAME: f"{t_name} Outro Duration",
                 CONF_ICON: "mdi:timer-outline",
-                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": outro_dur_init,
+                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+                CONF_ENTITY_CATEGORY: "config",
             }
             outro_dur = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(outro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
-            cg.add(outro_dur.publish_state(outro_dur_init))
+            cg.add(outro_dur.publish_state(1.0))
             cg.add(var.set_outro_duration(outro_dur))
 
-        # 9. Intro Use Palette
+        # 7. Intro Use Palette
         if is_effect_target and is_included(EXCLUDE_INTRO):
-            intro_pal_init = False
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
                 CONF_NAME: f"{t_name} Intro Use Palette",
                 CONF_ICON: "mdi:palette-swatch-variant",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+                CONF_ENTITY_CATEGORY: "config",
             }
             intro_pal = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(intro_pal, conf)
-            cg.add(intro_pal.publish_state(intro_pal_init))
+            cg.add(intro_pal.publish_state(False))
             cg.add(var.set_intro_use_palette(intro_pal))
+
+        # 8. Speed (Grouped with Intensity/Timer at bottom)
+        if is_effect_target and is_included(EXCLUDE_SPEED):
+            conf = {
+                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_speed"),
+                CONF_NAME: f"{t_name} Speed",
+                CONF_ICON: "mdi:speedometer",
+                "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
+                "optimistic": True,
+                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+                CONF_ENTITY_CATEGORY: "config",
+            }
+            speed = cg.new_Pvariable(conf[CONF_ID])
+            await number.register_number(speed, conf, min_value=0, max_value=255, step=1)
+            cg.add(speed.publish_state(128))
+            cg.add(var.set_speed(speed))
+
+        # 9. Intensity
+        if is_effect_target and is_included(EXCLUDE_INTENSITY):
+            conf = {
+                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intensity"),
+                CONF_NAME: f"{t_name} Intensity",
+                CONF_ICON: "mdi:brightness-6",
+                "min_value": 0, "max_value": 255, "step": 1, "initial_value": 128,
+                "optimistic": True,
+                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+                CONF_ENTITY_CATEGORY: "config",
+            }
+            intensity = cg.new_Pvariable(conf[CONF_ID])
+            await number.register_number(intensity, conf, min_value=0, max_value=255, step=1)
+            cg.add(intensity.publish_state(128))
+            cg.add(var.set_intensity(intensity))
 
         # 10. Timer
         if is_effect_target and is_included(EXCLUDE_TIMER):
-            timer_init = 0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_timer"),
                 CONF_NAME: f"{t_name} Timer (min)",
                 CONF_ICON: "mdi:timer-sand",
-                "min_value": 0, "max_value": 360, "step": 1, "initial_value": timer_init,
+                "min_value": 0, "max_value": 360, "step": 1, "initial_value": 0,
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
+                CONF_ENTITY_CATEGORY: "config",
             }
             timer = cg.new_Pvariable(conf[CONF_ID])
             await number.register_number(timer, conf, min_value=0, max_value=360, step=1)
-            cg.add(timer.publish_state(timer_init))
+            cg.add(timer.publish_state(0))
             cg.add(var.set_timer(timer))
 
-        # 11. Debug (ONLY on Master light, but it should propagate in C++)
+        # 11. Debug (ONLY on Master, Diagnostic category)
         if is_included(EXCLUDE_DEBUG) and idx == 0:
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_debug"),
                 CONF_NAME: f"{t_name} Debug",
                 CONF_ICON: "mdi:bug",
                 "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
+                CONF_ENTITY_CATEGORY: "diagnostic",
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)

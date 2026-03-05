@@ -396,7 +396,7 @@ struct FrameDiagnostics {
       uint32_t free_heap_kb = free_heap / 1024;
       uint32_t max_block_kb = max_block / 1024;
 
-      ESP_LOGI("cfx_diag",
+      ESP_LOGI("chimera_fx",
                "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
                "Free (%ukB Max)",
                effect_name, fps, avg_frame_ms, jitter_pct, free_heap_kb,
