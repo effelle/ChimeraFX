@@ -12,8 +12,7 @@ from esphome.components import number, select, switch, light
 from esphome.const import (
     CONF_ID, CONF_NAME, CONF_ICON, CONF_MODE,
     CONF_DISABLED_BY_DEFAULT, CONF_INTERNAL,
-    CONF_RESTORE_MODE, CONF_ENTITY_CATEGORY,
-    ENTITY_CATEGORY_DIAGNOSTIC
+    CONF_RESTORE_MODE, CONF_ENTITY_CATEGORY
 )
 from . import chimera_fx_ns
 
@@ -46,26 +45,11 @@ EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 EXCLUDE_OUTRO = 10
 
-CONF_DEFAULTS = "defaults" # Kept for backwards compatibility but ignored
-CONF_DEFAULT_SPEED = "speed"
-CONF_DEFAULT_INTENSITY = "intensity"
-CONF_DEFAULT_PALETTE = "palette"
-CONF_DEFAULT_MIRROR = "mirror"
-CONF_DEFAULT_INTRO = "intro_effect"
-CONF_DEFAULT_INTRO_DURATION = "intro_duration"
-CONF_DEFAULT_INTRO_USE_PALETTE = "intro_use_palette"
-CONF_DEFAULT_TIMER = "timer"
-CONF_DEFAULT_AUTOTUNE = "autotune"
-
-CONF_DEFAULT_OUTRO = "outro_effect"
-CONF_DEFAULT_OUTRO_DURATION = "outro_duration"
-
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
     cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
-    cv.Optional(CONF_DEFAULTS): cv.Any(dict, None), # Accept but ignore
 })
 
 async def to_code(config):
@@ -92,7 +76,7 @@ async def to_code(config):
                 })
                 
                 # Add segments
-                if hasattr(lconf, "get") and lconf.get("segments"):
+                if "segments" in lconf:
                     for seg in lconf["segments"]:
                         seg_light_id = seg.get("light_id")
                         seg_name = str(seg.get(CONF_NAME, f"{master_name} Segment"))
@@ -109,18 +93,18 @@ async def to_code(config):
     def is_included(id):
         return id not in exclude
 
+    has_segments = len(all_targets) > 1
+
     for idx, target in enumerate(all_targets):
+        # If there are segments, the Master (idx=0) should NOT have effect entities
+        is_effect_target = not has_segments or idx > 0
+
         if idx == 0:
             var_id = config[CONF_ID]
         else:
             var_id = core.ID(f"{config[CONF_ID].id}_{idx}", is_declaration=True, type=CFXControl)
             
         var = cg.new_Pvariable(var_id)
-        # For dynamically generated sibling instances (segments, idx > 0) the ID
-        # was never processed by ESPHome's YAML validator, so it is absent from
-        # CORE.component_ids. register_component checks that set and raises if
-        # the ID is missing.  Pre-populate it to replicate what the validator
-        # does for statically declared Component-inheriting IDs.
         if idx > 0:
             import esphome.core as _core
             _core.CORE.component_ids.add(str(var_id))
@@ -131,8 +115,76 @@ async def to_code(config):
         t_id = f"{config[CONF_ID].id}_{idx}"
         has_white_channel = target["has_white"]
 
-        # 1. Speed
-        if is_included(EXCLUDE_SPEED):
+        # Reordered Entities according to User QoL Request:
+        # 1. Autotune
+        if is_effect_target and is_included(EXCLUDE_AUTOTUNE):
+            autotune_init = False
+            conf = {
+                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_autotune"),
+                CONF_NAME: f"{t_name} Autotune",
+                CONF_ICON: "mdi:auto-fix",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            }
+            autotune = cg.new_Pvariable(conf[CONF_ID])
+            await switch.register_switch(autotune, conf)
+            cg.add(autotune.write_state(autotune_init))
+            cg.add(var.set_autotune(autotune))
+
+        # 2. Force White
+        if is_effect_target and is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
+            force_white_init = False
+            conf = {
+                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
+                CONF_NAME: f"{t_name} Force White",
+                CONF_ICON: "mdi:white-balance-sunny",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            }
+            force_white = cg.new_Pvariable(conf[CONF_ID])
+            await switch.register_switch(force_white, conf)
+            cg.add(force_white.publish_state(force_white_init))
+            cg.add(var.set_force_white(force_white))
+
+        # 3. Mirror
+        if is_effect_target and is_included(EXCLUDE_MIRROR):
+            mirror_init = False
+            conf = {
+                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_mirror"),
+                CONF_NAME: f"{t_name} Mirror",
+                CONF_ICON: "mdi:swap-horizontal",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            }
+            mirror = cg.new_Pvariable(conf[CONF_ID])
+            await switch.register_switch(mirror, conf)
+            cg.add(mirror.publish_state(mirror_init))
+            cg.add(var.set_mirror(mirror))
+
+        # 4. Palette
+        if is_effect_target and is_included(EXCLUDE_PALETTE):
+            palette_init = "Default"
+            conf = {
+                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_palette"),
+                CONF_NAME: f"{t_name} Palette",
+                CONF_ICON: "mdi:palette",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+            }
+            palette = cg.new_Pvariable(conf[CONF_ID])
+            await select.register_select(palette, conf, options=PALETTE_OPTIONS)
+            cg.add(palette.publish_state(palette_init))
+            cg.add(var.set_palette(palette))
+
+        # 5. Speed
+        if is_effect_target and is_included(EXCLUDE_SPEED):
             speed_init = 128
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_speed"),
@@ -149,8 +201,8 @@ async def to_code(config):
             cg.add(speed.publish_state(speed_init))
             cg.add(var.set_speed(speed))
 
-        # 2. Intensity
-        if is_included(EXCLUDE_INTENSITY):
+        # 6. Intensity
+        if is_effect_target and is_included(EXCLUDE_INTENSITY):
             intensity_init = 128
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intensity"),
@@ -167,41 +219,8 @@ async def to_code(config):
             cg.add(intensity.publish_state(intensity_init))
             cg.add(var.set_intensity(intensity))
 
-        # 3. Palette
-        if is_included(EXCLUDE_PALETTE):
-            palette_init = "Default"
-            conf = {
-                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_palette"),
-                CONF_NAME: f"{t_name} Palette",
-                CONF_ICON: "mdi:palette",
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-            }
-            palette = cg.new_Pvariable(conf[CONF_ID])
-            await select.register_select(palette, conf, options=PALETTE_OPTIONS)
-            cg.add(palette.publish_state(palette_init))
-            cg.add(var.set_palette(palette))
-
-        # 4. Mirror
-        if is_included(EXCLUDE_MIRROR):
-            mirror_init = False
-            conf = {
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_mirror"),
-                CONF_NAME: f"{t_name} Mirror",
-                CONF_ICON: "mdi:swap-horizontal",
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not mirror_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
-            }
-            mirror = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(mirror, conf)
-            cg.add(var.set_mirror(mirror))
-            cg.add(mirror.publish_state(mirror_init))
-
-        # 5. Intro Effect
-        if is_included(EXCLUDE_INTRO):
+        # 7. Intro & Intro Duration
+        if is_effect_target and is_included(EXCLUDE_INTRO):
             intro_init = "None"
             conf = {
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_intro"),
@@ -216,8 +235,6 @@ async def to_code(config):
             cg.add(intro.publish_state(intro_init))
             cg.add(var.set_intro_effect(intro))
 
-        # 6. Intro Duration
-        if is_included(EXCLUDE_INTRO):
             intro_dur_init = 1.0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intro_dur"),
@@ -234,25 +251,8 @@ async def to_code(config):
             cg.add(intro_dur.publish_state(intro_dur_init))
             cg.add(var.set_intro_duration(intro_dur))
 
-        # 7. Intro Use Palette
-        if is_included(EXCLUDE_INTRO):
-            intro_pal_init = False
-            conf = {
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
-                CONF_NAME: f"{t_name} Intro Use Palette",
-                CONF_ICON: "mdi:palette-swatch-variant",
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not intro_pal_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
-            }
-            intro_pal = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(intro_pal, conf)
-            cg.add(intro_pal.publish_state(intro_pal_init))
-            cg.add(var.set_intro_use_palette(intro_pal))
-
-        # 7.5. Outro Effect
-        if is_included(EXCLUDE_OUTRO):
+        # 8. Outro & Outro Duration
+        if is_effect_target and is_included(EXCLUDE_OUTRO):
             outro_init = "None"
             conf = {
                 CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
@@ -267,8 +267,6 @@ async def to_code(config):
             cg.add(outro.publish_state(outro_init))
             cg.add(var.set_outro_effect(outro))
 
-        # 7.6. Outro Duration
-        if is_included(EXCLUDE_OUTRO):
             outro_dur_init = 1.0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_outro_dur"),
@@ -285,8 +283,25 @@ async def to_code(config):
             cg.add(outro_dur.publish_state(outro_dur_init))
             cg.add(var.set_outro_duration(outro_dur))
 
-        # 8. Timer
-        if is_included(EXCLUDE_TIMER):
+        # 9. Intro Use Palette
+        if is_effect_target and is_included(EXCLUDE_INTRO):
+            intro_pal_init = False
+            conf = {
+                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
+                CONF_NAME: f"{t_name} Intro Use Palette",
+                CONF_ICON: "mdi:palette-swatch-variant",
+                "optimistic": True,
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_INTERNAL: False,
+                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+            }
+            intro_pal = cg.new_Pvariable(conf[CONF_ID])
+            await switch.register_switch(intro_pal, conf)
+            cg.add(intro_pal.publish_state(intro_pal_init))
+            cg.add(var.set_intro_use_palette(intro_pal))
+
+        # 10. Timer
+        if is_effect_target and is_included(EXCLUDE_TIMER):
             timer_init = 0
             conf = {
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_timer"),
@@ -303,41 +318,7 @@ async def to_code(config):
             cg.add(timer.publish_state(timer_init))
             cg.add(var.set_timer(timer))
 
-        # 10. Autotune
-        if is_included(EXCLUDE_AUTOTUNE):
-            autotune_init = False
-            conf = {
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_autotune"),
-                CONF_NAME: f"{t_name} Autotune",
-                CONF_ICON: "mdi:auto-fix",
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF" if not autotune_init else "switch_::SWITCH_RESTORE_DEFAULT_ON"),
-            }
-            autotune = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(autotune, conf)
-            cg.add(autotune.write_state(autotune_init))
-            cg.add(var.set_autotune(autotune))
-
-        # 9. Force White (SK6812 RGBW only — forces pure W channel)
-        if is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
-            force_white_init = False
-            conf = {
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
-                CONF_NAME: f"{t_name} Force White",
-                CONF_ICON: "mdi:white-balance-sunny",
-                "optimistic": True,
-                CONF_DISABLED_BY_DEFAULT: False,
-                CONF_INTERNAL: False,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-            }
-            force_white = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(force_white, conf)
-            cg.add(force_white.publish_state(force_white_init))
-            cg.add(var.set_force_white(force_white))
-
-        # 11. Debug
+        # 11. Debug (ONLY on Master light, but it should propagate in C++)
         if is_included(EXCLUDE_DEBUG) and idx == 0:
             conf = {
                 CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_debug"),
@@ -346,8 +327,8 @@ async def to_code(config):
                 "optimistic": True,
                 CONF_DISABLED_BY_DEFAULT: False,
                 CONF_INTERNAL: False,
-                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
+                CONF_ENTITY_CATEGORY: cg.RawExpression("esphome::ENTITY_CATEGORY_DIAGNOSTIC"),
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)

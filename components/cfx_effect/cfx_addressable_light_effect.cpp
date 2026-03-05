@@ -17,7 +17,8 @@
 namespace esphome {
 namespace chimera_fx {
 
-std::vector<CFXControl *> CFXControl::instances; // Define static vector
+std::vector<CFXControl *> CFXControl::instances;
+bool CFXControl::global_debug_enabled_ = false;
 
 static const char *TAG = "chimera_fx";
 

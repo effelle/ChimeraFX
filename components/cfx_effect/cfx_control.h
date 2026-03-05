@@ -47,6 +47,8 @@ class CFXControl : public Component {
 public:
   static std::vector<CFXControl *> instances;
 
+  static bool global_debug_enabled_;
+
   static CFXControl *find(light::LightState *light) {
     for (auto *c : instances) {
       if (c->get_light() == light)
@@ -85,8 +87,12 @@ public:
 
     if (this->debug_) {
       this->debug_->add_on_state_callback([this](bool value) {
-        for (auto *r : this->runners_)
-          r->setDebug(value);
+        global_debug_enabled_ = value;
+        // Apply to ALL runners in ALL controllers
+        for (auto *c : instances) {
+          for (auto *r : c->runners_)
+            r->setDebug(value);
+        }
       });
     }
 
@@ -150,6 +156,8 @@ public:
       runner->setMirror(mirror_->state);
     if (debug_ && debug_->has_state())
       runner->setDebug(debug_->state);
+    else
+      runner->setDebug(global_debug_enabled_);
     if (palette_ && palette_->has_state()) {
       const char *opt_ptr = palette_->current_option();
       std::string opt = opt_ptr ? opt_ptr : "";
