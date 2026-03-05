@@ -124,15 +124,25 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
         cv.Optional(CONF_SET_INTRO_PALETTE): cv.boolean,
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
-        cv.Optional(CONF_ON_START): automation.validate_automation(single=False),
-        cv.Optional(CONF_ON_COMPLETE): automation.validate_automation(single=False),
+        cv.Optional(CONF_ON_START): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnStartTrigger),
+            }
+        ),
+        cv.Optional(CONF_ON_COMPLETE): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnCompleteTrigger),
+            }
+        ),
         cv.Optional(CONF_ON_REACH): automation.validate_automation(
             {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnReachTrigger),
                 cv.Required(CONF_POSITION): cv.percentage,
             }
         ),
         cv.Optional(CONF_ON_PIXEL_NUM): automation.validate_automation(
             {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnPixelNumTrigger),
                 cv.Required(CONF_PIXEL): cv.int_,
             }
         ),
