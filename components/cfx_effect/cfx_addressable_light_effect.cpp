@@ -1217,6 +1217,10 @@ void CFXAddressableLightEffect::run_controls_() {
   // 1. Find controller if not linked
   if (this->controller_ == nullptr) {
     this->controller_ = CFXControl::find(this->get_light_state());
+    ESP_LOGD(
+        "chimera_fx",
+        "CFXAddressableLightEffect: Finding controller for light %p. Found: %p",
+        this->get_light_state(), this->controller_);
   }
 
   // 2. Register ALL runners with the controller (segment runners or single

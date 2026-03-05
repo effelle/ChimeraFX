@@ -87,9 +87,13 @@ public:
 
     if (this->debug_) {
       this->debug_->add_on_state_callback([this](bool value) {
+        ESP_LOGD("chimera_fx",
+                 "Debug switch toggled: %d. Applying to all instances.", value);
         global_debug_enabled_ = value;
         // Apply to ALL runners in ALL controllers
         for (auto *c : instances) {
+          ESP_LOGD("chimera_fx", "Controller %p has %u runners", c,
+                   c->runners_.size());
           for (auto *r : c->runners_)
             r->setDebug(value);
         }
@@ -146,6 +150,9 @@ public:
       if (r == runner)
         return;
     }
+    ESP_LOGD("chimera_fx",
+             "CFXControl: Registering runner to controller for light %p",
+             this->light_);
     this->runners_.push_back(runner);
 
     if (speed_ && speed_->has_state())
