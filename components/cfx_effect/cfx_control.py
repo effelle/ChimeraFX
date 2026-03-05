@@ -116,8 +116,14 @@ async def to_code(config):
             var_id = core.ID(f"{config[CONF_ID].id}_{idx}", is_declaration=True, type=CFXControl)
             
         var = cg.new_Pvariable(var_id)
-        # Primary instance uses the full config; siblings use {} to avoid
-        # collisions in ESPHome's component ID registry.
+        # For dynamically generated sibling instances (segments, idx > 0) the ID
+        # was never processed by ESPHome's YAML validator, so it is absent from
+        # CORE.component_ids. register_component checks that set and raises if
+        # the ID is missing.  Pre-populate it to replicate what the validator
+        # does for statically declared Component-inheriting IDs.
+        if idx > 0:
+            import esphome.core as _core
+            _core.CORE.component_ids.add(str(var_id))
         await cg.register_component(var, config if idx == 0 else {})
         cg.add(var.set_light(target["state"]))
         
