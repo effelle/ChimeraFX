@@ -11,8 +11,9 @@ import esphome.config_validation as cv
 from esphome.components.light.types import AddressableLightEffect
 from esphome.components.light.effects import register_addressable_effect
 from esphome.components import number, select, switch
-from esphome.const import CONF_ID, CONF_NAME, CONF_UPDATE_INTERVAL, CONF_EFFECTS
+from esphome.const import CONF_ID, CONF_NAME, CONF_UPDATE_INTERVAL, CONF_EFFECTS, CONF_TRIGGER_ID
 from esphome.core import CORE
+from esphome import automation
 
 DEPENDENCIES = ["light", "number", "select", "switch"]
 CODEOWNERS = ["@effelle"]
@@ -66,6 +67,21 @@ CONF_INTRO_DURATION = "intro_duration"
 CONF_OUTRO_EFFECT = "outro_effect"
 CONF_OUTRO_DURATION = "outro_duration"
 
+# Sequencer Triggers
+CONF_ON_START = "on_start"
+CONF_ON_COMPLETE = "on_complete"
+CONF_ON_REACH = "on_reach"
+CONF_ON_PIXEL_NUM = "on_pixel_num"
+
+CONF_POSITION = "position"
+CONF_PIXEL = "pixel"
+
+# Trigger Classes
+CfxOnStartTrigger = chimera_fx_ns.class_("CfxOnStartTrigger", automation.Trigger.template())
+CfxOnCompleteTrigger = chimera_fx_ns.class_("CfxOnCompleteTrigger", automation.Trigger.template())
+CfxOnReachTrigger = chimera_fx_ns.class_("CfxOnReachTrigger", automation.Trigger.template(cg.float_))
+CfxOnPixelNumTrigger = chimera_fx_ns.class_("CfxOnPixelNumTrigger", automation.Trigger.template(cg.int32))
+
 # Map of Effect IDs to Names
 CFX_EFFECT_NAMES = {
     0: "Solid", 1: "Blink", 2: "Breathe", 3: "Wipe", 4: "Wipe Random", 5: "Random Colors", 6: "Sweep", 7: "Dynamic", 8: "Colorloop", 9: "Rainbow",
@@ -109,6 +125,18 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
         cv.Optional(CONF_SET_INTRO_PALETTE): cv.boolean,
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
+        cv.Optional(CONF_ON_START): automation.validate_automation(single=False),
+        cv.Optional(CONF_ON_COMPLETE): automation.validate_automation(single=False),
+        cv.Optional(CONF_ON_REACH): automation.validate_automation(
+            {
+                cv.Required(CONF_POSITION): cv.percentage,
+            }
+        ),
+        cv.Optional(CONF_ON_PIXEL_NUM): automation.validate_automation(
+            {
+                cv.Required(CONF_PIXEL): cv.int_,
+            }
+        ),
     },
 )
 async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
@@ -181,5 +209,25 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
     if CONF_SET_FORCE_WHITE in config:
         cg.add(effect.set_force_white_preset(config[CONF_SET_FORCE_WHITE]))
 
+    # Setup Triggers
+    for conf in config.get(CONF_ON_START, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID])
+        cg.add(effect.add_on_start_trigger(trigger))
+        await automation.build_automation(trigger, [], conf)
+
+    for conf in config.get(CONF_ON_COMPLETE, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID])
+        cg.add(effect.add_on_complete_trigger(trigger))
+        await automation.build_automation(trigger, [], conf)
+
+    for conf in config.get(CONF_ON_REACH, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], conf[CONF_POSITION])
+        cg.add(effect.add_on_reach_trigger(trigger))
+        await automation.build_automation(trigger, [(cg.float_, "position")], conf)
+
+    for conf in config.get(CONF_ON_PIXEL_NUM, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], conf[CONF_PIXEL])
+        cg.add(effect.add_on_pixel_num_trigger(trigger))
+        await automation.build_automation(trigger, [(cg.int32, "pixel")], conf)
 
     return effect

@@ -21,11 +21,14 @@ Visual effects are computationally expensive.
 
 *   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices may function, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
 
-*   **Physical Framerate Limits:** The WS281x protocol is strictly bound to 800kHz (taking ~30 µs to transmit data for each RGB pixel, and ~40 µs for RGBW). Therefore, the physical length of your strip dictates your maximum possible framerate, unaffected by the ESP32's processing power:
-    *   To maintain a smooth **30 FPS** (~33ms per frame):
-        *   **RGB (WS2812/WS2811)**: Maximum ~800 to 900 LEDs per ESP32 data pin.
-        *   **RGBW (SK6812)**: Maximum ~600 to 700 LEDs per ESP32 data pin.
-    *   Pushing past these limits (e.g., 1000+ LEDs on a single pin) will strictly drop your framerate simply because the binary data takes longer to travel down the wire.
+*   **Hardware Framerate Bottlenecks:** While ChimeraFX targets a fluid **60 FPS**, the WS281x protocol is locked to a fixed **800kHz** data rate. Each pixel requires a specific amount of time to receive its data (~30 µs for RGB; ~40 µs for RGBW), followed by a "reset" pulse (typically >50 µs). Because this data is sent serially, your **pixel count per pin**—not the ESP32’s CPU speed—determines the maximum possible framerate.
+
+    To maintain a stable **30 FPS** (a ~33ms frame budget), follow these per-pin limits:
+    *   **RGB (WS2812B/WS2811):** Maximum **~1,000 LEDs** per data pin.
+    *   **RGBW (SK6812):** Maximum **~800 LEDs** per data pin.
+
+    Pushing beyond these limits (e.g., 1,200+ LEDs on a single pin) forces the hardware to drop frames simply because the binary packet for a single update becomes longer than the time available between frames. To control more LEDs without sacrificing smoothness, distribute your strips across multiple ESP32 pins to take advantage of parallel driving.
+
 
 *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
 

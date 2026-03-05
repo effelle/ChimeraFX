@@ -9,6 +9,7 @@
 #pragma once
 
 #include "CFXRunner.h"
+#include "cfx_triggers.h"
 #include "esphome/components/light/addressable_light_effect.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
@@ -106,6 +107,23 @@ public:
     this->controller_ = controller;
   }
 
+  void add_on_start_trigger(CfxOnStartTrigger *t) {
+    this->on_start_triggers_.push_back(t);
+  }
+  void add_on_complete_trigger(CfxOnCompleteTrigger *t) {
+    this->on_complete_triggers_.push_back(t);
+  }
+  void add_on_reach_trigger(CfxOnReachTrigger *t) {
+    this->on_reach_triggers_.push_back(t);
+  }
+  void add_on_pixel_num_trigger(CfxOnPixelNumTrigger *t) {
+    this->on_pixel_num_triggers_.push_back(t);
+  }
+
+  void trigger_on_start();
+  void trigger_on_complete();
+  void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
+
 protected:
   uint8_t effect_id_{0};
   number::Number *speed_{nullptr};
@@ -121,6 +139,13 @@ protected:
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
+
+  std::vector<CfxOnStartTrigger *> on_start_triggers_;
+  std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
+  std::vector<CfxOnReachTrigger *> on_reach_triggers_;
+  std::vector<CfxOnPixelNumTrigger *> on_pixel_num_triggers_;
+
+  int32_t last_leading_pixel_{-1};
 
   enum TransitionState {
     TRANSITION_NONE,

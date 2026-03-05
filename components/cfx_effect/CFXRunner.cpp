@@ -2688,6 +2688,8 @@ static uint16_t chase(uint32_t color1, uint32_t color2, uint32_t color3,
   float pps = 2.0f + (s * s * s) * 350.0f;
   float offset = (instance->now * pps) / 1000.0f;
 
+  instance->current_leading_pixel = (int32_t)fmodf(offset, (float)len);
+
   // Aliasing fade zone (0.6px minimum to prevent integer snaps at low
   // speeds)
   float fade_zone = 0.6f;
@@ -2904,6 +2906,8 @@ uint16_t mode_chase_multi(void) {
 
   // Convert time to infinite physical pixel offset distance
   float offset = (instance->now * pps) / 1000.0f;
+
+  instance->current_leading_pixel = (int32_t)fmodf(offset, (float)len);
 
   // Anti-aliasing fade zone to eliminate integer strobe jitter
   float w_half = width * 0.45f;
@@ -3925,6 +3929,8 @@ uint16_t mode_scanner_internal(bool dualMode) {
       instance->_segment.aux1 = index;
     }
   }
+
+  instance->current_leading_pixel = instance->_segment.aux1;
 
   // 3. Trail length from Intensity
   //    mapped to [3 ... len/3], or infinite if 255
@@ -5620,6 +5626,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // 1. Calculate precise position in "sub-pixels"
   uint32_t totalPos = (uint32_t)prog * len;
   uint16_t ledIndex = totalPos >> 15;
+  instance->current_leading_pixel = ledIndex;
 
   // rem is fractional progress (0-255)
   uint8_t rem = (totalPos & 0x7FFF) >> 7;

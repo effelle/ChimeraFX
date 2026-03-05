@@ -293,6 +293,8 @@ public:
   void set_segment_id(const std::string &id) { segment_id_ = id; }
   const std::string &get_segment_id() const { return segment_id_; }
 
+  int32_t current_leading_pixel{-1};
+
   // Gamma Correction Helper Support
   // Non-static to allow multiple strips with different gammas to coexist
   uint8_t _lut[256];

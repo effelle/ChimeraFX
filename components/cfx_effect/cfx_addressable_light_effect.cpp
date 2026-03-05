@@ -61,6 +61,8 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
+  this->trigger_on_start();
+
   // Zero the default transition length for virtual segment lights while an
   // effect is running. ESPHome's transition engine (default 1s) repeatedly
   // writes the ON-state color (white) to the buffer and flushes DMA for the
@@ -459,6 +461,8 @@ void CFXAddressableLightEffect::start() {
 
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
+
+  this->trigger_on_complete();
 
   // Clear intro snapshot vector to reclaim RAM
   intro_snapshot_.clear();
@@ -934,6 +938,21 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (progress >= (1.0f + softness)) {
       this->state_ = TRANSITION_NONE;
     }
+  }
+
+  int32_t leading_pixel = -1;
+  int32_t total_pixels = 0;
+  if (!this->segment_runners_.empty()) {
+    leading_pixel = this->segment_runners_[0]->current_leading_pixel;
+    total_pixels = this->segment_runners_[0]->_segment.length();
+  } else if (this->runner_) {
+    leading_pixel = this->runner_->current_leading_pixel;
+    total_pixels = this->runner_->_segment.length();
+  }
+
+  if (leading_pixel >= 0 && leading_pixel != this->last_leading_pixel_) {
+    this->last_leading_pixel_ = leading_pixel;
+    this->check_positional_triggers(leading_pixel, total_pixels);
   }
 
   it.schedule_show();
@@ -2336,6 +2355,45 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
     this->autotune_expected_palette_ = pal_name;
   } else if (palette_sel != nullptr) {
     this->autotune_expected_palette_ = palette_sel->current_option();
+  }
+}
+
+void CFXAddressableLightEffect::trigger_on_start() {
+  for (auto *t : this->on_start_triggers_) {
+    t->trigger();
+  }
+}
+
+void CFXAddressableLightEffect::trigger_on_complete() {
+  for (auto *t : this->on_complete_triggers_) {
+    t->trigger();
+  }
+}
+
+void CFXAddressableLightEffect::check_positional_triggers(
+    int32_t current_pixel, int32_t total_pixels) {
+  // Defensive bounds check
+  if (total_pixels <= 0 || current_pixel < 0 || current_pixel >= total_pixels) {
+    return;
+  }
+
+  float current_percentage = (float)current_pixel / (float)total_pixels;
+
+  // Evaluate on_reach (Percentage based)
+  for (auto *t : this->on_reach_triggers_) {
+    float target = t->get_target_position();
+    // Fire if exactly matching the physical boundary
+    // Usually effects loop indices, so we trigger when the index is painted.
+    if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
+      t->trigger(current_percentage);
+    }
+  }
+
+  // Evaluate on_pixel_num (Absolute based)
+  for (auto *t : this->on_pixel_num_triggers_) {
+    if (current_pixel == t->get_target_pixel()) {
+      t->trigger(current_pixel);
+    }
   }
 }
 
