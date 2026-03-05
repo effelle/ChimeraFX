@@ -151,7 +151,8 @@ public:
     if (debug_ && debug_->has_state())
       runner->setDebug(debug_->state);
     if (palette_ && palette_->has_state()) {
-      std::string opt = palette_->current_option().str();
+      const char *opt_ptr = palette_->current_option();
+      std::string opt = opt_ptr ? opt_ptr : "";
       if (opt.length() > 0) {
         uint8_t pal_idx = get_palette_index_(opt);
         runner->setPalette(pal_idx);
