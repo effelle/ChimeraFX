@@ -65,6 +65,8 @@ void CFXSequence::start() {
 
   ESP_LOGD(TAG, "Starting Sequence: %s", this->name_.c_str());
 
+  this->saved_states_.clear();
+
   // Only update the dropdown if it doesn't already show this sequence.
   // Calling publish_state() when the value already matches would re-fire the
   // on_state_callback, creating an infinite loop.
@@ -75,6 +77,9 @@ void CFXSequence::start() {
   }
 
   for (auto *l : this->lights_) {
+    // Capture current state before starting sequence
+    this->saved_states_.push_back({l->current_values, l->get_effect_name()});
+
     // 1. Issue standard light.turn_on with the target effect.
     // set_rgb(1,1,1) forces RGB color mode — without this ESPHome defaults to
     // "White" which drives 0 to all RGB channels on RGB-only strips and makes
@@ -146,11 +151,39 @@ void CFXSequence::stop() {
       }
     }
 
-    auto call = l->turn_on();
-    call.set_effect("None");
-    call.set_brightness(1.0f);     // Ensure remains visible
-    call.set_transition_length(0); // Optional: snap back or keep 1s
-    call.perform();
+    // RESTORE STATE Logic
+    // If we have a saved state for this light, restore it elegantly.
+    // Index i matches lights_ index because we push_back in the same order in
+    // start().
+    size_t light_idx = 0;
+    for (size_t i = 0; i < this->lights_.size(); i++) {
+      if (this->lights_[i] == l) {
+        light_idx = i;
+        break;
+      }
+    }
+
+    if (light_idx < this->saved_states_.size()) {
+      auto saved = this->saved_states_[light_idx];
+      auto call = l->make_call();
+      call.set_state(saved.values.is_on());
+      if (saved.values.is_on()) {
+        call.set_effect(saved.effect);
+        call.set_brightness(saved.values.get_brightness());
+        call.set_rgb(saved.values.get_red(), saved.values.get_green(),
+                     saved.values.get_blue());
+        call.set_white(saved.values.get_white());
+      }
+      call.set_transition_length(1000); // Graceful 1s return
+      call.perform();
+    } else {
+      // Fallback if state saving missed
+      auto call = l->turn_on();
+      call.set_effect("None");
+      call.set_brightness(1.0f);
+      call.set_transition_length(0);
+      call.perform();
+    }
   }
   this->is_stopping_ = false;
 }

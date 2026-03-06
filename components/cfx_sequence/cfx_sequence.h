@@ -101,6 +101,12 @@ protected:
   bool is_starting_{false};
   bool is_stopping_{false};
 
+  struct SavedState {
+    light::LightColorValues values;
+    std::string effect;
+  };
+  std::vector<SavedState> saved_states_;
+
 public:
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
