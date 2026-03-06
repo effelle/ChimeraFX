@@ -122,7 +122,7 @@ void CFXSequence::stop() {
     }
 
     auto call = l->turn_on();
-    call.set_effect("Solid");
+    call.set_effect("None");
     call.perform();
   }
 }

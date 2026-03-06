@@ -45,6 +45,12 @@ public:
       if (c->get_light() == light)
         return c;
     }
+    ESP_LOGD("chimera_fx",
+             "CFXControl::find failed for light %p. Instances: %zu", light,
+             instances.size());
+    for (auto *c : instances) {
+      ESP_LOGD("chimera_fx", "  Instance %p light: %p", c, c->get_light());
+    }
     return nullptr;
   }
 

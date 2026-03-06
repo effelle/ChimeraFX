@@ -506,18 +506,16 @@ void CFXAddressableLightEffect::stop() {
 
   if (state != nullptr && this->runner_ != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
-#ifdef USE_ESP32
     if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
       auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
           this->get_addressable_());
       if (vseg)
         out = vseg->get_parent();
+#endif
     } else {
-#endif
       out = static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
-#ifdef USE_ESP32
     }
-#endif
 
     if (out != nullptr) {
 
@@ -1282,13 +1280,18 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
 }
 
 void CFXAddressableLightEffect::run_controls_() {
-  // 1. Find controller if not linked
+  // 1. Find controller if not linked (with throttle to prevent log flooding)
   if (this->controller_ == nullptr) {
-    this->controller_ = CFXControl::find(this->get_light_state());
-    ESP_LOGD(
-        "chimera_fx",
-        "CFXAddressableLightEffect: Finding controller for light %p. Found: %p",
-        this->get_light_state(), this->controller_);
+    static uint32_t last_ctrl_check = 0;
+    uint32_t now = millis();
+    if (now - last_ctrl_check > 5000) {
+      last_ctrl_check = now;
+      this->controller_ = CFXControl::find(this->get_light_state());
+      ESP_LOGD("chimera_fx",
+               "CFXAddressableLightEffect: Finding controller for light %p. "
+               "Found: %p",
+               this->get_light_state(), this->controller_);
+    }
   }
 
   // 2. Register ALL runners with the controller (segment runners or single
