@@ -1,11 +1,3 @@
-/*
- * ChimeraFX - WLED Effects for ESPHome
- * Copyright (c) 2026 Federico Leoni (effelle)
- * Based on WLED by Aircoookie (https://github.com/wled/WLED)
- *
- * Licensed under the EUPL-1.2
- */
-
 #pragma once
 
 #include "FastLED_Stub.h"
@@ -15,6 +7,9 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+
+namespace esphome {
+namespace chimera_fx {
 
 #define DEBUGFX_PRINT(x) ESP_LOGD("chimera_fx", x)
 #define DEBUGFX_PRINTLN(x) ESP_LOGD("chimera_fx", x)
@@ -407,3 +402,6 @@ private:
 };
 
 extern CFXRunner *instance;
+
+} // namespace chimera_fx
+} // namespace esphome

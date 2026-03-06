@@ -207,6 +207,7 @@ public:
   bool is_monochromatic_(uint8_t effect_id);
 
   uint8_t get_palette_index_();
+  uint8_t get_pal_idx(select::Select *s);
   uint8_t get_default_palette_id_(uint8_t effect_id);
   std::string get_palette_name_(uint8_t pal_id);
   uint8_t get_default_speed_(uint8_t effect_id);
@@ -289,9 +290,9 @@ public:
     // the engine's first update cycle.
 
     // 2. Extract the underlying ChimeraFX effect to inject overrides
-    if (this->light_->get_effect() != nullptr) {
-      auto *active_fx =
-          dynamic_cast<CFXAddressableLightEffect *>(this->light_->get_effect());
+    if (this->light_->get_active_effect() != nullptr) {
+      auto *active_fx = dynamic_cast<CFXAddressableLightEffect *>(
+          this->light_->get_active_effect());
       if (active_fx != nullptr) {
         if (this->speed_.has_value())
           active_fx->set_speed_preset(this->speed_.value(x...));

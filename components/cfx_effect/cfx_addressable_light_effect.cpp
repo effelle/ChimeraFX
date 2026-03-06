@@ -971,15 +971,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   ::instance = nullptr;
 }
 
-uint8_t CFXAddressableLightEffect::get_palette_index_() {
-  select::Select *s = this->palette_;
-  if (s == nullptr && this->controller_ != nullptr)
-    s = this->controller_->get_palette();
-
+uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
   if (s == nullptr)
     return 0;
 
-  const char *option = s->current_option();
+  const char *option = s->current_option().c_str();
   if (option == nullptr)
     return 0;
 
@@ -2459,7 +2455,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
   this->last_triggered_percentage_ = current_percentage;
 
 #ifdef USE_CFX_SEQUENCER
-  for (auto *seq : cfx_sequencer::CFXSequencer::instances) {
+  for (auto *seq : cfx_sequence::CFXSequence::instances) {
     if (seq->owns_light(this->get_light_state())) {
       seq->check_positional_triggers(current_pixel, total_pixels);
     }
