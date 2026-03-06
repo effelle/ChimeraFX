@@ -16,6 +16,13 @@ CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
   this->add_on_state_callback([this](const std::string &value, size_t index) {
+    // Re-entrancy guard: publish_state() inside start()/stop() would re-fire
+    // this callback, causing an infinite loop and a brownout crash.
+    static bool in_callback = false;
+    if (in_callback)
+      return;
+    in_callback = true;
+
     if (value == "None") {
       for (auto *seq : CFXSequence::instances) {
         seq->stop();
@@ -28,6 +35,8 @@ void CFXSequenceSelect::setup() {
         }
       }
     }
+
+    in_callback = false;
   });
 }
 
@@ -52,7 +61,11 @@ void CFXSequence::dump_config() {
 void CFXSequence::start() {
   ESP_LOGD(TAG, "Starting Sequence: %s", this->name_.c_str());
 
-  if (CFXSequenceSelect::instance != nullptr) {
+  // Only update the dropdown if it doesn't already show this sequence.
+  // Calling publish_state() when the value already matches would re-fire the
+  // on_state_callback, creating an infinite loop.
+  if (CFXSequenceSelect::instance != nullptr &&
+      CFXSequenceSelect::instance->state != this->name_) {
     CFXSequenceSelect::instance->publish_state(this->name_);
   }
 
