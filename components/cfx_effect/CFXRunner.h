@@ -300,6 +300,11 @@ public:
   uint8_t _lut[256];
   float _gamma;
 
+  // Sequence Iteration Limits
+  uint32_t iteration_count_{0};
+  uint32_t target_iterations_{0};
+  bool effect_complete_{false};
+
   void setGamma(float g);
   inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }
   uint8_t shiftFloor(uint8_t val);

@@ -124,6 +124,9 @@ public:
   void trigger_on_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
 
+  float last_triggered_percentage_{-1.0f};
+  int32_t last_triggered_pixel_{-1};
+
 protected:
   uint8_t effect_id_{0};
   number::Number *speed_{nullptr};

@@ -4174,6 +4174,11 @@ void CFXRunner::service() {
   // Ensures effect functions operate on the correct strip context
   instance = this;
 
+  // Halt animation progression if target iterations reached
+  if (this->effect_complete_) {
+    return;
+  }
+
   // Globally initialize PaletteSolid with the latest selected color.
   // Any effect resolving getPaletteByIndex(255) needs this freshly
   // populated, especially for Pure W channel support in legacy C routines

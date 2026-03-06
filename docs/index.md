@@ -21,18 +21,27 @@ Visual effects are computationally expensive.
 
 *   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices may function, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
 
-*   **Hardware Framerate Bottlenecks:** While ChimeraFX targets a fluid **60 FPS**, the WS281x protocol is locked to a fixed **800kHz** data rate. Each pixel requires a specific amount of time to receive its data (~30 µs for RGB; ~40 µs for RGBW), followed by a "reset" pulse (typically >50 µs). Because this data is sent serially, your **pixel count per pin**—not the ESP32’s CPU speed—determines the maximum possible framerate.
+*   **System Framerate & Performance Bottlenecks:**
+    Maintaining a fluid **60 FPS** (or even a stable **30 FPS**) requires balancing two distinct bottlenecks: the physical speed of the LED protocol and the computational "math" budget of the ESP32.
 
-    To maintain a stable **30 FPS** (a ~33ms frame budget), follow these per-pin limits:
-    *   **RGB (WS2812B/WS2811):** Maximum **~1,000 LEDs** per data pin.
-    *   **RGBW (SK6812):** Maximum **~800 LEDs** per data pin.
+    ### 1. The Physical Limit (Protocol Speed)
+    The WS281x protocol is strictly locked to an **800kHz** data rate. Data is sent serially, meaning your **pixel count per pin** dictates the minimum time required just to push data down the wire, regardless of how fast the CPU is.
+    *   **RGB (WS2812B/WS2811):** ~30µs per LED. Theoretical max for 30 FPS: **~1,000 LEDs.**
+    *   **RGBW (SK6812):** ~40µs per LED. Theoretical max for 30 FPS: **~800 LEDs.**
 
-    Pushing beyond these limits (e.g., 1,200+ LEDs on a single pin) forces the hardware to drop frames simply because the binary packet for a single update becomes longer than the time available between frames. To control more LEDs without sacrificing smoothness, distribute your strips across multiple ESP32 pins to take advantage of parallel driving.
+    ### 2. The Computational Limit (Processing Overhead)
+    Because ChimeraFX operates as a modular component, it must share the ESP32’s CPU cycles with other tasks (such as Wi-Fi, Bluetooth, sensor polling, or web servers). 
+    *   **The "Math" Tax:** Every additional LED increases the time the CPU needs to calculate complex math for an effect.
+    *   **Resource Contention:** If other components are active, the time available for ChimeraFX to "render" a frame shrinks. If the math + transmission time exceeds your frame budget (e.g., 33ms for 30 FPS), the system will drop frames, causing visible stuttering.
+
+    **Note:** The values above are theoretical maximums. In practice, you should target **60–70% of these limits** to provide enough "breathing room" for the CPU to handle effect calculations and background system tasks without dropping frames.
+
+    **Pro Tip:** To drive large arrays without sacrificing smoothness, distribute your LEDs across **multiple data pins**. This allows the hardware to take advantage of parallel driving, effectively multiplying your available bandwidth.
 
 
 *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
 
-*   **Optimization:** This library is optimized for ESP-IDF, but hardware resources are finite. Manage your load accordingly.
+*   **Optimization:** This library is optimized for both ESP-IDF and Arduino frameworks, but hardware resources are finite. Manage your load accordingly.
 
 ---
 

@@ -14,6 +14,10 @@
 #include "esphome/core/hal.h" // For millis()
 #include "esphome/core/log.h"
 
+#ifdef USE_CFX_SEQUENCER
+#include "../cfx_sequencer/cfx_sequencer.h"
+#endif
+
 namespace esphome {
 namespace chimera_fx {
 
@@ -78,10 +82,18 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  // Force bypass transition to avoid the 1s darkness bug on initial render
+  if (auto *ls = this->get_light_state()) {
+    ls->current_values = ls->remote_values;
+  }
+
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   // Without this, a stale timestamp from a previous outro causes elapsed to
   // be enormous, progress clamps to 1.0, and the outro completes invisibly.
   this->outro_start_time_ = 0;
+
+  this->last_triggered_pixel_ = -1;
+  this->last_triggered_percentage_ = -1.0f;
 
   // Reset palette sync flag so we enforce the effect's default on the first
   // frame
@@ -2377,6 +2389,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
+  // Prevent multiple identical triggers in sequence, debounce across frames
+  if (current_pixel == this->last_triggered_pixel_) {
+    return;
+  }
+
   float current_percentage = (float)current_pixel / (float)total_pixels;
 
   // Evaluate on_reach (Percentage based)
@@ -2385,7 +2402,10 @@ void CFXAddressableLightEffect::check_positional_triggers(
     // Fire if exactly matching the physical boundary
     // Usually effects loop indices, so we trigger when the index is painted.
     if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
-      t->trigger(current_percentage);
+      if (std::abs(this->last_triggered_percentage_ - target) >=
+          (1.0f / total_pixels)) {
+        t->trigger(current_percentage);
+      }
     }
   }
 
@@ -2395,6 +2415,29 @@ void CFXAddressableLightEffect::check_positional_triggers(
       t->trigger(current_pixel);
     }
   }
+
+  // Detect loop wrap-around explicitly
+  if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
+    if (this->runner_ && this->runner_->target_iterations_ > 0) {
+      this->runner_->iteration_count_++;
+      if (this->runner_->iteration_count_ >=
+          this->runner_->target_iterations_) {
+        this->runner_->effect_complete_ = true;
+        this->trigger_on_complete();
+      }
+    }
+  }
+
+  this->last_triggered_pixel_ = current_pixel;
+  this->last_triggered_percentage_ = current_percentage;
+
+#ifdef USE_CFX_SEQUENCER
+  for (auto *seq : cfx_sequencer::CFXSequencer::instances) {
+    if (seq->owns_light(this->get_light_state())) {
+      seq->check_positional_triggers(current_pixel, total_pixels);
+    }
+  }
+#endif
 }
 
 } // namespace chimera_fx
