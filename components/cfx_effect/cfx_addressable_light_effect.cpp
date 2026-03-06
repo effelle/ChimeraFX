@@ -790,49 +790,79 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
-  // === State Machine: Intro vs Main Effect ===
-  if (this->intro_active_) {
-    // Run intro on ALL segments (swap-on-service pattern)
-    if (!this->segment_runners_.empty()) {
-      for (auto *r : this->segment_runners_) {
-        chimera_fx::instance = r;
-        this->run_intro(it, current_color);
-      }
-    } else {
-      chimera_fx::instance = this->runner_;
-      this->run_intro(it, current_color);
-    }
-
-    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
-    uint32_t duration_ms = 1000; // Final Default: 1.0s
-    number::Number *dur_num = this->intro_duration_;
-    if (dur_num == nullptr && this->controller_ != nullptr)
-      dur_num = this->controller_->get_intro_duration();
-
-    if (dur_num != nullptr && dur_num->has_state()) {
-      // High Priority: UI Slider
-      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->intro_duration_preset_.has_value()) {
-      // Medium Priority: YAML Preset
-      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    } else {
-      // Monochromatic Preset Fallback: Speed Slider
-      MonochromaticPreset preset =
-          this->get_monochromatic_preset_(this->effect_id_);
-      if (preset.is_active) {
-        number::Number *speed_num = this->speed_;
-        if (speed_num == nullptr && this->controller_ != nullptr)
-          speed_num = this->controller_->get_speed();
-
-        if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (500ms up to 10000ms)
-          float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-        } else {
-          duration_ms = 1000; // Standard 1s default
+#ifdef USE_CFX_SEQUENCER
+  // Lazy Binding: If we are in a sequence mode according to the dropdown,
+  // but this effect instance hasn't been bound yet (race condition), bind it
+  // now.
+  if (this->active_sequence_ == nullptr &&
+      cfx_sequence::CFXSequenceSelect::instance != nullptr &&
+      cfx_sequence::CFXSequenceSelect::instance->has_state()) {
+    std::string current_name =
+        cfx_sequence::CFXSequenceSelect::instance->current_option();
+    if (current_name != "None") {
+      for (auto *seq : cfx_sequence::CFXSequence::instances) {
+        if (seq->get_name() == current_name &&
+            seq->owns_light(this->get_light_state())) {
+          this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
+                                    seq->get_palette(), seq->get_iterations());
+          break;
         }
       }
     }
+  }
+#endif
+
+  // Sync Brightness to Runners (Master + Light Brightness)
+  float bri = 1.0f;
+  auto *bri_state = this->get_light_state();
+  if (bri_state != nullptr) {
+    // If a sequence is active, bypass transition lag by using remote_values.
+    // This solves the "black strip on first run" issue where current_values
+    // is still 0.
+    if (this->active_sequence_ != nullptr) {
+      bri = bri_state->remote_values.get_brightness();
+    } else {
+      bri = bri_state->current_values.get_brightness();
+      // Only apply get_state() if not in Intro/Outro/Transition (already
+      // ramping)
+      if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
+          this->state_ != OUTRO_RUNNING) {
+        bri *= bri_state->current_values.get_state();
+      }
+    }
+  }
+
+  // Main CFX effect Running — Multi-Segment Swap-on-Service
+  // MUST RUN before intro/outro masks!
+  if (!this->segment_runners_.empty()) {
+    // Multi-segment: iterate all runners, swapping the global instance
+    for (auto *r : this->segment_runners_) {
+      chimera_fx::instance = r;
+      r->global_brightness_ = bri;
+      r->service();
+
+      // Handle Iteration Completion
+      if (r->effect_complete_ && this->active_sequence_ != nullptr) {
+        this->active_sequence_->report_event_complete();
+        this->active_sequence_->stop();
+        break; // Stop all once sequence is over
+      }
+    }
+  } else if (this->runner_) {
+    // Single runner (backward compatible)
+    chimera_fx::instance = this->runner_;
+    this->runner_->global_brightness_ = bri;
+    this->runner_->service();
+
+    // Handle Iteration Completion
+    if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
+      this->active_sequence_->report_event_complete();
+      this->active_sequence_->stop();
+    }
+  }
+
+  // === State Machine: Intro vs Main Effect ===
+  if (this->intro_active_) {
 
     if (millis() - this->intro_start_time_ > duration_ms) {
       this->intro_active_ = false;
@@ -865,50 +895,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Ensure Main Runner is reset/started
       chimera_fx::instance = this->runner_;
       this->runner_->start();
-    }
-  }
-
-  // Sync Brightness to Runners (Master + Light Brightness)
-  float bri = 1.0f;
-  auto *bri_state = this->get_light_state();
-  if (bri_state != nullptr) {
-    bri = bri_state->current_values.get_brightness();
-    // Only apply get_state() if not in Intro/Outro/Transition (already
-    // ramping). ALSO skip if a Sequence is active - we want the sequence to be
-    // fully visible immediately even if the ESPHome light state transition
-    // hasn't fully arrived.
-    if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
-        this->state_ != OUTRO_RUNNING && this->active_sequence_ == nullptr) {
-      bri *= bri_state->current_values.get_state();
-    }
-  }
-
-  // Main CFX effect Running — Multi-Segment Swap-on-Service
-  // MUST RUN before intro/outro masks!
-  if (!this->segment_runners_.empty()) {
-    // Multi-segment: iterate all runners, swapping the global instance
-    for (auto *r : this->segment_runners_) {
-      chimera_fx::instance = r;
-      r->global_brightness_ = bri;
-      r->service();
-
-      // Handle Iteration Completion
-      if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-        this->active_sequence_->report_event_complete();
-        this->active_sequence_->stop();
-        break; // Stop all once sequence is over
-      }
-    }
-  } else {
-    // Single runner (backward compatible)
-    chimera_fx::instance = this->runner_;
-    this->runner_->global_brightness_ = bri;
-    this->runner_->service();
-
-    // Handle Iteration Completion
-    if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
-      this->active_sequence_->report_event_complete();
-      this->active_sequence_->stop();
     }
   }
 
@@ -2527,6 +2513,10 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
 
   // Reset trackers when a new sequence is bound
   if (seq != nullptr) {
+    // Disable built-in intro/transitions to prevent blackout/conflict
+    this->intro_active_ = false;
+    this->state_ = TRANSITION_NONE;
+
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
         r->reset();
