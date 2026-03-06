@@ -91,6 +91,7 @@ public:
   uint8_t active_outro_mode_{0};
   uint32_t active_outro_duration_ms_{0};
   uint8_t active_outro_intensity_{128};
+  float active_outro_brightness_{1.0f};
   uint32_t outro_start_time_{0};
 
   void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }

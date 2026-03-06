@@ -614,6 +614,8 @@ void CFXAddressableLightEffect::stop() {
             this->get_default_intensity_(this->effect_id_);
       }
 
+      this->active_outro_brightness_ = state->current_values.get_brightness();
+
       // Capture ALL segment runners for the outro
       auto captured_runners = std::make_shared<std::vector<CFXRunner *>>();
 
@@ -1749,10 +1751,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color::WHITE;
   }
 
-  // Apply user brightness scaling from current state
+  // Apply user brightness scaling from target state
   float user_brightness = 1.0f;
   if (state) {
-    user_brightness = state->current_values.get_brightness();
+    user_brightness = state->remote_values.get_brightness();
     if (user_brightness < 0.01f)
       user_brightness = 0.01f;
   }
@@ -2252,8 +2254,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   auto *ls = this->get_light_state();
   if (ls != nullptr) {
     original_brightness = ls->current_values.get_brightness();
-    // Capture user's intended brightness BEFORE any override
-    user_brightness = ls->remote_values.get_brightness();
+    // Capture user's intended brightness from initial state BEFORE override
+    // During outro, remote_values is usually 0, so we use the snapshot taken at
+    // start_outro
+    user_brightness = this->active_outro_brightness_;
     if (user_brightness < 0.01f)
       user_brightness = 0.01f;
     if (!this->is_virtual_segment_) {
