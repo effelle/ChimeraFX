@@ -18,6 +18,13 @@
 #include <cstdint>
 #include <vector>
 
+// Global time provider for FastLED timing functions.
+// Must be in global scope to match the extern declaration in FastLED_Stub.h.
+uint32_t get_millis() {
+  return esphome::chimera_fx::instance ? esphome::chimera_fx::instance->now
+                                       : cfx_millis();
+}
+
 namespace esphome {
 namespace chimera_fx {
 
@@ -46,8 +53,7 @@ uint16_t mode_follow_us(void);
 uint16_t mode_cfx_horizon_sweep(void);
 uint16_t mode_collider(void);
 
-// Global time provider for FastLED timing functions
-uint32_t get_millis() { return instance ? instance->now : cfx_millis(); }
+// (get_millis is defined globally before the namespace - see top of file)
 
 // Constructor
 CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
