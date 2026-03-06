@@ -35,6 +35,10 @@ void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
 }
 
+void CFXSequenceSelect::control(const std::string &value) {
+  this->publish_state(value);
+}
+
 void CFXSequence::setup() {
   ESP_LOGCONFIG(TAG, "Setting up CFX Sequence '%s'...", this->name_.c_str());
   CFXSequence::instances.push_back(this);
@@ -63,10 +67,9 @@ void CFXSequence::start() {
     call.perform();
 
     // 2. Extract the underlying ChimeraFX effect to inject overrides
-    auto *output = static_cast<light::AddressableLight *>(l->get_output());
-    if (output != nullptr && output->get_effect() != nullptr) {
+    if (l->get_effect() != nullptr) {
       auto *active_fx = dynamic_cast<chimera_fx::CFXAddressableLightEffect *>(
-          output->get_effect());
+          l->get_effect());
       if (active_fx != nullptr) {
         active_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                        this->palette_, this->iterations_);
@@ -86,10 +89,9 @@ void CFXSequence::stop() {
 
   for (auto *l : this->lights_) {
     // First unbind the sequence so original defaults come back
-    auto *output = static_cast<light::AddressableLight *>(l->get_output());
-    if (output != nullptr && output->get_effect() != nullptr) {
+    if (l->get_effect() != nullptr) {
       auto *active_fx = dynamic_cast<chimera_fx::CFXAddressableLightEffect *>(
-          output->get_effect());
+          l->get_effect());
       if (active_fx != nullptr) {
         active_fx->set_active_sequence(nullptr, {}, {}, {}, 0);
       }

@@ -15,7 +15,7 @@
 #include "esphome/core/log.h"
 
 #ifdef USE_CFX_SEQUENCER
-#include "../cfx_sequencer/cfx_sequencer.h"
+#include "../cfx_sequence/cfx_sequence.h"
 #endif
 
 namespace esphome {

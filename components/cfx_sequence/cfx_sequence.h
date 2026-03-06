@@ -12,9 +12,9 @@
 namespace esphome {
 namespace cfx_sequence {
 
-class CfxSeqOnStartTrigger : public Trigger<> {};
-class CfxSeqOnCompleteTrigger : public Trigger<> {};
-class CfxSeqOnReachTrigger : public Trigger<float> {
+class CfxSeqOnStartTrigger : public esphome::Trigger<> {};
+class CfxSeqOnCompleteTrigger : public esphome::Trigger<> {};
+class CfxSeqOnReachTrigger : public esphome::Trigger<float> {
 public:
   explicit CfxSeqOnReachTrigger(float target_position)
       : target_position_(target_position) {}
@@ -24,7 +24,7 @@ protected:
   float target_position_;
 };
 
-class CfxSeqOnPixelNumTrigger : public Trigger<int32_t> {
+class CfxSeqOnPixelNumTrigger : public esphome::Trigger<int32_t> {
 public:
   explicit CfxSeqOnPixelNumTrigger(int32_t target_pixel)
       : target_pixel_(target_pixel) {}
@@ -34,7 +34,7 @@ protected:
   int32_t target_pixel_;
 };
 
-class CFXSequence : public Component {
+class CFXSequence : public esphome::Component {
 public:
   CFXSequence(const std::string &name, const std::string &effect)
       : name_(name), effect_(effect) {}
@@ -124,7 +124,8 @@ protected:
   CFXSequence *sequence_;
 };
 
-class CFXSequenceSelect : public select::Select, public Component {
+class CFXSequenceSelect : public esphome::select::Select,
+                          public esphome::Component {
 public:
   void setup() override;
   void control(const std::string &value) override;

@@ -20,8 +20,13 @@
 #include <vector>
 
 namespace esphome {
+namespace cfx_sequence {
+class CFXSequence;
+}
 namespace chimera_fx {
+using cfx_sequence::CFXSequence;
 
+class CFXRunner;
 class CFXControl;
 
 class CFXAddressableLightEffect : public light::AddressableLightEffect {
@@ -283,10 +288,10 @@ public:
     // dynamically access it and inject our parameter presets immediately before
     // the engine's first update cycle.
 
-    if (this->light_->get_output() &&
-        this->light_->get_output()->get_effect()) {
-      auto *active_fx = dynamic_cast<CFXAddressableLightEffect *>(
-          this->light_->get_output()->get_effect());
+    // 2. Extract the underlying ChimeraFX effect to inject overrides
+    if (this->light_->get_effect() != nullptr) {
+      auto *active_fx =
+          dynamic_cast<CFXAddressableLightEffect *>(this->light_->get_effect());
       if (active_fx != nullptr) {
         if (this->speed_.has_value())
           active_fx->set_speed_preset(this->speed_.value(x...));
