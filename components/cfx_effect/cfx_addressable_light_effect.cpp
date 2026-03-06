@@ -1097,9 +1097,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   it.schedule_show();
-  if (this->active_sequence_ != nullptr) {
-    it.show(); // FORCE PHYSICAL FLUSH
-  }
   chimera_fx::instance = nullptr;
 }
 
