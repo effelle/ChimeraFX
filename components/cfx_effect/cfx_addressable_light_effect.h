@@ -267,59 +267,61 @@ class LightStateProxy : public light::LightState {
 public:
   static light::LightEffect *get_active_effect(light::LightState *state) {
     return static_cast<LightStateProxy *>(state)->get_active_effect_();
-  }
-};
-
-template <typename... Ts> class PlayEffectAction : public Action<Ts...> {
-public:
-  PlayEffectAction(light::LightState *light) : light_(light) {}
-
-  TEMPLATABLE_VALUE(std::string, effect);
-  TEMPLATABLE_VALUE(uint8_t, speed);
-  TEMPLATABLE_VALUE(uint8_t, intensity);
-  TEMPLATABLE_VALUE(uint8_t, palette);
-  TEMPLATABLE_VALUE(bool, mirror);
-
-  void play(Ts... x) override {
-    auto call = this->light_->turn_on();
-
-    if (this->effect_.has_value()) {
-      call.set_effect(this->effect_.value(x...));
+    static void stop_transformer(light::LightState * state) {
+      static_cast<LightStateProxy *>(state)->stop_transformer();
     }
+  };
 
-    call.perform();
-    // After calling perform(), ESPHome activates the target effect object
-    // natively. If the active effect is CFXAddressableLightEffect, we can
-    // dynamically access it and inject our parameter presets immediately before
-    // the engine's first update cycle.
+  template <typename... Ts> class PlayEffectAction : public Action<Ts...> {
+  public:
+    PlayEffectAction(light::LightState *light) : light_(light) {}
 
-    // 2. Extract the underlying ChimeraFX effect to inject overrides
-    light::LightEffect *effect =
-        LightStateProxy::get_active_effect(this->light_);
-    if (effect != nullptr) {
-      CFXAddressableLightEffect *active_fx = nullptr;
-      for (auto *inst : CFXAddressableLightEffect::all_effects) {
-        if (inst == effect) {
-          active_fx = inst;
-          break;
+    TEMPLATABLE_VALUE(std::string, effect);
+    TEMPLATABLE_VALUE(uint8_t, speed);
+    TEMPLATABLE_VALUE(uint8_t, intensity);
+    TEMPLATABLE_VALUE(uint8_t, palette);
+    TEMPLATABLE_VALUE(bool, mirror);
+
+    void play(Ts... x) override {
+      auto call = this->light_->turn_on();
+
+      if (this->effect_.has_value()) {
+        call.set_effect(this->effect_.value(x...));
+      }
+
+      call.perform();
+      // After calling perform(), ESPHome activates the target effect object
+      // natively. If the active effect is CFXAddressableLightEffect, we can
+      // dynamically access it and inject our parameter presets immediately
+      // before the engine's first update cycle.
+
+      // 2. Extract the underlying ChimeraFX effect to inject overrides
+      light::LightEffect *effect =
+          LightStateProxy::get_active_effect(this->light_);
+      if (effect != nullptr) {
+        CFXAddressableLightEffect *active_fx = nullptr;
+        for (auto *inst : CFXAddressableLightEffect::all_effects) {
+          if (inst == effect) {
+            active_fx = inst;
+            break;
+          }
+        }
+        if (active_fx != nullptr) {
+          if (this->speed_.has_value())
+            active_fx->set_speed_preset(this->speed_.value(x...));
+          if (this->intensity_.has_value())
+            active_fx->set_intensity_preset(this->intensity_.value(x...));
+          if (this->palette_.has_value())
+            active_fx->set_palette_preset(this->palette_.value(x...));
+          if (this->mirror_.has_value())
+            active_fx->set_mirror_preset(this->mirror_.value(x...));
         }
       }
-      if (active_fx != nullptr) {
-        if (this->speed_.has_value())
-          active_fx->set_speed_preset(this->speed_.value(x...));
-        if (this->intensity_.has_value())
-          active_fx->set_intensity_preset(this->intensity_.value(x...));
-        if (this->palette_.has_value())
-          active_fx->set_palette_preset(this->palette_.value(x...));
-        if (this->mirror_.has_value())
-          active_fx->set_mirror_preset(this->mirror_.value(x...));
-      }
     }
-  }
 
-protected:
-  light::LightState *light_;
-};
+  protected:
+    light::LightState *light_;
+  };
 
 } // namespace chimera_fx
 } // namespace esphome

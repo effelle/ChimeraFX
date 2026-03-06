@@ -845,7 +845,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // which might be 0 during a cold-boot transition. We snap it here to ON.
       auto v = bri_state->current_values;
       if (v.get_brightness() < 0.99f || v.get_state() < 0.99f) {
-        bri_state->stop_transformer();
+        chimera_fx::LightStateProxy::stop_transformer(bri_state);
         v.set_brightness(1.0f);
         v.set_state(1.0f);
         bri_state->current_values = v;
