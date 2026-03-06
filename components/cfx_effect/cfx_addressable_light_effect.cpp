@@ -867,42 +867,45 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->runner_->start();
     }
   } else {
+    // Sync Brightness to Runners (Master + Light Brightness)
+    float bri = 1.0f;
+    auto *bri_state = this->get_light_state();
+    if (bri_state != nullptr) {
+      bri = bri_state->current_values.get_brightness();
+      // Only apply get_state() if not in Intro/Outro/Transition (already
+      // ramping)
+      if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
+          this->state_ != OUTRO_RUNNING) {
+        bri *= bri_state->current_values.get_state();
+      }
+    }
+
     // Main CFX effect Running — Multi-Segment Swap-on-Service
     if (!this->segment_runners_.empty()) {
       // Multi-segment: iterate all runners, swapping the global instance
       for (auto *r : this->segment_runners_) {
         chimera_fx::instance = r;
+        r->global_brightness_ = bri;
         r->service();
+
+        // Handle Iteration Completion
+        if (r->effect_complete_ && this->active_sequence_ != nullptr) {
+          this->active_sequence_->report_event_complete();
+          this->active_sequence_->stop();
+          break; // Stop all once sequence is over
+        }
       }
     } else {
       // Single runner (backward compatible)
       chimera_fx::instance = this->runner_;
+      this->runner_->global_brightness_ = bri;
       this->runner_->service();
-    }
 
-    // Apply user brightness to all rendered pixels
-    // cfx_light::write_state() sends raw bytes to DMA without brightness
-    // scaling, so we must apply it here after all runners render.
-    auto *bri_state = this->get_light_state();
-    if (bri_state != nullptr) {
-      // BUG 11 FIX: Restore smooth transitional math but prevent double-fading
-      float bri = bri_state->current_values.get_brightness();
-      float state_mul = bri_state->current_values.get_state();
-
-      // If Intro or Outro is running, they provide their own visual ramp.
-      // Do not multiply by the light's transitioning `get_state()` or else
-      // they will double-fade during the ON/OFF transition.
-      if (this->state_ == TRANSITION_RUNNING || this->state_ == OUTRO_RUNNING) {
-        state_mul = 1.0f;
-      }
-      bri *= state_mul;
-
-      if (bri < 0.99f) { // Skip if already at full brightness
-        for (int i = 0; i < it.size(); i++) {
-          Color pc = it[i].get();
-          it[i] = Color((uint8_t)(pc.r * bri), (uint8_t)(pc.g * bri),
-                        (uint8_t)(pc.b * bri), (uint8_t)(pc.w * bri));
-        }
+      // Handle Iteration Completion
+      if (this->runner_->effect_complete_ &&
+          this->active_sequence_ != nullptr) {
+        this->active_sequence_->report_event_complete();
+        this->active_sequence_->stop();
       }
     }
   }
@@ -974,8 +977,42 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   if (leading_pixel >= 0 && leading_pixel != this->last_leading_pixel_) {
+    // Iteration tracking: Detect cycle based on leading pixel wrap to 0
+    if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+      if (this->last_leading_pixel_ > 0 && leading_pixel == 0) {
+        if (!this->segment_runners_.empty()) {
+          this->segment_runners_[0]->iteration_count_++;
+          if (this->segment_runners_[0]->iteration_count_ >=
+              this->sequence_iterations_) {
+            this->segment_runners_[0]->effect_complete_ = true;
+          }
+        } else if (this->runner_) {
+          this->runner_->iteration_count_++;
+          if (this->runner_->iteration_count_ >= this->sequence_iterations_) {
+            this->runner_->effect_complete_ = true;
+          }
+        }
+      }
+    }
+
     this->last_leading_pixel_ = leading_pixel;
     this->check_positional_triggers(leading_pixel, total_pixels);
+  }
+
+  // Sequence completion handling
+  if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+    bool is_complete = false;
+    if (!this->segment_runners_.empty() &&
+        this->segment_runners_[0]->effect_complete_) {
+      is_complete = true;
+    } else if (this->runner_ && this->runner_->effect_complete_) {
+      is_complete = true;
+    }
+
+    if (is_complete) {
+      this->active_sequence_->report_event_complete();
+      this->active_sequence_->stop();
+    }
   }
 
   it.schedule_show();
@@ -2479,6 +2516,33 @@ void CFXAddressableLightEffect::check_positional_triggers(
     }
   }
 #endif
+}
+
+void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
+                                                    optional<uint8_t> spd,
+                                                    optional<uint8_t> iten,
+                                                    optional<uint8_t> pal,
+                                                    uint32_t itr) {
+  this->active_sequence_ = seq;
+  this->sequence_speed_ = spd;
+  this->sequence_intensity_ = iten;
+  this->sequence_palette_ = pal;
+  this->sequence_iterations_ = itr;
+
+  // Reset trackers when a new sequence is bound
+  if (seq != nullptr) {
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        r->iteration_count_ = 0;
+        r->effect_complete_ = false;
+        r->target_iterations_ = itr;
+      }
+    } else if (this->runner_) {
+      this->runner_->iteration_count_ = 0;
+      this->runner_->effect_complete_ = false;
+      this->runner_->target_iterations_ = itr;
+    }
+  }
 }
 
 } // namespace chimera_fx

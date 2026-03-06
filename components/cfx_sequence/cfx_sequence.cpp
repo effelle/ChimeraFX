@@ -59,6 +59,10 @@ void CFXSequence::dump_config() {
 }
 
 void CFXSequence::start() {
+  if (this->is_starting_)
+    return;
+  this->is_starting_ = true;
+
   ESP_LOGD(TAG, "Starting Sequence: %s", this->name_.c_str());
 
   // Only update the dropdown if it doesn't already show this sequence.
@@ -99,9 +103,14 @@ void CFXSequence::start() {
       }
     }
   }
+  this->is_starting_ = false;
 }
 
 void CFXSequence::stop() {
+  if (this->is_stopping_)
+    return;
+  this->is_stopping_ = true;
+
   ESP_LOGD(TAG, "Stopping Sequence: %s", this->name_.c_str());
 
   if (CFXSequenceSelect::instance != nullptr &&
@@ -131,6 +140,7 @@ void CFXSequence::stop() {
     call.set_effect("None");
     call.perform();
   }
+  this->is_stopping_ = false;
 }
 
 void CFXSequence::report_event_start() {

@@ -93,6 +93,9 @@ protected:
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
 
+  bool is_starting_{false};
+  bool is_stopping_{false};
+
 public:
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {

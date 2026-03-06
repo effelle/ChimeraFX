@@ -4,7 +4,7 @@
 
 *A high-performance C++ rendering engine bringing premium fluid simulations, architectural transitions, and optimized WLED classics natively into your ESPHome and Home Assistant ecosystem.*
 
-Unlike the old `addressable_lambda` method, this implementation runs as a proper native component optimized for the ESP-IDF framework, freeing up your YAML and maximizing frame rates.
+Unlike the old `addressable_lambda` method, this implementation runs as a proper native component optimized for both ESP-IDF and Arduino frameworks, freeing up your YAML and maximizing frame rates.
 
 ### Getting Started
 
@@ -22,6 +22,8 @@ The documentation includes everything you need:
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
+* **Segment Runner Support** — Up to 8 segments for each light strip.
+* **Sequencer Support** — Create complex event driven sequences for your light strip.
 * **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **100% Home Assistant Native** — Instantly exposes speed, intensity, palette, and other controls.
@@ -37,7 +39,7 @@ Every effect in this library is selected for visual fidelity and rewritten for m
 
 #### Is this for me?
 This project is **not** a full WLED replacement. Choose the right tool for your hardware:
-* **Install [WLED](https://kno.wled.ge/) if:** You want the full lighting-only experience (SPI strips, E1.31, 150+ effects, sound reactivity).
+* **Install [WLED](https://kno.wled.ge/) if:** You want the full lighting-only experience (E1.31, 150+ effects, sound reactivity).
 * **Use ChimeraFX if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
 ---
@@ -48,7 +50,7 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 - **Chips:** **ESP32 Classic** and **ESP32-S3**
   - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
 - **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
-  - *2-wire SPI strips (APA102, WS2801, etc.) are **not supported**.*
+  - *2-wire SPI strips (APA102, WS2801, etc.) are **not yet supported**.*
 
 > **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.
 

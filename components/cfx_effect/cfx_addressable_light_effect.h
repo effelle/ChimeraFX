@@ -161,13 +161,7 @@ protected:
 public:
   void set_active_sequence(CFXSequence *seq, optional<uint8_t> spd,
                            optional<uint8_t> iten, optional<uint8_t> pal,
-                           uint32_t itr) {
-    this->active_sequence_ = seq;
-    this->sequence_speed_ = spd;
-    this->sequence_intensity_ = iten;
-    this->sequence_palette_ = pal;
-    this->sequence_iterations_ = itr;
-  }
+                           uint32_t itr);
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;

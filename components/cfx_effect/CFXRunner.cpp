@@ -172,6 +172,14 @@ void Segment::setPixelColor(int n, uint32_t c) {
       cfx::apply_force_white(r, g, b, w);
     }
 
+    if (instance->global_brightness_ < 0.99f &&
+        instance->global_brightness_ >= 0.0f) {
+      r = (uint8_t)(r * instance->global_brightness_);
+      g = (uint8_t)(g * instance->global_brightness_);
+      b = (uint8_t)(b * instance->global_brightness_);
+      w = (uint8_t)(w * instance->global_brightness_);
+    }
+
     esphome::Color esphome_color(r, g, b, w);
     (*instance->target_light)[global_index] = esphome_color;
   }
@@ -215,6 +223,14 @@ void Segment::fill(uint32_t c) {
   // Apply native force_white BEFORE hitting the ESPHome gamma cache
   if (instance->force_white_active_) {
     cfx::apply_force_white(r, g, b, w);
+  }
+
+  if (instance->global_brightness_ < 0.99f &&
+      instance->global_brightness_ >= 0.0f) {
+    r = (uint8_t)(r * instance->global_brightness_);
+    g = (uint8_t)(g * instance->global_brightness_);
+    b = (uint8_t)(b * instance->global_brightness_);
+    w = (uint8_t)(w * instance->global_brightness_);
   }
 
   esphome::Color esphome_color(r, g, b, w);

@@ -54,8 +54,9 @@ public:
     return nullptr;
   }
 
+  CFXControl() { instances.push_back(this); }
+
   void setup() override {
-    instances.push_back(this);
     if (this->timer_ != nullptr) {
       this->set_interval("cfx_timer", 60000,
                          [this]() { this->on_timer_tick_(); });
