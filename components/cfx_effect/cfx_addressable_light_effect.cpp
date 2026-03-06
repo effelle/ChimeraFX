@@ -873,9 +873,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (bri_state != nullptr) {
       bri = bri_state->current_values.get_brightness();
       // Only apply get_state() if not in Intro/Outro/Transition (already
-      // ramping)
+      // ramping) ALSO skip if a Sequence is active - we want the sequence to be
+      // fully visible immediately even if the ESPHome light state transition
+      // hasn't fully "arrived" yet.
       if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
-          this->state_ != OUTRO_RUNNING) {
+          this->state_ != OUTRO_RUNNING && this->active_sequence_ == nullptr) {
         bri *= bri_state->current_values.get_state();
       }
     }
@@ -2533,13 +2535,11 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
   if (seq != nullptr) {
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
-        r->iteration_count_ = 0;
-        r->effect_complete_ = false;
+        r->reset();
         r->target_iterations_ = itr;
       }
     } else if (this->runner_) {
-      this->runner_->iteration_count_ = 0;
-      this->runner_->effect_complete_ = false;
+      this->runner_->reset();
       this->runner_->target_iterations_ = itr;
     }
   }

@@ -81,8 +81,8 @@ void CFXSequence::start() {
     // the effect render to a black strip even though the runner is executing.
     auto call = l->turn_on();
     call.set_rgb(1.0f, 1.0f, 1.0f);
-    call.set_transition_length(
-        0); // snap on instantly; CFX effect handles its own fade-in
+    call.set_brightness(1.0f);     // Ensure 100% brightness
+    call.set_transition_length(0); // Snap-on
     call.set_effect(this->effect_);
     call.perform();
 
@@ -138,6 +138,8 @@ void CFXSequence::stop() {
 
     auto call = l->turn_on();
     call.set_effect("None");
+    call.set_brightness(1.0f);     // Ensure remains visible
+    call.set_transition_length(0); // Optional: snap back or keep 1s
     call.perform();
   }
   this->is_stopping_ = false;

@@ -4213,17 +4213,25 @@ void CFXRunner::service() {
   // Start frame diagnostics (measures time since last call)
   diagnostics.frame_start();
 
-  now = cfx_millis();
-
-  // Calculate frame time (delta) - using member variables, not static
-  frame_time = now - _last_frame;
-  _last_frame = now;
+  uint32_t real_now = cfx_millis();
+  // Calculate frame time (delta) from real clock
+  frame_time = real_now - _last_frame;
+  _last_frame = real_now;
 
   // Increment call counter for effect initialization logic
   _segment.call++;
 
   // Perform periodic logging if enabled
   diagnostics.maybe_log(_name);
+
+  // --- VIRTUAL TIME TRACKING ---
+  // Tracks elapsed time purely during active runner service.
+  // Resettable via reset() to ensure animations start from T=0.
+  _virtual_now += (double)frame_time;
+  _accum_ms += (float)frame_time;
+
+  // Sync 'now' to virtual timeline for all child effects
+  now = (uint32_t)_virtual_now;
 
   // --- INTRO LOGIC ---
   if (_state == STATE_INTRO) {
@@ -5843,6 +5851,16 @@ bool CFXRunner::serviceIntro() {
   }
 
   return false; // Still running
+}
+
+void CFXRunner::reset() {
+  _virtual_now = 0;
+  _accum_ms = 0;
+  _segment.call = 0;
+  iteration_count_ = 0;
+  effect_complete_ = false;
+  _segment.reset = true;
+  _last_frame = cfx_millis();
 }
 
 // --- Heartbeat Center Effect (ID 154) ---
