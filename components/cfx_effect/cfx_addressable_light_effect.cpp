@@ -622,6 +622,14 @@ void CFXAddressableLightEffect::stop() {
 
       this->active_outro_brightness_ = state->current_values.get_brightness();
 
+      // Cache Mirror for Outro
+      this->active_outro_mirror_ = false;
+      switch_::Switch *mirror_sw = this->mirror_;
+      if (mirror_sw == nullptr && c != nullptr)
+        mirror_sw = c->get_mirror();
+      if (mirror_sw != nullptr)
+        this->active_outro_mirror_ = mirror_sw->state;
+
       // Capture ALL segment runners for the outro
       auto captured_runners = std::make_shared<std::vector<CFXRunner *>>();
 
@@ -1861,7 +1869,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (symmetry)
       logical_len = seg_len / 2;
     if (quadrant)
-      logical_len = seg_len / 4;
+      logical_len = (seg_len + 3) / 4;
 
     // Intensity defines blur radius
     float blur_percent = 0.0f;
@@ -1915,25 +1923,41 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         }
       }
 
-      Color pixel_c = Color::BLACK;
+      Color pixel_c1 = Color::BLACK;
+      Color pixel_c2 = Color::BLACK; // Mirrored color for even/odd wings
       if (alpha > 0.0f) {
         if (use_palette && chimera_fx::instance) {
           uint8_t map_idx =
-              (uint8_t)((i * 255) / (logical_len > 0 ? logical_len : 1));
-          uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
-              map_idx, false, true, 255, 255);
-          pixel_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
-                          (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
-                          (uint8_t)((cp & 0xFF) * user_brightness), 0);
+              (uint8_t)((i * 255) / (logical_len > 1 ? logical_len - 1 : 1));
+
+          // Base index depends on reverse (mirror) flag
+          uint8_t m1 = reverse ? (255 - map_idx) : map_idx;
+          uint8_t m2 = 255 - m1;
+
+          uint32_t cp1 = chimera_fx::instance->_segment.color_from_palette(
+              m1, false, true, 255, 255);
+          uint32_t cp2 = chimera_fx::instance->_segment.color_from_palette(
+              m2, false, true, 255, 255);
+
+          pixel_c1 = Color((uint8_t)(((cp1 >> 16) & 0xFF) * user_brightness),
+                           (uint8_t)(((cp1 >> 8) & 0xFF) * user_brightness),
+                           (uint8_t)((cp1 & 0xFF) * user_brightness), 0);
+          pixel_c2 = Color((uint8_t)(((cp2 >> 16) & 0xFF) * user_brightness),
+                           (uint8_t)(((cp2 >> 8) & 0xFF) * user_brightness),
+                           (uint8_t)((cp2 & 0xFF) * user_brightness), 0);
         } else {
-          pixel_c = c; // Solid Color
+          pixel_c1 = c;
+          pixel_c2 = c;
         }
 
         // Apply Alpha Blending to Background (Black)
         if (alpha < 1.0f) {
-          pixel_c =
-              Color((uint8_t)(pixel_c.r * alpha), (uint8_t)(pixel_c.g * alpha),
-                    (uint8_t)(pixel_c.b * alpha), (uint8_t)(pixel_c.w * alpha));
+          pixel_c1 = Color(
+              (uint8_t)(pixel_c1.r * alpha), (uint8_t)(pixel_c1.g * alpha),
+              (uint8_t)(pixel_c1.b * alpha), (uint8_t)(pixel_c1.w * alpha));
+          pixel_c2 = Color(
+              (uint8_t)(pixel_c2.r * alpha), (uint8_t)(pixel_c2.g * alpha),
+              (uint8_t)(pixel_c2.b * alpha), (uint8_t)(pixel_c2.w * alpha));
         }
       }
 
@@ -1946,23 +1970,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         // Quadrant Logic: 4 wings converging from edges/midpoints to centers
         // logical_len = seg_len/4.
         // WINGS: [0->25%] [50%<-25%] [50%->75%] [100%<-75%]
-        int idx1 = i;                     // 0 towards 25%
-        int idx2 = (seg_len / 2) - 1 - i; // 50% towards 25%
-        int idx3 = (seg_len / 2) + i;     // 50% towards 75%
-        int idx4 = seg_len - 1 - i;       // 100% towards 75%
+        int idx1 = i;
+        int idx2 = (seg_len / 2) - 1 - i;
+        int idx3 = (seg_len / 2) + i;
+        int idx4 = seg_len - 1 - i;
 
         if (idx1 >= 0 && idx1 < seg_len)
-          it[seg_start + idx1] = pixel_c;
+          it[seg_start + idx1] = pixel_c1;
         if (idx2 >= 0 && idx2 < seg_len)
-          it[seg_start + idx2] = pixel_c;
+          it[seg_start + idx2] = pixel_c2;
         if (idx3 >= 0 && idx3 < seg_len)
-          it[seg_start + idx3] = pixel_c;
+          it[seg_start + idx3] = pixel_c1;
         if (idx4 >= 0 && idx4 < seg_len)
-          it[seg_start + idx4] = pixel_c;
+          it[seg_start + idx4] = pixel_c2;
       } else {
-        it[global_idx1] = pixel_c;
+        it[global_idx1] = pixel_c1;
         if (symmetry && global_idx2 >= 0) {
-          it[global_idx2] = pixel_c;
+          it[global_idx2] = pixel_c2;
         }
       }
     }
@@ -2302,14 +2326,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
   uint8_t mode = this->active_outro_mode_;
 
-  // Control State for Mirror (affects wipe direction)
-  switch_::Switch *mirror_sw = this->mirror_;
-  if (mirror_sw == nullptr && this->controller_ != nullptr)
-    mirror_sw = this->controller_->get_mirror();
-
-  bool reverse = false;
-  if (mirror_sw != nullptr && mirror_sw->state)
-    reverse = true;
+  bool reverse = this->active_outro_mirror_;
 
   bool symmetry = false;
   bool quadrant = false;
@@ -2327,7 +2344,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     if (symmetry)
       logical_len = seg_len / 2;
     if (quadrant)
-      logical_len = seg_len / 4;
+      logical_len = (seg_len + 3) / 4;
 
     // Intensity defines blur radius (up to 50% of the strip)
     // Use the cached active_outro_intensity_ because controller_ is null
@@ -2386,10 +2403,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
       if (quadrant) {
         // Quadrant Logic: 4 wings converging from edges/midpoints to centers
-        apply_alpha(i);                     // wing 1
-        apply_alpha((seg_len / 2) - 1 - i); // wing 2
-        apply_alpha((seg_len / 2) + i);     // wing 3
-        apply_alpha(seg_len - 1 - i);       // wing 4
+        apply_alpha(i);
+        apply_alpha((seg_len / 2) - 1 - i);
+        apply_alpha((seg_len / 2) + i);
+        apply_alpha(seg_len - 1 - i);
       } else {
         apply_alpha(i);
         if (symmetry) {

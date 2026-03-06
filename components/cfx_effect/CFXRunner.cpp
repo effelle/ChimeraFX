@@ -909,13 +909,44 @@ uint16_t mode_cfx_horizon_sweep(void) {
   if (!instance)
     return FRAMETIME;
 
+  uint16_t len = instance->_segment.length();
+  bool mirror = instance->_segment.mirror;
+  uint8_t mode = instance->_segment.mode;
+
+  // Determine sections for monochromatic effects
+  int sections = 1;
+  if (mode == FX_MODE_CENTER_SWEEP || mode == FX_MODE_GLITTER_SWEEP ||
+      mode == FX_MODE_TWIN_PULSE_SWEEP) {
+    sections = 2;
+  } else if (mode == FX_MODE_FOUR_TIMES_THE_CHARM) {
+    sections = 4;
+  }
+
+  uint16_t section_len = (len + sections - 1) / sections;
+  if (section_len == 0)
+    section_len = 1;
+
   if (instance->_segment.palette != 255 && instance->_segment.palette != 0) {
-    uint16_t len = instance->_segment.length();
     const uint32_t *active_palette =
         getPaletteByIndex(instance->_segment.palette);
 
     for (int i = 0; i < len; i++) {
-      uint8_t colorIndex = (i * 255) / (len > 1 ? len - 1 : 1);
+      int s_idx = i / section_len;
+      int i_rel = i % section_len;
+
+      // Invert odd sections for "Curtain" symmetry (0->1, 2<-1, 2->3, 4<-3)
+      bool reverse_in_section = (s_idx % 2 != 0);
+      if (mirror)
+        reverse_in_section = !reverse_in_section;
+
+      uint8_t colorIndex;
+      if (reverse_in_section) {
+        colorIndex =
+            255 - ((i_rel * 255) / (section_len > 1 ? section_len - 1 : 1));
+      } else {
+        colorIndex = (i_rel * 255) / (section_len > 1 ? section_len - 1 : 1);
+      }
+
       CRGBW c = ColorFromPalette(active_palette, colorIndex, 255);
       instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     }
