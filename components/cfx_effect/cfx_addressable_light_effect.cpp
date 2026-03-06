@@ -863,6 +863,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
+    // RESOLVE: be84cb0 - Build Fix Verification Log
+    ESP_LOGD("chimera_fx", "Sequencer: Resolving intro duration...");
     // 2. Resolve Intro Completion Duration (Priority Hierarchy)
     uint32_t duration_ms = 1000; // Final Default: 1.0s
     number::Number *dur_num = this->intro_duration_;
