@@ -832,6 +832,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       for (auto *seq : cfx_sequence::CFXSequence::instances) {
         if (seq->get_name() == current_name &&
             seq->owns_light(this->get_light_state())) {
+          ESP_LOGD("chimera_fx", "Lazy Binding sequence '%s' to effect %p",
+                   current_name.c_str(), this);
           this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
                                     seq->get_palette(), seq->get_iterations());
           break;
