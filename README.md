@@ -12,6 +12,7 @@ Unlike the old `addressable_lambda` method, this implementation runs as a proper
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
+- [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---

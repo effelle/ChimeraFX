@@ -42,6 +42,7 @@ nav:
   - Guide:
     - Installation: Installation.md
     - ChimeraFX light: cfx_light.md
+    - Sequencer: cfx_sequence.md
     - Controls: Controls.md
     - Effect Presets: Effect-Presets.md
     - Troubleshooting: Troubleshooting.md

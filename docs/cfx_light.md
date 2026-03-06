@@ -94,6 +94,61 @@ light:
 
 With the above configuration, your ESP32 will compile with all 50+ effects, but `Aurora` will use your tailored speed and palette settings out of the box. More on effect presets in the [Effect Presets](Effect-Presets.md) page.
 
+---
+
+## Segments (Multi-Zone Control)
+
+ChimeraFX supports dividing a single physical LED strip into multiple **independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+
+### Segment Configuration
+
+Segments are defined under the `segments` key in your `cfx_light` configuration.
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "Main TV Strip"
+    id: tv_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    all_effects: true
+    
+    segments:
+      - id: "tv_left"
+        name: "TV Left Side"
+        start: 0
+        stop: 40
+      - id: "tv_top"
+        name: "TV Top"
+        start: 40
+        stop: 80
+        mirror: true
+      - id: "tv_right"
+        name: "TV Right Side"
+        start: 80
+        stop: 120
+```
+
+### Segment Parameters
+
+* **id** (*string*, Required): A unique ID for the segment.
+* **name** (*string*, Optional): The name of the light entity in Home Assistant. If omitted, the `id` is used.
+* **start** (*int*, Required): The starting pixel index (inclusive).
+* **stop** (*int*, Required): The stopping pixel index (exclusive).
+* **mirror** (*boolean*, default: `false`): If true, calculations are reversed for this segment (useful for symmetrical setups).
+* **use_intro** / **use_outro** (*int*, Optional): Override the global intro/outro modes for this specific segment.
+* **intro_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
+
+### Master vs. Segment Behavior
+
+When segments are defined:
+1.  The "Master" light entity (e.g., "Main TV Strip") acts as a global power and brightness control. It does **not** have its own effects. Turning off the Master turns off all segments.
+2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (if `all_effects: true` is set on the parent).
+3.  Segments can run different effects, speeds, and palettes independently.
+
+---
+
 ## Hardware & Driver Architecture
 
 `cfx_light` is a high-performance, asynchronous DMA driver. Unlike standard platforms that provide a broad but generic compatibility layer, `cfx_light` is specifically optimized for visual excellence and stability on the ESP32:
