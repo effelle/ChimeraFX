@@ -747,33 +747,44 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                 ? this->get_light_state()->get_name().str()
                                 : std::string("");
 
+  // Sync color and settings to all runners
+  auto *state_ptr = this->get_light_state();
+  uint32_t color = 0;
+
+  if (state_ptr != nullptr) {
+    // We use remote_values (the target) instead of current_values (the
+    // transitioning color) to ensure the runner has the "full" color
+    // immediately. This solves the "black strip on first run" issue. Also, we
+    // use the RAW channels (get_*) which DO NOT have brightness applied,
+    // because global_brightness_ will be applied later in setPixelColor().
+    // This avoids "Double Brightness Scaling".
+    float r = state_ptr->remote_values.get_red();
+    float g = state_ptr->remote_values.get_green();
+    float b = state_ptr->remote_values.get_blue();
+    float w = state_ptr->remote_values.get_white();
+
+    color = (uint32_t(roundf(w * 255.0f)) << 24) |
+            (uint32_t(roundf(r * 255.0f)) << 16) |
+            (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
+  }
+
   if (!this->segment_runners_.empty()) {
     for (auto *r : this->segment_runners_) {
       r->setDebug(debug_active);
       if (!runner_name.empty())
         r->setName(runner_name.c_str());
+      r->setColor(color);
     }
   } else if (this->runner_) {
     this->runner_->setDebug(debug_active);
     if (!runner_name.empty())
       this->runner_->setName(runner_name.c_str());
-  } // Update speed from Number component
-  // Update controls via Controller or Local entities
-  this->run_controls_();
-
-  // Normal Mode: Pass current light color to segment natively
-  uint32_t color = (uint32_t(current_color.white) << 24) |
-                   (uint32_t(current_color.red) << 16) |
-                   (uint32_t(current_color.green) << 8) |
-                   uint32_t(current_color.blue);
-  // Sync color to all runners
-  if (!this->segment_runners_.empty()) {
-    for (auto *r : this->segment_runners_) {
-      r->setColor(color);
-    }
-  } else {
     this->runner_->setColor(color);
   }
+
+  // Update controls via Controller or Local entities (Crucial for
+  // Speed/Intensity)
+  this->run_controls_();
 
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting
@@ -818,9 +829,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (bri_state != nullptr) {
     // If a sequence is active, bypass transition lag by using remote_values.
     // This solves the "black strip on first run" issue where current_values
-    // is still 0.
+    // is still 0. We also account for target state (ON/OFF).
     if (this->active_sequence_ != nullptr) {
-      bri = bri_state->remote_values.get_brightness();
+      bri = bri_state->remote_values.get_brightness() *
+            bri_state->remote_values.get_state();
     } else {
       bri = bri_state->current_values.get_brightness();
       // Only apply get_state() if not in Intro/Outro/Transition (already
@@ -863,6 +875,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
+    // Run intro on ALL segments (swap-on-service pattern)
+    // This acts as a mask on top of the already-rendered main effect.
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        chimera_fx::instance = r;
+        this->run_intro(it, current_color);
+      }
+    } else {
+      chimera_fx::instance = this->runner_;
+      this->run_intro(it, current_color);
+    }
+
     // RESOLVE: be84cb0 - Build Fix Verification Log
     ESP_LOGD("chimera_fx", "Sequencer: Resolving intro duration...");
     // 2. Resolve Intro Completion Duration (Priority Hierarchy)
