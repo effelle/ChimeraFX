@@ -190,6 +190,9 @@ struct ColliderNode {
 #define FX_MODE_CENTER_SWEEP 162
 #define FX_MODE_GLITTER_SWEEP 163
 #define FX_MODE_COLLIDER 164
+#define FX_MODE_TWIN_PULSE_SWEEP 165
+#define FX_MODE_TRANSMISSION 166
+#define FX_MODE_FOUR_TIMES_THE_CHARM 167
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -198,8 +201,9 @@ struct ColliderNode {
 #define INTRO_GLITTER 4
 #define INTRO_TWIN_PULSE 5
 #define INTRO_MORSE 6
+#define INTRO_QUADRANT 7
 
-#define MODE_COUNT 119
+#define MODE_COUNT 120
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 

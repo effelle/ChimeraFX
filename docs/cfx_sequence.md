@@ -1,10 +1,10 @@
 # ChimeraFX Sequencer
 
-The ChimeraFX Sequencer (`cfx_sequence`) is a powerful orchestration component that allows you to create complex, event-driven lighting sequences. It can control one or more ChimeraFX lights, applying specific effects with optional overrides for speed, intensity, and palette, and can chain sequences together based on triggers.
+The ChimeraFX Sequencer (`cfx_sequence`) is a powerful orchestration component that allows you to create complex, event-driven lighting sequences. It can control one or more ChimeraFX lights, or segments of a light, applying specific effects with optional overrides for speed, intensity, and palette, and can chain sequences together based on triggers.
 
 ## Configuration Overview
 
-A sequence defines which light(s) to control, which effect to run, and optional parameters to override the default effect settings.
+A sequence defines which light(s) or segment(s) to control, which effect to run, and optional parameters to override the default effect settings.
 
 ```yaml
 cfx_sequence:
@@ -59,7 +59,7 @@ cfx_sequence:
 ```
 
 ### `on_reach`
-Fires when the animation reaches a specific percentage (0.0 to 1.0) of the strip length.
+Fires when a **progressive effect** (like Wipe or Chase) reaches a specific percentage (0.0 to 1.0) of the strip length.
 
 ```yaml
 cfx_sequence:
@@ -72,7 +72,7 @@ cfx_sequence:
 ```
 
 ### `on_pixel_num`
-Fires when the animation reaches a specific absolute pixel index.
+Fires when a **progressive effect** reaches a specific absolute pixel index.
 
 ```yaml
 cfx_sequence:
@@ -83,6 +83,12 @@ cfx_sequence:
         then:
           - logger.log: "Reached the last pixel!"
 ```
+
+> [!NOTE]
+> **Position-based triggers** (`on_reach` and `on_pixel_num`) require a **Progressive Effect**. These are effects with a clear "leading edge" that moves across the strip. Compatible effects are marked with the :material-bullseye-arrow: icon in the [Effects Library](Effects-Library.md).
+
+### External ESPHome Triggers
+The Sequencer is fully integrated with the ESPHome ecosystem. While it has its own internal triggers, you can use **any ESPHome trigger** (e.g., binary sensors, sensor thresholds, or time-based events) to start or stop a sequence using the `cfx_sequence.start` and `cfx_sequence.stop` actions.
 
 ---
 

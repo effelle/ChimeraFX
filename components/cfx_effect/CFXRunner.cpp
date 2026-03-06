@@ -4425,9 +4425,12 @@ void CFXRunner::service() {
   case FX_MODE_FLUID_RAIN: // 160
     mode_fluid_rain();
     break;
-  case FX_MODE_HORIZON_SWEEP: // 161
-  case FX_MODE_CENTER_SWEEP:  // 162
-  case FX_MODE_GLITTER_SWEEP: // 163
+  case FX_MODE_HORIZON_SWEEP:        // 161
+  case FX_MODE_CENTER_SWEEP:         // 162
+  case FX_MODE_GLITTER_SWEEP:        // 163
+  case FX_MODE_TWIN_PULSE_SWEEP:     // 165
+  case FX_MODE_TRANSMISSION:         // 166
+  case FX_MODE_FOUR_TIMES_THE_CHARM: // 167
     mode_cfx_horizon_sweep();
     break;
   case FX_MODE_COLLIDER: // 164

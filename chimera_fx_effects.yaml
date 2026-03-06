@@ -95,6 +95,10 @@
     name: "Curtain Sweep"
     effect_id: 162
 
+- addressable_cfx:
+    name: "Four Times the Charm"
+    effect_id: 167
+
 
 
 - addressable_cfx:
@@ -335,6 +339,10 @@
     name: "Transmission"
     effect_id: 166
 
+- addressable_cfx:
+    name: "Twin Pulse Sweep"
+    effect_id: 165
+
 
 
 - addressable_cfx:
@@ -348,10 +356,6 @@
     effect_id: 153
 
 
-
-- addressable_cfx:
-    name: "Twin Pulse Sweep"
-    effect_id: 165
 
 
 - addressable_cfx:

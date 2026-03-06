@@ -41,8 +41,8 @@ light:
 * **WS2811** (Standard 12V 3-LED segment strips)
 
 > [!WARNING]
-> **SPI strips are NOT supported.**  
-> 2-wire chipsets that require a separate Clock signal (such as **APA102, SK9822, WS2801, LPD8806**) are not compatible with this driver.
+> **SPI strips are NOT supported at this moment.**  
+> 2-wire chipsets that require a separate Clock signal (such as **APA102, SK9822, WS2801, LPD8806**) are not compatible with this driver for now.
 
 ### Configuration Variables
 To use a specific chipset, use the `chipset` variable in your YAML:
@@ -98,7 +98,7 @@ With the above configuration, your ESP32 will compile with all 50+ effects, but 
 
 ## Segments (Multi-Zone Control)
 
-ChimeraFX supports dividing a single physical LED strip into multiple **independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+ChimeraFX supports dividing a single physical LED strip into up to **6 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
 
 ### Segment Configuration
 
