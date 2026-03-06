@@ -71,8 +71,12 @@ void CFXSequence::start() {
   }
 
   for (auto *l : this->lights_) {
-    // 1. Issue standard light.turn_on with the target effect
+    // 1. Issue standard light.turn_on with the target effect.
+    // set_rgb(1,1,1) forces RGB color mode — without this ESPHome defaults to
+    // "White" which drives 0 to all RGB channels on RGB-only strips and makes
+    // the effect render to a black strip even though the runner is executing.
     auto call = l->turn_on();
+    call.set_rgb(1.0f, 1.0f, 1.0f);
     call.set_effect(this->effect_);
     call.perform();
 
