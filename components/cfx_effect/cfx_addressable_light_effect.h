@@ -269,7 +269,7 @@ public:
     return static_cast<LightStateProxy *>(state)->get_active_effect_();
   }
   static void stop_state_transformer(light::LightState *state) {
-    static_cast<LightStateProxy *>(state)->stop_transformer();
+    static_cast<LightStateProxy *>(state)->transformer_.reset();
   }
 };
 
