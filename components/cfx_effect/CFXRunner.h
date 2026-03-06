@@ -314,6 +314,7 @@ public:
   void setName(const char *name) { _name = name; }
 
   void service();
+  void reset();
   void setMode(uint8_t m) {
     if (_mode != m) {
       _mode = m;
