@@ -839,26 +839,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   float bri = 1.0f;
   auto *bri_state = this->get_light_state();
   if (bri_state != nullptr) {
-    // If a sequence is active, bypass transition lag by using remote_values.
-    // This solves the "black strip on first run" issue where current_values
-    // is still 0. We also account for target state (ON/OFF).
     if (this->active_sequence_ != nullptr) {
-      bri = bri_state->remote_values.get_brightness() *
-            bri_state->remote_values.get_state();
-
-      static uint32_t bri_log_timer = 0;
-      if (millis() - bri_log_timer > 1000) {
-        ESP_LOGD("chimera_fx",
-                 "Sequence Active: %s, Bri=%.2f (Remote=%.2f, State=%.2f)",
-                 this->active_sequence_->get_name().c_str(), bri,
-                 bri_state->remote_values.get_brightness(),
-                 bri_state->remote_values.get_state());
-        bri_log_timer = millis();
+      // FORCE SNAP: If we are in a sequence, we MUST be at 100% brightness
+      // immediately. Some ESPHome drivers scale the buffer by current_values
+      // which might be 0 during a cold-boot transition. We snap it here to ON.
+      auto v = bri_state->current_values;
+      if (v.get_brightness() < 0.99f || v.get_state() < 0.99f) {
+        bri_state->stop_transformer();
+        v.set_brightness(1.0f);
+        v.set_state(1.0f);
+        bri_state->current_values = v;
       }
+      bri = 1.0f;
     } else {
       bri = bri_state->current_values.get_brightness();
-      // Only apply get_state() if not in Intro/Outro/Transition (already
-      // ramping)
       if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
           this->state_ != OUTRO_RUNNING) {
         bri *= bri_state->current_values.get_state();
@@ -896,7 +890,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   // === State Machine: Intro vs Main Effect ===
-  if (this->intro_active_) {
+  if (this->intro_active_ && this->active_sequence_ == nullptr) {
     // Run intro on ALL segments (swap-on-service pattern)
     // This acts as a mask on top of the already-rendered main effect.
     if (!this->segment_runners_.empty()) {
