@@ -34,18 +34,26 @@ light:
           effect_id: 3 # Wipe
           set_speed: 50
 
-cfx_sequencer:
-  id: my_sequencer
-  lights: [ led_strip ]
-  on_start:
-    - logger.log: "Sequence started!"
-  on_complete:
-    - logger.log: "Sequence complete!"
-  on_reach:
-    - position: "50%"
-      then:
-        - logger.log: "Reached 50%!"
-  on_pixel_num:
-    - pixel: 10
-      then:
-        - logger.log: "Passed pixel 10!"
+cfx_sequence:
+  - id: my_sequencer
+    name: "Test Sequence"  
+    lights: [ led_strip ]
+    effect: "Rainbow Wipe"
+    set_speed: 255
+    set_intensity: 128
+    set_palette: 0
+    iterations: 2
+    on_start:
+      - logger.log: "Sequence started!"
+    on_complete:
+      - logger.log: "Sequence complete!"
+      - cfx_sequence.start:
+          id: my_sequencer
+    on_reach:
+      - position: "50%"
+        then:
+          - logger.log: "Reached 50%!"
+    on_pixel_num:
+      - pixel: 10
+        then:
+          - logger.log: "Passed pixel 10!"

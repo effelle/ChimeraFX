@@ -1043,6 +1043,25 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
   return 0; // Unknown palette name
 }
 
+uint8_t CFXAddressableLightEffect::get_palette_index_() {
+  if (this->sequence_palette_.has_value()) {
+    return this->sequence_palette_.value();
+  }
+
+  select::Select *palette_sel = this->palette_;
+  if (this->controller_ != nullptr && this->controller_->get_palette()) {
+    palette_sel = this->controller_->get_palette();
+  }
+
+  if (this->palette_preset_.has_value()) {
+    return this->palette_preset_.value();
+  } else if (palette_sel != nullptr) {
+    return this->get_pal_idx(palette_sel);
+  }
+  // Default fallback if no UI and no preset
+  return this->get_default_palette_id_(this->effect_id_);
+}
+
 uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   if (this->is_monochromatic_(effect_id)) {
     return 255; // Monochromatic series ALWAYS defaults to Solid
@@ -1180,6 +1199,10 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
+  if (this->sequence_speed_.has_value()) {
+    return this->sequence_speed_.value();
+  }
+
   // Per-effect speed defaults from effects_preset.md
   switch (effect_id) {
   case 38:
@@ -1218,6 +1241,10 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
+  if (this->sequence_intensity_.has_value()) {
+    return this->sequence_intensity_.value();
+  }
+
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
   case 28:

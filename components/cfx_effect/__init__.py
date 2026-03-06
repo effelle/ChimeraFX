@@ -240,3 +240,37 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
         await automation.build_automation(trigger, [(cg.int32, "pixel")], conf)
 
     return effect
+
+# Play Effect Action
+PlayEffectAction = chimera_fx_ns.class_("PlayEffectAction", automation.Action)
+
+@automation.register_action(
+    "cfx.play_effect",
+    PlayEffectAction,
+    cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.use_id(light.LightState),
+            cv.Optional("effect"): cv.templatable(cv.string),
+            cv.Optional("speed"): cv.templatable(cv.int_range(0, 255)),
+            cv.Optional("intensity"): cv.templatable(cv.int_range(0, 255)),
+            cv.Optional("palette"): cv.templatable(cv.int_range(0, 255)),
+            cv.Optional("mirror"): cv.templatable(cv.boolean),
+        }
+    ),
+)
+async def cfx_play_effect_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    
+    if "effect" in config:
+        cg.add(var.set_effect(await cg.templatable(config["effect"], args, cg.std_string)))
+    if "speed" in config:
+        cg.add(var.set_speed(await cg.templatable(config["speed"], args, cg.uint8)))
+    if "intensity" in config:
+        cg.add(var.set_intensity(await cg.templatable(config["intensity"], args, cg.uint8)))
+    if "palette" in config:
+        cg.add(var.set_palette(await cg.templatable(config["palette"], args, cg.uint8)))
+    if "mirror" in config:
+        cg.add(var.set_mirror(await cg.templatable(config["mirror"], args, cg.bool_)))
+        
+    return var

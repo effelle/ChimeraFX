@@ -13,6 +13,7 @@
 #include <map>
 #include <vector>
 
+#include "cfx_addressable_light_effect.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
@@ -21,7 +22,9 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 
-#include "cfx_addressable_light_effect.h"
+#ifdef USE_CFX_SEQUENCER
+#include "../cfx_sequence/cfx_sequence.h"
+#endif
 
 namespace esphome {
 namespace chimera_fx {
@@ -109,6 +112,29 @@ public:
             }
           });
     }
+
+    if (this->sequence_) {
+      this->sequence_->add_on_state_callback(
+          [this](const std::string &value, size_t index) {
+#ifdef USE_CFX_SEQUENCER
+            if (value == "None") {
+              for (auto *seq : cfx_sequence::CFXSequence::instances) {
+                // Easiest heuristic to find currently running sequences and
+                // kill them (Optionally could just kill them all, or track
+                // "active" ones)
+                seq->stop();
+              }
+            } else {
+              for (auto *seq : cfx_sequence::CFXSequence::instances) {
+                if (seq->get_name() == value) {
+                  seq->start();
+                  break;
+                }
+              }
+            }
+#endif
+          });
+    }
   }
 
   void loop() override {
@@ -142,6 +168,7 @@ public:
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_timer(number::Number *n) { timer_ = n; }
+  void set_sequence(select::Select *s) { sequence_ = s; }
 
   void set_light(esphome::light::LightState *light) { light_ = light; }
 
@@ -215,6 +242,7 @@ protected:
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
   number::Number *timer_{nullptr};
+  select::Select *sequence_{nullptr};
 
   esphome::light::LightState *light_{nullptr};
   std::vector<CFXRunner *> runners_; // Registered active runners

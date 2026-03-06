@@ -143,6 +143,24 @@ protected:
   number::Number *outro_duration_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
 
+  // Sequence tracking data
+  CFXSequence *active_sequence_{nullptr};
+  esphome::optional<uint8_t> sequence_speed_;
+  esphome::optional<uint8_t> sequence_intensity_;
+  esphome::optional<uint8_t> sequence_palette_;
+  uint32_t sequence_iterations_{0};
+
+public:
+  void set_active_sequence(CFXSequence *seq, optional<uint8_t> spd,
+                           optional<uint8_t> iten, optional<uint8_t> pal,
+                           uint32_t itr) {
+    this->active_sequence_ = seq;
+    this->sequence_speed_ = spd;
+    this->sequence_intensity_ = iten;
+    this->sequence_palette_ = pal;
+    this->sequence_iterations_ = itr;
+  }
+
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxOnReachTrigger *> on_reach_triggers_;
@@ -232,6 +250,58 @@ protected:
   // Transition length saved/restored around effect runs for virtual segments
   // to prevent the white flash from ESPHome's transition engine.
   uint32_t saved_transition_length_{0};
+};
+
+} // namespace chimera_fx
+} // namespace esphome
+
+#include "esphome/components/light/light_call.h"
+
+namespace esphome {
+namespace chimera_fx {
+
+template <typename... Ts> class PlayEffectAction : public Action<Ts...> {
+public:
+  PlayEffectAction(light::LightState *light) : light_(light) {}
+
+  TEMPLATABLE_VALUE(std::string, effect);
+  TEMPLATABLE_VALUE(uint8_t, speed);
+  TEMPLATABLE_VALUE(uint8_t, intensity);
+  TEMPLATABLE_VALUE(uint8_t, palette);
+  TEMPLATABLE_VALUE(bool, mirror);
+
+  void play(Ts... x) override {
+    auto call = this->light_->turn_on();
+
+    if (this->effect_.has_value()) {
+      call.set_effect(this->effect_.value(x...));
+    }
+
+    call.perform();
+    // After calling perform(), ESPHome activates the target effect object
+    // natively. If the active effect is CFXAddressableLightEffect, we can
+    // dynamically access it and inject our parameter presets immediately before
+    // the engine's first update cycle.
+
+    if (this->light_->get_output() &&
+        this->light_->get_output()->get_effect()) {
+      auto *active_fx = dynamic_cast<CFXAddressableLightEffect *>(
+          this->light_->get_output()->get_effect());
+      if (active_fx != nullptr) {
+        if (this->speed_.has_value())
+          active_fx->set_speed_preset(this->speed_.value(x...));
+        if (this->intensity_.has_value())
+          active_fx->set_intensity_preset(this->intensity_.value(x...));
+        if (this->palette_.has_value())
+          active_fx->set_palette_preset(this->palette_.value(x...));
+        if (this->mirror_.has_value())
+          active_fx->set_mirror_preset(this->mirror_.value(x...));
+      }
+    }
+  }
+
+protected:
+  light::LightState *light_;
 };
 
 } // namespace chimera_fx

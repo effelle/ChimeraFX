@@ -3,9 +3,13 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
+#include "esphome/core/helpers.h"
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace esphome {
-namespace cfx_sequencer {
+namespace cfx_sequence {
 
 class CfxSeqOnStartTrigger : public Trigger<> {};
 class CfxSeqOnCompleteTrigger : public Trigger<> {};
@@ -29,12 +33,27 @@ protected:
   int32_t target_pixel_;
 };
 
-class CFXSequencer : public Component {
+class CFXSequence : public Component {
 public:
+  CFXSequence(const std::string &name, const std::string &effect)
+      : name_(name), effect_(effect) {}
+
   void setup() override;
   void dump_config() override;
 
+  // Sequence runtime controllers
+  void start();
+  void stop();
+
   void add_light(light::LightState *state) { this->lights_.push_back(state); }
+
+  // Custom payload bindings
+  void set_speed(uint8_t speed) { this->speed_ = speed; }
+  void set_intensity(uint8_t intensity) { this->intensity_ = intensity; }
+  void set_palette(uint8_t palette) { this->palette_ = palette; }
+  void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
+
+  std::string get_name() const { return this->name_; }
 
   void add_on_start_trigger(CfxSeqOnStartTrigger *t) {
     this->on_start_triggers_.push_back(t);
@@ -55,6 +74,14 @@ public:
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
 
 protected:
+  std::string name_;
+  std::string effect_;
+
+  esphome::optional<uint8_t> speed_;
+  esphome::optional<uint8_t> intensity_;
+  esphome::optional<uint8_t> palette_;
+  uint32_t iterations_{0};
+
   std::vector<light::LightState *> lights_;
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
@@ -66,7 +93,7 @@ protected:
   int32_t last_triggered_pixel_{-1};
 
 public:
-  static std::vector<CFXSequencer *> instances;
+  static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
     for (auto *l : this->lights_) {
       if (l == state)
@@ -76,5 +103,25 @@ public:
   }
 };
 
-} // namespace cfx_sequencer
+template <typename... Ts> class StartAction : public Action<Ts...> {
+public:
+  StartAction(CFXSequence *sequence) : sequence_(sequence) {}
+
+  void play(Ts... x) override { this->sequence_->start(); }
+
+protected:
+  CFXSequence *sequence_;
+};
+
+template <typename... Ts> class StopAction : public Action<Ts...> {
+public:
+  StopAction(CFXSequence *sequence) : sequence_(sequence) {}
+
+  void play(Ts... x) override { this->sequence_->stop(); }
+
+protected:
+  CFXSequence *sequence_;
+};
+
+} // namespace cfx_sequence
 } // namespace esphome
