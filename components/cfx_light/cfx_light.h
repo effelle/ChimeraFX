@@ -293,6 +293,7 @@ protected:
   bool is_syncing_{false};
   bool prev_master_state_{false};
   bool segment_needs_flush_{false};
+  uint8_t tracked_brightness_{0};
 };
 
 } // namespace cfx_light

@@ -450,6 +450,7 @@ void CFXLightOutput::update_state(light::LightState *state) {
   // We are NOT in a transition. Apply the manual brightness correction.
   auto max_brightness =
       light::to_uint8_scale(val.get_brightness() * val.get_state());
+  this->tracked_brightness_ = max_brightness;
   this->correction_.set_local_brightness(max_brightness);
 
   // Solid color logic for non-segmented lights (no transition, no effect)
@@ -538,8 +539,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
   static uint32_t last_gate_log = 0;
   if (millis() - last_gate_log > 2000) {
-    ESP_LOGD(TAG, "Hardware Flush: Local Brightness = %d",
-             (int)this->correction_.get_local_brightness());
+    ESP_LOGD(TAG, "Hardware Flush: Tracked Brightness Gate = %d",
+             (int)this->tracked_brightness_);
     last_gate_log = millis();
   }
   this->last_refresh_ = now;
