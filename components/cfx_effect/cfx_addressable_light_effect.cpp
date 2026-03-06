@@ -779,12 +779,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!this->segment_runners_.empty()) {
     for (auto *r : this->segment_runners_) {
+      r->target_light = &it; // INJECT: Ensure we write to current buffer
       r->setDebug(debug_active);
       if (!runner_name.empty())
         r->setName(runner_name.c_str());
       r->setColor(color);
     }
   } else if (this->runner_) {
+    this->runner_->target_light =
+        &it; // INJECT: Ensure we write to current buffer
     this->runner_->setDebug(debug_active);
     if (!runner_name.empty())
       this->runner_->setName(runner_name.c_str());
