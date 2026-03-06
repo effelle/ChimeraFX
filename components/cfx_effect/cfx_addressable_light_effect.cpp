@@ -859,239 +859,239 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       v.set_brightness(1.0f);
       v.set_state(1.0f);
       bri_state->current_values = v;
-    }
-    bri = 1.0f;
-  } else {
-    bri = bri_state->current_values.get_brightness();
-    if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
-        this->state_ != OUTRO_RUNNING) {
-      bri *= bri_state->current_values.get_state();
-    }
-  }
-}
-
-// Main CFX effect Running — Multi-Segment Swap-on-Service
-// MUST RUN before intro/outro masks!
-if (!this->segment_runners_.empty()) {
-  // Multi-segment: iterate all runners, swapping the global instance
-  for (auto *r : this->segment_runners_) {
-    chimera_fx::instance = r;
-    r->global_brightness_ = bri;
-    r->service();
-
-    // Handle Iteration Completion
-    if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-      this->active_sequence_->report_event_complete();
-      this->active_sequence_->stop();
-      break; // Stop all once sequence is over
+      bri = 1.0f;
+    } else {
+      bri = bri_state->current_values.get_brightness();
+      if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
+          this->state_ != OUTRO_RUNNING) {
+        bri *= bri_state->current_values.get_state();
+      }
     }
   }
-} else if (this->runner_) {
-  // Single runner (backward compatible)
-  chimera_fx::instance = this->runner_;
-  this->runner_->global_brightness_ = bri;
-  this->runner_->service();
 
-  // Handle Iteration Completion
-  if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
-    this->active_sequence_->report_event_complete();
-    this->active_sequence_->stop();
-  }
-}
-
-// === State Machine: Intro vs Main Effect ===
-if (this->intro_active_ && this->active_sequence_ == nullptr) {
-  // Run intro on ALL segments (swap-on-service pattern)
-  // This acts as a mask on top of the already-rendered main effect.
+  // Main CFX effect Running — Multi-Segment Swap-on-Service
+  // MUST RUN before intro/outro masks!
   if (!this->segment_runners_.empty()) {
+    // Multi-segment: iterate all runners, swapping the global instance
     for (auto *r : this->segment_runners_) {
       chimera_fx::instance = r;
+      r->global_brightness_ = bri;
+      r->service();
+
+      // Handle Iteration Completion
+      if (r->effect_complete_ && this->active_sequence_ != nullptr) {
+        this->active_sequence_->report_event_complete();
+        this->active_sequence_->stop();
+        break; // Stop all once sequence is over
+      }
+    }
+  } else if (this->runner_) {
+    // Single runner (backward compatible)
+    chimera_fx::instance = this->runner_;
+    this->runner_->global_brightness_ = bri;
+    this->runner_->service();
+
+    // Handle Iteration Completion
+    if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
+      this->active_sequence_->report_event_complete();
+      this->active_sequence_->stop();
+    }
+  }
+
+  // === State Machine: Intro vs Main Effect ===
+  if (this->intro_active_ && this->active_sequence_ == nullptr) {
+    // Run intro on ALL segments (swap-on-service pattern)
+    // This acts as a mask on top of the already-rendered main effect.
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        chimera_fx::instance = r;
+        this->run_intro(it, current_color);
+      }
+    } else {
+      chimera_fx::instance = this->runner_;
       this->run_intro(it, current_color);
     }
-  } else {
-    chimera_fx::instance = this->runner_;
-    this->run_intro(it, current_color);
-  }
 
-  // RESOLVE: be84cb0 - Build Fix Verification Log
-  ESP_LOGD("chimera_fx", "Sequencer: Resolving intro duration...");
-  // 2. Resolve Intro Completion Duration (Priority Hierarchy)
-  uint32_t duration_ms = 1000; // Final Default: 1.0s
-  number::Number *dur_num = this->intro_duration_;
-  if (dur_num == nullptr && this->controller_ != nullptr)
-    dur_num = this->controller_->get_intro_duration();
+    // RESOLVE: be84cb0 - Build Fix Verification Log
+    ESP_LOGD("chimera_fx", "Sequencer: Resolving intro duration...");
+    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
+    uint32_t duration_ms = 1000; // Final Default: 1.0s
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
 
-  if (dur_num != nullptr && dur_num->has_state()) {
-    // High Priority: UI Slider
-    duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-  } else if (this->intro_duration_preset_.has_value()) {
-    // Medium Priority: YAML Preset
-    duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-  } else {
-    // Monochromatic Preset Fallback: Speed Slider
-    MonochromaticPreset preset =
-        this->get_monochromatic_preset_(this->effect_id_);
-    if (preset.is_active) {
-      number::Number *speed_num = this->speed_;
-      if (speed_num == nullptr && this->controller_ != nullptr)
-        speed_num = this->controller_->get_speed();
-
-      if (speed_num != nullptr && speed_num->has_state()) {
-        // Map Speed (0-255) to Duration (500ms up to 10000ms)
-        float speed_val = speed_num->state;
-        duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-      } else {
-        duration_ms = 1000; // Standard 1s default
-      }
-    }
-  }
-
-  if (millis() - this->intro_start_time_ > duration_ms) {
-    this->intro_active_ = false;
-
-    // Check if Transition is enabled via config
-    float trans_dur = (this->transition_duration_ != nullptr &&
-                       this->transition_duration_->has_state())
-                          ? this->transition_duration_->state
-                          : 1.5f;
-
-    MonochromaticPreset preset =
-        this->get_monochromatic_preset_(this->effect_id_);
-    if (preset.is_active) {
-      trans_dur = 0.0f; // Instant finish for Monochromatic Presets
-    }
-
-    if (trans_dur > 0.0f) {
-      // Snapshot Intro End State
-      this->intro_snapshot_.resize(it.size());
-      for (int i = 0; i < it.size(); i++) {
-        this->intro_snapshot_[i] = it[i].get();
-      }
-      this->state_ = TRANSITION_RUNNING; // Use RUNNING to signify Active Blend
-      this->transition_start_ms_ = millis();
+    if (dur_num != nullptr && dur_num->has_state()) {
+      // High Priority: UI Slider
+      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      // Medium Priority: YAML Preset
+      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
     } else {
-      this->state_ = TRANSITION_NONE;
-    }
+      // Monochromatic Preset Fallback: Speed Slider
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
 
-    // Ensure Main Runner is reset/started
-    chimera_fx::instance = this->runner_;
-    this->runner_->start();
-  }
-}
-
-// Handle Intro→Main Blending
-if (this->state_ == TRANSITION_RUNNING) {
-  uint32_t trans_elapsed = millis() - this->transition_start_ms_;
-  float trans_dur_ms =
-      (this->transition_duration_ ? this->transition_duration_->state * 1000.0f
-                                  : 1500.0f);
-
-  // Soft Dissolve (Fairy Dust with Crossfade) Logic
-  const float softness = 0.2f; // Configurable softness
-  // Scale progress to ensure all pixels complete transition even with
-  // softness delay
-  float progress = ((float)trans_elapsed / trans_dur_ms) * (1.0f + softness);
-
-  // Seed for deterministic random mask
-  uint32_t seed = this->transition_start_ms_;
-
-  for (int i = 0; i < it.size(); i++) {
-    if (i >= this->intro_snapshot_.size())
-      break; // Safety
-
-    // Generate stable random threshold for this pixel [0.0, 1.0]
-    uint32_t h = i + seed;
-    h = ((h >> 16) ^ h) * 0x45d9f3b;
-    h = ((h >> 16) ^ h) * 0x45d9f3b;
-    h = (h >> 16) ^ h;
-    float threshold = (h & 0xFF) / 255.0f;
-
-    // Calculate mix factor based on progress relative to threshold
-    // If progress < threshold, mix is 0 (Intro).
-    // If progress > threshold + softness, mix is 1 (Main).
-    // In between, it linearly interpolates.
-    float diff = (progress - threshold) / softness;
-    float mix = diff < 0.0f ? 0.0f : (diff > 1.0f ? 1.0f : diff);
-
-    if (mix < 1.0f) {
-      if (mix <= 0.0f) {
-        it[i] = this->intro_snapshot_[i];
-      } else {
-        // Blend Intro -> Main
-        Color buf = this->intro_snapshot_[i];
-        Color main = it[i].get();
-        uint8_t r = (uint8_t)(buf.r * (1.0f - mix) + main.r * mix);
-        uint8_t g = (uint8_t)(buf.g * (1.0f - mix) + main.g * mix);
-        uint8_t b = (uint8_t)(buf.b * (1.0f - mix) + main.b * mix);
-        uint8_t w = (uint8_t)(buf.w * (1.0f - mix) + main.w * mix);
-        it[i] = Color(r, g, b, w);
-      }
-    }
-  }
-
-  // End transition when fully complete
-  if (progress >= (1.0f + softness)) {
-    this->state_ = TRANSITION_NONE;
-  }
-}
-
-int32_t leading_pixel = -1;
-int32_t total_pixels = 0;
-if (!this->segment_runners_.empty()) {
-  leading_pixel = this->segment_runners_[0]->current_leading_pixel;
-  total_pixels = this->segment_runners_[0]->_segment.length();
-} else if (this->runner_) {
-  leading_pixel = this->runner_->current_leading_pixel;
-  total_pixels = this->runner_->_segment.length();
-}
-
-if (leading_pixel >= 0 && total_pixels > 0) {
-  float current_percentage = (float)leading_pixel / (float)total_pixels;
-  if (leading_pixel != this->last_leading_pixel_) {
-    // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2)
-    // This is much more robust against fast speeds jumping pixels than
-    // checking == 0
-    if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
-      if (this->last_triggered_percentage_ > 0.8f &&
-          current_percentage < 0.2f) {
-        if (!this->segment_runners_.empty()) {
-          this->segment_runners_[0]->iteration_count_++;
-          if (this->segment_runners_[0]->iteration_count_ >=
-              this->sequence_iterations_) {
-            this->segment_runners_[0]->effect_complete_ = true;
-          }
-        } else if (this->runner_) {
-          this->runner_->iteration_count_++;
-          if (this->runner_->iteration_count_ >= this->sequence_iterations_) {
-            this->runner_->effect_complete_ = true;
-          }
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else {
+          duration_ms = 1000; // Standard 1s default
         }
       }
     }
 
-    this->last_leading_pixel_ = leading_pixel;
-    this->check_positional_triggers(leading_pixel, total_pixels);
-  }
-}
+    if (millis() - this->intro_start_time_ > duration_ms) {
+      this->intro_active_ = false;
 
-// Sequence completion handling
-if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
-  bool is_complete = false;
-  if (!this->segment_runners_.empty() &&
-      this->segment_runners_[0]->effect_complete_) {
-    is_complete = true;
-  } else if (this->runner_ && this->runner_->effect_complete_) {
-    is_complete = true;
+      // Check if Transition is enabled via config
+      float trans_dur = (this->transition_duration_ != nullptr &&
+                         this->transition_duration_->has_state())
+                            ? this->transition_duration_->state
+                            : 1.5f;
+
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        trans_dur = 0.0f; // Instant finish for Monochromatic Presets
+      }
+
+      if (trans_dur > 0.0f) {
+        // Snapshot Intro End State
+        this->intro_snapshot_.resize(it.size());
+        for (int i = 0; i < it.size(); i++) {
+          this->intro_snapshot_[i] = it[i].get();
+        }
+        this->state_ =
+            TRANSITION_RUNNING; // Use RUNNING to signify Active Blend
+        this->transition_start_ms_ = millis();
+      } else {
+        this->state_ = TRANSITION_NONE;
+      }
+
+      // Ensure Main Runner is reset/started
+      chimera_fx::instance = this->runner_;
+      this->runner_->start();
+    }
   }
 
-  if (is_complete) {
-    this->active_sequence_->report_event_complete();
-    this->active_sequence_->stop();
-  }
-}
+  // Handle Intro→Main Blending
+  if (this->state_ == TRANSITION_RUNNING) {
+    uint32_t trans_elapsed = millis() - this->transition_start_ms_;
+    float trans_dur_ms = (this->transition_duration_
+                              ? this->transition_duration_->state * 1000.0f
+                              : 1500.0f);
 
-it.schedule_show();
-chimera_fx::instance = nullptr;
+    // Soft Dissolve (Fairy Dust with Crossfade) Logic
+    const float softness = 0.2f; // Configurable softness
+    // Scale progress to ensure all pixels complete transition even with
+    // softness delay
+    float progress = ((float)trans_elapsed / trans_dur_ms) * (1.0f + softness);
+
+    // Seed for deterministic random mask
+    uint32_t seed = this->transition_start_ms_;
+
+    for (int i = 0; i < it.size(); i++) {
+      if (i >= this->intro_snapshot_.size())
+        break; // Safety
+
+      // Generate stable random threshold for this pixel [0.0, 1.0]
+      uint32_t h = i + seed;
+      h = ((h >> 16) ^ h) * 0x45d9f3b;
+      h = ((h >> 16) ^ h) * 0x45d9f3b;
+      h = (h >> 16) ^ h;
+      float threshold = (h & 0xFF) / 255.0f;
+
+      // Calculate mix factor based on progress relative to threshold
+      // If progress < threshold, mix is 0 (Intro).
+      // If progress > threshold + softness, mix is 1 (Main).
+      // In between, it linearly interpolates.
+      float diff = (progress - threshold) / softness;
+      float mix = diff < 0.0f ? 0.0f : (diff > 1.0f ? 1.0f : diff);
+
+      if (mix < 1.0f) {
+        if (mix <= 0.0f) {
+          it[i] = this->intro_snapshot_[i];
+        } else {
+          // Blend Intro -> Main
+          Color buf = this->intro_snapshot_[i];
+          Color main = it[i].get();
+          uint8_t r = (uint8_t)(buf.r * (1.0f - mix) + main.r * mix);
+          uint8_t g = (uint8_t)(buf.g * (1.0f - mix) + main.g * mix);
+          uint8_t b = (uint8_t)(buf.b * (1.0f - mix) + main.b * mix);
+          uint8_t w = (uint8_t)(buf.w * (1.0f - mix) + main.w * mix);
+          it[i] = Color(r, g, b, w);
+        }
+      }
+    }
+
+    // End transition when fully complete
+    if (progress >= (1.0f + softness)) {
+      this->state_ = TRANSITION_NONE;
+    }
+  }
+
+  int32_t leading_pixel = -1;
+  int32_t total_pixels = 0;
+  if (!this->segment_runners_.empty()) {
+    leading_pixel = this->segment_runners_[0]->current_leading_pixel;
+    total_pixels = this->segment_runners_[0]->_segment.length();
+  } else if (this->runner_) {
+    leading_pixel = this->runner_->current_leading_pixel;
+    total_pixels = this->runner_->_segment.length();
+  }
+
+  if (leading_pixel >= 0 && total_pixels > 0) {
+    float current_percentage = (float)leading_pixel / (float)total_pixels;
+    if (leading_pixel != this->last_leading_pixel_) {
+      // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2)
+      // This is much more robust against fast speeds jumping pixels than
+      // checking == 0
+      if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+        if (this->last_triggered_percentage_ > 0.8f &&
+            current_percentage < 0.2f) {
+          if (!this->segment_runners_.empty()) {
+            this->segment_runners_[0]->iteration_count_++;
+            if (this->segment_runners_[0]->iteration_count_ >=
+                this->sequence_iterations_) {
+              this->segment_runners_[0]->effect_complete_ = true;
+            }
+          } else if (this->runner_) {
+            this->runner_->iteration_count_++;
+            if (this->runner_->iteration_count_ >= this->sequence_iterations_) {
+              this->runner_->effect_complete_ = true;
+            }
+          }
+        }
+      }
+
+      this->last_leading_pixel_ = leading_pixel;
+      this->check_positional_triggers(leading_pixel, total_pixels);
+    }
+  }
+
+  // Sequence completion handling
+  if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+    bool is_complete = false;
+    if (!this->segment_runners_.empty() &&
+        this->segment_runners_[0]->effect_complete_) {
+      is_complete = true;
+    } else if (this->runner_ && this->runner_->effect_complete_) {
+      is_complete = true;
+    }
+
+    if (is_complete) {
+      this->active_sequence_->report_event_complete();
+      this->active_sequence_->stop();
+    }
+  }
+
+  it.schedule_show();
+  chimera_fx::instance = nullptr;
 }
 
 uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
