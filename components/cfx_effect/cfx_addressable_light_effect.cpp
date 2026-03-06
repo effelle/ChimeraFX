@@ -848,16 +848,19 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   auto *bri_state = this->get_light_state();
   if (bri_state != nullptr) {
     if (this->active_sequence_ != nullptr) {
-      // FORCE SNAP: If we are in a sequence, we MUST be at 100% brightness
-      // immediately. Some ESPHome drivers scale the buffer by current_values
-      // which might be 0 during a cold-boot transition. We snap it here to ON.
+      // NUCLEAR SNAP: Always kill transitions and force 100% state every frame
+      // during a sequence. This prevents any "latent" transformers or driver
+      // scaling from keeping the strip black.
       auto v = bri_state->current_values;
+
+      // Kill transformer every frame just to be sure
+      chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
+
       if (v.get_brightness() < 0.99f || v.get_state() < 0.99f) {
-        ESP_LOGD(
-            "chimera_fx",
-            "RESCUE: Snapping LightState from Bri=%.2f State=%.2f to 100%%",
-            v.get_brightness(), v.get_state());
-        chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
+        ESP_LOGD("chimera_fx",
+                 "NUCLEAR RESCUE: Forcing LightState from Bri=%.2f State=%.2f "
+                 "to 100%%",
+                 v.get_brightness(), v.get_state());
         v.set_brightness(1.0f);
         v.set_state(1.0f);
         bri_state->current_values = v;
@@ -1094,6 +1097,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   it.schedule_show();
+  if (this->active_sequence_ != nullptr) {
+    it.show(); // FORCE PHYSICAL FLUSH
+  }
   chimera_fx::instance = nullptr;
 }
 
