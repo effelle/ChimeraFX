@@ -536,6 +536,12 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->schedule_show();
     return;
   }
+  static uint32_t last_gate_log = 0;
+  if (millis() - last_gate_log > 2000) {
+    ESP_LOGD(TAG, "Hardware Flush: Local Brightness = %d",
+             (int)this->correction_.get_local_brightness());
+    last_gate_log = millis();
+  }
   this->last_refresh_ = now;
   this->mark_shown_();
 
