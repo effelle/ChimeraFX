@@ -77,6 +77,8 @@ void CFXSequence::start() {
     // the effect render to a black strip even though the runner is executing.
     auto call = l->turn_on();
     call.set_rgb(1.0f, 1.0f, 1.0f);
+    call.set_transition_length(
+        0); // snap on instantly; CFX effect handles its own fade-in
     call.set_effect(this->effect_);
     call.perform();
 
