@@ -32,6 +32,9 @@ class CFXControl;
 class CFXAddressableLightEffect : public light::AddressableLightEffect {
 public:
   CFXAddressableLightEffect(const char *name);
+  virtual ~CFXAddressableLightEffect();
+
+  static std::vector<CFXAddressableLightEffect *> all_effects;
 
   void start() override;
   void stop() override;
@@ -266,6 +269,13 @@ public:
 namespace esphome {
 namespace chimera_fx {
 
+class LightStateProxy : public light::LightState {
+public:
+  static light::LightEffect *get_active_effect(light::LightState *state) {
+    return static_cast<LightStateProxy *>(state)->get_active_effect_();
+  }
+};
+
 template <typename... Ts> class PlayEffectAction : public Action<Ts...> {
 public:
   PlayEffectAction(light::LightState *light) : light_(light) {}
@@ -290,9 +300,16 @@ public:
     // the engine's first update cycle.
 
     // 2. Extract the underlying ChimeraFX effect to inject overrides
-    if (this->light_->get_active_effect_() != nullptr) {
-      auto *active_fx = dynamic_cast<CFXAddressableLightEffect *>(
-          this->light_->get_active_effect_());
+    light::LightEffect *effect =
+        LightStateProxy::get_active_effect(this->light_);
+    if (effect != nullptr) {
+      CFXAddressableLightEffect *active_fx = nullptr;
+      for (auto *inst : CFXAddressableLightEffect::all_effects) {
+        if (inst == effect) {
+          active_fx = inst;
+          break;
+        }
+      }
       if (active_fx != nullptr) {
         if (this->speed_.has_value())
           active_fx->set_speed_preset(this->speed_.value(x...));
