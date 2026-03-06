@@ -80,6 +80,9 @@ void CFXSequence::start() {
     // "White" which drives 0 to all RGB channels on RGB-only strips and makes
     // the effect render to a black strip even though the runner is executing.
     auto call = l->turn_on();
+    ESP_LOGD(TAG,
+             "  Sequence Turn On: Effect='%s', RGB=(1,1,1), Bri=1.0, Trans=0",
+             this->effect_.c_str());
     call.set_rgb(1.0f, 1.0f, 1.0f);
     call.set_brightness(1.0f);     // Ensure 100% brightness
     call.set_transition_length(0); // Snap-on
@@ -98,8 +101,15 @@ void CFXSequence::start() {
         }
       }
       if (active_fx != nullptr) {
+        ESP_LOGD(TAG, "  Binding Sequence overrides to Effect instance %p",
+                 active_fx);
         active_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                        this->palette_, this->iterations_);
+      } else {
+        ESP_LOGW(
+            TAG,
+            "  FAILED to find matching ChimeraFX effect instance for light %p",
+            l);
       }
     }
   }

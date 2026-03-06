@@ -775,6 +775,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                color);
       color_log_timer = millis();
     }
+  } else {
+    static uint32_t null_state_log = 0;
+    if (millis() - null_state_log > 5000) {
+      ESP_LOGW("chimera_fx", "apply() - get_light_state() is NULL!");
+      null_state_log = millis();
+    }
   }
 
   if (!this->segment_runners_.empty()) {
@@ -845,6 +851,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // which might be 0 during a cold-boot transition. We snap it here to ON.
       auto v = bri_state->current_values;
       if (v.get_brightness() < 0.99f || v.get_state() < 0.99f) {
+        ESP_LOGD(
+            "chimera_fx",
+            "RESCUE: Snapping LightState from Bri=%.2f State=%.2f to 100%%",
+            v.get_brightness(), v.get_state());
         chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
         v.set_brightness(1.0f);
         v.set_state(1.0f);

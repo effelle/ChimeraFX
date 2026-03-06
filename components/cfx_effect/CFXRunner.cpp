@@ -185,8 +185,9 @@ void Segment::setPixelColor(int n, uint32_t c) {
       static uint32_t px_log_timer = 0;
       if (cfx_millis() - px_log_timer > 2000) {
         ESP_LOGD("chimera_fx",
-                 "Runner SetPixel(0): R=%d G=%d B=%d W=%d (GlobalBri=%.2f)", r,
-                 g, b, w, instance->global_brightness_);
+                 "Runner SetPixel(0): R=%d G=%d B=%d W=%d (GlobalBri=%.2f) -> "
+                 "Buffer Index %d",
+                 r, g, b, w, instance->global_brightness_, global_index);
         px_log_timer = cfx_millis();
       }
     }
