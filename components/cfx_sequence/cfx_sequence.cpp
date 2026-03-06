@@ -11,6 +11,29 @@ namespace cfx_sequence {
 static const char *const TAG = "cfx_sequence";
 
 std::vector<CFXSequence *> CFXSequence::instances;
+CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
+
+void CFXSequenceSelect::setup() {
+  CFXSequenceSelect::instance = this;
+  this->add_on_state_callback([this](const std::string &value, size_t index) {
+    if (value == "None") {
+      for (auto *seq : CFXSequence::instances) {
+        seq->stop();
+      }
+    } else {
+      for (auto *seq : CFXSequence::instances) {
+        if (seq->get_name() == value) {
+          seq->start();
+          break;
+        }
+      }
+    }
+  });
+}
+
+void CFXSequenceSelect::control(const std::string &value) {
+  this->publish_state(value);
+}
 
 void CFXSequence::setup() {
   ESP_LOGCONFIG(TAG, "Setting up CFX Sequence '%s'...", this->name_.c_str());
@@ -28,6 +51,10 @@ void CFXSequence::dump_config() {
 
 void CFXSequence::start() {
   ESP_LOGD(TAG, "Starting Sequence: %s", this->name_.c_str());
+
+  if (CFXSequenceSelect::instance != nullptr) {
+    CFXSequenceSelect::instance->publish_state(this->name_);
+  }
 
   for (auto *l : this->lights_) {
     // 1. Issue standard light.turn_on with the target effect
@@ -50,6 +77,12 @@ void CFXSequence::start() {
 
 void CFXSequence::stop() {
   ESP_LOGD(TAG, "Stopping Sequence: %s", this->name_.c_str());
+
+  if (CFXSequenceSelect::instance != nullptr &&
+      CFXSequenceSelect::instance->has_state() &&
+      CFXSequenceSelect::instance->current_option() == this->name_) {
+    CFXSequenceSelect::instance->publish_state("None");
+  }
 
   for (auto *l : this->lights_) {
     // First unbind the sequence so original defaults come back

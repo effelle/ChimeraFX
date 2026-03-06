@@ -22,10 +22,6 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 
-#ifdef USE_CFX_SEQUENCER
-#include "../cfx_sequence/cfx_sequence.h"
-#endif
-
 namespace esphome {
 namespace chimera_fx {
 
@@ -112,209 +108,184 @@ public:
             }
           });
     }
+  });
+}
+}
 
-    if (this->sequence_) {
-      this->sequence_->add_on_state_callback(
-          [this](const std::string &value, size_t index) {
-#ifdef USE_CFX_SEQUENCER
-            if (value == "None") {
-              for (auto *seq : cfx_sequence::CFXSequence::instances) {
-                // Easiest heuristic to find currently running sequences and
-                // kill them (Optionally could just kill them all, or track
-                // "active" ones)
-                seq->stop();
-              }
-            } else {
-              for (auto *seq : cfx_sequence::CFXSequence::instances) {
-                if (seq->get_name() == value) {
-                  seq->start();
-                  break;
-                }
-              }
-            }
-#endif
-          });
+void loop() override {
+  if (!light_)
+    return;
+
+  bool light_on = light_->remote_values.is_on();
+  if (was_on_ && !light_on) {
+    // Light turned off -> Reset Timer
+    if (timer_ && timer_->state != 0.0f) {
+      auto call = timer_->make_call();
+      call.set_value(0);
+      call.perform();
     }
   }
+  was_on_ = light_on;
+}
 
-  void loop() override {
-    if (!light_)
+void set_speed(number::Number *n) { speed_ = n; }
+void set_intensity(number::Number *n) { intensity_ = n; }
+void set_palette(select::Select *s) { palette_ = s; }
+void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
+void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
+void set_force_white(esphome::switch_::Switch *s) { force_white_ = s; }
+void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
+void set_intro_effect(select::Select *s) { intro_effect_ = s; }
+void set_intro_duration(number::Number *n) { intro_duration_ = n; }
+void set_intro_use_palette(esphome::switch_::Switch *s) {
+  intro_use_palette_ = s;
+}
+void set_outro_effect(select::Select *s) { outro_effect_ = s; }
+void set_outro_duration(number::Number *n) { outro_duration_ = n; }
+void set_timer(number::Number *n) { timer_ = n; }
+
+void set_light(esphome::light::LightState *light) { light_ = light; }
+
+void register_runner(CFXRunner *runner) {
+  for (auto *r : this->runners_) {
+    if (r == runner)
       return;
-
-    bool light_on = light_->remote_values.is_on();
-    if (was_on_ && !light_on) {
-      // Light turned off -> Reset Timer
-      if (timer_ && timer_->state != 0.0f) {
-        auto call = timer_->make_call();
-        call.set_value(0);
-        call.perform();
-      }
-    }
-    was_on_ = light_on;
   }
+  ESP_LOGD("chimera_fx",
+           "CFXControl[%p]: Registering runner. global_debug_enabled_: %d",
+           this, global_debug_enabled_);
+  this->runners_.push_back(runner);
 
-  void set_speed(number::Number *n) { speed_ = n; }
-  void set_intensity(number::Number *n) { intensity_ = n; }
-  void set_palette(select::Select *s) { palette_ = s; }
-  void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
-  void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
-  void set_force_white(esphome::switch_::Switch *s) { force_white_ = s; }
-  void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
-  void set_intro_effect(select::Select *s) { intro_effect_ = s; }
-  void set_intro_duration(number::Number *n) { intro_duration_ = n; }
-  void set_intro_use_palette(esphome::switch_::Switch *s) {
-    intro_use_palette_ = s;
-  }
-  void set_outro_effect(select::Select *s) { outro_effect_ = s; }
-  void set_outro_duration(number::Number *n) { outro_duration_ = n; }
-  void set_timer(number::Number *n) { timer_ = n; }
-  void set_sequence(select::Select *s) { sequence_ = s; }
-
-  void set_light(esphome::light::LightState *light) { light_ = light; }
-
-  void register_runner(CFXRunner *runner) {
-    for (auto *r : this->runners_) {
-      if (r == runner)
-        return;
-    }
-    ESP_LOGD("chimera_fx",
-             "CFXControl[%p]: Registering runner. global_debug_enabled_: %d",
-             this, global_debug_enabled_);
-    this->runners_.push_back(runner);
-
-    if (speed_ && speed_->has_state())
-      runner->setSpeed((uint8_t)speed_->state);
-    if (intensity_ && intensity_->has_state())
-      runner->setIntensity((uint8_t)intensity_->state);
-    if (mirror_ && mirror_->has_state())
-      runner->setMirror(mirror_->state);
-    if (debug_ && debug_->has_state())
-      runner->setDebug(debug_->state);
-    else
-      runner->setDebug(global_debug_enabled_);
-    if (palette_ && palette_->has_state()) {
-      const char *opt_ptr = palette_->current_option();
-      std::string opt = opt_ptr ? opt_ptr : "";
-      if (opt.length() > 0) {
-        uint8_t pal_idx = get_palette_index_(opt);
-        runner->setPalette(pal_idx);
-      }
+  if (speed_ && speed_->has_state())
+    runner->setSpeed((uint8_t)speed_->state);
+  if (intensity_ && intensity_->has_state())
+    runner->setIntensity((uint8_t)intensity_->state);
+  if (mirror_ && mirror_->has_state())
+    runner->setMirror(mirror_->state);
+  if (debug_ && debug_->has_state())
+    runner->setDebug(debug_->state);
+  else
+    runner->setDebug(global_debug_enabled_);
+  if (palette_ && palette_->has_state()) {
+    const char *opt_ptr = palette_->current_option();
+    std::string opt = opt_ptr ? opt_ptr : "";
+    if (opt.length() > 0) {
+      uint8_t pal_idx = get_palette_index_(opt);
+      runner->setPalette(pal_idx);
     }
   }
+}
 
-  void unregister_runner(CFXRunner *runner) {
-    this->runners_.erase(
-        std::remove(this->runners_.begin(), this->runners_.end(), runner),
-        this->runners_.end());
-  }
+void unregister_runner(CFXRunner *runner) {
+  this->runners_.erase(
+      std::remove(this->runners_.begin(), this->runners_.end(), runner),
+      this->runners_.end());
+}
 
-  number::Number *get_speed() { return speed_; }
-  number::Number *get_intensity() { return intensity_; }
-  select::Select *get_palette() { return palette_; }
-  esphome::switch_::Switch *get_mirror() { return mirror_; }
-  esphome::switch_::Switch *get_autotune() { return autotune_; }
-  esphome::switch_::Switch *get_force_white() { return force_white_; }
+number::Number *get_speed() { return speed_; }
+number::Number *get_intensity() { return intensity_; }
+select::Select *get_palette() { return palette_; }
+esphome::switch_::Switch *get_mirror() { return mirror_; }
+esphome::switch_::Switch *get_autotune() { return autotune_; }
+esphome::switch_::Switch *get_force_white() { return force_white_; }
 
-  esphome::switch_::Switch *get_debug() { return debug_; }
-  select::Select *get_intro_effect() { return intro_effect_; }
-  number::Number *get_intro_duration() { return intro_duration_; }
-  esphome::switch_::Switch *get_intro_use_palette() {
-    return intro_use_palette_;
-  }
-  select::Select *get_outro_effect() { return outro_effect_; }
-  number::Number *get_outro_duration() { return outro_duration_; }
-  number::Number *get_timer() { return timer_; }
+esphome::switch_::Switch *get_debug() { return debug_; }
+select::Select *get_intro_effect() { return intro_effect_; }
+number::Number *get_intro_duration() { return intro_duration_; }
+esphome::switch_::Switch *get_intro_use_palette() { return intro_use_palette_; }
+select::Select *get_outro_effect() { return outro_effect_; }
+number::Number *get_outro_duration() { return outro_duration_; }
+number::Number *get_timer() { return timer_; }
 
-  esphome::light::LightState *get_light() { return light_; }
+esphome::light::LightState *get_light() { return light_; }
 
 protected:
-  number::Number *speed_{nullptr};
-  number::Number *intensity_{nullptr};
-  select::Select *palette_{nullptr};
-  esphome::switch_::Switch *mirror_{nullptr};
-  esphome::switch_::Switch *autotune_{nullptr};
-  esphome::switch_::Switch *force_white_{nullptr};
+number::Number *speed_{nullptr};
+number::Number *intensity_{nullptr};
+select::Select *palette_{nullptr};
+esphome::switch_::Switch *mirror_{nullptr};
+esphome::switch_::Switch *autotune_{nullptr};
+esphome::switch_::Switch *force_white_{nullptr};
 
-  esphome::switch_::Switch *debug_{nullptr};
-  select::Select *intro_effect_{nullptr};
-  number::Number *intro_duration_{nullptr};
-  esphome::switch_::Switch *intro_use_palette_{nullptr};
-  select::Select *outro_effect_{nullptr};
-  number::Number *outro_duration_{nullptr};
-  number::Number *timer_{nullptr};
-  select::Select *sequence_{nullptr};
+esphome::switch_::Switch *debug_{nullptr};
+select::Select *intro_effect_{nullptr};
+number::Number *intro_duration_{nullptr};
+esphome::switch_::Switch *intro_use_palette_{nullptr};
+select::Select *outro_effect_{nullptr};
+number::Number *outro_duration_{nullptr};
+number::Number *timer_{nullptr};
 
-  esphome::light::LightState *light_{nullptr};
-  std::vector<CFXRunner *> runners_; // Registered active runners
-  bool was_on_{false};
+esphome::light::LightState *light_{nullptr};
+std::vector<CFXRunner *> runners_; // Registered active runners
+bool was_on_{false};
 
-  void on_timer_tick_() {
-    if (timer_ == nullptr || light_ == nullptr)
-      return;
+void on_timer_tick_() {
+  if (timer_ == nullptr || light_ == nullptr)
+    return;
 
-    float val = timer_->state;
-    if (val > 0) {
-      val -= 1.0f;
-      if (val <= 0) {
-        val = 0;
-        auto call = light_->turn_off();
-        call.perform();
-      }
-      timer_->publish_state(val);
+  float val = timer_->state;
+  if (val > 0) {
+    val -= 1.0f;
+    if (val <= 0) {
+      val = 0;
+      auto call = light_->turn_off();
+      call.perform();
     }
+    timer_->publish_state(val);
   }
+}
 
-  uint8_t get_palette_index_(const std::string &name) {
-    if (name == "Aurora")
-      return 1;
-    if (name == "Forest")
-      return 2;
-    if (name == "Halloween")
-      return 3;
-    if (name == "Rainbow")
-      return 4;
-    if (name == "Fire")
-      return 5;
-    if (name == "Sunset")
-      return 6;
-    if (name == "Ice")
-      return 7;
-    if (name == "Party")
-      return 8;
-    if (name == "Lava")
-      return 9;
-    if (name == "Pastel")
-      return 10;
-    if (name == "Ocean")
-      return 11;
-    if (name == "HeatColors")
-      return 12;
-    if (name == "Sakura")
-      return 13;
-    if (name == "Rivendell")
-      return 14;
-    if (name == "Cyberpunk")
-      return 15;
-    if (name == "OrangeTeal")
-      return 16;
-    if (name == "Christmas")
-      return 17;
-    if (name == "RedBlue")
-      return 18;
-    if (name == "Matrix")
-      return 19;
-    if (name == "SunnyGold")
-      return 20;
-    if (name == "Solid")
-      return 255; // 21 in select, 255 internal
-    if (name == "Fairy")
-      return 22;
-    if (name == "Twilight")
-      return 23;
-    if (name == "Default")
-      return 0; // Handled by fallback in effect
-    return 0;
-  }
+uint8_t get_palette_index_(const std::string &name) {
+  if (name == "Aurora")
+    return 1;
+  if (name == "Forest")
+    return 2;
+  if (name == "Halloween")
+    return 3;
+  if (name == "Rainbow")
+    return 4;
+  if (name == "Fire")
+    return 5;
+  if (name == "Sunset")
+    return 6;
+  if (name == "Ice")
+    return 7;
+  if (name == "Party")
+    return 8;
+  if (name == "Lava")
+    return 9;
+  if (name == "Pastel")
+    return 10;
+  if (name == "Ocean")
+    return 11;
+  if (name == "HeatColors")
+    return 12;
+  if (name == "Sakura")
+    return 13;
+  if (name == "Rivendell")
+    return 14;
+  if (name == "Cyberpunk")
+    return 15;
+  if (name == "OrangeTeal")
+    return 16;
+  if (name == "Christmas")
+    return 17;
+  if (name == "RedBlue")
+    return 18;
+  if (name == "Matrix")
+    return 19;
+  if (name == "SunnyGold")
+    return 20;
+  if (name == "Solid")
+    return 255; // 21 in select, 255 internal
+  if (name == "Fairy")
+    return 22;
+  if (name == "Twilight")
+    return 23;
+  if (name == "Default")
+    return 0; // Handled by fallback in effect
+  return 0;
+}
 };
 
 } // namespace chimera_fx

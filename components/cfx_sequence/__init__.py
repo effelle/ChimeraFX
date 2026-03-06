@@ -1,18 +1,22 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light
+from esphome.components import light, select
 from esphome import automation
 from esphome.const import (
     CONF_ID,
     CONF_NAME,
     CONF_TRIGGER_ID,
+    CONF_DISABLED_BY_DEFAULT,
+    CONF_INTERNAL,
+    CONF_ICON,
 )
 
-DEPENDENCIES = ["light"]
+DEPENDENCIES = ["light", "select"]
 AUTO_LOAD = ["cfx_effect"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
 CFXSequence = cfx_sequence_ns.class_("CFXSequence", cg.Component)
+CFXSequenceSelect = cfx_sequence_ns.class_("CFXSequenceSelect", select.Select, cg.Component)
 
 # Actions
 StartAction = cfx_sequence_ns.class_("StartAction", automation.Action)
@@ -123,6 +127,33 @@ async def to_code(config):
             trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID], trigger_conf[CONF_PIXEL])
             cg.add(var.add_on_pixel_num_trigger(trigger))
             await automation.build_automation(trigger, [(cg.int32, "pixel")], trigger_conf)
+
+    # ----------------------------------------------------
+    # Generate the global Sequence Select Dropdown
+    # ----------------------------------------------------
+    if len(config) > 0:
+        import esphome.core as core
+        
+        seq_options = ["None"]
+        for seq_conf in config:
+            seq_options.append(seq_conf[CONF_NAME])
+            
+        var_id = core.ID("cfx_global_sequence_select", is_declaration=True, type=CFXSequenceSelect)
+        sel_var = cg.new_Pvariable(var_id)
+        core.CORE.component_ids.add("cfx_global_sequence_select")
+
+        sel_conf = {
+            CONF_ID: var_id,
+            CONF_NAME: "Active Sequence",
+            CONF_ICON: "mdi:movie-open-play",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+        
+        await select.register_select(sel_var, sel_conf, options=seq_options)
+        await cg.register_component(sel_var, sel_conf)
+        cg.add(sel_var.publish_state("None"))
 
 @automation.register_action(
     "cfx_sequence.start",

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/components/light/light_state.h"
+#include "esphome/components/select/select.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
@@ -121,6 +122,14 @@ public:
 
 protected:
   CFXSequence *sequence_;
+};
+
+class CFXSequenceSelect : public select::Select, public Component {
+public:
+  void setup() override;
+  void control(const std::string &value) override;
+
+  static CFXSequenceSelect *instance;
 };
 
 } // namespace cfx_sequence

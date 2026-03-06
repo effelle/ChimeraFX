@@ -10,7 +10,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components.light.types import AddressableLightEffect
 from esphome.components.light.effects import register_addressable_effect
-from esphome.components import number, select, switch
+from esphome.components import number, select, switch, light
 from esphome.const import CONF_ID, CONF_NAME, CONF_UPDATE_INTERVAL, CONF_EFFECTS, CONF_TRIGGER_ID
 from esphome.core import CORE
 from esphome import automation

@@ -44,13 +44,12 @@ EXCLUDE_AUTOTUNE = 7
 EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 EXCLUDE_OUTRO = 10
-EXCLUDE_SEQUENCE = 11
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CFXControl),
     cv.Required(CONF_NAME): cv.string,
     cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
-    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=11)),
+    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
 })
 
 async def to_code(config):
@@ -314,25 +313,3 @@ async def to_code(config):
             await switch.register_switch(debug, conf)
             cg.add(debug.publish_state(False))
             cg.add(var.set_debug(debug))
-
-        # 12. Sequence
-        # Scans ESPHome core for any declared cfx_sequence components
-        if is_effect_target and is_included(EXCLUDE_SEQUENCE):
-            seq_options = ["None"]
-            if "cfx_sequence" in core.CORE.config:
-                for seqconf in core.CORE.config["cfx_sequence"]:
-                    seq_name = seqconf.get(CONF_NAME)
-                    if seq_name:
-                        seq_options.append(str(seq_name))
-
-            conf = {
-                **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_sequence"),
-                CONF_NAME: f"{t_name} Sequence",
-                CONF_ICON: "mdi:movie-open-play",
-                "optimistic": True,
-            }
-            sequence = cg.new_Pvariable(conf[CONF_ID])
-            await select.register_select(sequence, conf, options=seq_options)
-            cg.add(sequence.publish_state("None"))
-            cg.add(var.set_sequence(sequence))
