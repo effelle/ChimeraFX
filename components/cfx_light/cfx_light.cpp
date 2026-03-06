@@ -428,6 +428,14 @@ void CFXLightOutput::loop() {
 void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
 
+  // ALWAYS update the hardware brightness gate. If we don't, and an effect
+  // starts while the light is OFF, the gate stays at 0 and the strip stays
+  // black.
+  auto max_brightness =
+      light::to_uint8_scale(val.get_brightness() * val.get_state());
+  this->tracked_brightness_ = max_brightness;
+  this->correction_.set_local_brightness(max_brightness);
+
   if (this->has_segments()) {
     // Segmented mode: Master LightState is muted.
     // Individual segments handle their own update_state().
@@ -446,12 +454,6 @@ void CFXLightOutput::update_state(light::LightState *state) {
   if (state->is_transformer_active()) {
     return;
   }
-
-  // We are NOT in a transition. Apply the manual brightness correction.
-  auto max_brightness =
-      light::to_uint8_scale(val.get_brightness() * val.get_state());
-  this->tracked_brightness_ = max_brightness;
-  this->correction_.set_local_brightness(max_brightness);
 
   // Solid color logic for non-segmented lights (no transition, no effect)
   Color c = light::color_from_light_color_values(val);
