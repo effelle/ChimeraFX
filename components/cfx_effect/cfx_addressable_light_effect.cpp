@@ -863,6 +863,36 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // === State Machine: Intro vs Main Effect ===
   if (this->intro_active_) {
+    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
+    uint32_t duration_ms = 1000; // Final Default: 1.0s
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+
+    if (dur_num != nullptr && dur_num->has_state()) {
+      // High Priority: UI Slider
+      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      // Medium Priority: YAML Preset
+      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    } else {
+      // Monochromatic Preset Fallback: Speed Slider
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else {
+          duration_ms = 1000; // Standard 1s default
+        }
+      }
+    }
 
     if (millis() - this->intro_start_time_ > duration_ms) {
       this->intro_active_ = false;

@@ -54,6 +54,11 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
 
+  esphome::optional<uint8_t> get_speed() const { return this->speed_; }
+  esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
+  esphome::optional<uint8_t> get_palette() const { return this->palette_; }
+  uint32_t get_iterations() const { return this->iterations_; }
+
   std::string get_name() const { return this->name_; }
 
   void add_on_start_trigger(CfxSeqOnStartTrigger *t) {
