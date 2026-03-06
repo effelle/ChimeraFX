@@ -866,49 +866,49 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       chimera_fx::instance = this->runner_;
       this->runner_->start();
     }
-  } else {
-    // Sync Brightness to Runners (Master + Light Brightness)
-    float bri = 1.0f;
-    auto *bri_state = this->get_light_state();
-    if (bri_state != nullptr) {
-      bri = bri_state->current_values.get_brightness();
-      // Only apply get_state() if not in Intro/Outro/Transition (already
-      // ramping) ALSO skip if a Sequence is active - we want the sequence to be
-      // fully visible immediately even if the ESPHome light state transition
-      // hasn't fully "arrived" yet.
-      if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
-          this->state_ != OUTRO_RUNNING && this->active_sequence_ == nullptr) {
-        bri *= bri_state->current_values.get_state();
-      }
+  }
+
+  // Sync Brightness to Runners (Master + Light Brightness)
+  float bri = 1.0f;
+  auto *bri_state = this->get_light_state();
+  if (bri_state != nullptr) {
+    bri = bri_state->current_values.get_brightness();
+    // Only apply get_state() if not in Intro/Outro/Transition (already
+    // ramping). ALSO skip if a Sequence is active - we want the sequence to be
+    // fully visible immediately even if the ESPHome light state transition
+    // hasn't fully arrived.
+    if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&
+        this->state_ != OUTRO_RUNNING && this->active_sequence_ == nullptr) {
+      bri *= bri_state->current_values.get_state();
     }
+  }
 
-    // Main CFX effect Running — Multi-Segment Swap-on-Service
-    if (!this->segment_runners_.empty()) {
-      // Multi-segment: iterate all runners, swapping the global instance
-      for (auto *r : this->segment_runners_) {
-        chimera_fx::instance = r;
-        r->global_brightness_ = bri;
-        r->service();
-
-        // Handle Iteration Completion
-        if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-          this->active_sequence_->report_event_complete();
-          this->active_sequence_->stop();
-          break; // Stop all once sequence is over
-        }
-      }
-    } else {
-      // Single runner (backward compatible)
-      chimera_fx::instance = this->runner_;
-      this->runner_->global_brightness_ = bri;
-      this->runner_->service();
+  // Main CFX effect Running — Multi-Segment Swap-on-Service
+  // MUST RUN before intro/outro masks!
+  if (!this->segment_runners_.empty()) {
+    // Multi-segment: iterate all runners, swapping the global instance
+    for (auto *r : this->segment_runners_) {
+      chimera_fx::instance = r;
+      r->global_brightness_ = bri;
+      r->service();
 
       // Handle Iteration Completion
-      if (this->runner_->effect_complete_ &&
-          this->active_sequence_ != nullptr) {
+      if (r->effect_complete_ && this->active_sequence_ != nullptr) {
         this->active_sequence_->report_event_complete();
         this->active_sequence_->stop();
+        break; // Stop all once sequence is over
       }
+    }
+  } else {
+    // Single runner (backward compatible)
+    chimera_fx::instance = this->runner_;
+    this->runner_->global_brightness_ = bri;
+    this->runner_->service();
+
+    // Handle Iteration Completion
+    if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
+      this->active_sequence_->report_event_complete();
+      this->active_sequence_->stop();
     }
   }
 
@@ -978,27 +978,33 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     total_pixels = this->runner_->_segment.length();
   }
 
-  if (leading_pixel >= 0 && leading_pixel != this->last_leading_pixel_) {
-    // Iteration tracking: Detect cycle based on leading pixel wrap to 0
-    if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
-      if (this->last_leading_pixel_ > 0 && leading_pixel == 0) {
-        if (!this->segment_runners_.empty()) {
-          this->segment_runners_[0]->iteration_count_++;
-          if (this->segment_runners_[0]->iteration_count_ >=
-              this->sequence_iterations_) {
-            this->segment_runners_[0]->effect_complete_ = true;
-          }
-        } else if (this->runner_) {
-          this->runner_->iteration_count_++;
-          if (this->runner_->iteration_count_ >= this->sequence_iterations_) {
-            this->runner_->effect_complete_ = true;
+  if (leading_pixel >= 0 && total_pixels > 0) {
+    float current_percentage = (float)leading_pixel / (float)total_pixels;
+    if (leading_pixel != this->last_leading_pixel_) {
+      // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2)
+      // This is much more robust against fast speeds jumping pixels than
+      // checking == 0
+      if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+        if (this->last_triggered_percentage_ > 0.8f &&
+            current_percentage < 0.2f) {
+          if (!this->segment_runners_.empty()) {
+            this->segment_runners_[0]->iteration_count_++;
+            if (this->segment_runners_[0]->iteration_count_ >=
+                this->sequence_iterations_) {
+              this->segment_runners_[0]->effect_complete_ = true;
+            }
+          } else if (this->runner_) {
+            this->runner_->iteration_count_++;
+            if (this->runner_->iteration_count_ >= this->sequence_iterations_) {
+              this->runner_->effect_complete_ = true;
+            }
           }
         }
       }
-    }
 
-    this->last_leading_pixel_ = leading_pixel;
-    this->check_positional_triggers(leading_pixel, total_pixels);
+      this->last_leading_pixel_ = leading_pixel;
+      this->check_positional_triggers(leading_pixel, total_pixels);
+    }
   }
 
   // Sequence completion handling
@@ -2493,18 +2499,6 @@ void CFXAddressableLightEffect::check_positional_triggers(
   for (auto *t : this->on_pixel_num_triggers_) {
     if (current_pixel == t->get_target_pixel()) {
       t->trigger(current_pixel);
-    }
-  }
-
-  // Detect loop wrap-around explicitly
-  if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
-    if (this->runner_ && this->runner_->target_iterations_ > 0) {
-      this->runner_->iteration_count_++;
-      if (this->runner_->iteration_count_ >=
-          this->runner_->target_iterations_) {
-        this->runner_->effect_complete_ = true;
-        this->trigger_on_complete();
-      }
     }
   }
 
