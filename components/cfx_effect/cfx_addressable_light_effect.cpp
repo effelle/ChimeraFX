@@ -2376,7 +2376,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
           if (alpha <= 0.0f) {
             it[global_idx] = Color::BLACK;
           } else if (alpha < 1.0f) {
-            Color c = it[global_idx];
+            Color c = it[global_idx].get();
             it[global_idx] =
                 Color((uint8_t)(c.r * alpha), (uint8_t)(c.g * alpha),
                       (uint8_t)(c.b * alpha), (uint8_t)(c.w * alpha));
@@ -2397,8 +2397,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         }
       }
     }
-    break;
-  }
 
     if (symmetry && (seg_len % 2 != 0)) {
       int mid = seg_start + (seg_len / 2);
@@ -2409,149 +2407,149 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
     break;
   }
-case INTRO_MODE_GLITTER: {
-  // Glitter Outro: More and more black pixels appear
-  uint8_t threshold = (uint8_t)(progress * 255.0f);
-  for (int i = 0; i < seg_len; i++) {
-    int global_idx = seg_start + i;
-    uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
-    uint8_t val = hash % 256;
-    if (val < threshold) {
-      it[global_idx] = Color::BLACK;
-    }
-    // Else: Keep 100% brightness of the underlying frame
-  }
-  break;
-}
-case INTRO_MODE_TWIN_PULSE: {
-  // Twin Pulse Outro (Option B: Forward Chase)
-  // The formation (Two pulses + trailing void) races forward.
-  // Progress 0.0: Full light.
-  // Progress 1.0: Full black.
-
-  float length = (float)seg_len;
-  float c_size = length * 0.08f;
-  if (c_size < 3.0f)
-    c_size = 3.0f;
-  float short_gap = length * 0.12f;
-  if (short_gap < 1.0f)
-    short_gap = 1.0f;
-  float long_gap = length * 0.10f;
-  if (long_gap < 1.0f)
-    long_gap = 1.0f;
-  float wipe_fade = length * 0.05f;
-  if (wipe_fade < 1.0f)
-    wipe_fade = 1.0f;
-
-  // Layout (identical to intro but relative to the "Eraser Head")
-  // Leading edge (Eraser Head) is the front of the formation.
-  float c1_front = 0.0f;
-  float c1_back = c1_front - c_size;
-  float c2_front = c1_back - short_gap;
-  float c2_back = c2_front - c_size;
-  float w_front = c2_back - long_gap;
-  float w_solid = w_front - wipe_fade;
-
-  // Total distance to cover so the void (w_solid) clears the strip
-  float total_distance = length - w_solid;
-  float head_pos = (progress * total_distance) + c1_front;
-
-  for (int i = 0; i < seg_len; i++) {
-    int idx = reverse ? (seg_len - 1 - i) : i;
-    int global_idx = seg_start + idx;
-    float fi = (float)idx;
-    float relative_pos = head_pos - fi;
-    float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
-
-    if (relative_pos < 0.0f) {
-      // Ahead of the eraser formation: Smoothly fade down from full
-      // background
-      if (relative_pos > -wipe_fade) {
-        alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
-      } else {
-        alpha = 1.0f;
-      }
-    } else if (relative_pos <= -c1_back) {
-      // Cursor 1: Pulse of Light
-      float c_radius = c_size / 2.0f;
-      float center_pos = (-c1_front + -c1_back) / 2.0f;
-      float dist_to_center = abs(relative_pos - center_pos);
-      if (dist_to_center < c_radius) {
-        // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
-        alpha = 1.0f - (dist_to_center / c_radius);
-      } else {
-        alpha = 0.0f;
-      }
-    } else if (relative_pos < -c2_front) {
-      // Short Gap (Black)
-      alpha = 0.0f;
-    } else if (relative_pos <= -c2_back) {
-      // Cursor 2: Pulse of Light
-      float c_radius = c_size / 2.0f;
-      float center_pos = (-c2_front + -c2_back) / 2.0f;
-      float dist_to_center = abs(relative_pos - center_pos);
-      if (dist_to_center < c_radius) {
-        alpha = 1.0f - (dist_to_center / c_radius);
-      } else {
-        alpha = 0.0f;
-      }
-    } else if (relative_pos < -w_front) {
-      // Long Gap (Black)
-      alpha = 0.0f;
-    } else {
-      // The Void behind the formation
-      alpha = 0.0f;
-    }
-
-    // Apply alpha to existing buffer color
-    if (alpha <= 0.0f) {
-      it[global_idx] = Color::BLACK;
-    } else if (alpha < 1.0f) {
-      Color cur = it[global_idx].get();
-      it[global_idx] =
-          Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
-                (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
-    }
-  }
-  break;
-}
-case INTRO_MODE_MORSE: {
-  uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
-  uint32_t elapsed_morse = millis() - this->outro_start_time_;
-  uint32_t current_bit = elapsed_morse / unit_ms;
-
-  uint64_t mask = 0b11101110111000101011101000101011101ULL;
-  uint8_t total_bits = 35;
-
-  bool is_on = false;
-  if (current_bit < total_bits) {
-    is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
-  } else {
-    is_on = false; // Hold OFF after sequence
-  }
-
-  if (!is_on) {
+  case INTRO_MODE_GLITTER: {
+    // Glitter Outro: More and more black pixels appear
+    uint8_t threshold = (uint8_t)(progress * 255.0f);
     for (int i = 0; i < seg_len; i++) {
-      it[seg_start + i] = Color::BLACK;
+      int global_idx = seg_start + i;
+      uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
+      uint8_t val = hash % 256;
+      if (val < threshold) {
+        it[global_idx] = Color::BLACK;
+      }
+      // Else: Keep 100% brightness of the underlying frame
     }
+    break;
   }
-  break;
-}
-case INTRO_MODE_FADE:
-case INTRO_MODE_NONE:
-default:
-  // Manual fade scalar scaling due to hardware fade circumvention
-  for (int i = 0; i < seg_len; i++) {
-    int global_idx = seg_start + i;
-    Color c = it[global_idx].get();
-    it[global_idx] =
-        Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-              (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
-  }
-  break;
-}
+  case INTRO_MODE_TWIN_PULSE: {
+    // Twin Pulse Outro (Option B: Forward Chase)
+    // The formation (Two pulses + trailing void) races forward.
+    // Progress 0.0: Full light.
+    // Progress 1.0: Full black.
 
-return (progress >= 1.0f);
+    float length = (float)seg_len;
+    float c_size = length * 0.08f;
+    if (c_size < 3.0f)
+      c_size = 3.0f;
+    float short_gap = length * 0.12f;
+    if (short_gap < 1.0f)
+      short_gap = 1.0f;
+    float long_gap = length * 0.10f;
+    if (long_gap < 1.0f)
+      long_gap = 1.0f;
+    float wipe_fade = length * 0.05f;
+    if (wipe_fade < 1.0f)
+      wipe_fade = 1.0f;
+
+    // Layout (identical to intro but relative to the "Eraser Head")
+    // Leading edge (Eraser Head) is the front of the formation.
+    float c1_front = 0.0f;
+    float c1_back = c1_front - c_size;
+    float c2_front = c1_back - short_gap;
+    float c2_back = c2_front - c_size;
+    float w_front = c2_back - long_gap;
+    float w_solid = w_front - wipe_fade;
+
+    // Total distance to cover so the void (w_solid) clears the strip
+    float total_distance = length - w_solid;
+    float head_pos = (progress * total_distance) + c1_front;
+
+    for (int i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i;
+      int global_idx = seg_start + idx;
+      float fi = (float)idx;
+      float relative_pos = head_pos - fi;
+      float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
+
+      if (relative_pos < 0.0f) {
+        // Ahead of the eraser formation: Smoothly fade down from full
+        // background
+        if (relative_pos > -wipe_fade) {
+          alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
+        } else {
+          alpha = 1.0f;
+        }
+      } else if (relative_pos <= -c1_back) {
+        // Cursor 1: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c1_front + -c1_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -c2_front) {
+        // Short Gap (Black)
+        alpha = 0.0f;
+      } else if (relative_pos <= -c2_back) {
+        // Cursor 2: Pulse of Light
+        float c_radius = c_size / 2.0f;
+        float center_pos = (-c2_front + -c2_back) / 2.0f;
+        float dist_to_center = abs(relative_pos - center_pos);
+        if (dist_to_center < c_radius) {
+          alpha = 1.0f - (dist_to_center / c_radius);
+        } else {
+          alpha = 0.0f;
+        }
+      } else if (relative_pos < -w_front) {
+        // Long Gap (Black)
+        alpha = 0.0f;
+      } else {
+        // The Void behind the formation
+        alpha = 0.0f;
+      }
+
+      // Apply alpha to existing buffer color
+      if (alpha <= 0.0f) {
+        it[global_idx] = Color::BLACK;
+      } else if (alpha < 1.0f) {
+        Color cur = it[global_idx].get();
+        it[global_idx] =
+            Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
+                  (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_MORSE: {
+    uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
+    uint32_t elapsed_morse = millis() - this->outro_start_time_;
+    uint32_t current_bit = elapsed_morse / unit_ms;
+
+    uint64_t mask = 0b11101110111000101011101000101011101ULL;
+    uint8_t total_bits = 35;
+
+    bool is_on = false;
+    if (current_bit < total_bits) {
+      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
+    } else {
+      is_on = false; // Hold OFF after sequence
+    }
+
+    if (!is_on) {
+      for (int i = 0; i < seg_len; i++) {
+        it[seg_start + i] = Color::BLACK;
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_FADE:
+  case INTRO_MODE_NONE:
+  default:
+    // Manual fade scalar scaling due to hardware fade circumvention
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      Color c = it[global_idx].get();
+      it[global_idx] =
+          Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+    }
+    break;
+  }
+
+  return (progress >= 1.0f);
 }
 
 // --- Autotune Auto-Disable Implementation ---
