@@ -290,9 +290,9 @@ public:
     // the engine's first update cycle.
 
     // 2. Extract the underlying ChimeraFX effect to inject overrides
-    if (this->light_->get_active_effect() != nullptr) {
+    if (this->light_->get_active_effect_() != nullptr) {
       auto *active_fx = dynamic_cast<CFXAddressableLightEffect *>(
-          this->light_->get_active_effect());
+          this->light_->get_active_effect_());
       if (active_fx != nullptr) {
         if (this->speed_.has_value())
           active_fx->set_speed_preset(this->speed_.value(x...));

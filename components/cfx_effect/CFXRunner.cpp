@@ -18,6 +18,9 @@
 #include <cstdint>
 #include <vector>
 
+namespace esphome {
+namespace chimera_fx {
+
 CFXRunner *instance = nullptr;
 
 // Forward declarations
@@ -6878,3 +6881,6 @@ uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
   }
   return color;
 }
+
+} // namespace chimera_fx
+} // namespace esphome

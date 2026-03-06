@@ -63,9 +63,9 @@ void CFXSequence::start() {
     call.perform();
 
     // 2. Extract the underlying ChimeraFX effect to inject overrides
-    if (l->get_active_effect() != nullptr) {
+    if (l->get_active_effect_() != nullptr) {
       auto *active_fx = dynamic_cast<chimera_fx::CFXAddressableLightEffect *>(
-          l->get_active_effect());
+          l->get_active_effect_());
       if (active_fx != nullptr) {
         active_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                        this->palette_, this->iterations_);
@@ -85,9 +85,9 @@ void CFXSequence::stop() {
 
   for (auto *l : this->lights_) {
     // First unbind the sequence so original defaults come back
-    if (l->get_active_effect() != nullptr) {
+    if (l->get_active_effect_() != nullptr) {
       auto *active_fx = dynamic_cast<chimera_fx::CFXAddressableLightEffect *>(
-          l->get_active_effect());
+          l->get_active_effect_());
       if (active_fx != nullptr) {
         active_fx->set_active_sequence(nullptr, {}, {}, {}, 0);
       }

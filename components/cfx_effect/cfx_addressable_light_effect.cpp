@@ -975,7 +975,11 @@ uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
   if (s == nullptr)
     return 0;
 
-  const char *option = s->current_option().c_str();
+  auto option_opt = s->current_option();
+  if (!option_opt.has_value())
+    return 0;
+
+  const char *option = option_opt->c_str();
   if (option == nullptr)
     return 0;
 
@@ -1680,18 +1684,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       use_palette = true;
   }
 
-  if (use_palette && ::instance != nullptr) {
+  if (use_palette && chimera_fx::instance != nullptr) {
     // Force update the runner's palette immediately
-    ::instance->_segment.palette = pal;
+    chimera_fx::instance->_segment.palette = pal;
   }
 
   // Segment Aware Bounds
   int seg_len = it.size();
   int seg_start = 0;
   int seg_stop = seg_len;
-  if (::instance != nullptr) {
-    seg_len = ::instance->_segment.length();
-    seg_start = (it.size() == seg_len) ? 0 : ::instance->_segment.start;
+  if (chimera_fx::instance != nullptr) {
+    chimera_fx::instance->now = cfx_millis();
+    seg_len = chimera_fx::instance->_segment.length();
+    seg_start =
+        (it.size() == seg_len) ? 0 : chimera_fx::instance->_segment.start;
     seg_stop = seg_start + seg_len;
   }
 
