@@ -766,6 +766,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     color = (uint32_t(roundf(w * 255.0f)) << 24) |
             (uint32_t(roundf(r * 255.0f)) << 16) |
             (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
+
+    // Log color once every 60 frames to avoid spamming
+    static uint32_t color_log_timer = 0;
+    if (millis() - color_log_timer > 1000) {
+      ESP_LOGD("chimera_fx",
+               "Sync Color: R=%.2f G=%.2f B=%.2f W=%.2f -> 0x%08X", r, g, b, w,
+               color);
+      color_log_timer = millis();
+    }
   }
 
   if (!this->segment_runners_.empty()) {
@@ -833,6 +842,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (this->active_sequence_ != nullptr) {
       bri = bri_state->remote_values.get_brightness() *
             bri_state->remote_values.get_state();
+
+      static uint32_t bri_log_timer = 0;
+      if (millis() - bri_log_timer > 1000) {
+        ESP_LOGD("chimera_fx",
+                 "Sequence Active: %s, Bri=%.2f (Remote=%.2f, State=%.2f)",
+                 this->active_sequence_->get_name().c_str(), bri,
+                 bri_state->remote_values.get_brightness(),
+                 bri_state->remote_values.get_state());
+        bri_log_timer = millis();
+      }
     } else {
       bri = bri_state->current_values.get_brightness();
       // Only apply get_state() if not in Intro/Outro/Transition (already

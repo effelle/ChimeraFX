@@ -180,6 +180,17 @@ void Segment::setPixelColor(int n, uint32_t c) {
       w = (uint8_t)(w * instance->global_brightness_);
     }
 
+    // Log pixel 0 once every 2 seconds to avoid flooding
+    if (global_index == 0) {
+      static uint32_t px_log_timer = 0;
+      if (cfx_millis() - px_log_timer > 2000) {
+        ESP_LOGD("chimera_fx",
+                 "Runner SetPixel(0): R=%d G=%d B=%d W=%d (GlobalBri=%.2f)", r,
+                 g, b, w, instance->global_brightness_);
+        px_log_timer = cfx_millis();
+      }
+    }
+
     esphome::Color esphome_color(r, g, b, w);
     (*instance->target_light)[global_index] = esphome_color;
   }
@@ -4202,6 +4213,14 @@ void CFXRunner::service() {
   // Halt animation progression if target iterations reached
   if (this->effect_complete_) {
     return;
+  }
+
+  static uint32_t service_log_timer = 0;
+  if (cfx_millis() - service_log_timer > 3000) {
+    ESP_LOGD("chimera_fx",
+             "Runner Service: Mode=%d, State=%d, Iterations=%u/%u", _mode,
+             _state, iteration_count_, target_iterations_);
+    service_log_timer = cfx_millis();
   }
 
   // Globally initialize PaletteSolid with the latest selected color.
