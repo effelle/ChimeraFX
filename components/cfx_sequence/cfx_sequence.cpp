@@ -65,7 +65,8 @@ void CFXSequence::start() {
   // Calling publish_state() when the value already matches would re-fire the
   // on_state_callback, creating an infinite loop.
   if (CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->state != this->name_) {
+      CFXSequenceSelect::instance->has_state() &&
+      CFXSequenceSelect::instance->current_option() != this->name_) {
     CFXSequenceSelect::instance->publish_state(this->name_);
   }
 
