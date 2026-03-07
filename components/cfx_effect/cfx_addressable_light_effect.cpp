@@ -2637,37 +2637,40 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
-  float current_percentage = (float)current_pixel / (float)total_pixels;
+  if (this->active_sequence_ != nullptr) {
+    this->active_sequence_->check_positional_triggers(current_pixel,
+                                                      total_pixels);
+  }
 
-  // Evaluate on_reach (Percentage based)
-  for (auto *t : this->on_reach_triggers_) {
-    float target = t->get_target_position();
-    // Fire if exactly matching the physical boundary
-    // Usually effects loop indices, so we trigger when the index is painted.
-    if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
-      if (std::abs(this->last_triggered_percentage_ - target) >=
-          (1.0f / total_pixels)) {
-        t->trigger(current_percentage);
+  // Effect internal triggers (from YAML)
+  if (!this->on_reach_triggers_.empty() ||
+      !this->on_pixel_num_triggers_.empty()) {
+    float current_percentage = (float)current_pixel / (float)total_pixels;
+
+    for (auto *t : this->on_reach_triggers_) {
+      float target = t->get_target_position();
+      if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
+        if (std::abs(this->last_triggered_percentage_ - target) >=
+            (1.0f / total_pixels)) {
+          ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
+                   this->get_name().c_str(), this, target * 100.0f);
+          t->trigger(current_percentage);
+        }
+      }
+    }
+
+    for (auto *t : this->on_pixel_num_triggers_) {
+      if (current_pixel == t->get_target_pixel()) {
+        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_pixel_num %d triggered",
+                 this->get_name().c_str(), this, current_pixel);
+        t->trigger(current_pixel);
       }
     }
   }
 
-  // Evaluate on_pixel_num (Absolute based)
-  for (auto *t : this->on_pixel_num_triggers_) {
-    if (current_pixel == t->get_target_pixel()) {
-      t->trigger(current_pixel);
-    }
-  }
-
+  this->last_triggered_percentage_ = (float)current_pixel / (float)total_pixels;
   this->last_triggered_pixel_ = current_pixel;
-  this->last_triggered_percentage_ = current_percentage;
-
-#ifdef USE_CFX_SEQUENCER
-  for (auto *seq : cfx_sequence::CFXSequence::instances) {
-    if (seq->owns_light(this->get_light_state())) {
-      seq->check_positional_triggers(current_pixel, total_pixels);
-    }
-  }
+}
 #endif
 }
 

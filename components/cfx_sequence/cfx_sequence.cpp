@@ -17,24 +17,21 @@ CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
   this->add_on_state_callback([](const std::string &value, size_t index) {
-    ESP_LOGD(TAG, "Active Sequence Select: '%s' (index %d)", value.c_str(),
-             (int)index);
     if (value == "None") {
+      ESP_LOGD(TAG, "Active Sequence Select: 'None'");
       for (auto *seq : CFXSequence::instances) {
         seq->stop();
       }
     } else {
-      bool found = false;
       for (auto *seq : CFXSequence::instances) {
         if (seq->get_name() == value) {
-          ESP_LOGD(TAG, "  Targeting Sequence ID: '%s'", seq->get_id().c_str());
-          seq->start();
-          found = true;
+          if (!seq->is_starting_) {
+            ESP_LOGD(TAG, "Active Sequence Select: '%s' (ID: %s)",
+                     value.c_str(), seq->get_id().c_str());
+            seq->start();
+          }
           break;
         }
-      }
-      if (!found) {
-        ESP_LOGW(TAG, "  No sequence found with name '%s'", value.c_str());
       }
     }
   });
@@ -166,12 +163,15 @@ void CFXSequence::clear_active_binding() {
 }
 
 void CFXSequence::report_event_start() {
+  ESP_LOGV(TAG, "Sequence '%s': on_start triggers firing", this->id_.c_str());
   for (auto *t : this->on_start_triggers_) {
     t->trigger();
   }
 }
 
 void CFXSequence::report_event_complete() {
+  ESP_LOGD(TAG, "Sequence '%s': on_complete triggers firing",
+           this->id_.c_str());
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
@@ -193,10 +193,11 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
-    // Allow for a small epsilon in matching
     if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
       if (std::abs(this->last_triggered_percentage_ - target) >=
           (1.0f / total_pixels)) {
+        ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
+                 this->id_.c_str(), target * 100.0f);
         t->trigger(current_percentage);
       }
     }
@@ -205,6 +206,8 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // Evaluate on_pixel_num (Discrete based)
   for (auto *t : this->on_pixel_num_triggers_) {
     if (current_pixel == t->get_target_pixel()) {
+      ESP_LOGD(TAG, "Sequence '%s': on_pixel_num %d triggered",
+               this->id_.c_str(), current_pixel);
       t->trigger(current_pixel);
     }
   }
