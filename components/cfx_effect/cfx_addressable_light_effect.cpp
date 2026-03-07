@@ -859,18 +859,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   auto *bri_state = this->get_light_state();
   if (bri_state != nullptr) {
     if (this->active_sequence_ != nullptr) {
-      // NUCLEAR SNAP: Always kill transitions and force 100% state every frame
-      // during a sequence. This prevents any "latent" transformers or driver
-      // scaling from keeping the strip black.
-      auto v = bri_state->current_values;
-
-      // Kill transformer every frame just to be sure
+      // During a sequence, we stop any active transitions/transformers
+      // but we MUST respect the current brightness for triggers to work.
       chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
-
-      v.set_brightness(1.0f);
-      v.set_state(1.0f);
-      bri_state->current_values = v;
-      bri = 1.0f;
+      bri = bri_state->current_values.get_brightness() *
+            bri_state->current_values.get_state();
     } else {
       bri = bri_state->current_values.get_brightness();
       if (this->state_ == TRANSITION_NONE && !this->intro_active_ &&

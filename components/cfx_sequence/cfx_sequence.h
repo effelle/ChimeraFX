@@ -100,6 +100,7 @@ protected:
 
   bool is_starting_{false};
   bool is_stopping_{false};
+  bool is_running_{false};
 
   struct SavedState {
     light::LightColorValues values;

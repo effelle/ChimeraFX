@@ -48,9 +48,17 @@ CFXSequence::CFXSequence(const std::string &id, const std::string &name,
 }
 
 void CFXSequence::start() {
-  if (this->is_starting_)
+  if (this->is_starting_ || this->is_running_)
     return;
   this->is_starting_ = true;
+
+  // Handover: Stop all other sequences first to prevent state restoration race
+  for (auto *seq : CFXSequence::instances) {
+    if (seq != this && seq->is_running_) {
+      seq->stop();
+    }
+  }
+
   ESP_LOGD(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
            this->id_.c_str());
 
@@ -108,13 +116,17 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
+  this->is_running_ = true;
   this->is_starting_ = false;
+  this->report_event_start();
 }
 
 void CFXSequence::stop() {
-  if (this->is_stopping_)
+  if (this->is_stopping_ || !this->is_running_)
     return;
   this->is_stopping_ = true;
+  this->is_running_ = false;
+
   ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
   if (CFXSequenceSelect::instance != nullptr &&
