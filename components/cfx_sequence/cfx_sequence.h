@@ -38,8 +38,6 @@ class CFXSequence {
 public:
   CFXSequence(const std::string &id, const std::string &name,
               const std::string &effect);
-  // void setup() override; // Removed Component inheritance
-  // void dump_config() override;
 
   // Sequence runtime controllers
   void start();
@@ -78,6 +76,7 @@ public:
   void report_event_start();
   void report_event_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
+  void clear_active_binding();
 
 protected:
   std::string id_;
@@ -123,7 +122,7 @@ template <typename... Ts> class StartAction : public Action<Ts...> {
 public:
   StartAction(const std::string &target_id) : target_id_(target_id) {}
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     for (auto *seq : CFXSequence::instances) {
       if (seq->get_id() == this->target_id_) {
         seq->start();
@@ -140,7 +139,7 @@ template <typename... Ts> class StopAction : public Action<Ts...> {
 public:
   StopAction(const std::string &target_id) : target_id_(target_id) {}
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     for (auto *seq : CFXSequence::instances) {
       if (seq->get_id() == this->target_id_) {
         seq->stop();
