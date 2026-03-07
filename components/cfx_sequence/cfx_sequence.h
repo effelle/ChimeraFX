@@ -37,10 +37,6 @@ protected:
 class CFXSequence {
 public:
   CFXSequence(const std::string &id, const std::string &name,
-              const std::string &effect)
-      : id_(id), name_(name), effect_(effect) {}
-
-  CFXSequence(const std::string &id, const std::string &name,
               const std::string &effect);
   // void setup() override; // Removed Component inheritance
   // void dump_config() override;
