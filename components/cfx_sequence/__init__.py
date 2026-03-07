@@ -90,7 +90,9 @@ async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCER")
     
     for seq_conf in config:
-        var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_NAME], seq_conf[CONF_EFFECT])
+        # Pass ID string, Name string, and Effect string
+        # seq_conf[CONF_ID] is a core.ID object, we want its .id string for C++
+        var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT])
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
         if CONF_SET_SPEED in seq_conf:
@@ -165,9 +167,8 @@ async def to_code(config):
     ),
 )
 async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
-    import esphome.core as core
-    paren = await cg.get_variable(core.ID(config[CONF_ID], is_declaration=False, type=CFXSequence))
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    # Pass the raw target ID string directly to break the codegen dependency graph
+    return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
 
 
 @automation.register_action(
@@ -180,6 +181,5 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
     ),
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
-    import esphome.core as core
-    paren = await cg.get_variable(core.ID(config[CONF_ID], is_declaration=False, type=CFXSequence))
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    # Pass the raw target ID string directly to break the codegen dependency graph
+    return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])

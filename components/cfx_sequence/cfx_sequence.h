@@ -36,10 +36,12 @@ protected:
 
 class CFXSequence {
 public:
-  CFXSequence(const std::string &name, const std::string &effect)
-      : name_(name), effect_(effect) {}
+  CFXSequence(const std::string &id, const std::string &name,
+              const std::string &effect)
+      : id_(id), name_(name), effect_(effect) {}
 
-  CFXSequence(const std::string &name, const std::string &effect);
+  CFXSequence(const std::string &id, const std::string &name,
+              const std::string &effect);
   // void setup() override; // Removed Component inheritance
   // void dump_config() override;
 
@@ -60,6 +62,7 @@ public:
   esphome::optional<uint8_t> get_palette() const { return this->palette_; }
   uint32_t get_iterations() const { return this->iterations_; }
 
+  std::string get_id() const { return this->id_; }
   std::string get_name() const { return this->name_; }
 
   void add_on_start_trigger(CfxSeqOnStartTrigger *t) {
@@ -81,6 +84,7 @@ public:
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
 
 protected:
+  std::string id_;
   std::string name_;
   std::string effect_;
 
@@ -121,22 +125,36 @@ public:
 
 template <typename... Ts> class StartAction : public Action<Ts...> {
 public:
-  StartAction(CFXSequence *sequence) : sequence_(sequence) {}
+  StartAction(const std::string &target_id) : target_id_(target_id) {}
 
-  void play(Ts... x) override { this->sequence_->start(); }
+  void play(Ts... x) override {
+    for (auto *seq : CFXSequence::instances) {
+      if (seq->get_id() == this->target_id_) {
+        seq->start();
+        return;
+      }
+    }
+  }
 
 protected:
-  CFXSequence *sequence_;
+  std::string target_id_;
 };
 
 template <typename... Ts> class StopAction : public Action<Ts...> {
 public:
-  StopAction(CFXSequence *sequence) : sequence_(sequence) {}
+  StopAction(const std::string &target_id) : target_id_(target_id) {}
 
-  void play(Ts... x) override { this->sequence_->stop(); }
+  void play(Ts... x) override {
+    for (auto *seq : CFXSequence::instances) {
+      if (seq->get_id() == this->target_id_) {
+        seq->stop();
+        return;
+      }
+    }
+  }
 
 protected:
-  CFXSequence *sequence_;
+  std::string target_id_;
 };
 
 class CFXSequenceSelect : public esphome::select::Select,

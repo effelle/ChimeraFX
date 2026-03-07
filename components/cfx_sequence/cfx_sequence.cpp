@@ -44,8 +44,9 @@ void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
 }
 
-CFXSequence::CFXSequence(const std::string &name, const std::string &effect)
-    : name_(name), effect_(effect) {
+CFXSequence::CFXSequence(const std::string &id, const std::string &name,
+                         const std::string &effect)
+    : id_(id), name_(name), effect_(effect) {
   CFXSequence::instances.push_back(this);
 }
 
