@@ -25,7 +25,7 @@ void CFXSequenceSelect::setup() {
     } else {
       for (auto *seq : CFXSequence::instances) {
         if (seq->get_name() == value) {
-          if (!seq->is_starting_) {
+          if (!seq->is_starting()) {
             ESP_LOGD(TAG, "Active Sequence Select: '%s' (ID: %s)",
                      value.c_str(), seq->get_id().c_str());
             seq->start();

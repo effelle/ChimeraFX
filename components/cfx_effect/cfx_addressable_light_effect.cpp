@@ -2653,7 +2653,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
         if (std::abs(this->last_triggered_percentage_ - target) >=
             (1.0f / total_pixels)) {
           ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
-                   this->get_name().c_str(), this, target * 100.0f);
+                   this->get_name(), this, target * 100.0f);
           t->trigger(current_percentage);
         }
       }
@@ -2662,7 +2662,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
     for (auto *t : this->on_pixel_num_triggers_) {
       if (current_pixel == t->get_target_pixel()) {
         ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_pixel_num %d triggered",
-                 this->get_name().c_str(), this, current_pixel);
+                 this->get_name(), this, current_pixel);
         t->trigger(current_pixel);
       }
     }
@@ -2670,8 +2670,6 @@ void CFXAddressableLightEffect::check_positional_triggers(
 
   this->last_triggered_percentage_ = (float)current_pixel / (float)total_pixels;
   this->last_triggered_pixel_ = current_pixel;
-}
-#endif
 }
 
 void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,

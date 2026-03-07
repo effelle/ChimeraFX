@@ -108,6 +108,7 @@ protected:
   std::vector<SavedState> saved_states_;
 
 public:
+  bool is_starting() const { return this->is_starting_; }
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
     for (auto *l : this->lights_) {
