@@ -16,7 +16,7 @@ CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
-  this->add_on_state_callback([](const std::string &value) {
+  this->add_on_state_callback([](const std::string &value, size_t index) {
     if (value == "None") {
       for (auto *seq : CFXSequence::instances) {
         seq->stop();

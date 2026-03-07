@@ -164,6 +164,7 @@ public:
   void set_active_sequence(CFXSequence *seq, optional<uint8_t> spd,
                            optional<uint8_t> iten, optional<uint8_t> pal,
                            uint32_t itr);
+  CFXSequence *get_active_sequence() const { return this->active_sequence_; }
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
