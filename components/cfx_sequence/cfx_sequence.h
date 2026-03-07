@@ -1,5 +1,6 @@
 #pragma once
 
+#include "esphome/components/light/color_mode.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
 #include "esphome/core/automation.h"
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+
 
 namespace esphome {
 namespace cfx_sequence {
@@ -37,7 +39,7 @@ protected:
 class CFXSequence {
 public:
   CFXSequence(const std::string &id, const std::string &name,
-              const std::string &effect);
+              const std::string &effect, bool restore = true);
 
   // Sequence runtime controllers
   void start();
@@ -87,6 +89,7 @@ protected:
   esphome::optional<uint8_t> intensity_;
   esphome::optional<uint8_t> palette_;
   uint32_t iterations_{0};
+  bool restore_state_{true};
 
   std::vector<light::LightState *> lights_;
 
@@ -104,6 +107,7 @@ protected:
 
   struct SavedState {
     light::LightColorValues values;
+    light::ColorMode color_mode;
     std::string effect;
   };
   std::vector<SavedState> saved_states_;

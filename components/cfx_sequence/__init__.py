@@ -34,6 +34,7 @@ CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
 CONF_ITERATIONS = "iterations"
+CONF_RESTORE = "restore"
 
 # Inherited constants
 CONF_ON_START = "on_start"
@@ -54,6 +55,7 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
+        cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         
         # Triggers
         cv.Optional(CONF_ON_START): automation.validate_automation(
@@ -90,9 +92,8 @@ async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCER")
     
     for seq_conf in config:
-        # Pass ID string, Name string, and Effect string
-        # seq_conf[CONF_ID] is a core.ID object, we want its .id string for C++
-        var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT])
+        # Pass ID string, Name string, Effect string, and Restore boolean
+        var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT], seq_conf[CONF_RESTORE])
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
         if CONF_SET_SPEED in seq_conf:

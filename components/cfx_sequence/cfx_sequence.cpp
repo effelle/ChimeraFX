@@ -42,8 +42,8 @@ void CFXSequenceSelect::control(const std::string &value) {
 }
 
 CFXSequence::CFXSequence(const std::string &id, const std::string &name,
-                         const std::string &effect)
-    : id_(id), name_(name), effect_(effect) {
+                         const std::string &effect, bool restore)
+    : id_(id), name_(name), effect_(effect), restore_state_(restore) {
   CFXSequence::instances.push_back(this);
 }
 
@@ -67,6 +67,7 @@ void CFXSequence::start() {
   for (auto *l : this->lights_) {
     SavedState s;
     s.values = l->remote_values;
+    s.color_mode = l->remote_values.get_color_mode();
     s.effect = "None";
 
     light::LightEffect *effect =
@@ -87,6 +88,10 @@ void CFXSequence::start() {
     auto call = l->make_call();
     call.set_state(true); // CRITICAL: Ensure light is ON when starting effect
     call.set_effect(this->effect_);
+
+    // Explicitly preserve current color mode to avoid "using White" warnings
+    call.set_color_mode(l->remote_values.get_color_mode());
+
     call.perform();
 
     // Bind parameters
@@ -137,26 +142,38 @@ void CFXSequence::stop() {
 
   this->clear_active_binding();
 
-  // Restore States
-  size_t light_idx = 0;
-  for (auto *l : this->lights_) {
-    if (light_idx < this->saved_states_.size()) {
-      auto saved = this->saved_states_[light_idx];
-      auto call = l->make_call();
-      call.set_state(saved.values.is_on());
-      if (saved.values.is_on()) {
-        call.set_effect(saved.effect);
+  // Restore States: Only if explicitly requested
+  if (this->restore_state_) {
+    size_t light_idx = 0;
+    for (auto *l : this->lights_) {
+      if (light_idx < this->saved_states_.size()) {
+        auto saved = this->saved_states_[light_idx];
+        auto call = l->make_call();
+
+        // Restore everything: state, mode, brightness, color
+        // This ensures that even if we turn OFF, the "last known" values are
+        // correct.
+        call.set_state(saved.values.is_on());
+        call.set_color_mode(saved.color_mode);
         call.set_brightness(saved.values.get_brightness());
         call.set_rgb(saved.values.get_red(), saved.values.get_green(),
                      saved.values.get_blue());
         call.set_white(saved.values.get_white());
+
+        if (saved.values.is_on()) {
+          call.set_effect(saved.effect);
+        } else {
+          call.set_effect("None");
+        }
+
+        call.set_transition_length(1000);
+        call.perform();
       }
-      call.set_transition_length(1000);
-      call.perform();
+      light_idx++;
     }
-    light_idx++;
   }
 
+  this->is_running_ = false;
   this->is_stopping_ = false;
 }
 
