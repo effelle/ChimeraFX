@@ -15,7 +15,7 @@ DEPENDENCIES = ["light", "select"]
 AUTO_LOAD = ["cfx_effect"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
-CFXSequence = cfx_sequence_ns.class_("CFXSequence", cg.Component)
+CFXSequence = cfx_sequence_ns.class_("CFXSequence")
 CFXSequenceSelect = cfx_sequence_ns.class_("CFXSequenceSelect", select.Select, cg.Component)
 
 # Actions
@@ -79,7 +79,7 @@ SEQUENCE_SCHEMA = cv.Schema(
             }
         ),
     }
-).extend(cv.COMPONENT_SCHEMA)
+)
 
 
 CONFIG_SCHEMA = cv.All(
@@ -91,7 +91,7 @@ async def to_code(config):
     
     for seq_conf in config:
         var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_NAME], seq_conf[CONF_EFFECT])
-        await cg.register_component(var, seq_conf)
+        # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
         if CONF_SET_SPEED in seq_conf:
             cg.add(var.set_speed(seq_conf[CONF_SET_SPEED]))

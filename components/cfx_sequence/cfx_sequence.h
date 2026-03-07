@@ -34,13 +34,14 @@ protected:
   int32_t target_pixel_;
 };
 
-class CFXSequence : public esphome::Component {
+class CFXSequence {
 public:
   CFXSequence(const std::string &name, const std::string &effect)
       : name_(name), effect_(effect) {}
 
-  void setup() override;
-  void dump_config() override;
+  CFXSequence(const std::string &name, const std::string &effect);
+  // void setup() override; // Removed Component inheritance
+  // void dump_config() override;
 
   // Sequence runtime controllers
   void start();

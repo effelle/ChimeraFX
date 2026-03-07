@@ -44,19 +44,24 @@ void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
 }
 
-void CFXSequence::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up CFX Sequence '%s'...", this->name_.c_str());
+CFXSequence::CFXSequence(const std::string &name, const std::string &effect)
+    : name_(name), effect_(effect) {
   CFXSequence::instances.push_back(this);
 }
 
-void CFXSequence::dump_config() {
-  ESP_LOGCONFIG(TAG, "CFX Sequence: %s", this->name_.c_str());
-  ESP_LOGCONFIG(TAG, "  Target Lights: %zu", this->lights_.size());
-  ESP_LOGCONFIG(TAG, "  Effect: %s", this->effect_.c_str());
-  if (this->speed_.has_value()) {
-    ESP_LOGCONFIG(TAG, "  Speed Override: %d", this->speed_.value());
-  }
-}
+// void CFXSequence::setup() { // Removed Component inheritance
+//   ESP_LOGCONFIG(TAG, "Setting up CFX Sequence '%s'...", this->name_.c_str());
+//   CFXSequence::instances.push_back(this);
+// }
+
+// void CFXSequence::dump_config() {
+//   ESP_LOGCONFIG(TAG, "CFX Sequence: %s", this->name_.c_str());
+//   ESP_LOGCONFIG(TAG, "  Target Lights: %zu", this->lights_.size());
+//   ESP_LOGCONFIG(TAG, "  Effect: %s", this->effect_.c_str());
+//   if (this->speed_.has_value()) {
+//     ESP_LOGCONFIG(TAG, "  Speed Override: %d", this->speed_.value());
+//   }
+// }
 
 void CFXSequence::start() {
   if (this->is_starting_)
