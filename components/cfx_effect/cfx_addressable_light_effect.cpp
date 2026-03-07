@@ -786,14 +786,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             (uint32_t(roundf(r * 255.0f)) << 16) |
             (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
 
-    // Log color once every 60 frames to avoid spamming
-    static uint32_t color_log_timer = 0;
-    if (millis() - color_log_timer > 1000) {
-      ESP_LOGD("chimera_fx",
-               "Sync Color: R=%.2f G=%.2f B=%.2f W=%.2f -> 0x%08X", r, g, b, w,
-               color);
-      color_log_timer = millis();
-    }
   } else {
     static uint32_t null_state_log = 0;
     if (millis() - null_state_log > 5000) {

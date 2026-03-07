@@ -6,7 +6,6 @@
 #include <cmath>
 #include <vector>
 
-
 namespace esphome {
 namespace cfx_sequence {
 
@@ -88,7 +87,7 @@ void CFXSequence::start() {
         }
       }
       if (active_fx != nullptr) {
-        ESP_LOGD(TAG, "  Binding Sequence '%s' (%p) to Effect instance %p",
+        ESP_LOGV(TAG, "  Binding Sequence '%s' (%p) to Effect instance %p",
                  this->id_.c_str(), this, active_fx);
         active_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                        this->palette_, this->iterations_);
