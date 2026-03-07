@@ -98,10 +98,9 @@ DEFAULT_ORDER = {
 
 SEGMENT_SCHEMA = cv.Schema(
     {
-        cv.Required(CONF_SEGMENT_ID): cv.string,
+        cv.Required(CONF_SEGMENT_ID): cv.declare_id(light.LightState),
         cv.Optional(CONF_SEGMENT_NAME): cv.string,
         cv.GenerateID(CONF_SEGMENT_OUTPUT_ID): cv.declare_id(CFXVirtualSegmentLight),
-        cv.GenerateID(CONF_SEGMENT_LIGHT_ID): cv.declare_id(light.LightState),
         cv.Required(CONF_SEGMENT_START): cv.uint16_t,
         cv.Required(CONF_SEGMENT_STOP): cv.uint16_t,
         cv.Optional(CONF_SEGMENT_MIRROR, default=False): cv.boolean,
@@ -339,7 +338,8 @@ async def to_code(config):
 
     # --- Segment codegen ---
     for seg in segments:
-        seg_id = seg[CONF_SEGMENT_ID]
+        seg_id_obj = seg[CONF_SEGMENT_ID]
+        seg_id_str = str(seg_id_obj)
         seg_start = seg[CONF_SEGMENT_START]
         seg_stop = seg[CONF_SEGMENT_STOP]
         seg_mirror = seg.get(CONF_SEGMENT_MIRROR, False)
@@ -353,20 +353,20 @@ async def to_code(config):
         # Register segment definition on parent (for C++ access)
         cg.add(
             var.add_segment_def(
-                seg_id, seg_start, seg_stop, seg_mirror,
+                seg_id_str, seg_start, seg_stop, seg_mirror,
                 seg_intro, seg_outro, seg_intro_dur, seg_intro_dur
             )
         )
 
         # Phase 2: Create virtual segment light + independent LightState
         vl = cg.new_Pvariable(
-            seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id
+            seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id_str
         )
 
         # Prepare segment config WITHOUT effects to avoid ESPHome's internal collision
         seg_light_config = {
-            CONF_ID: seg[CONF_SEGMENT_LIGHT_ID],
-            CONF_NAME: seg[CONF_SEGMENT_NAME] if CONF_SEGMENT_NAME in seg else seg_id,
+            CONF_ID: seg_id_obj,
+            CONF_NAME: seg[CONF_SEGMENT_NAME] if CONF_SEGMENT_NAME in seg else seg_id_str,
             CONF_OUTPUT_ID: seg[CONF_SEGMENT_OUTPUT_ID],
             CONF_EFFECTS: [],  # Skip internal effect registration
             CONF_DEFAULT_TRANSITION_LENGTH: config.get(
@@ -379,7 +379,7 @@ async def to_code(config):
 
         # Register the LightState (without effects)
         await light.register_light(vl, seg_light_config)
-        light_state = await cg.get_variable(seg[CONF_SEGMENT_LIGHT_ID])
+        light_state = await cg.get_variable(seg_id_obj)
 
         # Manually create strictly unique effects and attach them to the segment
         from esphome.core import ID as CoreID
