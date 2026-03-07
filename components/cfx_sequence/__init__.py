@@ -160,12 +160,13 @@ async def to_code(config):
     StartAction,
     cv.Schema(
         {
-            cv.Required(CONF_ID): cv.use_id(CFXSequence),
+            cv.Required(CONF_ID): cv.string,
         }
     ),
 )
 async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
+    import esphome.core as core
+    paren = await cg.get_variable(core.ID(config[CONF_ID], is_declaration=False, type=CFXSequence))
     return cg.new_Pvariable(action_id, template_arg, paren)
 
 
@@ -174,10 +175,11 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
     StopAction,
     cv.Schema(
         {
-            cv.Required(CONF_ID): cv.use_id(CFXSequence),
+            cv.Required(CONF_ID): cv.string,
         }
     ),
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
+    import esphome.core as core
+    paren = await cg.get_variable(core.ID(config[CONF_ID], is_declaration=False, type=CFXSequence))
     return cg.new_Pvariable(action_id, template_arg, paren)
