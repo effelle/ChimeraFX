@@ -17,16 +17,24 @@ CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
   this->add_on_state_callback([](const std::string &value, size_t index) {
+    ESP_LOGD(TAG, "Active Sequence Select: '%s' (index %d)", value.c_str(),
+             (int)index);
     if (value == "None") {
       for (auto *seq : CFXSequence::instances) {
         seq->stop();
       }
     } else {
+      bool found = false;
       for (auto *seq : CFXSequence::instances) {
         if (seq->get_name() == value) {
+          ESP_LOGD(TAG, "  Targeting Sequence ID: '%s'", seq->get_id().c_str());
           seq->start();
+          found = true;
           break;
         }
+      }
+      if (!found) {
+        ESP_LOGW(TAG, "  No sequence found with name '%s'", value.c_str());
       }
     }
   });
@@ -72,6 +80,7 @@ void CFXSequence::start() {
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
+    call.set_state(true); // CRITICAL: Ensure light is ON when starting effect
     call.set_effect(this->effect_);
     call.perform();
 
