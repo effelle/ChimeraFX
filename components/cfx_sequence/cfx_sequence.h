@@ -1,6 +1,5 @@
 #pragma once
 
-#include "esphome/components/light/color_mode.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
 #include "esphome/core/automation.h"
@@ -9,7 +8,6 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-
 
 namespace esphome {
 namespace cfx_sequence {
@@ -114,6 +112,7 @@ protected:
 
 public:
   bool is_starting() const { return this->is_starting_; }
+  bool is_running() const { return this->is_running_; }
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
     for (auto *l : this->lights_) {

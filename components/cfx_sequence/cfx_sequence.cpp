@@ -78,11 +78,6 @@ void CFXSequence::start() {
     this->saved_states_.push_back(s);
   }
 
-  // Update physical select if exists
-  if (CFXSequenceSelect::instance != nullptr) {
-    CFXSequenceSelect::instance->publish_state(this->name_);
-  }
-
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
@@ -134,12 +129,6 @@ void CFXSequence::stop() {
 
   ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
-  if (CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->has_state() &&
-      CFXSequenceSelect::instance->current_option() == this->name_) {
-    CFXSequenceSelect::instance->publish_state("None");
-  }
-
   this->clear_active_binding();
 
   // Restore States: Only if explicitly requested
@@ -173,7 +162,6 @@ void CFXSequence::stop() {
     }
   }
 
-  this->is_running_ = false;
   this->is_stopping_ = false;
 }
 
@@ -217,7 +205,7 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   }
 
   // Adjust percentage calculation to be boundary-inclusive (0.0 to 1.0)
-  float current_percentage = (float)current_pixel / (float)(total_pixels - 1);
+  float current_percentage = (float)current_pixel / (float)total_pixels;
 
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {

@@ -830,38 +830,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
-#ifdef USE_CFX_SEQUENCER
-  // Lazy Binding: If we are in a sequence mode according to the dropdown,
-  // but this effect instance hasn't been bound yet (race condition), bind it
-  // now.
-  if (this->active_sequence_ == nullptr &&
-      cfx_sequence::CFXSequenceSelect::instance != nullptr &&
-      cfx_sequence::CFXSequenceSelect::instance->has_state()) {
-    std::string current_name =
-        cfx_sequence::CFXSequenceSelect::instance->current_option();
-    if (current_name != "None") {
-      for (auto *seq : cfx_sequence::CFXSequence::instances) {
-        if (seq->get_name() == current_name &&
-            seq->owns_light(this->get_light_state())) {
-          ESP_LOGD("chimera_fx", "Lazy Binding sequence '%s' to effect %p",
-                   current_name.c_str(), this);
-          this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
-                                    seq->get_palette(), seq->get_iterations());
-          break;
-        }
-      }
-    }
-  }
-#endif
+  // (Lazy Binding removed — binding happens in cfx_sequence::start())
 
   // Sync Brightness to Runners (Master + Light Brightness)
   float bri = 1.0f;
   auto *bri_state = this->get_light_state();
   if (bri_state != nullptr) {
     if (this->active_sequence_ != nullptr) {
-      // During a sequence, we stop any active transitions/transformers
-      // but we MUST respect the current brightness for triggers to work.
-      chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
+      // During a sequence, stop transitions only if one is actually running
+      if (bri_state->current_values.get_state() < 1.0f) {
+        chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
+      }
       bri = bri_state->current_values.get_brightness() *
             bri_state->current_values.get_state();
     } else {
@@ -882,11 +861,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       r->global_brightness_ = bri;
       r->service();
 
-      // Handle Iteration Completion
+      // Handle Iteration Completion — save pointer before stop() clears it
       if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-        this->active_sequence_->report_event_complete();
-        this->active_sequence_->stop();
-        break; // Stop all once sequence is over
+        auto *completed_seq = this->active_sequence_;
+        completed_seq->stop();
+        completed_seq->report_event_complete();
+        break;
       }
     }
   } else if (this->runner_) {
@@ -895,10 +875,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     this->runner_->global_brightness_ = bri;
     this->runner_->service();
 
-    // Handle Iteration Completion
+    // Handle Iteration Completion — save pointer before stop() clears it
     if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
-      this->active_sequence_->report_event_complete();
-      this->active_sequence_->stop();
+      auto *completed_seq = this->active_sequence_;
+      completed_seq->stop();
+      completed_seq->report_event_complete();
     }
   }
 
@@ -1078,21 +1059,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
-  // Sequence completion handling
-  if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
-    bool is_complete = false;
-    if (!this->segment_runners_.empty() &&
-        this->segment_runners_[0]->effect_complete_) {
-      is_complete = true;
-    } else if (this->runner_ && this->runner_->effect_complete_) {
-      is_complete = true;
-    }
-
-    if (is_complete) {
-      this->active_sequence_->report_event_complete();
-      this->active_sequence_->stop();
-    }
-  }
+  // (Duplicate completion handler removed — handled in service loop above)
 
   it.schedule_show();
   chimera_fx::instance = nullptr;
