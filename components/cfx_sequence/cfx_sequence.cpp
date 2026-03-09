@@ -13,10 +13,14 @@ static const char *const TAG = "cfx_sequence";
 
 std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
+bool CFXSequenceSelect::suppress_callback_ = false;
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
   this->add_on_state_callback([](const std::string &value, size_t index) {
+    if (CFXSequenceSelect::suppress_callback_)
+      return;
+
     if (value == "None") {
       ESP_LOGD(TAG, "Active Sequence Select: 'None'");
       for (auto *seq : CFXSequence::instances) {
@@ -39,6 +43,12 @@ void CFXSequenceSelect::setup() {
 
 void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
+}
+
+void CFXSequenceSelect::publish_state_silent(const std::string &value) {
+  CFXSequenceSelect::suppress_callback_ = true;
+  this->publish_state(value);
+  CFXSequenceSelect::suppress_callback_ = false;
 }
 
 CFXSequence::CFXSequence(const std::string &id, const std::string &name,
@@ -134,6 +144,12 @@ void CFXSequence::start() {
   this->last_triggered_pixel_ = -1;
   this->is_running_ = true;
   this->is_starting_ = false;
+
+  // Update Select UI to reflect the active sequence
+  if (CFXSequenceSelect::instance != nullptr) {
+    CFXSequenceSelect::instance->publish_state_silent(this->name_);
+  }
+
   this->report_event_start();
 }
 
@@ -179,6 +195,13 @@ void CFXSequence::stop() {
   }
 
   this->is_stopping_ = false;
+
+  // Update Select UI to reflect the stopped sequence
+  if (CFXSequenceSelect::instance != nullptr &&
+      CFXSequenceSelect::instance->has_state() &&
+      CFXSequenceSelect::instance->state == this->name_) {
+    CFXSequenceSelect::instance->publish_state_silent("None");
+  }
 }
 
 void CFXSequence::clear_active_binding() {

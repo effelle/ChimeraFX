@@ -166,7 +166,11 @@ public:
   void setup() override;
   void control(const std::string &value) override;
 
+  /// Safely update the UI without triggering the callback.
+  void publish_state_silent(const std::string &value);
+
   static CFXSequenceSelect *instance;
+  static bool suppress_callback_;
 };
 
 } // namespace cfx_sequence
