@@ -2617,7 +2617,7 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 void CFXAddressableLightEffect::check_positional_triggers(
     int32_t current_pixel, int32_t total_pixels) {
   // Defensive bounds check
-  if (total_pixels <= 0 || current_pixel < 0 || current_pixel >= total_pixels) {
+  if (total_pixels <= 0 || current_pixel < 0 || current_pixel > total_pixels) {
     return;
   }
 
@@ -2638,13 +2638,44 @@ void CFXAddressableLightEffect::check_positional_triggers(
 
     for (auto *t : this->on_reach_triggers_) {
       float target = t->get_target_position();
-      if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
-        if (std::abs(this->last_triggered_percentage_ - target) >=
-            (1.0f / total_pixels)) {
-          ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
-                   this->get_name(), this, target * 100.0f);
-          t->trigger(current_percentage);
+      bool crossed = false;
+
+      if (this->last_triggered_percentage_ == -1.0f) {
+        if (current_percentage >= target)
+          crossed = true;
+      } else {
+        // Forward crossing
+        if (current_percentage >= target &&
+            this->last_triggered_percentage_ < target) {
+          crossed = true;
         }
+        // Backward crossing
+        else if (current_percentage <= target &&
+                 this->last_triggered_percentage_ > target) {
+          crossed = true;
+        }
+        // Wrap-around forward
+        else if (this->last_triggered_percentage_ > 0.8f &&
+                 current_percentage < 0.2f) {
+          if (target > this->last_triggered_percentage_ ||
+              target <= current_percentage) {
+            crossed = true;
+          }
+        }
+        // Wrap-around backward
+        else if (this->last_triggered_percentage_ < 0.2f &&
+                 current_percentage > 0.8f) {
+          if (target < this->last_triggered_percentage_ ||
+              target >= current_percentage) {
+            crossed = true;
+          }
+        }
+      }
+
+      if (crossed) {
+        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
+                 this->get_name(), this, target * 100.0f);
+        t->trigger(current_percentage);
       }
     }
 

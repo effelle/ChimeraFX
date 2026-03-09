@@ -267,13 +267,44 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
-    if (std::abs(current_percentage - target) < (1.0f / total_pixels)) {
-      if (std::abs(this->last_triggered_percentage_ - target) >=
-          (1.0f / total_pixels)) {
-        ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
-                 this->id_.c_str(), target * 100.0f);
-        t->trigger(current_percentage);
+    bool crossed = false;
+
+    if (this->last_triggered_percentage_ == -1.0f) {
+      if (current_percentage >= target)
+        crossed = true;
+    } else {
+      // Forward crossing
+      if (current_percentage >= target &&
+          this->last_triggered_percentage_ < target) {
+        crossed = true;
       }
+      // Backward crossing
+      else if (current_percentage <= target &&
+               this->last_triggered_percentage_ > target) {
+        crossed = true;
+      }
+      // Wrap-around forward (e.g. 0.95 -> 0.05)
+      else if (this->last_triggered_percentage_ > 0.8f &&
+               current_percentage < 0.2f) {
+        if (target > this->last_triggered_percentage_ ||
+            target <= current_percentage) {
+          crossed = true;
+        }
+      }
+      // Wrap-around backward (e.g. 0.05 -> 0.95)
+      else if (this->last_triggered_percentage_ < 0.2f &&
+               current_percentage > 0.8f) {
+        if (target < this->last_triggered_percentage_ ||
+            target >= current_percentage) {
+          crossed = true;
+        }
+      }
+    }
+
+    if (crossed) {
+      ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
+               this->id_.c_str(), target * 100.0f);
+      t->trigger(current_percentage);
     }
   }
 
