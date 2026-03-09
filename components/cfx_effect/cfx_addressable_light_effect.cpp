@@ -950,7 +950,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   // === State Machine: Intro vs Main Effect ===
-  if (this->intro_active_ && this->active_sequence_ == nullptr) {
+  bool is_mono_preset =
+      this->get_monochromatic_preset_(this->effect_id_).is_active;
+
+  if (this->intro_active_ &&
+      (this->active_sequence_ == nullptr || is_mono_preset)) {
     // Run intro on ALL segments (swap-on-service pattern)
     // This acts as a mask on top of the already-rendered main effect.
     if (!this->segment_runners_.empty()) {

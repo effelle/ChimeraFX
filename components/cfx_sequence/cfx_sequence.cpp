@@ -113,9 +113,8 @@ void CFXSequence::start() {
   }
 
   // Bind sequence to the correct CFXAddressableLightEffect instance.
-  // Strategy: get the active effect from the first target light and match it
-  // in all_effects. For segment lights (where the active effect is on the
-  // segment, not the master), fall back to the first master effect.
+  // Strategy: get the active effect from EACH target light and match it
+  // in all_effects to ensure all sequence-controlled segments are mapped.
   bool bound = false;
   for (auto *l : this->lights_) {
     light::LightEffect *active =
@@ -129,11 +128,9 @@ void CFXSequence::start() {
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
         bound = true;
-        break;
+        // Do not break! Match other lights as well.
       }
     }
-    if (bound)
-      break;
   }
 
   // Fallback: for segment lights, the active effect is a segment-local instance
