@@ -2675,7 +2675,10 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
   // Reset trackers when a new sequence is bound
   if (seq != nullptr) {
     // Disable built-in intro/transitions to prevent blackout/conflict
-    this->intro_active_ = false;
+    // EXCEPT for Monochromatic Presets, which functionally ARE intros.
+    if (!this->get_monochromatic_preset_(this->effect_id_).is_active) {
+      this->intro_active_ = false;
+    }
     this->state_ = TRANSITION_NONE;
 
     if (!this->segment_runners_.empty()) {
