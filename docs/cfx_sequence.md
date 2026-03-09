@@ -41,6 +41,24 @@ cfx_sequence:
 
 ---
 
+## Understanding Progressive Effects
+
+Not all effects are created equal when it comes to the Sequencer. While any effect can be used in a sequence, only **Progressive Effects** support position-based triggers like `on_reach` and `on_pixel_num`.
+
+### What makes an effect "Progressive"?
+A progressive effect is one where the animation has a clear **leading edge** or **state progression** that moves across the strip over time. 
+Examples include:
+- **Wipes & Sweeps**: The light physically moves from one end to the other.
+- **Filling Effects**: Like "Dropping Time," where the strip fills up like a bucket.
+- **Single Cursors**: Like "Chase" or "Follow Me," where a distinct point moves.
+
+### How to identify them
+In the [Effects Library](Effects-Library.md), progressive effects are marked with the **Sequencer Ready** icon: :material-bullseye-arrow:.
+
+When one of these effects is active, the engine tracks its "leading edge" pixel in real-time. This tracking is what allows the Sequencer to fire triggers at exactly 50% or pixel 45, even if the animation is moving very fast.
+
+---
+
 ## Proximity & Progress Triggers
 
 The sequencer can react to the physical progress of an effect.
