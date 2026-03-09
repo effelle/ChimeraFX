@@ -424,22 +424,21 @@ void CFXAddressableLightEffect::start() {
 
     // Preserve active intro state against redundant turn_on() calls triggered
     // by segment->master->segment sync recursion
-    if (this->intro_active_) {
+    if (!this->intro_active_) {
+      this->intro_active_ = is_fresh_turn_on;
+      if (this->intro_active_) {
+        this->intro_start_time_ = millis();
+      }
+    } else {
       // Intro is already running, do NOT kill it just because the light is now
       // ON
       is_fresh_turn_on = true;
-    } else {
-      this->intro_active_ = is_fresh_turn_on;
     }
 
     if (this->intro_active_ && this->controller_ == nullptr) {
       // Try linking again if missed
       this->controller_ = CFXControl::find(this->get_light_state());
       this->run_controls_(); // Re-run to pull pointers
-    }
-
-    if (this->intro_active_ && !this->intro_start_time_) {
-      this->intro_start_time_ = millis();
     }
   } else {
     this->intro_active_ = false;
