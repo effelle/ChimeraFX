@@ -105,6 +105,13 @@ void CFXAddressableLightEffect::start() {
     is_fresh_turn_on = !state->current_values.is_on();
   }
 
+  // Monochromatic presets functionally ARE intros. They must unconditionally
+  // execute their start logic regardless of transition snaps bypassing the
+  // state check.
+  if (this->get_monochromatic_preset_(this->effect_id_).is_active) {
+    is_fresh_turn_on = true;
+  }
+
   // Force bypass transition to avoid the 1s darkness bug on initial render
   if (auto *ls = this->get_light_state()) {
     ls->current_values = ls->remote_values;
