@@ -1717,15 +1717,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color::WHITE;
   }
 
-  // Apply user brightness scaling from target state
-  float user_brightness = 1.0f;
-  if (state) {
-    user_brightness = state->remote_values.get_brightness();
-    if (user_brightness < 0.01f)
-      user_brightness = 0.01f;
-  }
-  c = Color((uint8_t)(c.r * user_brightness), (uint8_t)(c.g * user_brightness),
-            (uint8_t)(c.b * user_brightness), (uint8_t)(c.w * user_brightness));
+  // NOTE: Brightness is handled by global_brightness_ on the runner.
+  // Do NOT apply user_brightness here — it would cause double-application.
 
   // BUG 13 FIX: Apply force_white to Intro transitions
   if (this->controller_ != nullptr &&
@@ -1891,12 +1884,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint32_t cp2 = chimera_fx::instance->_segment.color_from_palette(
               m2, false, true, 255, 255);
 
-          pixel_c1 = Color((uint8_t)(((cp1 >> 16) & 0xFF) * user_brightness),
-                           (uint8_t)(((cp1 >> 8) & 0xFF) * user_brightness),
-                           (uint8_t)((cp1 & 0xFF) * user_brightness), 0);
-          pixel_c2 = Color((uint8_t)(((cp2 >> 16) & 0xFF) * user_brightness),
-                           (uint8_t)(((cp2 >> 8) & 0xFF) * user_brightness),
-                           (uint8_t)((cp2 & 0xFF) * user_brightness), 0);
+          pixel_c1 =
+              Color((uint8_t)((cp1 >> 16) & 0xFF), (uint8_t)((cp1 >> 8) & 0xFF),
+                    (uint8_t)(cp1 & 0xFF), 0);
+          pixel_c2 =
+              Color((uint8_t)((cp2 >> 16) & 0xFF), (uint8_t)((cp2 >> 8) & 0xFF),
+                    (uint8_t)(cp2 & 0xFF), 0);
         } else {
           pixel_c1 = c;
           pixel_c2 = c;
@@ -1989,10 +1982,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
         uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
             map_idx, false, true, 255, 255);
-        base_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
-                       (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
-                       (uint8_t)((cp & 0xFF) * user_brightness),
-                       (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
+        base_c =
+            Color((uint8_t)((cp >> 16) & 0xFF), (uint8_t)((cp >> 8) & 0xFF),
+                  (uint8_t)(cp & 0xFF), (uint8_t)((cp >> 24) & 0xFF));
       }
 
       // Explicit Scaling avoiding operator ambiguity
@@ -2022,10 +2014,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
           uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          pixel_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
-                          (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
-                          (uint8_t)((cp & 0xFF) * user_brightness),
-                          (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
+          pixel_c =
+              Color((uint8_t)((cp >> 16) & 0xFF), (uint8_t)((cp >> 8) & 0xFF),
+                    (uint8_t)(cp & 0xFF), (uint8_t)((cp >> 24) & 0xFF));
         } else {
           pixel_c = c;
         }
@@ -2136,10 +2127,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
               (uint8_t)((idx * 255) / (seg_len > 0 ? seg_len : 1));
           uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
-          base_c = Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
-                         (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
-                         (uint8_t)((cp & 0xFF) * user_brightness),
-                         (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
+          base_c =
+              Color((uint8_t)((cp >> 16) & 0xFF), (uint8_t)((cp >> 8) & 0xFF),
+                    (uint8_t)(cp & 0xFF), (uint8_t)((cp >> 24) & 0xFF));
         }
 
         it[global_idx] =
@@ -2175,15 +2165,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
               map_idx, false, true, 255, 255);
           it[global_idx] =
-              Color((uint8_t)(((cp >> 16) & 0xFF) * user_brightness),
-                    (uint8_t)(((cp >> 8) & 0xFF) * user_brightness),
-                    (uint8_t)((cp & 0xFF) * user_brightness),
-                    (uint8_t)(((cp >> 24) & 0xFF) * user_brightness));
+              Color((uint8_t)((cp >> 16) & 0xFF), (uint8_t)((cp >> 8) & 0xFF),
+                    (uint8_t)(cp & 0xFF), (uint8_t)((cp >> 24) & 0xFF));
         } else {
-          it[global_idx] = Color((uint8_t)(target_color.r * user_brightness),
-                                 (uint8_t)(target_color.g * user_brightness),
-                                 (uint8_t)(target_color.b * user_brightness),
-                                 (uint8_t)(target_color.w * user_brightness));
+          it[global_idx] = Color(target_color.r, target_color.g, target_color.b,
+                                 target_color.w);
         }
       } else {
         it[global_idx] = Color::BLACK;
