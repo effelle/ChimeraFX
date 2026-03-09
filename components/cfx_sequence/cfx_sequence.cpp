@@ -199,10 +199,11 @@ void CFXSequence::stop() {
 
   // Update Select UI to reflect the stopped sequence
   if (CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->has_state() &&
-      CFXSequenceSelect::instance->current_option().has_value() &&
-      CFXSequenceSelect::instance->current_option().value() == this->name_) {
-    CFXSequenceSelect::instance->publish_state_silent("None");
+      CFXSequenceSelect::instance->has_state()) {
+    const char *current = CFXSequenceSelect::instance->current_option();
+    if (current != nullptr && this->name_ == current) {
+      CFXSequenceSelect::instance->publish_state_silent("None");
+    }
   }
 }
 
