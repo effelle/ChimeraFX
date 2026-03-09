@@ -33,6 +33,7 @@ CONF_EFFECT = "effect"
 CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
+CONF_SET_BRIGHTNESS = "set_brightness"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 
@@ -54,6 +55,7 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_SPEED): cv.int_range(0, 255),
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
+        cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         
@@ -102,6 +104,8 @@ async def to_code(config):
             cg.add(var.set_intensity(seq_conf[CONF_SET_INTENSITY]))
         if CONF_SET_PALETTE in seq_conf:
             cg.add(var.set_palette(seq_conf[CONF_SET_PALETTE]))
+        if CONF_SET_BRIGHTNESS in seq_conf:
+            cg.add(var.set_brightness(seq_conf[CONF_SET_BRIGHTNESS]))
         if CONF_ITERATIONS in seq_conf:
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
 

@@ -1,131 +1,119 @@
 # ChimeraFX Sequencer
 
-The ChimeraFX Sequencer (`cfx_sequence`) is a powerful orchestration component that allows you to create complex, event-driven lighting sequences. It can control one or more ChimeraFX lights, or segments of a light, applying specific effects with optional overrides for speed, intensity, and palette, and can chain sequences together based on triggers.
+The ChimeraFX Sequencer (`cfx_sequence`) is a powerful orchestration component that allows you to create complex, event-driven lighting sequences. It can control one or more ChimeraFX lights, or segments of a light, applying specific effects with optional overrides for speed, intensity, palette, and brightness. Sequences can chain together based on triggers.
 
 ## Configuration Overview
 
-A sequence defines which light(s) or segment(s) to control, which effect to run, and optional parameters to override the default effect settings.
-
 ```yaml
 cfx_sequence:
-  - name: "Sweep Sequence"
-    light_id: rgb_light
+  - id: my_sequence
+    name: "Sweep Sequence"
+    lights: [rgb_light]
     effect: "Wipe"
-    speed: 150
-    intensity: 200
-    palette: "Rainbow"
+    set_speed: 150
+    set_intensity: 200
+    set_palette: 5
+    set_brightness: 80%
     iterations: 2
+    restore: true
     on_complete:
       - cfx_sequence.start: next_sequence
 ```
 
 ### Configuration Variables
 
-* **name** (*string*, Required): The unique name of the sequence. This is displayed in the "Active Sequence" select dropdown.
-* **light_id** (*ID* or *list of IDs*, Required): The ID(s) of the `cfx_light` component(s) to control.
-* **effect** (*string*, Required): The name of the ChimeraFX effect to run (e.g., "Wipe", "Rainbow", "Fire").
-* **speed** (*int*, Optional): Override the effect's default speed (0-255).
-* **intensity** (*int*, Optional): Override the effect's default intensity (0-255).
-* **palette** (*string* or *int*, Optional): Override the effect's default palette. You can use the palette name (e.g., "Rainbow") or its ID.
-* **iterations** (*int*, Optional): The number of times the effect should repeat before finishing. If set to `0` (default), it runs indefinitely until stopped or a trigger occurs.
+| Variable | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| **id** | ID | Yes | — | Unique identifier for referencing in actions and triggers |
+| **name** | string | Yes | — | Display name in the "Active Sequence" select dropdown |
+| **lights** | list of IDs | Yes | — | Target `cfx_light` or segment light IDs |
+| **effect** | string | Yes | — | ChimeraFX effect name (e.g., "Wipe", "Chase", "Fire") |
+| **set_speed** | int (0-255) | No | — | Override the effect's default speed |
+| **set_intensity** | int (0-255) | No | — | Override the effect's default intensity |
+| **set_palette** | int (0-255) | No | — | Override the effect's default palette by ID |
+| **set_brightness** | percentage | No | — | Set the light brightness (e.g., `80%`, `0.5`) |
+| **iterations** | int | No | 0 | Number of effect cycles before `on_complete`. 0 = run indefinitely |
+| **restore** | boolean | No | true | Restore the light's previous state when the sequence stops |
+
+> [!NOTE]
+> `set_speed`, `set_intensity`, and `set_palette` override the shared controls during the sequence. When the sequence stops (with `restore: true`), the previous values are restored.
 
 ---
 
 ## Triggers
 
-The Sequencer exposes several triggers that allow you to react to the sequence's progress and chain events.
-
 ### `on_start`
 Fires exactly once when the sequence starts.
 
 ```yaml
-cfx_sequence:
-  - name: "Intro Sequence"
-    # ...
-    on_start:
-      - logger.log: "Sequence started!"
+on_start:
+  - logger.log: "Sequence started!"
 ```
 
 ### `on_complete`
-Fires when the sequence finishes its requested number of `iterations`. This is commonly used to "chain" sequences together.
+Fires when the sequence finishes all `iterations`. Used to chain sequences.
 
 ```yaml
-cfx_sequence:
-  - name: "Step 1"
-    iterations: 1
-    # ...
-    on_complete:
-      - cfx_sequence.start: step_2
+iterations: 1
+on_complete:
+  - cfx_sequence.start: next_step
 ```
 
 ### `on_reach`
-Fires when a **progressive effect** (like Wipe or Chase) reaches a specific percentage (0.0 to 1.0) of the strip length.
+Fires when a **progressive effect** reaches a specific percentage of the strip.
 
 ```yaml
-cfx_sequence:
-  - name: "Middle Trigger"
-    # ...
-    on_reach:
-      - position: 0.5  # 50%
-        then:
-          - logger.log: "Reached the middle of the strip!"
+on_reach:
+  - position: 50%
+    then:
+      - light.turn_on: {id: led_strip, red: 1, green: 0, blue: 0}
 ```
 
 ### `on_pixel_num`
 Fires when a **progressive effect** reaches a specific absolute pixel index.
 
 ```yaml
-cfx_sequence:
-  - name: "End Trigger"
-    # ...
-    on_pixel_num:
-      - pixel: 299
-        then:
-          - logger.log: "Reached the last pixel!"
+on_pixel_num:
+  - pixel: 30
+    then:
+      - light.turn_on: {id: led_strip, brightness: 80%}
 ```
 
 > [!NOTE]
-> **Position-based triggers** (`on_reach` and `on_pixel_num`) require a **Progressive Effect**. These are effects with a clear "leading edge" that moves across the strip. Compatible effects are marked with the :material-bullseye-arrow: icon in the [Effects Library](Effects-Library.md).
-
-### External ESPHome Triggers
-The Sequencer is fully integrated with the ESPHome ecosystem. While it has its own internal triggers, you can use **any ESPHome trigger** (e.g., binary sensors, sensor thresholds, or time-based events) to start or stop a sequence using the `cfx_sequence.start` and `cfx_sequence.stop` actions.
+> **Position-based triggers** (`on_reach` and `on_pixel_num`) require a **Progressive Effect** — effects with a clear leading edge that moves across the strip. Compatible effects are marked with :material-bullseye-arrow: in the [Effects Library](Effects-Library.md).
 
 ---
 
-## "Leave No Trace" Behavior
+## State Restoration
 
-The ChimeraFX Sequencer is designed with architectural integrity in mind. When a sequence starts, it takes a "snapshot" of the current state of the target lights (On/Off state, current color, and active effect).
+When `restore: true` (default), the sequencer takes a snapshot of the light's state before starting (On/Off, brightness, color, and active effect). When the sequence stops, it restores that state instantly.
 
-When the sequence stops (either manually or by completing its iterations), it **gracefully restores** the light to exactly how it found it.
-
-* If the light was **OFF** before the sequence, it will transition back to **OFF**.
-* If the light was running a different effect, it will transition back to that effect.
-* The restoration uses a smooth 1-second transition to prevent jarring visual snaps.
+- If the light was **OFF** before → it returns to **OFF**
+- If the light was running a different effect → it switches back
+- `restore: false` → the light stays in the sequence's final state
 
 ---
 
 ## Active Sequence Control
 
-When you define one or more sequences, a select entity named **"Active Sequence"** is automatically exposed to Home Assistant. Selecting a sequence from the dropdown starts it, and selecting **"None"** stops the active sequence and restores the previous light state.
+When sequences are defined, a select entity **"Active Sequence"** is automatically exposed to Home Assistant. Selecting a sequence starts it; selecting **"None"** stops the active sequence.
 
 ---
 
 ## Actions
 
 ### `cfx_sequence.start`
-Starts a specific sequence.
-
 ```yaml
 on_...:
   then:
-    - cfx_sequence.start: my_sequence_id
+    - cfx_sequence.start:
+        id: my_sequence_id
 ```
 
 ### `cfx_sequence.stop`
-Stops the specified sequence (or all sequences if no ID is provided).
-
 ```yaml
 on_...:
   then:
-    - cfx_sequence.stop: my_sequence_id
+    - cfx_sequence.stop:
+        id: my_sequence_id
 ```

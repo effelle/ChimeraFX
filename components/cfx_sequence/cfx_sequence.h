@@ -50,10 +50,12 @@ public:
   void set_intensity(uint8_t intensity) { this->intensity_ = intensity; }
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
+  void set_brightness(float brightness) { this->brightness_ = brightness; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
   esphome::optional<uint8_t> get_palette() const { return this->palette_; }
+  esphome::optional<float> get_brightness() const { return this->brightness_; }
   uint32_t get_iterations() const { return this->iterations_; }
 
   std::string get_id() const { return this->id_; }
@@ -86,6 +88,7 @@ protected:
   esphome::optional<uint8_t> speed_;
   esphome::optional<uint8_t> intensity_;
   esphome::optional<uint8_t> palette_;
+  esphome::optional<float> brightness_;
   uint32_t iterations_{0};
   bool restore_state_{true};
 

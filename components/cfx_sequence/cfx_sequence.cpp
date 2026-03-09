@@ -84,44 +84,50 @@ void CFXSequence::start() {
     call.set_state(true);
     call.set_effect(this->effect_);
     call.set_color_mode(l->remote_values.get_color_mode());
-    call.set_transition_length(0); // Force instant transition for sequences
+    call.set_transition_length(0);
+    if (this->brightness_.has_value()) {
+      call.set_brightness(this->brightness_.value());
+    }
     call.perform();
   }
 
-  // Bind sequence to the master CFXAddressableLightEffect
-  // Segment lights share the master's effect instance, so we search all_effects
-  // for any instance that recognizes our target lights.
+  // Bind sequence to the correct CFXAddressableLightEffect instance.
+  // Strategy: get the active effect from the first target light and match it
+  // in all_effects. For segment lights (where the active effect is on the
+  // segment, not the master), fall back to the first master effect.
   bool bound = false;
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-    if (inst->get_active_sequence() == nullptr) {
-      // Check if this effect instance is relevant to our sequence lights
-      for (auto *l : this->lights_) {
-        if (inst->get_light_state() == l) {
-          // Direct match (master light targeted by sequence)
-          ESP_LOGD(TAG, "  Binding Sequence to Effect %p (direct match)", inst);
-          inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                    this->palette_, this->iterations_);
-          bound = true;
-          break;
-        }
+  for (auto *l : this->lights_) {
+    light::LightEffect *active =
+        chimera_fx::LightStateProxy::get_active_effect(l);
+    if (active == nullptr)
+      continue;
+
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+      if (inst == active) {
+        ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
+        inst->set_active_sequence(this, this->speed_, this->intensity_,
+                                  this->palette_, this->iterations_);
+        bound = true;
+        break;
       }
     }
+    if (bound)
+      break;
   }
 
-  // If no direct match, segments are targeted — find the master effect
-  if (!bound) {
-    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-      ESP_LOGD(TAG, "  Binding Sequence to Effect %p (segment mode)", inst);
-      inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                this->palette_, this->iterations_);
-      bound = true;
-      break; // Only one master effect instance
-    }
+  // Fallback: for segment lights, the active effect is a segment-local instance
+  // that may not be in all_effects. Bind to the first master effect instead.
+  if (!bound && !chimera_fx::CFXAddressableLightEffect::all_effects.empty()) {
+    auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
+    ESP_LOGD(TAG, "  Binding Sequence to Effect %p (segment fallback)",
+             master_fx);
+    master_fx->set_active_sequence(this, this->speed_, this->intensity_,
+                                   this->palette_, this->iterations_);
+    bound = true;
   }
 
   if (!bound) {
-    ESP_LOGW(TAG,
-             "  FAILED to bind sequence — no CFXAddressableLightEffect found");
+    ESP_LOGW(TAG, "  FAILED to bind — no CFXAddressableLightEffect found");
   }
 
   this->last_triggered_percentage_ = -1.0f;
