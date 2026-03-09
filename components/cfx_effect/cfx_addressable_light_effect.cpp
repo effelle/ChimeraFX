@@ -98,6 +98,13 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  // State Machine Init: Check if we are turning ON from OFF BEFORE modifying
+  // state
+  bool is_fresh_turn_on = false;
+  if (auto *state = this->get_light_state()) {
+    is_fresh_turn_on = !state->current_values.is_on();
+  }
+
   // Force bypass transition to avoid the 1s darkness bug on initial render
   if (auto *ls = this->get_light_state()) {
     ls->current_values = ls->remote_values;
@@ -400,8 +407,6 @@ void CFXAddressableLightEffect::start() {
   // State Machine Init: Check if we are turning ON from OFF
   auto *state = this->get_light_state();
   if (state != nullptr) {
-    bool is_fresh_turn_on = !state->current_values.is_on();
-
     // Bypass intro for effects that have their own embedded startup animations
     if (this->effect_id_ == 158 || this->effect_id_ == 159) {
       is_fresh_turn_on = false;
