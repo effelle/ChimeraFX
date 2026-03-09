@@ -86,10 +86,11 @@ public:
   uint8_t active_intro_mode_{0};
   uint8_t active_intro_speed_{128};
   uint32_t intro_start_time_{0};
+  uint32_t active_intro_duration_ms_{1000};
 
   bool outro_active_{false};
   uint8_t active_outro_mode_{0};
-  uint32_t active_outro_duration_ms_{0};
+  uint32_t active_outro_duration_ms_{1000};
   uint8_t active_outro_intensity_{128};
   float active_outro_brightness_{1.0f};
   uint32_t outro_start_time_{0};

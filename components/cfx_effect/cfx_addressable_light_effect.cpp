@@ -422,7 +422,15 @@ void CFXAddressableLightEffect::start() {
       is_fresh_turn_on = false;
     }
 
-    this->intro_active_ = is_fresh_turn_on;
+    // Preserve active intro state against redundant turn_on() calls triggered
+    // by segment->master->segment sync recursion
+    if (this->intro_active_) {
+      // Intro is already running, do NOT kill it just because the light is now
+      // ON
+      is_fresh_turn_on = true;
+    } else {
+      this->intro_active_ = is_fresh_turn_on;
+    }
 
     if (this->intro_active_ && this->controller_ == nullptr) {
       // Try linking again if missed
@@ -430,9 +438,8 @@ void CFXAddressableLightEffect::start() {
       this->run_controls_(); // Re-run to pull pointers
     }
 
-    if (this->intro_active_) {
+    if (this->intro_active_ && !this->intro_start_time_) {
       this->intro_start_time_ = millis();
-    } else {
     }
   } else {
     this->intro_active_ = false;
@@ -477,6 +484,50 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
       }
     }
+
+    // 10. Intro Duration Priority Chain (Calculated ONCE during start)
+    uint32_t duration_ms = 1000; // Final Default: 1.0s
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+
+    if (this->active_intro_mode_ == INTRO_MODE_MORSE) {
+      // A. Highest: Morse Code Timing (Message length based)
+      uint8_t current_speed = 128;
+      number::Number *intensity_num =
+          (this->controller_ && this->controller_->get_intensity())
+              ? this->controller_->get_intensity()
+              : this->intensity_;
+      if (intensity_num != nullptr && intensity_num->has_state()) {
+        current_speed = (uint8_t)intensity_num->state;
+      }
+      uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
+      duration_ms = 35 * unit_ms; // ~ "HELLO"
+    } else if (dur_num != nullptr && dur_num->has_state()) {
+      // B. High Priority: UI Slider
+      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      // C. Medium Priority: YAML Preset
+      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    } else {
+      // D. Monochromatic Preset Fallback: Speed Slider
+      MonochromaticPreset preset =
+          this->get_monochromatic_preset_(this->effect_id_);
+      if (preset.is_active) {
+        number::Number *speed_num = this->speed_;
+        if (speed_num == nullptr && this->controller_ != nullptr)
+          speed_num = this->controller_->get_speed();
+
+        if (speed_num != nullptr && speed_num->has_state()) {
+          // Map Speed (0-255) to Duration (500ms up to 10000ms)
+          float speed_val = speed_num->state;
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else {
+          duration_ms = 1000; // Standard 1s default
+        }
+      }
+    }
+    this->active_intro_duration_ms_ = duration_ms;
 
     // Cache Speed for Intro (since Morse needs it for unit_ms)
     this->active_intro_speed_ = 128; // fallback
@@ -912,40 +963,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->run_intro(it, current_color);
     }
 
-    // RESOLVE: be84cb0 - Build Fix Verification Log
-    ESP_LOGD("chimera_fx", "Sequencer: Resolving intro duration...");
-    // 2. Resolve Intro Completion Duration (Priority Hierarchy)
-    uint32_t duration_ms = 1000; // Final Default: 1.0s
-    number::Number *dur_num = this->intro_duration_;
-    if (dur_num == nullptr && this->controller_ != nullptr)
-      dur_num = this->controller_->get_intro_duration();
-
-    if (dur_num != nullptr && dur_num->has_state()) {
-      // High Priority: UI Slider
-      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->intro_duration_preset_.has_value()) {
-      // Medium Priority: YAML Preset
-      duration_ms = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    } else {
-      // Monochromatic Preset Fallback: Speed Slider
-      MonochromaticPreset preset =
-          this->get_monochromatic_preset_(this->effect_id_);
-      if (preset.is_active) {
-        number::Number *speed_num = this->speed_;
-        if (speed_num == nullptr && this->controller_ != nullptr)
-          speed_num = this->controller_->get_speed();
-
-        if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (500ms up to 10000ms)
-          float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-        } else {
-          duration_ms = 1000; // Standard 1s default
-        }
-      }
-    }
-
-    if (millis() - this->intro_start_time_ > duration_ms) {
+    if (millis() - this->intro_start_time_ > this->active_intro_duration_ms_) {
       this->intro_active_ = false;
 
       // Check if Transition is enabled via config
