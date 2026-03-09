@@ -96,7 +96,15 @@ void CFXSequence::start() {
     if (!this->effect_.empty()) {
       call.set_effect(this->effect_);
     }
-    call.set_color_mode(l->remote_values.get_color_mode());
+    auto valid_mode = l->remote_values.get_color_mode();
+    if (valid_mode == light::ColorMode::UNKNOWN) {
+      if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+        valid_mode = light::ColorMode::RGB_WHITE;
+      } else if (l->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+        valid_mode = light::ColorMode::RGB;
+      }
+    }
+    call.set_color_mode(valid_mode);
     call.set_transition_length(0);
     if (this->brightness_.has_value()) {
       call.set_brightness(this->brightness_.value());
