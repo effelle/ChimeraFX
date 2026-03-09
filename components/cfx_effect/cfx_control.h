@@ -13,6 +13,7 @@
 #include <map>
 #include <vector>
 
+#include "../cfx_light/cfx_light.h"
 #include "cfx_addressable_light_effect.h"
 
 namespace esphome {
@@ -41,14 +42,26 @@ public:
   static bool global_debug_enabled_;
 
   static CFXControl *find(light::LightState *light) {
+    // 1. Direct master match
     for (auto *c : instances) {
       if (c->get_light() == light)
         return c;
     }
-    // Fallback: segment lights have different LightState pointers than master.
-    // If there's exactly one controller, it's the master — return it.
-    if (instances.size() == 1) {
-      return instances[0];
+
+    // 2. Segment match fallback: iterate masters and check segment configs
+    for (auto *c : instances) {
+      if (c->get_light() == nullptr)
+        continue;
+      auto *output = c->get_light()->get_output();
+      if (output == nullptr)
+        continue;
+
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+      for (auto *seg_state : cfx_out->get_segment_light_states()) {
+        if (seg_state == light) {
+          return c;
+        }
+      }
     }
     ESP_LOGD("chimera_fx",
              "CFXControl::find failed for light %p. Instances: %zu", light,

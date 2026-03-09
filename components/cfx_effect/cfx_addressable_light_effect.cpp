@@ -191,6 +191,16 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  // Force reset runner memory whenever an effect is selected/started
+  // to ensure multi-segment sequences synchronize and start fresh.
+  if (!this->segment_runners_.empty()) {
+    for (auto *r : this->segment_runners_) {
+      r->reset();
+    }
+  } else if (this->runner_ != nullptr) {
+    this->runner_->reset();
+  }
+
   // Pre-seed the UI with this effect's default palette
   if (this->controller_) {
     select::Select *palette_sel_init = this->controller_->get_palette()
