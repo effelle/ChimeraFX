@@ -51,7 +51,7 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.GenerateID(): cv.declare_id(CFXSequence),
         cv.Required(CONF_NAME): cv.string,
         cv.Required(CONF_LIGHTS): cv.ensure_list(cv.use_id(light.LightState)),
-        cv.Required(CONF_EFFECT): cv.string,
+        cv.Optional(CONF_EFFECT, default=""): cv.string,
         cv.Optional(CONF_SET_SPEED): cv.int_range(0, 255),
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),

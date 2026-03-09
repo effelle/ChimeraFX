@@ -93,7 +93,9 @@ void CFXSequence::start() {
   for (auto *l : this->lights_) {
     auto call = l->make_call();
     call.set_state(true);
-    call.set_effect(this->effect_);
+    if (!this->effect_.empty()) {
+      call.set_effect(this->effect_);
+    }
     call.set_color_mode(l->remote_values.get_color_mode());
     call.set_transition_length(0);
     if (this->brightness_.has_value()) {
