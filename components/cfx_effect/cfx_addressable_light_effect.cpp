@@ -59,6 +59,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MORSE, INTRO_MORSE};
   case 167: // Four Times the Charm
     return {true, INTRO_MODE_QUADRANT, INTRO_MODE_QUADRANT};
+  case 168: // Aqueous Flow
+    return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -72,6 +74,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 165: // Twin Pulse Sweep
   case 166: // Transmission
   case 167: // Four Times the Charm
+  case 168: // Aqueous Flow
     return true;
   default:
     return false;
@@ -118,9 +121,10 @@ void CFXAddressableLightEffect::start() {
   }
 
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
-  // Without this, a stale timestamp from a previous outro causes elapsed to
-  // be enormous, progress clamps to 1.0, and the outro completes invisibly.
   this->outro_start_time_ = 0;
+  this->hydraulics_fluid_level_ = 0.0f;
+  this->hydraulics_particles_.clear();
+  this->hydraulics_last_ms_ = 0;
 
   this->last_triggered_pixel_ = -1;
   this->last_triggered_percentage_ = -1.0f;
@@ -747,6 +751,11 @@ void CFXAddressableLightEffect::stop() {
           // Initialize outro start time on the very first allowed frame
           if (this->outro_start_time_ == 0) {
             this->outro_start_time_ = millis();
+            this->hydraulics_last_ms_ = this->outro_start_time_;
+            if (this->active_outro_mode_ == INTRO_MODE_HYDRAULICS) {
+              this->hydraulics_fluid_level_ = (float)it_light->size();
+              this->hydraulics_particles_.clear();
+            }
           }
 
           // Run outro frame on ALL captured segment runners
@@ -1391,10 +1400,10 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 140; // Follow Me (Default Speed)
   case 157:
     return 128; // Follow Us (Default Speed 128)
-  case 161:
-  case 162:
   case 163:
     return 1; // Monochromatic series (fastest speed)
+  case 168:
+    return 128; // Aqueous Flow (Default Speed)
   case 164:
     return 100; // Collider (Default Speed)
   default:
@@ -1425,10 +1434,10 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 40; // Follow Me (Default Intensity)
   case 157:
     return 128; // Follow Us (Default Intensity 128)
-  case 161:
-  case 162:
   case 163:
     return 1; // Monochromatic series (No blur)
+  case 168:
+    return 128; // Aqueous Flow (Default Viscosity)
   case 164:
     return 170; // Collider (Default Intensity)
   default:
@@ -2215,6 +2224,95 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     break;
   }
+  case INTRO_MODE_HYDRAULICS: {
+    uint32_t now_ms = millis();
+    if (this->hydraulics_last_ms_ == 0) {
+      this->hydraulics_last_ms_ = now_ms;
+      this->hydraulics_fluid_level_ = 0.0f;
+      this->hydraulics_particles_.clear();
+      this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
+    }
+    uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+    this->hydraulics_last_ms_ = now_ms;
+
+    float speed_val = this->active_intro_speed_ / 255.0f;
+    float intensity_val =
+        this->active_outro_intensity_ / 255.0f; // Reuse intensity for viscosity
+    if (this->controller_ && this->controller_->get_intensity()) {
+      intensity_val = this->controller_->get_intensity()->state / 255.0f;
+    }
+
+    // Physics Constants
+    float target_l = (float)seg_len;
+    float viscosity = 0.05f + (intensity_val * 0.15f);
+    float gravity = 0.005f + (intensity_val * 0.015f);
+
+    // 1. Update Fluid Level (Sub-Pixel Wipe)
+    float old_level = this->hydraulics_fluid_level_;
+    this->hydraulics_fluid_level_ +=
+        (target_l - this->hydraulics_fluid_level_) * viscosity *
+        (dt_ms / 16.6f);
+    float velocity = this->hydraulics_fluid_level_ - old_level;
+
+    // 2. Trigger Splashes (Intro)
+    if (velocity > 0.1f &&
+        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+      if ((rand() % 100) < 20) {
+        float p_vel = speed_val * (1.2f + (rand() % 80) / 100.0f);
+        this->hydraulics_particles_.push_back(
+            {this->hydraulics_fluid_level_, p_vel, true});
+      }
+    }
+
+    // 3. Render Fluid Mass
+    int floor_level = (int)floorf(this->hydraulics_fluid_level_);
+    for (int i = 0; i < floor_level; i++) {
+      if (i < seg_len)
+        it[seg_start + i] = Color::WHITE;
+    }
+    if (floor_level < seg_len) {
+      float fraction = this->hydraulics_fluid_level_ - floor_level;
+      it[seg_start + floor_level] =
+          Color(Color::WHITE).fade((uint8_t)(fraction * 255));
+    }
+
+    // 4. Update and Render Particles
+    for (auto &p : this->hydraulics_particles_) {
+      if (!p.active)
+        continue;
+
+      p.vel -= gravity * (dt_ms / 16.6f);
+      p.pos += p.vel * (dt_ms / 16.6f);
+
+      // Merge/Collision
+      if (p.pos < this->hydraulics_fluid_level_) {
+        p.active = false;
+        continue;
+      }
+      if (p.pos >= target_l) {
+        p.pos = target_l - 0.1f;
+        p.vel *= -0.5f; // Bounce
+      }
+
+      int p_idx = (int)p.pos;
+      if (p_idx >= 0 && p_idx < seg_len) {
+        Color existing = it[seg_start + p_idx].get();
+        // Particles are 150% brightness (simulated refraction/foam)
+        uint8_t b = 255;
+        Color particle_c = Color(b, b, b, b);
+        it[seg_start + p_idx] = particle_c;
+      }
+    }
+
+    // Cleanup inactive particles
+    this->hydraulics_particles_.erase(
+        std::remove_if(this->hydraulics_particles_.begin(),
+                       this->hydraulics_particles_.end(),
+                       [](const HydraulicsParticle &p) { return !p.active; }),
+        this->hydraulics_particles_.end());
+
+    break;
+  }
   case INTRO_MODE_MORSE: {
     uint32_t speed_val = this->active_intro_speed_;
     uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
@@ -2244,520 +2342,612 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         } else {
           it[global_idx] = Color(target_color.r, target_color.g, target_color.b,
                                  target_color.w);
+          // The formation (Two pulses + trailing void) races forward.
+          // Progress 0.0: Full light.
+          // The Twin Pulse Outro logic would go here.
+          // For now, we'll just fade out the entire strip.
+          for (int i = 0; i < seg_len; i++) {
+            int global_idx = seg_start + i;
+            Color c = it[global_idx].get();
+            it[global_idx] = Color(
+                (uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+          }
+          break;
         }
-      } else {
-        it[global_idx] = Color::BLACK;
+      case INTRO_MODE_HYDRAULICS: {
+        uint32_t now_ms = millis();
+        uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+        this->hydraulics_last_ms_ = now_ms;
+
+        float speed_val =
+            128 / 255.0f; // Default speed for outro if not accessible
+        float intensity_val = this->active_outro_intensity_ / 255.0f;
+
+        // Physics Constants
+        float target_l = 0.0f;
+        float viscosity = 0.05f + (intensity_val * 0.15f);
+        float gravity = 0.005f + (intensity_val * 0.015f);
+
+        // 1. Update Fluid Level (Drain)
+        float old_level = this->hydraulics_fluid_level_;
+        this->hydraulics_fluid_level_ +=
+            (target_l - this->hydraulics_fluid_level_) * viscosity *
+            (dt_ms / 16.6f);
+
+        // 2. Trigger Clinging Drops (Outro)
+        if (this->hydraulics_fluid_level_ < old_level &&
+            this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+          if ((rand() % 100) < 15) {
+            this->hydraulics_particles_.push_back({old_level, 0.0f, true});
+          }
+        }
+
+        // 3. Render Fluid Mass
+        int floor_level = (int)floorf(this->hydraulics_fluid_level_);
+        for (int i = 0; i < floor_level; i++) {
+          if (i < seg_len)
+            it[seg_start + i] = Color::WHITE;
+        }
+        if (floor_level < seg_len) {
+          float fraction = this->hydraulics_fluid_level_ - floor_level;
+          it[seg_start + floor_level] =
+              Color(Color::WHITE).fade((uint8_t)(fraction * 255));
+        }
+
+        // 4. Update and Render Particles
+        for (auto &p : this->hydraulics_particles_) {
+          if (!p.active)
+            continue;
+
+          p.vel -= gravity * (dt_ms / 16.6f); // Falling down towards index 0
+          p.pos += p.vel * (dt_ms / 16.6f);
+
+          // Merge/Collision
+          if (p.pos < 0.0f) {
+            p.active = false;
+            continue;
+          }
+          if (p.pos < this->hydraulics_fluid_level_) {
+            p.active = false; // Re-absorbed
+            continue;
+          }
+
+          int p_idx = (int)p.pos;
+          if (p_idx >= 0 && p_idx < seg_len) {
+            it[seg_start + p_idx] = Color::WHITE;
+          }
+        }
+
+        // Cleanup inactive particles
+        this->hydraulics_particles_.erase(
+            std::remove_if(
+                this->hydraulics_particles_.begin(),
+                this->hydraulics_particles_.end(),
+                [](const HydraulicsParticle &p) { return !p.active; }),
+            this->hydraulics_particles_.end());
+
+        if (this->hydraulics_fluid_level_ <= 0.1f &&
+            this->hydraulics_particles_.empty()) {
+          it.fill(Color::BLACK);
+          return true; // Done
+        }
+        return false;
+      }
+      case INTRO_MODE_NONE:
+      default:
+        for (int i = 0; i < seg_len; i++) {
+          it[seg_start + i] = Color::BLACK;
+        }
+        break;
       }
     }
-    break;
-  }
-  case INTRO_MODE_NONE:
-  default:
-    for (int i = 0; i < seg_len; i++) {
-      it[seg_start + i] = Color::BLACK;
-    }
-    break;
-  }
-}
 
-bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
-                                                CFXRunner *runner) {
-  if (runner == nullptr)
-    return true;
+    bool CFXAddressableLightEffect::run_outro_frame(
+        light::AddressableLight & it, CFXRunner * runner) {
+      if (runner == nullptr)
+        return true;
 
-  auto *state = this->get_light_state();
-  if (state != nullptr && state->remote_values.is_on()) {
-    // Light turned back ON during Outro!
-    // Return true immediately so the callback is released and
-    // the captured runner is safely destroyed.
-    return true;
-  }
+      auto *state = this->get_light_state();
+      if (state != nullptr && state->remote_values.is_on()) {
+        // Light turned back ON during Outro!
+        // Return true immediately so the callback is released and
+        // the captured runner is safely destroyed.
+        return true;
+      }
 
-  uint32_t duration_ms = this->active_outro_duration_ms_;
+      uint32_t duration_ms = this->active_outro_duration_ms_;
 
-  uint32_t elapsed = millis() - this->outro_start_time_;
-  float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
-  if (progress > 1.0f)
-    progress = 1.0f;
+      uint32_t elapsed = millis() - this->outro_start_time_;
+      float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
+      if (progress > 1.0f)
+        progress = 1.0f;
 
-  float fade_scaler = 1.0f - progress;
+      float fade_scaler = 1.0f - progress;
 
-  // 1. Advance the underlying effect in the background
-  runner->service();
+      // 1. Advance the underlying effect in the background
+      runner->service();
 
-  // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our pixels!
-  // Non-segmented: ESPHome is actively fading brightness to 0.0f. We must
-  //   temporarily force it to 1.0f so the outro renders visibly.
-  // Segmented (virtual segments): Each segment has its OWN ColorCorrection
-  //   that is independent from the Master. Skip the Master brightness hack
-  //   to avoid corrupting it for other concurrently-active segments.
-  float original_brightness = 0.0f;
-  float user_brightness = 1.0f;
-  auto *ls = this->get_light_state();
-  if (ls != nullptr) {
-    original_brightness = ls->current_values.get_brightness();
-    // Capture user's intended brightness from initial state BEFORE override
-    // During outro, remote_values is usually 0, so we use the snapshot taken at
-    // start_outro
-    user_brightness = this->active_outro_brightness_;
-    if (user_brightness < 0.01f)
-      user_brightness = 0.01f;
-    if (!this->is_virtual_segment_) {
-      ls->current_values.set_brightness(1.0f);
-    }
-  }
-
-  // 2. Render background frame onto the output buffer (scaled by user
-  // brightness)
-  int seg_len = runner->_segment.length();
-  int seg_start = (it.size() == seg_len) ? 0 : runner->_segment.start;
-  int seg_stop = seg_start + seg_len;
-
-  for (int i = 0; i < seg_len; i++) {
-    int global_idx = seg_start + i;
-    uint32_t c = runner->_segment.getPixelColor(i);
-    uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
-    uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
-    uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
-    uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
-
-    // BUG 13 FIX: Apply force_white to Outro transitions
-    if (this->controller_ != nullptr &&
-        this->controller_->get_force_white() != nullptr &&
-        this->controller_->get_force_white()->state) {
-      cfx::apply_force_white(r, g, b, w);
-    }
-
-    it[global_idx] = Color(r, g, b, w);
-  }
-
-  // Restore the scaling factor so we don't permanently corrupt the LightState
-  if (ls != nullptr && !this->is_virtual_segment_) {
-    ls->current_values.set_brightness(original_brightness);
-  }
-
-  uint8_t mode = this->active_outro_mode_;
-
-  bool reverse = this->active_outro_mirror_;
-
-  bool symmetry = false;
-  bool quadrant = false;
-  if (mode == INTRO_MODE_CENTER) {
-    symmetry = true;
-    mode = INTRO_MODE_WIPE;
-  } else if (mode == INTRO_MODE_QUADRANT) {
-    quadrant = true;
-    mode = INTRO_MODE_WIPE;
-  }
-
-  switch (mode) {
-  case INTRO_MODE_WIPE: {
-    int logical_len = seg_len;
-    if (symmetry)
-      logical_len = seg_len / 2;
-    if (quadrant)
-      logical_len = (seg_len + 3) / 4;
-
-    // Intensity defines blur radius (up to 50% of the strip)
-    // Use the cached active_outro_intensity_ because controller_ is null
-    // during Outro
-    float blur_percent = (this->active_outro_intensity_ / 255.0f) * 0.5f;
-
-    int blur_radius = (int)(logical_len * blur_percent);
-    float progress_erasing = 1.0f - progress;
-    float exact_lead = progress_erasing * (logical_len + blur_radius);
-    int lead = (int)exact_lead;
-
-    for (int i = 0; i < logical_len; i++) {
-
-      float alpha =
-          0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
-
-      if (!reverse) {
-        if (i <= lead - blur_radius) {
-          alpha = 1.0f;
-        } else if (i <= lead && blur_radius > 0) {
-          float distance_into_blur = exact_lead - i;
-          alpha = distance_into_blur / blur_radius;
-          if (alpha < 0.0f)
-            alpha = 0.0f;
-          if (alpha > 1.0f)
-            alpha = 1.0f;
-        }
-      } else {
-        int rev_i = logical_len - 1 - i;
-        if (rev_i <= lead - blur_radius) {
-          alpha = 1.0f;
-        } else if (rev_i <= lead && blur_radius > 0) {
-          float distance_into_blur = exact_lead - rev_i;
-          alpha = distance_into_blur / blur_radius;
-          if (alpha < 0.0f)
-            alpha = 0.0f;
-          if (alpha > 1.0f)
-            alpha = 1.0f;
+      // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our
+      // pixels! Non-segmented: ESPHome is actively fading brightness to 0.0f.
+      // We must
+      //   temporarily force it to 1.0f so the outro renders visibly.
+      // Segmented (virtual segments): Each segment has its OWN ColorCorrection
+      //   that is independent from the Master. Skip the Master brightness hack
+      //   to avoid corrupting it for other concurrently-active segments.
+      float original_brightness = 0.0f;
+      float user_brightness = 1.0f;
+      auto *ls = this->get_light_state();
+      if (ls != nullptr) {
+        original_brightness = ls->current_values.get_brightness();
+        // Capture user's intended brightness from initial state BEFORE override
+        // During outro, remote_values is usually 0, so we use the snapshot
+        // taken at start_outro
+        user_brightness = this->active_outro_brightness_;
+        if (user_brightness < 0.01f)
+          user_brightness = 0.01f;
+        if (!this->is_virtual_segment_) {
+          ls->current_values.set_brightness(1.0f);
         }
       }
 
-      // Helper to apply alpha to a specific index relative to segment start
-      auto apply_alpha = [&](int idx) {
-        if (idx >= 0 && idx < seg_len) {
+      // 2. Render background frame onto the output buffer (scaled by user
+      // brightness)
+      int seg_len = runner->_segment.length();
+      int seg_start = (it.size() == seg_len) ? 0 : runner->_segment.start;
+      int seg_stop = seg_start + seg_len;
+
+      for (int i = 0; i < seg_len; i++) {
+        int global_idx = seg_start + i;
+        uint32_t c = runner->_segment.getPixelColor(i);
+        uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
+        uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
+        uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
+        uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
+
+        // BUG 13 FIX: Apply force_white to Outro transitions
+        if (this->controller_ != nullptr &&
+            this->controller_->get_force_white() != nullptr &&
+            this->controller_->get_force_white()->state) {
+          cfx::apply_force_white(r, g, b, w);
+        }
+
+        it[global_idx] = Color(r, g, b, w);
+      }
+
+      // Restore the scaling factor so we don't permanently corrupt the
+      // LightState
+      if (ls != nullptr && !this->is_virtual_segment_) {
+        ls->current_values.set_brightness(original_brightness);
+      }
+
+      uint8_t mode = this->active_outro_mode_;
+
+      bool reverse = this->active_outro_mirror_;
+
+      bool symmetry = false;
+      bool quadrant = false;
+      if (mode == INTRO_MODE_CENTER) {
+        symmetry = true;
+        mode = INTRO_MODE_WIPE;
+      } else if (mode == INTRO_MODE_QUADRANT) {
+        quadrant = true;
+        mode = INTRO_MODE_WIPE;
+      }
+
+      switch (mode) {
+      case INTRO_MODE_WIPE: {
+        int logical_len = seg_len;
+        if (symmetry)
+          logical_len = seg_len / 2;
+        if (quadrant)
+          logical_len = (seg_len + 3) / 4;
+
+        // Intensity defines blur radius (up to 50% of the strip)
+        // Use the cached active_outro_intensity_ because controller_ is null
+        // during Outro
+        float blur_percent = (this->active_outro_intensity_ / 255.0f) * 0.5f;
+
+        int blur_radius = (int)(logical_len * blur_percent);
+        float progress_erasing = 1.0f - progress;
+        float exact_lead = progress_erasing * (logical_len + blur_radius);
+        int lead = (int)exact_lead;
+
+        for (int i = 0; i < logical_len; i++) {
+
+          float alpha =
+              0.0f; // 0.0 means ERASED (black), 1.0 means KEPT (background)
+
+          if (!reverse) {
+            if (i <= lead - blur_radius) {
+              alpha = 1.0f;
+            } else if (i <= lead && blur_radius > 0) {
+              float distance_into_blur = exact_lead - i;
+              alpha = distance_into_blur / blur_radius;
+              if (alpha < 0.0f)
+                alpha = 0.0f;
+              if (alpha > 1.0f)
+                alpha = 1.0f;
+            }
+          } else {
+            int rev_i = logical_len - 1 - i;
+            if (rev_i <= lead - blur_radius) {
+              alpha = 1.0f;
+            } else if (rev_i <= lead && blur_radius > 0) {
+              float distance_into_blur = exact_lead - rev_i;
+              alpha = distance_into_blur / blur_radius;
+              if (alpha < 0.0f)
+                alpha = 0.0f;
+              if (alpha > 1.0f)
+                alpha = 1.0f;
+            }
+          }
+
+          // Helper to apply alpha to a specific index relative to segment start
+          auto apply_alpha = [&](int idx) {
+            if (idx >= 0 && idx < seg_len) {
+              int global_idx = seg_start + idx;
+              if (alpha <= 0.0f) {
+                it[global_idx] = Color::BLACK;
+              } else if (alpha < 1.0f) {
+                Color c = it[global_idx].get();
+                it[global_idx] =
+                    Color((uint8_t)(c.r * alpha), (uint8_t)(c.g * alpha),
+                          (uint8_t)(c.b * alpha), (uint8_t)(c.w * alpha));
+              }
+            }
+          };
+
+          if (quadrant) {
+            // Quadrant Logic: 4 wings converging from edges/midpoints to
+            // centers
+            apply_alpha(i);
+            apply_alpha((seg_len / 2) - 1 - i);
+            apply_alpha((seg_len / 2) + i);
+            apply_alpha(seg_len - 1 - i);
+          } else {
+            apply_alpha(i);
+            if (symmetry) {
+              apply_alpha(seg_len - 1 - i);
+            }
+          }
+        }
+
+        if (symmetry && (seg_len % 2 != 0)) {
+          int mid = seg_start + (seg_len / 2);
+          bool fill_center = (lead > 0);
+          if (!fill_center) {
+            it[mid] = Color::BLACK;
+          }
+        }
+        break;
+      }
+      case INTRO_MODE_GLITTER: {
+        // Glitter Outro: More and more black pixels appear
+        uint8_t threshold = (uint8_t)(progress * 255.0f);
+        for (int i = 0; i < seg_len; i++) {
+          int global_idx = seg_start + i;
+          uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
+          uint8_t val = hash % 256;
+          if (val < threshold) {
+            it[global_idx] = Color::BLACK;
+          }
+          // Else: Keep 100% brightness of the underlying frame
+        }
+        break;
+      }
+      case INTRO_MODE_TWIN_PULSE: {
+        // Twin Pulse Outro (Option B: Forward Chase)
+        // The formation (Two pulses + trailing void) races forward.
+        // Progress 0.0: Full light.
+        // Progress 1.0: Full black.
+
+        float length = (float)seg_len;
+        float c_size = length * 0.08f;
+        if (c_size < 3.0f)
+          c_size = 3.0f;
+        float short_gap = length * 0.12f;
+        if (short_gap < 1.0f)
+          short_gap = 1.0f;
+        float long_gap = length * 0.10f;
+        if (long_gap < 1.0f)
+          long_gap = 1.0f;
+        float wipe_fade = length * 0.05f;
+        if (wipe_fade < 1.0f)
+          wipe_fade = 1.0f;
+
+        // Layout (identical to intro but relative to the "Eraser Head")
+        // Leading edge (Eraser Head) is the front of the formation.
+        float c1_front = 0.0f;
+        float c1_back = c1_front - c_size;
+        float c2_front = c1_back - short_gap;
+        float c2_back = c2_front - c_size;
+        float w_front = c2_back - long_gap;
+        float w_solid = w_front - wipe_fade;
+
+        // Total distance to cover so the void (w_solid) clears the strip
+        float total_distance = length - w_solid;
+        float head_pos = (progress * total_distance) + c1_front;
+
+        for (int i = 0; i < seg_len; i++) {
+          int idx = reverse ? (seg_len - 1 - i) : i;
           int global_idx = seg_start + idx;
+          float fi = (float)idx;
+          float relative_pos = head_pos - fi;
+          float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
+
+          if (relative_pos < 0.0f) {
+            // Ahead of the eraser formation: Smoothly fade down from full
+            // background
+            if (relative_pos > -wipe_fade) {
+              alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
+            } else {
+              alpha = 1.0f;
+            }
+          } else if (relative_pos <= -c1_back) {
+            // Cursor 1: Pulse of Light
+            float c_radius = c_size / 2.0f;
+            float center_pos = (-c1_front + -c1_back) / 2.0f;
+            float dist_to_center = abs(relative_pos - center_pos);
+            if (dist_to_center < c_radius) {
+              // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
+              alpha = 1.0f - (dist_to_center / c_radius);
+            } else {
+              alpha = 0.0f;
+            }
+          } else if (relative_pos < -c2_front) {
+            // Short Gap (Black)
+            alpha = 0.0f;
+          } else if (relative_pos <= -c2_back) {
+            // Cursor 2: Pulse of Light
+            float c_radius = c_size / 2.0f;
+            float center_pos = (-c2_front + -c2_back) / 2.0f;
+            float dist_to_center = abs(relative_pos - center_pos);
+            if (dist_to_center < c_radius) {
+              alpha = 1.0f - (dist_to_center / c_radius);
+            } else {
+              alpha = 0.0f;
+            }
+          } else if (relative_pos < -w_front) {
+            // Long Gap (Black)
+            alpha = 0.0f;
+          } else {
+            // The Void behind the formation
+            alpha = 0.0f;
+          }
+
+          // Apply alpha to existing buffer color
           if (alpha <= 0.0f) {
             it[global_idx] = Color::BLACK;
           } else if (alpha < 1.0f) {
-            Color c = it[global_idx].get();
+            Color cur = it[global_idx].get();
             it[global_idx] =
-                Color((uint8_t)(c.r * alpha), (uint8_t)(c.g * alpha),
-                      (uint8_t)(c.b * alpha), (uint8_t)(c.w * alpha));
+                Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
+                      (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
           }
         }
-      };
-
-      if (quadrant) {
-        // Quadrant Logic: 4 wings converging from edges/midpoints to centers
-        apply_alpha(i);
-        apply_alpha((seg_len / 2) - 1 - i);
-        apply_alpha((seg_len / 2) + i);
-        apply_alpha(seg_len - 1 - i);
-      } else {
-        apply_alpha(i);
-        if (symmetry) {
-          apply_alpha(seg_len - 1 - i);
-        }
+        break;
       }
-    }
+      case INTRO_MODE_MORSE: {
+        uint32_t unit_ms =
+            80 + ((255 - this->active_outro_intensity_) * 100 / 255);
+        uint32_t elapsed_morse = millis() - this->outro_start_time_;
+        uint32_t current_bit = elapsed_morse / unit_ms;
 
-    if (symmetry && (seg_len % 2 != 0)) {
-      int mid = seg_start + (seg_len / 2);
-      bool fill_center = (lead > 0);
-      if (!fill_center) {
-        it[mid] = Color::BLACK;
-      }
-    }
-    break;
-  }
-  case INTRO_MODE_GLITTER: {
-    // Glitter Outro: More and more black pixels appear
-    uint8_t threshold = (uint8_t)(progress * 255.0f);
-    for (int i = 0; i < seg_len; i++) {
-      int global_idx = seg_start + i;
-      uint16_t hash = (global_idx * 33) + (global_idx * global_idx);
-      uint8_t val = hash % 256;
-      if (val < threshold) {
-        it[global_idx] = Color::BLACK;
-      }
-      // Else: Keep 100% brightness of the underlying frame
-    }
-    break;
-  }
-  case INTRO_MODE_TWIN_PULSE: {
-    // Twin Pulse Outro (Option B: Forward Chase)
-    // The formation (Two pulses + trailing void) races forward.
-    // Progress 0.0: Full light.
-    // Progress 1.0: Full black.
+        uint64_t mask = 0b11101110111000101011101000101011101ULL;
+        uint8_t total_bits = 35;
 
-    float length = (float)seg_len;
-    float c_size = length * 0.08f;
-    if (c_size < 3.0f)
-      c_size = 3.0f;
-    float short_gap = length * 0.12f;
-    if (short_gap < 1.0f)
-      short_gap = 1.0f;
-    float long_gap = length * 0.10f;
-    if (long_gap < 1.0f)
-      long_gap = 1.0f;
-    float wipe_fade = length * 0.05f;
-    if (wipe_fade < 1.0f)
-      wipe_fade = 1.0f;
-
-    // Layout (identical to intro but relative to the "Eraser Head")
-    // Leading edge (Eraser Head) is the front of the formation.
-    float c1_front = 0.0f;
-    float c1_back = c1_front - c_size;
-    float c2_front = c1_back - short_gap;
-    float c2_back = c2_front - c_size;
-    float w_front = c2_back - long_gap;
-    float w_solid = w_front - wipe_fade;
-
-    // Total distance to cover so the void (w_solid) clears the strip
-    float total_distance = length - w_solid;
-    float head_pos = (progress * total_distance) + c1_front;
-
-    for (int i = 0; i < seg_len; i++) {
-      int idx = reverse ? (seg_len - 1 - i) : i;
-      int global_idx = seg_start + idx;
-      float fi = (float)idx;
-      float relative_pos = head_pos - fi;
-      float alpha = 1.0f; // 1.0 = Keep Original Color, 0.0 = Black
-
-      if (relative_pos < 0.0f) {
-        // Ahead of the eraser formation: Smoothly fade down from full
-        // background
-        if (relative_pos > -wipe_fade) {
-          alpha = (-relative_pos) / wipe_fade; // relative_pos is negative
+        bool is_on = false;
+        if (current_bit < total_bits) {
+          is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
         } else {
-          alpha = 1.0f;
+          is_on = false; // Hold OFF after sequence
         }
-      } else if (relative_pos <= -c1_back) {
-        // Cursor 1: Pulse of Light
-        float c_radius = c_size / 2.0f;
-        float center_pos = (-c1_front + -c1_back) / 2.0f;
-        float dist_to_center = abs(relative_pos - center_pos);
-        if (dist_to_center < c_radius) {
-          // Pulse opacity (1.0 at center, fading down to 0.0 at edges)
-          alpha = 1.0f - (dist_to_center / c_radius);
-        } else {
-          alpha = 0.0f;
+
+        if (!is_on) {
+          for (int i = 0; i < seg_len; i++) {
+            it[seg_start + i] = Color::BLACK;
+          }
         }
-      } else if (relative_pos < -c2_front) {
-        // Short Gap (Black)
-        alpha = 0.0f;
-      } else if (relative_pos <= -c2_back) {
-        // Cursor 2: Pulse of Light
-        float c_radius = c_size / 2.0f;
-        float center_pos = (-c2_front + -c2_back) / 2.0f;
-        float dist_to_center = abs(relative_pos - center_pos);
-        if (dist_to_center < c_radius) {
-          alpha = 1.0f - (dist_to_center / c_radius);
-        } else {
-          alpha = 0.0f;
+        break;
+      }
+      case INTRO_MODE_FADE:
+      case INTRO_MODE_NONE:
+      default:
+        // Manual fade scalar scaling due to hardware fade circumvention
+        for (int i = 0; i < seg_len; i++) {
+          int global_idx = seg_start + i;
+          Color c = it[global_idx].get();
+          it[global_idx] =
+              Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                    (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
         }
-      } else if (relative_pos < -w_front) {
-        // Long Gap (Black)
-        alpha = 0.0f;
-      } else {
-        // The Void behind the formation
-        alpha = 0.0f;
+        break;
       }
 
-      // Apply alpha to existing buffer color
-      if (alpha <= 0.0f) {
-        it[global_idx] = Color::BLACK;
-      } else if (alpha < 1.0f) {
-        Color cur = it[global_idx].get();
-        it[global_idx] =
-            Color((uint8_t)(cur.r * alpha), (uint8_t)(cur.g * alpha),
-                  (uint8_t)(cur.b * alpha), (uint8_t)(cur.w * alpha));
+      return (progress >= 1.0f);
+    }
+
+    // --- Autotune Auto-Disable Implementation ---
+    void CFXAddressableLightEffect::apply_autotune_defaults_() {
+      CFXControl *c = this->controller_;
+
+      // 1. Speed
+      number::Number *speed_num =
+          (c && c->get_speed()) ? c->get_speed() : this->speed_;
+      if (speed_num != nullptr && !this->speed_preset_.has_value()) {
+        float target = (float)this->get_default_speed_(this->effect_id_);
+        if (speed_num->state != target) {
+          auto call = speed_num->make_call();
+          call.set_value(target);
+          call.perform();
+        }
+        this->autotune_expected_speed_ = target;
+      } else if (speed_num != nullptr) {
+        this->autotune_expected_speed_ = speed_num->state;
+      }
+
+      // 2. Intensity
+      number::Number *intensity_num =
+          (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+      if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
+        float target = (float)this->get_default_intensity_(this->effect_id_);
+        if (intensity_num->state != target) {
+          auto call = intensity_num->make_call();
+          call.set_value(target);
+          call.perform();
+        }
+        this->autotune_expected_intensity_ = target;
+      } else if (intensity_num != nullptr) {
+        this->autotune_expected_intensity_ = intensity_num->state;
+      }
+
+      // 3. Palette
+      select::Select *palette_sel =
+          (c && c->get_palette()) ? c->get_palette() : this->palette_;
+      if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
+        uint8_t default_pal_id =
+            this->get_default_palette_id_(this->effect_id_);
+        std::string pal_name = this->get_palette_name_(default_pal_id);
+
+        if (palette_sel->current_option() != pal_name) {
+          auto call = palette_sel->make_call();
+          call.set_option(pal_name);
+          call.perform();
+        }
+        this->autotune_expected_palette_ = pal_name;
+      } else if (palette_sel != nullptr) {
+        this->autotune_expected_palette_ = palette_sel->current_option();
       }
     }
-    break;
-  }
-  case INTRO_MODE_MORSE: {
-    uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
-    uint32_t elapsed_morse = millis() - this->outro_start_time_;
-    uint32_t current_bit = elapsed_morse / unit_ms;
 
-    uint64_t mask = 0b11101110111000101011101000101011101ULL;
-    uint8_t total_bits = 35;
-
-    bool is_on = false;
-    if (current_bit < total_bits) {
-      is_on = (mask >> (total_bits - 1 - current_bit)) & 0x01;
-    } else {
-      is_on = false; // Hold OFF after sequence
-    }
-
-    if (!is_on) {
-      for (int i = 0; i < seg_len; i++) {
-        it[seg_start + i] = Color::BLACK;
+    void CFXAddressableLightEffect::trigger_on_start() {
+      for (auto *t : this->on_start_triggers_) {
+        t->trigger();
       }
     }
-    break;
-  }
-  case INTRO_MODE_FADE:
-  case INTRO_MODE_NONE:
-  default:
-    // Manual fade scalar scaling due to hardware fade circumvention
-    for (int i = 0; i < seg_len; i++) {
-      int global_idx = seg_start + i;
-      Color c = it[global_idx].get();
-      it[global_idx] =
-          Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
-                (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+
+    void CFXAddressableLightEffect::trigger_on_complete() {
+      for (auto *t : this->on_complete_triggers_) {
+        t->trigger();
+      }
     }
-    break;
-  }
 
-  return (progress >= 1.0f);
-}
+    void CFXAddressableLightEffect::check_positional_triggers(
+        int32_t current_pixel, int32_t total_pixels) {
+      // Defensive bounds check
+      if (total_pixels <= 0 || current_pixel < 0 ||
+          current_pixel > total_pixels) {
+        return;
+      }
 
-// --- Autotune Auto-Disable Implementation ---
-void CFXAddressableLightEffect::apply_autotune_defaults_() {
-  CFXControl *c = this->controller_;
-
-  // 1. Speed
-  number::Number *speed_num =
-      (c && c->get_speed()) ? c->get_speed() : this->speed_;
-  if (speed_num != nullptr && !this->speed_preset_.has_value()) {
-    float target = (float)this->get_default_speed_(this->effect_id_);
-    if (speed_num->state != target) {
-      auto call = speed_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-    this->autotune_expected_speed_ = target;
-  } else if (speed_num != nullptr) {
-    this->autotune_expected_speed_ = speed_num->state;
-  }
-
-  // 2. Intensity
-  number::Number *intensity_num =
-      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
-  if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
-    float target = (float)this->get_default_intensity_(this->effect_id_);
-    if (intensity_num->state != target) {
-      auto call = intensity_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-    this->autotune_expected_intensity_ = target;
-  } else if (intensity_num != nullptr) {
-    this->autotune_expected_intensity_ = intensity_num->state;
-  }
-
-  // 3. Palette
-  select::Select *palette_sel =
-      (c && c->get_palette()) ? c->get_palette() : this->palette_;
-  if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
-    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
-    std::string pal_name = this->get_palette_name_(default_pal_id);
-
-    if (palette_sel->current_option() != pal_name) {
-      auto call = palette_sel->make_call();
-      call.set_option(pal_name);
-      call.perform();
-    }
-    this->autotune_expected_palette_ = pal_name;
-  } else if (palette_sel != nullptr) {
-    this->autotune_expected_palette_ = palette_sel->current_option();
-  }
-}
-
-void CFXAddressableLightEffect::trigger_on_start() {
-  for (auto *t : this->on_start_triggers_) {
-    t->trigger();
-  }
-}
-
-void CFXAddressableLightEffect::trigger_on_complete() {
-  for (auto *t : this->on_complete_triggers_) {
-    t->trigger();
-  }
-}
-
-void CFXAddressableLightEffect::check_positional_triggers(
-    int32_t current_pixel, int32_t total_pixels) {
-  // Defensive bounds check
-  if (total_pixels <= 0 || current_pixel < 0 || current_pixel > total_pixels) {
-    return;
-  }
-
-  // Prevent multiple identical triggers in sequence, debounce across frames
-  if (current_pixel == this->last_triggered_pixel_) {
-    return;
-  }
+      // Prevent multiple identical triggers in sequence, debounce across frames
+      if (current_pixel == this->last_triggered_pixel_) {
+        return;
+      }
 
 #ifdef USE_CFX_SEQUENCE
-  if (this->active_sequence_ != nullptr) {
-    this->active_sequence_->check_positional_triggers(current_pixel,
-                                                      total_pixels);
-  }
+      if (this->active_sequence_ != nullptr) {
+        this->active_sequence_->check_positional_triggers(current_pixel,
+                                                          total_pixels);
+      }
 #endif
 
-  // Effect internal triggers (from YAML)
-  if (!this->on_reach_triggers_.empty() ||
-      !this->on_pixel_num_triggers_.empty()) {
-    float current_percentage = (float)current_pixel / (float)total_pixels;
+      // Effect internal triggers (from YAML)
+      if (!this->on_reach_triggers_.empty() ||
+          !this->on_pixel_num_triggers_.empty()) {
+        float current_percentage = (float)current_pixel / (float)total_pixels;
 
-    for (auto *t : this->on_reach_triggers_) {
-      float target = t->get_target_position();
-      bool crossed = false;
+        for (auto *t : this->on_reach_triggers_) {
+          float target = t->get_target_position();
+          bool crossed = false;
 
-      if (this->last_triggered_percentage_ == -1.0f) {
-        if (current_percentage >= target)
-          crossed = true;
-      } else {
-        // Forward crossing
-        if (current_percentage >= target &&
-            this->last_triggered_percentage_ < target) {
-          crossed = true;
-        }
-        // Backward crossing
-        else if (current_percentage <= target &&
-                 this->last_triggered_percentage_ > target) {
-          crossed = true;
-        }
-        // Wrap-around forward
-        else if (this->last_triggered_percentage_ > 0.8f &&
-                 current_percentage < 0.2f) {
-          if (target > this->last_triggered_percentage_ ||
-              target <= current_percentage) {
-            crossed = true;
+          if (this->last_triggered_percentage_ == -1.0f) {
+            if (current_percentage >= target)
+              crossed = true;
+          } else {
+            // Forward crossing
+            if (current_percentage >= target &&
+                this->last_triggered_percentage_ < target) {
+              crossed = true;
+            }
+            // Backward crossing
+            else if (current_percentage <= target &&
+                     this->last_triggered_percentage_ > target) {
+              crossed = true;
+            }
+            // Wrap-around forward
+            else if (this->last_triggered_percentage_ > 0.8f &&
+                     current_percentage < 0.2f) {
+              if (target > this->last_triggered_percentage_ ||
+                  target <= current_percentage) {
+                crossed = true;
+              }
+            }
+            // Wrap-around backward
+            else if (this->last_triggered_percentage_ < 0.2f &&
+                     current_percentage > 0.8f) {
+              if (target < this->last_triggered_percentage_ ||
+                  target >= current_percentage) {
+                crossed = true;
+              }
+            }
+          }
+
+          if (crossed) {
+            ESP_LOGD(TAG,
+                     "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
+                     this->get_name(), this, target * 100.0f);
+            t->trigger(current_percentage);
           }
         }
-        // Wrap-around backward
-        else if (this->last_triggered_percentage_ < 0.2f &&
-                 current_percentage > 0.8f) {
-          if (target < this->last_triggered_percentage_ ||
-              target >= current_percentage) {
-            crossed = true;
+
+        for (auto *t : this->on_pixel_num_triggers_) {
+          if (current_pixel == t->get_target_pixel()) {
+            ESP_LOGD(TAG,
+                     "Effect Instance '%s' (%p): on_pixel_num %d triggered",
+                     this->get_name(), this, current_pixel);
+            t->trigger(current_pixel);
           }
         }
       }
 
-      if (crossed) {
-        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
-                 this->get_name(), this, target * 100.0f);
-        t->trigger(current_percentage);
-      }
+      this->last_triggered_percentage_ =
+          (float)current_pixel / (float)total_pixels;
+      this->last_triggered_pixel_ = current_pixel;
     }
-
-    for (auto *t : this->on_pixel_num_triggers_) {
-      if (current_pixel == t->get_target_pixel()) {
-        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_pixel_num %d triggered",
-                 this->get_name(), this, current_pixel);
-        t->trigger(current_pixel);
-      }
-    }
-  }
-
-  this->last_triggered_percentage_ = (float)current_pixel / (float)total_pixels;
-  this->last_triggered_pixel_ = current_pixel;
-}
 
 #ifdef USE_CFX_SEQUENCE
-void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
-                                                    optional<uint8_t> spd,
-                                                    optional<uint8_t> iten,
-                                                    optional<uint8_t> pal,
-                                                    uint32_t itr) {
-  this->active_sequence_ = seq;
-  this->sequence_speed_ = spd;
-  this->sequence_intensity_ = iten;
-  this->sequence_palette_ = pal;
-  this->sequence_iterations_ = itr;
+    void CFXAddressableLightEffect::set_active_sequence(
+        CFXSequence * seq, optional<uint8_t> spd, optional<uint8_t> iten,
+        optional<uint8_t> pal, uint32_t itr) {
+      this->active_sequence_ = seq;
+      this->sequence_speed_ = spd;
+      this->sequence_intensity_ = iten;
+      this->sequence_palette_ = pal;
+      this->sequence_iterations_ = itr;
 
-  // Reset trackers when a new sequence is bound
-  if (seq != nullptr) {
-    // Disable built-in intro/transitions to prevent blackout/conflict
-    // EXCEPT for Monochromatic Presets, which functionally ARE intros.
-    if (!this->get_monochromatic_preset_(this->effect_id_).is_active) {
-      this->intro_active_ = false;
-    }
-    this->state_ = TRANSITION_NONE;
+      // Reset trackers when a new sequence is bound
+      if (seq != nullptr) {
+        // Disable built-in intro/transitions to prevent blackout/conflict
+        // EXCEPT for Monochromatic Presets, which functionally ARE intros.
+        if (!this->get_monochromatic_preset_(this->effect_id_).is_active) {
+          this->intro_active_ = false;
+        }
+        this->state_ = TRANSITION_NONE;
 
-    if (!this->segment_runners_.empty()) {
-      for (auto *r : this->segment_runners_) {
-        r->reset();
-        r->target_iterations_ = itr;
+        if (!this->segment_runners_.empty()) {
+          for (auto *r : this->segment_runners_) {
+            r->reset();
+            r->target_iterations_ = itr;
+          }
+        } else if (this->runner_) {
+          this->runner_->reset();
+          this->runner_->target_iterations_ = itr;
+        }
       }
-    } else if (this->runner_) {
-      this->runner_->reset();
-      this->runner_->target_iterations_ = itr;
     }
-  }
-}
 #endif
 
-} // namespace chimera_fx
-} // namespace esphome
+  } // namespace chimera_fx
+  } // namespace esphome

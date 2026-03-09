@@ -501,6 +501,29 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 167
         ```
 
+??? abstract "168 | Aqueous Flow | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        <!-- video logic will be added when available -->
+        *A premium physics-based monochromatic liquid simulation. Features a "Surge" entry where water fills the strip with splashes, and a "Drain" exit where clinging drops recede into a void.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Viscosity**: determines the weight and gravity of the liquid. |
+        | **Speed** | `128` | **Flow speed**: controls the surge and drain velocity. |
+        | **Palette** | — | **Not Supported**: Forced to primary white (Monochromatic). |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Aqueous Flow"
+              effect_id: 168
+        ```
+
 ---
 ## 3. WLED Classics (Remastered)
 

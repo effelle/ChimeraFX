@@ -76,7 +76,8 @@ public:
     INTRO_MODE_GLITTER = 4,
     INTRO_MODE_TWIN_PULSE = 5,
     INTRO_MODE_MORSE = 6,
-    INTRO_MODE_QUADRANT = 7
+    INTRO_MODE_QUADRANT = 7,
+    INTRO_MODE_HYDRAULICS = 8
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);
@@ -208,6 +209,12 @@ public:
     uint8_t outro_mode;
   };
 
+  struct HydraulicsParticle {
+    float pos;
+    float vel;
+    bool active;
+  };
+
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool is_monochromatic_(uint8_t effect_id);
 
@@ -230,6 +237,11 @@ public:
   optional<uint8_t> outro_preset_{};
   optional<float> outro_duration_preset_{};
   optional<uint16_t> timer_preset_{};
+
+  float hydraulics_fluid_level_{0.0f};
+  std::vector<HydraulicsParticle> hydraulics_particles_;
+  uint32_t hydraulics_last_ms_{0};
+  static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;
 
   CFXControl *controller_{nullptr};
   void run_controls_();

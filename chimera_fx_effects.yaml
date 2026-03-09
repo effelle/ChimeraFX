@@ -11,6 +11,10 @@
     name: "Aurora"
     effect_id: 38
 
+- addressable_cfx:
+    name: "Aqueous Flow"
+    effect_id: 168
+
 
 
 - addressable_cfx:
