@@ -154,18 +154,22 @@ protected:
   number::Number *outro_duration_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
 
+#ifdef USE_CFX_SEQUENCE
   // Sequence tracking data
   CFXSequence *active_sequence_{nullptr};
+#endif
   esphome::optional<uint8_t> sequence_speed_;
   esphome::optional<uint8_t> sequence_intensity_;
   esphome::optional<uint8_t> sequence_palette_;
   uint32_t sequence_iterations_{0};
 
 public:
+#ifdef USE_CFX_SEQUENCE
   void set_active_sequence(CFXSequence *seq, optional<uint8_t> spd,
                            optional<uint8_t> iten, optional<uint8_t> pal,
                            uint32_t itr);
   CFXSequence *get_active_sequence() const { return this->active_sequence_; }
+#endif
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;

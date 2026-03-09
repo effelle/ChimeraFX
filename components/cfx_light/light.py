@@ -325,6 +325,7 @@ async def to_code(config):
     if CONF_VISUALIZER_IP in config:
         cg.add(var.set_visualizer_ip(config[CONF_VISUALIZER_IP]))
         cg.add(var.set_visualizer_port(config[CONF_VISUALIZER_PORT]))
+        cg.add(var.set_visualizer_enabled(True))
 
     # --- Root-level intro/outro defaults ---
     if "use_intro" in config:

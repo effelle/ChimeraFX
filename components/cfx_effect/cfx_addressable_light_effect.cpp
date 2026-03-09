@@ -16,7 +16,9 @@
 #include <algorithm>
 
 #ifdef USE_CFX_SEQUENCER
+#ifdef USE_CFX_SEQUENCE
 #include "../cfx_sequence/cfx_sequence.h"
+#endif
 #endif
 
 namespace esphome {
@@ -933,13 +935,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       r->global_brightness_ = bri;
       r->service();
 
-      // Handle Iteration Completion — save pointer before stop() clears it
-      if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-        auto *completed_seq = this->active_sequence_;
-        completed_seq->stop();
-        completed_seq->report_event_complete();
-        break;
+      // Handle Iteration Completion — save
+#ifdef USE_CFX_SEQUENCE
+      if (this->active_sequence_ != nullptr) {
+        if (r->effect_complete_ && this->active_sequence_ != nullptr) {
+          auto *completed_seq = this->active_sequence_;
+          completed_seq->stop();
+          completed_seq->report_event_complete();
+          this->active_sequence_ = nullptr;
+        }
       }
+#endif
     }
   } else if (this->runner_) {
     // Single runner (backward compatible)
@@ -948,19 +954,32 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     this->runner_->service();
 
     // Handle Iteration Completion — save pointer before stop() clears it
+#ifdef USE_CFX_SEQUENCE
     if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
       auto *completed_seq = this->active_sequence_;
       completed_seq->stop();
       completed_seq->report_event_complete();
+      this->active_sequence_ = nullptr;
     }
+#endif
   }
 
   // === State Machine: Intro vs Main Effect ===
   bool is_mono_preset =
       this->get_monochromatic_preset_(this->effect_id_).is_active;
+  bool needs_autotune = (this->autotune_active_ &&
+#ifdef USE_CFX_SEQUENCE
+                         (this->active_sequence_ == nullptr || is_mono_preset));
+#else
+                         true);
+#endif
 
   if (this->intro_active_ &&
+#ifdef USE_CFX_SEQUENCE
       (this->active_sequence_ == nullptr || is_mono_preset)) {
+#else
+      true) {
+#endif
     // Run intro on ALL segments (swap-on-service pattern)
     // This acts as a mask on top of the already-rendered main effect.
     if (!this->segment_runners_.empty()) {
@@ -1079,6 +1098,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2)
       // This is much more robust against fast speeds jumping pixels than
       // checking == 0
+#ifdef USE_CFX_SEQUENCE
       if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
         if (this->last_triggered_percentage_ > 0.8f &&
             current_percentage < 0.2f) {
@@ -1096,6 +1116,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           }
         }
       }
+#endif
 
       this->last_leading_pixel_ = leading_pixel;
       this->check_positional_triggers(leading_pixel, total_pixels);
@@ -1177,9 +1198,11 @@ uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
 }
 
 uint8_t CFXAddressableLightEffect::get_palette_index_() {
+#ifdef USE_CFX_SEQUENCE
   if (this->sequence_palette_.has_value()) {
     return this->sequence_palette_.value();
   }
+#endif
 
   select::Select *palette_sel = this->palette_;
   if (this->controller_ != nullptr && this->controller_->get_palette()) {
@@ -1332,9 +1355,11 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
+#ifdef USE_CFX_SEQUENCE
   if (this->sequence_speed_.has_value()) {
     return this->sequence_speed_.value();
   }
+#endif
 
   // Per-effect speed defaults from effects_preset.md
   switch (effect_id) {
@@ -1374,9 +1399,11 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 }
 
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
+#ifdef USE_CFX_SEQUENCE
   if (this->sequence_intensity_.has_value()) {
     return this->sequence_intensity_.value();
   }
+#endif
 
   // Per-effect intensity defaults from effects_preset.md
   switch (effect_id) {
@@ -2185,8 +2212,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_MORSE: {
-    uint32_t speed = this->active_intro_speed_;
-    uint32_t unit_ms = 80 + ((255 - speed) * 100 / 255);
+    uint32_t speed_val = this->active_intro_speed_;
+    uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
     uint32_t elapsed_m = millis() - this->intro_start_time_;
     uint32_t current_bit = elapsed_m / unit_ms;
 
@@ -2626,10 +2653,12 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
+#ifdef USE_CFX_SEQUENCE
   if (this->active_sequence_ != nullptr) {
     this->active_sequence_->check_positional_triggers(current_pixel,
                                                       total_pixels);
   }
+#endif
 
   // Effect internal triggers (from YAML)
   if (!this->on_reach_triggers_.empty() ||
@@ -2692,6 +2721,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
   this->last_triggered_pixel_ = current_pixel;
 }
 
+#ifdef USE_CFX_SEQUENCE
 void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
                                                     optional<uint8_t> spd,
                                                     optional<uint8_t> iten,
