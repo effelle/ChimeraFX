@@ -42,6 +42,7 @@ public:
   // Sequence runtime controllers
   void start();
   void stop();
+  void force_reset();
 
   void add_light(light::LightState *state) { this->lights_.push_back(state); }
 

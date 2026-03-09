@@ -25,6 +25,7 @@ void CFXSequenceSelect::setup() {
       ESP_LOGD(TAG, "Active Sequence Select: 'None'");
       for (auto *seq : CFXSequence::instances) {
         seq->stop();
+        seq->force_reset();
       }
     } else {
       for (auto *seq : CFXSequence::instances) {
@@ -199,8 +200,22 @@ void CFXSequence::stop() {
   // Update Select UI to reflect the stopped sequence
   if (CFXSequenceSelect::instance != nullptr &&
       CFXSequenceSelect::instance->has_state() &&
-      CFXSequenceSelect::instance->state == this->name_) {
+      CFXSequenceSelect::instance->current_option().has_value() &&
+      CFXSequenceSelect::instance->current_option().value() == this->name_) {
     CFXSequenceSelect::instance->publish_state_silent("None");
+  }
+}
+
+void CFXSequence::force_reset() {
+  // Hard reset: turn off all lights managed by this sequence.
+  // Called by "None" handler to ensure lights are off even when
+  // the sequence has already completed and on_complete overrode state.
+  for (auto *l : this->lights_) {
+    auto call = l->make_call();
+    call.set_state(false);
+    call.set_effect("None");
+    call.set_transition_length(0);
+    call.perform();
   }
 }
 
