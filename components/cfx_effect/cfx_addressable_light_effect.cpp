@@ -15,10 +15,8 @@
 #include "esphome/core/log.h"
 #include <algorithm>
 
-#ifdef USE_CFX_SEQUENCER
 #ifdef USE_CFX_SEQUENCE
 #include "../cfx_sequence/cfx_sequence.h"
-#endif
 #endif
 
 namespace esphome {
@@ -910,7 +908,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   float bri = 1.0f;
   auto *bri_state = this->get_light_state();
   if (bri_state != nullptr) {
-    if (this->active_sequence_ != nullptr) {
+    if (
+#ifdef USE_CFX_SEQUENCE
+        this->active_sequence_ != nullptr
+#else
+        false
+#endif
+    ) {
       // During a sequence, stop transitions only if one is actually running
       if (bri_state->current_values.get_state() < 1.0f) {
         chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
@@ -2753,6 +2757,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
     }
   }
 }
+#endif
 
 } // namespace chimera_fx
 } // namespace esphome
