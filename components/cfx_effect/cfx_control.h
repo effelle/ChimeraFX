@@ -45,6 +45,11 @@ public:
       if (c->get_light() == light)
         return c;
     }
+    // Fallback: segment lights have different LightState pointers than master.
+    // If there's exactly one controller, it's the master — return it.
+    if (instances.size() == 1) {
+      return instances[0];
+    }
     ESP_LOGD("chimera_fx",
              "CFXControl::find failed for light %p. Instances: %zu", light,
              instances.size());
