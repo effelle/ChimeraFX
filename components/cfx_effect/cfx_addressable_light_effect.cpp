@@ -59,7 +59,7 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MORSE, INTRO_MORSE};
   case 167: // Four Times the Charm
     return {true, INTRO_MODE_QUADRANT, INTRO_MODE_QUADRANT};
-  case 168: // Aqueous Flow
+  case 168: // Hydro-Pulse
     return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
@@ -493,6 +493,8 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_MORSE;
         else if (s == "Quadrant")
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
+        else if (s == "Pressurize")
+          this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
       }
     }
 
@@ -629,10 +631,10 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_TWIN_PULSE;
           else if (opt == "Morse Code")
             this->active_outro_mode_ = INTRO_MODE_MORSE;
-          else if (opt == "Quadrant")
+          else if (s == "Quadrant")
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
-          else if (opt == "Quadrant")
-            this->active_outro_mode_ = INTRO_MODE_QUADRANT;
+          else if (s == "Drain")
+            this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {
@@ -2235,7 +2237,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
     }
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0) dt_ms = 1;
+    if (dt_ms == 0)
+      dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float speed_scale = this->active_intro_speed_ / 255.0f;
@@ -2249,7 +2252,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     float dt = dt_ms / 1000.0f;
     float damping = 1.0f + (intensity_val * 4.0f);
     float pressure = 10.0f + (speed_scale * 50.0f);
-    
+
     float force = (target_l - this->hydraulics_fluid_level_) * pressure;
     float accel = force - (damping * this->hydraulics_fluid_velocity_);
     this->hydraulics_fluid_velocity_ += accel * dt;
@@ -2258,36 +2261,36 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // --- Impact Spawning (When water hits the end of the pipe) ---
     if (this->hydraulics_fluid_level_ > target_l) {
       this->hydraulics_fluid_level_ = target_l;
-      
+
       if (this->hydraulics_fluid_velocity_ > 15.0f) {
-          int splash_count = (rand() % 4) + 3; // 3 to 6 drops
-          for(int d = 0; d < splash_count; d++) {
-              if (this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-                  this->hydraulics_particles_.push_back({
-                      target_l, 
-                      -this->hydraulics_fluid_velocity_ * (0.2f + (rand() % 50) / 100.0f),
-                      true
-                  });
-              }
+        int splash_count = (rand() % 4) + 3; // 3 to 6 drops
+        for (int d = 0; d < splash_count; d++) {
+          if (this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+            this->hydraulics_particles_.push_back(
+                {target_l,
+                 -this->hydraulics_fluid_velocity_ *
+                     (0.2f + (rand() % 50) / 100.0f),
+                 true});
           }
+        }
       }
       this->hydraulics_fluid_velocity_ *= -0.3f; // Slosh dampening
     }
-    
+
     if (this->hydraulics_fluid_level_ < 0.0f) {
       this->hydraulics_fluid_level_ = 0.0f;
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
     // --- Continuous Spray Spawning (While moving fast) ---
-    if (this->hydraulics_fluid_velocity_ > 8.0f && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-        if (rand() % 100 < 40) {
-            this->hydraulics_particles_.push_back({
-                this->hydraulics_fluid_level_,
-                this->hydraulics_fluid_velocity_ * (1.1f + (rand() % 40) / 100.0f), 
-                true
-            });
-        }
+    if (this->hydraulics_fluid_velocity_ > 8.0f &&
+        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+      if (rand() % 100 < 40) {
+        this->hydraulics_particles_.push_back(
+            {this->hydraulics_fluid_level_,
+             this->hydraulics_fluid_velocity_ * (1.1f + (rand() % 40) / 100.0f),
+             true});
+      }
     }
 
     // 2. Strict Buffer Clearing
@@ -2305,17 +2308,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         float wave1 = sinf(i * 0.5f - wave_time);
         float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
         float liquid_noise = (wave1 + wave2) * 0.15f;
-        
-        float brightness = 0.7f + liquid_noise + vel_glow; // v4.1 Match White Peak
+
+        float brightness =
+            0.7f + liquid_noise + vel_glow; // v4.1 Match White Peak
 
         // The "Froth" (Water is brighter/turbulent at the leading edge)
         float dist_to_head = this->hydraulics_fluid_level_ - i;
         if (dist_to_head < 5.0f) {
-            brightness += (5.0f - dist_to_head) * 0.15f;
+          brightness += (5.0f - dist_to_head) * 0.15f;
         }
 
-        if (brightness > 1.0f) brightness = 1.0f;
-        if (brightness < 0.1f) brightness = 0.1f;
+        if (brightness > 1.0f)
+          brightness = 1.0f;
+        if (brightness < 0.1f)
+          brightness = 0.1f;
         uint8_t b = (uint8_t)(255 * brightness);
         it[seg_start + i] = Color(b, b, b, b);
       }
@@ -2331,7 +2337,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // 4. Droplets / Particles Rendering
     float gravity = 25.0f + (intensity_val * 20.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active) continue;
+      if (!p.active)
+        continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
       if (p.pos <= this->hydraulics_fluid_level_) {
@@ -2344,10 +2351,14 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
-          it[seg_start + p_idx] = Color(255, 255, 255, 255);
+        it[seg_start + p_idx] = Color(255, 255, 255, 255);
       }
     }
-    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(
+        std::remove_if(this->hydraulics_particles_.begin(),
+                       this->hydraulics_particles_.end(),
+                       [](const HydraulicsParticle &p) { return !p.active; }),
+        this->hydraulics_particles_.end());
     break;
   }
   case INTRO_MODE_MORSE: {
@@ -2684,7 +2695,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     if (this->hydraulics_last_ms_ == 0)
       this->hydraulics_last_ms_ = now_ms;
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0) dt_ms = 1;
+    if (dt_ms == 0)
+      dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float dt = dt_ms / 1000.0f;
@@ -2706,14 +2718,16 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     // Drops cling more based on intensity
-    if (this->hydraulics_fluid_level_ < old_level && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+    if (this->hydraulics_fluid_level_ < old_level &&
+        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
       if ((rand() % 100) < (10 + (int)(intensity_val * 25))) {
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }
 
     // Strict Buffer Clearing
-    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
 
     // Render Shimmering Fluid Mass (Coherent Waves)
     int floor_level = (int)this->hydraulics_fluid_level_;
@@ -2724,36 +2738,53 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
         float liquid_noise = (wave1 + wave2) * 0.15f;
         float brightness = 0.7f + liquid_noise;
-        if (brightness > 1.0f) brightness = 1.0f;
+        if (brightness > 1.0f)
+          brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
     if (floor_level < seg_len && floor_level >= 0) {
-       float fraction = this->hydraulics_fluid_level_ - floor_level;
-       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
-       it[seg_start + floor_level] = Color(b, b, b, b);
+      float fraction = this->hydraulics_fluid_level_ - floor_level;
+      uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
+      it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
     float gravity = 25.0f + (intensity_val * 20.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active) continue;
+      if (!p.active)
+        continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
-      if (p.pos < 0.0f) { p.active = false; continue; }
-      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
+      if (p.pos < 0.0f) {
+        p.active = false;
+        continue;
+      }
+      if (p.pos < this->hydraulics_fluid_level_) {
+        p.active = false;
+        continue;
+      }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len)
+        it[seg_start + p_idx] = Color::WHITE;
     }
-    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(
+        std::remove_if(this->hydraulics_particles_.begin(),
+                       this->hydraulics_particles_.end(),
+                       [](const HydraulicsParticle &p) { return !p.active; }),
+        this->hydraulics_particles_.end());
 
-    if (this->hydraulics_fluid_level_ <= 0.01f && this->hydraulics_particles_.empty()) {
-       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
-       return true;
+    if (this->hydraulics_fluid_level_ <= 0.01f &&
+        this->hydraulics_particles_.empty()) {
+      for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+      return true;
     }
-    if (millis() - this->outro_start_time_ > this->active_outro_duration_ms_ + 2000) {
-       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
-       return true;
+    if (millis() - this->outro_start_time_ >
+        this->active_outro_duration_ms_ + 2000) {
+      for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+      return true;
     }
     return false;
   }
