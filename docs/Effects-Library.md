@@ -266,6 +266,30 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 157
         ```
 
+??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *(Video preview coming soon)*
+        
+        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
+        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
+        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Hydro-Pulse"
+              effect_id: 168
+        ```
+
 ??? abstract "155 | Kaleidos | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
 
     === "🎬 Preview"
@@ -340,30 +364,6 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
           - addressable_cfx:
               name: "Twin Flames"
               effect_id: 153
-        ```
-
-??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
-
-    === "🎬 Preview"
-        *(Video preview coming soon)*
-        
-        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
-        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
-        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Hydro-Pulse"
-              effect_id: 168
         ```
 
 ---

@@ -254,6 +254,8 @@ public:
   uint32_t fade_in_start_ms_{0};
   bool fade_in_active_{false};
   bool active_outro_mirror_{false};
+  bool active_force_white_{false};
+  bool active_outro_force_white_{false};
 
   bool initial_preset_applied_{false};
 

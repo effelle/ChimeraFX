@@ -266,6 +266,7 @@ void CFXAddressableLightEffect::start() {
   } else {
     this->runner_->force_white_active_ = fw_active;
   }
+  this->active_force_white_ = fw_active;
 
   // 1. Speed (YAML Preset Override Only)
   number::Number *speed_num =
@@ -844,6 +845,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = this->controller_->get_debug()->state; // Master local state
   } else if (this->debug_switch_) {
     debug_active = this->debug_switch_->state; // Legacy fallback
+  }
+
+  if (this->controller_ && this->controller_->get_force_white()) {
+    this->active_force_white_ = this->controller_->get_force_white()->state;
   }
 
   std::string runner_name = this->get_light_state()
@@ -2323,7 +2328,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         if (brightness < 0.1f)
           brightness = 0.1f;
         uint8_t b = (uint8_t)(255 * brightness);
-        it[seg_start + i] = Color(b, b, b, b);
+        if (this->active_force_white_)
+          it[seg_start + i] = Color(0, 0, 0, b);
+        else
+          it[seg_start + i] = Color(b, b, b, b);
       }
     }
 
@@ -2331,7 +2339,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
       uint8_t b = (uint8_t)(255 * (0.8f + fraction * 0.2f));
-      it[seg_start + floor_level] = Color(b, b, b, b);
+      if (this->active_force_white_)
+        it[seg_start + floor_level] = Color(0, 0, 0, b);
+      else
+        it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
     // 4. Droplets / Particles Rendering
@@ -2351,7 +2362,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
-        it[seg_start + p_idx] = Color(255, 255, 255, 255);
+        if (this->active_force_white_)
+          it[seg_start + p_idx] = Color(0, 0, 0, 255);
+        else
+          it[seg_start + p_idx] = Color(255, 255, 255, 255);
       }
     }
     this->hydraulics_particles_.erase(
@@ -2737,17 +2751,20 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         float wave1 = sinf(i * 0.5f - wave_time);
         float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
         float liquid_noise = (wave1 + wave2) * 0.15f;
-        float brightness = 0.7f + liquid_noise;
-        if (brightness > 1.0f)
-          brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
-        it[seg_start + i] = Color(b, b, b, b);
+        if (this->active_force_white_)
+          it[seg_start + i] = Color(0, 0, 0, b);
+        else
+          it[seg_start + i] = Color(b, b, b, b);
       }
     }
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
-      it[seg_start + floor_level] = Color(b, b, b, b);
+      if (this->active_force_white_)
+        it[seg_start + floor_level] = Color(0, 0, 0, b);
+      else
+        it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
     float gravity = 25.0f + (intensity_val * 20.0f);
@@ -2765,8 +2782,12 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         continue;
       }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len)
-        it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len) {
+        if (this->active_force_white_)
+          it[seg_start + p_idx] = Color(0, 0, 0, 255);
+        else
+          it[seg_start + p_idx] = Color::WHITE;
+      }
     }
     this->hydraulics_particles_.erase(
         std::remove_if(this->hydraulics_particles_.begin(),
