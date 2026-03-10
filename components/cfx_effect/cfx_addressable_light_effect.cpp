@@ -2233,6 +2233,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_fluid_velocity_ = 0.0f;
       this->hydraulics_particles_.clear();
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
+      // HARD CLEAR: Wipe previous effect state completely on first frame
+      for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
     }
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
     if (dt_ms == 0) dt_ms = 1;
@@ -2263,34 +2265,44 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    // 2. Wet Residue (Decay trail instead of hard clear)
-    // We apply a soft fade so old positions linger as "wet" residue.
+    // 2. Wet Residue & Void Masking
+    // Fade the body trail (0.7x) and FORCE MASK the void ahead to black
+    int floor_level = (int)this->hydraulics_fluid_level_;
     for (int i = 0; i < seg_len; i++) {
-       Color c = it[seg_start + i].get();
-       it[seg_start + i] = Color((uint8_t)(c.r * 0.7f), (uint8_t)(c.g * 0.7f), (uint8_t)(c.b * 0.7f), (uint8_t)(c.w * 0.7f));
+       if (i < floor_level) {
+          Color c = it[seg_start + i].get();
+          it[seg_start + i] = Color((uint8_t)(c.r * 0.7f), (uint8_t)(c.g * 0.7f), (uint8_t)(c.b * 0.7f), (uint8_t)(c.w * 0.7f));
+       } else if (i > floor_level + 3) {
+          it[seg_start + i] = Color::BLACK; // Mask main effect bleed
+       }
     }
 
     // 3. Render Shimmering Fluid Mass
-    int floor_level = (int)this->hydraulics_fluid_level_;
     // Momentum-linked vibrancy
     float vel_glow = 0.1f * (abs(this->hydraulics_fluid_velocity_) / target_l);
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        // High-frequency texture shimmer (simulates sparkling water)
+        // High-frequency texture shimmer
         float noise = 0.75f + (float)(rand() % 100) / 400.0f + vel_glow;
         if (noise > 1.0f) noise = 1.0f;
         uint8_t b = (uint8_t)(255 * noise);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
+    if (floor_level < seg_len && floor_level >= 0) {
+      float fraction = this->hydraulics_fluid_level_ - floor_level;
+      uint8_t b = (uint8_t)(255 * fraction);
+      it[seg_start + floor_level] = Color(b, b, b, b);
+    }
 
-    // 4. Pressure Wave (Spray/Mist ahead of wave front)
+    // 4. Pressure Wave Spray
     if (this->hydraulics_fluid_velocity_ > 1.0f) {
        for (int i = 1; i <= 3; i++) {
           int spray_idx = floor_level + i;
           if (spray_idx < seg_len) {
-             uint8_t spray_b = (uint8_t)(64 / i); // Diffuse spray
-             it[seg_start + spray_idx] = Color(max(it[seg_start+spray_idx].get().r, spray_b), max(it[seg_start+spray_idx].get().g, spray_b), max(it[seg_start+spray_idx].get().b, spray_b), max(it[seg_start+spray_idx].get().w, spray_b));
+             uint8_t spray_b = (uint8_t)(64 / i);
+             Color cur = it[seg_start + spray_idx].get();
+             it[seg_start + spray_idx] = Color(max(cur.r, spray_b), max(cur.g, spray_b), max(cur.b, spray_b), max(cur.w, spray_b));
           }
        }
     }
@@ -2664,20 +2676,24 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    // Drops cling more based on intensity (viscosity)
     if (this->hydraulics_fluid_level_ < old_level && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
       if ((rand() % 100) < (10 + (int)(intensity_val * 25))) {
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }
 
-    // Wet trail during drain (fade old buffer instead of clearing)
+    // Wet trail (0.8x) AND Force BLACK on already drained region
+    int floor_level = (int)this->hydraulics_fluid_level_;
     for (int i = 0; i < seg_len; i++) {
-       Color cur = it[seg_start + i].get();
-       it[seg_start + i] = Color((uint8_t)(cur.r * 0.8f), (uint8_t)(cur.g * 0.8f), (uint8_t)(cur.b * 0.8f), (uint8_t)(cur.w * 0.8f));
+       if (i >= floor_level) {
+          Color cur = it[seg_start + i].get();
+          it[seg_start + i] = Color((uint8_t)(cur.r * 0.8f), (uint8_t)(cur.g * 0.8f), (uint8_t)(cur.b * 0.8f), (uint8_t)(cur.w * 0.8f));
+       } else {
+          // Ensure no main effect seep through the "already drained" portion
+          it[seg_start + i] = Color::BLACK;
+       }
     }
 
-    int floor_level = (int)this->hydraulics_fluid_level_;
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
         float noise = 0.8f + (float)(rand() % 100) / 500.0f;
@@ -2698,12 +2714,22 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
     this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
 
-    if (this->hydraulics_fluid_level_ <= 0.01f && this->hydraulics_particles_.empty()) {
-       bool all_black = true;
+    // Reliable Exit: Finished when level is 0 and particles are gone
+    if (this->hydraulics_fluid_level_ <= 0.05f && this->hydraulics_particles_.empty()) {
+       // Check if there is still visual residue
+       bool has_residue = false;
        for(int i=0; i<seg_len; i++) {
-          if(it[seg_start+i].get().r > 5) { all_black = false; break; }
+          if(it[seg_start+i].get().r > 2) { has_residue = true; break; }
        }
-       if (all_black) return true;
+       if (!has_residue) {
+          for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
+          return true;
+       }
+    }
+    // Safety fallback for timeout
+    if (millis() - this->outro_start_time_ > this->active_outro_duration_ms_ + 1000) {
+       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
+       return true;
     }
     return false;
   }
