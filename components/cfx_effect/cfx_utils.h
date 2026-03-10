@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #else
 #include "esp_heap_caps.h"
+#include "esp_random.h"
 #include "esp_system.h"
 #endif
 
@@ -92,6 +93,11 @@ inline uint8_t hw_random8(uint8_t min, uint8_t max) {
 // sin8_C). The old sinf() call cost ~40-80 cycles on ESP32; the LUT costs a
 // single array access. Effects with per-pixel sin8 calls (plasma, sinelon,
 // sinewave, noisepal) benefit most — several ms saved per frame on long strips.
+// Resolve PROGMEM_OR_RAM — on plain ESP-IDF/Arduino builds this is just empty
+#ifndef PROGMEM_OR_RAM
+#define PROGMEM_OR_RAM
+#endif
+
 static const uint8_t sin8_table[256] PROGMEM_OR_RAM = {
     128, 131, 134, 137, 140, 143, 146, 149, 152, 155, 158, 162, 165, 167, 170,
     173, 176, 179, 182, 185, 188, 190, 193, 196, 198, 201, 203, 206, 208, 211,
@@ -111,10 +117,7 @@ static const uint8_t sin8_table[256] PROGMEM_OR_RAM = {
     40,  42,  44,  47,  49,  52,  54,  57,  59,  62,  65,  67,  70,  73,  76,
     79,  82,  85,  88,  90,  93,  97,  100, 103, 106, 109, 112, 115, 118, 121,
     124};
-// Resolve PROGMEM_OR_RAM — on plain ESP-IDF/Arduino builds this is just empty
-#ifndef PROGMEM_OR_RAM
-#define PROGMEM_OR_RAM
-#endif
+
 inline uint8_t sin8(uint8_t theta) { return sin8_table[theta]; }
 
 typedef uint16_t accum88;
