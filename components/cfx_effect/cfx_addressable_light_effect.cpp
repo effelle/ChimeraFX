@@ -2243,7 +2243,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // Physics Constants
     float target_l = (float)seg_len;
-    float viscosity = 0.05f + (intensity_val * 0.15f);
+    // Lower viscosity = slower, more gradual fill
+    float viscosity = 0.01f + (intensity_val * 0.04f); // 1% to 5% per frame
     float gravity = 0.005f + (intensity_val * 0.015f);
 
     // 1. Update Fluid Level (Sub-Pixel Wipe)
@@ -2251,19 +2252,29 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     this->hydraulics_fluid_level_ +=
         (target_l - this->hydraulics_fluid_level_) * viscosity *
         (dt_ms / 16.6f);
+
+    // Cap fluid level to segment length
+    if (this->hydraulics_fluid_level_ > target_l)
+      this->hydraulics_fluid_level_ = target_l;
+
     float velocity = this->hydraulics_fluid_level_ - old_level;
 
-    // 2. Trigger Splashes (Intro)
-    if (velocity > 0.1f &&
+    // 2. Clear Segment Buffer (Prevent visual ghosts)
+    for (int i = 0; i < seg_len; i++) {
+      it[seg_start + i] = Color::BLACK;
+    }
+
+    // 3. Trigger Splashes (Intro)
+    if (velocity > 0.05f &&
         this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-      if ((rand() % 100) < 20) {
-        float p_vel = speed_val * (1.2f + (rand() % 80) / 100.0f);
+      if ((rand() % 100) < 15) {
+        float p_vel = speed_val * (0.8f + (rand() % 60) / 100.0f);
         this->hydraulics_particles_.push_back(
             {this->hydraulics_fluid_level_, p_vel, true});
       }
     }
 
-    // 3. Render Fluid Mass
+    // 4. Render Fluid Mass
     int floor_level = (int)floorf(this->hydraulics_fluid_level_);
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len)
@@ -2271,12 +2282,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     if (floor_level < seg_len) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      it[seg_start + floor_level] =
-          Color((uint8_t)(255 * fraction), (uint8_t)(255 * fraction),
-                (uint8_t)(255 * fraction), (uint8_t)(255 * fraction));
+      uint8_t alpha = (uint8_t)(255 * fraction);
+      it[seg_start + floor_level] = Color(alpha, alpha, alpha, alpha);
     }
 
-    // 4. Update and Render Particles
+    // 5. Update and Render Particles
     for (auto &p : this->hydraulics_particles_) {
       if (!p.active)
         continue;
@@ -2649,7 +2659,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     // Physics Constants
     float target_l = 0.0f;
-    float viscosity = 0.05f + (intensity_val * 0.15f);
+    float viscosity = 0.01f + (intensity_val * 0.04f); // Slower drain
     float gravity = 0.005f + (intensity_val * 0.015f);
 
     // 1. Update Fluid Level (Drain)
@@ -2671,12 +2681,18 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len)
         it[seg_start + i] = Color::WHITE;
+      else
+        it[seg_start + i] = Color::BLACK;
     }
-    if (floor_level < seg_len) {
+    // Black out the rest of the strip
+    for (int i = floor_level; i < seg_len; i++) {
+      it[seg_start + i] = Color::BLACK;
+    }
+
+    if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      it[seg_start + floor_level] =
-          Color((uint8_t)(255 * fraction), (uint8_t)(255 * fraction),
-                (uint8_t)(255 * fraction), (uint8_t)(255 * fraction));
+      uint8_t alpha = (uint8_t)(255 * fraction);
+      it[seg_start + floor_level] = Color(alpha, alpha, alpha, alpha);
     }
 
     // 4. Update and Render Particles
