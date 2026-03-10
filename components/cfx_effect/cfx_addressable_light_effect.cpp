@@ -2419,7 +2419,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_DROPPING: {
-    // Fill Logic - monochromatic fast accumulation
+    // ── 1. Duration fetch ───────────────────────────────────────────────────
     uint32_t duration = 1000;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
@@ -2430,50 +2430,111 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     } else if (this->intro_duration_preset_.has_value()) {
       duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
     }
-
     if (duration == 0)
       duration = 1;
-    float prog_d = (float)elapsed / (float)duration;
-    if (prog_d > 1.0f)
-      prog_d = 1.0f;
 
-    uint16_t target_level = (uint16_t)(prog_d * seg_len);
-    if (target_level > seg_len)
-      target_level = seg_len;
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
-    // Clear everything above level
-    for (int i = target_level; i < seg_len; i++) {
+    // ── 2. Fill level: ease-out cubic ───────────────────────────────────────
+    float inv = 1.0f - prog;
+    float eased = 1.0f - (inv * inv * inv); // cubic ease-out
+    int fill_level = (int)(eased * (float)seg_len);
+    if (fill_level > seg_len)
+      fill_level = seg_len;
+
+    // ── 3. Color helpers (Monochromatic) ────────────────────────────────────
+    // Integer-only dim: factor 0=black, 255=full brightness
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // Additive boost (white-flash for splash/shimmer)
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+
+    // ── 4. Clear everything above fill level ────────────────────────────────
+    for (int i = fill_level; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
+
+    // ── 5. Draw water body with depth shading + surface shimmer ─────────────
+    uint32_t shimmer_t = elapsed % 120; // 120 ms period
+    uint8_t shimmer = (shimmer_t < 60)
+                          ? (uint8_t)(shimmer_t * 3)          // 0→180 rise
+                          : (uint8_t)((120 - shimmer_t) * 3); // 180→0 fall
+
+    for (int i = 0; i < fill_level; i++) {
+      Color base = target_color;
+
+      // Depth: bottom quarter dims to ~60% brightness
+      if (i < seg_len / 4)
+        base = dim(base, 153); // 153/255 ≈ 60%
+
+      // Surface shimmer on top 2 pixels
+      int dist_from_surface = (fill_level - 1) - i;
+      if (dist_from_surface == 0)
+        base = boost(base, shimmer);
+      else if (dist_from_surface == 1)
+        base = boost(base, shimmer / 3);
+
+      it[seg_start + i] = base;
     }
 
-    // Draw Water
-    for (int i = 0; i < target_level; i++) {
-      int global_idx = seg_start + i;
-      if (use_palette && chimera_fx::instance) {
-        uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
-        uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
-            map_idx, false, true, 255, 255);
-        it[global_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
-                               (cp >> 24) & 0xFF);
-      } else {
-        it[global_idx] = c;
-      }
-    }
+    // ── 6. Falling drops — 3 staggered, gravity-accelerated ─────────────────
+    if (fill_level < seg_len) {
+      const int NUM_DROPS = 3;
+      uint32_t period_ms = (uint32_t)(duration / 5);
+      if (period_ms < 100)
+        period_ms = 100;
+      if (period_ms > 350)
+        period_ms = 350;
 
-    // Draw the "next" falling drop
-    if (target_level < seg_len) {
-      float pixel_progress = (prog_d * seg_len) - target_level;
-      float drop_pos =
-          (seg_len - 1) - (pixel_progress * ((seg_len - 1) - target_level));
-      int drop_idx = (int)drop_pos;
-      if (drop_idx >= target_level && drop_idx < seg_len) {
-        if (use_palette && chimera_fx::instance) {
-          uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
-              128, false, true, 255, 255);
-          it[seg_start + drop_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF,
-                                           cp & 0xFF, (cp >> 24) & 0xFF);
-        } else {
-          it[seg_start + drop_idx] = c;
+      for (int d = 0; d < NUM_DROPS; d++) {
+        uint32_t phase = (uint32_t)(d * period_ms / NUM_DROPS);
+        uint32_t t = (elapsed + phase) % period_ms;
+        float drop_t = (float)t / (float)period_ms; // 0=top → 1=surface
+
+        // Gravity: quadratic ease-in (accelerates toward surface)
+        float fall = drop_t * drop_t;
+
+        int span = (seg_len - 1) - fill_level;
+        if (span <= 0)
+          break;
+
+        // drop_px: seg_len-1 at fall=0, fill_level at fall=1
+        int drop_px = (seg_len - 1) - (int)(fall * (float)span);
+        if (drop_px < fill_level)
+          drop_px = fill_level;
+        if (drop_px >= seg_len)
+          continue;
+
+        // Drop head: bright white-boosted
+        it[seg_start + drop_px] = boost(target_color, 90);
+
+        // Two-pixel trailing tail (fades upward from head)
+        if (drop_px + 1 < seg_len)
+          it[seg_start + drop_px + 1] = dim(target_color, 70);
+        if (drop_px + 2 < seg_len)
+          it[seg_start + drop_px + 2] = dim(target_color, 25);
+
+        // ── Impact splash: surface flares as drop arrives ────────────────
+        if (drop_t > 0.85f && fill_level > 0) {
+          float st = (drop_t - 0.85f) / 0.15f;            // 0→1 over last 15%
+          float env = (st < 0.6f) ? (st / 0.6f)           // fast rise
+                                  : ((1.0f - st) / 0.4f); // slower decay
+          uint8_t splash_b = (uint8_t)(env * 200.0f);
+          int surf = fill_level - 1;
+          it[seg_start + surf] = boost(target_color, splash_b);
+          if (surf - 1 >= 0)
+            it[seg_start + surf - 1] = boost(target_color, splash_b / 3);
         }
       }
     }
@@ -2668,14 +2729,94 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_DRAINING: {
-    // Inverse of Dropping - draining linearly
-    uint16_t current_level = (uint16_t)((1.0f - progress) * seg_len);
-    if (current_level > seg_len)
-      current_level = seg_len;
+    // ── 1. Duration fetch ───────────────────────────────────────────────────
+    uint32_t duration = duration_ms;
+    if (duration == 0)
+      duration = 1;
 
-    // Clear everything above current level
-    for (int i = current_level; i < seg_len; i++) {
+    float prog = progress;
+
+    // ── 2. Drain level: ease-in cubic ───────────────────────────────────────
+    float drain_eased = prog * prog * prog; // cubic ease-in
+    int fill_level = seg_len - (int)(drain_eased * (float)seg_len);
+    if (fill_level < 0)
+      fill_level = 0;
+
+    // ── 3. Color helpers (Monochromatic) ────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+
+    // ── 4. Clear above fill level ────────────────────────────────────────────
+    for (int i = fill_level; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
+
+    // ── 5. Draw water body with depth shading + surface shimmer ─────────────
+    uint32_t shimmer_period =
+        (uint32_t)(120.0f * (1.0f - prog * 0.6f)); // 120→48 ms
+    if (shimmer_period < 40)
+      shimmer_period = 40;
+    uint32_t shimmer_t = elapsed % shimmer_period;
+    uint8_t shimmer = (shimmer_t < shimmer_period / 2)
+                          ? (uint8_t)(shimmer_t * 240 / (shimmer_period / 2))
+                          : (uint8_t)((shimmer_period - shimmer_t) * 240 /
+                                      (shimmer_period / 2));
+
+    for (int i = 0; i < fill_level; i++) {
+      Color base = it[seg_start + i].get();
+      if (i < seg_len / 4)
+        base = dim(base, 153);
+      int dist_from_surface = (fill_level - 1) - i;
+      if (dist_from_surface == 0)
+        base = boost(base, shimmer);
+      else if (dist_from_surface == 1)
+        base = boost(base, shimmer / 3);
+      it[seg_start + i] = base;
+    }
+
+    // ── 6. Rising bubbles ────────────────────────────────────────────────────
+    if (fill_level > 1 && prog > 0.1f) {
+      const int NUM_BUBBLES = 3;
+      uint32_t bubble_period = (uint32_t)(200.0f * (1.0f - prog * 0.5f));
+      if (bubble_period < 80)
+        bubble_period = 80;
+
+      for (int b = 0; b < NUM_BUBBLES; b++) {
+        uint32_t phase = (uint32_t)(b * bubble_period / NUM_BUBBLES);
+        uint32_t t = (elapsed + phase) % bubble_period;
+        float bubble_t = (float)t / (float)bubble_period; // 0=bottom → 1=surface
+
+        float rise = 1.0f - (1.0f - bubble_t) * (1.0f - bubble_t);
+
+        int bottom_bound = (int)(fill_level * 0.10f);
+        int span = (fill_level - 1) - bottom_bound;
+        if (span <= 1)
+          continue;
+
+        int bubble_px = bottom_bound + (int)(rise * (float)span);
+        if (bubble_px < 0 || bubble_px >= fill_level)
+          continue;
+
+        it[seg_start + bubble_px] = dim(it[seg_start + bubble_px].get(), 40);
+
+        if (bubble_t > 0.88f && fill_level > 0) {
+          float pt = (bubble_t - 0.88f) / 0.12f;
+          float env = (pt < 0.5f) ? (pt / 0.5f) : ((1.0f - pt) / 0.5f);
+          uint8_t pop_b = (uint8_t)(env * 160.0f);
+          it[seg_start + fill_level - 1] =
+              boost(it[seg_start + fill_level - 1].get(), pop_b);
+        }
+      }
     }
     break;
   }
