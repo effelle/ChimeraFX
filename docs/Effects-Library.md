@@ -266,30 +266,6 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 157
         ```
 
-??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
-
-    === "🎬 Preview"
-        *(Video preview coming soon)*
-        
-        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
-        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
-        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Hydro-Pulse"
-              effect_id: 168
-        ```
-
 ??? abstract "155 | Kaleidos | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
 
     === "🎬 Preview"
@@ -398,7 +374,31 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               name: "Curtain Sweep"
               effect_id: 162
         ```
+??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
 
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
+        </video>
+        
+        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
+        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
+        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Hydro-Pulse"
+              effect_id: 168
+        ```
 ??? abstract "161 | Horizon Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
@@ -502,10 +502,12 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 166
         ```
 
-??? abstract "167 | Four Times the Charm | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "167 | Four Times the Charm | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
-        <!-- video logic will be added when available -->
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
+        </video>
         *A multi-center architectural sweep. Splitting the strip into quadrants, it runs two simultaneous 'Curtain Sweeps' starting from the 25% and 75% positions. Perfect for complex architectural highlight sequences.*
 
     === "⚙️ Controls"
@@ -523,29 +525,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
           - addressable_cfx:
               name: "Four Times the Charm"
               effect_id: 167
-        ```
-
-??? abstract "168 | Aqueous Flow | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
-
-    === "🎬 Preview"
-        <!-- video logic will be added when available -->
-        *A premium physics-based monochromatic liquid simulation. Features a "Surge" entry where water fills the strip with splashes, and a "Drain" exit where clinging drops recede into a void.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Viscosity**: determines the weight and gravity of the liquid. |
-        | **Speed** | `128` | **Flow speed**: controls the surge and drain velocity. |
-        | **Palette** | — | **Not Supported**: Forced to primary white (Monochromatic). |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Aqueous Flow"
-              effect_id: 168
         ```
 
 ---
@@ -1725,12 +1704,15 @@ These short animations play once when the light is turned ON or OFF.
             <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
         </video>
     *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
-??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
         </video>
     *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
-??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
+        </video>
     *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
 
 

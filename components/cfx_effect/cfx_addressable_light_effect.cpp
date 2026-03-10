@@ -61,6 +61,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_QUADRANT, INTRO_MODE_QUADRANT};
   case 168: // Hydro-Pulse
     return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
+  case 169: // Dropping Fill
+    return {true, INTRO_MODE_DROPPING, INTRO_MODE_DRAINING};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -75,6 +77,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 166: // Transmission
   case 167: // Four Times the Charm
   case 168: // Aqueous Flow
+  case 169: // Dropping Fill
     return true;
   default:
     return false;
@@ -1304,6 +1307,7 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 101:    // Ocean (Pacifica)
   case 151:    // Dropping Time
   case 160:    // Fluid Rain
+  case 169:    // Dropping Fill
     return 11; // Defaults to Ocean
 
   case 38:    // Aurora
@@ -1412,6 +1416,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 1; // Monochromatic series (fastest speed)
   case 168:
     return 128; // Aqueous Flow (Default Speed)
+  case 169:
+    return 1; // Dropping Fill (Monochromatic / Speed slider controls duration)
   case 164:
     return 100; // Collider (Default Speed)
   default:
@@ -1446,6 +1452,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 1; // Monochromatic series (No blur)
   case 168:
     return 128; // Aqueous Flow (Default Viscosity)
+  case 169:
+    return 1; // Dropping Fill (Monochromatic / No blur)
   case 164:
     return 170; // Collider (Default Intensity)
   default:
@@ -2410,6 +2418,67 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     break;
   }
+  case INTRO_MODE_DROPPING: {
+    // Fill Logic - monochromatic fast accumulation
+    uint32_t duration = 1000;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+
+    if (dur_num != nullptr && dur_num->has_state()) {
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    }
+
+    if (duration == 0)
+      duration = 1;
+    float prog_d = (float)elapsed / (float)duration;
+    if (prog_d > 1.0f)
+      prog_d = 1.0f;
+
+    uint16_t target_level = (uint16_t)(prog_d * seg_len);
+    if (target_level > seg_len)
+      target_level = seg_len;
+
+    // Clear everything above level
+    for (int i = target_level; i < seg_len; i++) {
+      it[seg_start + i] = Color::BLACK;
+    }
+
+    // Draw Water
+    for (int i = 0; i < target_level; i++) {
+      int global_idx = seg_start + i;
+      if (use_palette && chimera_fx::instance) {
+        uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
+        uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
+            map_idx, false, true, 255, 255);
+        it[global_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF, cp & 0xFF,
+                               (cp >> 24) & 0xFF);
+      } else {
+        it[global_idx] = c;
+      }
+    }
+
+    // Draw the "next" falling drop
+    if (target_level < seg_len) {
+      float pixel_progress = (prog_d * seg_len) - target_level;
+      float drop_pos =
+          (seg_len - 1) - (pixel_progress * ((seg_len - 1) - target_level));
+      int drop_idx = (int)drop_pos;
+      if (drop_idx >= target_level && drop_idx < seg_len) {
+        if (use_palette && chimera_fx::instance) {
+          uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
+              128, false, true, 255, 255);
+          it[seg_start + drop_idx] = Color((cp >> 16) & 0xFF, (cp >> 8) & 0xFF,
+                                           cp & 0xFF, (cp >> 24) & 0xFF);
+        } else {
+          it[seg_start + drop_idx] = c;
+        }
+      }
+    }
+    break;
+  }
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -2595,6 +2664,18 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       if (!fill_center) {
         it[mid] = Color::BLACK;
       }
+    }
+    break;
+  }
+  case INTRO_MODE_DRAINING: {
+    // Inverse of Dropping - draining linearly
+    uint16_t current_level = (uint16_t)((1.0f - progress) * seg_len);
+    if (current_level > seg_len)
+      current_level = seg_len;
+
+    // Clear everything above current level
+    for (int i = current_level; i < seg_len; i++) {
+      it[seg_start + i] = Color::BLACK;
     }
     break;
   }

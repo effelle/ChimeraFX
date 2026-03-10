@@ -76,6 +76,10 @@
     effect_id: 96
 
 - addressable_cfx:
+    name: "Dropping Fill"
+    effect_id: 169
+
+- addressable_cfx:
     name: "Dropping Time"
     effect_id: 151
 

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026 Federico Leoni (effelle)
  * Copyright (c) Aircoookie (WLED)
  *
@@ -52,6 +52,8 @@ uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
 uint16_t mode_cfx_horizon_sweep(void);
 uint16_t mode_collider(void);
+uint16_t mode_hydro_pulse(void);
+uint16_t mode_dropping_fill(void);
 
 // (get_millis is defined globally before the namespace - see top of file)
 
@@ -4455,6 +4457,12 @@ void CFXRunner::service() {
   case FX_MODE_COLLIDER: // 164
     mode_collider();
     break;
+  case FX_MODE_HYDRO_PULSE: // 168
+    mode_hydro_pulse();
+    break;
+  case FX_MODE_DROPPING_FILL: // 169
+    mode_dropping_fill();
+    break;
   default:
     mode_static();
     break;
@@ -6956,6 +6964,16 @@ uint16_t mode_collider(void) {
     }
   }
 
+  return FRAMETIME;
+}
+
+uint16_t mode_hydro_pulse(void) {
+  instance->_segment.fill(instance->_segment.colors[0]);
+  return FRAMETIME;
+}
+
+uint16_t mode_dropping_fill(void) {
+  instance->_segment.fill(instance->_segment.colors[0]);
   return FRAMETIME;
 }
 // Valid Palette Implementation (Moved from line 121)

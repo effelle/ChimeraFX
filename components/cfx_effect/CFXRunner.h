@@ -193,6 +193,8 @@ struct ColliderNode {
 #define FX_MODE_TWIN_PULSE_SWEEP 165
 #define FX_MODE_TRANSMISSION 166
 #define FX_MODE_FOUR_TIMES_THE_CHARM 167
+#define FX_MODE_HYDRO_PULSE 168
+#define FX_MODE_DROPPING_FILL 169
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -203,9 +205,11 @@ struct ColliderNode {
 #define INTRO_MORSE 6
 #define INTRO_QUADRANT 7
 #define INTRO_HYDRAULICS 8
+#define INTRO_DROPPING 9
+#define INTRO_DRAINING 10
 
 // CFX-008: was 120 — updated to cover all mode IDs up to FX_MODE_FOUR_TIMES_THE_CHARM (167)
-#define MODE_COUNT 168
+#define MODE_COUNT 170
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 
