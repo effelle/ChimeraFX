@@ -942,45 +942,45 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Main CFX effect Running — Multi-Segment Swap-on-Service
   // MUST RUN before intro/outro masks!
-  if (!this->segment_runners_.empty()) {
-    // Multi-segment: iterate all runners, swapping the global instance
-    for (auto *r : this->segment_runners_) {
-      chimera_fx::instance = r;
-      r->global_brightness_ = bri;
-      r->service();
+  bool is_mono_preset =
+      this->get_monochromatic_preset_(this->effect_id_).is_active;
+  bool skip_service =
+      is_mono_preset && (this->intro_active_ || this->state_ == OUTRO_RUNNING);
 
-      // Handle Iteration Completion — save
+  if (!skip_service) {
+    if (!this->segment_runners_.empty()) {
+      for (auto *r : this->segment_runners_) {
+        chimera_fx::instance = r;
+        r->global_brightness_ = bri;
+        r->service();
 #ifdef USE_CFX_SEQUENCE
-      if (this->active_sequence_ != nullptr) {
-        if (r->effect_complete_ && this->active_sequence_ != nullptr) {
-          auto *completed_seq = this->active_sequence_;
-          completed_seq->stop();
-          completed_seq->report_event_complete();
-          this->active_sequence_ = nullptr;
+        if (this->active_sequence_ != nullptr) {
+          if (r->effect_complete_) {
+            auto *completed_seq = this->active_sequence_;
+            completed_seq->stop();
+            completed_seq->report_event_complete();
+            this->active_sequence_ = nullptr;
+          }
         }
+#endif
+      }
+    } else if (this->runner_) {
+      chimera_fx::instance = this->runner_;
+      this->runner_->global_brightness_ = bri;
+      this->runner_->service();
+#ifdef USE_CFX_SEQUENCE
+      if (this->runner_->effect_complete_ &&
+          this->active_sequence_ != nullptr) {
+        auto *completed_seq = this->active_sequence_;
+        completed_seq->stop();
+        completed_seq->report_event_complete();
+        this->active_sequence_ = nullptr;
       }
 #endif
     }
-  } else if (this->runner_) {
-    // Single runner (backward compatible)
-    chimera_fx::instance = this->runner_;
-    this->runner_->global_brightness_ = bri;
-    this->runner_->service();
-
-    // Handle Iteration Completion — save pointer before stop() clears it
-#ifdef USE_CFX_SEQUENCE
-    if (this->runner_->effect_complete_ && this->active_sequence_ != nullptr) {
-      auto *completed_seq = this->active_sequence_;
-      completed_seq->stop();
-      completed_seq->report_event_complete();
-      this->active_sequence_ = nullptr;
-    }
-#endif
   }
 
   // === State Machine: Intro vs Main Effect ===
-  bool is_mono_preset =
-      this->get_monochromatic_preset_(this->effect_id_).is_active;
   bool needs_autotune = (this->autotune_active_ &&
 #ifdef USE_CFX_SEQUENCE
                          (this->active_sequence_ == nullptr || is_mono_preset));
@@ -2233,11 +2233,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_fluid_velocity_ = 0.0f;
       this->hydraulics_particles_.clear();
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
-      // HARD CLEAR: Wipe previous effect state completely on first frame
-      for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
     }
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0) dt_ms = 1;
+    if (dt_ms == 0)
+      dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float speed_scale = this->active_intro_speed_ / 255.0f;
@@ -2246,7 +2245,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       intensity_val = this->controller_->get_intensity()->state / 255.0f;
     }
 
-    // 1. Organic Physics (v3)
+    // 1. Organic Physics (v3.2)
     float target_l = (float)seg_len;
     float dt = dt_ms / 1000.0f;
     float damping = 1.0f + (intensity_val * 4.0f);
@@ -2258,67 +2257,71 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     if (this->hydraulics_fluid_level_ > target_l) {
       this->hydraulics_fluid_level_ = target_l;
-      this->hydraulics_fluid_velocity_ *= -0.3f; // Bounce slosh
+      this->hydraulics_fluid_velocity_ *= -0.3f; // Slosh
     }
     if (this->hydraulics_fluid_level_ < 0.0f) {
       this->hydraulics_fluid_level_ = 0.0f;
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    // 2. Wet Residue & Void Masking
-    // Fade the body trail (0.7x) and FORCE MASK the void ahead to black
-    int floor_level = (int)this->hydraulics_fluid_level_;
-    for (int i = 0; i < seg_len; i++) {
-       if (i < floor_level) {
-          Color c = it[seg_start + i].get();
-          it[seg_start + i] = Color((uint8_t)(c.r * 0.7f), (uint8_t)(c.g * 0.7f), (uint8_t)(c.b * 0.7f), (uint8_t)(c.w * 0.7f));
-       } else if (i > floor_level + 3) {
-          it[seg_start + i] = Color::BLACK; // Mask main effect bleed
-       }
-    }
+    // 2. Strict Buffer Clearing (Fixes sparkling background)
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
 
     // 3. Render Shimmering Fluid Mass
-    // Momentum-linked vibrancy
-    float vel_glow = 0.1f * (abs(this->hydraulics_fluid_velocity_) / target_l);
+    int floor_level = (int)this->hydraulics_fluid_level_;
+    float vel_glow = 0.15f * (abs(this->hydraulics_fluid_velocity_) / target_l);
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        // High-frequency texture shimmer
-        float noise = 0.75f + (float)(rand() % 100) / 400.0f + vel_glow;
-        if (noise > 1.0f) noise = 1.0f;
+        float noise = 0.7f + (float)(rand() % 100) / 333.0f + vel_glow;
+        if (noise > 1.0f)
+          noise = 1.0f;
         uint8_t b = (uint8_t)(255 * noise);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
+    // Anti-aliased head
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      uint8_t b = (uint8_t)(255 * fraction);
+      uint8_t b = (uint8_t)(255 * (0.7f + fraction * 0.3f));
       it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
-    // 4. Pressure Wave Spray
-    if (this->hydraulics_fluid_velocity_ > 1.0f) {
-       for (int i = 1; i <= 3; i++) {
-          int spray_idx = floor_level + i;
-          if (spray_idx < seg_len) {
-             uint8_t spray_b = (uint8_t)(64 / i);
-             Color cur = it[seg_start + spray_idx].get();
-             it[seg_start + spray_idx] = Color(max(cur.r, spray_b), max(cur.g, spray_b), max(cur.b, spray_b), max(cur.w, spray_b));
-          }
-       }
+    // 4. Pressure Wave (Spray)
+    if (this->hydraulics_fluid_velocity_ > 2.0f) {
+      for (int i = 1; i <= 3; i++) {
+        int spray_idx = floor_level + i;
+        if (spray_idx < seg_len) {
+          uint8_t spray_b = (uint8_t)(48 / i);
+          it[seg_start + spray_idx] = Color(spray_b, spray_b, spray_b, spray_b);
+        }
+      }
     }
 
-    // 5. Particles (Splashes)
+    // 5. Particles
     float gravity = 15.0f + (intensity_val * 30.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active) continue;
+      if (!p.active)
+        continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
-      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
-      if (p.pos >= target_l) { p.pos = target_l - 0.1f; p.vel *= -0.4f; }
+      if (p.pos < this->hydraulics_fluid_level_) {
+        p.active = false;
+        continue;
+      }
+      if (p.pos >= target_l) {
+        p.pos = target_l - 0.1f;
+        p.vel *= -0.4f;
+      }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len)
+        it[seg_start + p_idx] = Color::WHITE;
     }
-    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(
+        std::remove_if(this->hydraulics_particles_.begin(),
+                       this->hydraulics_particles_.end(),
+                       [](const HydraulicsParticle &p) { return !p.active; }),
+        this->hydraulics_particles_.end());
     break;
   }
   case INTRO_MODE_MORSE: {
@@ -2655,7 +2658,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     if (this->hydraulics_last_ms_ == 0)
       this->hydraulics_last_ms_ = now_ms;
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0) dt_ms = 1;
+    if (dt_ms == 0)
+      dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float dt = dt_ms / 1000.0f;
@@ -2676,60 +2680,68 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    if (this->hydraulics_fluid_level_ < old_level && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+    // Drops cling more based on intensity
+    if (this->hydraulics_fluid_level_ < old_level &&
+        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
       if ((rand() % 100) < (10 + (int)(intensity_val * 25))) {
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }
 
-    // Wet trail (0.8x) AND Force BLACK on already drained region
-    int floor_level = (int)this->hydraulics_fluid_level_;
-    for (int i = 0; i < seg_len; i++) {
-       if (i >= floor_level) {
-          Color cur = it[seg_start + i].get();
-          it[seg_start + i] = Color((uint8_t)(cur.r * 0.8f), (uint8_t)(cur.g * 0.8f), (uint8_t)(cur.b * 0.8f), (uint8_t)(cur.w * 0.8f));
-       } else {
-          // Ensure no main effect seep through the "already drained" portion
-          it[seg_start + i] = Color::BLACK;
-       }
-    }
+    // Strict Buffer Clearing (Solves fully lit strip)
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
 
+    int floor_level = (int)this->hydraulics_fluid_level_;
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        float noise = 0.8f + (float)(rand() % 100) / 500.0f;
+        float noise = 0.75f + (float)(rand() % 100) / 400.0f;
         uint8_t b = (uint8_t)(255 * noise);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
+    if (floor_level < seg_len && floor_level >= 0) {
+      float fraction = this->hydraulics_fluid_level_ - floor_level;
+      uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
+      it[seg_start + floor_level] = Color(b, b, b, b);
+    }
 
     float gravity = 15.0f + (intensity_val * 30.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active) continue;
+      if (!p.active)
+        continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
-      if (p.pos < 0.0f) { p.active = false; continue; }
-      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
+      if (p.pos < 0.0f) {
+        p.active = false;
+        continue;
+      }
+      if (p.pos < this->hydraulics_fluid_level_) {
+        p.active = false;
+        continue;
+      }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len)
+        it[seg_start + p_idx] = Color::WHITE;
     }
-    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(
+        std::remove_if(this->hydraulics_particles_.begin(),
+                       this->hydraulics_particles_.end(),
+                       [](const HydraulicsParticle &p) { return !p.active; }),
+        this->hydraulics_particles_.end());
 
-    // Reliable Exit: Finished when level is 0 and particles are gone
-    if (this->hydraulics_fluid_level_ <= 0.05f && this->hydraulics_particles_.empty()) {
-       // Check if there is still visual residue
-       bool has_residue = false;
-       for(int i=0; i<seg_len; i++) {
-          if(it[seg_start+i].get().r > 2) { has_residue = true; break; }
-       }
-       if (!has_residue) {
-          for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
-          return true;
-       }
+    // Hard Exit
+    if (this->hydraulics_fluid_level_ <= 0.01f &&
+        this->hydraulics_particles_.empty()) {
+      for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+      return true;
     }
-    // Safety fallback for timeout
-    if (millis() - this->outro_start_time_ > this->active_outro_duration_ms_ + 1000) {
-       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
-       return true;
+    if (millis() - this->outro_start_time_ >
+        this->active_outro_duration_ms_ + 2000) {
+      for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+      return true;
     }
     return false;
   }
