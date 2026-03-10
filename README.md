@@ -48,8 +48,8 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 ### Platform Compatibility
 
 - **Framework:** **ESP-IDF** and **Arduino** (via RMT DMA)
-- **Chips:** **ESP32 Classic** and **ESP32-S3**
-  - *ESP32-C3/S2/C6 and ESP8266 are not officially supported due to single-core limitations.*
+- **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
+  - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
 - **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
   - *2-wire SPI strips (APA102, WS2801, etc.) are **not yet supported**.*
 

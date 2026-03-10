@@ -6,7 +6,7 @@
     *   **ESP32 (Classic)**: Fully supported.
     *   **ESP32-S3**: Fully supported (and recommended for new builds).
     *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.
-    *   **ESP8266**: **NOT RECOMMENDED**. The old ESP8266 is stuck on the Arduino framework and simply lacks the resources to run ESPHome and ChimeraFX simultaneously. Save yourself the headache and upgrade to an ESP32. Seriously.
+    *   **ESP8266**: **NOT SUPPORTED**. The ESP8266 lacks the hardware resources (FPU, RAM) required for the ChimeraFX rendering engine. It will not compile for this platform.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported!
 
 You can install the component in two ways:
