@@ -527,6 +527,54 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 167
         ```
 
+??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
+        </video>
+        
+        *Falling droplets that accumulate at the bottom of the strip. Similar to Dropping Time but with a monochromatic focus and physics-based accumulation.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
+        | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
+        | **Palette** | — | **Supported**: Defaults to **Ocean** (11). |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Dropping Fill"
+              effect_id: 169
+        ```
+
+??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
+
+    === "🎬 Preview"
+        *Keeps your space dynamic but grounded. Randomly cycles through the premium monochromatic animation library, ensuring your lighting feels alive without being overwhelming.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
+        | **Speed** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
+        | **Palette** | — | **Supported**: The selected sub-effect will respect the active palette. |
+        
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Ambient Roulette"
+              effect_id: 255
+        ```
+
+
 ---
 ## 3. WLED Classics (Remastered)
 
@@ -1714,6 +1762,10 @@ These short animations play once when the light is turned ON or OFF.
             <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
         </video>
     *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
+
+??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
+
 
 
 ### Transition Behavior

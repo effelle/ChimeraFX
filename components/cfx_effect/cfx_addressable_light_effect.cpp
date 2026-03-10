@@ -26,6 +26,7 @@ std::vector<CFXControl *> CFXControl::instances;
 bool CFXControl::global_debug_enabled_ = false;
 
 std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_effects;
+uint8_t CFXAddressableLightEffect::last_roulette_id_ = 0;
 
 static const char *TAG = "chimera_fx";
 
@@ -62,7 +63,7 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   case 168: // Hydro-Pulse
     return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
   case 169: // Dropping Fill
-    return {true, INTRO_MODE_DROPPING, INTRO_MODE_DRAINING};
+    return {true, INTRO_MODE_DROPPING, INTRO_MODE_DROPPING};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -84,8 +85,48 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   }
 }
 
+std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
+  // Automatically builds the pool from all effects registered as monochromatic
+  std::vector<uint8_t> pool;
+  // Common premium monochromatic IDs
+  for (uint8_t id = 100; id < 200; id++) {
+    if (this->is_monochromatic_(id)) {
+      pool.push_back(id);
+    }
+  }
+  return pool;
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
+
+  // --- Ambient Roulette (Randomizer) ---
+  if (this->effect_id_ == 255) {
+    std::vector<uint8_t> pool = this->get_monochromatic_pool_();
+    if (!pool.empty()) {
+      uint8_t chosen_id = 0;
+      // Filter out only the last one to avoid back-to-back repetitions
+      std::vector<uint8_t> filtered_pool;
+      for (uint8_t id : pool) {
+        if (id != CFXAddressableLightEffect::last_roulette_id_) {
+          filtered_pool.push_back(id);
+        }
+      }
+
+      if (filtered_pool.empty()) {
+        // Fallback if pool only has 1 element
+        chosen_id = pool[0];
+      } else {
+        uint32_t r_idx = cfx_random(filtered_pool.size());
+        chosen_id = filtered_pool[r_idx];
+      }
+
+      ESP_LOGI("chimera_fx", "Ambient Roulette (255) selected effect %u",
+               chosen_id);
+      this->effect_id_ = chosen_id;
+      CFXAddressableLightEffect::last_roulette_id_ = chosen_id;
+    }
+  }
 
   this->trigger_on_start();
 
@@ -499,6 +540,8 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
         else if (s == "Pressurize" || s == "Drain")
           this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
+        else if (s == "Dropping" || s == "Emptying")
+          this->active_intro_mode_ = INTRO_MODE_DROPPING;
       }
     }
 
@@ -639,6 +682,8 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
           else if (opt == "Drain" || opt == "Pressurize")
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
+          else if (opt == "Dropping" || opt == "Emptying")
+            this->active_outro_mode_ = INTRO_MODE_DROPPING;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {

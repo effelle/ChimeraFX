@@ -78,8 +78,7 @@ public:
     INTRO_MODE_MORSE = 6,
     INTRO_MODE_QUADRANT = 7,
     INTRO_MODE_HYDRAULICS = 8,
-    INTRO_MODE_DROPPING = 9,
-    INTRO_MODE_DRAINING = 10
+    INTRO_MODE_DROPPING = 9
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);
@@ -219,6 +218,9 @@ public:
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool is_monochromatic_(uint8_t effect_id);
+  std::vector<uint8_t> get_monochromatic_pool_();
+
+  static uint8_t last_roulette_id_;
 
   uint8_t get_palette_index_();
   uint8_t get_pal_idx(select::Select *s);

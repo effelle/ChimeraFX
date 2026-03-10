@@ -8,6 +8,10 @@
 
 
 - addressable_cfx:
+    name: "Ambient Roulette"
+    effect_id: 255
+
+- addressable_cfx:
     name: "Aurora"
     effect_id: 38
 
