@@ -631,9 +631,9 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_TWIN_PULSE;
           else if (opt == "Morse Code")
             this->active_outro_mode_ = INTRO_MODE_MORSE;
-          else if (s == "Quadrant")
+          else if (opt == "Quadrant")
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
-          else if (s == "Drain")
+          else if (opt == "Drain")
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
