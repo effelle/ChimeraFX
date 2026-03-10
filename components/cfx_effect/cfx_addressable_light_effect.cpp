@@ -9,6 +9,7 @@
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_compat.h"
 #include "cfx_control.h"
+#include "cfx_utils.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
 #include "esphome/core/hal.h" // For millis()
@@ -117,7 +118,7 @@ void CFXAddressableLightEffect::start() {
         // Fallback if pool only has 1 element
         chosen_id = pool[0];
       } else {
-        uint32_t r_idx = cfx_random(filtered_pool.size());
+        uint32_t r_idx = (uint32_t)cfx::hw_random16((uint16_t)filtered_pool.size());
         chosen_id = filtered_pool[r_idx];
       }
 
@@ -2773,7 +2774,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
     break;
   }
-  case INTRO_MODE_DRAINING: {
+  case INTRO_MODE_DROPPING: {
     // ── 1. Duration fetch ───────────────────────────────────────────────────
     uint32_t duration = duration_ms;
     if (duration == 0)
