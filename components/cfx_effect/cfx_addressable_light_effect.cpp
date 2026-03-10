@@ -2235,8 +2235,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
     }
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0)
-      dt_ms = 1;
+    if (dt_ms == 0) dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float speed_scale = this->active_intro_speed_ / 255.0f;
@@ -2245,83 +2244,110 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       intensity_val = this->controller_->get_intensity()->state / 255.0f;
     }
 
-    // 1. Organic Physics (v3.2)
+    // 1. Organic Physics (Surge & Slosh)
     float target_l = (float)seg_len;
     float dt = dt_ms / 1000.0f;
     float damping = 1.0f + (intensity_val * 4.0f);
     float pressure = 10.0f + (speed_scale * 50.0f);
+    
     float force = (target_l - this->hydraulics_fluid_level_) * pressure;
     float accel = force - (damping * this->hydraulics_fluid_velocity_);
     this->hydraulics_fluid_velocity_ += accel * dt;
     this->hydraulics_fluid_level_ += this->hydraulics_fluid_velocity_ * dt;
 
+    // --- Impact Spawning (When water hits the end of the pipe) ---
     if (this->hydraulics_fluid_level_ > target_l) {
       this->hydraulics_fluid_level_ = target_l;
-      this->hydraulics_fluid_velocity_ *= -0.3f; // Slosh
+      
+      if (this->hydraulics_fluid_velocity_ > 15.0f) {
+          int splash_count = (rand() % 4) + 3; // 3 to 6 drops
+          for(int d = 0; d < splash_count; d++) {
+              if (this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+                  this->hydraulics_particles_.push_back({
+                      target_l, 
+                      -this->hydraulics_fluid_velocity_ * (0.2f + (rand() % 50) / 100.0f),
+                      true
+                  });
+              }
+          }
+      }
+      this->hydraulics_fluid_velocity_ *= -0.3f; // Slosh dampening
     }
+    
     if (this->hydraulics_fluid_level_ < 0.0f) {
       this->hydraulics_fluid_level_ = 0.0f;
       this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    // 2. Strict Buffer Clearing (Fixes sparkling background)
+    // --- Continuous Spray Spawning (While moving fast) ---
+    if (this->hydraulics_fluid_velocity_ > 8.0f && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+        if (rand() % 100 < 40) {
+            this->hydraulics_particles_.push_back({
+                this->hydraulics_fluid_level_,
+                this->hydraulics_fluid_velocity_ * (1.1f + (rand() % 40) / 100.0f), 
+                true
+            });
+        }
+    }
+
+    // 2. Strict Buffer Clearing
     for (int i = 0; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
 
-    // 3. Render Shimmering Fluid Mass
+    // 3. Render Shimmering Fluid Mass (Coherent Waves)
     int floor_level = (int)this->hydraulics_fluid_level_;
     float vel_glow = 0.15f * (abs(this->hydraulics_fluid_velocity_) / target_l);
+    float wave_time = now_ms * 0.005f;
+
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        float noise = 0.7f + (float)(rand() % 100) / 333.0f + vel_glow;
-        if (noise > 1.0f)
-          noise = 1.0f;
-        uint8_t b = (uint8_t)(255 * noise);
+        // Overlapping Sine Waves create a flowing "liquid" texture
+        float wave1 = sinf(i * 0.5f - wave_time);
+        float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
+        float liquid_noise = (wave1 + wave2) * 0.15f;
+        
+        float brightness = 0.6f + liquid_noise + vel_glow;
+
+        // The "Froth" (Water is brighter/turbulent at the leading edge)
+        float dist_to_head = this->hydraulics_fluid_level_ - i;
+        if (dist_to_head < 5.0f) {
+            brightness += (5.0f - dist_to_head) * 0.15f;
+        }
+
+        if (brightness > 1.0f) brightness = 1.0f;
+        if (brightness < 0.1f) brightness = 0.1f;
+        uint8_t b = (uint8_t)(255 * brightness);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
-    // Anti-aliased head
+
+    // Anti-aliased exact head
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      uint8_t b = (uint8_t)(255 * (0.7f + fraction * 0.3f));
+      uint8_t b = (uint8_t)(255 * (0.8f + fraction * 0.2f));
       it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
-    // 4. Pressure Wave (Spray)
-    if (this->hydraulics_fluid_velocity_ > 2.0f) {
-      for (int i = 1; i <= 3; i++) {
-        int spray_idx = floor_level + i;
-        if (spray_idx < seg_len) {
-          uint8_t spray_b = (uint8_t)(48 / i);
-          it[seg_start + spray_idx] = Color(spray_b, spray_b, spray_b, spray_b);
-        }
-      }
-    }
-
-    // 5. Particles
-    float gravity = 15.0f + (intensity_val * 30.0f);
+    // 4. Droplets / Particles Rendering
+    float gravity = 25.0f + (intensity_val * 20.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active)
-        continue;
+      if (!p.active) continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
-      if (p.pos < this->hydraulics_fluid_level_) {
+      if (p.pos <= this->hydraulics_fluid_level_) {
         p.active = false;
         continue;
       }
       if (p.pos >= target_l) {
         p.pos = target_l - 0.1f;
-        p.vel *= -0.4f;
+        p.vel *= -0.3f;
       }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len)
-        it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len) {
+          it[seg_start + p_idx] = Color(255, 255, 255, 255);
+      }
     }
-    this->hydraulics_particles_.erase(
-        std::remove_if(this->hydraulics_particles_.begin(),
-                       this->hydraulics_particles_.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
     break;
   }
   case INTRO_MODE_MORSE: {
@@ -2658,8 +2684,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     if (this->hydraulics_last_ms_ == 0)
       this->hydraulics_last_ms_ = now_ms;
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
-    if (dt_ms == 0)
-      dt_ms = 1;
+    if (dt_ms == 0) dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
     float dt = dt_ms / 1000.0f;
@@ -2681,67 +2706,54 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     // Drops cling more based on intensity
-    if (this->hydraulics_fluid_level_ < old_level &&
-        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+    if (this->hydraulics_fluid_level_ < old_level && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
       if ((rand() % 100) < (10 + (int)(intensity_val * 25))) {
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }
 
-    // Strict Buffer Clearing (Solves fully lit strip)
-    for (int i = 0; i < seg_len; i++)
-      it[seg_start + i] = Color::BLACK;
+    // Strict Buffer Clearing
+    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
 
+    // Render Shimmering Fluid Mass (Coherent Waves)
     int floor_level = (int)this->hydraulics_fluid_level_;
+    float wave_time = now_ms * 0.005f;
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        float noise = 0.75f + (float)(rand() % 100) / 400.0f;
-        uint8_t b = (uint8_t)(255 * noise);
+        float wave1 = sinf(i * 0.5f - wave_time);
+        float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
+        float liquid_noise = (wave1 + wave2) * 0.15f;
+        float brightness = 0.7f + liquid_noise;
+        if (brightness > 1.0f) brightness = 1.0f;
+        uint8_t b = (uint8_t)(255 * brightness);
         it[seg_start + i] = Color(b, b, b, b);
       }
     }
     if (floor_level < seg_len && floor_level >= 0) {
-      float fraction = this->hydraulics_fluid_level_ - floor_level;
-      uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
-      it[seg_start + floor_level] = Color(b, b, b, b);
+       float fraction = this->hydraulics_fluid_level_ - floor_level;
+       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
+       it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
-    float gravity = 15.0f + (intensity_val * 30.0f);
+    float gravity = 25.0f + (intensity_val * 20.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active)
-        continue;
+      if (!p.active) continue;
       p.vel -= gravity * dt;
       p.pos += p.vel * dt;
-      if (p.pos < 0.0f) {
-        p.active = false;
-        continue;
-      }
-      if (p.pos < this->hydraulics_fluid_level_) {
-        p.active = false;
-        continue;
-      }
+      if (p.pos < 0.0f) { p.active = false; continue; }
+      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len)
-        it[seg_start + p_idx] = Color::WHITE;
+      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
     }
-    this->hydraulics_particles_.erase(
-        std::remove_if(this->hydraulics_particles_.begin(),
-                       this->hydraulics_particles_.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        this->hydraulics_particles_.end());
+    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
 
-    // Hard Exit
-    if (this->hydraulics_fluid_level_ <= 0.01f &&
-        this->hydraulics_particles_.empty()) {
-      for (int i = 0; i < seg_len; i++)
-        it[seg_start + i] = Color::BLACK;
-      return true;
+    if (this->hydraulics_fluid_level_ <= 0.01f && this->hydraulics_particles_.empty()) {
+       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
+       return true;
     }
-    if (millis() - this->outro_start_time_ >
-        this->active_outro_duration_ms_ + 2000) {
-      for (int i = 0; i < seg_len; i++)
-        it[seg_start + i] = Color::BLACK;
-      return true;
+    if (millis() - this->outro_start_time_ > this->active_outro_duration_ms_ + 2000) {
+       for(int i=0; i<seg_len; i++) it[seg_start+i] = Color::BLACK;
+       return true;
     }
     return false;
   }
