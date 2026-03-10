@@ -118,7 +118,7 @@ void CFXAddressableLightEffect::start() {
         // Fallback if pool only has 1 element
         chosen_id = pool[0];
       } else {
-        uint32_t r_idx = (uint32_t)cfx::hw_random16((uint16_t)filtered_pool.size());
+        uint32_t r_idx = (uint32_t)cfx::hw_random16(0, (uint16_t)filtered_pool.size());
         chosen_id = filtered_pool[r_idx];
       }
 
