@@ -2751,6 +2751,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         float wave1 = sinf(i * 0.5f - wave_time);
         float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
         float liquid_noise = (wave1 + wave2) * 0.15f;
+        float brightness = 0.7f + liquid_noise;
+        if (brightness > 1.0f)
+          brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
         if (this->active_force_white_)
           it[seg_start + i] = Color(0, 0, 0, b);
