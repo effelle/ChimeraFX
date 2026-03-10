@@ -3,7 +3,10 @@
 #include "esphome/components/light/light_effect.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/log.h"
+#include <algorithm> // CFX-011: std::find in destructor
+#include <atomic>    // CFX-012: std::atomic<bool>
 #include <cmath>
+#include <string>
 #include <vector>
 
 namespace esphome {
@@ -13,7 +16,8 @@ static const char *const TAG = "cfx_sequence";
 
 std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
-bool CFXSequenceSelect::suppress_callback_ = false;
+// CFX-012: atomic<bool> — safe across FreeRTOS tasks on dual-core ESP32
+std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
@@ -56,6 +60,16 @@ CFXSequence::CFXSequence(const std::string &id, const std::string &name,
                          const std::string &effect, bool restore)
     : id_(id), name_(name), effect_(effect), restore_state_(restore) {
   CFXSequence::instances.push_back(this);
+}
+
+// CFX-011: Destructor removes this from the static instances vector.
+// Without this, destroying a CFXSequence leaves a dangling pointer in the
+// vector, causing undefined behaviour in stop(), force_reset(), and start().
+CFXSequence::~CFXSequence() {
+  auto it = std::find(CFXSequence::instances.begin(),
+                      CFXSequence::instances.end(), this);
+  if (it != CFXSequence::instances.end())
+    CFXSequence::instances.erase(it);
 }
 
 void CFXSequence::start() {
@@ -133,12 +147,22 @@ void CFXSequence::start() {
     }
   }
 
-  // Fallback: for segment lights, the active effect is a segment-local instance
-  // that may not be in all_effects. Bind to the first master effect instead.
+  // CFX-015 FIX: Fallback path now uses LOGW and names both the targeted lights
+  // and the effect it actually binds to, so misconfigured sequences are
+  // immediately visible in the serial log.
   if (!bound && !chimera_fx::CFXAddressableLightEffect::all_effects.empty()) {
     auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
-    ESP_LOGD(TAG, "  Binding Sequence to Effect %p (segment fallback)",
-             master_fx);
+    // Build a comma-separated list of target light names for the warning
+    std::string target_names;
+    for (auto *l : this->lights_) {
+      if (!target_names.empty()) target_names += ", ";
+      target_names += l->get_name();
+    }
+    ESP_LOGW(TAG,
+             "Sequence '%s': no active CFX effect found for target light(s) [%s]. "
+             "Falling back to first registered effect %p — animation may target "
+             "the wrong strip. Check that the correct CFX effect is active.",
+             this->name_.c_str(), target_names.c_str(), master_fx);
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
     bound = true;

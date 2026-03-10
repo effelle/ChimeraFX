@@ -5,6 +5,8 @@
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
+#include <atomic>    // CFX-012: for std::atomic<bool>
+#include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -38,6 +40,9 @@ class CFXSequence {
 public:
   CFXSequence(const std::string &id, const std::string &name,
               const std::string &effect, bool restore = true);
+  // CFX-011: Destructor removes this from the static instances vector to
+  // prevent dangling pointers when objects are destroyed.
+  ~CFXSequence();
 
   // Sequence runtime controllers
   void start();
@@ -171,7 +176,10 @@ public:
   void publish_state_silent(const std::string &value);
 
   static CFXSequenceSelect *instance;
-  static bool suppress_callback_;
+  // CFX-012: Changed from plain bool to std::atomic<bool> to prevent a race
+  // condition on multi-core ESP32 where a FreeRTOS task could read false before
+  // publish_state_silent() sets it back, causing an unintended recursive start.
+  static std::atomic<bool> suppress_callback_;
 };
 
 } // namespace cfx_sequence

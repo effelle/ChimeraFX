@@ -33,6 +33,27 @@ namespace cfx {
 // RANDOM HELPERS
 // ============================================================================
 
+// ============================================================================
+// RANDOM HELPERS
+// CFX-002 FIX: All helpers now use hardware RNG (esp_random on ESP-IDF,
+// random() on Arduino framework) instead of the unseeded libc rand() which
+// always starts from seed=1 at boot and produces identical sequences every
+// power cycle.
+// ============================================================================
+
+namespace detail {
+// Returns a 32-bit hardware-entropy random word.
+// esp_random() is available in both Arduino and bare ESP-IDF builds for ESP32.
+// For ESP8266 the Arduino random() call also uses the hardware PRNG.
+inline uint32_t hw_rand32() {
+#ifdef ARDUINO
+  return (uint32_t)random();
+#else
+  return esp_random();
+#endif
+}
+} // namespace detail
+
 // Scale one byte by a second one, which is treated as the numerator of a
 // fraction whose denominator is 256.
 inline uint8_t scale8(uint8_t i, uint8_t scale) {
@@ -40,38 +61,61 @@ inline uint8_t scale8(uint8_t i, uint8_t scale) {
 }
 
 // Random 16-bit value (0-65535)
-inline uint16_t hw_random16() { return rand() & 0xFFFF; }
+inline uint16_t hw_random16() {
+  return (uint16_t)(detail::hw_rand32() & 0xFFFF);
+}
 
 // Random 16-bit value in range [min, max)
 inline uint16_t hw_random16(uint16_t min, uint16_t max) {
   if (min >= max)
     return min;
-  return min + (rand() % (max - min));
+  return min + (uint16_t)(detail::hw_rand32() % (uint32_t)(max - min));
 }
 
 // Random 8-bit value (0-255)
-inline uint8_t hw_random8() { return rand() % 256; }
+inline uint8_t hw_random8() { return (uint8_t)(detail::hw_rand32() & 0xFF); }
 
 // Random 8-bit value in range [0, max)
 inline uint8_t hw_random8(uint8_t max) {
   if (max == 0)
     return 0; // Safety: prevent div/0
-  return rand() % max;
+  return (uint8_t)(detail::hw_rand32() % (uint32_t)max);
 }
 
 // Random 8-bit value in range [min, max)
 inline uint8_t hw_random8(uint8_t min, uint8_t max) {
   if (min >= max)
     return min;
-  return min + (rand() % (max - min));
+  return min + (uint8_t)(detail::hw_rand32() % (uint32_t)(max - min));
 }
-inline uint8_t sin8(uint8_t theta) {
-  // Simple approximation or std::sin
-  // return (sin(theta * 6.2831853f / 256.0f) + 1.0f) * 127.5f;
-  // Use integer approximation for speed if needed, but float is fine on ESP32
-  // We'll use a lookup-table-free robust version or just std::sin
-  return (uint8_t)((sinf(theta * 0.02454369f) + 1.0f) * 127.5f);
-}
+// CFX-005 FIX: sin8() now uses a 256-byte lookup table (identical to FastLED
+// sin8_C). The old sinf() call cost ~40-80 cycles on ESP32; the LUT costs a
+// single array access. Effects with per-pixel sin8 calls (plasma, sinelon,
+// sinewave, noisepal) benefit most — several ms saved per frame on long strips.
+static const uint8_t sin8_table[256] PROGMEM_OR_RAM = {
+    128, 131, 134, 137, 140, 143, 146, 149, 152, 155, 158, 162, 165, 167, 170,
+    173, 176, 179, 182, 185, 188, 190, 193, 196, 198, 201, 203, 206, 208, 211,
+    213, 215, 218, 220, 222, 224, 226, 228, 230, 232, 234, 235, 237, 238, 240,
+    241, 243, 244, 245, 246, 248, 249, 250, 250, 251, 252, 253, 253, 254, 254,
+    254, 255, 255, 255, 255, 255, 255, 255, 254, 254, 254, 253, 253, 252, 251,
+    250, 250, 249, 248, 246, 245, 244, 243, 241, 240, 238, 237, 235, 234, 232,
+    230, 228, 226, 224, 222, 220, 218, 215, 213, 211, 208, 206, 203, 201, 198,
+    196, 193, 190, 188, 185, 182, 179, 176, 173, 170, 167, 165, 162, 158, 155,
+    152, 149, 146, 143, 140, 137, 134, 131, 128, 124, 121, 118, 115, 112, 109,
+    106, 103, 100, 97,  93,  90,  88,  85,  82,  79,  76,  73,  70,  67,  65,
+    62,  59,  57,  54,  52,  49,  47,  44,  42,  40,  37,  35,  33,  31,  29,
+    27,  25,  23,  21,  20,  18,  17,  15,  14,  12,  11,  10,  9,   7,   6,
+    5,   5,   4,   3,   2,   2,   1,   1,   1,   0,   0,   0,   0,   0,   0,
+    0,   1,   1,   1,   2,   2,   3,   4,   5,   5,   6,   7,   9,   10,  11,
+    12,  14,  15,  17,  18,  20,  21,  23,  25,  27,  29,  31,  33,  35,  37,
+    40,  42,  44,  47,  49,  52,  54,  57,  59,  62,  65,  67,  70,  73,  76,
+    79,  82,  85,  88,  90,  93,  97,  100, 103, 106, 109, 112, 115, 118, 121,
+    124};
+// Resolve PROGMEM_OR_RAM — on plain ESP-IDF/Arduino builds this is just empty
+#ifndef PROGMEM_OR_RAM
+#define PROGMEM_OR_RAM
+#endif
+inline uint8_t sin8(uint8_t theta) { return sin8_table[theta]; }
 
 typedef uint16_t accum88;
 
@@ -118,8 +162,12 @@ inline uint16_t triwave16(uint16_t in) {
 // ============================================================================
 
 // WLED map function
+// CFX-006 FIX: Add safety check to prevent integer division by zero if in_max
+// == in_min
 inline long cfx_map(long x, long in_min, long in_max, long out_min,
                     long out_max) {
+  if (in_max == in_min)
+    return out_min;
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
@@ -261,7 +309,7 @@ inline uint8_t get_random_wheel_index(uint8_t pos) {
   uint8_t d = 0;
   uint8_t loops = 0;
   while (d < 42 && loops < 15) {
-    r = rand() % 256;
+    r = hw_random8(); // CFX-002: was rand() % 256
     x = abs(pos - r);
     y = 255 - x;
     d = (x < y) ? x : y;

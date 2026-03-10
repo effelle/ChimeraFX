@@ -204,7 +204,8 @@ struct ColliderNode {
 #define INTRO_QUADRANT 7
 #define INTRO_HYDRAULICS 8
 
-#define MODE_COUNT 120
+// CFX-008: was 120 — updated to cover all mode IDs up to FX_MODE_FOUR_TIMES_THE_CHARM (167)
+#define MODE_COUNT 168
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 
@@ -235,7 +236,7 @@ public:
   uint16_t aux0;
   uint16_t aux1;
   uint8_t *data;
-  uint16_t _dataLen;
+  size_t _dataLen; // CFX-003: widened from uint16_t to avoid silent truncation vs allocateData(size_t)
 
   uint32_t colors[3];
 
@@ -250,8 +251,11 @@ public:
   }
 
   uint16_t length() const { return stop - start; }
-  uint16_t virtualLength() const { return length(); }
-  bool isActive() const { return on && length() > 0; }
+  // CFX-001: physicalLength() is the full pixel span; virtualLength() is the
+  // addressable half when mirror is active (each pixel written symmetrically).
+  uint16_t physicalLength() const { return stop - start; }
+  uint16_t virtualLength() const { return mirror ? physicalLength() / 2 : physicalLength(); }
+  bool isActive() const { return on && physicalLength() > 0; }
 
   bool allocateData(size_t len) {
     if (data && _dataLen == len)
@@ -331,11 +335,19 @@ public:
   uint8_t getMode() const { return _mode; }
   uint8_t getPalette() const { return _segment.palette; }
 
-  // Phase 2 hook: returns animation progress as 0-100%.
-  // Stub for now — will be filled per progressive effect.
-  uint8_t progress_pct() const { return 0; }
+  // CFX-010: Returns animation progress 0–100% for progressive effects.
+  // Uses current_leading_pixel (set by sweep/wipe/sunrise/dropping_time effects).
+  // Effects that do not advance a leading pixel will still report 0 — that is
+  // correct and expected; this hook is primarily useful for sequencer on_reach triggers.
+  uint8_t progress_pct() const {
+    uint16_t len = _segment.length();
+    if (len == 0 || current_leading_pixel < 0)
+      return 0;
+    uint32_t pct = ((uint32_t)current_leading_pixel * 100u) / len;
+    return (pct > 100u) ? 100u : (uint8_t)pct;
+  }
 
-  double _virtual_now = 0;
+  float _virtual_now = 0.0f; // CFX-009: was double — ESP32 Xtensa LX6 only has single-precision HW FPU
   float _accum_ms = 0;
 
   uint32_t pacifica_speed_accum = 0;
@@ -402,8 +414,12 @@ private:
 
   uint8_t _mode;
 
-  typedef uint16_t (*mode_ptr)(void);
-  static mode_ptr _mode_ptr[];
+  // CFX-008 / CFX-004: _mode_ptr[] dispatch table removed — superseded by the
+  // switch-case in service(). It was indexed by mode ID and would have caused
+  // out-of-bounds reads for IDs 120–167 with the old MODE_COUNT of 120.
+  // NOTE (CFX-004): service() is not re-entrant. The global `instance` pointer
+  // is updated at the top of each service() call; callers must ensure service()
+  // runs exclusively on the ESPHome main-loop task.
 
   uint32_t _last_frame = 0;
 };

@@ -959,10 +959,12 @@ uint16_t mode_aurora(void) {
   instance->_segment.aux1 = active_count;
 
   if (!instance->_segment.allocateData(sizeof(AuroraWave) * W_MAX_COUNT)) {
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(AuroraWave) * W_MAX_COUNT)); // CFX-007
     return mode_static();
   }
 
-  // Handle Reset / Garbage Memory
+  // CFX-013 FIX: allocateData() already zeroes fresh allocations via memset.
+  // Only re-zero on an explicit reset flag to avoid doubling the work every call.
   if (instance->_segment.reset) {
     memset(instance->_segment.data, 0, instance->_segment._dataLen);
     instance->_segment.reset = false;
@@ -993,23 +995,22 @@ uint16_t mode_aurora(void) {
         // Wave died naturally. Only re-init if we are below the active
         // threshold
         if (i < active_count) {
-          uint8_t colorIndex = rand() % 256;
+          uint8_t colorIndex = hw_random8(); // CFX-002: was rand() % 256
+          const uint32_t *active_palette =
+              getPaletteByIndex(instance->_segment.palette);
+          CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
+          waves[i].init(instance->_segment.length(), color);
+        }
+      } else {
+        // Dead slot. If it's within the active_count, start a new wave
+        if (i < active_count) {
+          uint8_t colorIndex = hw_random8(); // CFX-002: was rand() % 256
           const uint32_t *active_palette =
               getPaletteByIndex(instance->_segment.palette);
           CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
           waves[i].init(instance->_segment.length(), color);
         }
       }
-    } else {
-      // Dead slot. If it's within the active_count, start a new wave
-      if (i < active_count) {
-        uint8_t colorIndex = rand() % 256;
-        const uint32_t *active_palette =
-            getPaletteByIndex(instance->_segment.palette);
-        CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
-        waves[i].init(instance->_segment.length(), color);
-      }
-    }
 
     if (waves[i].alive) {
       waves[i].updateCachedValues();
@@ -1060,6 +1061,7 @@ uint16_t mode_fire_2012(void) {
 
   // Allocate heat array for Virtual Grid
   if (!instance->_segment.allocateData(VIRTUAL_HEIGHT))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(VIRTUAL_HEIGHT)); // CFX-007
     return mode_static();
   uint8_t *heat = instance->_segment.data;
 
@@ -1145,6 +1147,7 @@ uint16_t mode_fire_dual(void) {
 
   // Allocate heat array for Virtual Grid
   if (!instance->_segment.allocateData(VIRTUAL_HEIGHT))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(VIRTUAL_HEIGHT)); // CFX-007
     return mode_static();
   uint8_t *heat = instance->_segment.data;
 
@@ -1602,6 +1605,7 @@ uint16_t mode_plasma(void) {
 
   // Allocate storage for previous color indices (for temporal smoothing)
   if (!instance->_segment.allocateData(len)) {
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(len)); // CFX-007
     return mode_static();
   }
   uint8_t *prevColors = instance->_segment.data;
@@ -1892,6 +1896,7 @@ uint16_t mode_dissolve(void) {
   // Allocate shadow buffer using allocateData (proper memory lifecycle
   // tracking)
   if (!instance->_segment.allocateData(shadow_size)) {
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(shadow_size)); // CFX-007
     return mode_static(); // Allocation failed
   }
 
@@ -2352,6 +2357,7 @@ uint16_t mode_ripple(void) {
   uint16_t dataSize = sizeof(RippleState) * maxRipples;
 
   if (!instance->_segment.allocateData(dataSize))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(dataSize)); // CFX-007
     return mode_static();
 
   RippleState *ripples = (RippleState *)instance->_segment.data;
@@ -2647,6 +2653,7 @@ uint16_t mode_noisepal(void) {
   // (palettes[1])
   unsigned dataSize = sizeof(CRGBPalette16) * 2; // 2 * 16 * 3 = 96 bytes
   if (!instance->_segment.allocateData(dataSize))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(dataSize)); // CFX-007
     return mode_static();
   CRGBPalette16 *palettes =
       reinterpret_cast<CRGBPalette16 *>(instance->_segment.data);
@@ -3913,6 +3920,7 @@ uint16_t mode_scanner_internal(bool dualMode) {
     instance->_segment.step = 0;
     // Allocate 4 bytes for old trail data
     if (!instance->_segment.allocateData(4))
+      ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(4)); // CFX-007
       return mode_static();
     instance->_segment.data[0] = 0; // old_dir
     instance->_segment.data[1] = 0; // old_pos low
@@ -4242,7 +4250,7 @@ void CFXRunner::service() {
   // --- VIRTUAL TIME TRACKING ---
   // Tracks elapsed time purely during active runner service.
   // Resettable via reset() to ensure animations start from T=0.
-  _virtual_now += (double)frame_time;
+  _virtual_now += (float)frame_time; // CFX-009: was cast to double; now float to match HW FPU
   _accum_ms += (float)frame_time;
 
   // Sync 'now' to virtual timeline for all child effects
@@ -4473,6 +4481,7 @@ uint16_t mode_exploding_fireworks(void) {
   size_t dataSize = sizeof(Spark) * numSparks;
 
   if (!instance->_segment.allocateData(dataSize + sizeof(float)))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(dataSize + sizeof(float))); // CFX-007
     return mode_static();
 
   Spark *sparks = reinterpret_cast<Spark *>(instance->_segment.data);
@@ -4653,6 +4662,7 @@ uint16_t mode_popcorn(void) {
   // WLED: max 21 kernels per segment (ESP8266)
   const int MAX_POPCORN = 24;
   if (!instance->_segment.allocateData(sizeof(Spark) * MAX_POPCORN))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(Spark) * MAX_POPCORN)); // CFX-007
     return mode_static();
 
   Spark *popcorn = reinterpret_cast<Spark *>(instance->_segment.data);
@@ -4820,10 +4830,18 @@ uint16_t mode_dropping_time(void) {
   float gravity = -0.0005f - (wled_speed / 50000.0f);
   gravity *= (len - 1);
 
+  // CFX-006 FIX: Guard against divide-by-zero before the division at this scope.
+  // The top-of-function (len <= 1) guard does not cover code restructuring paths.
+  if (len == 0)
+    return mode_static();
+
   // A. Filling Drop Timing
   // We want the drop to 'release' (finish swelling and fall) at releaseTime
   // such that it hits the WATER LEVEL exactly at nextPixelTime.
   uint32_t msPerPixel = duration_ms / len;
+  // CFX-006 FIX: clamp to at least 1 ms so nextPixelTime can never stall at zero.
+  if (msPerPixel == 0)
+    msPerPixel = 1;
   uint32_t nextPixelTime = (state->filledPixels + 1) * msPerPixel;
 
   // Distance to fall: From Top (len-1) to Water Surface (filledPixels)
@@ -5053,6 +5071,7 @@ uint16_t mode_drip(void) {
 
   const int MAX_DROPS = 4;
   if (!instance->_segment.allocateData(sizeof(Spark) * MAX_DROPS))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(Spark) * MAX_DROPS)); // CFX-007
     return mode_static();
   Spark *drops = reinterpret_cast<Spark *>(instance->_segment.data);
 
@@ -5217,6 +5236,7 @@ uint16_t mode_bouncing_balls(void) {
 
   // Allocate State
   if (!instance->_segment.allocateData(sizeof(BouncingBall) * MAX_BALLS)) {
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(BouncingBall) * MAX_BALLS)); // CFX-007
     return mode_static();
   }
   BouncingBall *balls =
@@ -5276,10 +5296,10 @@ uint16_t mode_bouncing_balls(void) {
         // Randomize nicely between 80% and 105% of max height energy
         // Range: ~0.8 * 6.0 (4.8) to ~1.05 * 6.0 (6.3)
         // This ensures they reach the top but vary a bit
-        float energyMult = 0.8f + ((rand() % 25) / 100.0f);
+        float energyMult = 0.8f + ((hw_random8(25) / 100.0f)); // CFX-002: was rand() % 25
         balls[i].impactVelocity = V_MAX * energyMult;
 
-        balls[i].dampening = 0.90f + ((rand() % 10) / 100.0f);
+        balls[i].dampening = 0.90f + ((hw_random8(10) / 100.0f)); // CFX-002: was rand() % 10
       }
 
       balls[i].clockTimeAtLastBounce = instance->now;
@@ -5652,8 +5672,8 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (useRandomColors) {
     // Initialization
     if (instance->_segment.call == 0) {
-      instance->_segment.aux0 = rand() % 256;
-      instance->_segment.aux1 = rand() % 256;
+      instance->_segment.aux0 = hw_random8(); // CFX-002: was rand() % 256
+      instance->_segment.aux1 = hw_random8(); // CFX-002: was rand() % 256
       instance->_segment.step = back ? 1 : 0;
     }
 
@@ -5663,13 +5683,13 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
       // Changed from Front to Back
       instance->_segment.step = 1;
       instance->_segment.aux1 =
-          instance->_segment.aux0;            // Old FG becomes New BG
-      instance->_segment.aux0 = rand() % 256; // New FG
+          instance->_segment.aux0;                    // Old FG becomes New BG
+      instance->_segment.aux0 = hw_random8(); // New FG — CFX-002: was rand() % 256
     } else if (!back && instance->_segment.step == 1) {
       // Changed from Back to Front
       instance->_segment.step = 0;
       instance->_segment.aux1 = instance->_segment.aux0;
-      instance->_segment.aux0 = rand() % 256; // New FG
+      instance->_segment.aux0 = hw_random8(); // New FG — CFX-002: was rand() % 256
     }
   } else {
     // Non-random state (just track step if needed for other effects)
@@ -5862,8 +5882,8 @@ bool CFXRunner::serviceIntro() {
     _segment.fill(RGBW32(r, g, b, w));
   } else if (_intro_mode == INTRO_GLITTER) {
     // Glitter: Accumulate random pixels
-    if ((rand() % 100) < 30) {
-      uint16_t pos = rand() % len;
+    if (hw_random8(100) < 30) { // CFX-002: was rand() % 100
+      uint16_t pos = hw_random16() % len; // CFX-002: was rand() % len
       _segment.setPixelColor(pos, _intro_color);
     }
   }
@@ -6152,6 +6172,7 @@ uint16_t mode_follow_me(void) {
 
   // === Allocate State ===
   if (!instance->_segment.allocateData(sizeof(FollowMeData)))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(FollowMeData))); // CFX-007
     return mode_static();
 
   FollowMeData *fm = reinterpret_cast<FollowMeData *>(instance->_segment.data);
@@ -6389,6 +6410,7 @@ uint16_t mode_follow_us(void) {
 
   // === Allocate State ===
   if (!instance->_segment.allocateData(sizeof(FollowUsData)))
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, (size_t)(sizeof(FollowUsData))); // CFX-007
     return mode_static();
 
   FollowUsData *fu = reinterpret_cast<FollowUsData *>(instance->_segment.data);
