@@ -239,6 +239,7 @@ public:
   optional<uint16_t> timer_preset_{};
 
   float hydraulics_fluid_level_{0.0f};
+  float hydraulics_fluid_velocity_{0.0f};
   std::vector<HydraulicsParticle> hydraulics_particles_;
   uint32_t hydraulics_last_ms_{0};
   static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;

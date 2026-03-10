@@ -123,6 +123,7 @@ void CFXAddressableLightEffect::start() {
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   this->outro_start_time_ = 0;
   this->hydraulics_fluid_level_ = 0.0f;
+  this->hydraulics_fluid_velocity_ = 0.0f;
   this->hydraulics_particles_.clear();
   this->hydraulics_last_ms_ = 0;
 
@@ -2229,94 +2230,76 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (this->hydraulics_last_ms_ == 0) {
       this->hydraulics_last_ms_ = now_ms;
       this->hydraulics_fluid_level_ = 0.0f;
+      this->hydraulics_fluid_velocity_ = 0.0f;
       this->hydraulics_particles_.clear();
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
     }
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+    if (dt_ms == 0) dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
-    float speed_val = this->active_intro_speed_ / 255.0f;
+    float speed_scale = this->active_intro_speed_ / 255.0f;
     float intensity_val = 127 / 255.0f;
     if (this->controller_ && this->controller_->get_intensity()) {
       intensity_val = this->controller_->get_intensity()->state / 255.0f;
     }
 
-    // Physics Constants
+    // 1. Advanced Physics Model (Momentum-based Surge)
     float target_l = (float)seg_len;
-    // Lower viscosity = slower, more gradual fill
-    float viscosity = 0.01f + (intensity_val * 0.04f); // 1% to 5% per frame
-    float gravity = 0.005f + (intensity_val * 0.015f);
+    float dt = dt_ms / 1000.0f;
 
-    // 1. Update Fluid Level (Sub-Pixel Wipe)
-    float old_level = this->hydraulics_fluid_level_;
-    this->hydraulics_fluid_level_ +=
-        (target_l - this->hydraulics_fluid_level_) * viscosity *
-        (dt_ms / 16.6f);
+    float damping = 1.0f + (intensity_val * 4.0f);
+    float pressure = 10.0f + (speed_scale * 50.0f);
 
-    // Cap fluid level to segment length
-    if (this->hydraulics_fluid_level_ > target_l)
+    float force = (target_l - this->hydraulics_fluid_level_) * pressure;
+    float accel = force - (damping * this->hydraulics_fluid_velocity_);
+
+    this->hydraulics_fluid_velocity_ += accel * dt;
+    this->hydraulics_fluid_level_ += this->hydraulics_fluid_velocity_ * dt;
+
+    if (this->hydraulics_fluid_level_ > target_l) {
       this->hydraulics_fluid_level_ = target_l;
-
-    float velocity = this->hydraulics_fluid_level_ - old_level;
-
-    // 2. Clear Segment Buffer (Prevent visual ghosts)
-    for (int i = 0; i < seg_len; i++) {
-      it[seg_start + i] = Color::BLACK;
+      this->hydraulics_fluid_velocity_ *= -0.3f;
+    }
+    if (this->hydraulics_fluid_level_ < 0.0f) {
+      this->hydraulics_fluid_level_ = 0.0f;
+      this->hydraulics_fluid_velocity_ = 0.0f;
     }
 
-    // 3. Trigger Splashes (Intro)
-    if (velocity > 0.05f &&
-        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-      if ((rand() % 100) < 15) {
-        float p_vel = speed_val * (0.8f + (rand() % 60) / 100.0f);
-        this->hydraulics_particles_.push_back(
-            {this->hydraulics_fluid_level_, p_vel, true});
+    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+
+    if (this->hydraulics_fluid_velocity_ > (target_l * 0.5f) && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+      if ((rand() % 100) < 20) {
+        float p_v = this->hydraulics_fluid_velocity_ * 0.5f + (float)(rand() % 100) / 100.0f * 10.0f;
+        this->hydraulics_particles_.push_back({this->hydraulics_fluid_level_, p_v, true});
       }
     }
 
-    // 4. Render Fluid Mass
-    int floor_level = (int)floorf(this->hydraulics_fluid_level_);
+    int floor_level = (int)this->hydraulics_fluid_level_;
     for (int i = 0; i < floor_level; i++) {
-      if (i < seg_len)
-        it[seg_start + i] = Color::WHITE;
+      if (i < seg_len) {
+        float noise = 0.9f + 0.1f * sinf(i * 0.5f + now_ms * 0.01f);
+        uint8_t b = (uint8_t)(255 * noise);
+        it[seg_start + i] = Color(b, b, b, b);
+      }
     }
-    if (floor_level < seg_len) {
+    if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      uint8_t alpha = (uint8_t)(255 * fraction);
-      it[seg_start + floor_level] = Color(alpha, alpha, alpha, alpha);
+      uint8_t b = (uint8_t)(255 * fraction);
+      it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
-    // 5. Update and Render Particles
+    float gravity = 15.0f + (intensity_val * 30.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active)
-        continue;
-
-      p.vel -= gravity * (dt_ms / 16.6f);
-      p.pos += p.vel * (dt_ms / 16.6f);
-
-      // Merge/Collision
-      if (p.pos < this->hydraulics_fluid_level_) {
-        p.active = false;
-        continue;
-      }
-      if (p.pos >= target_l) {
-        p.pos = target_l - 0.1f;
-        p.vel *= -0.5f; // Bounce
-      }
-
+      if (!p.active) continue;
+      p.vel -= gravity * dt;
+      p.pos += p.vel * dt;
+      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
+      if (p.pos >= target_l) { p.pos = target_l - 0.1f; p.vel *= -0.4f; }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len) {
-        it[seg_start + p_idx] = Color::WHITE;
-      }
+      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
     }
-
-    // Cleanup inactive particles
-    this->hydraulics_particles_.erase(
-        std::remove_if(this->hydraulics_particles_.begin(),
-                       this->hydraulics_particles_.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        this->hydraulics_particles_.end());
-
+    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
     break;
   }
   case INTRO_MODE_MORSE: {
@@ -2653,85 +2636,65 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     if (this->hydraulics_last_ms_ == 0)
       this->hydraulics_last_ms_ = now_ms;
     uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+    if (dt_ms == 0) dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
 
+    float dt = dt_ms / 1000.0f;
     float intensity_val = this->active_outro_intensity_ / 255.0f;
 
-    // Physics Constants
     float target_l = 0.0f;
-    float viscosity = 0.01f + (intensity_val * 0.04f); // Slower drain
-    float gravity = 0.005f + (intensity_val * 0.015f);
+    float damping = 1.0f + (intensity_val * 4.0f);
+    float force_mag = 20.0f;
 
-    // 1. Update Fluid Level (Drain)
+    float force = (target_l - this->hydraulics_fluid_level_) * force_mag;
+    float accel = force - (damping * this->hydraulics_fluid_velocity_);
+
     float old_level = this->hydraulics_fluid_level_;
-    this->hydraulics_fluid_level_ +=
-        (target_l - this->hydraulics_fluid_level_) * viscosity *
-        (dt_ms / 16.6f);
+    this->hydraulics_fluid_velocity_ += accel * dt;
+    this->hydraulics_fluid_level_ += this->hydraulics_fluid_velocity_ * dt;
 
-    // 2. Trigger Clinging Drops (Outro)
-    if (this->hydraulics_fluid_level_ < old_level &&
-        this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-      if ((rand() % 100) < 15) {
+    if (this->hydraulics_fluid_level_ < 0.0f) {
+      this->hydraulics_fluid_level_ = 0.0f;
+      this->hydraulics_fluid_velocity_ = 0.0f;
+    }
+
+    if (this->hydraulics_fluid_level_ < old_level && this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
+      if ((rand() % 100) < (15 + (int)(intensity_val * 20))) {
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }
 
-    // 3. Render Fluid Mass
-    int floor_level = (int)floorf(this->hydraulics_fluid_level_);
-    for (int i = 0; i < floor_level; i++) {
-      if (i < seg_len)
-        it[seg_start + i] = Color::WHITE;
-      else
-        it[seg_start + i] = Color::BLACK;
-    }
-    // Black out the rest of the strip
-    for (int i = floor_level; i < seg_len; i++) {
-      it[seg_start + i] = Color::BLACK;
-    }
+    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
 
+    int floor_level = (int)this->hydraulics_fluid_level_;
+    for (int i = 0; i < floor_level; i++) {
+      if (i < seg_len) {
+        float noise = 0.9f + 0.1f * sinf(i * 0.5f + now_ms * 0.01f);
+        uint8_t b = (uint8_t)(255 * noise);
+        it[seg_start + i] = Color(b, b, b, b);
+      }
+    }
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = this->hydraulics_fluid_level_ - floor_level;
-      uint8_t alpha = (uint8_t)(255 * fraction);
-      it[seg_start + floor_level] = Color(alpha, alpha, alpha, alpha);
+      uint8_t b = (uint8_t)(255 * fraction);
+      it[seg_start + floor_level] = Color(b, b, b, b);
     }
 
-    // 4. Update and Render Particles
+    float gravity = 15.0f + (intensity_val * 30.0f);
     for (auto &p : this->hydraulics_particles_) {
-      if (!p.active)
-        continue;
-
-      p.vel -= gravity * (dt_ms / 16.6f); // Falling down towards index 0
-      p.pos += p.vel * (dt_ms / 16.6f);
-
-      // Merge/Collision
-      if (p.pos < 0.0f) {
-        p.active = false;
-        continue;
-      }
-      if (p.pos < this->hydraulics_fluid_level_) {
-        p.active = false; // Re-absorbed
-        continue;
-      }
-
+      if (!p.active) continue;
+      p.vel -= gravity * dt;
+      p.pos += p.vel * dt;
+      if (p.pos < 0.0f) { p.active = false; continue; }
+      if (p.pos < this->hydraulics_fluid_level_) { p.active = false; continue; }
       int p_idx = (int)p.pos;
-      if (p_idx >= 0 && p_idx < seg_len) {
-        it[seg_start + p_idx] = Color::WHITE;
-      }
+      if (p_idx >= 0 && p_idx < seg_len) it[seg_start + p_idx] = Color::WHITE;
     }
+    this->hydraulics_particles_.erase(std::remove_if(this->hydraulics_particles_.begin(), this->hydraulics_particles_.end(), [](const HydraulicsParticle &p) { return !p.active; }), this->hydraulics_particles_.end());
 
-    // Cleanup inactive particles
-    this->hydraulics_particles_.erase(
-        std::remove_if(this->hydraulics_particles_.begin(),
-                       this->hydraulics_particles_.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        this->hydraulics_particles_.end());
-
-    if (this->hydraulics_fluid_level_ <= 0.1f &&
-        this->hydraulics_particles_.empty()) {
-      for (int i = 0; i < seg_len; i++) {
-        it[seg_start + i] = Color::BLACK;
-      }
-      return true; // Done
+    if (this->hydraulics_fluid_level_ <= 0.01f && this->hydraulics_particles_.empty()) {
+      for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+      return true;
     }
     return false;
   }
