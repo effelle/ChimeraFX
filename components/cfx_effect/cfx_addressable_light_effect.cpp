@@ -1018,7 +1018,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       MonochromaticPreset preset =
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
-        trans_dur = 0.0f; // Instant finish for Monochromatic Presets
+        trans_dur = 0.5f; // v4.1 Smooth Transition
       }
 
       if (trans_dur > 0.0f) {
@@ -2306,7 +2306,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
         float liquid_noise = (wave1 + wave2) * 0.15f;
         
-        float brightness = 0.6f + liquid_noise + vel_glow;
+        float brightness = 0.7f + liquid_noise + vel_glow; // v4.1 Match White Peak
 
         // The "Froth" (Water is brighter/turbulent at the leading edge)
         float dist_to_head = this->hydraulics_fluid_level_ - i;
