@@ -1730,6 +1730,8 @@ These short animations play once when the light is turned ON or OFF.
             <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
         </video>
     *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
+??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+    *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
 
 
 ### Transition Behavior

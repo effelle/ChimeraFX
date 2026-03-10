@@ -494,7 +494,7 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_MORSE;
         else if (s == "Quadrant")
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
-        else if (s == "Pressurize")
+        else if (s == "Pressurize" || s == "Drain")
           this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
       }
     }
@@ -634,7 +634,7 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_MORSE;
           else if (opt == "Quadrant")
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
-          else if (opt == "Drain")
+          else if (opt == "Drain" || opt == "Pressurize")
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
