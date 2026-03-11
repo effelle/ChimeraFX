@@ -29,7 +29,12 @@ PALETTE_OPTIONS = [
     "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid", "Fairy", "Twilight", "Smart Random"
 ]
 
-INTRO_OPTIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse", "Morse Code", "Quadrant", "Pressurize", "Dropping", "Drain", "Emptying", "Construct", "Dismantle"]
+COMMON_TRANSITIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse", "Morse Code", "Quadrant"]
+INTRO_ONLY = ["Pressurize", "Dropping", "Construct"]
+OUTRO_ONLY = ["Drain", "Emptying", "Dismantle"]
+
+INTRO_OPTIONS = COMMON_TRANSITIONS + INTRO_ONLY
+OUTRO_OPTIONS = COMMON_TRANSITIONS + OUTRO_ONLY
 
 CONF_LIGHT = "light_id"
 CONF_EXCLUDE = "exclude"
@@ -249,7 +254,7 @@ async def to_code(config):
                 "optimistic": True,
             }
             outro = cg.new_Pvariable(conf[CONF_ID])
-            await select.register_select(outro, conf, options=INTRO_OPTIONS)
+            await select.register_select(outro, conf, options=OUTRO_OPTIONS)
             cg.add(outro.publish_state("None"))
             cg.add(var.set_outro_effect(outro))
 

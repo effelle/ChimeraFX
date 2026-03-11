@@ -82,6 +82,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 167: // Four Times the Charm
   case 168: // Aqueous Flow
   case 169: // Dropping Fill
+  case 170: // Assembly
     return true;
   default:
     return false;
@@ -541,11 +542,11 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_MORSE;
         else if (s == "Quadrant")
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
-        else if (s == "Pressurize" || s == "Drain")
+        else if (s == "Pressurize")
           this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
-        else if (s == "Dropping" || s == "Emptying")
+        else if (s == "Dropping")
           this->active_intro_mode_ = INTRO_MODE_DROPPING;
-        else if (s == "Construct" || s == "Dismantle")
+        else if (s == "Construct")
           this->active_intro_mode_ = INTRO_MODE_ASSEMBLY;
       }
     }
@@ -670,27 +671,29 @@ void CFXAddressableLightEffect::stop() {
       } else {
         // 2. Fallback to UI Selectors / YAML Presets
         if (out_eff != nullptr && out_eff->has_state()) {
-          std::string opt = out_eff->current_option();
-          if (opt == "Wipe")
+          std::string s = out_eff->current_option();
+          if (s == "Wipe")
             this->active_outro_mode_ = INTRO_MODE_WIPE;
-          else if (opt == "Center")
-            this->active_outro_mode_ = INTRO_MODE_CENTER;
-          else if (opt == "Glitter")
-            this->active_outro_mode_ = INTRO_MODE_GLITTER;
-          else if (opt == "Fade")
+          else if (s == "Fade")
             this->active_outro_mode_ = INTRO_MODE_FADE;
-          else if (opt == "Twin Pulse")
+          else if (s == "Center")
+            this->active_outro_mode_ = INTRO_MODE_CENTER;
+          else if (s == "Glitter")
+            this->active_outro_mode_ = INTRO_MODE_GLITTER;
+          else if (s == "Twin Pulse")
             this->active_outro_mode_ = INTRO_MODE_TWIN_PULSE;
-          else if (opt == "Morse Code")
+          else if (s == "Morse Code")
             this->active_outro_mode_ = INTRO_MODE_MORSE;
-          else if (opt == "Quadrant")
+          else if (s == "Quadrant")
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
-          else if (opt == "Drain" || opt == "Pressurize")
+          else if (s == "Drain")
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
-          else if (opt == "Dropping" || opt == "Emptying")
+          else if (s == "Emptying")
             this->active_outro_mode_ = INTRO_MODE_DROPPING;
-          else if (opt == "Construct" || opt == "Dismantle")
+          else if (s == "Dismantle")
             this->active_outro_mode_ = INTRO_MODE_ASSEMBLY;
+          else
+            this->active_outro_mode_ = INTRO_MODE_NONE;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {
@@ -1382,6 +1385,9 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
 
   case 52:     // Running Dual
     return 13; // Defaults to Sakura
+
+  case 170:    // Assembly
+    return 255; // Defaults to Solid
 
   default:
     return 1; // General fallback to Aurora
@@ -2606,7 +2612,16 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
   case INTRO_MODE_ASSEMBLY: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
-    uint32_t duration = this->active_intro_duration_ms_;
+    uint32_t duration = 1000;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+
+    if (dur_num != nullptr && dur_num->has_state()) {
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    } else if (this->intro_duration_preset_.has_value()) {
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    }
     if (duration == 0) duration = 1;
 
     // ── 2. Knuth multiplicative hash for deterministic block sizes ────────────
@@ -2627,8 +2642,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
 
     // ── 4. Progress → which block is falling ──────────────────────────────────
-    float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    float prog = progress; // Use outer progress calculation
 
     int num_blocks = blocks.size();
     float block_prog = prog * (float)num_blocks;
@@ -2644,13 +2658,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 6. Draw stacked base ──────────────────────────────────────────────────
     for (int i = 0; i < fill_px; i++)
-      it[seg_start + i] = target_color;
+      it[seg_start + i] = c; // Use local variable 'c' (force_white already applied)
 
     // ── 7. Draw currently falling block (quadratic ease-in) ───────────────────
     if (landed < num_blocks) {
       BlockInfo b = blocks[landed];
-      int fall_start = seg_len - 1;
-      int fall_end = b.start;
+      int fall_start = seg_len - 1; // Top
+      int fall_end = b.start;      // Target
       int span = fall_start - fall_end;
 
       int drop_px = fall_start - (int)(fall_frac * fall_frac * (float)(span + 1));
@@ -2659,7 +2673,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       for (int i = 0; i < b.size; i++) {
         int px = drop_px - i;
         if (px >= b.start && px < seg_len)
-          it[seg_start + px] = target_color;
+          it[seg_start + px] = c; // Use local color 'c'
       }
     }
     break;
@@ -3166,67 +3180,73 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     float fall_duration_ms = 500.0f / speed_scale;
     float block_interval_ms = 120.0f / speed_scale;
 
-    // Deterministic block distribution (must match intro for continuity)
+    // Deterministic block distribution (matches intro)
     int current_fill = 0;
-    int block_count = 0;
     struct BlockInfo { int size; int target_pos; uint32_t start_offset; };
     std::vector<BlockInfo> blocks;
-    uint16_t seed = (uint16_t)seg_len ^ 0x55AA;
     
+    auto block_sz = [](int idx) -> int {
+      uint32_t h = (uint32_t)idx * 2654435761u;
+      return (int)(h >> 30) + 1; // 1 to 4 pixels
+    };
+
     while (current_fill < seg_len) {
-      seed = (seed * 32719 + 3) % 32749;
-      int b_size = 2 + (seed % 5);
+      int b_size = block_sz(blocks.size());
       if (current_fill + b_size > seg_len) b_size = seg_len - current_fill;
-      // Dismantle order: top-down (highest target_pos peels first)
       blocks.push_back({b_size, current_fill, 0});
       current_fill += b_size;
     }
     
-    // Assign start offsets in reverse (top-down)
+    // Assign start offsets in reverse (top blocks peel first)
     for (int i = blocks.size() - 1, count = 0; i >= 0; i--, count++) {
       blocks[i].start_offset = (uint32_t)(count * block_interval_ms);
     }
 
     // Render loop
-    // it already contains the effect background from the preamble of run_outro_frame
     for (const auto& b : blocks) {
       if (elapsed < b.start_offset) continue;
       
       uint32_t b_elapsed = elapsed - b.start_offset;
       float b_prog = (float)b_elapsed / fall_duration_ms;
-      if (b_prog > 1.0f) {
-        // Block is gone, clear its original area
-        for (int i = 0; i < b.size; i++) {
-          int px = b.target_pos + i;
-          if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
-        }
-        continue;
-      }
-
-      // Gravity: quadratic ease-in
-      float fall_prog = b_prog * b_prog; 
-      // Falling AWAY to the bottom (0)
-      int current_pos = b.target_pos - (int)(fall_prog * (float)(b.target_pos + b.size));
-
+      
       // 1. Clear original position
       for (int i = 0; i < b.size; i++) {
         int px = b.target_pos + i;
         if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
       }
 
+      if (b_prog >= 1.0f) continue; // Block is gone
+
+      // Gravity: quadratic ease-in
+      float fall_prog = b_prog * b_prog; 
+      
+      // Falling towards the TOP (seg_len-1)
+      int fall_start = b.target_pos;
+      int fall_end = seg_len - 1;
+      int span = fall_end - fall_start;
+      int current_pos = fall_start + (int)(fall_prog * (float)(span + 1));
+
       // 2. Draw falling block
       for (int i = 0; i < b.size; i++) {
         int px = current_pos + i;
-        if (px >= 0 && px < seg_len) {
-          // Sample from the background frame rendered earlier in run_outro_frame
-          // Actually, runner->_segment already has the colors.
+        if (px >= 0 && px < seg_len && px >= fall_start) {
           uint32_t c_raw = runner->_segment.getPixelColor(b.target_pos + i);
-          Color base = Color((c_raw >> 16) & 0xFF, (c_raw >> 8) & 0xFF, c_raw & 0xFF, (c_raw >> 24) & 0xFF);
+          uint8_t r = (uint8_t)((c_raw >> 16) & 0xFF);
+          uint8_t g = (uint8_t)((c_raw >> 8) & 0xFF);
+          uint8_t b_val = (uint8_t)(c_raw & 0xFF);
+          uint8_t w = (uint8_t)((c_raw >> 24) & 0xFF);
+
+          // Apply force_white if active
+          if (this->active_outro_force_white_) {
+            cfx::apply_force_white(r, g, b_val, w);
+          }
+          
+          Color base = Color(r, g, b_val, w);
           
           // Dim as it falls
-          float dim = 1.0f - (b_prog * 0.5f);
-          it[seg_start + px] = Color((uint8_t)(base.r * dim), (uint8_t)(base.g * dim), 
-                                     (uint8_t)(base.b * dim), (uint8_t)(base.w * dim));
+          float dim_factor = 1.0f - (b_prog * 0.5f);
+          it[seg_start + px] = Color((uint8_t)(base.r * dim_factor), (uint8_t)(base.g * dim_factor), 
+                                     (uint8_t)(base.b * dim_factor), (uint8_t)(base.w * dim_factor));
         }
       }
     }
