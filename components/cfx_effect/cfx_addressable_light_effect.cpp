@@ -528,15 +528,15 @@ void CFXAddressableLightEffect::start() {
         const char *opt = intro_sel->current_option();
         std::string s = opt ? opt : "";
         if (s == "Wipe")
-          this->active_intro_mode_ = INTRO_WIPE;
+          this->active_intro_mode_ = INTRO_MODE_WIPE;
         else if (s == "Fade")
-          this->active_intro_mode_ = INTRO_FADE;
+          this->active_intro_mode_ = INTRO_MODE_FADE;
         else if (s == "Center")
-          this->active_intro_mode_ = INTRO_CENTER;
+          this->active_intro_mode_ = INTRO_MODE_CENTER;
         else if (s == "Glitter")
-          this->active_intro_mode_ = INTRO_GLITTER;
+          this->active_intro_mode_ = INTRO_MODE_GLITTER;
         else if (s == "Twin Pulse")
-          this->active_intro_mode_ = INTRO_TWIN_PULSE;
+          this->active_intro_mode_ = INTRO_MODE_TWIN_PULSE;
         else if (s == "Morse Code")
           this->active_intro_mode_ = INTRO_MODE_MORSE;
         else if (s == "Quadrant")
@@ -656,7 +656,7 @@ void CFXAddressableLightEffect::stop() {
     if (out != nullptr) {
 
       // Resolve Outro Mode synchronously before dropping controller mapping
-      this->active_outro_mode_ = INTRO_NONE;
+      this->active_outro_mode_ = INTRO_MODE_NONE;
       select::Select *out_eff = this->outro_effect_;
       if (out_eff == nullptr && c != nullptr)
         out_eff = c->get_outro_effect();
@@ -672,15 +672,15 @@ void CFXAddressableLightEffect::stop() {
         if (out_eff != nullptr && out_eff->has_state()) {
           std::string opt = out_eff->current_option();
           if (opt == "Wipe")
-            this->active_outro_mode_ = INTRO_WIPE;
+            this->active_outro_mode_ = INTRO_MODE_WIPE;
           else if (opt == "Center")
-            this->active_outro_mode_ = INTRO_CENTER;
+            this->active_outro_mode_ = INTRO_MODE_CENTER;
           else if (opt == "Glitter")
-            this->active_outro_mode_ = INTRO_GLITTER;
+            this->active_outro_mode_ = INTRO_MODE_GLITTER;
           else if (opt == "Fade")
-            this->active_outro_mode_ = INTRO_FADE;
+            this->active_outro_mode_ = INTRO_MODE_FADE;
           else if (opt == "Twin Pulse")
-            this->active_outro_mode_ = INTRO_TWIN_PULSE;
+            this->active_outro_mode_ = INTRO_MODE_TWIN_PULSE;
           else if (opt == "Morse Code")
             this->active_outro_mode_ = INTRO_MODE_MORSE;
           else if (opt == "Quadrant")
@@ -2601,7 +2601,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
             it[seg_start + surf - 1] = boost(target_color, splash_b / 3);
         }
       }
-    }
     }
     break;
   }
