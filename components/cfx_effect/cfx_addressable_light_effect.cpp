@@ -2546,9 +2546,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     for (int i = 0; i < fill_level; i++) {
       Color base = target_color;
 
-      // Depth: bottom quarter dims to ~60% brightness
-      if (i < seg_len / 4)
-        base = dim(base, 153); // 153/255 ≈ 60%
 
       // Surface shimmer on top 2 pixels
       int dist_from_surface = (fill_level - 1) - i;
@@ -2928,8 +2925,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     for (int i = 0; i < fill_level; i++) {
       Color base = it[seg_start + i].get();
-      if (i < seg_len / 4)
-        base = dim(base, 153);
       int dist_from_surface = (fill_level - 1) - i;
       if (dist_from_surface == 0)
         base = boost(base, shimmer);
