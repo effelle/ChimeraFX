@@ -76,12 +76,20 @@
     effect_id: 162
 
 - addressable_cfx:
+    name: "Crystallize"
+    effect_id: 174
+
+- addressable_cfx:
     name: "Dissolve"
     effect_id: 18
 
 - addressable_cfx:
     name: "Drip"
     effect_id: 96
+
+- addressable_cfx:
+    name: "Deep Breathe"
+    effect_id: 175
 
 - addressable_cfx:
     name: "Dropping Fill"
@@ -138,6 +146,10 @@
 - addressable_cfx:
     name: "Hydro-Pulse"
     effect_id: 168
+
+- addressable_cfx:
+    name: "Inertia Sweep"
+    effect_id: 171
 
 - addressable_cfx:
     name: "Juggle"
@@ -212,6 +224,10 @@
     effect_id: 60
 
 - addressable_cfx:
+    name: "Sonar Reveal"
+    effect_id: 172
+
+- addressable_cfx:
     name: "Sparkle"
     effect_id: 20
 
@@ -250,6 +266,10 @@
 - addressable_cfx:
     name: "Transmission"
     effect_id: 166
+
+- addressable_cfx:
+    name: "Venetian"
+    effect_id: 173
 
 - addressable_cfx:
     name: "Twin Flames"

@@ -96,6 +96,11 @@ CFX_EFFECT_NAMES = {
     100: "Heartbeat", 101: "Ocean", 102: "Candle Multi", 103: "Solid Glitter", 104: "Sunrise", 105: "Phased", 106: "Twinkleup", 107: "Noise Pal", 108: "Sine", 109: "Phased Noise",
     110: "Flow", 111: "Chunchun", 112: "Dancing Shadows", 113: "Washing Machine",
     161: "Horizon Sweep",
+    171: "Inertia Sweep",
+    172: "Sonar Reveal",
+    173: "Venetian",
+    174: "Crystallize",
+    175: "Deep Breathe",
     255: "Ambient Roulette"
 }
 

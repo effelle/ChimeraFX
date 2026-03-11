@@ -67,6 +67,16 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_DROPPING, INTRO_MODE_DROPPING};
   case 170: // Assembly
     return {true, INTRO_MODE_ASSEMBLY, INTRO_MODE_ASSEMBLY};
+  case 171: // Inertia Sweep
+    return {true, INTRO_MODE_INERTIA_SWEEP, INTRO_MODE_INERTIA_SWEEP};
+  case 172: // Sonar Reveal
+    return {true, INTRO_MODE_SONAR_REVEAL, INTRO_MODE_SONAR_REVEAL};
+  case 173: // Venetian
+    return {true, INTRO_MODE_VENETIAN, INTRO_MODE_VENETIAN};
+  case 174: // Crystallize
+    return {true, INTRO_MODE_CRYSTALLIZE, INTRO_MODE_CRYSTALLIZE};
+  case 175: // Deep Breathe
+    return {true, INTRO_MODE_DEEP_BREATHE, INTRO_MODE_DEEP_BREATHE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -83,6 +93,11 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 168: // Aqueous Flow
   case 169: // Dropping Fill
   case 170: // Assembly
+  case 171: // Inertia Sweep
+  case 172: // Sonar Reveal
+  case 173: // Venetian
+  case 174: // Crystallize
+  case 175: // Deep Breathe
     return true;
   default:
     return false;
@@ -550,6 +565,16 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_DROPPING;
         else if (s == "Construct")
           this->active_intro_mode_ = INTRO_MODE_ASSEMBLY;
+        else if (s == "Inertia Sweep")
+          this->active_intro_mode_ = INTRO_MODE_INERTIA_SWEEP;
+        else if (s == "Sonar Reveal")
+          this->active_intro_mode_ = INTRO_MODE_SONAR_REVEAL;
+        else if (s == "Venetian")
+          this->active_intro_mode_ = INTRO_MODE_VENETIAN;
+        else if (s == "Crystallize")
+          this->active_intro_mode_ = INTRO_MODE_CRYSTALLIZE;
+        else if (s == "Deep Breathe")
+          this->active_intro_mode_ = INTRO_MODE_DEEP_BREATHE;
       }
     }
 
@@ -694,6 +719,16 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_DROPPING;
           else if (s == "Dismantle")
             this->active_outro_mode_ = INTRO_MODE_ASSEMBLY;
+          else if (s == "Decelerate")
+            this->active_outro_mode_ = INTRO_MODE_INERTIA_SWEEP;
+          else if (s == "Sonar Fade")
+            this->active_outro_mode_ = INTRO_MODE_SONAR_REVEAL;
+          else if (s == "Close Blinds")
+            this->active_outro_mode_ = INTRO_MODE_VENETIAN;
+          else if (s == "Erode")
+            this->active_outro_mode_ = INTRO_MODE_CRYSTALLIZE;
+          else if (s == "Exhale")
+            this->active_outro_mode_ = INTRO_MODE_DEEP_BREATHE;
           else
             this->active_outro_mode_ = INTRO_MODE_NONE;
         } else if (this->outro_preset_.has_value()) {
@@ -1389,6 +1424,11 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 13; // Defaults to Sakura
 
   case 170:    // Assembly
+  case 171:    // Inertia Sweep
+  case 172:    // Sonar Reveal
+  case 173:    // Venetian
+  case 174:    // Crystallize
+  case 175:    // Deep Breathe
     return 255; // Defaults to Solid
 
   default:
@@ -1489,7 +1529,12 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 168:
     return 128; // Aqueous Flow (Default Speed)
   case 169:
-    return 1; // Dropping Fill (Monochromatic / Speed slider controls duration)
+  case 171:
+  case 172:
+  case 173:
+  case 174:
+  case 175:
+    return 1; // Monochromatic effects (Speed slider controls duration)
   case 164:
     return 100; // Collider (Default Speed)
   default:
@@ -1525,7 +1570,12 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 168:
     return 128; // Aqueous Flow (Default Viscosity)
   case 169:
-    return 1; // Dropping Fill (Monochromatic / No blur)
+  case 171:
+  case 172:
+  case 173:
+  case 174:
+  case 175:
+    return 1; // Monochromatic effects (No blur)
   case 164:
     return 170; // Collider (Default Intensity)
   default:
@@ -2691,6 +2741,285 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     break;
   }
+
+  // ── Shared monochromatic lambdas (defined per scope to match existing pattern) ──
+
+  case INTRO_MODE_INERTIA_SWEEP: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1000;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+    auto ease_in_out = [](float p) -> float {
+      float cv = 1.0f - 2.0f * p;
+      float abs_c = cv < 0.0f ? -cv : cv;
+      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
+                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
+      return 0.5f - 0.5f * cos_approx;
+    };
+
+    // ── 3. Eased fill position ────────────────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    float eased   = ease_in_out(prog);
+    int   fill_px = (int)(eased * (float)seg_len);
+    if (fill_px > seg_len) fill_px = seg_len;
+
+    // ── 4. Leading-edge glow: 3-pixel brightness ramp at the cursor ───────────
+    static const uint8_t LEAD_BRIGHT[3] = { 255, 160, 60 };
+
+    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+
+    // ── 6. Draw filled body ───────────────────────────────────────────────────
+    for (int i = 0; i < fill_px; i++)
+        it[seg_start + i] = c;
+
+    // ── 7. Draw hot leading edge ──────────────────────────────────────────────
+    for (int g = 0; g < 3; g++) {
+        int px = fill_px - 1 - g;
+        if (px >= 0 && px < seg_len)
+            it[seg_start + px] = boost(c, LEAD_BRIGHT[g] >> 1);
+    }
+    if (fill_px < seg_len) {
+        uint8_t ahead_b = (uint8_t)(128.0f * (1.0f - prog));
+        it[seg_start + fill_px] = dim(c, ahead_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_SONAR_REVEAL: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 2000;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // ── 3. Layout: 4 passes, each raising the floor ───────────────────────────
+    const int   NUM_PASSES   = 4;
+    static const uint8_t FLOOR_S[NUM_PASSES + 1] = { 0, 64, 140, 210, 255 };
+
+    float prog       = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    float pass_prog  = prog * (float)NUM_PASSES;
+    int   pass_done  = (int)pass_prog;
+    if (pass_done > NUM_PASSES) pass_done = NUM_PASSES;
+    float within     = pass_prog - (float)pass_done;
+
+    uint8_t floor_b  = FLOOR_S[pass_done < NUM_PASSES ? pass_done : NUM_PASSES];
+
+    float scan_t     = (pass_done % 2 == 0) ? within : (1.0f - within);
+    int   scan_px    = (int)(scan_t * (float)(seg_len - 1));
+
+    int   scan_w     = seg_len / 20;
+    if (scan_w < 3) scan_w = 3;
+
+    // ── 4. Draw floor + scanner ───────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++) {
+        int dist = i - scan_px;
+        if (dist < 0) dist = -dist;
+
+        if (dist < scan_w) {
+            uint8_t beam_b = (uint8_t)(255 - (dist * 255 / scan_w));
+            uint8_t final_b = beam_b > floor_b ? beam_b : floor_b;
+            it[seg_start + i] = dim(c, final_b);
+        } else {
+            it[seg_start + i] = dim(c, floor_b);
+        }
+    }
+    break;
+  }
+
+  case INTRO_MODE_VENETIAN: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1200;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto ease_in_out = [](float p) -> float {
+      float cv = 1.0f - 2.0f * p;
+      float abs_c = cv < 0.0f ? -cv : cv;
+      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
+                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
+      return 0.5f - 0.5f * cos_approx;
+    };
+
+    // ── 3. Two-phase split: 0→0.5 = evens snap on, 0.5→1.0 = odds fade in ───
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    uint8_t even_b, odd_b;
+    if (prog <= 0.5f) {
+        float p1   = prog * 2.0f;
+        float e1   = ease_in_out(p1);
+        even_b     = (uint8_t)(e1 * 255.0f);
+        odd_b      = 0;
+    } else {
+        float p2   = (prog - 0.5f) * 2.0f;
+        float e2   = ease_in_out(p2);
+        even_b     = 255;
+        odd_b      = (uint8_t)(e2 * 255.0f);
+    }
+
+    // ── 4. Draw ───────────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++) {
+        uint8_t b = (i % 2 == 0) ? even_b : odd_b;
+        it[seg_start + i] = dim(c, b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_CRYSTALLIZE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1500;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // ── 3. Seed points: 4 nodes, spread via Knuth hash ────────────────────────
+    const int NUM_SEEDS = 4;
+    int seeds[NUM_SEEDS];
+    for (int s = 0; s < NUM_SEEDS; s++) {
+        uint32_t h  = (uint32_t)(s * 1234567u + 0xDEADBEEFu) * 2654435761u;
+        seeds[s]    = (int)((h >> 16) % (uint32_t)seg_len);
+    }
+
+    // ── 4. Ease-out cubic radius ──────────────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    float inv     = 1.0f - prog;
+    float eased   = 1.0f - (inv * inv * inv);
+    float radius  = eased * (float)seg_len;
+
+    const int EDGE_PX = 3;
+
+    // ── 5. Draw each pixel based on distance to nearest seed ──────────────────
+    for (int i = 0; i < seg_len; i++) {
+        int min_dist = seg_len;
+        for (int s = 0; s < NUM_SEEDS; s++) {
+            int d = i - seeds[s];
+            if (d < 0) d = -d;
+            if (d < min_dist) min_dist = d;
+        }
+
+        float dist_f = (float)min_dist;
+        uint8_t b;
+        if (dist_f <= radius - EDGE_PX) {
+            b = 255;
+        } else if (dist_f <= radius) {
+            float t = (radius - dist_f) / (float)EDGE_PX;
+            b = (uint8_t)(t * 255.0f);
+        } else {
+            b = 0;
+        }
+        it[seg_start + i] = dim(c, b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_DEEP_BREATHE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1800;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // ── 3. Gamma-corrected brightness — cubic ease-in, warm-up feel ───────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    float eased   = prog * prog * prog;
+    uint8_t raw_b = (uint8_t)(eased * 255.0f);
+    uint8_t b     = (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
+
+    // ── 4. Triangular shimmer over strip length ───────────────────────────────
+    for (int i = 0; i < seg_len; i++) {
+        int half    = seg_len / 2;
+        int dist    = i < half ? i : seg_len - 1 - i;
+        int shimmer = (dist * 24 / (half > 0 ? half : 1)) - 12;
+        int final_b = (int)b + shimmer;
+        if (final_b < 0)   final_b = 0;
+        if (final_b > 255) final_b = 255;
+        it[seg_start + i] = dim(c, (uint8_t)final_b);
+    }
+    break;
+  }
+
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -2699,6 +3028,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 }
+
 
 bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                                                 CFXRunner *runner) {
@@ -3288,7 +3618,187 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
     break;
   }
+  case INTRO_MODE_INERTIA_SWEEP: {
+    // Outro: Decelerate — fill drains from right with eased sweep
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto ease_in_out = [](float p) -> float {
+      float cv = 1.0f - 2.0f * p;
+      float abs_c = cv < 0.0f ? -cv : cv;
+      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
+                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
+      return 0.5f - 0.5f * cos_approx;
+    };
+
+    float eased    = ease_in_out(progress);
+    int   keep_px  = seg_len - (int)(eased * (float)seg_len);
+    if (keep_px < 0) keep_px = 0;
+
+    for (int i = 0; i < seg_len; i++) {
+      if (i >= keep_px) {
+        it[seg_start + i] = Color::BLACK;
+      } else {
+        // Dim the kept body slightly by remaining fraction
+        uint8_t fade_b = (uint8_t)(255.0f * (1.0f - progress * 0.4f));
+        Color orig     = it[seg_start + i].get();
+        it[seg_start + i] = dim(orig, fade_b);
+      }
+    }
+    break;
+  }
+  case INTRO_MODE_SONAR_REVEAL: {
+    // Outro: Sonar Fade — scanner sweeps while floor dims to black
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    const int NUM_SWEEPS = 3;
+    float     sweep_dur  = (float)duration_ms / (float)NUM_SWEEPS;
+
+    int   sweep_idx  = (int)((float)elapsed / sweep_dur);
+    if (sweep_idx >= NUM_SWEEPS) sweep_idx = NUM_SWEEPS - 1;
+    float within     = ((float)elapsed - (float)sweep_idx * sweep_dur) / sweep_dur;
+
+    float floor_fade = 1.0f - progress;
+    uint8_t floor_b  = (uint8_t)(floor_fade * 255.0f);
+
+    float scan_t = (sweep_idx % 2 == 0) ? within : (1.0f - within);
+    int   scan_px = (int)(scan_t * (float)(seg_len - 1));
+
+    int scan_w = seg_len / 20;
+    if (scan_w < 3) scan_w = 3;
+
+    for (int i = 0; i < seg_len; i++) {
+      int dist = i - scan_px;
+      if (dist < 0) dist = -dist;
+
+      Color orig     = it[seg_start + i].get();
+      uint8_t beam_b = 0;
+      if (dist < scan_w)
+        beam_b = (uint8_t)(255 - (dist * 255 / scan_w));
+
+      uint8_t final_b = beam_b > floor_b ? beam_b : floor_b;
+      it[seg_start + i] = dim(orig, final_b);
+    }
+    break;
+  }
+  case INTRO_MODE_VENETIAN: {
+    // Outro: Close Blinds — evens fade first, then odds
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto ease_in_out = [](float p) -> float {
+      float cv = 1.0f - 2.0f * p;
+      float abs_c = cv < 0.0f ? -cv : cv;
+      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
+                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
+      return 0.5f - 0.5f * cos_approx;
+    };
+
+    uint8_t even_b, odd_b;
+    if (progress <= 0.5f) {
+      float p1  = progress * 2.0f;
+      float e1  = ease_in_out(p1);
+      even_b    = (uint8_t)((1.0f - e1) * 255.0f);
+      odd_b     = 255;
+    } else {
+      float p2  = (progress - 0.5f) * 2.0f;
+      float e2  = ease_in_out(p2);
+      even_b    = 0;
+      odd_b     = (uint8_t)((1.0f - e2) * 255.0f);
+    }
+
+    for (int i = 0; i < seg_len; i++) {
+      uint8_t b  = (i % 2 == 0) ? even_b : odd_b;
+      Color orig = it[seg_start + i].get();
+      it[seg_start + i] = dim(orig, b);
+    }
+    break;
+  }
+  case INTRO_MODE_CRYSTALLIZE: {
+    // Outro: Erode — crystal radius contracts from seeds inward
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    const int NUM_SEEDS = 4;
+    int seeds[NUM_SEEDS];
+    for (int s = 0; s < NUM_SEEDS; s++) {
+      uint32_t h = (uint32_t)(s * 1234567u + 0xDEADBEEFu) * 2654435761u;
+      seeds[s]   = (int)((h >> 16) % (uint32_t)seg_len);
+    }
+
+    // Contract: radius shrinks from seg_len to 0
+    float inv    = 1.0f - progress;
+    float eased  = inv * inv * inv;
+    float radius = eased * (float)seg_len;
+
+    const int EDGE_PX = 3;
+
+    for (int i = 0; i < seg_len; i++) {
+      int min_dist = seg_len;
+      for (int s = 0; s < NUM_SEEDS; s++) {
+        int d = i - seeds[s];
+        if (d < 0) d = -d;
+        if (d < min_dist) min_dist = d;
+      }
+
+      float dist_f = (float)min_dist;
+      uint8_t b;
+      if (dist_f <= radius - EDGE_PX) {
+        b = 255;
+      } else if (dist_f <= radius) {
+        float t = (radius - dist_f) / (float)EDGE_PX;
+        b = (uint8_t)(t * 255.0f);
+      } else {
+        b = 0;
+      }
+      Color orig         = it[seg_start + i].get();
+      it[seg_start + i]  = dim(orig, b);
+    }
+    break;
+  }
+  case INTRO_MODE_DEEP_BREATHE: {
+    // Outro: Exhale — gamma-corrected uniform fade to black
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    float inv     = 1.0f - progress;
+    float eased   = inv * inv * inv;
+    uint8_t raw_b = (uint8_t)(eased * 255.0f);
+    uint8_t b     = (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
+
+    for (int i = 0; i < seg_len; i++) {
+      int half    = seg_len / 2;
+      int dist    = i < half ? i : seg_len - 1 - i;
+      int shimmer = (dist * 24 / (half > 0 ? half : 1)) - 12;
+      int final_b = (int)b + shimmer;
+      if (final_b < 0)   final_b = 0;
+      if (final_b > 255) final_b = 255;
+      Color orig         = it[seg_start + i].get();
+      it[seg_start + i]  = dim(orig, (uint8_t)final_b);
+    }
+    break;
+  }
   case INTRO_MODE_MORSE: {
+
     uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
     uint32_t elapsed_morse = millis() - this->outro_start_time_;
     uint32_t current_bit = elapsed_morse / unit_ms;

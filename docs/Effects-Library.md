@@ -362,7 +362,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | :--- | :--: | :--- |
         | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
         | **Speed** | `128` | **Gravity**: controls the velocity of falling and peeling blocks. |
-        | **Palette** | — | **Supported**: Affects the color of the stacked blocks. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
 
     === "💻 Config"
@@ -567,7 +567,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | :--- | :--: | :--- |
         | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
         | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
-        | **Palette** | — | **Supported**: Defaults to **Ocean** (11). |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
 
     === "💻 Config"
@@ -579,7 +579,119 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 169
         ```
 
-??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
+
+??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Crystallize"
+              effect_id: 174
+        ```
+
+??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Deep Breathe"
+              effect_id: 175
+        ```
+
+??? abstract "171 | Inertia Sweep | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *A precisely-eased fill that sweeps from dark to full brightness in a single pass, with a hot leading edge that pulses three pixels of decreasing intensity ahead of the cursor.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Inertia Sweep"
+              effect_id: 171
+        ```
+
+??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *A radar-like scanning beam sweeps back and forth four times, each pass permanently lifting the brightness floor — like sonar gradually resolving a picture from nothing to full presence.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Sonar Reveal"
+              effect_id: 172
+        ```
+
+??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Venetian"
+              effect_id: 173
+        ```
+
+??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
+
 
     === "🎬 Preview"
         *Keeps your space dynamic but grounded. Randomly cycles through the premium monochromatic animation library, ensuring your lighting feels alive without being overwhelming.*
@@ -589,7 +701,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | :--- | :--: | :--- |
         | **Intensity** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
         | **Speed** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
-        | **Palette** | — | **Supported**: The selected sub-effect will respect the active palette. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         
     === "💻 Config"
         **YAML Setup / Custom Preset:**

@@ -195,6 +195,11 @@ struct ColliderNode {
 #define FX_MODE_FOUR_TIMES_THE_CHARM 167
 #define FX_MODE_HYDRO_PULSE 168
 #define FX_MODE_DROPPING_FILL 169
+#define FX_MODE_INERTIA_SWEEP 171
+#define FX_MODE_SONAR_REVEAL 172
+#define FX_MODE_VENETIAN 173
+#define FX_MODE_CRYSTALLIZE 174
+#define FX_MODE_DEEP_BREATHE 175
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -207,9 +212,14 @@ struct ColliderNode {
 #define INTRO_HYDRAULICS 8
 #define INTRO_DROPPING 9
 #define INTRO_DRAINING 10
+#define INTRO_INERTIA_SWEEP 11
+#define INTRO_SONAR_REVEAL 12
+#define INTRO_VENETIAN 13
+#define INTRO_CRYSTALLIZE 14
+#define INTRO_DEEP_BREATHE 15
 
-// CFX-008: was 120 — updated to cover all mode IDs up to FX_MODE_FOUR_TIMES_THE_CHARM (167)
-#define MODE_COUNT 170
+// CFX-008: Cover full 0–255 ID range (Ambient Roulette = 255)
+#define MODE_COUNT 256
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 

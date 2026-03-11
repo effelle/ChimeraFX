@@ -30,8 +30,8 @@ PALETTE_OPTIONS = [
 ]
 
 COMMON_TRANSITIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse", "Morse Code", "Quadrant"]
-INTRO_ONLY = ["Pressurize", "Dropping", "Construct"]
-OUTRO_ONLY = ["Drain", "Emptying", "Dismantle"]
+INTRO_ONLY = ["Pressurize", "Dropping", "Construct", "Inertia Sweep", "Sonar Reveal", "Venetian", "Crystallize", "Deep Breathe"]
+OUTRO_ONLY = ["Drain", "Emptying", "Dismantle", "Decelerate", "Sonar Fade", "Close Blinds", "Erode", "Exhale"]
 
 INTRO_OPTIONS = COMMON_TRANSITIONS + INTRO_ONLY
 OUTRO_OPTIONS = COMMON_TRANSITIONS + OUTRO_ONLY
