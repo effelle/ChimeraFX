@@ -352,7 +352,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
-        *A kinetic, gravity-based transition. Blocks of light free-fall and stack to physically construct the strip (**Construct**), and systematically peel away to collapse into darkness (**Dismantle**) when turning off.*
+        *A kinetic, gravity-based transition. Blocks of varying sizes free-fall and stack to physically construct the strip, and systematically peel away to collapse into darkness when turning off.*
 
     === "⚙️ Controls"
         | Parameter | Autotune | Function Description |
@@ -1788,6 +1788,9 @@ These short animations play once when the light is turned ON or OFF.
 
 ??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
+
+??? abstract "10 | Construct / Dismantle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette: | :material-bullseye-arrow:</span>"
+    *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
 
 

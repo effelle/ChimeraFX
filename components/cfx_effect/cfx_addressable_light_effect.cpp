@@ -545,6 +545,8 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
         else if (s == "Dropping" || s == "Emptying")
           this->active_intro_mode_ = INTRO_MODE_DROPPING;
+        else if (s == "Construct" || s == "Dismantle")
+          this->active_intro_mode_ = INTRO_MODE_ASSEMBLY;
       }
     }
 
@@ -687,6 +689,8 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
           else if (opt == "Dropping" || opt == "Emptying")
             this->active_outro_mode_ = INTRO_MODE_DROPPING;
+          else if (opt == "Construct" || opt == "Dismantle")
+            this->active_outro_mode_ = INTRO_MODE_ASSEMBLY;
         } else if (this->outro_preset_.has_value()) {
           this->active_outro_mode_ = *this->outro_preset_;
         } else {
@@ -749,6 +753,18 @@ void CFXAddressableLightEffect::stop() {
       } else {
         this->active_outro_intensity_ =
             this->get_default_intensity_(this->effect_id_);
+      }
+
+      // Cache Speed for Outro
+      this->active_outro_speed_ = 128; // fallback
+      number::Number *speed_num = this->speed_;
+      if (speed_num == nullptr && c != nullptr)
+        speed_num = c->get_speed();
+
+      if (speed_num != nullptr && speed_num->has_state()) {
+        this->active_outro_speed_ = (uint8_t)speed_num->state;
+      } else {
+        this->active_outro_speed_ = this->get_default_speed_(this->effect_id_);
       }
 
       this->active_outro_brightness_ = state->current_values.get_brightness();
@@ -2584,6 +2600,67 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           if (surf - 1 >= 0)
             it[seg_start + surf - 1] = boost(target_color, splash_b / 3);
         }
+      }
+    }
+    }
+    break;
+  }
+  case INTRO_MODE_ASSEMBLY: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = this->active_intro_duration_ms_;
+    if (duration == 0) duration = 1;
+
+    // ── 2. Knuth multiplicative hash for deterministic block sizes ────────────
+    auto block_sz = [](int idx) -> int {
+      uint32_t h = (uint32_t)idx * 2654435761u;
+      return (int)(h >> 30) + 1; // 1 to 4 pixels
+    };
+
+    // ── 3. Precompute block layout ────────────────────────────────────────────
+    struct BlockInfo { int start; int size; };
+    std::vector<BlockInfo> blocks;
+    int cursor = 0;
+    while (cursor < seg_len) {
+      int sz = block_sz(blocks.size());
+      if (cursor + sz > seg_len) sz = seg_len - cursor;
+      blocks.push_back({cursor, sz});
+      cursor += sz;
+    }
+
+    // ── 4. Progress → which block is falling ──────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+
+    int num_blocks = blocks.size();
+    float block_prog = prog * (float)num_blocks;
+    int landed = (int)block_prog;
+    if (landed > num_blocks) landed = num_blocks;
+    float fall_frac = block_prog - (float)landed;
+
+    int fill_px = (landed < num_blocks) ? blocks[landed].start : seg_len;
+
+    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    // ── 6. Draw stacked base ──────────────────────────────────────────────────
+    for (int i = 0; i < fill_px; i++)
+      it[seg_start + i] = target_color;
+
+    // ── 7. Draw currently falling block (quadratic ease-in) ───────────────────
+    if (landed < num_blocks) {
+      BlockInfo b = blocks[landed];
+      int fall_start = seg_len - 1;
+      int fall_end = b.start;
+      int span = fall_start - fall_end;
+
+      int drop_px = fall_start - (int)(fall_frac * fall_frac * (float)(span + 1));
+      if (drop_px < fall_end) drop_px = fall_end;
+
+      for (int i = 0; i < b.size; i++) {
+        int px = drop_px - i;
+        if (px >= b.start && px < seg_len)
+          it[seg_start + px] = target_color;
       }
     }
     break;
