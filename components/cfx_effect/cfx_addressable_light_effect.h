@@ -40,7 +40,10 @@ public:
   void stop() override;
   void apply(light::AddressableLight &it, const Color &current_color) override;
 
-  void set_effect_id(uint8_t effect_id) { this->effect_id_ = effect_id; }
+  void set_effect_id(uint8_t effect_id) {
+    this->effect_id_ = effect_id;
+    this->configured_effect_id_ = effect_id;
+  }
   void set_speed(number::Number *speed) { this->speed_ = speed; }
   void set_intensity(number::Number *intensity) {
     this->intensity_ = intensity;
@@ -144,6 +147,7 @@ public:
 
 protected:
   uint8_t effect_id_{0};
+  uint8_t configured_effect_id_{0};
   number::Number *speed_{nullptr};
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};

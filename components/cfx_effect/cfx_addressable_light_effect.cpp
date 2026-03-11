@@ -105,7 +105,8 @@ void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
   // --- Ambient Roulette (Randomizer) ---
-  if (this->effect_id_ == 255) {
+  if (this->configured_effect_id_ == 255) {
+    this->effect_id_ = 255; // Reset to roulette base
     std::vector<uint8_t> pool = this->get_monochromatic_pool_();
     if (!pool.empty()) {
       uint8_t chosen_id = 0;
