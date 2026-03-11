@@ -2677,10 +2677,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         float b_prog = b_elapsed / fall_duration;
         float fall_prog = b_prog * b_prog; // quadratic ease-in
 
-        // Direction: Fall from "End" towards "Target"
-        // If !reverse: Fall from seg_len-1 down to target_start
-        // If reverse: Fall from 0 up to target_start
-        int f_start = reverse ? 0 : seg_len - 1;
+        // Direction: Fall from "Off-screen" towards "Target"
+        // Increased distance to ensure top LEDs have visible fall
+        int offset = (seg_len / 3) + 5;
+        int f_start = reverse ? -offset : (seg_len + offset);
         int f_end = target_start;
         int span = f_end - f_start;
         int current_pos = f_start + (int)(fall_prog * (float)span);
@@ -3238,10 +3238,11 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         }
 
         // Falling direction: move from current position to "the exits"
-        // If !reverse: move from bottom to top (exit at seg_len)
-        // If reverse: move from top to bottom (exit at -size)
+        // !reverse: fall DOWN to exit (index < 0)
+        // reverse: move UP to exit (index >= seg_len)
+        int offset = (seg_len / 3) + 5;
         int f_start = target_idx;
-        int f_end = reverse ? -b.size : seg_len;
+        int f_end = reverse ? (seg_len + offset) : (-b.size - offset);
         int span = f_end - f_start;
         int current_pos = f_start + (int)(fall_prog * (float)span);
 
