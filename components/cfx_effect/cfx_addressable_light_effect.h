@@ -148,6 +148,7 @@ public:
 protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};
+  std::vector<esphome::Color> outro_color_cache_;
   number::Number *speed_{nullptr};
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};

@@ -171,6 +171,7 @@ void CFXAddressableLightEffect::start() {
 
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   this->outro_start_time_ = 0;
+  this->outro_color_cache_.clear();
   this->hydraulics_fluid_level_ = 0.0f;
   this->hydraulics_fluid_velocity_ = 0.0f;
   this->hydraulics_particles_.clear();
@@ -2678,8 +2679,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         float fall_prog = b_prog * b_prog; // quadratic ease-in
 
         // Direction: Fall from "Off-screen" towards "Target"
-        // Increased distance to ensure top LEDs have visible fall
-        int offset = (seg_len / 3) + 5;
+        // Minimal offset to ensure immediate visibility upon start
+        int offset = 5;
         int f_start = reverse ? -offset : (seg_len + offset);
         int f_end = target_start;
         int span = f_end - f_start;
@@ -3193,6 +3194,16 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     float total_duration_ms = (float)this->active_outro_duration_ms_;
     if (total_duration_ms <= 0.0f) total_duration_ms = 1000.0f;
 
+    // ── 1.5 Cache population (First frame only) ───────────────────────────────
+    if (this->outro_color_cache_.empty()) {
+      for (int i = 0; i < seg_len; i++) {
+        uint32_t c_raw = runner->_segment.getPixelColor(i);
+        this->outro_color_cache_.push_back(Color(
+            (uint8_t)((c_raw >> 16) & 0xFF), (uint8_t)((c_raw >> 8) & 0xFF),
+            (uint8_t)(c_raw & 0xFF), (uint8_t)((c_raw >> 24) & 0xFF)));
+      }
+    }
+
     // ── 2. Block Definition (Deterministic matching intro) ────────────────────
     struct BlockInfo { int target_pos; int size; };
     std::vector<BlockInfo> blocks;
@@ -3228,15 +3239,18 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       int target_idx = reverse ? (seg_len - b.size - b.target_pos) : b.target_pos;
 
       if (f_elapsed < start_time) {
-        // Still part of the light - Draw at target position
+        // Still part of the light - Draw from cache
         for (int j = 0; j < b.size; j++) {
            int px = target_idx + j;
-           if (px >= 0 && px < seg_len) {
-             uint32_t c_raw = runner->_segment.getPixelColor(target_idx + j);
-             uint8_t r = (uint8_t)((c_raw >> 16) & 0xFF);
-             uint8_t g = (uint8_t)((c_raw >> 8) & 0xFF);
-             uint8_t b_val = (uint8_t)(c_raw & 0xFF);
-             uint8_t w = (uint8_t)((c_raw >> 24) & 0xFF);
+           // Logical index in cache is target_idx + j if we didn't mirror the cache itself
+           // Wait, target_idx is ALREADY mirrored if 'reverse'
+           // We need the COLOR from the original pixel position.
+           // If reverse=false: b.target_pos + j
+           // If reverse=true: (seg_len - b.size - b.target_pos) + j
+           int cache_idx = target_idx + j; 
+           if (px >= 0 && px < seg_len && cache_idx >= 0 && (size_t)cache_idx < this->outro_color_cache_.size()) {
+             Color c_cached = this->outro_color_cache_[cache_idx];
+             uint8_t r = c_cached.r, g = c_cached.g, b_val = c_cached.b, w = c_cached.w;
              if (this->active_outro_force_white_) {
                cfx::apply_force_white(r, g, b_val, w);
              }
@@ -3251,7 +3265,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         // Falling direction: move from current position to "the exits"
         // !reverse: fall DOWN to exit (index < 0)
         // reverse: move UP to exit (index >= seg_len)
-        int offset = (seg_len / 3) + 5;
+        int offset = 10;
         int f_start = target_idx;
         int f_end = reverse ? (seg_len + offset) : (-b.size - offset);
         int span = f_end - f_start;
@@ -3261,12 +3275,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         float dim_factor = 1.0f - (b_prog * 0.7f);
         for (int j = 0; j < b.size; j++) {
           int px = current_pos + j;
-          if (px >= 0 && px < seg_len) {
-            uint32_t c_raw = runner->_segment.getPixelColor(target_idx + j);
-            uint8_t r = (uint8_t)(((c_raw >> 16) & 0xFF) * dim_factor);
-            uint8_t g = (uint8_t)(((c_raw >> 8) & 0xFF) * dim_factor);
-            uint8_t b_val = (uint8_t)((c_raw & 0xFF) * dim_factor);
-            uint8_t w = (uint8_t)(((c_raw >> 24) & 0xFF) * dim_factor);
+          int cache_idx = target_idx + j;
+          if (px >= 0 && px < seg_len && cache_idx >= 0 && (size_t)cache_idx < this->outro_color_cache_.size()) {
+            Color c_cached = this->outro_color_cache_[cache_idx];
+            uint8_t r = (uint8_t)(c_cached.r * dim_factor);
+            uint8_t g = (uint8_t)(c_cached.g * dim_factor);
+            uint8_t b_val = (uint8_t)(c_cached.b * dim_factor);
+            uint8_t w = (uint8_t)(c_cached.w * dim_factor);
 
             if (this->active_outro_force_white_) {
               cfx::apply_force_white(r, g, b_val, w);
@@ -3275,7 +3290,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
           }
         }
       }
-      // Else: Fully gone, do nothing (strip already cleared)
     }
     break;
   }
