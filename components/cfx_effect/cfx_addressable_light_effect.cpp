@@ -2625,13 +2625,16 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     if (duration == 0) duration = 1;
 
-    // ── 2. Knuth multiplicative hash for deterministic block sizes ────────────
+    // ── 2. Mirroring ──────────────────────────────────────────────────────────
+    bool reverse = (mirror_sw != nullptr && mirror_sw->state);
+
+    // ── 3. Knuth multiplicative hash for deterministic block sizes ────────────
     auto block_sz = [](int idx) -> int {
       uint32_t h = (uint32_t)idx * 2654435761u;
       return (int)(h >> 30) + 1; // 1 to 4 pixels
     };
 
-    // ── 3. Precompute block layout ────────────────────────────────────────────
+    // ── 4. Precompute block layout ────────────────────────────────────────────
     struct BlockInfo { int start; int size; };
     std::vector<BlockInfo> blocks;
     int cursor = 0;
@@ -2642,39 +2645,50 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       cursor += sz;
     }
 
-    // ── 4. Progress → which block is falling ──────────────────────────────────
-    float prog = progress; // Use outer progress calculation
-
+    // ── 5. Timing partitioning ────────────────────────────────────────────────
+    // Each block has a staggered start time. The last block lands at the end of the duration.
     int num_blocks = blocks.size();
-    float block_prog = prog * (float)num_blocks;
-    int landed = (int)block_prog;
-    if (landed > num_blocks) landed = num_blocks;
-    float fall_frac = block_prog - (float)landed;
+    float f_duration = (float)duration;
+    // Each block takes 40% of the total duration to fall.
+    // The starts are staggered over the remaining 60%.
+    float fall_duration = f_duration * 0.4f;
+    float total_stagger = f_duration * 0.6f;
+    float block_interval = (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
 
-    int fill_px = (landed < num_blocks) ? blocks[landed].start : seg_len;
+    // ── 6. Rendering ──────────────────────────────────────────────────────────
+    // Clear strip
+    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
 
-    // ── 5. Clear strip ────────────────────────────────────────────────────────
-    for (int i = 0; i < seg_len; i++)
-      it[seg_start + i] = Color::BLACK;
+    float current_time = progress * f_duration;
 
-    // ── 6. Draw stacked base ──────────────────────────────────────────────────
-    for (int i = 0; i < fill_px; i++)
-      it[seg_start + i] = c; // Use local variable 'c' (force_white already applied)
+    for (int i = 0; i < num_blocks; i++) {
+      BlockInfo b = blocks[i];
+      float start_time = (float)i * block_interval;
+      
+      // Determine physical target position based on mirror
+      int target_start = reverse ? (seg_len - b.size - b.start) : b.start;
 
-    // ── 7. Draw currently falling block (quadratic ease-in) ───────────────────
-    if (landed < num_blocks) {
-      BlockInfo b = blocks[landed];
-      int fall_start = seg_len - 1; // Top
-      int fall_end = b.start;      // Target
-      int span = fall_start - fall_end;
+      if (current_time >= start_time + fall_duration) {
+        // Landed
+        for (int j = 0; j < b.size; j++) it[seg_start + target_start + j] = c;
+      } else if (current_time > start_time) {
+        // Falling
+        float b_elapsed = current_time - start_time;
+        float b_prog = b_elapsed / fall_duration;
+        float fall_prog = b_prog * b_prog; // quadratic ease-in
 
-      int drop_px = fall_start - (int)(fall_frac * fall_frac * (float)(span + 1));
-      if (drop_px < fall_end) drop_px = fall_end;
+        // Direction: Fall from "End" towards "Target"
+        // If !reverse: Fall from seg_len-1 down to target_start
+        // If reverse: Fall from 0 up to target_start
+        int f_start = reverse ? 0 : seg_len - 1;
+        int f_end = target_start;
+        int span = f_end - f_start;
+        int current_pos = f_start + (int)(fall_prog * (float)span);
 
-      for (int i = 0; i < b.size; i++) {
-        int px = drop_px - i;
-        if (px >= b.start && px < seg_len)
-          it[seg_start + px] = c; // Use local color 'c'
+        for (int j = 0; j < b.size; j++) {
+           int px = current_pos + (reverse ? j : (j - (b.size - 1)));
+           if (px >= 0 && px < seg_len) it[seg_start + px] = c;
+        }
       }
     }
     break;
@@ -3174,80 +3188,85 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     return false;
   }
   case INTRO_MODE_ASSEMBLY: {
-    // --- 1. Physics Parameters ---
-    float speed_scale = this->active_outro_speed_ / 128.0f;
-    if (speed_scale < 0.2f) speed_scale = 0.2f;
+    // ── 1. Mirroring & Duration ───────────────────────────────────────────────
+    bool reverse = this->active_outro_mirror_;
+    float total_duration_ms = (float)this->active_outro_duration_ms_;
+    if (total_duration_ms <= 0.0f) total_duration_ms = 1000.0f;
 
-    float fall_duration_ms = 500.0f / speed_scale;
-    float block_interval_ms = 120.0f / speed_scale;
-
-    // Deterministic block distribution (matches intro)
-    int current_fill = 0;
-    struct BlockInfo { int size; int target_pos; uint32_t start_offset; };
+    // ── 2. Block Definition (Deterministic matching intro) ────────────────────
+    struct BlockInfo { int target_pos; int size; };
     std::vector<BlockInfo> blocks;
+    int current_fill = 0;
     
     auto block_sz = [](int idx) -> int {
-      uint32_t h = (uint32_t)idx * 2654435761u;
+      uint32_t h = (uint32_t)idx * 2654435761u; // Knuth hash
       return (int)(h >> 30) + 1; // 1 to 4 pixels
     };
 
     while (current_fill < seg_len) {
       int b_size = block_sz(blocks.size());
       if (current_fill + b_size > seg_len) b_size = seg_len - current_fill;
-      blocks.push_back({b_size, current_fill, 0});
+      blocks.push_back({current_fill, b_size});
       current_fill += b_size;
     }
-    
-    // Assign start offsets in reverse (top blocks peel first)
-    for (int i = blocks.size() - 1, count = 0; i >= 0; i--, count++) {
-      blocks[i].start_offset = (uint32_t)(count * block_interval_ms);
-    }
 
-    // Render loop
-    for (const auto& b : blocks) {
-      if (elapsed < b.start_offset) continue;
+    // ── 3. Timing setup ───────────────────────────────────────────────────────
+    int num_blocks = blocks.size();
+    float f_elapsed = (float)elapsed;
+    float fall_duration = total_duration_ms * 0.4f;
+    float total_stagger = total_duration_ms * 0.6f;
+    float block_interval = (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
+
+    // ── 4. Render loop ────────────────────────────────────────────────────────
+    for (int i = 0; i < num_blocks; i++) {
+      const auto& b = blocks[i]; // Peel from index 0 first (Eating from bottom if !reverse)
+      float start_time = (float)i * block_interval;
       
-      uint32_t b_elapsed = elapsed - b.start_offset;
-      float b_prog = (float)b_elapsed / fall_duration_ms;
-      
-      // 1. Clear original position
-      for (int i = 0; i < b.size; i++) {
-        int px = b.target_pos + i;
-        if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
-      }
+      int target_idx = reverse ? (seg_len - b.size - b.target_pos) : b.target_pos;
 
-      if (b_prog >= 1.0f) continue; // Block is gone
+      if (f_elapsed < start_time) {
+        // Still part of the light (do nothing, background already rendered)
+      } else if (f_elapsed < start_time + fall_duration) {
+        // Falling away
+        float b_prog = (f_elapsed - start_time) / fall_duration;
+        float fall_prog = b_prog * b_prog; 
 
-      // Gravity: quadratic ease-in
-      float fall_prog = b_prog * b_prog; 
-      
-      // Falling towards the TOP (seg_len-1)
-      int fall_start = b.target_pos;
-      int fall_end = seg_len - 1;
-      int span = fall_end - fall_start;
-      int current_pos = fall_start + (int)(fall_prog * (float)(span + 1));
+        // Clear original position
+        for (int j = 0; j < b.size; j++) {
+           int px = target_idx + j;
+           if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
+        }
 
-      // 2. Draw falling block
-      for (int i = 0; i < b.size; i++) {
-        int px = current_pos + i;
-        if (px >= 0 && px < seg_len && px >= fall_start) {
-          uint32_t c_raw = runner->_segment.getPixelColor(b.target_pos + i);
-          uint8_t r = (uint8_t)((c_raw >> 16) & 0xFF);
-          uint8_t g = (uint8_t)((c_raw >> 8) & 0xFF);
-          uint8_t b_val = (uint8_t)(c_raw & 0xFF);
-          uint8_t w = (uint8_t)((c_raw >> 24) & 0xFF);
+        // Falling direction: move from current position to "the exits"
+        // If !reverse: move from bottom to top (exit at seg_len)
+        // If reverse: move from top to bottom (exit at -size)
+        int f_start = target_idx;
+        int f_end = reverse ? -b.size : seg_len;
+        int span = f_end - f_start;
+        int current_pos = f_start + (int)(fall_prog * (float)span);
 
-          // Apply force_white if active
-          if (this->active_outro_force_white_) {
-            cfx::apply_force_white(r, g, b_val, w);
+        // Draw falling block with dimming
+        float dim_factor = 1.0f - (b_prog * 0.7f);
+        for (int j = 0; j < b.size; j++) {
+          int px = current_pos + j;
+          if (px >= 0 && px < seg_len) {
+            uint32_t c_raw = runner->_segment.getPixelColor(target_idx + j);
+            uint8_t r = (uint8_t)(((c_raw >> 16) & 0xFF) * dim_factor);
+            uint8_t g = (uint8_t)(((c_raw >> 8) & 0xFF) * dim_factor);
+            uint8_t b_val = (uint8_t)((c_raw & 0xFF) * dim_factor);
+            uint8_t w = (uint8_t)(((c_raw >> 24) & 0xFF) * dim_factor);
+
+            if (this->active_outro_force_white_) {
+              cfx::apply_force_white(r, g, b_val, w);
+            }
+            it[seg_start + px] = Color(r, g, b_val, w);
           }
-          
-          Color base = Color(r, g, b_val, w);
-          
-          // Dim as it falls
-          float dim_factor = 1.0f - (b_prog * 0.5f);
-          it[seg_start + px] = Color((uint8_t)(base.r * dim_factor), (uint8_t)(base.g * dim_factor), 
-                                     (uint8_t)(base.b * dim_factor), (uint8_t)(base.w * dim_factor));
+        }
+      } else {
+        // Fully gone - Clear original position
+        for (int j = 0; j < b.size; j++) {
+           int px = target_idx + j;
+           if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
         }
       }
     }
