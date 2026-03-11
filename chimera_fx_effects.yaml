@@ -12,6 +12,10 @@
     effect_id: 255
 
 - addressable_cfx:
+    name: "Assembly"
+    effect_id: 170
+
+- addressable_cfx:
     name: "Aurora"
     effect_id: 38
 

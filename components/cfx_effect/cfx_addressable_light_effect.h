@@ -78,7 +78,8 @@ public:
     INTRO_MODE_MORSE = 6,
     INTRO_MODE_QUADRANT = 7,
     INTRO_MODE_HYDRAULICS = 8,
-    INTRO_MODE_DROPPING = 9
+    INTRO_MODE_DROPPING = 9,
+    INTRO_MODE_ASSEMBLY = 10
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);

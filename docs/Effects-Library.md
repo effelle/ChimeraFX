@@ -349,6 +349,29 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
 
 Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling, and feature integrated "Horizon Sweep" transitions for seamless power-on/off sequences.
 
+??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *A kinetic, gravity-based transition. Blocks of light free-fall and stack to physically construct the strip (**Construct**), and systematically peel away to collapse into darkness (**Dismantle**) when turning off.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
+        | **Speed** | `128` | **Gravity**: controls the velocity of falling and peeling blocks. |
+        | **Palette** | — | **Supported**: Affects the color of the stacked blocks. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Assembly"
+              effect_id: 170
+        ```
+
+
 ??? abstract "162 | Curtain Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"

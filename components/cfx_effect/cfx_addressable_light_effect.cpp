@@ -65,6 +65,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
   case 169: // Dropping Fill
     return {true, INTRO_MODE_DROPPING, INTRO_MODE_DROPPING};
+  case 170: // Assembly
+    return {true, INTRO_MODE_ASSEMBLY, INTRO_MODE_ASSEMBLY};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -3079,6 +3081,80 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       return true;
     }
     return false;
+  }
+  case INTRO_MODE_ASSEMBLY: {
+    // --- 1. Physics Parameters ---
+    float speed_scale = this->active_outro_speed_ / 128.0f;
+    if (speed_scale < 0.2f) speed_scale = 0.2f;
+
+    float fall_duration_ms = 500.0f / speed_scale;
+    float block_interval_ms = 120.0f / speed_scale;
+
+    // Deterministic block distribution (must match intro for continuity)
+    int current_fill = 0;
+    int block_count = 0;
+    struct BlockInfo { int size; int target_pos; uint32_t start_offset; };
+    std::vector<BlockInfo> blocks;
+    uint16_t seed = (uint16_t)seg_len ^ 0x55AA;
+    
+    while (current_fill < seg_len) {
+      seed = (seed * 32719 + 3) % 32749;
+      int b_size = 2 + (seed % 5);
+      if (current_fill + b_size > seg_len) b_size = seg_len - current_fill;
+      // Dismantle order: top-down (highest target_pos peels first)
+      blocks.push_back({b_size, current_fill, 0});
+      current_fill += b_size;
+    }
+    
+    // Assign start offsets in reverse (top-down)
+    for (int i = blocks.size() - 1, count = 0; i >= 0; i--, count++) {
+      blocks[i].start_offset = (uint32_t)(count * block_interval_ms);
+    }
+
+    // Render loop
+    // it already contains the effect background from the preamble of run_outro_frame
+    for (const auto& b : blocks) {
+      if (elapsed < b.start_offset) continue;
+      
+      uint32_t b_elapsed = elapsed - b.start_offset;
+      float b_prog = (float)b_elapsed / fall_duration_ms;
+      if (b_prog > 1.0f) {
+        // Block is gone, clear its original area
+        for (int i = 0; i < b.size; i++) {
+          int px = b.target_pos + i;
+          if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
+        }
+        continue;
+      }
+
+      // Gravity: quadratic ease-in
+      float fall_prog = b_prog * b_prog; 
+      // Falling AWAY to the bottom (0)
+      int current_pos = b.target_pos - (int)(fall_prog * (float)(b.target_pos + b.size));
+
+      // 1. Clear original position
+      for (int i = 0; i < b.size; i++) {
+        int px = b.target_pos + i;
+        if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
+      }
+
+      // 2. Draw falling block
+      for (int i = 0; i < b.size; i++) {
+        int px = current_pos + i;
+        if (px >= 0 && px < seg_len) {
+          // Sample from the background frame rendered earlier in run_outro_frame
+          // Actually, runner->_segment already has the colors.
+          uint32_t c_raw = runner->_segment.getPixelColor(b.target_pos + i);
+          Color base = Color((c_raw >> 16) & 0xFF, (c_raw >> 8) & 0xFF, c_raw & 0xFF, (c_raw >> 24) & 0xFF);
+          
+          // Dim as it falls
+          float dim = 1.0f - (b_prog * 0.5f);
+          it[seg_start + px] = Color((uint8_t)(base.r * dim), (uint8_t)(base.g * dim), 
+                                     (uint8_t)(base.b * dim), (uint8_t)(base.w * dim));
+        }
+      }
+    }
+    break;
   }
   case INTRO_MODE_MORSE: {
     uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
