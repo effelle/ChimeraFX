@@ -3218,6 +3218,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     float block_interval = (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
 
     // ── 4. Render loop ────────────────────────────────────────────────────────
+    // Clear strip first
+    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+
     for (int i = 0; i < num_blocks; i++) {
       const auto& b = blocks[i]; // Peel from index 0 first (Eating from bottom if !reverse)
       float start_time = (float)i * block_interval;
@@ -3225,17 +3228,25 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       int target_idx = reverse ? (seg_len - b.size - b.target_pos) : b.target_pos;
 
       if (f_elapsed < start_time) {
-        // Still part of the light (do nothing, background already rendered)
+        // Still part of the light - Draw at target position
+        for (int j = 0; j < b.size; j++) {
+           int px = target_idx + j;
+           if (px >= 0 && px < seg_len) {
+             uint32_t c_raw = runner->_segment.getPixelColor(target_idx + j);
+             uint8_t r = (uint8_t)((c_raw >> 16) & 0xFF);
+             uint8_t g = (uint8_t)((c_raw >> 8) & 0xFF);
+             uint8_t b_val = (uint8_t)(c_raw & 0xFF);
+             uint8_t w = (uint8_t)((c_raw >> 24) & 0xFF);
+             if (this->active_outro_force_white_) {
+               cfx::apply_force_white(r, g, b_val, w);
+             }
+             it[seg_start + px] = Color(r, g, b_val, w);
+           }
+        }
       } else if (f_elapsed < start_time + fall_duration) {
         // Falling away
         float b_prog = (f_elapsed - start_time) / fall_duration;
         float fall_prog = b_prog * b_prog; 
-
-        // Clear original position
-        for (int j = 0; j < b.size; j++) {
-           int px = target_idx + j;
-           if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
-        }
 
         // Falling direction: move from current position to "the exits"
         // !reverse: fall DOWN to exit (index < 0)
@@ -3263,13 +3274,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
             it[seg_start + px] = Color(r, g, b_val, w);
           }
         }
-      } else {
-        // Fully gone - Clear original position
-        for (int j = 0; j < b.size; j++) {
-           int px = target_idx + j;
-           if (px >= 0 && px < seg_len) it[seg_start + px] = Color::BLACK;
-        }
       }
+      // Else: Fully gone, do nothing (strip already cleared)
     }
     break;
   }
