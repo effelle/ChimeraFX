@@ -520,16 +520,16 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
 // ============================================================================
 
 // Integer-only dim: factor 0 = black, 255 = full brightness
-inline Color dim(Color col, uint8_t f) {
-  return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+inline esphome::Color dim(esphome::Color col, uint8_t f) {
+  return esphome::Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                (uint8_t)(((uint16_t)col.g * f) >> 8),
                (uint8_t)(((uint16_t)col.b * f) >> 8),
                (uint8_t)(((uint16_t)col.w * f) >> 8));
 }
 
 // Additive white-flash boost
-inline Color boost(Color col, uint8_t b) {
-  return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+inline esphome::Color boost(esphome::Color col, uint8_t b) {
+  return esphome::Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
                (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
                (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
                (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
@@ -547,7 +547,7 @@ inline float ease_in_out(float p) {
 
 // Gamma-corrected dim: quadratic curve spends more time in the dark registers.
 // Non-zero input never returns black (dim8_video equivalent).
-inline Color gamma_dim(Color col, uint8_t bright) {
+inline esphome::Color gamma_dim(esphome::Color col, uint8_t bright) {
   uint8_t b = (bright == 0) ? 0 : (uint8_t)(((uint16_t)bright * bright) >> 8) + 1;
   return dim(col, b);
 }

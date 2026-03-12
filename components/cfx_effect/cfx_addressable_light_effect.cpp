@@ -3429,7 +3429,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
       // Apply intro envelope
       uint8_t final_b = (uint8_t)(((uint16_t)(uint8_t)bri * env) >> 8);
-      it[seg_start + i] = cfx::dim(c, final_b);
+      it[seg_start + i] = dim(c, final_b);
     }
     break;
   }
@@ -3515,7 +3515,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 3. Apply brightness to full strip ────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
-      it[seg_start + i] = cfx::dim(c, brightness);
+      it[seg_start + i] = dim(c, brightness);
     break;
   }
 
@@ -3567,7 +3567,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       uint8_t over_b = (uint8_t)((fill_px - seg_len) * 40);
       if (over_b > 80)
         over_b = 80;
-      it[seg_start + seg_len - 1] = cfx::boost(c, over_b);
+      it[seg_start + seg_len - 1] = boost(c, over_b);
     }
 
     // ── 6. Spring tension line: dim pixels behind fill when bouncing back ──────
@@ -3578,7 +3578,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       for (int g = 0; g < tension_px; g++) {
         int px = fill_px - 1 - g;
         if (px >= 0)
-          it[seg_start + px] = cfx::dim(c, (uint8_t)(80 - g * 18));
+          it[seg_start + px] = dim(c, (uint8_t)(80 - g * 18));
       }
     }
     break;
@@ -3666,7 +3666,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 7. Scan cursor: single bright pixel at the leading edge ───────────────
     if (sweep_px < seg_len)
-      it[seg_start + sweep_px] = cfx::boost(c, 80);
+      it[seg_start + sweep_px] = boost(c, 80);
     break;
   }
 
@@ -4748,7 +4748,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         bri = 0;
 
       uint8_t final_b = (uint8_t)(((uint16_t)(uint8_t)bri * env) >> 8);
-      it[seg_start + i] = cfx::dim(c, final_b);
+      it[seg_start + i] = dim(c, final_b);
     }
     break;
   }
@@ -4816,7 +4816,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     // ── 3. Apply brightness to full strip ────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
-      it[seg_start + i] = cfx::dim(c, brightness);
+      it[seg_start + i] = dim(c, brightness);
     break;
   }
 
@@ -4871,7 +4871,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       for (int g = 0; g < tension_px; g++) {
         int px = fill_px - 1 - g;
         if (px >= 0)
-          it[seg_start + px] = cfx::dim(c, (uint8_t)(80 - g * 18));
+          it[seg_start + px] = dim(c, (uint8_t)(80 - g * 18));
       }
     }
     break;
@@ -4953,7 +4953,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     // ── 7. Retreating scan cursor ─────────────────────────────────────────────
     if (remaining > 0)
-      it[seg_start + remaining - 1] = cfx::boost(c, 80);
+      it[seg_start + remaining - 1] = boost(c, 80);
     break;
   }
 

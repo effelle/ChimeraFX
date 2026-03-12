@@ -7062,7 +7062,7 @@ uint16_t mode_eclipse(void) {
   const uint8_t BASE_B = 180;
   int shadow_hw = len * 18 / 100;
   if (shadow_hw < 4) shadow_hw = 4;
-  int shadow_px = (int)((instance->_segment.now / 6000.0f) * (float)len) % len;
+  int shadow_px = (int)((instance->now / 6000.0f) * (float)len) % len;
 
   // Get base color (monochromatic)
   uint32_t base_col = instance->_segment.colors[0];
@@ -7094,7 +7094,7 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
-  uint32_t scroll = instance->_segment.now >> 3;
+  uint32_t scroll = instance->now >> 3;
 
   // Rebuild pattern — same hash as intro/outro
   const int PATTERN_SLOTS = 128;
