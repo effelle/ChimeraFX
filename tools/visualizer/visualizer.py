@@ -59,7 +59,7 @@ def main():
     parser = argparse.ArgumentParser(description="ChimeraFX UDP Visualizer")
     parser.add_argument("--ip", default="0.0.0.0", help="IP address to bind to (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=7777, help="UDP port (default: 7777)")
-    parser.add_argument("--rgbw", action="store_true", help="Assume RGBW (4 bytes per pixel) instead of RGB (3 bytes)")
+    parser.add_argument("--rgbw", action="store_true", default=True, help="Assume RGBW (4 bytes per pixel) instead of RGB (3 bytes) (default: True)")
     parser.add_argument("--scale", type=int, default=20, help="Size of each LED square in pixels (default: 20)")
     args = parser.parse_args()
 
@@ -264,7 +264,8 @@ def main():
                 # pygame surface string is RGB, OpenCV expects BGR
                 try:
                     sub_surface = screen.subsurface((0, 50, box_width, box_height))
-                    view = pygame.surfarray.pixels3d(sub_surface)
+                    # array3d copies the pixels without locking the surface (pixels3d locks it and crashes the next blit)
+                    view = pygame.surfarray.array3d(sub_surface)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
