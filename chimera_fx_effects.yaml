@@ -152,6 +152,10 @@
     effect_id: 171
 
 - addressable_cfx:
+    name: "Interference"
+    effect_id: 180
+
+- addressable_cfx:
     name: "Juggle"
     effect_id: 64
 

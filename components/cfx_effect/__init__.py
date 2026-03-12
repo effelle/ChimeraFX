@@ -105,6 +105,7 @@ CFX_EFFECT_NAMES = {
     177: "Resonance Fill",
     178: "Telemetry",
     179: "Stellar Dust",
+    180: "Interference",
     255: "Ambient Roulette"
 }
 

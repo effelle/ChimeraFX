@@ -204,6 +204,7 @@ struct ColliderNode {
 #define FX_MODE_RESONANCE_FILL 177
 #define FX_MODE_TELEMETRY 178
 #define FX_MODE_STELLAR_DUST 179
+#define FX_MODE_INTERFERENCE 180
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1

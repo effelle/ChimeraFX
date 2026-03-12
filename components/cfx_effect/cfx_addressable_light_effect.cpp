@@ -3059,7 +3059,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         uint8_t co  = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
         uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
         uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-        uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+        
+        // Fade the interference pattern into a solid color (255) as progress approaches 1
+        uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * prog));
+        uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
         it[seg_start + i] = dim(c, final_b);
     }
     break;
@@ -3104,16 +3107,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     for (int i = 0; i < seg_len; i++)
         it[seg_start + i] = Color::BLACK;
 
-    // ── 5. Decaying ripple behind sweep head ──────────────────────────────────
+    // ── 5. Draw filled region with ripple behind the sweep head ──────────────
     for (int i = 0; i < sweep_pos; i++) {
-        int dist        = sweep_pos - 1 - i;
+        int dist = sweep_pos - 1 - i;  // 0 at head, grows toward strip start
+
         uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
-        uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 8);
-        uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 20u));
-        int     ripple      = ((int)ripple_raw - 128) * inv_prog_b / 255;
+        // Deepen falloff
+        uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
+
+        // Ripple: sine wave over distance, amplitude decays with inv_prog_b
+        uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 25u));
+        // Double the ripple amplitude for visibility
+        int     ripple      = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
+
         int bri = 255 - (int)falloff + ripple;
         if (bri < 0)   bri = 0;
         if (bri > 255) bri = 255;
+
         it[seg_start + i] = dim(c, (uint8_t)bri);
     }
 
@@ -3205,10 +3215,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    // ── 3. Brightness envelope: cubic ease-in ─────────────────────────────────
+    // ── 3. Brightness envelope ─────────────────────────────────
     float prog  = (float)elapsed / (float)duration;
     if (prog > 1.0f) prog = 1.0f;
-    float eased = prog * prog * prog;
+    // Removed cubic delay; linear fade or ease_out works best for instant visibility
+    float eased = prog * (2.0f - prog); // Quadratic ease-out so it lights up immediately
     uint8_t env = (uint8_t)(eased * 255.0f);
 
     // ── 4. Global time counter + per-pixel breathing ──────────────────────────
@@ -4039,7 +4050,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       uint8_t co   = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
       uint8_t avg  = (uint8_t)(((uint16_t)s + co) >> 1);
       uint8_t gam  = (uint8_t)(((uint16_t)avg * avg) >> 8);
-      uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+      // As progress increases, fade FROM solid (255) TO the interference pattern
+      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
+      uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
       it[seg_start + i] = dim(orig, final_b);
     }
     break;
@@ -4064,16 +4077,17 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     uint8_t inv_prog_b = (uint8_t)((1.0f - progress) * 255.0f);
 
-    for (int i = 0; i < seg_len; i++)
+    // Only clear the portion of the strip that has been wiped away
+    for (int i = sweep_pos; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
 
-    for (int i = sweep_pos; i < seg_len; i++) {
+    for (int i = 0; i < sweep_pos; i++) {
       Color orig          = it[seg_start + i].get();
-      int dist            = i - sweep_pos;
+      int dist            = sweep_pos - 1 - i;
       uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
-      uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 8);
-      uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 20u));
-      int     ripple      = ((int)ripple_raw - 128) * inv_prog_b / 255;
+      uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
+      uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 25u));
+      int     ripple      = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
       int bri = 255 - (int)falloff + ripple;
       if (bri < 0)   bri = 0;
       if (bri > 255) bri = 255;
@@ -4109,7 +4123,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     int remaining = seg_len - (int)(eased * (float)seg_len);
     if (remaining < 0) remaining = 0;
 
-    for (int i = 0; i < seg_len; i++)
+    // Only clear the portion of the strip that has been wiped away
+    for (int i = remaining; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
 
     for (int i = 0; i < remaining; i++) {
@@ -4119,6 +4134,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         int    dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
         uint8_t blade_b     = (uint8_t)(255 - dist_in_unit * 18);
         it[seg_start + i]   = dim(orig, blade_b);
+      } else {
+        it[seg_start + i]   = Color::BLACK;
       }
     }
     if (remaining > 0 && remaining <= seg_len) {

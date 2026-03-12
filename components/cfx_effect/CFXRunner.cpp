@@ -58,6 +58,7 @@ uint16_t mode_moire_shift(void);
 uint16_t mode_resonance_fill(void);
 uint16_t mode_telemetry(void);
 uint16_t mode_stellar_dust(void);
+uint16_t mode_interference(void);
 
 // (get_millis is defined globally before the namespace - see top of file)
 
@@ -4477,6 +4478,9 @@ void CFXRunner::service() {
   case FX_MODE_STELLAR_DUST: // 179
     mode_stellar_dust();
     break;
+  case FX_MODE_INTERFERENCE: // 180
+    mode_interference();
+    break;
   default:
     mode_static();
     break;
@@ -7038,6 +7042,32 @@ uint16_t mode_stellar_dust(void) {
   }
   return FRAMETIME;
 }
+
+uint16_t mode_interference(void) {
+  if (!instance) return FRAMETIME;
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+  
+  uint32_t t_scaled = (instance->now * instance->_segment.speed) >> 7;
+  uint8_t t1 = (uint8_t)(t_scaled >> 4);
+  uint8_t t2 = (uint8_t)((t_scaled * 3u) >> 5);
+  
+  uint8_t freq2_multiplier = (instance->_segment.intensity / 20) + 1;
+  
+  for (int i = 0; i < len; i++) {
+      uint8_t s   = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co  = cfx::sin8((uint8_t)((uint8_t)(i * freq2_multiplier) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+      
+      uint8_t color_index = (uint8_t)((i * 8u) + t1);
+      uint32_t color = instance->_segment.color_from_palette(color_index, false, true, 255, gam);
+      
+      instance->_segment.setPixelColor(i, color);
+  }
+  return FRAMETIME;
+}
+
 // Valid Palette Implementation (Moved from line 121)
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap,
                                      uint8_t mcol, uint8_t pbri) {
