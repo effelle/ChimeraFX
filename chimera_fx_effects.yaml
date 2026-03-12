@@ -164,6 +164,10 @@
     effect_id: 76
 
 - addressable_cfx:
+    name: "Moiré Shift"
+    effect_id: 176
+
+- addressable_cfx:
     name: "Multi Strobe"
     effect_id: 25
 
@@ -198,6 +202,10 @@
 - addressable_cfx:
     name: "Reactor Beat"
     effect_id: 154
+
+- addressable_cfx:
+    name: "Resonance Fill"
+    effect_id: 177
 
 - addressable_cfx:
     name: "Ripple"
@@ -248,6 +256,10 @@
     effect_id: 0
 
 - addressable_cfx:
+    name: "Stellar Dust"
+    effect_id: 179
+
+- addressable_cfx:
     name: "Strobe"
     effect_id: 23
 
@@ -262,6 +274,10 @@
 - addressable_cfx:
     name: "Sweep"
     effect_id: 6
+
+- addressable_cfx:
+    name: "Telemetry"
+    effect_id: 178
 
 - addressable_cfx:
     name: "Transmission"
