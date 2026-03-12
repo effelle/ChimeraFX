@@ -25,23 +25,18 @@ def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
         print("No pixels to capture.")
         return
 
-    # Calculate bounding box of just the LEDs
-    columns = screen.get_width() // scale
-    rows = ((len(pixels) - 1) // columns) + 1
-    
-    box_width = min(len(pixels), columns) * scale
-    box_height = rows * scale
+    # Legacy Snapshot matches legacy WebM specs exactly
+    # 60 leds * 20 scale = 1200px wide. 3 * 20 scale = 60px height.
+    box_width = len(pixels) * scale
+    box_height = 3 * scale
     
     # Create transparent surface for just the LEDs
     snap_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
     snap_surface.fill((0, 0, 0, 0)) # Fully transparent background
     
     for i, color in enumerate(pixels):
-        col = i % columns
-        row = i // columns
-        
-        x = col * scale
-        y = row * scale
+        x = i * scale
+        y = scale
         
         # Transparent padding/glow
         inner_pad = 2
@@ -102,9 +97,9 @@ def main():
         base_name = get_filename_base(eff_name, pal_name)
         recording_filepath = os.path.join("examples", f"{base_name}.webm")
         
-        cols = screen.get_width() // args.scale
-        b_width = min(len(pxols), cols) * args.scale
-        b_height = ((len(pxols) - 1) // cols + 1) * args.scale
+        # Offscreen surface exactly matching the 60px height docs requirement
+        b_width = len(pxols) * args.scale
+        b_height = args.scale * 3
         
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         video_writer = cv2.VideoWriter(recording_filepath, fourcc, 60.0, (b_width, b_height))
@@ -151,12 +146,9 @@ def main():
                     # Initialize or resize window if LED count changes
                     if new_led_count != led_count and new_led_count > 0:
                         led_count = new_led_count
-                        # Force exactly 1200 width for docs if scale is 20 and leds=60
-                        columns = 60 if args.scale == 20 else max(10, min(led_count, 1600 // args.scale))
-                        rows = ((led_count - 1) // columns) + 1
                         
-                        width = columns * args.scale
-                        height = rows * (args.scale * 3)
+                        width = led_count * args.scale
+                        height = (args.scale * 3) + 40 # 60px for strip + 40px for text
                         
                         screen = pygame.display.set_mode((width, height))
                         print(f"Detected {led_count} LEDs. Resizing window to {width}x{height}")
@@ -218,19 +210,14 @@ def main():
         if screen is not None:
             screen.fill((20, 20, 20)) # Dark background
             
-            # Draw LEDs
-            columns = screen.get_width() // args.scale
-            
+            # Draw LEDs (Horizontal strip fixed to top below text)
             for i, color in enumerate(pixels):
-                col = i % columns
-                row = i // columns
-                
-                x = col * args.scale
-                # Center vertically in the 3*scale row height
-                y = (row * args.scale * 3) + args.scale
+                x = i * args.scale
+                # Text is at 10, offset strip below it
+                y = 40 + args.scale  # So the strip is centered in its 60px track
                 
                 # Draw LED bounding box (dark gray background cell)
-                pygame.draw.rect(screen, (39, 41, 41), (x, y, args.scale, args.scale))
+                pygame.draw.rect(screen, (39, 41, 41), (x, 40, args.scale, args.scale * 3))
                 
                 # Draw LED color if it's lit
                 if color != (0, 0, 0):
@@ -256,9 +243,12 @@ def main():
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                # We capture the entire screen since it's perfectly sized now
+                # Capture just the 1200x60 LED strip portion, skipping the UI text
                 try:
-                    view = pygame.surfarray.array3d(screen)
+                    box_width = len(pixels) * args.scale
+                    box_height = args.scale * 3
+                    sub_surface = screen.subsurface((0, 40, box_width, box_height))
+                    view = pygame.surfarray.array3d(sub_surface)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
