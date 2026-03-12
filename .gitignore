@@ -43,3 +43,5 @@ wled_fx.cpp
 # Visualizer Tools
 tools/visualizer/
 all_blobs.txt
+local_only
+

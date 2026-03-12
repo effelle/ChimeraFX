@@ -87,7 +87,11 @@ public:
     INTRO_MODE_SONAR_REVEAL = 12,
     INTRO_MODE_VENETIAN = 13,
     INTRO_MODE_CRYSTALLIZE = 14,
-    INTRO_MODE_DEEP_BREATHE = 15
+    INTRO_MODE_DEEP_BREATHE = 15,
+    INTRO_MODE_MOIRE_SHIFT  = 16,
+    INTRO_MODE_RESONANCE_FILL = 17,
+    INTRO_MODE_TELEMETRY    = 18,
+    INTRO_MODE_STELLAR_DUST = 19
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);

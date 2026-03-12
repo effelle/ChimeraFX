@@ -77,6 +77,14 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_CRYSTALLIZE, INTRO_MODE_CRYSTALLIZE};
   case 175: // Deep Breathe
     return {true, INTRO_MODE_DEEP_BREATHE, INTRO_MODE_DEEP_BREATHE};
+  case 176: // Moiré Shift
+    return {true, INTRO_MODE_MOIRE_SHIFT, INTRO_MODE_MOIRE_SHIFT};
+  case 177: // Resonance Fill
+    return {true, INTRO_MODE_RESONANCE_FILL, INTRO_MODE_RESONANCE_FILL};
+  case 178: // Telemetry
+    return {true, INTRO_MODE_TELEMETRY, INTRO_MODE_TELEMETRY};
+  case 179: // Stellar Dust
+    return {true, INTRO_MODE_STELLAR_DUST, INTRO_MODE_STELLAR_DUST};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -98,6 +106,10 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 173: // Venetian
   case 174: // Crystallize
   case 175: // Deep Breathe
+  case 176: // Moiré Shift
+  case 177: // Resonance Fill
+  case 178: // Telemetry
+  case 179: // Stellar Dust
     return true;
   default:
     return false;
@@ -3012,6 +3024,207 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
+  case INTRO_MODE_MOIRE_SHIFT: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1200;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // ── 3. Brightness envelope: smoothstep 0 → 1 ─────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+    float eased_p = prog * prog * (3.0f - 2.0f * prog);
+    uint8_t env = (uint8_t)(eased_p * 255.0f);
+
+    // ── 4. Two coprime interference waves (cos8 via sin8 phase shift) ─────────
+    uint8_t t1 = (uint8_t)(elapsed >> 4);
+    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
+
+    for (int i = 0; i < seg_len; i++) {
+        uint8_t s   = cfx::sin8((uint8_t)(i * 3u) + t1);
+        uint8_t co  = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+        uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+        uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+        uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+        it[seg_start + i] = dim(c, final_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_RESONANCE_FILL: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1400;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+
+    // ── 3. Sweep position (smoothstep) ────────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+    float eased     = prog * prog * (3.0f - 2.0f * prog);
+    int   sweep_pos = (int)(eased * (float)seg_len);
+    if (sweep_pos > seg_len) sweep_pos = seg_len;
+
+    uint8_t inv_prog_b = (uint8_t)((1.0f - prog) * 255.0f);
+
+    // ── 4. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+
+    // ── 5. Decaying ripple behind sweep head ──────────────────────────────────
+    for (int i = 0; i < sweep_pos; i++) {
+        int dist        = sweep_pos - 1 - i;
+        uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
+        uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 8);
+        uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 20u));
+        int     ripple      = ((int)ripple_raw - 128) * inv_prog_b / 255;
+        int bri = 255 - (int)falloff + ripple;
+        if (bri < 0)   bri = 0;
+        if (bri > 255) bri = 255;
+        it[seg_start + i] = dim(c, (uint8_t)bri);
+    }
+
+    // ── 6. Hot leading edge ───────────────────────────────────────────────────
+    if (sweep_pos < seg_len) {
+        it[seg_start + sweep_pos] = boost(c, 60);
+        if (sweep_pos + 1 < seg_len)
+            it[seg_start + sweep_pos + 1] = dim(c, 80);
+    }
+    break;
+  }
+
+  case INTRO_MODE_TELEMETRY: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1200;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+
+    // ── 3. Dash geometry ──────────────────────────────────────────────────────
+    const int DASH_LEN = 6;
+    const int GAP_LEN  = 2;
+
+    // ── 4. Sweep position (smoothstep) ────────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+    float eased     = prog * prog * (3.0f - 2.0f * prog);
+    int   sweep_pos = (int)(eased * (float)seg_len);
+    if (sweep_pos > seg_len) sweep_pos = seg_len;
+
+    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+        it[seg_start + i] = Color::BLACK;
+
+    // ── 6. Draw dashes behind sweep head ──────────────────────────────────────
+    for (int i = 0; i < sweep_pos; i++) {
+        int phase = i % DASH_LEN;
+        if (phase < (DASH_LEN - GAP_LEN)) {
+            int    dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+            uint8_t blade_b     = (uint8_t)(255 - dist_in_unit * 18);
+            it[seg_start + i]   = dim(c, blade_b);
+        }
+    }
+
+    // ── 7. Hot leading edge ───────────────────────────────────────────────────
+    if (sweep_pos > 0 && sweep_pos < seg_len) {
+        it[seg_start + sweep_pos - 1] = boost(c, 50);
+        it[seg_start + sweep_pos]     = dim(c, 100);
+    }
+    break;
+  }
+
+  case INTRO_MODE_STELLAR_DUST: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 2000;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+        dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+        duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0) duration = 1;
+
+    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+
+    // ── 3. Brightness envelope: cubic ease-in ─────────────────────────────────
+    float prog  = (float)elapsed / (float)duration;
+    if (prog > 1.0f) prog = 1.0f;
+    float eased = prog * prog * prog;
+    uint8_t env = (uint8_t)(eased * 255.0f);
+
+    // ── 4. Global time counter + per-pixel breathing ──────────────────────────
+    uint8_t t = (uint8_t)(elapsed >> 5);
+    for (int i = 0; i < seg_len; i++) {
+        uint8_t phase   = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
+        uint8_t osc     = cfx::sin8(t + phase);
+        uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
+        uint8_t scaled  = (uint8_t)(((uint16_t)osc * 175u) >> 8);
+        uint8_t star_b  = floor_b + scaled;
+        uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
+        it[seg_start + i] = dim(c, final_b);
+    }
+    break;
+  }
+
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -3801,6 +4014,143 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       for (int i = 0; i < seg_len; i++) {
         it[seg_start + i] = Color::BLACK;
       }
+    }
+    break;
+  }
+  case INTRO_MODE_MOIRE_SHIFT: {
+    // Outro: Moire Dissolve — interference pattern fades envelope to black
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    // Envelope: smoothstep 1 → 0
+    float inv_p = 1.0f - progress;
+    float eased_p = inv_p * inv_p * (3.0f - 2.0f * inv_p);
+    uint8_t env = (uint8_t)(eased_p * 255.0f);
+
+    uint8_t t1 = (uint8_t)(elapsed >> 4);
+    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
+
+    for (int i = 0; i < seg_len; i++) {
+      Color orig   = it[seg_start + i].get();
+      uint8_t s    = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co   = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg  = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam  = (uint8_t)(((uint16_t)avg * avg) >> 8);
+      uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+      it[seg_start + i] = dim(orig, final_b);
+    }
+    break;
+  }
+  case INTRO_MODE_RESONANCE_FILL: {
+    // Outro: Resonance Drain — sweep retreats from far end with decaying ripple
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+    float eased     = progress * progress * (3.0f - 2.0f * progress);
+    int   sweep_pos = seg_len - (int)(eased * (float)seg_len);
+    if (sweep_pos < 0) sweep_pos = 0;
+
+    uint8_t inv_prog_b = (uint8_t)((1.0f - progress) * 255.0f);
+
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    for (int i = sweep_pos; i < seg_len; i++) {
+      Color orig          = it[seg_start + i].get();
+      int dist            = i - sweep_pos;
+      uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
+      uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 8);
+      uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 20u));
+      int     ripple      = ((int)ripple_raw - 128) * inv_prog_b / 255;
+      int bri = 255 - (int)falloff + ripple;
+      if (bri < 0)   bri = 0;
+      if (bri > 255) bri = 255;
+      it[seg_start + i] = dim(orig, (uint8_t)bri);
+    }
+    if (sweep_pos > 0) {
+      Color edge = it[seg_start + sweep_pos - 1 < seg_len ? seg_start + sweep_pos - 1 : seg_start].get();
+      if (sweep_pos - 1 >= 0 && sweep_pos - 1 < seg_len)
+        it[seg_start + sweep_pos - 1] = boost(edge, 60);
+      if (sweep_pos - 2 >= 0 && sweep_pos - 2 < seg_len)
+        it[seg_start + sweep_pos - 2] = dim(it[seg_start + sweep_pos - 2].get(), 80);
+    }
+    break;
+  }
+  case INTRO_MODE_TELEMETRY: {
+    // Outro: Telemetry Retract — dashes wipe from the far end backward
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    auto boost = [](Color col, uint8_t b) -> Color {
+      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+    };
+    const int DASH_LEN = 6;
+    const int GAP_LEN  = 2;
+
+    float eased   = progress * progress * (3.0f - 2.0f * progress);
+    int remaining = seg_len - (int)(eased * (float)seg_len);
+    if (remaining < 0) remaining = 0;
+
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    for (int i = 0; i < remaining; i++) {
+      Color orig  = it[seg_start + i].get();
+      int phase   = i % DASH_LEN;
+      if (phase < (DASH_LEN - GAP_LEN)) {
+        int    dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+        uint8_t blade_b     = (uint8_t)(255 - dist_in_unit * 18);
+        it[seg_start + i]   = dim(orig, blade_b);
+      }
+    }
+    if (remaining > 0 && remaining <= seg_len) {
+      Color edge = it[seg_start + remaining - 1].get();
+      it[seg_start + remaining - 1] = boost(edge, 50);
+      if (remaining < seg_len)
+        it[seg_start + remaining] = dim(it[seg_start + remaining].get(), 100);
+    }
+    break;
+  }
+  case INTRO_MODE_STELLAR_DUST: {
+    // Outro: Stellar Fade — per-pixel breathing collapses envelope to black
+    auto dim = [](Color col, uint8_t f) -> Color {
+      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                   (uint8_t)(((uint16_t)col.g * f) >> 8),
+                   (uint8_t)(((uint16_t)col.b * f) >> 8),
+                   (uint8_t)(((uint16_t)col.w * f) >> 8));
+    };
+    float inv   = 1.0f - progress;
+    float eased = inv * inv * inv;                  // cubic ease-out
+    uint8_t env = (uint8_t)(eased * 255.0f);
+
+    uint8_t t = (uint8_t)(elapsed >> 5);
+    for (int i = 0; i < seg_len; i++) {
+      Color orig      = it[seg_start + i].get();
+      uint8_t phase   = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
+      uint8_t osc     = cfx::sin8(t + phase);
+      uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
+      uint8_t scaled  = (uint8_t)(((uint16_t)osc * 175u) >> 8);
+      uint8_t star_b  = floor_b + scaled;
+      uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
+      it[seg_start + i] = dim(orig, final_b);
     }
     break;
   }

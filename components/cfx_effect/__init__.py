@@ -101,6 +101,10 @@ CFX_EFFECT_NAMES = {
     173: "Venetian",
     174: "Crystallize",
     175: "Deep Breathe",
+    176: "Moiré Shift",
+    177: "Resonance Fill",
+    178: "Telemetry",
+    179: "Stellar Dust",
     255: "Ambient Roulette"
 }
 
