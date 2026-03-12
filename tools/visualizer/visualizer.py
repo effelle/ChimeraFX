@@ -26,17 +26,22 @@ def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
         return
 
     # Legacy Snapshot matches legacy WebM specs exactly
-    # 60 leds * 20 scale = 1200px wide. 1 * 20 scale = 20px height.
-    box_width = len(pixels) * scale
-    box_height = scale
+    # 1200x60 output with centered 20px padded track
+    box_width = 1200
+    box_height = 60
     
     # Create transparent surface for just the LEDs
     snap_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-    snap_surface.fill((0, 0, 0, 0)) # Fully transparent background
+    snap_surface.fill((39, 41, 41)) # Legacy gray background
     
+    # Track allows up to 58 LEDs to fit nicely within 1160px (leaving 20px L/R margin)
+    start_x = 20
+    start_y = 20
     for i, color in enumerate(pixels):
-        x = i * scale
-        y = 0
+        if i >= 58: break # Only draw up to 58 inside the fixed bounds
+            
+        x = start_x + (i * scale)
+        y = start_y
         
         # Transparent padding/glow
         inner_pad = 2
@@ -97,9 +102,9 @@ def main():
         base_name = get_filename_base(eff_name, pal_name)
         recording_filepath = os.path.join("examples", f"{base_name}.webm")
         
-        # Offscreen surface exactly matching the 20px height pure pixel strip
-        b_width = len(pxols) * args.scale
-        b_height = args.scale
+        # Fixed 1200x60 video output size matching docs exactly
+        b_width = 1200
+        b_height = 60
         
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         video_writer = cv2.VideoWriter(recording_filepath, fourcc, 60.0, (b_width, b_height))
@@ -147,9 +152,9 @@ def main():
                     if new_led_count != led_count and new_led_count > 0:
                         led_count = new_led_count
                         
-                        # True 1D layout: match old 1200x20 output, add 40px for text to UI window
-                        width = led_count * args.scale
-                        height = (args.scale) + 40 
+                        # True 1D layout: match old 1200x60 output, add 40px for text to UI window
+                        width = 1200
+                        height = 60 + 40 # 60 for visualizer + 40 for text
                         
                         screen = pygame.display.set_mode((width, height))
                         print(f"Detected {led_count} LEDs. Resizing window to {width}x{height}")
@@ -212,18 +217,21 @@ def main():
             # Main window background
             screen.fill((20, 20, 20)) 
             
-            # Explicitly draw the grey base track for the LED strip
+            # Draw the exact legacy 1200x60 background starting below text
             track_y = 40
-            track_height = args.scale
-            track_width = led_count * args.scale
-            pygame.draw.rect(screen, (39, 41, 41), (0, track_y, track_width, track_height))
+            pygame.draw.rect(screen, (39, 41, 41), (0, track_y, 1200, 60))
             
-            # Draw LEDs over the grey track
+            # The strip allows 58 LEDs max, physically 20px padded inside the background
+            start_x = 20
+            start_y = track_y + 20
+            
             for i, color in enumerate(pixels):
-                x = i * args.scale
-                y = track_y
+                if i >= 58: break
                 
-                # Draw LED inner fill. Black unlit pixels will now neatly sit within a grey border
+                x = start_x + (i * args.scale)
+                y = start_y
+                
+                # Draw LED inner fill. Black unlit pixels neatly sit within the grey border
                 inner_pad = 2
                 pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
 
@@ -246,11 +254,9 @@ def main():
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                # Capture the exact 1200x20 pixel strip, cutting out text
+                # Capture the exact 1200x60 legacy dimension, cutting out text
                 try:
-                    box_width = len(pixels) * args.scale
-                    box_height = args.scale
-                    sub_surface = screen.subsurface((0, 40, box_width, box_height))
+                    sub_surface = screen.subsurface((0, 40, 1200, 60))
                     view = pygame.surfarray.array3d(sub_surface)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
