@@ -1573,6 +1573,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 1; // Monochromatic effects (Speed slider controls duration)
   case 164:
     return 100; // Collider (Default Speed)
+  case 180:
+    return 160; // Interference (Default Speed)
   default:
     return 128; // WLED default
   }
@@ -1614,6 +1616,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 1; // Monochromatic effects (No blur)
   case 164:
     return 170; // Collider (Default Intensity)
+  case 180:
+    return 180; // Interference (Default Intensity)
   default:
     return 128; // WLED default
   }
@@ -3142,29 +3146,24 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    // ── 3. Brightness envelope: smoothstep 0 → 1 ─────────────────────────────
-    float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f)
-      prog = 1.0f;
+    float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
+    if (prog > 1.0f) prog = 1.0f;
     float eased_p = prog * prog * (3.0f - 2.0f * prog);
     uint8_t env = (uint8_t)(eased_p * 255.0f);
 
-    // ── 4. Two coprime interference waves (cos8 via sin8 phase shift)
-    // ─────────
     uint8_t t1 = (uint8_t)(elapsed >> 4);
     uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
 
+    // Restore original Interference/Moire ripples for the full duration
+    // The "gentle turn on" is handled by the global transition after intro ends
     for (int i = 0; i < seg_len; i++) {
-      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
-      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
-      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
-      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+        uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+        uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+        uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+        uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
 
-      // Fade the interference pattern into a solid color (255) as progress
-      // approaches 1
-      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * prog));
-      uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
-      it[seg_start + i] = dim(c, final_b);
+        uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+        it[seg_start + i] = dim(c, final_b);
     }
     break;
   }
@@ -3257,37 +3256,49 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     const int DASH_LEN = 6;
     const int GAP_LEN = 2;
 
-    // ── 4. Sweep position (smoothstep)
-    // ────────────────────────────────────────
+    // ── 4. Two-Stage Sweep Logic (Intro) ────────────────────────
+    // Stage 1 (0.0 - 0.5): Wipe in the blocks/dashes
+    // Stage 2 (0.5 - 1.0): Wipe in the gap-fill
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f)
-      prog = 1.0f;
-    float eased = prog * prog * (3.0f - 2.0f * prog);
-    int sweep_pos = (int)(eased * (float)seg_len);
-    if (sweep_pos > seg_len)
-      sweep_pos = seg_len;
+    if (prog > 1.0f) prog = 1.0f;
+    
+    float stage1_prog = prog / 0.5f;
+    if (stage1_prog > 1.0f) stage1_prog = 1.0f;
+    
+    float stage2_prog = (prog - 0.5f) / 0.5f;
+    if (stage2_prog < 0.0f) stage2_prog = 0.0f;
+
+    int sweep1_pos = (int)(stage1_prog * (float)seg_len);
+    int sweep2_pos = (int)(stage2_prog * (float)seg_len);
 
     // ── 5. Clear strip
-    // ────────────────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
       it[seg_start + i] = Color::BLACK;
 
-    // ── 6. Draw dashes behind sweep head
-    // ──────────────────────────────────────
-    for (int i = 0; i < sweep_pos; i++) {
+    // ── 6. Rendering Logic
+    for (int i = 0; i < seg_len; i++) {
       int phase = i % DASH_LEN;
-      if (phase < (DASH_LEN - GAP_LEN)) {
-        int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
-        uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
-        it[seg_start + i] = dim(c, blade_b);
+      bool is_dash = (phase < (DASH_LEN - GAP_LEN));
+      
+      if (is_dash) {
+        if (i < sweep1_pos) {
+          int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+          uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
+          it[seg_start + i] = dim(c, blade_b);
+        }
+      } else {
+        if (i < sweep2_pos) {
+          it[seg_start + i] = c;
+        }
       }
     }
 
-    // ── 7. Hot leading edge
-    // ───────────────────────────────────────────────────
-    if (sweep_pos > 0 && sweep_pos < seg_len) {
-      it[seg_start + sweep_pos - 1] = boost(c, 50);
-      it[seg_start + sweep_pos] = dim(c, 100);
+    // ── 7. Hot leading edges
+    if (sweep1_pos > 0 && sweep1_pos < seg_len && stage1_prog < 1.0f) {
+      it[seg_start + sweep1_pos - 1] = boost(it[seg_start + sweep1_pos - 1].get(), 50);
+    }
+    if (sweep2_pos > 0 && sweep2_pos < seg_len && stage2_prog > 0.0f) {
+      it[seg_start + sweep2_pos - 1] = boost(it[seg_start + sweep2_pos - 1].get(), 30);
     }
     break;
   }
@@ -3308,25 +3319,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // Lambdas moved to function scope
 
-    // ── 3. Brightness envelope ─────────────────────────────────
-    float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f)
-      prog = 1.0f;
-    // Removed cubic delay; linear fade or ease_out works best for instant
-    // visibility
-    float eased =
-        prog * (2.0f - prog); // Quadratic ease-out so it lights up immediately
+    // Restore pure stars for the full duration
+    float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
+    if (prog > 1.0f) prog = 1.0f;
+    float eased = prog * (2.0f - prog); // Quadratic ease-out
     uint8_t env = (uint8_t)(eased * 255.0f);
-
-    // ── 4. Global time counter + per-pixel breathing
-    // ──────────────────────────
     uint8_t t = (uint8_t)(elapsed >> 5);
+
     for (int i = 0; i < seg_len; i++) {
-      uint8_t phase = (uint8_t)((uint32_t)(i)*2654435761u >> 24);
+      uint8_t phase = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
       uint8_t osc = cfx::sin8(t + phase);
       uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
       uint8_t scaled = (uint8_t)(((uint16_t)osc * 175u) >> 8);
-      uint8_t star_b = floor_b + scaled;
+      uint8_t star_b = (uint8_t)(floor_b + scaled);
+
       uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
       it[seg_start + i] = dim(c, final_b);
     }
@@ -4292,34 +4298,49 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     const int DASH_LEN = 6;
     const int GAP_LEN = 2;
 
-    float eased = progress * progress * (3.0f - 2.0f * progress);
-    int remaining = seg_len - (int)(eased * (float)seg_len);
-    if (remaining < 0)
-      remaining = 0;
+    // ── Two-Stage Outro (Reverse Telemetry) ──────────────────────
+    // Stage 1 (0.0 - 0.5): Wipe out the gaps (turn them black)
+    // Stage 2 (0.5 - 1.0): Wipe out the blocks/dashes
+    float stage1_prog = progress / 0.5f;
+    if (stage1_prog > 1.0f) stage1_prog = 1.0f;
+    
+    float stage2_prog = (progress - 0.5f) / 0.5f;
+    if (stage2_prog < 0.0f) stage2_prog = 0.0f;
 
-    // Only clear the portion of the strip that has been wiped away
-    // Softer clear: fade out the wiped pixels over 100ms instead of immediate black
-    for (int i = remaining; i < seg_len; i++) {
-      Color cur = it[seg_start + i].get();
-      it[seg_start + i] = dim(cur, 180); // 70% retention for "soft" trail
+    // Sweep positions for retraction (retracting from end to start)
+    int sweep1_pos = seg_len - (int)(stage1_prog * (float)seg_len);
+    int sweep2_pos = seg_len - (int)(stage2_prog * (float)seg_len);
+
+    for (int i = 0; i < seg_len; i++) {
+        it[seg_start + i] = Color::BLACK;
     }
 
-    for (int i = 0; i < remaining; i++) {
-      Color orig = it[seg_start + i].get();
+    Color dash_c = Color::WHITE;
+    if (instance) dash_c = instance->_segment.colors[0];
+
+    for (int i = 0; i < seg_len; i++) {
       int phase = i % DASH_LEN;
-      if (phase < (DASH_LEN - GAP_LEN)) {
-        int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
-        uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
-        it[seg_start + i] = dim(orig, blade_b);
+      bool is_dash = (phase < (DASH_LEN - GAP_LEN));
+      
+      if (is_dash) {
+        if (i < sweep2_pos) {
+           int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+           uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
+           it[seg_start + i] = dim(dash_c, blade_b);
+        }
       } else {
-        it[seg_start + i] = Color::BLACK;
+        if (i < sweep1_pos) {
+          it[seg_start + i] = dash_c;
+        }
       }
     }
-    if (remaining > 0 && remaining <= seg_len) {
-      Color edge = it[seg_start + remaining - 1].get();
-      it[seg_start + remaining - 1] = boost(edge, 50);
-      if (remaining < seg_len)
-        it[seg_start + remaining] = dim(it[seg_start + remaining].get(), 100);
+    
+    // Edges
+    if (sweep1_pos > 0 && sweep1_pos < seg_len && stage1_prog < 1.0f) {
+        it[seg_start + sweep1_pos] = dim(dash_c, 100);
+    }
+    if (sweep2_pos > 0 && sweep2_pos < seg_len && stage2_prog < 1.0f) {
+        it[seg_start + sweep2_pos] = dim(dash_c, 50);
     }
     break;
   }
@@ -4359,9 +4380,11 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
       uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
       uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-      
-      // As progress increases, fade FROM solid (255) TO the interference pattern
-      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
+
+      // As progress increases, fade FROM solid (255) TO the interference
+      // pattern
+      uint8_t blended_gam =
+          (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
       uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
       it[seg_start + i] = dim(orig, final_b);
     }

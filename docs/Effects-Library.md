@@ -266,6 +266,27 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
               effect_id: 157
         ```
 
+??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High | :material-palette:</span>"
+
+    === "🎬 Preview"
+        *A "Batch 2" signature effect. High-frequency light waves collide and interfere, creating a shimmering, high-energy field. Unlike other monochromatic effects, Interference fully supports palettes and features a dedicated "Interference" soft fade-in.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `170` | **Wave Frequency**: adjusts the density of the interference bands. |
+        | **Speed** | `160` | **Shift Speed**: controls how fast the patterns collide. |
+        | **Palette** | — | **Supported**: Defaults to **Cyberpunk** (15). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Interference"
+              effect_id: 180
+        ```
+
 ??? abstract "155 | Kaleidos | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
 
     === "🎬 Preview"
@@ -786,27 +807,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
           - addressable_cfx:
               name: "Stellar Dust"
               effect_id: 179
-        ```
-
-??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High | :material-palette:</span>"
-
-    === "🎬 Preview"
-        *A "Batch 2" signature effect. High-frequency light waves collide and interfere, creating a shimmering, high-energy field. Unlike other monochromatic effects, Interference fully supports palettes and features a dedicated "Interference" soft fade-in.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `170` | **Wave Frequency**: adjusts the density of the interference bands. |
-        | **Speed** | `100` | **Shift Speed**: controls how fast the patterns collide. |
-        | **Palette** | — | **Supported**: Defaults to **Cyberpunk** (15). |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Interference"
-              effect_id: 180
         ```
 
 ??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
@@ -2032,31 +2032,31 @@ These short animations play once when the light is turned ON or OFF.
         </video>
     *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
-??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
 
-??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
 
-??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
 
-??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *Geological nucleation transition. **Crystallize** grow seeds of light outward into a solid floor during the intro. **Erode** causes the light to fragment and dissolve at the edges, slowly consuming the strip from within.*
 
-??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A slow, organic brightness ramp. **Deep Breathe** rises from darkness with a subtle triangular shimmer during the intro. **Exhale** provides a natural, lung-like curve that gently releases the light into darkness.*
 
-??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid</span>"
+??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette:</span>"
     *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
 
-??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
 
-??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
 
-??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
+??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
     *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
 
 ??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
