@@ -26,9 +26,9 @@ def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
         return
 
     # Legacy Snapshot matches legacy WebM specs exactly
-    # 60 leds * 20 scale = 1200px wide. 3 * 20 scale = 60px height.
+    # 60 leds * 20 scale = 1200px wide. 1 * 20 scale = 20px height.
     box_width = len(pixels) * scale
-    box_height = 3 * scale
+    box_height = scale
     
     # Create transparent surface for just the LEDs
     snap_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
@@ -36,7 +36,7 @@ def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
     
     for i, color in enumerate(pixels):
         x = i * scale
-        y = scale
+        y = 0
         
         # Transparent padding/glow
         inner_pad = 2
@@ -97,9 +97,9 @@ def main():
         base_name = get_filename_base(eff_name, pal_name)
         recording_filepath = os.path.join("examples", f"{base_name}.webm")
         
-        # Offscreen surface exactly matching the 60px height docs requirement
+        # Offscreen surface exactly matching the 20px height pure pixel strip
         b_width = len(pxols) * args.scale
-        b_height = args.scale * 3
+        b_height = args.scale
         
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         video_writer = cv2.VideoWriter(recording_filepath, fourcc, 60.0, (b_width, b_height))
@@ -147,9 +147,9 @@ def main():
                     if new_led_count != led_count and new_led_count > 0:
                         led_count = new_led_count
                         
-                        # True 1D layout: match old 1200x60 dims precisely without text padding
+                        # True 1D layout: match old 1200x20 output, add 40px for text to UI window
                         width = led_count * args.scale
-                        height = args.scale * 3 
+                        height = (args.scale) + 40 
                         
                         screen = pygame.display.set_mode((width, height))
                         print(f"Detected {led_count} LEDs. Resizing window to {width}x{height}")
@@ -215,22 +215,37 @@ def main():
             # Draw LEDs exactly centered
             for i, color in enumerate(pixels):
                 x = i * args.scale
-                y = args.scale  # center row vertically
-                
-                # Draw LED bounding box border (dark gray so unlit cells remain visible)
-                pygame.draw.rect(screen, (40, 40, 40), (x, y, args.scale, args.scale), 1)
+                y = 40  # offset below text
                 
                 # Draw LED color inner fill (black = unlit but border stays)
                 inner_pad = 2
                 pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
 
+            # Draw Metadata Text
+            text_str = f"Effect: {effect_name}"
+            if palette_name:
+                text_str += f" | Palette: {palette_name}"
+            text_str += f" | LEDs: {led_count}"
+            
+            if is_recording:
+                text_str += " | [REC]"
+                text_color = (255, 50, 50)
+            else:
+                text_color = (255, 255, 255)
+            
+            text_surf = font.render(text_str, True, text_color)
+            screen.blit(text_surf, (10, 10))
+            
             pygame.display.flip()
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                # Capture the entire clean 1D window
+                # Capture the exact 1200x20 pixel strip, cutting out text
                 try:
-                    view = pygame.surfarray.array3d(screen)
+                    box_width = len(pixels) * args.scale
+                    box_height = args.scale
+                    sub_surface = screen.subsurface((0, 40, box_width, box_height))
+                    view = pygame.surfarray.array3d(sub_surface)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
