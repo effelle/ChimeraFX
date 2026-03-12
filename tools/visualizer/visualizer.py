@@ -147,8 +147,9 @@ def main():
                     if new_led_count != led_count and new_led_count > 0:
                         led_count = new_led_count
                         
+                        # True 1D layout: match old 1200x60 dims precisely without text padding
                         width = led_count * args.scale
-                        height = (args.scale * 3) + 40 # 60px for strip + 40px for text
+                        height = args.scale * 3 
                         
                         screen = pygame.display.set_mode((width, height))
                         print(f"Detected {led_count} LEDs. Resizing window to {width}x{height}")
@@ -208,47 +209,28 @@ def main():
             
         # Render
         if screen is not None:
-            screen.fill((20, 20, 20)) # Dark background
+            # Pitch black background
+            screen.fill((0, 0, 0)) 
             
-            # Draw LEDs (Horizontal strip fixed to top below text)
+            # Draw LEDs exactly centered
             for i, color in enumerate(pixels):
                 x = i * args.scale
-                # Text is at 10, offset strip below it
-                y = 40 + args.scale  # So the strip is centered in its 60px track
+                y = args.scale  # center row vertically
                 
-                # Draw LED bounding box (dark gray background cell)
-                pygame.draw.rect(screen, (39, 41, 41), (x, 40, args.scale, args.scale * 3))
+                # Draw LED bounding box border (dark gray so unlit cells remain visible)
+                pygame.draw.rect(screen, (40, 40, 40), (x, y, args.scale, args.scale), 1)
                 
-                # Draw LED color if it's lit
-                if color != (0, 0, 0):
-                    inner_pad = 2
-                    pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
+                # Draw LED color inner fill (black = unlit but border stays)
+                inner_pad = 2
+                pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
 
-            # Draw Metadata Text
-            text_str = f"Effect: {effect_name}"
-            if palette_name:
-                text_str += f" | Palette: {palette_name}"
-            text_str += f" | LEDs: {led_count}"
-            
-            if is_recording:
-                text_str += " | [REC]"
-                text_color = (255, 50, 50)
-            else:
-                text_color = (255, 255, 255)
-            
-            text_surf = font.render(text_str, True, text_color)
-            screen.blit(text_surf, (10, 10))
-            
             pygame.display.flip()
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                # Capture just the 1200x60 LED strip portion, skipping the UI text
+                # Capture the entire clean 1D window
                 try:
-                    box_width = len(pixels) * args.scale
-                    box_height = args.scale * 3
-                    sub_surface = screen.subsurface((0, 40, box_width, box_height))
-                    view = pygame.surfarray.array3d(sub_surface)
+                    view = pygame.surfarray.array3d(screen)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
