@@ -209,15 +209,21 @@ def main():
             
         # Render
         if screen is not None:
-            # Pitch black background
-            screen.fill((0, 0, 0)) 
+            # Main window background
+            screen.fill((20, 20, 20)) 
             
-            # Draw LEDs exactly centered
+            # Explicitly draw the grey base track for the LED strip
+            track_y = 40
+            track_height = args.scale
+            track_width = led_count * args.scale
+            pygame.draw.rect(screen, (39, 41, 41), (0, track_y, track_width, track_height))
+            
+            # Draw LEDs over the grey track
             for i, color in enumerate(pixels):
                 x = i * args.scale
-                y = 40  # offset below text
+                y = track_y
                 
-                # Draw LED color inner fill (black = unlit but border stays)
+                # Draw LED inner fill. Black unlit pixels will now neatly sit within a grey border
                 inner_pad = 2
                 pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
 

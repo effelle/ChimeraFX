@@ -379,7 +379,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Assembly2.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Assembly3.webm" type="video/webm">
         </video>
         
         *A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip.*
