@@ -2770,11 +2770,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
     };
     auto ease_in_out = [](float p) -> float {
-      float cv = 1.0f - 2.0f * p;
-      float abs_c = cv < 0.0f ? -cv : cv;
-      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
-                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
-      return 0.5f - 0.5f * cos_approx;
+      return p * p * (3.0f - 2.0f * p);
     };
 
     // ── 3. Eased fill position ────────────────────────────────────────────────
@@ -2831,7 +2827,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 3. Layout: 4 passes, each raising the floor ───────────────────────────
     const int   NUM_PASSES   = 4;
-    static const uint8_t FLOOR_S[NUM_PASSES + 1] = { 0, 64, 140, 210, 255 };
 
     float prog       = (float)elapsed / (float)duration;
     if (prog > 1.0f) prog = 1.0f;
@@ -2841,7 +2836,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (pass_done > NUM_PASSES) pass_done = NUM_PASSES;
     float within     = pass_prog - (float)pass_done;
 
-    uint8_t floor_b  = FLOOR_S[pass_done < NUM_PASSES ? pass_done : NUM_PASSES];
+    // Smooth gentle fade-in matching the outro behavior
+    uint8_t floor_b  = (uint8_t)(prog * 255.0f);
 
     float scan_t     = (pass_done % 2 == 0) ? within : (1.0f - within);
     int   scan_px    = (int)(scan_t * (float)(seg_len - 1));
@@ -2885,11 +2881,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
     auto ease_in_out = [](float p) -> float {
-      float cv = 1.0f - 2.0f * p;
-      float abs_c = cv < 0.0f ? -cv : cv;
-      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
-                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
-      return 0.5f - 0.5f * cos_approx;
+      return p * p * (3.0f - 2.0f * p);
     };
 
     // ── 3. Two-phase split: 0→0.5 = evens snap on, 0.5→1.0 = odds fade in ───
@@ -3627,11 +3619,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
     auto ease_in_out = [](float p) -> float {
-      float cv = 1.0f - 2.0f * p;
-      float abs_c = cv < 0.0f ? -cv : cv;
-      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
-                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
-      return 0.5f - 0.5f * cos_approx;
+      return p * p * (3.0f - 2.0f * p);
     };
 
     float eased    = ease_in_out(progress);
@@ -3698,11 +3686,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
     auto ease_in_out = [](float p) -> float {
-      float cv = 1.0f - 2.0f * p;
-      float abs_c = cv < 0.0f ? -cv : cv;
-      float cos_approx = (cv * (6.283185f - 4.0f * abs_c)) /
-                         (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
-      return 0.5f - 0.5f * cos_approx;
+      return p * p * (3.0f - 2.0f * p);
     };
 
     uint8_t even_b, odd_b;
@@ -3781,8 +3765,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     };
 
     float inv     = 1.0f - progress;
-    float eased   = inv * inv * inv;
-    uint8_t raw_b = (uint8_t)(eased * 255.0f);
+    // Use a gentler fade curve so the light stays visible through the full duration
+    uint8_t raw_b = (uint8_t)(inv * 255.0f);
     uint8_t b     = (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
 
     for (int i = 0; i < seg_len; i++) {
