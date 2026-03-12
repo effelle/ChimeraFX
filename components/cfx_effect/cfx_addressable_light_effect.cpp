@@ -4244,17 +4244,18 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     };
     float eased = progress * progress * (3.0f - 2.0f * progress);
     int sweep_pos = seg_len - (int)(eased * (float)seg_len);
-    if (sweep_pos < 0)
-      sweep_pos = 0;
-
     uint8_t inv_prog_b = (uint8_t)((1.0f - progress) * 255.0f);
 
-    // Only clear the portion of the strip that has been wiped away
-    for (int i = sweep_pos; i < seg_len; i++)
-      it[seg_start + i] = Color::BLACK;
+    // Clear the entire segment every frame to prevent ghosting
+    for (int i = 0; i < seg_len; i++) {
+        it[seg_start + i] = Color::BLACK;
+    }
+
+    // Stable color source
+    Color base_c = Color::WHITE;
+    if (instance) base_c = Color(instance->_segment.colors[0]);
 
     for (int i = 0; i < sweep_pos; i++) {
-      Color orig = it[seg_start + i].get();
       int dist = sweep_pos - 1 - i;
       uint8_t dist_factor =
           (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
@@ -4266,7 +4267,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         bri = 0;
       if (bri > 255)
         bri = 255;
-      it[seg_start + i] = dim(orig, (uint8_t)bri);
+      it[seg_start + i] = dim(base_c, (uint8_t)bri);
     }
     if (sweep_pos > 0) {
       Color edge =
@@ -4316,7 +4317,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     Color dash_c = Color::WHITE;
-    if (instance) dash_c = instance->_segment.colors[0];
+    if (instance) dash_c = Color(instance->_segment.colors[0]);
 
     for (int i = 0; i < seg_len; i++) {
       int phase = i % DASH_LEN;
