@@ -30,6 +30,23 @@ namespace chimera_fx {
 
 CFXRunner *instance = nullptr;
 
+// RAII guard to set/reset global instance pointer
+class InstanceGuard {
+  CFXRunner* prev_;
+public:
+  explicit InstanceGuard(CFXRunner* runner) {
+    prev_ = instance;
+    instance = runner;
+  }
+  ~InstanceGuard() {
+    instance = prev_;
+  }
+
+  // Non-copyable
+  InstanceGuard(const InstanceGuard&) = delete;
+  InstanceGuard& operator=(const InstanceGuard&) = delete;
+};
+
 // Forward declarations
 uint16_t mode_running_lights(void);
 uint16_t mode_running_dual(void);
@@ -64,7 +81,7 @@ uint16_t mode_interference(void);
 // Constructor
 CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   target_light = light;
-  instance = this;
+  // CFX-004: instance = this removed; use InstanceGuard in service()
   _mode = FX_MODE_STATIC;
   _name = "CFX";
   frame_time = 0;
@@ -3413,8 +3430,10 @@ uint16_t mode_energy(void) {
   // State Management
   EnergyData *data = (EnergyData *)instance->_segment.data;
   if (!data || instance->_segment.reset) {
-    if (!instance->_segment.allocateData(sizeof(EnergyData)))
+    if (!instance->_segment.allocateData(sizeof(EnergyData))) {
+      ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, sizeof(EnergyData));
       return 350;
+    }
     data = (EnergyData *)instance->_segment.data;
     data->last_millis = instance->now;
     data->accumulator = 0;
@@ -3568,8 +3587,10 @@ uint16_t mode_chaos_theory(void) {
   // State Management
   ChaosData *data = (ChaosData *)instance->_segment.data;
   if (!data || instance->_segment.reset) {
-    if (!instance->_segment.allocateData(sizeof(ChaosData)))
+    if (!instance->_segment.allocateData(sizeof(ChaosData))) {
+      ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__, sizeof(ChaosData));
       return 350;
+    }
     data = (ChaosData *)instance->_segment.data;
     data->last_millis = instance->now;
     data->accumulator = 0;
@@ -4239,9 +4260,8 @@ uint16_t mode_heartbeat(void) {
 }
 
 void CFXRunner::service() {
-  // CRITICAL FIX: Update global instance pointer to 'this' runner
-  // Ensures effect functions operate on the correct strip context
-  instance = this;
+  // CFX-004: Use RAII guard to set global instance pointer for this service call
+  InstanceGuard guard(this);
 
   // Halt animation progression if target iterations reached
   if (this->effect_complete_) {

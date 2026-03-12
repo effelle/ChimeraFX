@@ -2,6 +2,10 @@
 
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
+#include "esphome/components/event/event.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/text/text.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
@@ -86,6 +90,23 @@ public:
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
   void clear_active_binding();
 
+  // HA event integration
+  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
+  void fire_event(const char *type) {
+    if (this->event_entity_ == nullptr) return;
+    this->event_entity_->trigger(type);
+  }
+
+  // Runtime configurable entities
+  void set_progress_step(uint8_t step) { this->progress_step_ = step; }
+  void set_pixel_whitelist(const std::vector<uint16_t>& pixels) { this->pixel_whitelist_ = pixels; }
+  void set_progress_sensor(esphome::sensor::Sensor *sensor) { this->progress_pct_sensor_ = sensor; }
+  void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { this->last_pixel_sensor_ = sensor; }
+
+  // Milestone tracking
+  void check_milestones(uint8_t current_pct);
+  void pixel_advanced(uint16_t pixel);
+
 protected:
   std::string id_;
   std::string name_;
@@ -99,6 +120,16 @@ protected:
   bool restore_state_{true};
 
   std::vector<light::LightState *> lights_;
+  esphome::event::Event *event_entity_{nullptr};
+
+  // Runtime-configurable entities
+  uint8_t progress_step_{10}; // Default 10%
+  std::vector<uint16_t> pixel_whitelist_;
+  uint8_t last_fired_milestone_{0};
+
+  // Sensor pointers (optional)
+  esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
+  esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;

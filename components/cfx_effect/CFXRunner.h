@@ -436,9 +436,9 @@ private:
   // CFX-008 / CFX-004: _mode_ptr[] dispatch table removed — superseded by the
   // switch-case in service(). It was indexed by mode ID and would have caused
   // out-of-bounds reads for IDs 120–167 with the old MODE_COUNT of 120.
-  // NOTE (CFX-004): service() is not re-entrant. The global `instance` pointer
-  // is updated at the top of each service() call; callers must ensure service()
-  // runs exclusively on the ESPHome main-loop task.
+  // CFX-004 FIXED: global `instance` pointer race resolved via RAII InstanceGuard
+  // in service(). The guard ensures each service() call operates on correct runner
+  // context even with multiple strips.
 
   uint32_t _last_frame = 0;
 };

@@ -2,6 +2,7 @@
 #include "../cfx_effect/cfx_addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
 #include "esphome/components/light/light_state.h"
+#include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
 #include <algorithm> // CFX-011: std::find in destructor
 #include <atomic>    // CFX-012: std::atomic<bool>
@@ -265,6 +266,7 @@ void CFXSequence::report_event_start() {
   for (auto *t : this->on_start_triggers_) {
     t->trigger();
   }
+  this->fire_event("cfx_start");
 }
 
 void CFXSequence::report_event_complete() {
@@ -273,6 +275,7 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
+  this->fire_event("cfx_complete");
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,
@@ -343,6 +346,43 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 
   this->last_triggered_percentage_ = current_percentage;
   this->last_triggered_pixel_ = current_pixel;
+
+  // Check runtime milestones (cfx_reach)
+  uint8_t current_pct = (uint8_t)(current_percentage * 100.0f);
+  this->check_milestones(current_pct);
+}
+
+void CFXSequence::check_milestones(uint8_t current_pct) {
+  if (this->progress_step_ == 0) return; // No milestones configured
+
+  uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
+  if (current_pct >= next_milestone) {
+    this->last_fired_milestone_ = next_milestone;
+
+    // Update sensor before firing event (sensor-before-event pattern)
+    if (this->progress_pct_sensor_) {
+      this->progress_pct_sensor_->publish_state(current_pct);
+    }
+
+    this->fire_event("cfx_reach");
+  }
+}
+
+void CFXSequence::pixel_advanced(uint16_t pixel) {
+  if (this->pixel_whitelist_.empty()) return;
+
+  // Check if pixel is in whitelist
+  for (uint16_t p : this->pixel_whitelist_) {
+    if (p == pixel) {
+      // Update sensor before firing event (sensor-before-event pattern)
+      if (this->last_pixel_sensor_) {
+        this->last_pixel_sensor_->publish_state(pixel);
+      }
+
+      this->fire_event("cfx_pixel");
+      break;
+    }
+  }
 }
 
 } // namespace cfx_sequence

@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select
+from esphome.components import light, select, event
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -92,11 +92,33 @@ CONFIG_SCHEMA = cv.All(
 
 async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCER")
-    
+
+    # Create global event entity for all sequences (one per device)
+    event_var = None
+    if len(config) > 0:
+        import esphome.core as core
+        event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
+        event_var = cg.new_Pvariable(event_id)
+        core.CORE.component_ids.add("cfx_global_events")
+
+        event_conf = {
+            "id": event_id,
+            "name": "CFX Events",
+            "icon": "mdi:animation-play",
+            "disabled_by_default": False,
+            "internal": False,
+            "event_types": ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel"],
+        }
+        await event.register_event(event_var, event_conf)
+
     for seq_conf in config:
         # Pass ID string, Name string, Effect string, and Restore boolean
         var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT], seq_conf[CONF_RESTORE])
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
+
+        # Bind the global event entity to this sequence
+        if event_var:
+            cg.add(var.set_event_entity(event_var))
 
         if CONF_SET_SPEED in seq_conf:
             cg.add(var.set_speed(seq_conf[CONF_SET_SPEED]))
