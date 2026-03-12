@@ -1,11 +1,59 @@
 import socket
 import sys
 import argparse
+import os
+import datetime
 import pygame
+import numpy as np
+import cv2
 
 # Protocol Types
 VISUALIZER_TYPE_PIXELS = 0x00
 VISUALIZER_TYPE_METADATA = 0x01
+
+def get_filename_base(effect_name, palette_name):
+    # Clean names for filesystem
+    eff = "".join([c for c in effect_name if c.isalpha() or c.isdigit() or c in " -_"]).strip()
+    pal = "".join([c for c in palette_name if c.isalpha() or c.isdigit() or c in " -_"]).strip()
+    base = eff.replace(" ", "_")
+    if pal and pal.lower() not in ["default", "none", "solid"]:
+        base += f"_{pal.replace(' ', '_')}"
+    return base
+
+def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
+    if not pixels:
+        print("No pixels to capture.")
+        return
+
+    # Calculate bounding box of just the LEDs
+    columns = screen.get_width() // scale
+    rows = (len(pixels) // columns) + 1
+    
+    box_width = min(len(pixels), columns) * scale
+    box_height = ((len(pixels) - 1) // columns + 1) * scale
+    
+    # Create transparent surface for just the LEDs
+    snap_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+    snap_surface.fill((0, 0, 0, 0)) # Fully transparent background
+    
+    for i, color in enumerate(pixels):
+        col = i % columns
+        row = i // columns
+        
+        x = col * scale
+        y = row * scale
+        
+        # Transparent padding/glow
+        inner_pad = 2
+        pygame.draw.rect(snap_surface, (color[0], color[1], color[2], 255), 
+                         (x + inner_pad, y + inner_pad, scale - inner_pad*2, scale - inner_pad*2))
+                         
+    os.makedirs("examples", exist_ok=True)
+    base_name = get_filename_base(effect_name, palette_name)
+    filepath = os.path.join("examples", f"Snapshot_{base_name}.png")
+    
+    pygame.image.save(snap_surface, filepath)
+    print(f"Snapshot saved: {filepath}")
 
 def main():
     parser = argparse.ArgumentParser(description="ChimeraFX UDP Visualizer")
@@ -30,7 +78,7 @@ def main():
     led_count = 0
     font = pygame.font.SysFont("Arial", 20)
 
-    clock = pygame.Clock()
+    clock = pygame.time.Clock()
     
     # State
     pixels = []
@@ -40,6 +88,38 @@ def main():
     bytes_per_pixel = 4 if args.rgbw else 3
     running = True
 
+    # Recording state
+    is_recording = False
+    video_writer = None
+    recording_filepath = ""
+    current_recorded_effect = None
+
+    def start_recording(eff_name, pal_name, pxols):
+        nonlocal is_recording, video_writer, recording_filepath
+        if video_writer:
+            video_writer.release()
+        os.makedirs("examples", exist_ok=True)
+        base_name = get_filename_base(eff_name, pal_name)
+        timestamp = datetime.datetime.now().strftime("%H%M%S")
+        recording_filepath = os.path.join("examples", f"{base_name}_{timestamp}.webm")
+        
+        cols = screen.get_width() // args.scale
+        b_width = min(len(pxols), cols) * args.scale
+        b_height = ((len(pxols) - 1) // cols + 1) * args.scale
+        
+        fourcc = cv2.VideoWriter_fourcc(*'VP80')
+        video_writer = cv2.VideoWriter(recording_filepath, fourcc, 60.0, (b_width, b_height))
+        is_recording = True
+        print(f"Auto-started recording: {recording_filepath}")
+
+    def stop_recording():
+        nonlocal is_recording, video_writer
+        if video_writer:
+            video_writer.release()
+            video_writer = None
+        is_recording = False
+        print(f"Auto-stopped recording: {recording_filepath}")
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -47,6 +127,14 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
+                elif event.key == pygame.K_s:
+                    capture_snapshot(screen, pixels, args.scale, effect_name, palette_name)
+                # Manual recording (R key) overrides auto
+                elif event.key == pygame.K_r:
+                    if not is_recording and pixels:
+                        start_recording(effect_name, palette_name, pixels)
+                    elif is_recording:
+                        stop_recording()
 
         # Read all pending UDP packets
         while True:
@@ -117,6 +205,19 @@ def main():
                 print(f"UDP Error: {e}")
                 break
 
+        # --- AUTO RECORDING LOGIC ---
+        is_lit = any(r > 0 or g > 0 or b > 0 for r, g, b in pixels)
+        is_valid_effect = effect_name and effect_name not in ["Solid", "Waiting for metadata..."]
+        
+        if is_valid_effect and is_lit:
+            if not is_recording or current_recorded_effect != effect_name:
+                start_recording(effect_name, palette_name, pixels)
+                current_recorded_effect = effect_name
+        elif is_recording and (not is_lit or not is_valid_effect):
+            # Turned off or effect cleared
+            stop_recording()
+            current_recorded_effect = None
+            
         # Render
         if screen is not None:
             screen.fill((20, 20, 20)) # Dark background
@@ -143,12 +244,43 @@ def main():
                 text_str += f" | Palette: {palette_name}"
             text_str += f" | LEDs: {led_count}"
             
-            text_surf = font.render(text_str, True, (255, 255, 255))
+            if is_recording:
+                text_str += " | [REC]"
+                text_color = (255, 50, 50)
+            else:
+                text_color = (255, 255, 255)
+            
+            text_surf = font.render(text_str, True, text_color)
             screen.blit(text_surf, (10, 10))
             
             pygame.display.flip()
+            
+            # Handle Video Frame Capture
+            if is_recording and video_writer and pixels:
+                columns = screen.get_width() // args.scale
+                box_width = min(len(pixels), columns) * args.scale
+                box_height = ((len(pixels) - 1) // columns + 1) * args.scale
+                
+                # Extract just the LED area (skip the text header at y=50)
+                # pygame surface string is RGB, OpenCV expects BGR
+                try:
+                    sub_surface = screen.subsurface((0, 50, box_width, box_height))
+                    view = pygame.surfarray.pixels3d(sub_surface)
+                    # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
+                    frame = np.transpose(view, (1, 0, 2))
+                    # Convert RGB to BGR
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    video_writer.write(frame_bgr)
+                except Exception as e:
+                    print(f"Frame capture error: {e}")
+                    is_recording = False
+                    if video_writer:
+                        video_writer.release()
 
         clock.tick(60)
+
+    if video_writer:
+        video_writer.release()
 
     pygame.quit()
     sys.exit(0)
