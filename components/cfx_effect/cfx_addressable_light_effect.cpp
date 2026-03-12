@@ -149,7 +149,8 @@ void CFXAddressableLightEffect::start() {
         // Fallback if pool only has 1 element
         chosen_id = pool[0];
       } else {
-        uint32_t r_idx = (uint32_t)cfx::hw_random16(0, (uint16_t)filtered_pool.size());
+        uint32_t r_idx =
+            (uint32_t)cfx::hw_random16(0, (uint16_t)filtered_pool.size());
         chosen_id = filtered_pool[r_idx];
       }
 
@@ -579,14 +580,18 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_ASSEMBLY;
         else if (s == "Inertia Sweep")
           this->active_intro_mode_ = INTRO_MODE_INERTIA_SWEEP;
-        else if (s == "Sonar Reveal")
-          this->active_intro_mode_ = INTRO_MODE_SONAR_REVEAL;
-        else if (s == "Venetian")
-          this->active_intro_mode_ = INTRO_MODE_VENETIAN;
-        else if (s == "Crystallize")
-          this->active_intro_mode_ = INTRO_MODE_CRYSTALLIZE;
         else if (s == "Deep Breathe")
           this->active_intro_mode_ = INTRO_MODE_DEEP_BREATHE;
+        else if (s == "Moiré Shift")
+          this->active_intro_mode_ = INTRO_MODE_MOIRE_SHIFT;
+        else if (s == "Resonance")
+          this->active_intro_mode_ = INTRO_MODE_RESONANCE_FILL;
+        else if (s == "Telemetry")
+          this->active_intro_mode_ = INTRO_MODE_TELEMETRY;
+        else if (s == "Stellar Dust")
+          this->active_intro_mode_ = INTRO_MODE_STELLAR_DUST;
+        else if (s == "Interference")
+          this->active_intro_mode_ = INTRO_MODE_INTERFERENCE;
       }
     }
 
@@ -733,14 +738,18 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_ASSEMBLY;
           else if (s == "Decelerate")
             this->active_outro_mode_ = INTRO_MODE_INERTIA_SWEEP;
-          else if (s == "Sonar Fade")
-            this->active_outro_mode_ = INTRO_MODE_SONAR_REVEAL;
-          else if (s == "Close Blinds")
-            this->active_outro_mode_ = INTRO_MODE_VENETIAN;
-          else if (s == "Erode")
-            this->active_outro_mode_ = INTRO_MODE_CRYSTALLIZE;
           else if (s == "Exhale")
             this->active_outro_mode_ = INTRO_MODE_DEEP_BREATHE;
+          else if (s == "Moiré Fade")
+            this->active_outro_mode_ = INTRO_MODE_MOIRE_SHIFT;
+          else if (s == "Resonance Fade")
+            this->active_outro_mode_ = INTRO_MODE_RESONANCE_FILL;
+          else if (s == "Telemetry Fade")
+            this->active_outro_mode_ = INTRO_MODE_TELEMETRY;
+          else if (s == "Stellar Fade")
+            this->active_outro_mode_ = INTRO_MODE_STELLAR_DUST;
+          else if (s == "Interference Fade")
+            this->active_outro_mode_ = INTRO_MODE_INTERFERENCE;
           else
             this->active_outro_mode_ = INTRO_MODE_NONE;
         } else if (this->outro_preset_.has_value()) {
@@ -1435,12 +1444,15 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   case 52:     // Running Dual
     return 13; // Defaults to Sakura
 
-  case 170:    // Assembly
-  case 171:    // Inertia Sweep
-  case 172:    // Sonar Reveal
-  case 173:    // Venetian
-  case 174:    // Crystallize
-  case 175:    // Deep Breathe
+  case 180:    // Interference
+    return 15; // Defaults to Cyberpunk
+
+  case 170:     // Assembly
+  case 171:     // Inertia Sweep
+  case 172:     // Sonar Reveal
+  case 173:     // Venetian
+  case 174:     // Crystallize
+  case 175:     // Deep Breathe
     return 255; // Defaults to Solid
 
   default:
@@ -2608,7 +2620,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     for (int i = 0; i < fill_level; i++) {
       Color base = target_color;
 
-
       // Surface shimmer on top 2 pixels
       int dist_from_surface = (fill_level - 1) - i;
       if (dist_from_surface == 0)
@@ -2672,7 +2683,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_ASSEMBLY: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1000;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
@@ -2683,54 +2695,66 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     } else if (this->intro_duration_preset_.has_value()) {
       duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
     }
-    if (duration == 0) duration = 1;
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Mirroring ──────────────────────────────────────────────────────────
+    // ── 2. Mirroring
+    // ──────────────────────────────────────────────────────────
     bool reverse = (mirror_sw != nullptr && mirror_sw->state);
 
-    // ── 3. Knuth multiplicative hash for deterministic block sizes ────────────
+    // ── 3. Knuth multiplicative hash for deterministic block sizes
+    // ────────────
     auto block_sz = [](int idx) -> int {
       uint32_t h = (uint32_t)idx * 2654435761u;
       return (int)(h >> 30) + 1; // 1 to 4 pixels
     };
 
-    // ── 4. Precompute block layout ────────────────────────────────────────────
-    struct BlockInfo { int start; int size; };
+    // ── 4. Precompute block layout
+    // ────────────────────────────────────────────
+    struct BlockInfo {
+      int start;
+      int size;
+    };
     std::vector<BlockInfo> blocks;
     int cursor = 0;
     while (cursor < seg_len) {
       int sz = block_sz(blocks.size());
-      if (cursor + sz > seg_len) sz = seg_len - cursor;
+      if (cursor + sz > seg_len)
+        sz = seg_len - cursor;
       blocks.push_back({cursor, sz});
       cursor += sz;
     }
 
-    // ── 5. Timing partitioning ────────────────────────────────────────────────
-    // Each block has a staggered start time. The last block lands at the end of the duration.
+    // ── 5. Timing partitioning
+    // ──────────────────────────────────────────────── Each block has a
+    // staggered start time. The last block lands at the end of the duration.
     int num_blocks = blocks.size();
     float f_duration = (float)duration;
     // Each block takes 40% of the total duration to fall.
     // The starts are staggered over the remaining 60%.
     float fall_duration = f_duration * 0.4f;
     float total_stagger = f_duration * 0.6f;
-    float block_interval = (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
+    float block_interval =
+        (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
 
-    // ── 6. Rendering ──────────────────────────────────────────────────────────
-    // Clear strip
-    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+    // ── 6. Rendering
+    // ────────────────────────────────────────────────────────── Clear strip
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
 
     float current_time = progress * f_duration;
 
     for (int i = 0; i < num_blocks; i++) {
       BlockInfo b = blocks[i];
       float start_time = (float)i * block_interval;
-      
+
       // Determine physical target position based on mirror
       int target_start = reverse ? (seg_len - b.size - b.start) : b.start;
 
       if (current_time >= start_time + fall_duration) {
         // Landed
-        for (int j = 0; j < b.size; j++) it[seg_start + target_start + j] = c;
+        for (int j = 0; j < b.size; j++)
+          it[seg_start + target_start + j] = c;
       } else if (current_time > start_time) {
         // Falling
         float b_elapsed = current_time - start_time;
@@ -2746,29 +2770,34 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         int current_pos = f_start + (int)(fall_prog * (float)span);
 
         for (int j = 0; j < b.size; j++) {
-           int px = current_pos + (reverse ? j : (j - (b.size - 1)));
-           if (px >= 0 && px < seg_len) it[seg_start + px] = c;
+          int px = current_pos + (reverse ? j : (j - (b.size - 1)));
+          if (px >= 0 && px < seg_len)
+            it[seg_start + px] = c;
         }
       }
     }
     break;
   }
 
-  // ── Shared monochromatic lambdas (defined per scope to match existing pattern) ──
+    // ── Shared monochromatic lambdas (defined per scope to match existing
+    // pattern) ──
 
   case INTRO_MODE_INERTIA_SWEEP: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1000;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -2785,51 +2814,61 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       return p * p * (3.0f - 2.0f * p);
     };
 
-    // ── 3. Eased fill position ────────────────────────────────────────────────
+    // ── 3. Eased fill position
+    // ────────────────────────────────────────────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
-    float eased   = ease_in_out(prog);
-    int   fill_px = (int)(eased * (float)seg_len);
-    if (fill_px > seg_len) fill_px = seg_len;
+    float eased = ease_in_out(prog);
+    int fill_px = (int)(eased * (float)seg_len);
+    if (fill_px > seg_len)
+      fill_px = seg_len;
 
-    // ── 4. Leading-edge glow: 3-pixel brightness ramp at the cursor ───────────
-    static const uint8_t LEAD_BRIGHT[3] = { 255, 160, 60 };
+    // ── 4. Leading-edge glow: 3-pixel brightness ramp at the cursor
+    // ───────────
+    static const uint8_t LEAD_BRIGHT[3] = {255, 160, 60};
 
-    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    // ── 5. Clear strip
+    // ────────────────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
-        it[seg_start + i] = Color::BLACK;
+      it[seg_start + i] = Color::BLACK;
 
-    // ── 6. Draw filled body ───────────────────────────────────────────────────
+    // ── 6. Draw filled body
+    // ───────────────────────────────────────────────────
     for (int i = 0; i < fill_px; i++)
-        it[seg_start + i] = c;
+      it[seg_start + i] = c;
 
-    // ── 7. Draw hot leading edge ──────────────────────────────────────────────
+    // ── 7. Draw hot leading edge
+    // ──────────────────────────────────────────────
     for (int g = 0; g < 3; g++) {
-        int px = fill_px - 1 - g;
-        if (px >= 0 && px < seg_len)
-            it[seg_start + px] = boost(c, LEAD_BRIGHT[g] >> 1);
+      int px = fill_px - 1 - g;
+      if (px >= 0 && px < seg_len)
+        it[seg_start + px] = boost(c, LEAD_BRIGHT[g] >> 1);
     }
     if (fill_px < seg_len) {
-        uint8_t ahead_b = (uint8_t)(128.0f * (1.0f - prog));
-        it[seg_start + fill_px] = dim(c, ahead_b);
+      uint8_t ahead_b = (uint8_t)(128.0f * (1.0f - prog));
+      it[seg_start + fill_px] = dim(c, ahead_b);
     }
     break;
   }
 
   case INTRO_MODE_SONAR_REVEAL: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 2000;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -2837,55 +2876,64 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    // ── 3. Layout: 4 passes, each raising the floor ───────────────────────────
-    const int   NUM_PASSES   = 4;
+    // ── 3. Layout: 4 passes, each raising the floor
+    // ───────────────────────────
+    const int NUM_PASSES = 4;
 
-    float prog       = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
-    float pass_prog  = prog * (float)NUM_PASSES;
-    int   pass_done  = (int)pass_prog;
-    if (pass_done > NUM_PASSES) pass_done = NUM_PASSES;
-    float within     = pass_prog - (float)pass_done;
+    float pass_prog = prog * (float)NUM_PASSES;
+    int pass_done = (int)pass_prog;
+    if (pass_done > NUM_PASSES)
+      pass_done = NUM_PASSES;
+    float within = pass_prog - (float)pass_done;
 
     // Smooth gentle fade-in matching the outro behavior
-    uint8_t floor_b  = (uint8_t)(prog * 255.0f);
+    uint8_t floor_b = (uint8_t)(prog * 255.0f);
 
-    float scan_t     = (pass_done % 2 == 0) ? within : (1.0f - within);
-    int   scan_px    = (int)(scan_t * (float)(seg_len - 1));
+    float scan_t = (pass_done % 2 == 0) ? within : (1.0f - within);
+    int scan_px = (int)(scan_t * (float)(seg_len - 1));
 
-    int   scan_w     = seg_len / 20;
-    if (scan_w < 3) scan_w = 3;
+    int scan_w = seg_len / 20;
+    if (scan_w < 3)
+      scan_w = 3;
 
-    // ── 4. Draw floor + scanner ───────────────────────────────────────────────
+    // ── 4. Draw floor + scanner
+    // ───────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++) {
-        int dist = i - scan_px;
-        if (dist < 0) dist = -dist;
+      int dist = i - scan_px;
+      if (dist < 0)
+        dist = -dist;
 
-        if (dist < scan_w) {
-            uint8_t beam_b = (uint8_t)(255 - (dist * 255 / scan_w));
-            uint8_t final_b = beam_b > floor_b ? beam_b : floor_b;
-            it[seg_start + i] = dim(c, final_b);
-        } else {
-            it[seg_start + i] = dim(c, floor_b);
-        }
+      if (dist < scan_w) {
+        uint8_t beam_b = (uint8_t)(255 - (dist * 255 / scan_w));
+        uint8_t final_b = beam_b > floor_b ? beam_b : floor_b;
+        it[seg_start + i] = dim(c, final_b);
+      } else {
+        it[seg_start + i] = dim(c, floor_b);
+      }
     }
     break;
   }
 
   case INTRO_MODE_VENETIAN: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -2898,42 +2946,47 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 3. Two-phase split: 0→0.5 = evens snap on, 0.5→1.0 = odds fade in ───
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
     uint8_t even_b, odd_b;
     if (prog <= 0.5f) {
-        float p1   = prog * 2.0f;
-        float e1   = ease_in_out(p1);
-        even_b     = (uint8_t)(e1 * 255.0f);
-        odd_b      = 0;
+      float p1 = prog * 2.0f;
+      float e1 = ease_in_out(p1);
+      even_b = (uint8_t)(e1 * 255.0f);
+      odd_b = 0;
     } else {
-        float p2   = (prog - 0.5f) * 2.0f;
-        float e2   = ease_in_out(p2);
-        even_b     = 255;
-        odd_b      = (uint8_t)(e2 * 255.0f);
+      float p2 = (prog - 0.5f) * 2.0f;
+      float e2 = ease_in_out(p2);
+      even_b = 255;
+      odd_b = (uint8_t)(e2 * 255.0f);
     }
 
-    // ── 4. Draw ───────────────────────────────────────────────────────────────
+    // ── 4. Draw
+    // ───────────────────────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++) {
-        uint8_t b = (i % 2 == 0) ? even_b : odd_b;
-        it[seg_start + i] = dim(c, b);
+      uint8_t b = (i % 2 == 0) ? even_b : odd_b;
+      it[seg_start + i] = dim(c, b);
     }
     break;
   }
 
   case INTRO_MODE_CRYSTALLIZE: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1500;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -2941,61 +2994,70 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    // ── 3. Seed points: 4 nodes, spread via Knuth hash ────────────────────────
+    // ── 3. Seed points: 4 nodes, spread via Knuth hash
+    // ────────────────────────
     const int NUM_SEEDS = 4;
     int seeds[NUM_SEEDS];
     for (int s = 0; s < NUM_SEEDS; s++) {
-        uint32_t h  = (uint32_t)(s * 1234567u + 0xDEADBEEFu) * 2654435761u;
-        seeds[s]    = (int)((h >> 16) % (uint32_t)seg_len);
+      uint32_t h = (uint32_t)(s * 1234567u + 0xDEADBEEFu) * 2654435761u;
+      seeds[s] = (int)((h >> 16) % (uint32_t)seg_len);
     }
 
-    // ── 4. Ease-out cubic radius ──────────────────────────────────────────────
+    // ── 4. Ease-out cubic radius
+    // ──────────────────────────────────────────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
-    float inv     = 1.0f - prog;
-    float eased   = 1.0f - (inv * inv * inv);
-    float radius  = eased * (float)seg_len;
+    float inv = 1.0f - prog;
+    float eased = 1.0f - (inv * inv * inv);
+    float radius = eased * (float)seg_len;
 
     const int EDGE_PX = 3;
 
-    // ── 5. Draw each pixel based on distance to nearest seed ──────────────────
+    // ── 5. Draw each pixel based on distance to nearest seed
+    // ──────────────────
     for (int i = 0; i < seg_len; i++) {
-        int min_dist = seg_len;
-        for (int s = 0; s < NUM_SEEDS; s++) {
-            int d = i - seeds[s];
-            if (d < 0) d = -d;
-            if (d < min_dist) min_dist = d;
-        }
+      int min_dist = seg_len;
+      for (int s = 0; s < NUM_SEEDS; s++) {
+        int d = i - seeds[s];
+        if (d < 0)
+          d = -d;
+        if (d < min_dist)
+          min_dist = d;
+      }
 
-        float dist_f = (float)min_dist;
-        uint8_t b;
-        if (dist_f <= radius - EDGE_PX) {
-            b = 255;
-        } else if (dist_f <= radius) {
-            float t = (radius - dist_f) / (float)EDGE_PX;
-            b = (uint8_t)(t * 255.0f);
-        } else {
-            b = 0;
-        }
-        it[seg_start + i] = dim(c, b);
+      float dist_f = (float)min_dist;
+      uint8_t b;
+      if (dist_f <= radius - EDGE_PX) {
+        b = 255;
+      } else if (dist_f <= radius) {
+        float t = (radius - dist_f) / (float)EDGE_PX;
+        b = (uint8_t)(t * 255.0f);
+      } else {
+        b = 0;
+      }
+      it[seg_start + i] = dim(c, b);
     }
     break;
   }
 
   case INTRO_MODE_DEEP_BREATHE: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1800;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -3003,40 +3065,49 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    // ── 3. Gamma-corrected brightness — cubic ease-in, warm-up feel ───────────
+    // ── 3. Gamma-corrected brightness — cubic ease-in, warm-up feel
+    // ───────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    if (prog > 1.0f)
+      prog = 1.0f;
 
-    float eased   = prog * prog * prog;
+    float eased = prog * prog * prog;
     uint8_t raw_b = (uint8_t)(eased * 255.0f);
-    uint8_t b     = (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
+    uint8_t b =
+        (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
 
-    // ── 4. Triangular shimmer over strip length ───────────────────────────────
+    // ── 4. Triangular shimmer over strip length
+    // ───────────────────────────────
     for (int i = 0; i < seg_len; i++) {
-        int half    = seg_len / 2;
-        int dist    = i < half ? i : seg_len - 1 - i;
-        int shimmer = (dist * 24 / (half > 0 ? half : 1)) - 12;
-        int final_b = (int)b + shimmer;
-        if (final_b < 0)   final_b = 0;
-        if (final_b > 255) final_b = 255;
-        it[seg_start + i] = dim(c, (uint8_t)final_b);
+      int half = seg_len / 2;
+      int dist = i < half ? i : seg_len - 1 - i;
+      int shimmer = (dist * 24 / (half > 0 ? half : 1)) - 12;
+      int final_b = (int)b + shimmer;
+      if (final_b < 0)
+        final_b = 0;
+      if (final_b > 255)
+        final_b = 255;
+      it[seg_start + i] = dim(c, (uint8_t)final_b);
     }
     break;
   }
 
   case INTRO_MODE_MOIRE_SHIFT: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -3046,41 +3117,47 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 3. Brightness envelope: smoothstep 0 → 1 ─────────────────────────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
+    if (prog > 1.0f)
+      prog = 1.0f;
     float eased_p = prog * prog * (3.0f - 2.0f * prog);
     uint8_t env = (uint8_t)(eased_p * 255.0f);
 
-    // ── 4. Two coprime interference waves (cos8 via sin8 phase shift) ─────────
+    // ── 4. Two coprime interference waves (cos8 via sin8 phase shift)
+    // ─────────
     uint8_t t1 = (uint8_t)(elapsed >> 4);
     uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
 
     for (int i = 0; i < seg_len; i++) {
-        uint8_t s   = cfx::sin8((uint8_t)(i * 3u) + t1);
-        uint8_t co  = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
-        uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
-        uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-        
-        // Fade the interference pattern into a solid color (255) as progress approaches 1
-        uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * prog));
-        uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
-        it[seg_start + i] = dim(c, final_b);
+      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+
+      // Fade the interference pattern into a solid color (255) as progress
+      // approaches 1
+      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * prog));
+      uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
+      it[seg_start + i] = dim(c, final_b);
     }
     break;
   }
 
   case INTRO_MODE_RESONANCE_FILL: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1400;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -3094,61 +3171,72 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
     };
 
-    // ── 3. Sweep position (smoothstep) ────────────────────────────────────────
+    // ── 3. Sweep position (smoothstep)
+    // ────────────────────────────────────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
-    float eased     = prog * prog * (3.0f - 2.0f * prog);
-    int   sweep_pos = (int)(eased * (float)seg_len);
-    if (sweep_pos > seg_len) sweep_pos = seg_len;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    float eased = prog * prog * (3.0f - 2.0f * prog);
+    int sweep_pos = (int)(eased * (float)seg_len);
+    if (sweep_pos > seg_len)
+      sweep_pos = seg_len;
 
     uint8_t inv_prog_b = (uint8_t)((1.0f - prog) * 255.0f);
 
-    // ── 4. Clear strip ────────────────────────────────────────────────────────
+    // ── 4. Clear strip
+    // ────────────────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
-        it[seg_start + i] = Color::BLACK;
+      it[seg_start + i] = Color::BLACK;
 
     // ── 5. Draw filled region with ripple behind the sweep head ──────────────
     for (int i = 0; i < sweep_pos; i++) {
-        int dist = sweep_pos - 1 - i;  // 0 at head, grows toward strip start
+      int dist = sweep_pos - 1 - i; // 0 at head, grows toward strip start
 
-        uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
-        // Deepen falloff
-        uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
+      uint8_t dist_factor =
+          (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
+      // Deepen falloff
+      uint8_t falloff = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
 
-        // Ripple: sine wave over distance, amplitude decays with inv_prog_b
-        uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 25u));
-        // Double the ripple amplitude for visibility
-        int     ripple      = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
+      // Ripple: sine wave over distance, amplitude decays with inv_prog_b
+      uint8_t ripple_raw = cfx::sin8((uint8_t)(dist * 25u));
+      // Double the ripple amplitude for visibility
+      int ripple = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
 
-        int bri = 255 - (int)falloff + ripple;
-        if (bri < 0)   bri = 0;
-        if (bri > 255) bri = 255;
+      int bri = 255 - (int)falloff + ripple;
+      if (bri < 0)
+        bri = 0;
+      if (bri > 255)
+        bri = 255;
 
-        it[seg_start + i] = dim(c, (uint8_t)bri);
+      it[seg_start + i] = dim(c, (uint8_t)bri);
     }
 
-    // ── 6. Hot leading edge ───────────────────────────────────────────────────
+    // ── 6. Hot leading edge
+    // ───────────────────────────────────────────────────
     if (sweep_pos < seg_len) {
-        it[seg_start + sweep_pos] = boost(c, 60);
-        if (sweep_pos + 1 < seg_len)
-            it[seg_start + sweep_pos + 1] = dim(c, 80);
+      it[seg_start + sweep_pos] = boost(c, 60);
+      if (sweep_pos + 1 < seg_len)
+        it[seg_start + sweep_pos + 1] = dim(c, 80);
     }
     break;
   }
 
   case INTRO_MODE_TELEMETRY: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -3162,52 +3250,62 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                    (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
     };
 
-    // ── 3. Dash geometry ──────────────────────────────────────────────────────
+    // ── 3. Dash geometry
+    // ──────────────────────────────────────────────────────
     const int DASH_LEN = 6;
-    const int GAP_LEN  = 2;
+    const int GAP_LEN = 2;
 
-    // ── 4. Sweep position (smoothstep) ────────────────────────────────────────
+    // ── 4. Sweep position (smoothstep)
+    // ────────────────────────────────────────
     float prog = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
-    float eased     = prog * prog * (3.0f - 2.0f * prog);
-    int   sweep_pos = (int)(eased * (float)seg_len);
-    if (sweep_pos > seg_len) sweep_pos = seg_len;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    float eased = prog * prog * (3.0f - 2.0f * prog);
+    int sweep_pos = (int)(eased * (float)seg_len);
+    if (sweep_pos > seg_len)
+      sweep_pos = seg_len;
 
-    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    // ── 5. Clear strip
+    // ────────────────────────────────────────────────────────
     for (int i = 0; i < seg_len; i++)
-        it[seg_start + i] = Color::BLACK;
+      it[seg_start + i] = Color::BLACK;
 
-    // ── 6. Draw dashes behind sweep head ──────────────────────────────────────
+    // ── 6. Draw dashes behind sweep head
+    // ──────────────────────────────────────
     for (int i = 0; i < sweep_pos; i++) {
-        int phase = i % DASH_LEN;
-        if (phase < (DASH_LEN - GAP_LEN)) {
-            int    dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
-            uint8_t blade_b     = (uint8_t)(255 - dist_in_unit * 18);
-            it[seg_start + i]   = dim(c, blade_b);
-        }
+      int phase = i % DASH_LEN;
+      if (phase < (DASH_LEN - GAP_LEN)) {
+        int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+        uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
+        it[seg_start + i] = dim(c, blade_b);
+      }
     }
 
-    // ── 7. Hot leading edge ───────────────────────────────────────────────────
+    // ── 7. Hot leading edge
+    // ───────────────────────────────────────────────────
     if (sweep_pos > 0 && sweep_pos < seg_len) {
-        it[seg_start + sweep_pos - 1] = boost(c, 50);
-        it[seg_start + sweep_pos]     = dim(c, 100);
+      it[seg_start + sweep_pos - 1] = boost(c, 50);
+      it[seg_start + sweep_pos] = dim(c, 100);
     }
     break;
   }
 
   case INTRO_MODE_STELLAR_DUST: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration fetch
+    // ─────────────────────────────────────────────────────
     uint32_t duration = 2000;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
-        dur_num = this->controller_->get_intro_duration();
+      dur_num = this->controller_->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
-        duration = (uint32_t)(dur_num->state * 1000.0f);
+      duration = (uint32_t)(dur_num->state * 1000.0f);
     else if (this->intro_duration_preset_.has_value())
-        duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
-    if (duration == 0) duration = 1;
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
 
-    // ── 2. Local helpers ──────────────────────────────────────────────────────
+    // ── 2. Local helpers
+    // ──────────────────────────────────────────────────────
     auto dim = [](Color col, uint8_t f) -> Color {
       return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
                    (uint8_t)(((uint16_t)col.g * f) >> 8),
@@ -3216,22 +3314,50 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     };
 
     // ── 3. Brightness envelope ─────────────────────────────────
-    float prog  = (float)elapsed / (float)duration;
-    if (prog > 1.0f) prog = 1.0f;
-    // Removed cubic delay; linear fade or ease_out works best for instant visibility
-    float eased = prog * (2.0f - prog); // Quadratic ease-out so it lights up immediately
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    // Removed cubic delay; linear fade or ease_out works best for instant
+    // visibility
+    float eased =
+        prog * (2.0f - prog); // Quadratic ease-out so it lights up immediately
     uint8_t env = (uint8_t)(eased * 255.0f);
 
-    // ── 4. Global time counter + per-pixel breathing ──────────────────────────
+    // ── 4. Global time counter + per-pixel breathing
+    // ──────────────────────────
     uint8_t t = (uint8_t)(elapsed >> 5);
     for (int i = 0; i < seg_len; i++) {
-        uint8_t phase   = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
-        uint8_t osc     = cfx::sin8(t + phase);
-        uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
-        uint8_t scaled  = (uint8_t)(((uint16_t)osc * 175u) >> 8);
-        uint8_t star_b  = floor_b + scaled;
-        uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
-        it[seg_start + i] = dim(c, final_b);
+      uint8_t phase = (uint8_t)((uint32_t)(i)*2654435761u >> 24);
+      uint8_t osc = cfx::sin8(t + phase);
+      uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
+      uint8_t scaled = (uint8_t)(((uint16_t)osc * 175u) >> 8);
+      uint8_t star_b = floor_b + scaled;
+      uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
+      it[seg_start + i] = dim(c, final_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_INTERFERENCE: {
+    // ── Interference Intro: Soft fade-in with Moire-like pattern ──
+    float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
+    if (prog > 1.0f)
+      prog = 1.0f;
+    float eased = prog * (2.0f - prog); // Quadratic ease-out
+    uint8_t env = (uint8_t)(eased * 255.0f);
+
+    uint8_t t1 = (uint8_t)(elapsed >> 4);
+    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
+
+    for (int i = 0; i < seg_len; i++) {
+      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+
+      // Blend from black (alpha=env) towards the pattern
+      uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+      it[seg_start + i] = dim(c, final_b);
     }
     break;
   }
@@ -3244,7 +3370,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 }
-
 
 bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                                                 CFXRunner *runner) {
@@ -3489,7 +3614,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       for (int b = 0; b < NUM_BUBBLES; b++) {
         uint32_t phase = (uint32_t)(b * bubble_period / NUM_BUBBLES);
         uint32_t t = (elapsed + phase) % bubble_period;
-        float bubble_t = (float)t / (float)bubble_period; // 0=bottom → 1=surface
+        float bubble_t =
+            (float)t / (float)bubble_period; // 0=bottom → 1=surface
 
         float rise = 1.0f - (1.0f - bubble_t) * (1.0f - bubble_t);
 
@@ -3730,12 +3856,15 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     return false;
   }
   case INTRO_MODE_ASSEMBLY: {
-    // ── 1. Mirroring & Duration ───────────────────────────────────────────────
+    // ── 1. Mirroring & Duration
+    // ───────────────────────────────────────────────
     bool reverse = this->active_outro_mirror_;
     float total_duration_ms = (float)this->active_outro_duration_ms_;
-    if (total_duration_ms <= 0.0f) total_duration_ms = 1000.0f;
+    if (total_duration_ms <= 0.0f)
+      total_duration_ms = 1000.0f;
 
-    // ── 1.5 Cache population (First frame only) ───────────────────────────────
+    // ── 1.5 Cache population (First frame only)
+    // ───────────────────────────────
     if (this->outro_color_cache_.empty()) {
       for (int i = 0; i < seg_len; i++) {
         uint32_t c_raw = runner->_segment.getPixelColor(i);
@@ -3745,63 +3874,76 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       }
     }
 
-    // ── 2. Block Definition (Deterministic matching intro) ────────────────────
-    struct BlockInfo { int target_pos; int size; };
+    // ── 2. Block Definition (Deterministic matching intro)
+    // ────────────────────
+    struct BlockInfo {
+      int target_pos;
+      int size;
+    };
     std::vector<BlockInfo> blocks;
     int current_fill = 0;
-    
+
     auto block_sz = [](int idx) -> int {
       uint32_t h = (uint32_t)idx * 2654435761u; // Knuth hash
-      return (int)(h >> 30) + 1; // 1 to 4 pixels
+      return (int)(h >> 30) + 1;                // 1 to 4 pixels
     };
 
     while (current_fill < seg_len) {
       int b_size = block_sz(blocks.size());
-      if (current_fill + b_size > seg_len) b_size = seg_len - current_fill;
+      if (current_fill + b_size > seg_len)
+        b_size = seg_len - current_fill;
       blocks.push_back({current_fill, b_size});
       current_fill += b_size;
     }
 
-    // ── 3. Timing setup ───────────────────────────────────────────────────────
+    // ── 3. Timing setup
+    // ───────────────────────────────────────────────────────
     int num_blocks = blocks.size();
     float f_elapsed = (float)elapsed;
     float fall_duration = total_duration_ms * 0.4f;
     float total_stagger = total_duration_ms * 0.6f;
-    float block_interval = (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
+    float block_interval =
+        (num_blocks > 1) ? (total_stagger / (float)(num_blocks - 1)) : 0.0f;
 
-    // ── 4. Render loop ────────────────────────────────────────────────────────
-    // Clear strip first
-    for (int i = 0; i < seg_len; i++) it[seg_start + i] = Color::BLACK;
+    // ── 4. Render loop
+    // ──────────────────────────────────────────────────────── Clear strip
+    // first
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
 
     for (int i = 0; i < num_blocks; i++) {
-      const auto& b = blocks[i]; // Peel from index 0 first (Eating from bottom if !reverse)
+      const auto &b =
+          blocks[i]; // Peel from index 0 first (Eating from bottom if !reverse)
       float start_time = (float)i * block_interval;
-      
-      int target_idx = reverse ? (seg_len - b.size - b.target_pos) : b.target_pos;
+
+      int target_idx =
+          reverse ? (seg_len - b.size - b.target_pos) : b.target_pos;
 
       if (f_elapsed < start_time) {
         // Still part of the light - Draw from cache
         for (int j = 0; j < b.size; j++) {
-           int px = target_idx + j;
-           // Logical index in cache is target_idx + j if we didn't mirror the cache itself
-           // Wait, target_idx is ALREADY mirrored if 'reverse'
-           // We need the COLOR from the original pixel position.
-           // If reverse=false: b.target_pos + j
-           // If reverse=true: (seg_len - b.size - b.target_pos) + j
-           int cache_idx = target_idx + j; 
-           if (px >= 0 && px < seg_len && cache_idx >= 0 && (size_t)cache_idx < this->outro_color_cache_.size()) {
-             Color c_cached = this->outro_color_cache_[cache_idx];
-             uint8_t r = c_cached.r, g = c_cached.g, b_val = c_cached.b, w = c_cached.w;
-             if (this->active_outro_force_white_) {
-               cfx::apply_force_white(r, g, b_val, w);
-             }
-             it[seg_start + px] = Color(r, g, b_val, w);
-           }
+          int px = target_idx + j;
+          // Logical index in cache is target_idx + j if we didn't mirror the
+          // cache itself Wait, target_idx is ALREADY mirrored if 'reverse' We
+          // need the COLOR from the original pixel position. If reverse=false:
+          // b.target_pos + j If reverse=true: (seg_len - b.size - b.target_pos)
+          // + j
+          int cache_idx = target_idx + j;
+          if (px >= 0 && px < seg_len && cache_idx >= 0 &&
+              (size_t)cache_idx < this->outro_color_cache_.size()) {
+            Color c_cached = this->outro_color_cache_[cache_idx];
+            uint8_t r = c_cached.r, g = c_cached.g, b_val = c_cached.b,
+                    w = c_cached.w;
+            if (this->active_outro_force_white_) {
+              cfx::apply_force_white(r, g, b_val, w);
+            }
+            it[seg_start + px] = Color(r, g, b_val, w);
+          }
         }
       } else if (f_elapsed < start_time + fall_duration) {
         // Falling away
         float b_prog = (f_elapsed - start_time) / fall_duration;
-        float fall_prog = b_prog * b_prog; 
+        float fall_prog = b_prog * b_prog;
 
         // Falling direction: move from current position to "the exits"
         // !reverse: fall DOWN to exit (index < 0)
@@ -3817,7 +3959,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         for (int j = 0; j < b.size; j++) {
           int px = current_pos + j;
           int cache_idx = target_idx + j;
-          if (px >= 0 && px < seg_len && cache_idx >= 0 && (size_t)cache_idx < this->outro_color_cache_.size()) {
+          if (px >= 0 && px < seg_len && cache_idx >= 0 &&
+              (size_t)cache_idx < this->outro_color_cache_.size()) {
             Color c_cached = this->outro_color_cache_[cache_idx];
             uint8_t r = (uint8_t)(c_cached.r * dim_factor);
             uint8_t g = (uint8_t)(c_cached.g * dim_factor);
@@ -3846,9 +3989,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       return p * p * (3.0f - 2.0f * p);
     };
 
-    float eased    = ease_in_out(progress);
-    int   keep_px  = seg_len - (int)(eased * (float)seg_len);
-    if (keep_px < 0) keep_px = 0;
+    float eased = ease_in_out(progress);
+    int keep_px = seg_len - (int)(eased * (float)seg_len);
+    if (keep_px < 0)
+      keep_px = 0;
 
     for (int i = 0; i < seg_len; i++) {
       if (i >= keep_px) {
@@ -3856,7 +4000,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       } else {
         // Dim the kept body slightly by remaining fraction
         uint8_t fade_b = (uint8_t)(255.0f * (1.0f - progress * 0.4f));
-        Color orig     = it[seg_start + i].get();
+        Color orig = it[seg_start + i].get();
         it[seg_start + i] = dim(orig, fade_b);
       }
     }
@@ -3872,26 +4016,29 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     };
 
     const int NUM_SWEEPS = 3;
-    float     sweep_dur  = (float)duration_ms / (float)NUM_SWEEPS;
+    float sweep_dur = (float)duration_ms / (float)NUM_SWEEPS;
 
-    int   sweep_idx  = (int)((float)elapsed / sweep_dur);
-    if (sweep_idx >= NUM_SWEEPS) sweep_idx = NUM_SWEEPS - 1;
-    float within     = ((float)elapsed - (float)sweep_idx * sweep_dur) / sweep_dur;
+    int sweep_idx = (int)((float)elapsed / sweep_dur);
+    if (sweep_idx >= NUM_SWEEPS)
+      sweep_idx = NUM_SWEEPS - 1;
+    float within = ((float)elapsed - (float)sweep_idx * sweep_dur) / sweep_dur;
 
     float floor_fade = 1.0f - progress;
-    uint8_t floor_b  = (uint8_t)(floor_fade * 255.0f);
+    uint8_t floor_b = (uint8_t)(floor_fade * 255.0f);
 
     float scan_t = (sweep_idx % 2 == 0) ? within : (1.0f - within);
-    int   scan_px = (int)(scan_t * (float)(seg_len - 1));
+    int scan_px = (int)(scan_t * (float)(seg_len - 1));
 
     int scan_w = seg_len / 20;
-    if (scan_w < 3) scan_w = 3;
+    if (scan_w < 3)
+      scan_w = 3;
 
     for (int i = 0; i < seg_len; i++) {
       int dist = i - scan_px;
-      if (dist < 0) dist = -dist;
+      if (dist < 0)
+        dist = -dist;
 
-      Color orig     = it[seg_start + i].get();
+      Color orig = it[seg_start + i].get();
       uint8_t beam_b = 0;
       if (dist < scan_w)
         beam_b = (uint8_t)(255 - (dist * 255 / scan_w));
@@ -3915,19 +4062,19 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     uint8_t even_b, odd_b;
     if (progress <= 0.5f) {
-      float p1  = progress * 2.0f;
-      float e1  = ease_in_out(p1);
-      even_b    = (uint8_t)((1.0f - e1) * 255.0f);
-      odd_b     = 255;
+      float p1 = progress * 2.0f;
+      float e1 = ease_in_out(p1);
+      even_b = (uint8_t)((1.0f - e1) * 255.0f);
+      odd_b = 255;
     } else {
-      float p2  = (progress - 0.5f) * 2.0f;
-      float e2  = ease_in_out(p2);
-      even_b    = 0;
-      odd_b     = (uint8_t)((1.0f - e2) * 255.0f);
+      float p2 = (progress - 0.5f) * 2.0f;
+      float e2 = ease_in_out(p2);
+      even_b = 0;
+      odd_b = (uint8_t)((1.0f - e2) * 255.0f);
     }
 
     for (int i = 0; i < seg_len; i++) {
-      uint8_t b  = (i % 2 == 0) ? even_b : odd_b;
+      uint8_t b = (i % 2 == 0) ? even_b : odd_b;
       Color orig = it[seg_start + i].get();
       it[seg_start + i] = dim(orig, b);
     }
@@ -3946,12 +4093,12 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     int seeds[NUM_SEEDS];
     for (int s = 0; s < NUM_SEEDS; s++) {
       uint32_t h = (uint32_t)(s * 1234567u + 0xDEADBEEFu) * 2654435761u;
-      seeds[s]   = (int)((h >> 16) % (uint32_t)seg_len);
+      seeds[s] = (int)((h >> 16) % (uint32_t)seg_len);
     }
 
     // Contract: radius shrinks from seg_len to 0
-    float inv    = 1.0f - progress;
-    float eased  = inv * inv * inv;
+    float inv = 1.0f - progress;
+    float eased = inv * inv * inv;
     float radius = eased * (float)seg_len;
 
     const int EDGE_PX = 3;
@@ -3960,8 +4107,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       int min_dist = seg_len;
       for (int s = 0; s < NUM_SEEDS; s++) {
         int d = i - seeds[s];
-        if (d < 0) d = -d;
-        if (d < min_dist) min_dist = d;
+        if (d < 0)
+          d = -d;
+        if (d < min_dist)
+          min_dist = d;
       }
 
       float dist_f = (float)min_dist;
@@ -3974,8 +4123,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       } else {
         b = 0;
       }
-      Color orig         = it[seg_start + i].get();
-      it[seg_start + i]  = dim(orig, b);
+      Color orig = it[seg_start + i].get();
+      it[seg_start + i] = dim(orig, b);
     }
     break;
   }
@@ -3988,20 +4137,24 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
 
-    float inv     = 1.0f - progress;
-    // Use a gentler fade curve so the light stays visible through the full duration
+    float inv = 1.0f - progress;
+    // Use a gentler fade curve so the light stays visible through the full
+    // duration
     uint8_t raw_b = (uint8_t)(inv * 255.0f);
-    uint8_t b     = (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
+    uint8_t b =
+        (raw_b == 0) ? 0 : (uint8_t)(((uint16_t)raw_b * raw_b) >> 8) + 1;
 
     for (int i = 0; i < seg_len; i++) {
-      int half    = seg_len / 2;
-      int dist    = i < half ? i : seg_len - 1 - i;
+      int half = seg_len / 2;
+      int dist = i < half ? i : seg_len - 1 - i;
       int shimmer = (dist * 24 / (half > 0 ? half : 1)) - 12;
       int final_b = (int)b + shimmer;
-      if (final_b < 0)   final_b = 0;
-      if (final_b > 255) final_b = 255;
-      Color orig         = it[seg_start + i].get();
-      it[seg_start + i]  = dim(orig, (uint8_t)final_b);
+      if (final_b < 0)
+        final_b = 0;
+      if (final_b > 255)
+        final_b = 255;
+      Color orig = it[seg_start + i].get();
+      it[seg_start + i] = dim(orig, (uint8_t)final_b);
     }
     break;
   }
@@ -4045,13 +4198,15 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
 
     for (int i = 0; i < seg_len; i++) {
-      Color orig   = it[seg_start + i].get();
-      uint8_t s    = cfx::sin8((uint8_t)(i * 3u) + t1);
-      uint8_t co   = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
-      uint8_t avg  = (uint8_t)(((uint16_t)s + co) >> 1);
-      uint8_t gam  = (uint8_t)(((uint16_t)avg * avg) >> 8);
-      // As progress increases, fade FROM solid (255) TO the interference pattern
-      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
+      Color orig = it[seg_start + i].get();
+      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+      // As progress increases, fade FROM solid (255) TO the interference
+      // pattern
+      uint8_t blended_gam =
+          (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
       uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
       it[seg_start + i] = dim(orig, final_b);
     }
@@ -4071,9 +4226,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
                    (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
     };
-    float eased     = progress * progress * (3.0f - 2.0f * progress);
-    int   sweep_pos = seg_len - (int)(eased * (float)seg_len);
-    if (sweep_pos < 0) sweep_pos = 0;
+    float eased = progress * progress * (3.0f - 2.0f * progress);
+    int sweep_pos = seg_len - (int)(eased * (float)seg_len);
+    if (sweep_pos < 0)
+      sweep_pos = 0;
 
     uint8_t inv_prog_b = (uint8_t)((1.0f - progress) * 255.0f);
 
@@ -4082,23 +4238,30 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       it[seg_start + i] = Color::BLACK;
 
     for (int i = 0; i < sweep_pos; i++) {
-      Color orig          = it[seg_start + i].get();
-      int dist            = sweep_pos - 1 - i;
-      uint8_t dist_factor = (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
-      uint8_t falloff     = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
-      uint8_t ripple_raw  = cfx::sin8((uint8_t)(dist * 25u));
-      int     ripple      = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
+      Color orig = it[seg_start + i].get();
+      int dist = sweep_pos - 1 - i;
+      uint8_t dist_factor =
+          (uint8_t)((dist * 255) / (seg_len > 0 ? seg_len : 1));
+      uint8_t falloff = (uint8_t)(((uint16_t)dist_factor * inv_prog_b) >> 7);
+      uint8_t ripple_raw = cfx::sin8((uint8_t)(dist * 25u));
+      int ripple = (((int)ripple_raw - 128) * 2 * inv_prog_b) / 255;
       int bri = 255 - (int)falloff + ripple;
-      if (bri < 0)   bri = 0;
-      if (bri > 255) bri = 255;
+      if (bri < 0)
+        bri = 0;
+      if (bri > 255)
+        bri = 255;
       it[seg_start + i] = dim(orig, (uint8_t)bri);
     }
     if (sweep_pos > 0) {
-      Color edge = it[seg_start + sweep_pos - 1 < seg_len ? seg_start + sweep_pos - 1 : seg_start].get();
+      Color edge =
+          it[seg_start + sweep_pos - 1 < seg_len ? seg_start + sweep_pos - 1
+                                                 : seg_start]
+              .get();
       if (sweep_pos - 1 >= 0 && sweep_pos - 1 < seg_len)
         it[seg_start + sweep_pos - 1] = boost(edge, 60);
       if (sweep_pos - 2 >= 0 && sweep_pos - 2 < seg_len)
-        it[seg_start + sweep_pos - 2] = dim(it[seg_start + sweep_pos - 2].get(), 80);
+        it[seg_start + sweep_pos - 2] =
+            dim(it[seg_start + sweep_pos - 2].get(), 80);
     }
     break;
   }
@@ -4117,25 +4280,29 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
     };
     const int DASH_LEN = 6;
-    const int GAP_LEN  = 2;
+    const int GAP_LEN = 2;
 
-    float eased   = progress * progress * (3.0f - 2.0f * progress);
+    float eased = progress * progress * (3.0f - 2.0f * progress);
     int remaining = seg_len - (int)(eased * (float)seg_len);
-    if (remaining < 0) remaining = 0;
+    if (remaining < 0)
+      remaining = 0;
 
     // Only clear the portion of the strip that has been wiped away
-    for (int i = remaining; i < seg_len; i++)
-      it[seg_start + i] = Color::BLACK;
+    // Softer clear: fade out the wiped pixels over 100ms instead of immediate black
+    for (int i = remaining; i < seg_len; i++) {
+      Color cur = it[seg_start + i].get();
+      it[seg_start + i] = dim(cur, 180); // 70% retention for "soft" trail
+    }
 
     for (int i = 0; i < remaining; i++) {
-      Color orig  = it[seg_start + i].get();
-      int phase   = i % DASH_LEN;
+      Color orig = it[seg_start + i].get();
+      int phase = i % DASH_LEN;
       if (phase < (DASH_LEN - GAP_LEN)) {
-        int    dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
-        uint8_t blade_b     = (uint8_t)(255 - dist_in_unit * 18);
-        it[seg_start + i]   = dim(orig, blade_b);
+        int dist_in_unit = (DASH_LEN - GAP_LEN - 1) - phase;
+        uint8_t blade_b = (uint8_t)(255 - dist_in_unit * 18);
+        it[seg_start + i] = dim(orig, blade_b);
       } else {
-        it[seg_start + i]   = Color::BLACK;
+        it[seg_start + i] = Color::BLACK;
       }
     }
     if (remaining > 0 && remaining <= seg_len) {
@@ -4154,19 +4321,43 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                    (uint8_t)(((uint16_t)col.b * f) >> 8),
                    (uint8_t)(((uint16_t)col.w * f) >> 8));
     };
-    float inv   = 1.0f - progress;
-    float eased = inv * inv * inv;                  // cubic ease-out
+    float inv = 1.0f - progress;
+    float eased = inv * inv * inv; // cubic ease-out
     uint8_t env = (uint8_t)(eased * 255.0f);
 
     uint8_t t = (uint8_t)(elapsed >> 5);
     for (int i = 0; i < seg_len; i++) {
-      Color orig      = it[seg_start + i].get();
-      uint8_t phase   = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
-      uint8_t osc     = cfx::sin8(t + phase);
+      Color orig = it[seg_start + i].get();
+      uint8_t phase = (uint8_t)((uint32_t)(i) * 2654435761u >> 24);
+      uint8_t osc = cfx::sin8(t + phase);
       uint8_t floor_b = (uint8_t)(((uint16_t)80u * env) >> 8);
-      uint8_t scaled  = (uint8_t)(((uint16_t)osc * 175u) >> 8);
-      uint8_t star_b  = floor_b + scaled;
+      uint8_t scaled = (uint8_t)(((uint16_t)osc * 175u) >> 8);
+      uint8_t star_b = floor_b + scaled;
       uint8_t final_b = (uint8_t)(((uint16_t)star_b * env) >> 8);
+      it[seg_start + i] = dim(orig, final_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_INTERFERENCE: {
+    // Outro: Interference Dissolve — reverse of intro
+    float inv_p = 1.0f - progress;
+    float eased_p = inv_p * inv_p; // Quadratic ease-in for outro
+    uint8_t env = (uint8_t)(eased_p * 255.0f);
+
+    uint8_t t1 = (uint8_t)(elapsed >> 4);
+    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
+
+    for (int i = 0; i < seg_len; i++) {
+      Color orig = it[seg_start + i].get();
+      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+      
+      // As progress increases, fade FROM solid (255) TO the interference pattern
+      uint8_t blended_gam = (uint8_t)(gam + ((255.0f - gam) * (1.0f - progress)));
+      uint8_t final_b = (uint8_t)(((uint16_t)blended_gam * env) >> 8);
       it[seg_start + i] = dim(orig, final_b);
     }
     break;

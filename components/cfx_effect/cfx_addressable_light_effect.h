@@ -91,7 +91,8 @@ public:
     INTRO_MODE_MOIRE_SHIFT  = 16,
     INTRO_MODE_RESONANCE_FILL = 17,
     INTRO_MODE_TELEMETRY    = 18,
-    INTRO_MODE_STELLAR_DUST = 19
+    INTRO_MODE_STELLAR_DUST = 19,
+    INTRO_MODE_INTERFERENCE = 20
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);

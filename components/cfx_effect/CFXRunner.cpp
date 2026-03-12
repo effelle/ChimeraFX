@@ -57,7 +57,6 @@ uint16_t mode_dropping_fill(void);
 uint16_t mode_moire_shift(void);
 uint16_t mode_resonance_fill(void);
 uint16_t mode_telemetry(void);
-uint16_t mode_stellar_dust(void);
 uint16_t mode_interference(void);
 
 // (get_millis is defined globally before the namespace - see top of file)
@@ -4469,14 +4468,10 @@ void CFXRunner::service() {
     mode_dropping_fill();
     break;
   case FX_MODE_MOIRE_SHIFT: // 176
-    mode_moire_shift();
-    break;
   case FX_MODE_RESONANCE_FILL: // 177
   case FX_MODE_TELEMETRY: // 178
-    mode_static(); // Ambient fill effects
-    break;
   case FX_MODE_STELLAR_DUST: // 179
-    mode_stellar_dust();
+    mode_static(); // Ambient fill effects
     break;
   case FX_MODE_INTERFERENCE: // 180
     mode_interference();
@@ -6995,53 +6990,6 @@ uint16_t mode_dropping_fill(void) {
   return FRAMETIME;
 }
 
-uint16_t mode_moire_shift(void) {
-  if (!instance) return FRAMETIME;
-  uint16_t len = instance->_segment.length();
-  if (len <= 1) return mode_static();
-  
-  uint8_t t1 = (uint8_t)(instance->now >> 4);
-  uint8_t t2 = (uint8_t)((instance->now * 3u) >> 5);
-  uint32_t c0 = instance->_segment.colors[0];
-  
-  for (int i = 0; i < len; i++) {
-      uint8_t s   = cfx::sin8((uint8_t)(i * 3u) + t1);
-      uint8_t c   = cfx::sin8((uint8_t)(i * 5u) - t2 + 64u);
-      uint8_t avg = (uint8_t)(((uint16_t)s + c) >> 1);
-      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-      
-      uint8_t r = (CFX_R(c0) * gam) >> 8;
-      uint8_t g = (CFX_G(c0) * gam) >> 8;
-      uint8_t b = (CFX_B(c0) * gam) >> 8;
-      uint8_t w = (CFX_W(c0) * gam) >> 8;
-      
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-  }
-  return FRAMETIME;
-}
-
-uint16_t mode_stellar_dust(void) {
-  if (!instance) return FRAMETIME;
-  uint16_t len = instance->_segment.length();
-  if (len <= 1) return mode_static();
-  
-  uint8_t t = (uint8_t)(instance->now >> 5);
-  uint32_t c0 = instance->_segment.colors[0];
-  
-  for (int i = 0; i < len; i++) {
-      uint8_t phase   = (uint8_t)(((uint32_t)i * 2654435761u) >> 24);
-      uint8_t osc     = cfx::sin8(t + phase);
-      uint8_t star_b  = 80u + (uint8_t)(((uint16_t)osc * 175u) >> 8);
-      
-      uint8_t r = (CFX_R(c0) * star_b) >> 8;
-      uint8_t g = (CFX_G(c0) * star_b) >> 8;
-      uint8_t b = (CFX_B(c0) * star_b) >> 8;
-      uint8_t w = (CFX_W(c0) * star_b) >> 8;
-      
-      instance->_segment.setPixelColor(i, RGBW32(r, g, b, w));
-  }
-  return FRAMETIME;
-}
 
 uint16_t mode_interference(void) {
   if (!instance) return FRAMETIME;

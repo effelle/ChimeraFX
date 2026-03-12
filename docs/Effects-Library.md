@@ -690,6 +690,125 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 173
         ```
 
+??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Moire_Shift.webm" type="video/webm">
+        </video>
+        *A high-frequency interference pattern that shifts and breathes. Features a complex overlapping sinewave engine that creates organic, shifting shadows and light pockets. Now refined with a proper architectural transition that resolves to a solid floor.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Complexity**: adjusts the frequency of the overlapping waves. |
+        | **Speed** | `128` | **Drift**: controls the velocity of the interference shift. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Moiré Shift"
+              effect_id: 176
+        ```
+
+??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Resonance_Fill.webm" type="video/webm">
+        </video>
+        *A liquid-reactive fill sequence. Light surges across the strip with a decaying ripple effect, resonating at the leading edge. The "Resonance" intro features a high-impact surge, while the "Resonance Fade" outro provides a rhythmic, decaying drain.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Ripple Decadence**: controls the frequency and decay of the feedback ripples. |
+        | **Speed** | `100` | **Flow Pressure**: controls the velocity of the fill surge. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Resonance Fill"
+              effect_id: 177
+        ```
+
+??? abstract "178 | Telemetry | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Telemetry.webm" type="video/webm">
+        </video>
+        *A digital, block-based construction sequence. Dashes of light "transmit" across the strip to build the solid floor. Features a "Telemetry" intro with sharp data-bursts and a refined "Telemetry Fade" outro with softened trail-retraction.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Data Density**: adjusts the length and spacing of the telemetry dashes. |
+        | **Speed** | `128` | **Baud Rate**: controls the transmission speed across the strip. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Telemetry"
+              effect_id: 178
+        ```
+
+??? abstract "179 | Stellar Dust | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Stellar_Dust.webm" type="video/webm">
+        </video>
+        *The strip awakens through a flurry of distant, breathing stars. Each pixel enters with a randomized phase-shifted pulse, creating a deep field of light that eventually stabilizes into a solid floor. Fixed in 1.4.1 for instant response.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Star Density**: adjusts the contrast between breathing pixels. |
+        | **Speed** | `128` | **Blink Rate**: controls the frequency of the stellar breathing. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Stellar Dust"
+              effect_id: 179
+        ```
+
+??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High | :material-palette:</span>"
+
+    === "🎬 Preview"
+        *A "Batch 2" signature effect. High-frequency light waves collide and interfere, creating a shimmering, high-energy field. Unlike other monochromatic effects, Interference fully supports palettes and features a dedicated "Interference" soft fade-in.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `170` | **Wave Frequency**: adjusts the density of the interference bands. |
+        | **Speed** | `100` | **Shift Speed**: controls how fast the patterns collide. |
+        | **Palette** | — | **Supported**: Defaults to **Cyberpunk** (15). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Interference"
+              effect_id: 180
+        ```
+
 ??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
 
 
