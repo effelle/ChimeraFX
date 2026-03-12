@@ -151,15 +151,12 @@ def main():
                     # Initialize or resize window if LED count changes
                     if new_led_count != led_count and new_led_count > 0:
                         led_count = new_led_count
-                        width = led_count * args.scale
-                        height = args.scale * 4 + 60 # Extra room for text
-                        # Prevent window from being wider than absolute max (wrap around if needed)
-                        max_width = 1600
-                        if width > max_width:
-                            columns = max_width // args.scale
-                            rows = (led_count // columns) + 1
-                            width = columns * args.scale
-                            height = (rows * args.scale) + 60
+                        # Force exactly 1200 width for docs if scale is 20 and leds=60
+                        columns = 60 if args.scale == 20 else max(10, min(led_count, 1600 // args.scale))
+                        rows = ((led_count - 1) // columns) + 1
+                        
+                        width = columns * args.scale
+                        height = rows * (args.scale * 3)
                         
                         screen = pygame.display.set_mode((width, height))
                         print(f"Detected {led_count} LEDs. Resizing window to {width}x{height}")
@@ -229,13 +226,16 @@ def main():
                 row = i // columns
                 
                 x = col * args.scale
-                y = 50 + (row * args.scale)
+                # Center vertically in the 3*scale row height
+                y = (row * args.scale * 3) + args.scale
                 
-                # Draw LED bounding box
-                pygame.draw.rect(screen, (40, 40, 40), (x, y, args.scale, args.scale), 1)
-                # Draw LED color
-                inner_pad = 2
-                pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
+                # Draw LED bounding box (dark gray background cell)
+                pygame.draw.rect(screen, (39, 41, 41), (x, y, args.scale, args.scale))
+                
+                # Draw LED color if it's lit
+                if color != (0, 0, 0):
+                    inner_pad = 2
+                    pygame.draw.rect(screen, color, (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
 
             # Draw Metadata Text
             text_str = f"Effect: {effect_name}"
@@ -256,16 +256,9 @@ def main():
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                columns = screen.get_width() // args.scale
-                box_width = min(len(pixels), columns) * args.scale
-                box_height = ((len(pixels) - 1) // columns + 1) * args.scale
-                
-                # Extract just the LED area (skip the text header at y=50)
-                # pygame surface string is RGB, OpenCV expects BGR
+                # We capture the entire screen since it's perfectly sized now
                 try:
-                    sub_surface = screen.subsurface((0, 50, box_width, box_height))
-                    # array3d copies the pixels without locking the surface (pixels3d locks it and crashes the next blit)
-                    view = pygame.surfarray.array3d(sub_surface)
+                    view = pygame.surfarray.array3d(screen)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
