@@ -85,6 +85,14 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_TELEMETRY, INTRO_MODE_TELEMETRY};
   case 179: // Stellar Dust
     return {true, INTRO_MODE_STELLAR_DUST, INTRO_MODE_STELLAR_DUST};
+  case 181: // Eclipse
+    return {true, INTRO_MODE_ECLIPSE, INTRO_MODE_ECLIPSE};
+  case 182: // Gas Discharge
+    return {true, INTRO_MODE_GAS_DISCHARGE, INTRO_MODE_GAS_DISCHARGE};
+  case 183: // Harmonic Settle
+    return {true, INTRO_MODE_HARMONIC_SETTLE, INTRO_MODE_HARMONIC_SETTLE};
+  case 184: // Lithograph
+    return {true, INTRO_MODE_LITHOGRAPH, INTRO_MODE_LITHOGRAPH};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -110,6 +118,10 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 177: // Resonance Fill
   case 178: // Telemetry
   case 179: // Stellar Dust
+  case 181: // Eclipse
+  case 182: // Gas Discharge
+  case 183: // Harmonic Settle
+  case 184: // Lithograph
     return true;
   default:
     return false;
@@ -3363,6 +3375,301 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
+  case INTRO_MODE_ECLIPSE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1500;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Global brightness envelope: cubic ease-in (lingers dark, then glows) ─
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    uint8_t env = (uint8_t)(cfx::ease_in_out(prog) * 255.0f);
+
+    // ── 3. Shadow geometry ─────────────────────────────────────────────────────
+    //       Base brightness the strip rests at when fully lit (not 255 —
+    //       this is ambient glow, not a work light)
+    const uint8_t BASE_B = 180;
+    //       Shadow half-width: covers ~18% of strip, minimum 4 pixels
+    int shadow_hw = seg_len * 18 / 100;
+    if (shadow_hw < 4)
+      shadow_hw = 4;
+    //       Shadow centre travels one full strip length per 6 seconds
+    int shadow_px = (int)((elapsed / 6000.0f) * (float)seg_len) % seg_len;
+
+    // ── 4. Draw strip: base brightness minus parabolic shadow dip ─────────────
+    for (int i = 0; i < seg_len; i++) {
+      // Wrap-aware distance from shadow centre
+      int dist = i - shadow_px;
+      if (dist < 0)
+        dist = -dist;
+      if (dist > seg_len / 2)
+        dist = seg_len - dist;  // shortest arc on wrap
+      if (dist > shadow_hw)
+        dist = shadow_hw;  // clamp to shadow radius
+
+      // Parabolic profile: 255 at centre, 0 at edge — approximates Gaussian
+      // without expf() in a per-pixel loop
+      int d_norm = shadow_hw - dist;  // 0 at edge, shadow_hw at centre
+      uint8_t shadow_depth = (uint8_t)((uint32_t)d_norm * d_norm * 215u /
+                                       (uint32_t)(shadow_hw * shadow_hw));
+      // shadow_depth: 0 at edge → ~215 at centre (85% of BASE_B)
+
+      int bri = (int)BASE_B - (int)shadow_depth;
+      if (bri < 0)
+        bri = 0;
+
+      // Apply intro envelope
+      uint8_t final_b = (uint8_t)(((uint16_t)(uint8_t)bri * env) >> 8);
+      it[seg_start + i] = cfx::dim(c, final_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_GAS_DISCHARGE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 2200;  // default longer: the stutter IS the experience
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Phase boundaries ───────────────────────────────────────────────────
+    uint32_t p1_end = duration * 35 / 100;  // sparse flashes
+    uint32_t p2_end = duration * 65 / 100;  // rapid strikes
+    uint32_t p3_end = duration * 88 / 100;  // buzz stabilisation
+    // p4: remainder → lock-in
+
+    uint8_t brightness = 0;
+
+    if (elapsed < p1_end) {
+      // ── Phase 1: Sparse violent flashes ──────────────────────────────────
+      //    80 ms time slots.  High-bit of hash decides flash vs dark.
+      //    A flash slot itself is split: first 25 ms bright, then 55 ms dark
+      //    (simulates the fast-extinguishing of a struggling arc).
+      const uint32_t SLOT_MS = 80;
+      uint32_t slot = elapsed / SLOT_MS;
+      uint32_t within_slot = elapsed % SLOT_MS;
+      uint32_t h = cfx::knuth32(slot * 7u + 1u);
+      bool is_flash_slot = (h >> 29) > 5u;  // ~25% of slots are flashes
+
+      if (is_flash_slot && within_slot < 25u) {
+        brightness = 255;
+      } else {
+        brightness = 0;
+      }
+    } else if (elapsed < p2_end) {
+      // ── Phase 2: Rapid strikes ────────────────────────────────────────────
+      //    30 ms slots.  Higher flash density (~55%).  Between flashes, a
+      //    dim afterglow (brightness 40) from the residual ionised gas.
+      const uint32_t SLOT_MS = 30;
+      uint32_t phase_t = elapsed - p1_end;
+      uint32_t slot = phase_t / SLOT_MS;
+      uint32_t within_slot = phase_t % SLOT_MS;
+      uint32_t h = cfx::knuth32(slot * 13u + 2u);
+      bool is_flash_slot = (h >> 29) > 3u;  // ~55% are flashes
+
+      if (is_flash_slot && within_slot < 18u) {
+        brightness = 255;
+      } else {
+        // Dim afterglow: linearly fades from 60 → 0 over the dark portion
+        uint32_t dark_t = within_slot > 18u ? within_slot - 18u : 0u;
+        brightness = (uint8_t)(60u > dark_t * 2u ? 60u - dark_t * 2u : 0u);
+      }
+    } else if (elapsed < p3_end) {
+      // ── Phase 3: Buzz — oscillates 150–255, amplitude shrinks as stabilises ─
+      //    Period starts at 30 ms (fast flutter) and extends to 60 ms (calm buzz)
+      uint32_t phase_t = elapsed - p2_end;
+      uint32_t phase_dur = p3_end - p2_end;
+      float norm = (float)phase_t / (float)phase_dur;  // 0→1
+      // Amplitude: starts at 52 (full 150-255 swing), shrinks to 18 (237-255)
+      uint8_t amp = (uint8_t)(52.0f * (1.0f - norm * 0.65f));
+      // Period: 30 ms → 55 ms
+      uint32_t period = 30u + (uint32_t)(norm * 25.0f);
+      uint8_t t = (uint8_t)((phase_t % period) * 255u / period);
+      // sin8 oscillation centred at (255 - amp)
+      brightness = (255u - amp) + (uint8_t)(((uint16_t)cfx::sin8(t) * amp) >> 8);
+    } else {
+      // ── Phase 4: Final lock-in — linear ramp 210 → 255 ───────────────────
+      uint32_t phase_t = elapsed - p3_end;
+      uint32_t phase_dur = duration - p3_end;
+      if (phase_dur == 0)
+        phase_dur = 1;
+      brightness = (uint8_t)(210u + (phase_t * 45u / phase_dur));
+      if (brightness > 255u)
+        brightness = 255u;
+    }
+
+    // ── 3. Apply brightness to full strip ────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = cfx::dim(c, brightness);
+    break;
+  }
+
+  case INTRO_MODE_HARMONIC_SETTLE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1600;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Spring position — computed ONCE, not per pixel ─────────────────────
+    float t_norm = (float)elapsed / (float)duration;
+    if (t_norm > 1.0f)
+      t_norm = 1.0f;
+
+    // Damped oscillator: decay=4.0, omega=2π (one full oscillation)
+    // expf() + cosf() called once per frame — see FPU note above
+    float decay_term = expf(-4.0f * t_norm);
+    float osc_term = cosf(6.283185f * t_norm);
+    float fill_frac = 1.0f - decay_term * osc_term;
+
+    // fill_frac can briefly exceed 1.0 (overshoot past seg_len — this is correct)
+    int fill_px = (int)(fill_frac * (float)seg_len);
+
+    // ── 3. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    // ── 4. Draw filled body ───────────────────────────────────────────────────
+    int draw_px = fill_px;
+    if (draw_px > seg_len)
+      draw_px = seg_len;
+    if (draw_px < 0)
+      draw_px = 0;
+
+    for (int i = 0; i < draw_px; i++)
+      it[seg_start + i] = c;
+
+    // ── 5. Overshoot indicator: edge flash when spring extends past strip end ─
+    //       A brief white boost on the final pixel signals the "wall impact"
+    //       that the spring is pushing against.
+    if (fill_px > seg_len) {
+      uint8_t over_b = (uint8_t)((fill_px - seg_len) * 40);
+      if (over_b > 80)
+        over_b = 80;
+      it[seg_start + seg_len - 1] = cfx::boost(c, over_b);
+    }
+
+    // ── 6. Spring tension line: dim pixels behind fill when bouncing back ──────
+    //       When the spring retracts (fill_frac decreasing), a dim "tension"
+    //       gradient behind the head conveys the elastic pull-back.
+    if (fill_px > 0 && fill_px < seg_len) {
+      int tension_px = fill_px < 4 ? fill_px : 4;
+      for (int g = 0; g < tension_px; g++) {
+        int px = fill_px - 1 - g;
+        if (px >= 0)
+          it[seg_start + px] = cfx::dim(c, (uint8_t)(80 - g * 18));
+      }
+    }
+    break;
+  }
+
+  case INTRO_MODE_LITHOGRAPH: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1100;
+    number::Number *dur_num = this->intro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_intro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->intro_duration_preset_.has_value())
+      duration = (uint32_t)(this->intro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Sweep cursor (ease-in-out) ─────────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    int sweep_px = (int)(cfx::ease_in_out(prog) * (float)seg_len);
+    if (sweep_px > seg_len)
+      sweep_px = seg_len;
+
+    // ── 3. Scroll position: 1 pixel per 8 ms  (125 px/sec scanner speed) ──────
+    uint32_t scroll = elapsed >> 3;
+
+    // ── 4. Build pattern lookup (segment index → lit or dark) ─────────────────
+    //       Each segment has a hash-derived width (1–7 px) and lit/dark state.
+    //       We walk forward through segments until we've covered seg_len +
+    //       the maximum possible scroll offset we'll ever use.
+    //       PATTERN_SLOTS: enough segments to guarantee full coverage.
+    const int PATTERN_SLOTS = 128;
+    //       Pre-build cumulative start positions and lit flags into stack arrays.
+    //       Stack cost: 128 * (2+1) = 384 bytes — acceptable on ESP32.
+    uint16_t seg_start_arr[PATTERN_SLOTS];
+    bool seg_lit[PATTERN_SLOTS];
+    int pattern_total = 0;
+    int n_segs = 0;
+
+    for (int s = 0; s < PATTERN_SLOTS; s++) {
+      uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
+      int width = (int)(h >> 29) + 1;  // 1–8 px per segment
+      bool lit = (h >> 28) & 1u;  // 50/50 lit vs dark
+
+      seg_start_arr[s] = (uint16_t)pattern_total;
+      seg_lit[s] = lit;
+      pattern_total += width;
+      n_segs = s + 1;
+
+      // Stop once pattern is wide enough to cover strip + full scroll range
+      if (pattern_total >= seg_len * 3)
+        break;
+    }
+    if (pattern_total == 0)
+      pattern_total = 1;
+
+    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    // ── 6. Draw barcode behind the sweep cursor ────────────────────────────────
+    for (int i = 0; i < sweep_px; i++) {
+      // Virtual position in the pattern (wrapping)
+      uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
+
+      // Binary search would be cleaner for large strips but linear scan over
+      // PATTERN_SLOTS is fast enough: ~128 iterations, pure integer arithmetic.
+      bool is_lit = false;
+      for (int s = 0; s < n_segs - 1; s++) {
+        if (vpos >= seg_start_arr[s] && vpos < seg_start_arr[s + 1]) {
+          is_lit = seg_lit[s];
+          break;
+        }
+      }
+      // Last segment covers the remainder
+      if (vpos >= (uint32_t)seg_start_arr[n_segs - 1])
+        is_lit = seg_lit[n_segs - 1];
+
+      // Razor-sharp: strictly 0 or 255 — no dim(), no interpolation
+      it[seg_start + i] = is_lit ? c : Color::BLACK;
+    }
+
+    // ── 7. Scan cursor: single bright pixel at the leading edge ───────────────
+    if (sweep_px < seg_len)
+      it[seg_start + sweep_px] = cfx::boost(c, 80);
+    break;
+  }
+
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -4391,6 +4698,265 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
     break;
   }
+
+  case INTRO_MODE_ECLIPSE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1500;
+    number::Number *dur_num = this->outro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_outro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->outro_duration_preset_.has_value())
+      duration = (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Color source (current effect's palette) ─────────────────────────────
+    Color c = Color::WHITE;
+    if (instance) c = Color(instance->_segment.colors[0]);
+
+    // ── 3. Global brightness envelope: falls from 255 → 0, cubic ease-out ─────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    uint8_t env = (uint8_t)((1.0f - cfx::ease_in_out(prog)) * 255.0f);
+
+    // ── 3. Shadow geometry (identical to intro — shadow continues uninterrupted) ─
+    const uint8_t BASE_B = 180;
+    int shadow_hw = seg_len * 18 / 100;
+    if (shadow_hw < 4)
+      shadow_hw = 4;
+    int shadow_px = (int)((elapsed / 6000.0f) * (float)seg_len) % seg_len;
+
+    // ── 4. Draw strip ─────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++) {
+      int dist = i - shadow_px;
+      if (dist < 0)
+        dist = -dist;
+      if (dist > seg_len / 2)
+        dist = seg_len - dist;
+      if (dist > shadow_hw)
+        dist = shadow_hw;
+
+      int d_norm = shadow_hw - dist;
+      uint8_t shadow_depth = (uint8_t)((uint32_t)d_norm * d_norm * 215u /
+                                       (uint32_t)(shadow_hw * shadow_hw));
+
+      int bri = (int)BASE_B - (int)shadow_depth;
+      if (bri < 0)
+        bri = 0;
+
+      uint8_t final_b = (uint8_t)(((uint16_t)(uint8_t)bri * env) >> 8);
+      it[seg_start + i] = cfx::dim(c, final_b);
+    }
+    break;
+  }
+
+  case INTRO_MODE_GAS_DISCHARGE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1800;
+    number::Number *dur_num = this->outro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_outro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->outro_duration_preset_.has_value())
+      duration = (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Color source (current effect's palette) ─────────────────────────────
+    Color c = Color::WHITE;
+    if (instance) c = Color(instance->_segment.colors[0]);
+
+    // ── 3. Phase boundaries ───────────────────────────────────────────────────
+    uint32_t p1_end = duration * 12 / 100;  // solid with faint ripple
+    uint32_t p2_end = duration * 50 / 100;  // growing buzz instability
+    uint32_t p3_end = duration * 80 / 100;  // collapse flashes
+    // p4: final dark
+
+    uint8_t brightness = 0;
+
+    if (elapsed < p1_end) {
+      // ── Phase 1: Solid with faint high-frequency ripple ───────────────────
+      uint8_t t = (uint8_t)(elapsed * 255u / 60u);  // period 60 ms
+      brightness = 245u + (uint8_t)(((uint16_t)cfx::sin8(t) * 10u) >> 8);
+    } else if (elapsed < p2_end) {
+      // ── Phase 2: Growing instability — buzz amplitude expands ─────────────
+      uint32_t phase_t = elapsed - p1_end;
+      uint32_t phase_dur = p2_end - p1_end;
+      float norm = (float)phase_t / (float)phase_dur;
+      uint8_t amp = (uint8_t)(8.0f + norm * 60.0f);  // 8 → 68
+      uint32_t period = 50u - (uint32_t)(norm * 22.0f);  // 50 ms → 28 ms
+      if (period == 0)
+        period = 1;
+      uint8_t t = (uint8_t)((phase_t % period) * 255u / period);
+      uint8_t base_b = (uint8_t)(255u - (uint32_t)(norm * 50.0f));
+      brightness = (uint8_t)((int)base_b - (int)amp +
+                             (int)(((uint16_t)cfx::sin8(t) * amp * 2u) >> 8));
+      if ((int)brightness > 255)
+        brightness = 255;
+      if ((int)brightness < 0)
+        brightness = 0;
+    } else if (elapsed < p3_end) {
+      // ── Phase 3: Collapse — sparse final flares, mostly dark ──────────────
+      const uint32_t SLOT_MS = 40;
+      uint32_t phase_t = elapsed - p2_end;
+      uint32_t slot = phase_t / SLOT_MS;
+      uint32_t within_slot = phase_t % SLOT_MS;
+      uint32_t h = cfx::knuth32(slot * 17u + 3u);
+      bool is_flash = (h >> 29) > 6u;  // ~25% are flares
+
+      brightness = (is_flash && within_slot < 20u) ? (uint8_t)(160u + (h & 0x3Fu)) : 0u;
+    } else {
+      // ── Phase 4: Dark ─────────────────────────────────────────────────────
+      brightness = 0;
+    }
+
+    // ── 3. Apply brightness to full strip ────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = cfx::dim(c, brightness);
+    break;
+  }
+
+  case INTRO_MODE_HARMONIC_SETTLE: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1600;
+    number::Number *dur_num = this->outro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_outro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->outro_duration_preset_.has_value())
+      duration = (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Color source (current effect's palette) ─────────────────────────────
+    Color c = Color::WHITE;
+    if (instance) c = Color(instance->_segment.colors[0]);
+
+    // ── 3. Spring release — symmetric retreat from seg_len → 0 ───────────────
+    float t_norm = (float)elapsed / (float)duration;
+    if (t_norm > 1.0f)
+      t_norm = 1.0f;
+
+    // Release formula: fill begins full and retreats with a damped dip
+    // exp(-3*t) * (1 + cos(π*t)) / 2
+    //   t=0:   exp(0)  * (1+1)/2   = 1.0  → full ✓
+    //   t=0.5: exp(-1.5) * (1+0)/2 = 0.11 → ~11% (midpoint dip)
+    //   t=1.0: exp(-3)  * (1-1)/2  = 0.0  → dark ✓
+    float decay_term = expf(-3.0f * t_norm);
+    float osc_term = cosf(3.14159265f * t_norm);
+    float fill_frac = decay_term * (1.0f + osc_term) * 0.5f;
+
+    int fill_px = (int)(fill_frac * (float)seg_len);
+    if (fill_px > seg_len)
+      fill_px = seg_len;
+    if (fill_px < 0)
+      fill_px = 0;
+
+    // ── 3. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    // ── 4. Draw remaining body ────────────────────────────────────────────────
+    for (int i = 0; i < fill_px; i++)
+      it[seg_start + i] = c;
+
+    // ── 5. Retreating tension edge (mirrors intro spring tension line) ─────────
+    if (fill_px > 0 && fill_px < seg_len) {
+      int tension_px = fill_px < 4 ? fill_px : 4;
+      for (int g = 0; g < tension_px; g++) {
+        int px = fill_px - 1 - g;
+        if (px >= 0)
+          it[seg_start + px] = cfx::dim(c, (uint8_t)(80 - g * 18));
+      }
+    }
+    break;
+  }
+
+  case INTRO_MODE_LITHOGRAPH: {
+    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    uint32_t duration = 1100;
+    number::Number *dur_num = this->outro_duration_;
+    if (dur_num == nullptr && this->controller_ != nullptr)
+      dur_num = this->controller_->get_outro_duration();
+    if (dur_num != nullptr && dur_num->has_state())
+      duration = (uint32_t)(dur_num->state * 1000.0f);
+    else if (this->outro_duration_preset_.has_value())
+      duration = (uint32_t)(this->outro_duration_preset_.value() * 1000.0f);
+    if (duration == 0)
+      duration = 1;
+
+    // ── 2. Color source (current effect's palette) ─────────────────────────────
+    Color c = Color::WHITE;
+    if (instance) c = Color(instance->_segment.colors[0]);
+
+    // ── 3. Sweep retreats from seg_len → 0 ────────────────────────────────────
+    float prog = (float)elapsed / (float)duration;
+    if (prog > 1.0f)
+      prog = 1.0f;
+    int remaining = seg_len - (int)(cfx::ease_in_out(prog) * (float)seg_len);
+    if (remaining < 0)
+      remaining = 0;
+    if (remaining > seg_len)
+      remaining = seg_len;
+
+    // ── 3. Scroll continues from intro (elapsed offset preserved by caller) ────
+    uint32_t scroll = elapsed >> 3;
+
+    // ── 4. Rebuild pattern (same hash — same layout as intro) ─────────────────
+    const int PATTERN_SLOTS = 128;
+    uint16_t seg_start_arr[PATTERN_SLOTS];
+    bool seg_lit[PATTERN_SLOTS];
+    int pattern_total = 0;
+    int n_segs = 0;
+
+    for (int s = 0; s < PATTERN_SLOTS; s++) {
+      uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
+      int width = (int)(h >> 29) + 1;
+      bool lit = (h >> 28) & 1u;
+
+      seg_start_arr[s] = (uint16_t)pattern_total;
+      seg_lit[s] = lit;
+      pattern_total += width;
+      n_segs = s + 1;
+
+      if (pattern_total >= seg_len * 3)
+        break;
+    }
+    if (pattern_total == 0)
+      pattern_total = 1;
+
+    // ── 5. Clear strip ────────────────────────────────────────────────────────
+    for (int i = 0; i < seg_len; i++)
+      it[seg_start + i] = Color::BLACK;
+
+    // ── 6. Draw barcode in the remaining region ────────────────────────────────
+    for (int i = 0; i < remaining; i++) {
+      uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
+      bool is_lit = false;
+
+      for (int s = 0; s < n_segs - 1; s++) {
+        if (vpos >= seg_start_arr[s] && vpos < seg_start_arr[s + 1]) {
+          is_lit = seg_lit[s];
+          break;
+        }
+      }
+      if (vpos >= (uint32_t)seg_start_arr[n_segs - 1])
+        is_lit = seg_lit[n_segs - 1];
+
+      it[seg_start + i] = is_lit ? c : Color::BLACK;
+    }
+
+    // ── 7. Retreating scan cursor ─────────────────────────────────────────────
+    if (remaining > 0)
+      it[seg_start + remaining - 1] = cfx::boost(c, 80);
+    break;
+  }
+
   case INTRO_MODE_FADE:
   case INTRO_MODE_NONE:
   default:

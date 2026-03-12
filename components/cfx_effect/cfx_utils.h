@@ -25,6 +25,7 @@
 #endif
 
 #include "cfx_compat.h"
+#include "esphome/core/color.h"
 #include "esphome/core/log.h"
 
 namespace cfx {
@@ -512,6 +513,49 @@ inline FrameTiming calculate_frame_timing(uint8_t speed,
                                       : (83 + (((speed - 128) * 173) >> 7));
 
   return {deltams, scaled_now, wled_speed};
+}
+
+// ============================================================================
+// MONOCHROMATIC EFFECT HELPERS
+// ============================================================================
+
+// Integer-only dim: factor 0 = black, 255 = full brightness
+inline Color dim(Color col, uint8_t f) {
+  return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+               (uint8_t)(((uint16_t)col.g * f) >> 8),
+               (uint8_t)(((uint16_t)col.b * f) >> 8),
+               (uint8_t)(((uint16_t)col.w * f) >> 8));
+}
+
+// Additive white-flash boost
+inline Color boost(Color col, uint8_t b) {
+  return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+               (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+               (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+               (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+}
+
+// Bhaskara I cosine approximation — no sinf()/cosf(), accurate to < 0.0016
+// Maps prog [0,1] → eased [0,1]  (sine ease-in-out)
+inline float ease_in_out(float p) {
+  float c = 1.0f - 2.0f * p;
+  float abs_c = c < 0.0f ? -c : c;
+  float cos_apx = (c * (6.283185f - 4.0f * abs_c)) /
+                  (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
+  return 0.5f - 0.5f * cos_apx;
+}
+
+// Gamma-corrected dim: quadratic curve spends more time in the dark registers.
+// Non-zero input never returns black (dim8_video equivalent).
+inline Color gamma_dim(Color col, uint8_t bright) {
+  uint8_t b = (bright == 0) ? 0 : (uint8_t)(((uint16_t)bright * bright) >> 8) + 1;
+  return dim(col, b);
+}
+
+// Knuth multiplicative hash — deterministic pseudo-random uint32_t from any key.
+// Used for stateless flash timing (Gas Discharge) and barcode pattern (Lithograph).
+inline uint32_t knuth32(uint32_t key) {
+  return key * 2654435761u;
 }
 
 } // namespace cfx

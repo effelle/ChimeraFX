@@ -306,3 +306,19 @@
 - addressable_cfx:
     name: "Wipe Random"
     effect_id: 4
+
+- addressable_cfx:
+    name: "Eclipse"
+    effect_id: 181
+
+- addressable_cfx:
+    name: "Gas Discharge"
+    effect_id: 182
+
+- addressable_cfx:
+    name: "Harmonic Settle"
+    effect_id: 183
+
+- addressable_cfx:
+    name: "Lithograph"
+    effect_id: 184

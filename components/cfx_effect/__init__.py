@@ -106,6 +106,10 @@ CFX_EFFECT_NAMES = {
     178: "Telemetry",
     179: "Stellar Dust",
     180: "Interference",
+    181: "Eclipse",
+    182: "Gas Discharge",
+    183: "Harmonic Settle",
+    184: "Lithograph",
     255: "Ambient Roulette"
 }
 

@@ -75,6 +75,8 @@ uint16_t mode_moire_shift(void);
 uint16_t mode_resonance_fill(void);
 uint16_t mode_telemetry(void);
 uint16_t mode_interference(void);
+uint16_t mode_eclipse(void);
+uint16_t mode_lithograph(void);
 
 // (get_millis is defined globally before the namespace - see top of file)
 
@@ -4496,6 +4498,18 @@ void CFXRunner::service() {
   case FX_MODE_INTERFERENCE: // 180
     mode_interference();
     break;
+  case FX_MODE_ECLIPSE: // 181
+    mode_eclipse();
+    break;
+  case FX_MODE_GAS_DISCHARGE: // 182
+    mode_static();  // No running mode, just intro/outro
+    break;
+  case FX_MODE_HARMONIC_SETTLE: // 183
+    mode_static();  // No running mode, just intro/outro
+    break;
+  case FX_MODE_LITHOGRAPH: // 184
+    mode_lithograph();
+    break;
   default:
     mode_static();
     break;
@@ -7015,23 +7029,117 @@ uint16_t mode_interference(void) {
   if (!instance) return FRAMETIME;
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
-  
+
   uint32_t t_scaled = (instance->now * instance->_segment.speed) >> 7;
   uint8_t t1 = (uint8_t)(t_scaled >> 4);
   uint8_t t2 = (uint8_t)((t_scaled * 3u) >> 5);
-  
+
   uint8_t freq2_multiplier = (instance->_segment.intensity / 20) + 1;
-  
+
   for (int i = 0; i < len; i++) {
       uint8_t s   = cfx::sin8((uint8_t)(i * 3u) + t1);
       uint8_t co  = cfx::sin8((uint8_t)((uint8_t)(i * freq2_multiplier) - t2 + 64u));
       uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
       uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-      
+
       uint8_t color_index = (uint8_t)((i * 8u) + t1);
       uint32_t color = instance->_segment.color_from_palette(color_index, false, true, 255, gam);
-      
+
       instance->_segment.setPixelColor(i, color);
+  }
+  return FRAMETIME;
+}
+
+// -----------------------------------------------------------------------------
+// Batch 3 Monochromatic Running Modes
+// -----------------------------------------------------------------------------
+
+uint16_t mode_eclipse(void) {
+  if (!instance) return FRAMETIME;
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+
+  const uint8_t BASE_B = 180;
+  int shadow_hw = len * 18 / 100;
+  if (shadow_hw < 4) shadow_hw = 4;
+  int shadow_px = (int)((instance->_segment.now / 6000.0f) * (float)len) % len;
+
+  // Get base color (monochromatic)
+  uint32_t base_col = instance->_segment.colors[0];
+  // Precompute components as Color for dimming
+  Color base_color = Color((base_col >> 16) & 0xFF, (base_col >> 8) & 0xFF,
+                           base_col & 0xFF, (base_col >> 24) & 0xFF);
+
+  for (int i = 0; i < len; i++) {
+    int dist = i - shadow_px;
+    if (dist < 0) dist = -dist;
+    if (dist > len / 2) dist = len - dist;
+    if (dist > shadow_hw) dist = shadow_hw;
+
+    int d_norm = shadow_hw - dist;
+    uint8_t depth = (uint8_t)((uint32_t)d_norm * d_norm * 215u /
+                              (uint32_t)(shadow_hw * shadow_hw));
+    int bri = (int)BASE_B - (int)depth;
+    if (bri < 0) bri = 0;
+
+    Color dimmed = cfx::dim(base_color, (uint8_t)bri);
+    instance->_segment.setPixelColor(
+        i, RGBW32(dimmed.r, dimmed.g, dimmed.b, dimmed.w));
+  }
+  return FRAMETIME;
+}
+
+uint16_t mode_lithograph(void) {
+  if (!instance) return FRAMETIME;
+  uint16_t len = instance->_segment.length();
+  if (len <= 1) return mode_static();
+
+  uint32_t scroll = instance->_segment.now >> 3;
+
+  // Rebuild pattern — same hash as intro/outro
+  const int PATTERN_SLOTS = 128;
+  uint16_t seg_start_arr[PATTERN_SLOTS];
+  bool seg_lit[PATTERN_SLOTS];
+  int pattern_total = 0;
+  int n_segs = 0;
+
+  for (int s = 0; s < PATTERN_SLOTS; s++) {
+    uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
+    int width = (int)(h >> 29) + 1;
+    bool lit = (h >> 28) & 1u;
+
+    seg_start_arr[s] = (uint16_t)pattern_total;
+    seg_lit[s] = lit;
+    pattern_total += width;
+    n_segs = s + 1;
+
+    if (pattern_total >= (int)len * 3) break;
+  }
+  if (pattern_total == 0) pattern_total = 1;
+
+  // Get base color (monochromatic, full brightness)
+  uint32_t base_col = instance->_segment.colors[0];
+  Color base_color = Color((base_col >> 16) & 0xFF, (base_col >> 8) & 0xFF,
+                           base_col & 0xFF, (base_col >> 24) & 0xFF);
+
+  for (int i = 0; i < len; i++) {
+    uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
+    bool is_lit = false;
+    for (int s = 0; s < n_segs - 1; s++) {
+      if (vpos >= seg_start_arr[s] && vpos < seg_start_arr[s + 1]) {
+        is_lit = seg_lit[s];
+        break;
+      }
+    }
+    if (vpos >= (uint32_t)seg_start_arr[n_segs - 1]) is_lit = seg_lit[n_segs - 1];
+
+    if (is_lit) {
+      // Full brightness (255)
+      instance->_segment.setPixelColor(
+          i, RGBW32(base_color.r, base_color.g, base_color.b, base_color.w));
+    } else {
+      instance->_segment.setPixelColor(i, 0);  // Black
+    }
   }
   return FRAMETIME;
 }
