@@ -25,23 +25,17 @@ def capture_snapshot(screen, pixels, scale, effect_name, palette_name):
         print("No pixels to capture.")
         return
 
-    # Calculate bounding box of just the LEDs
-    columns = screen.get_width() // scale
-    rows = (len(pixels) // columns) + 1
-    
-    box_width = min(len(pixels), columns) * scale
-    box_height = ((len(pixels) - 1) // columns + 1) * scale
+    # Offscreen flat render (1D row)
+    box_width = len(pixels) * scale
+    box_height = scale * 3
     
     # Create transparent surface for just the LEDs
     snap_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
     snap_surface.fill((0, 0, 0, 0)) # Fully transparent background
     
     for i, color in enumerate(pixels):
-        col = i % columns
-        row = i // columns
-        
-        x = col * scale
-        y = row * scale
+        x = i * scale
+        y = scale
         
         # Transparent padding/glow
         inner_pad = 2
@@ -60,7 +54,7 @@ def main():
     parser.add_argument("--ip", default="0.0.0.0", help="IP address to bind to (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=7777, help="UDP port (default: 7777)")
     parser.add_argument("--rgbw", action="store_true", help="Assume RGBW (4 bytes per pixel) instead of RGB (3 bytes)")
-    parser.add_argument("--scale", type=int, default=15, help="Size of each LED square in pixels (default: 15)")
+    parser.add_argument("--scale", type=int, default=20, help="Size of each LED square in pixels (default: 20)")
     args = parser.parse_args()
 
     # Networking Setup
@@ -103,9 +97,9 @@ def main():
         timestamp = datetime.datetime.now().strftime("%H%M%S")
         recording_filepath = os.path.join("examples", f"{base_name}_{timestamp}.webm")
         
-        cols = screen.get_width() // args.scale
-        b_width = min(len(pxols), cols) * args.scale
-        b_height = ((len(pxols) - 1) // cols + 1) * args.scale
+        # Offscreen flat render (1D row) for identical docs videos
+        b_width = len(pxols) * args.scale
+        b_height = args.scale * 3
         
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         video_writer = cv2.VideoWriter(recording_filepath, fourcc, 60.0, (b_width, b_height))
@@ -257,15 +251,21 @@ def main():
             
             # Handle Video Frame Capture
             if is_recording and video_writer and pixels:
-                columns = screen.get_width() // args.scale
-                box_width = min(len(pixels), columns) * args.scale
-                box_height = ((len(pixels) - 1) // columns + 1) * args.scale
+                box_width = len(pixels) * args.scale
+                box_height = args.scale * 3
                 
-                # Extract just the LED area (skip the text header at y=50)
-                # pygame surface string is RGB, OpenCV expects BGR
+                vid_surface = pygame.Surface((box_width, box_height))
+                vid_surface.fill((39, 41, 41)) # Dark background matching the original webm
+                
+                for i, color in enumerate(pixels):
+                    x = i * args.scale
+                    y = args.scale
+                    inner_pad = 2
+                    pygame.draw.rect(vid_surface, (color[0], color[1], color[2]), 
+                                     (x + inner_pad, y + inner_pad, args.scale - inner_pad*2, args.scale - inner_pad*2))
+                
                 try:
-                    sub_surface = screen.subsurface((0, 50, box_width, box_height))
-                    view = pygame.surfarray.pixels3d(sub_surface)
+                    view = pygame.surfarray.pixels3d(vid_surface)
                     # Convert to numpy array and swap axes from (x,y,c) to (y,x,c) expected by OpenCV
                     frame = np.transpose(view, (1, 0, 2))
                     # Convert RGB to BGR
