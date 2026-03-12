@@ -42,3 +42,4 @@ next-version.md
 wled_fx.cpp
 # Visualizer Tools
 tools/visualizer/
+all_blobs.txt

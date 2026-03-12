@@ -580,7 +580,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         ```
 
 
-??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
         *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
@@ -602,7 +602,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 174
         ```
 
-??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
         *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
@@ -624,7 +624,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 175
         ```
 
-??? abstract "171 | Inertia Sweep | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+??? abstract "171 | Inertia Sweep | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
         *A precisely-eased fill that sweeps from dark to full brightness in a single pass, with a hot leading edge that pulses three pixels of decreasing intensity ahead of the cursor.*
@@ -646,7 +646,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 171
         ```
 
-??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
         *A radar-like scanning beam sweeps back and forth four times, each pass permanently lifting the brightness floor — like sonar gradually resolving a picture from nothing to full presence.*
@@ -668,7 +668,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 172
         ```
 
-??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
         *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
