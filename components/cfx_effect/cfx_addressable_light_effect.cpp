@@ -1974,6 +1974,21 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     c = Color::WHITE;
   }
 
+  // Define helper lambdas at function scope to avoid redeclaration issues and
+  // fix missing symbol errors in newer cases like Interference.
+  auto dim = [](Color col, uint8_t f) -> Color {
+    return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                 (uint8_t)(((uint16_t)col.g * f) >> 8),
+                 (uint8_t)(((uint16_t)col.b * f) >> 8),
+                 (uint8_t)(((uint16_t)col.w * f) >> 8));
+  };
+  auto boost = [](Color col, uint8_t b) -> Color {
+    return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                 (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                 (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                 (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+  };
+
   // NOTE: Brightness is handled by global_brightness_ on the runner.
   // Do NOT apply user_brightness here — it would cause double-application.
 
@@ -3168,20 +3183,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (duration == 0)
       duration = 1;
 
-    // ── 2. Local helpers
-    // ──────────────────────────────────────────────────────
-    auto dim = [](Color col, uint8_t f) -> Color {
-      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
-                   (uint8_t)(((uint16_t)col.g * f) >> 8),
-                   (uint8_t)(((uint16_t)col.b * f) >> 8),
-                   (uint8_t)(((uint16_t)col.w * f) >> 8));
-    };
-    auto boost = [](Color col, uint8_t b) -> Color {
-      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
-                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
-                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
-                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
-    };
+    // -- 2. Duration fetch already handled --
+    // Lambdas moved to function scope
 
     // ── 3. Sweep position (smoothstep)
     // ────────────────────────────────────────
@@ -3247,20 +3250,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (duration == 0)
       duration = 1;
 
-    // ── 2. Local helpers
-    // ──────────────────────────────────────────────────────
-    auto dim = [](Color col, uint8_t f) -> Color {
-      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
-                   (uint8_t)(((uint16_t)col.g * f) >> 8),
-                   (uint8_t)(((uint16_t)col.b * f) >> 8),
-                   (uint8_t)(((uint16_t)col.w * f) >> 8));
-    };
-    auto boost = [](Color col, uint8_t b) -> Color {
-      return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
-                   (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
-                   (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
-                   (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
-    };
+    // Lambdas moved to function scope
 
     // ── 3. Dash geometry
     // ──────────────────────────────────────────────────────
@@ -3316,14 +3306,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (duration == 0)
       duration = 1;
 
-    // ── 2. Local helpers
-    // ──────────────────────────────────────────────────────
-    auto dim = [](Color col, uint8_t f) -> Color {
-      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
-                   (uint8_t)(((uint16_t)col.g * f) >> 8),
-                   (uint8_t)(((uint16_t)col.b * f) >> 8),
-                   (uint8_t)(((uint16_t)col.w * f) >> 8));
-    };
+    // Lambdas moved to function scope
 
     // ── 3. Brightness envelope ─────────────────────────────────
     float prog = (float)elapsed / (float)duration;
@@ -3436,6 +3419,21 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   int seg_len = runner->_segment.length();
   int seg_start = (it.size() == seg_len) ? 0 : runner->_segment.start;
   int seg_stop = seg_start + seg_len;
+
+  // Define helper lambdas at function scope to avoid redeclaration issues and
+  // fix missing symbol errors in newer cases like Interference.
+  auto dim = [](Color col, uint8_t f) -> Color {
+    return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
+                 (uint8_t)(((uint16_t)col.g * f) >> 8),
+                 (uint8_t)(((uint16_t)col.b * f) >> 8),
+                 (uint8_t)(((uint16_t)col.w * f) >> 8));
+  };
+  auto boost = [](Color col, uint8_t b) -> Color {
+    return Color((uint8_t)((int)col.r + b > 255 ? 255 : col.r + b),
+                 (uint8_t)((int)col.g + b > 255 ? 255 : col.g + b),
+                 (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
+                 (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
+  };
 
   for (int i = 0; i < seg_len; i++) {
     int global_idx = seg_start + i;
@@ -4327,12 +4325,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
   case INTRO_MODE_STELLAR_DUST: {
     // Outro: Stellar Fade — per-pixel breathing collapses envelope to black
-    auto dim = [](Color col, uint8_t f) -> Color {
-      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
-                   (uint8_t)(((uint16_t)col.g * f) >> 8),
-                   (uint8_t)(((uint16_t)col.b * f) >> 8),
-                   (uint8_t)(((uint16_t)col.w * f) >> 8));
-    };
+    // Lambdas moved to function scope
     float inv = 1.0f - progress;
     float eased = inv * inv * inv; // cubic ease-out
     uint8_t env = (uint8_t)(eased * 255.0f);
