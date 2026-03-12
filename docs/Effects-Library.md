@@ -2032,6 +2032,36 @@ These short animations play once when the light is turned ON or OFF.
         </video>
     *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
+??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
+
+??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
+
+??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
+
+??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *Geological nucleation transition. **Crystallize** grow seeds of light outward into a solid floor during the intro. **Erode** causes the light to fragment and dissolve at the edges, slowly consuming the strip from within.*
+
+??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *A slow, organic brightness ramp. **Deep Breathe** rises from darkness with a subtle triangular shimmer during the intro. **Exhale** provides a natural, lung-like curve that gently releases the light into darkness.*
+
+??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid</span>"
+    *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
+
+??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
+
+??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+    *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
+
+??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
+    *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
+
+??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
+    *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
+
 
 
 ### Transition Behavior

@@ -580,6 +580,12 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_ASSEMBLY;
         else if (s == "Inertia Sweep")
           this->active_intro_mode_ = INTRO_MODE_INERTIA_SWEEP;
+        else if (s == "Sonar Reveal")
+          this->active_intro_mode_ = INTRO_MODE_SONAR_REVEAL;
+        else if (s == "Venetian")
+          this->active_intro_mode_ = INTRO_MODE_VENETIAN;
+        else if (s == "Crystallize")
+          this->active_intro_mode_ = INTRO_MODE_CRYSTALLIZE;
         else if (s == "Deep Breathe")
           this->active_intro_mode_ = INTRO_MODE_DEEP_BREATHE;
         else if (s == "Moiré Shift")
@@ -738,6 +744,12 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_ASSEMBLY;
           else if (s == "Decelerate")
             this->active_outro_mode_ = INTRO_MODE_INERTIA_SWEEP;
+          else if (s == "Sonar Fade")
+            this->active_outro_mode_ = INTRO_MODE_SONAR_REVEAL;
+          else if (s == "Close Blinds")
+            this->active_outro_mode_ = INTRO_MODE_VENETIAN;
+          else if (s == "Erode")
+            this->active_outro_mode_ = INTRO_MODE_CRYSTALLIZE;
           else if (s == "Exhale")
             this->active_outro_mode_ = INTRO_MODE_DEEP_BREATHE;
           else if (s == "Moiré Fade")
