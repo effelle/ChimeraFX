@@ -584,6 +584,14 @@ void CFXAddressableLightEffect::start() {
           this->active_intro_mode_ = INTRO_MODE_MORSE;
         else if (s == "Quadrant")
           this->active_intro_mode_ = INTRO_MODE_QUADRANT;
+        else if (s == "Eclipse")
+          this->active_intro_mode_ = INTRO_MODE_ECLIPSE;
+        else if (s == "Gas Discharge")
+          this->active_intro_mode_ = INTRO_MODE_GAS_DISCHARGE;
+        else if (s == "Harmonic Settle")
+          this->active_intro_mode_ = INTRO_MODE_HARMONIC_SETTLE;
+        else if (s == "Lithograph")
+          this->active_intro_mode_ = INTRO_MODE_LITHOGRAPH;
         else if (s == "Pressurize")
           this->active_intro_mode_ = INTRO_MODE_HYDRAULICS;
         else if (s == "Dropping")
@@ -748,6 +756,14 @@ void CFXAddressableLightEffect::stop() {
             this->active_outro_mode_ = INTRO_MODE_MORSE;
           else if (s == "Quadrant")
             this->active_outro_mode_ = INTRO_MODE_QUADRANT;
+          else if (s == "Eclipse")
+            this->active_outro_mode_ = INTRO_MODE_ECLIPSE;
+          else if (s == "Gas Discharge")
+            this->active_outro_mode_ = INTRO_MODE_GAS_DISCHARGE;
+          else if (s == "Harmonic Settle")
+            this->active_outro_mode_ = INTRO_MODE_HARMONIC_SETTLE;
+          else if (s == "Lithograph")
+            this->active_outro_mode_ = INTRO_MODE_LITHOGRAPH;
           else if (s == "Drain")
             this->active_outro_mode_ = INTRO_MODE_HYDRAULICS;
           else if (s == "Emptying")

@@ -535,14 +535,12 @@ inline esphome::Color boost(esphome::Color col, uint8_t b) {
                (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
 }
 
-// Bhaskara I cosine approximation — no sinf()/cosf(), accurate to < 0.0016
-// Maps prog [0,1] → eased [0,1]  (sine ease-in-out)
+// Cubic smoothstep approximation for ease-in-out
+// Maps prog [0,1] → eased [0,1]
 inline float ease_in_out(float p) {
-  float c = 1.0f - 2.0f * p;
-  float abs_c = c < 0.0f ? -c : c;
-  float cos_apx = (c * (6.283185f - 4.0f * abs_c)) /
-                  (6.283185f - abs_c * (6.283185f - 4.0f * abs_c / 3.14159265f));
-  return 0.5f - 0.5f * cos_apx;
+  if (p <= 0.0f) return 0.0f;
+  if (p >= 1.0f) return 1.0f;
+  return p * p * (3.0f - 2.0f * p);
 }
 
 // Gamma-corrected dim: quadratic curve spends more time in the dark registers.

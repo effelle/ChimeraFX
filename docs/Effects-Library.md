@@ -832,6 +832,94 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         ```
 
 
+??? abstract "181 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *A masterclass in negative space. The strip remains gently illuminated while a smooth, deep shadow slowly glides across the light, creating a calming, reverse-kinetic effect.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Shadow width**: determines the size of the negative space. |
+        | **Speed** | `128` | **Glide velocity**: controls the speed of the drifting shadow. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Eclipse"
+              effect_id: 181
+        ```
+
+??? abstract "182 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *A digital homage to analog ignition. The strip stutters to life with high-frequency flashes before finally catching and settling into a solid block of light.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Flutter intensity**: controls the contrast and aggressiveness of the stutter sequence. |
+        | **Speed** | `128` | **Ignition duration**: controls the length of the ignition phase. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Gas Discharge"
+              effect_id: 182
+        ```
+
+??? abstract "183 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *A physical collision transformed into light. The strip fills rapidly, overshoots its brightness target, and then rhythmically 'bounces' back into its stable state like a tuned spring.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Spring stiffness**: determines the tension and number of bounces before settling. |
+        | **Speed** | `128` | **Surge velocity**: controls the speed of the initial brightness jump. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Harmonic Settle"
+              effect_id: 183
+        ```
+
+??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+
+    === "🎬 Preview"
+        *A precise, machine-like drawing process. A bright, sharp cursor 'prints' the light onto the strip line by line, leaving a solid trail behind it until the entire sequence is complete.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Cursor sharpness**: controls the brightness and width of the leading edge. |
+        | **Speed** | `128` | **Print speed**: controls the velocity of the print cursor. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Lithograph"
+              effect_id: 184
+        ```
+
 ---
 ## 3. WLED Classics (Remastered)
 
@@ -1999,12 +2087,25 @@ These short animations play once when the light is turned ON or OFF.
             <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
         </video>
     *Random pixels sparkle as brightness increases.*
-??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "5 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
+        </video>
+    *Four-point architectural sweep from the 25% and 75% positions outward.*
+??? abstract "6 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A deep shadow glides across the strip, modulating the base brightness up and down like a reverse-kinetic effect.*
+??? abstract "7 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *The strip stutters to life with high-frequency flashes before settling.*
+??? abstract "8 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *Brightness surges, overshoots, and rhythmically bounces into its stable state like a tuned spring.*
+??? abstract "9 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A bright cursor draws the light line by line, leaving a solid trail.*
+??? abstract "10 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
         </video>
     *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
-??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "11 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
         </video>
