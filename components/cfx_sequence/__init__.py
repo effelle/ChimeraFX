@@ -159,6 +159,8 @@ async def to_code(config):
         "accuracy_decimals": 0,
         "disabled_by_default": False,
         "internal": False,
+        "force_update": False,
+        "entity_category": "diagnostic",
     }
     await sensor.register_sensor(prog_var, prog_conf)
     cg.add(prog_var.set_unit_of_measurement("%"))
@@ -175,6 +177,8 @@ async def to_code(config):
         "accuracy_decimals": 0,
         "disabled_by_default": False,
         "internal": False,
+        "force_update": False,
+        "entity_category": "diagnostic",
     }
     await sensor.register_sensor(last_px_var, last_px_conf)
 
