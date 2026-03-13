@@ -96,7 +96,7 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 async def to_code(config):
-    cg.add_define("USE_CFX_SEQUENCER")
+    cg.add_define("USE_CFX_SEQUENCE")
 
     # Phase E: Check for api: batch_delay configuration
     # This is a heuristic — we check if the api component is loaded and advise the user.

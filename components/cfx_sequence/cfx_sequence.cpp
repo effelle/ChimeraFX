@@ -9,6 +9,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <cstdlib>
 
 namespace esphome {
 namespace cfx_sequence {
@@ -423,9 +424,11 @@ static std::vector<uint16_t> parse_csv(const std::string &csv) {
   while (end != std::string::npos) {
     std::string token = csv.substr(start, end - start);
     if (!token.empty()) {
-      try {
-        result.push_back(std::stoi(token));
-      } catch (...) {} // Ignore invalid data
+      char *token_end;
+      long int val = std::strtol(token.c_str(), &token_end, 10);
+      if (token_end != token.c_str()) {
+        result.push_back(static_cast<uint16_t>(val));
+      }
     }
     start = end + 1;
     end = csv.find(',', start);
@@ -433,9 +436,11 @@ static std::vector<uint16_t> parse_csv(const std::string &csv) {
   if (start < csv.length()) {
     std::string token = csv.substr(start);
     if (!token.empty()) {
-      try {
-        result.push_back(std::stoi(token));
-      } catch (...) {}
+      char *token_end;
+      long int val = std::strtol(token.c_str(), &token_end, 10);
+      if (token_end != token.c_str()) {
+        result.push_back(static_cast<uint16_t>(val));
+      }
     }
   }
   return result;
