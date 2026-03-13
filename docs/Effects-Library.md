@@ -2067,54 +2067,49 @@ These short animations play once when the light is turned ON or OFF.
             <source src="/ChimeraFX/assets/effects/none_io.webm" type="video/webm">
         </video>
     *Standard behavior (Main effect starts immediately).*
+
 ??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/wipe_io.webm" type="video/webm">
         </video>
     *Linear wipe from start to end (respects Mirror).*
+
 ??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/fade_io.webm" type="video/webm">
         </video>
     *Smooth brightness fade-in.*
+
 ??? abstract "3 | Center | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/center_io.webm" type="video/webm">
         </video>
     *Wipe from center outwards (or inwards if reversed).*
+
 ??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
         </video>
     *Random pixels sparkle as brightness increases.*
-??? abstract "5 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
-        </video>
-    *Four-point architectural sweep from the 25% and 75% positions outward.*
-??? abstract "6 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A deep shadow glides across the strip, modulating the base brightness up and down like a reverse-kinetic effect.*
-??? abstract "7 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *The strip stutters to life with high-frequency flashes before settling.*
-??? abstract "8 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *Brightness surges, overshoots, and rhythmically bounces into its stable state like a tuned spring.*
-??? abstract "9 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A bright cursor draws the light line by line, leaving a solid trail.*
-??? abstract "10 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+
+??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
         </video>
     *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
-??? abstract "11 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+
+??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
         </video>
     *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
+
 ??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
         </video>
     *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
+
 ??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
@@ -2162,6 +2157,18 @@ These short animations play once when the light is turned ON or OFF.
 
 ??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
     *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
+
+??? abstract "21 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A masterclass in negative space. **Eclipse** sweeps a deep, smooth shadow across the strip, modulating the brightness in a calming reverse-kinetic motion. Perfect for transitions into solid, ambient colors.*
+
+??? abstract "22 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *The strip stutters to life with high-frequency flashes and crackling brightness surges, simulating an old neon tube or high-pressure lamp striking before it settles into stable illumination.*
+
+??? abstract "23 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A highly physical, spring-loaded transition. The light surges forward, overshoots the target brightness, and bounces back and forth with decaying momentum until it smoothly settles into its final solid state.*
+
+??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A precise, technical construction. A razor-sharp bright cursor 'prints' the light onto the strip line by line with mechanical precision, constructng a solid trail until the entire segment is fully revealed.*
 
 
 
