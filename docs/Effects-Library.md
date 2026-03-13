@@ -2068,59 +2068,11 @@ These short animations play once when the light is turned ON or OFF.
         </video>
     *Standard behavior (Main effect starts immediately).*
 
-??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/wipe_io.webm" type="video/webm">
-        </video>
-    *Linear wipe from start to end (respects Mirror).*
-
-??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/fade_io.webm" type="video/webm">
-        </video>
-    *Smooth brightness fade-in.*
-
 ??? abstract "3 | Center | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/center_io.webm" type="video/webm">
         </video>
     *Wipe from center outwards (or inwards if reversed).*
-
-??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
-        </video>
-    *Random pixels sparkle as brightness increases.*
-
-??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
-        </video>
-    *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
-
-??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
-        </video>
-    *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
-
-??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
-        </video>
-    *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
-
-??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
-        </video>
-    *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
-
-??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
-        </video>
-    *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
 
 ??? abstract "10 | Construct / Dismantle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette: | :material-bullseye-arrow:</span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -2128,47 +2080,95 @@ These short animations play once when the light is turned ON or OFF.
         </video>
     *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
-??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
-
-??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
-
-??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
-
 ??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *Geological nucleation transition. **Crystallize** grow seeds of light outward into a solid floor during the intro. **Erode** causes the light to fragment and dissolve at the edges, slowly consuming the strip from within.*
 
 ??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A slow, organic brightness ramp. **Deep Breathe** rises from darkness with a subtle triangular shimmer during the intro. **Exhale** provides a natural, lung-like curve that gently releases the light into darkness.*
 
-??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette:</span>"
-    *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
-
-??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
-
-??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
-    *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
-
-??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
-    *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
-
-??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
-    *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
+??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
+        </video>
+    *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
 
 ??? abstract "21 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A masterclass in negative space. **Eclipse** sweeps a deep, smooth shadow across the strip, modulating the brightness in a calming reverse-kinetic motion. Perfect for transitions into solid, ambient colors.*
 
+??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/fade_io.webm" type="video/webm">
+        </video>
+    *Smooth brightness fade-in.*
+
 ??? abstract "22 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *The strip stutters to life with high-frequency flashes and crackling brightness surges, simulating an old neon tube or high-pressure lamp striking before it settles into stable illumination.*
+
+??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
+        </video>
+    *Random pixels sparkle as brightness increases.*
 
 ??? abstract "23 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A highly physical, spring-loaded transition. The light surges forward, overshoots the target brightness, and bounces back and forth with decaying momentum until it smoothly settles into its final solid state.*
 
+??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
+
+??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
+    *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
+
 ??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
     *A precise, technical construction. A razor-sharp bright cursor 'prints' the light onto the strip line by line with mechanical precision, constructng a solid trail until the entire segment is fully revealed.*
+
+??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette:</span>"
+    *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
+
+??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
+        </video>
+    *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
+
+??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
+        </video>
+    *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
+
+??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
+        </video>
+    *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
+
+??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
+
+??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
+
+??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
+    *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
+
+??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
+
+??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
+        </video>
+    *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
+
+??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
+
+??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/wipe_io.webm" type="video/webm">
+        </video>
+    *Linear wipe from start to end (respects Mirror).*
 
 
 

@@ -33,8 +33,19 @@ COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Gli
 INTRO_ONLY = ["Construct", "Crystallize", "Deep Breathe", "Dropping", "Inertia Sweep", "Interference", "Moiré Shift", "Pressurize", "Resonance", "Sonar Reveal", "Stellar Dust", "Telemetry", "Venetian"]
 OUTRO_ONLY = ["Close Blinds", "Drain", "Decelerate", "Dismantle", "Emptying", "Erode", "Exhale", "Interference Fade", "Moiré Fade", "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade"]
 
-INTRO_OPTIONS = COMMON_TRANSITIONS + INTRO_ONLY
-OUTRO_OPTIONS = COMMON_TRANSITIONS + OUTRO_ONLY
+INTRO_OPTIONS = [
+    "None", "Center", "Construct", "Crystallize", "Deep Breathe", "Dropping", "Eclipse", 
+    "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Inertia Sweep", "Interference", 
+    "Lithograph", "Moiré Shift", "Morse Code", "Pressurize", "Quadrant", "Resonance", 
+    "Sonar Reveal", "Stellar Dust", "Telemetry", "Twin Pulse", "Venetian", "Wipe"
+]
+
+OUTRO_OPTIONS = [
+    "None", "Center", "Close Blinds", "Decelerate", "Dismantle", "Drain", "Eclipse", 
+    "Emptying", "Erode", "Exhale", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", 
+    "Interference Fade", "Lithograph", "Moiré Fade", "Morse Code", "Quadrant", 
+    "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade", "Twin Pulse", "Wipe"
+]
 
 CONF_LIGHT = "light_id"
 CONF_EXCLUDE = "exclude"
