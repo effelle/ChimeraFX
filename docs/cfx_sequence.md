@@ -1,154 +1,156 @@
 # ChimeraFX Sequencer
 
-The ChimeraFX Sequencer (`cfx_sequence`) is a powerful orchestration component that allows you to create complex, event-driven lighting workflows. It can control one or more ChimeraFX lights (or segments), applying specific effects with optional overrides for speed, intensity, palette, and brightness.
+The ChimeraFX Sequencer (`cfx_sequence`) is the **Logic Layer** of your lighting. It allows your LED strips to move beyond simple repeating loops and become an organic, responsive part of your environment.
 
-Sequences are the "Logic Layer" of your lighting—they allow segments to talk to each other, trigger handovers, and react to specific progress milestones.
+### 🛡️ Built for Reliability: Two Ways to Sequence
 
----
+ChimeraFX gives you two ways to orchestrate your lights. Choosing the right one is key to a professional lighting setup.
 
-## Configuration Overview
-
-```yaml
-cfx_sequence:
-  - id: my_sequence
-    name: "Standard Sweep"
-    lights: [rgb_light]
-    effect: "Wipe"
-    set_speed: 150
-    set_intensity: 200
-    set_palette: 5
-    set_brightness: 80%
-    iterations: 1
-    restore: true
-    on_complete:
-      - cfx_sequence.start: next_sequence
-```
-
-### Configuration Variables
-
-| Variable | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| **id** | ID | Yes | — | Unique identifier for referencing in actions |
-| **name** | string | Yes | — | Display name in the "Active Sequence" selector |
-| **lights** | list of IDs | Yes | — | Target `cfx_light` or segment light IDs |
-| **effect** | string | Yes | — | Name of the effect to run (e.g., "Wipe", "Fire") |
-| **set_speed** | int (0-255) | No | — | Force a specific speed for this sequence run |
-| **set_intensity** | int (0-255) | No | — | Force a specific intensity for this sequence run |
-| **set_palette** | int (0-255) | No | — | Force a specific palette ID |
-| **set_brightness** | percentage | No | — | Set the light brightness (e.g., `80%`, `0.5`) |
-| **iterations** | int | No | 0 | Cycles before `on_complete`. 0 = run indefinitely. |
-| **restore** | boolean | No | true | Return to previous state when the sequence stops |
+| Feature | On-Device Sequence (`cfx_sequence`) | Home Assistant Automation |
+| :--- | :--- | :--- |
+| **Logic Location** | Runs directly on the ESP32 hardware. | Runs on your Home Assistant Server. |
+| **Reliability** | **Immune** to network lag or Wi-Fi drops. | Dependent on network stability. |
+| **Precision** | **Microsecond timing**. Perfect for "handovers". | **Millisecond latency** (~10-200ms). |
+| **Ecosystem** | Limited to ChimeraFX components. | Connects to any smart device (TTS, Plugs). |
+| **Best For** | Timing-critical organic animations. | High-level triggers and notifications. |
 
 ---
 
-## Understanding Progressive Effects
+## ⚡ Examples: Internal vs. External
 
-Not all effects are created equal when it comes to the Sequencer. While any effect can be used in a sequence, only **Progressive Effects** support position-based triggers like `on_reach` and `on_pixel_num`.
+The following examples show how to react to the same sequence logic in both environments.
 
-### What makes an effect "Progressive"?
-A progressive effect is one where the animation has a clear **leading edge** or **state progression** that moves across the strip over time. 
-Examples include:
-- **Wipes & Sweeps**: The light physically moves from one end to the other.
-- **Filling Effects**: Like "Dropping Time," where the strip fills up like a bucket.
-- **Single Cursors**: Like "Chase" or "Follow Me," where a distinct point moves.
+??? example "1. Start & Complete Triggers"
+    *React immediately when a sequence begins or finishes its cycle.*
 
-### How to identify them
-In the [Effects Library](Effects-Library.md), progressive effects are marked with the **Sequencer Ready** icon: :material-bullseye-arrow:.
+    === "On-Device (YAML)"
+        ```yaml
+        cfx_sequence:
+          - id: intro_seq
+            name: "Intro Sweep"
+            lights: [strip_1]
+            on_cfx_start:
+              then:
+                - logger.log: "Animation started on hardware"
+            on_cfx_complete:
+              then:
+                - cfx_sequence.start: main_loop_seq
+        ```
 
-When one of these effects is active, the engine tracks its "leading edge" pixel in real-time. This tracking is what allows the Sequencer to fire triggers at exactly 50% or pixel 45, even if the animation is moving very fast.
+    === "Home Assistant"
+        ```yaml
+        # Use the 'state' trigger on the CFX Events entity.
+        # Filter by the 'event_type' attribute.
+        automation:
+          trigger:
+            - platform: state
+              entity_id: event.cfx_events
+              attribute: event_type
+              to: cfx_complete
+          action:
+            - service: notify.mobile_app
+              data:
+                message: "The light show is complete!"
+        ```
 
----
+??? example "2. Proximity Triggers (`on_cfx_reach`)"
+    *The "Edge" of ChimeraFX: react as the animation physically moves across the device.*
 
-## Proximity & Progress Triggers
+    === "On-Device (YAML)"
+        ```yaml
+        # Seamless handover: Start strip_2 exactly as strip_1 hits 100%.
+        cfx_sequence:
+          - id: strip_1_wipe
+            on_cfx_reach:
+              - position: 100%
+                then:
+                  - cfx_sequence.start: strip_2_wipe
+        ```
 
-The sequencer can react to the physical progress of an effect.
+    === "Home Assistant"
+        ```yaml
+        # Sync a secondary lamp to match the current sequence progress.
+        automation:
+          trigger:
+            - platform: state
+              entity_id: event.cfx_events
+              attribute: event_type
+              to: cfx_reach
+          action:
+            - service: light.turn_on
+              target: { entity_id: light.mood_lamp }
+              data:
+                # Progress value is stored in the Sequence Progress sensor
+                brightness_pct: "{{ states('sensor.cfx_progress') | int }}"
+        ```
 
-### `on_reach` (Percentage)
-Fires when a **Progressive Effect** reaches a specific threshold (percentage) of the strip. Ideal for cross-light handovers.
+??? example "3. Precision Pixel Watch (`on_cfx_pixel`)"
+    *Trigger actions exactly when the light passes a specific physical point.*
 
-```yaml
-on_reach:
-  - position: 100%
-    then:
-      - light.turn_on: {id: next_strip, effect: "Breathe"}
-```
+    === "On-Device (YAML)"
+        ```yaml
+        # Fast reaction: Pulse a specific segment when the master wipe passes it.
+        cfx_sequence:
+          - id: master_wipe
+            on_cfx_pixel:
+              - pixel: 45
+                then:
+                  - light.turn_on: { id: segment_at_pixel_45, brightness: 100% }
+        ```
 
-### `on_pixel_num` (Discrete)
-Fires at a specific absolute pixel index. Perfect for syncing effects with physical environmental features (e.g., "stair 5").
-
-```yaml
-on_pixel_num:
-  - pixel: 45
-    then:
-      - logger.log: "Passed the hallway sensor point"
-```
-
-> [!TIP]
-> **Crossing Logic**: Triggers are designed with "Crossing Detection." Even if your framerate is low, the system detects if the leading edge of an animation has passed your target, ensuring triggers are never skipped.
-
----
-
-## Advanced Orchestration Patterns
-
-### 1. The Relay (Serial Chain)
-Sequences can be linked end-to-end to create a multi-stage animation.
-
-```yaml
-cfx_sequence:
-  - id: stage_1
-    name: "Relay Start"
-    lights: [strip_1]
-    iterations: 1
-    on_complete:
-      - cfx_sequence.start: stage_2
-
-  - id: stage_2
-    name: "Relay End"
-    lights: [strip_1]
-    # ... on_complete could loop back to stage_1
-```
-
-### 2. The Handover (Progress Chain)
-One light "passes the baton" to the next as soon as the effect reaches its edge.
-
-```yaml
-cfx_sequence:
-  - id: convergence
-    name: "Push to Center"
-    lights: [strip_1, strip_3]
-    effect: "Curtain Sweep"
-    on_reach:
-      - position: 100%
-        then:
-          - light.turn_on: {id: strip_2, effect: "Breathe"}
-```
-
-### 3. The Master Override
-A sequence can target a "Master" ID that represents multiple segments. The sequence takes ownership of the entire buffer, but you can still pulse individual segments within it.
-
-```yaml
-cfx_sequence:
-  - id: master_sweep
-    lights: [master_light]
-    on_start:
-      - delay: 2s
-      - light.turn_on: {id: segment_1, red: 100%}
-```
-
----
-
-## State Resilience ("Chaos Mode")
-
-The Sequencer is designed to handle manual user intervention gracefully. 
-
-- **Manual Interruption**: If a sequence is running and you manually call `light.turn_on` for one of its target segments, the segment will obey your command (e.g., switching to "Solid Red").
-- **Sequence Continuation**: The sequence remains "Active" in the background. If the sequence reaches a progress trigger (like `on_reach: 80%`), it can still fire even if the physical light is temporarily showing something else.
-- **Auto-Recovery**: If `restore: true` is set, turning off the sequence via the "Active Sequence" selector will return the light correctly to its pre-sequence state, capturing any "chaos" changes made during the run.
+    === "Home Assistant"
+        ```yaml
+        # Security: Snapshot when the light "passes" the door (Pixel 124).
+        automation:
+          trigger:
+            - platform: state
+              entity_id: event.cfx_events
+              attribute: event_type
+              to: cfx_pixel
+          condition:
+            # Check the 'Last Watch Pixel' sensor for the specific ID
+            - condition: template
+              value_template: "{{ states('sensor.cfx_last_pixel') | int == 124 }}"
+          action:
+            - service: camera.snapshot
+              target: { entity_id: camera.front_door }
+        ```
 
 ---
 
-## Summary of Logic
-- **`iterations: 0`**: Runs forever. `on_complete` never fires.
-- **`iterations: 1+`**: Once reached, `on_complete` fires. If `restore: true`, the lights return to their previous state automatically.
-- **Nested Starts**: You can start a sequence from within another sequence's trigger. The new sequence will take over ownership of the lights it targets.
+## 🏠 Home Assistant Dashboard Setup
+
+ChimeraFX exposes several entities to help you monitor and configure your logic from the dashboard.
+
+??? info "Entity List & Usage (Click to expand)"
+    | Entity | Usage | Location |
+    | :--- | :--- | :--- |
+    | **Internal Sequences** | The main dropdown to trigger sequences stored on-device. | **Controls** |
+    | **CFX Events** | The event hub used for triggers (Start/Complete/Reach/Pixel). | Diagnostic |
+    | **Sequence Progress** | Sensor showing the current position (0-100%). | Diagnostic |
+    | **Sequence Step** | Configuration: How often to fire `cfx_reach` (e.g., every 5%). | Configuration |
+    | **Watch List** | Configuration: Comma-separated pixels (e.g., `10,50,100`). | Configuration |
+    | **Last Watch Pixel** | Diagnostic: Shows the ID of the last "watched" pixel. | Diagnostic |
+
+---
+
+## Configuration Variables (YAML)
+
+| Variable | Type | Required | Description |
+|----------|------|----------|-------------|
+| **id** | ID | Yes | Unique identifier for referencing in YAML actions. |
+| **name** | string | Yes | The name displayed in the Home Assistant dropdown. |
+| **lights** | list | Yes | IDs of simple lights or segments to control. |
+| **effect** | string | Yes | The CFX effect to apply (e.g., "Wipe", "Fire"). |
+| **on_cfx_start** | trigger | No | Action to fire when the sequence begins. |
+| **on_cfx_complete** | trigger | No | Action to fire when iterations are complete. |
+| **on_cfx_reach** | trigger | No | Fires at a specific % position (requires position). |
+| **on_cfx_pixel** | trigger | No | Fires at a specific pixel index (requires pixel). |
+| **iterations** | int | No | Cycles before finishing. 0 = indefinitely. |
+| **restore** | bool | No | Return strips to their pre-sequence state on stop. |
+
+---
+
+## Technical Edge: Why ChimeraFX is Different
+ChimeraFX isn't built to replace all-in-one effects hubs like WLED. It is built for **Industrial-grade lighting logic**. While other platforms focus on visual presets, ChimeraFX focuses on the **Logic Layer**—ensuring that if your light "passes a point," your system knows about it instantly and timing remains absolute, even without a network connection.
 

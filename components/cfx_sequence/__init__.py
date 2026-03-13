@@ -40,11 +40,11 @@ CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 
 # Inherited constants
-CONF_ON_START = "on_start"
-CONF_ON_COMPLETE = "on_complete"
-CONF_ON_REACH = "on_reach"
+CONF_ON_START = "on_cfx_start"
+CONF_ON_COMPLETE = "on_cfx_complete"
+CONF_ON_REACH = "on_cfx_reach"
 CONF_POSITION = "position"
-CONF_ON_PIXEL_NUM = "on_pixel_num"
+CONF_ON_PIXEL_NUM = "on_cfx_pixel"
 CONF_PIXEL = "pixel"
 
 
