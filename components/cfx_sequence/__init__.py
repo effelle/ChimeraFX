@@ -140,12 +140,12 @@ async def to_code(config):
         "name": "CFX Progress Step",
         "icon": "mdi:percent",
         "mode": number.NUMBER_MODES["BOX"],
+        "unit_of_measurement": "%",
         "disabled_by_default": False,
         "internal": False,
     }
     await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
     await cg.register_component(step_var, step_conf)
-    cg.add(step_var.set_unit_of_measurement("%"))
 
     # 2. Progress Sensor
     prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
