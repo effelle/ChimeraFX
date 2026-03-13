@@ -981,19 +981,17 @@ void CFXAddressableLightEffect::stop() {
 
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                       const Color &current_color) {
-  // Defensive: Ensure global instance points to OUR runner before any logic
-  // This prevents "strip bleeding" if apply() returns early due to throttle.
-  if (this->runner_ != nullptr) {
-    chimera_fx::instance = this->runner_;
-  }
+  // CFX-004: Use RAII InstanceGuard so the global pointer is always restored
+  // on every return path, including the throttle early-exit below.
+  // This prevents "strip bleeding" in multi-strip configurations.
+  chimera_fx::InstanceGuard apply_guard(this->runner_);
 
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
 
   const uint32_t now = cfx_millis();
   if (now - this->last_run_ < this->update_interval_) {
-    chimera_fx::instance = nullptr;
-    return; // Not time for update yet
+    return; // Not time for update yet (apply_guard auto-restores instance)
   }
   this->last_run_ = now;
 
@@ -1125,7 +1123,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (!skip_service) {
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
-        chimera_fx::instance = r;
+        chimera_fx::InstanceGuard seg_guard(r); // CFX-004: scoped per-iteration
         r->global_brightness_ = bri;
         r->service();
 #ifdef USE_CFX_SEQUENCE
@@ -1140,7 +1138,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #endif
       }
     } else if (this->runner_) {
-      chimera_fx::instance = this->runner_;
+      chimera_fx::InstanceGuard svc_guard(this->runner_); // CFX-004: scoped single-runner
       this->runner_->global_brightness_ = bri;
       this->runner_->service();
 #ifdef USE_CFX_SEQUENCE
@@ -1173,11 +1171,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // This acts as a mask on top of the already-rendered main effect.
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
-        chimera_fx::instance = r;
+        chimera_fx::InstanceGuard intro_seg_guard(r); // CFX-004: scoped per-iteration
         this->run_intro(it, current_color);
       }
     } else {
-      chimera_fx::instance = this->runner_;
+      chimera_fx::InstanceGuard intro_guard(this->runner_); // CFX-004: scoped single-runner
       this->run_intro(it, current_color);
     }
 
@@ -1209,8 +1207,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         this->state_ = TRANSITION_NONE;
       }
 
-      // Ensure Main Runner is reset/started
-      chimera_fx::instance = this->runner_;
+      // Ensure Main Runner is reset/started (CFX-004: scoped guard)
+      chimera_fx::InstanceGuard start_guard(this->runner_);
       this->runner_->start();
     }
   }
@@ -5089,6 +5087,8 @@ void CFXAddressableLightEffect::check_positional_triggers(
   if (this->active_sequence_ != nullptr) {
     this->active_sequence_->check_positional_triggers(current_pixel,
                                                       total_pixels);
+    // Phase D: fire cfx_pixel event for watched pixels (zero-overhead if whitelist empty)
+    this->active_sequence_->pixel_advanced((uint16_t)current_pixel);
   }
 #endif
 

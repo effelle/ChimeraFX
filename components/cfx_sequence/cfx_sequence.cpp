@@ -22,6 +22,11 @@ std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
+  // Phase E: Remind integrators to set api: batch_delay: 0ms for best event delivery.
+  // This is a one-time boot advisory — it does not block operation.
+  ESP_LOGW(TAG,
+           "ChimeraFX: For sub-10ms cfx_start/cfx_complete event delivery to "
+           "Home Assistant, set 'api: batch_delay: 0ms' in your ESPHome config.");
   this->add_on_state_callback([](const std::string &value, size_t index) {
     if (CFXSequenceSelect::suppress_callback_)
       return;
@@ -175,6 +180,7 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
+  this->last_fired_milestone_ = 0; // Phase C: reset milestone counter on each new run
   this->is_running_ = true;
   this->is_starting_ = false;
 
@@ -382,6 +388,89 @@ void CFXSequence::pixel_advanced(uint16_t pixel) {
       this->fire_event("cfx_pixel");
       break;
     }
+  }
+}
+
+// ----------------------------------------------------
+// Runtime Configurable Entities (Number & Text Inputs)
+// ----------------------------------------------------
+
+void CFXProgressStepNumber::setup() {
+  uint8_t restored;
+  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
+  if (this->pref_.load(&restored)) {
+    this->publish_state(restored);
+  } else {
+    this->publish_state(10.0f); // Default 10%
+  }
+}
+
+void CFXProgressStepNumber::control(float value) {
+  uint8_t step = (uint8_t)value;
+  this->publish_state(value);
+  this->pref_.save(&step);
+  
+  for (auto *seq : CFXSequence::instances) {
+    seq->set_progress_step(step);
+  }
+}
+
+// Helper to parse CSV string into vector
+static std::vector<uint16_t> parse_csv(const std::string &csv) {
+  std::vector<uint16_t> result;
+  size_t start = 0;
+  size_t end = csv.find(',');
+  while (end != std::string::npos) {
+    std::string token = csv.substr(start, end - start);
+    if (!token.empty()) {
+      try {
+        result.push_back(std::stoi(token));
+      } catch (...) {} // Ignore invalid data
+    }
+    start = end + 1;
+    end = csv.find(',', start);
+  }
+  if (start < csv.length()) {
+    std::string token = csv.substr(start);
+    if (!token.empty()) {
+      try {
+        result.push_back(std::stoi(token));
+      } catch (...) {}
+    }
+  }
+  return result;
+}
+
+void CFXPixelWatchText::setup() {
+  std::string restored;
+  // Use a fixed size hash array for string preference (max 64 chars for pixel list)
+  this->pref_ = global_preferences->make_preference<char[64]>(this->get_object_id_hash());
+  
+  char buffer[64];
+  if (this->pref_.load(&buffer)) {
+    restored = std::string(buffer);
+    this->publish_state(restored);
+    
+    // Parse and apply loaded state
+    std::vector<uint16_t> parsed = parse_csv(restored);
+    for (auto *seq : CFXSequence::instances) {
+      seq->set_pixel_whitelist(parsed);
+    }
+  } else {
+    this->publish_state(""); // Default empty
+  }
+}
+
+void CFXPixelWatchText::control(const std::string &value) {
+  this->publish_state(value);
+  
+  char buffer[64] = {0};
+  strncpy(buffer, value.c_str(), sizeof(buffer) - 1);
+  this->pref_.save(&buffer);
+  
+  std::vector<uint16_t> parsed = parse_csv(value);
+  for (auto *seq : CFXSequence::instances) {
+    seq->set_pixel_whitelist(parsed);
   }
 }
 

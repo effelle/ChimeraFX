@@ -9,6 +9,7 @@
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/preferences.h"
 #include <atomic>    // CFX-012: for std::atomic<bool>
 #include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
@@ -211,6 +212,24 @@ public:
   // condition on multi-core ESP32 where a FreeRTOS task could read false before
   // publish_state_silent() sets it back, causing an unintended recursive start.
   static std::atomic<bool> suppress_callback_;
+};
+
+class CFXProgressStepNumber : public esphome::number::Number, public esphome::Component {
+public:
+  void setup() override;
+  void control(float value) override;
+  
+protected:
+  esphome::ESPPreferenceObject pref_;
+};
+
+class CFXPixelWatchText : public esphome::text::Text, public esphome::Component {
+public:
+  void setup() override;
+  void control(const std::string &value) override;
+  
+protected:
+  esphome::ESPPreferenceObject pref_;
 };
 
 } // namespace cfx_sequence
