@@ -140,6 +140,8 @@ async def to_code(config):
         "name": "CFX Progress Step",
         "icon": "mdi:percent",
         "mode": "BOX",
+        "disabled_by_default": False,
+        "internal": False,
     }
     await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
     await cg.register_component(step_var, step_conf)
@@ -155,6 +157,8 @@ async def to_code(config):
         "icon": "mdi:percent-circle",
         "state_class": "measurement",
         "accuracy_decimals": 0,
+        "disabled_by_default": False,
+        "internal": False,
     }
     await sensor.register_sensor(prog_var, prog_conf)
     cg.add(prog_var.set_unit_of_measurement("%"))
@@ -169,6 +173,8 @@ async def to_code(config):
         "icon": "mdi:led-on",
         "state_class": "measurement",
         "accuracy_decimals": 0,
+        "disabled_by_default": False,
+        "internal": False,
     }
     await sensor.register_sensor(last_px_var, last_px_conf)
 
@@ -181,6 +187,8 @@ async def to_code(config):
         "name": "CFX Pixel Watch List",
         "icon": "mdi:format-list-numbered",
         "mode": "TEXT",
+        "disabled_by_default": False,
+        "internal": False,
     }
     await text.register_text(watch_var, watch_conf)
     await cg.register_component(watch_var, watch_conf)
