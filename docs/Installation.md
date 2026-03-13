@@ -38,14 +38,6 @@ Setting to `always` forces ESPHome to download the absolute latest version of th
 **For Production Stability:**
 Once you have a working setup, it is safer to remove `refresh: always` or pin to a specific commit hash. This ensures your lights keep working even if the repository changes.
 
-**Note:** `ChimeraFX` controls depend on the `number`, `select`, and `switch` components. If your config doesn't use them, you must add the empty headers `number:`, `select:`, and `switch:` to your YAML to prevent compilation errors:
-
-```yaml
-number:
-select: 
-switch:
-```
-
 ---
 
 ## Light Configuration
@@ -83,7 +75,7 @@ If you prefer not to use `all_effects: true`, or want to create custom [presets]
       - addressable_cfx:
           # Add more effects here
 ```
-
+The necessary YAML to declare each single effect is available on the [Effects-Library.md](Effects-Library.md) page.
 Alternatively, you can manually use the mass inclusion YAML file:
 
 1.  **Download** `chimera_fx_effects.yaml` from the repository root.

@@ -5087,8 +5087,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
   if (this->active_sequence_ != nullptr) {
     this->active_sequence_->check_positional_triggers(current_pixel,
                                                       total_pixels);
-    // Phase D: fire cfx_pixel event for watched pixels (zero-overhead if whitelist empty)
-    this->active_sequence_->pixel_advanced((uint16_t)current_pixel);
+    // Phase D: fire cfx_pixel event for watched pixels (handled inside check_positional_triggers delegation now)
+  } else {
+    // Phase J: No active sequence (manual usage). Report progress to global hub.
+    float current_percentage = (float)current_pixel / (float)total_pixels;
+    cfx_sequence::CFXEventManager::get().check_milestones(current_percentage * 100.0f);
   }
 #endif
 

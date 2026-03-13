@@ -13,6 +13,7 @@
 #include <atomic>    // CFX-012: for std::atomic<bool>
 #include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
+#include <cstddef>
 #include <set>
 #include <string>
 #include <vector>
@@ -40,6 +41,33 @@ public:
 
 protected:
   int32_t target_pixel_;
+};
+
+class CFXEventManager {
+public:
+  static CFXEventManager &get();
+
+  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
+  void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
+  void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
+  void set_progress_step(uint8_t step) { this->progress_step_ = step; }
+
+  void fire_event(const char *type);
+  void report_progress(float pct);
+  void report_last_pixel(int32_t pixel);
+  
+  // High-level milestone logic (shared for Sequence and Manual)
+  void check_milestones(float current_pct);
+  void pixel_advanced(uint16_t pixel, const std::vector<uint16_t> &whitelist);
+
+protected:
+  CFXEventManager() = default;
+  esphome::event::Event *event_entity_{nullptr};
+  esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
+  esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
+  
+  uint8_t progress_step_{10};
+  uint8_t last_fired_milestone_{0};
 };
 
 class CFXSequence {
@@ -93,10 +121,8 @@ public:
   void clear_active_binding();
 
   // HA event integration
-  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void fire_event(const char *type) {
-    if (this->event_entity_ == nullptr) return;
-    this->event_entity_->trigger(type);
+    CFXEventManager::get().fire_event(type);
   }
 
   // Runtime configurable entities
@@ -106,8 +132,12 @@ public:
   void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { this->last_pixel_sensor_ = sensor; }
 
   // Milestone tracking
-  void check_milestones(uint8_t current_pct);
-  void pixel_advanced(uint16_t pixel);
+  void check_milestones(uint8_t current_pct) {
+    CFXEventManager::get().check_milestones(current_pct);
+  }
+  void pixel_advanced(uint16_t pixel) {
+    CFXEventManager::get().pixel_advanced(pixel, this->pixel_whitelist_);
+  }
 
 protected:
   std::string id_;
@@ -122,16 +152,8 @@ protected:
   bool restore_state_{true};
 
   std::vector<light::LightState *> lights_;
-  esphome::event::Event *event_entity_{nullptr};
-
   // Runtime-configurable entities
-  uint8_t progress_step_{10}; // Default 10%
   std::vector<uint16_t> pixel_whitelist_;
-  uint8_t last_fired_milestone_{0};
-
-  // Sensor pointers (optional)
-  esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
-  esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
 
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;

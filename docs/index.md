@@ -58,12 +58,14 @@ Visual effects are computationally expensive.
 *   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
 *   **Autotuning**: Automatically load default parameters and tune the effect for you .
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
+*   **ChimeraFX Orchestrator**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
 
 ## Quick Links
 
 *   **[Installation Guide](Installation.md)** - Get up and running in minutes.
 *   **[Controls Guide](Controls.md)** - How to set up inputs and switches.
 *   **[Effect Library](Effects-Library.md)** - Browse available effects and palettes.
+*   **[ChimeraFX Orchestrator](cfx_sequence.md)** - Logic, events, and reactive automations.
 *   **[Troubleshooting](Troubleshooting.md)** - Fix common issues (flickering, memory).
 
 ---

@@ -51,7 +51,7 @@ Today, ChimeraFX is a precision-engineered lighting engine offering a curated su
 | Icon | Description | Icon | Description |
 |:---:|:---|:---:|:---|
 | :material-tag-outline: | **Minimum Version**: The ChimeraFX version where this effect was introduced. | :material-speedometer: | **Performance Class**: The resource intensity of the effect (Low, Mid, High). |
-| :material-palette: | **Palette Support**: Whether the effect supports color palettes. | :material-bullseye-arrow: | **Sequencer Ready**: Fully compatible with position-based triggers (**on_reach**, **on_pixel_num**). |
+| :material-palette: | **Palette Support**: Whether the effect supports color palettes. | :material-bullseye-arrow: | **Orchestrator Ready**: Fully compatible with position-based triggers (**on_cfx_reach**, **on_cfx_pixel**). |
 
 ---
 
@@ -75,7 +75,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `128` | **Percent fill**: determines how much of the strip is occupied. |
         | **Speed** | `128` | **Smoothness**: controls the transition speed of the fill. |
         | **Palette** | — | **Supported**: Affects the color of the gauge bars. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -101,7 +101,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `128` | **Peak Chaos**: adjusts the frequency of twinkling eruptions. |
         | **Speed** | `128` | **Flow speed**: controls the velocity of the underlying color bands. |
         | **Palette** | — | **Not Supported**: Uses its internal organic color engine. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -127,7 +127,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `170` | **Grid density**: determines the number and size of liquid nodes. |
         | **Speed** | `100` | **Pulse speed**: controls the drifting and expansion velocity. |
         | **Palette** | — | **Supported**: Colors the liquid nodes and collision bridges. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -153,7 +153,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `128` | **Not used**: Reserved for future visual refinements. |
         | **Speed** | `15` | **Timer Duration**: controls how long it takes to fill the strip. |
         | **Palette** | — | **Supported**: Defaults to **Ocean** (11). |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -229,7 +229,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `40` | **Fade rate**: determines how quickly the trail vanishes. |
         | **Speed** | `140` | **Cursor speed**: controls the velocity of the running dot. |
         | **Palette** | — | **Not Supported**: Uses the primary selected color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -255,7 +255,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `128` | **Distance**: adjusts the spacing between the three cursors. |
         | **Speed** | `128` | **Velocity**: controls the combined speed of the cursors. |
         | **Palette** | — | **Not Supported**: Uses the primary selected color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -327,7 +327,7 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
         | **Intensity** | `128` | **Pulse decay**: controls how fast the beat energy dissipates. |
         | **Speed** | `128` | **BPM**: sets the frequency of the heartbeats. |
         | **Palette** | — | **Supported**: Affects the color of the kinetic energy pulses. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -384,7 +384,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
         | **Speed** | `128` | **Gravity**: controls the velocity of falling and peeling blocks. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -411,7 +411,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -436,7 +436,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
         | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
         | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -461,7 +461,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -487,7 +487,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -513,7 +513,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -563,7 +563,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edges. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transitions. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -589,7 +589,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
         | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -612,7 +612,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -634,7 +634,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -656,7 +656,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -678,7 +678,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -700,7 +700,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -749,7 +749,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Ripple Decadence**: controls the frequency and decay of the feedback ripples. |
         | **Speed** | `100` | **Flow Pressure**: controls the velocity of the fill surge. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -774,7 +774,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Data Density**: adjusts the length and spacing of the telemetry dashes. |
         | **Speed** | `128` | **Baud Rate**: controls the transmission speed across the strip. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -843,7 +843,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Shadow width**: determines the size of the negative space. |
         | **Speed** | `128` | **Glide velocity**: controls the speed of the drifting shadow. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -865,7 +865,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Flutter intensity**: controls the contrast and aggressiveness of the stutter sequence. |
         | **Speed** | `128` | **Ignition duration**: controls the length of the ignition phase. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -887,7 +887,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Spring stiffness**: determines the tension and number of bounces before settling. |
         | **Speed** | `128` | **Surge velocity**: controls the speed of the initial brightness jump. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -909,7 +909,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Cursor sharpness**: controls the brightness and width of the leading edge. |
         | **Speed** | `128` | **Print speed**: controls the velocity of the print cursor. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -942,7 +942,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Wave width**: determines how broad the light bands are. |
         | **Speed** | `24` | **Drift speed**: controls the horizontal movement velocity. |
         | **Palette** | — | **Supported**: Defaults to **Aurora** (1). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -968,7 +968,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Blink rate**: controls the frequency of the on/off transitions. |
         | **Palette** | — | **Supported**: Sets the color of the active blink. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -994,7 +994,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Color speed**: controls how fast the colors cycle between blinks. |
         | **Speed** | `128` | **Blink rate**: controls the frequency of the on/off transitions. |
         | **Palette** | — | **Supported**: Defines the color cycle range. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1020,7 +1020,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Count**: determines the number of active bouncing balls. |
         | **Speed** | `128` | **Gravity**: controls the acceleration and bounce height. |
         | **Palette** | — | **Supported**: Assigns colors to individual balls. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1046,7 +1046,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Breathe rate**: controls the speed of the expansion and contraction. |
         | **Palette** | — | **Supported**: Sets the color of the breathing pulse. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1072,7 +1072,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `40` | **Trail length**: determines how long the tail persists. |
         | **Speed** | `110` | **Chase speed**: controls the velocity of the moving dot. |
         | **Palette** | — | **Supported**: Sets the color of the chase and trail. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1098,7 +1098,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `70` | **Spacing**: adjusts the distance between the chase segments. |
         | **Speed** | `60` | **Chase speed**: controls the velocity of the triple-chase. |
         | **Palette** | — | **Supported**: Defines the colors of the different segments. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1124,7 +1124,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Saturation**: adjusts the color depth of the loop. |
         | **Speed** | `128` | **Cycle speed**: controls how fast colors rotate. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1150,7 +1150,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Spawn rate**: determines how many twinkles appear. |
         | **Speed** | `128` | **Fade speed**: controls how fast the sparks vanish. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1176,7 +1176,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Saturation**: adjusts the vibrancy of the waves. |
         | **Speed** | `128` | **Wave speed**: controls the motion velocity. |
         | **Palette** | — | **Supported**: Defaults to **Party** (8). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1202,7 +1202,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Change rate**: determines how many pixels change per tick. |
         | **Speed** | `128` | **Hold time**: controls the duration of the fill/clear states. |
         | **Palette** | — | **Supported**: Sets the dissolve colors. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1228,7 +1228,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Drop size**: determines the volume of the water drops. |
         | **Speed** | `128` | **Gravity**: controls the fall velocity and splash height. |
         | **Palette** | — | **Supported**: Colorizes the water drops. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1254,7 +1254,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `160` | **Sparking rate**: determines the frequency of new embers. |
         | **Speed** | `64` | **Cooling rate**: controls the flame height and dissipation. |
         | **Palette** | — | **Supported**: Defaults to **Fire** (5). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1280,7 +1280,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Explosion size**: determines the radius of the burst. |
         | **Speed** | `128` | **Launch frequency**: controls how often rockets fire. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1306,7 +1306,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Zone count**: determines the number of active color bands. |
         | **Speed** | `128` | **Flow speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1332,7 +1332,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Sparkle density**: determines the spark frequency. |
         | **Speed** | `128` | **Flow speed**: controls the background motion. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1358,7 +1358,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Pulse decay**: controls the dissipation of the beat surge. |
         | **Speed** | `128` | **BPM**: sets the frequency of the heartbeats. |
         | **Palette** | — | **Supported**: Assigns colors to the heart pulses. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1384,7 +1384,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the persisting trail depth. |
         | **Speed** | `64` | **Movement speed**: controls the dot oscillation frequency. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1410,7 +1410,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the particle persistence. |
         | **Speed** | `128` | **Fall speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Colors the meteor and its tail. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1436,7 +1436,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Burst count**: determines the number of strobe flashes per cycle. |
         | **Speed** | `128` | **Strobe rate**: controls the flash frequency. |
         | **Palette** | — | **Supported**: Colors the strobe bursts. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1461,7 +1461,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Zoom**: adjusts the scale/resolution of the noise pattern. |
         | **Speed** | `128` | **Drift speed**: controls the velocity of the color movement. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1487,7 +1487,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Zoom/Scale**: adjusts the breadth of the wave movements. |
         | **Speed** | `128` | **Wave speed**: controls the velocity of the ocean surge. |
         | **Palette** | — | **Not Supported**: Forced to the deep sea Ocean palette. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1513,7 +1513,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Percent fill**: determines the completion level (0-255 map). |
         | **Speed** | `128` | **Smoothness**: controls the transition velocity between values. |
         | **Palette** | — | **Supported**: Colors the fill bar. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1539,7 +1539,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Frequency**: adjusts the density of the plasma nodes. |
         | **Speed** | `128` | **Morph speed**: controls how fast the plasma fluctuates. |
         | **Palette** | — | **Supported**: Defaults to **Party** (8). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1565,7 +1565,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Particle count**: determines the number of active popcorn grains. |
         | **Speed** | `128` | **Bounciness**: controls the kinetic energy retention on impact. |
         | **Palette** | — | **Supported**: Colors the individual particles. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1591,7 +1591,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Zoom/Density**: adjusts the breadth of the rainbow bands. |
         | **Speed** | `128` | **Flow speed**: controls the velocity of the spectrum movement. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1617,7 +1617,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Wave strength**: determines the ripple amplitude. |
         | **Speed** | `128` | **Propagation**: controls how fast waves expand. |
         | **Palette** | — | **Supported**: Defaults to **Rainbow** (4). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1643,7 +1643,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Spacing**: adjusts the distance between trails. |
         | **Speed** | `128` | **Run speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Defaults to **Sakura** (13). |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1669,7 +1669,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail spacing**: adjusts the density of the light peaks. |
         | **Speed** | `128` | **Run speed**: controls the motion velocity. |
         | **Palette** | — | **Supported**: Sets the color of the trails. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1695,7 +1695,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Wave count**: determines the density of the sawtooth pattern. |
         | **Speed** | `128` | **Speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Colors the sawtooth peaks. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1721,7 +1721,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the persisting trail depth. |
         | **Speed** | `128` | **Scan speed**: controls the movement frequency. |
         | **Palette** | — | **Supported**: Sets the scanner color. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1747,7 +1747,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the trail persistence. |
         | **Speed** | `128` | **Scan speed**: controls the meeting frequency. |
         | **Palette** | — | **Supported**: Sets the color of the dual scanners. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1773,7 +1773,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Sparkle density**: determines how many pixels flash at once. |
         | **Speed** | `128` | **Cycle speed**: controls how fast sparks update. |
         | **Palette** | — | **Supported**: Sets the sparkle colors. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1799,7 +1799,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Density**: determines the frequency of new light births. |
         | **Speed** | `128` | **Flash rate**: controls the shutter speed of the sparkles. |
         | **Palette** | — | **Supported**: Colors the intense flash events. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1825,7 +1825,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Density**: determines the number of dark nodes. |
         | **Speed** | `128` | **Blink rate**: controls the frequency of dark events. |
         | **Palette** | — | **Supported**: Sets the background solid color. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1851,7 +1851,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | — | **Not used**: Reserved for future refinements. |
         | **Palette** | — | **Supported**: Maps a static gradient across the strip. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1877,7 +1877,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Strobe rate**: controls the flash frequency. |
         | **Palette** | — | **Supported**: Colors the strobe bursts. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1903,7 +1903,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Color speed**: controls how fast colors cycle during the strobe. |
         | **Speed** | `128` | **Strobe rate**: controls the flash frequency. |
         | **Palette** | — | **Supported**: Defines the strobe color cycle. |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1929,7 +1929,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Not used**: Reserved for future refinements. |
         | **Speed** | `60` | **Duration**: controls the length of the sunrise transition. |
         | **Palette** | — | **Supported**: Defaults to **HeatColors** (12). |
-        | **Sequencer Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
+        | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1955,7 +1955,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Sweep speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Colors the sweeping light. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1981,7 +1981,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Wipe speed**: controls the transition velocity. |
         | **Palette** | — | **Supported**: Colors the wipe animation. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -2007,7 +2007,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Wipe speed**: controls the transition velocity. |
         | **Palette** | — | **Supported**: Defines the random color range. |
-        | **Sequencer Triggers** | — | **Supported**: Position-based triggers (`on_reach`, `on_pixel_num`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**

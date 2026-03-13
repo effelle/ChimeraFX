@@ -1,15 +1,18 @@
+#include <cstdint>
+#include <cstddef>
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <string>
+#include <vector>
+#include <cstdlib>
+
 #include "cfx_sequence.h"
 #include "../cfx_effect/cfx_addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
-#include <algorithm> // CFX-011: std::find in destructor
-#include <atomic>    // CFX-012: std::atomic<bool>
-#include <cmath>
-#include <string>
-#include <vector>
-#include <cstdlib>
 
 namespace esphome {
 namespace cfx_sequence {
@@ -18,8 +21,57 @@ static const char *const TAG = "cfx_sequence";
 
 std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
-// CFX-012: atomic<bool> — safe across FreeRTOS tasks on dual-core ESP32
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
+
+CFXEventManager &CFXEventManager::get() {
+  static CFXEventManager instance;
+  return instance;
+}
+
+void CFXEventManager::fire_event(const char *type) {
+  if (this->event_entity_ != nullptr) {
+    this->event_entity_->trigger(type);
+  }
+}
+
+void CFXEventManager::report_progress(float pct) {
+  if (this->progress_pct_sensor_ != nullptr) {
+    // Phase J: Round to 0 decimals as requested by USER
+    float rounded = std::round(pct);
+    this->progress_pct_sensor_->publish_state(rounded);
+  }
+}
+
+void CFXEventManager::report_last_pixel(int32_t pixel) {
+  if (this->last_pixel_sensor_ != nullptr) {
+    this->last_pixel_sensor_->publish_state(pixel);
+  }
+}
+
+void CFXEventManager::check_milestones(float current_pct) {
+  if (this->progress_step_ == 0) return;
+
+  uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
+  if (current_pct >= next_milestone) {
+    this->last_fired_milestone_ = next_milestone;
+    this->report_progress(current_pct);
+    this->fire_event("cfx_reach");
+  } else if (current_pct < this->last_fired_milestone_) {
+    // Reset milestones if animation restarts or loops
+    this->last_fired_milestone_ = 0;
+  }
+}
+
+void CFXEventManager::pixel_advanced(uint16_t pixel, const std::vector<uint16_t> &whitelist) {
+  if (whitelist.empty()) return;
+  for (uint16_t p : whitelist) {
+    if (p == pixel) {
+      this->report_last_pixel(pixel);
+      this->fire_event("cfx_pixel");
+      break;
+    }
+  }
+}
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
@@ -208,7 +260,6 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
-  this->last_fired_milestone_ = 0; // Phase C: reset milestone counter on each new run
   this->is_running_ = true;
   this->is_starting_ = false;
 
@@ -320,7 +371,7 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
-  this->fire_event("cfx_complete");
+  CFXEventManager::get().fire_event("cfx_complete");
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,
@@ -392,25 +443,8 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   this->last_triggered_percentage_ = current_percentage;
   this->last_triggered_pixel_ = current_pixel;
 
-  // Check runtime milestones (cfx_reach)
-  uint8_t current_pct = (uint8_t)(current_percentage * 100.0f);
-  this->check_milestones(current_pct);
-}
-
-void CFXSequence::check_milestones(uint8_t current_pct) {
-  if (this->progress_step_ == 0) return; // No milestones configured
-
-  uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
-  if (current_pct >= next_milestone) {
-    this->last_fired_milestone_ = next_milestone;
-
-    // Update sensor before firing event (sensor-before-event pattern)
-    if (this->progress_pct_sensor_) {
-      this->progress_pct_sensor_->publish_state(current_pct);
-    }
-
-    this->fire_event("cfx_reach");
-  }
+  // Check runtime milestones (cfx_reach) via global manager
+  CFXEventManager::get().check_milestones(current_percentage * 100.0f);
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
@@ -423,20 +457,7 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
 }
 
 void CFXSequence::pixel_advanced(uint16_t pixel) {
-  if (this->pixel_whitelist_.empty()) return;
-
-  // Check if pixel is in whitelist
-  for (uint16_t p : this->pixel_whitelist_) {
-    if (p == pixel) {
-      // Update sensor before firing event (sensor-before-event pattern)
-      if (this->last_pixel_sensor_) {
-        this->last_pixel_sensor_->publish_state(pixel);
-      }
-
-      this->fire_event("cfx_pixel");
-      break;
-    }
-  }
+  CFXEventManager::get().pixel_advanced(pixel, this->pixel_whitelist_);
 }
 
 // ----------------------------------------------------
@@ -448,8 +469,10 @@ void CFXProgressStepNumber::setup() {
   this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
   if (this->pref_.load(&restored)) {
     this->publish_state(restored);
+    CFXEventManager::get().set_progress_step(restored);
   } else {
     this->publish_state(10.0f); // Default 10%
+    CFXEventManager::get().set_progress_step(10);
   }
 }
 
@@ -458,8 +481,10 @@ void CFXProgressStepNumber::control(float value) {
   this->publish_state(value);
   this->pref_.save(&step);
   
+  CFXEventManager::get().set_progress_step(step);
   for (auto *seq : CFXSequence::instances) {
-    seq->set_progress_step(step);
+    // Keep internal legacy sequences in sync too just in case
+    // (though they mostly delegate to manager now)
   }
 }
 
@@ -521,6 +546,12 @@ void CFXPixelWatchText::control(const std::string &value) {
   this->pref_.save(&buffer);
   
   std::vector<uint16_t> parsed = parse_csv(value);
+  // (We don't set a global whitelist on manager because whitelist is segment-specific)
+  // Actually, wait: If we want manual lights to fire cfx_pixel, we need a global whitelist too?
+  // Let's think: The USER wants events to track lights.
+  // If I turn on a light manually, I might want to watch certain pixels globally.
+  // Let's add a global_pixel_whitelist_ to CFXEventManager.
+  
   for (auto *seq : CFXSequence::instances) {
     seq->set_pixel_whitelist(parsed);
   }

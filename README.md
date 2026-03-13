@@ -12,7 +12,7 @@ Unlike the old `addressable_lambda` method, this implementation runs as a proper
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
-- [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
+- [The Orchestrator Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---
@@ -23,8 +23,8 @@ The documentation includes everything you need:
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
-* **Segment Runner Support** — Up to 8 segments for each light strip.
-* **Sequencer Support** — Create complex event driven sequences for your light strip.
+* **Segment Runner Core** — High-performance parallel rendering for up to 8 independent segments.
+* **ChimeraFX Orchestrator** — The powerhouse logic layer for hardware-precise events and reactive Home Assistant automations.
 * **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **100% Home Assistant Native** — Instantly exposes speed, intensity, palette, and other controls.

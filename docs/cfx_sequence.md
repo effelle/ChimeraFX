@@ -1,6 +1,6 @@
-# ChimeraFX Sequencer
+# ChimeraFX Orchestrator
 
-The ChimeraFX Sequencer (`cfx_sequence`) is the **Logic Layer** of your lighting. It allows your LED strips to move beyond simple repeating loops and become an organic, responsive part of your environment.
+The ChimeraFX Orchestrator (`cfx_sequence`) is the **Logic Layer** of your lighting. It allows your LED strips to move beyond simple repeating loops and become an organic, responsive part of your environment.
 
 ### 🛡️ Built for Reliability: Two Ways to Sequence
 
@@ -115,6 +115,23 @@ The following examples show how to react to the same sequence logic in both envi
             - service: camera.snapshot
               target: { entity_id: camera.front_door }
         ```
+
+---
+
+## ⚡ Performance Optimization: Event Latency
+
+By default, ESPHome batches network updates to prevent Wi-Fi congestion. While this is great for standard sensors, it can introduce a ~200ms delay in Home Assistant receiving your lighting events.
+
+For the most responsive "Logic Layer," we recommend reducing the API batch delay:
+
+```yaml
+api:
+  batch_delay: 0ms
+```
+
+> [!NOTE]
+> **Why is there a delay?**
+> ESPHome defaults to `200ms` to group multiple sensor updates into a single network packet, saving energy and reducing network noise. Setting it to `0ms` tells the device to fire events **instantly** the microsecond they occur—critical for tightly synced automations.
 
 ---
 
