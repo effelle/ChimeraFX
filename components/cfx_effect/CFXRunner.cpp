@@ -621,7 +621,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 8:
     return PaletteParty;
   case 9:
-    return PaletteLava;
+    return PaletteTwilight;
   case 10:
     return PalettePastel;
   case 11:
@@ -649,7 +649,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 22:
     return PaletteFairy;
   case 23:
-    return PaletteTwilight;
+    return PaletteRainbow; // Reserved for future use
   case 254:
     // Smart Random (generated on switch)
     // Needs instance to access the buffer

@@ -1372,7 +1372,7 @@ uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
   if (strcmp(option, "Fairy") == 0)
     return 22;
   if (strcmp(option, "Twilight") == 0)
-    return 23;
+    return 9;
 
   if (strcmp(option, "Default") == 0) {
     // Resolve the natural default for this effect
@@ -1544,8 +1544,10 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
     return "SunnyGold";
   case 22:
     return "Fairy";
-  case 23:
+  case 9:
     return "Twilight";
+  case 23:
+    return "Default";
   case 254:
     return "Smart Random";
   case 255:

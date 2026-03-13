@@ -2032,10 +2032,10 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 | ID | Palette Name | Description | Preview |
 |:---|:---|:---|:---|
+| 0 | **Default** | Uses the effect's hardcoded colors. | |
 | 1 | **Aurora** | Northern lights colors. | ![Aurora](/ChimeraFX/assets/palettes/Aurora.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 17 | **Christmas** | Red and green holiday mix. | ![Christmas](/ChimeraFX/assets/palettes/Christmas.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 15 | **Cyberpunk** | Neon pink, blue, and purple. | ![Cyberpunk](/ChimeraFX/assets/palettes/Cyberpunk.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
-| 0 | **Default** | Uses the effect's hardcoded colors. |
 | 22 | **Fairy** | Magical pinks and purples. | ![Fairy](/ChimeraFX/assets/palettes/Fairy.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 5 | **Fire** | Intense reds, oranges, and yellows. | ![Fire](/ChimeraFX/assets/palettes/Fire.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 2 | **Forest** | Earth greens, browns, and mossy tones. | ![Forest](/ChimeraFX/assets/palettes/Forest.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
@@ -2055,7 +2055,7 @@ You can assign any of these palettes to compatible effects using the `palette` s
 | 21 | **Solid** | Solid color (uses primary color). | ![Solid](/ChimeraFX/assets/palettes/Solid.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 20 | **SunnyGold** | Bright gold and yellow. | ![SunnyGold](/ChimeraFX/assets/palettes/SunnyGold.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 | 6 | **Sunset** | Purple, red, orange, and yellow gradients. | ![Sunset](/ChimeraFX/assets/palettes/Sunset.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
-| 23 | **Twilight** | Dusk blues and purples. | ![Twilight](/ChimeraFX/assets/palettes/Twilight.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
+| 9 | **Twilight** | Dusk blues and purples. | ![Twilight](/ChimeraFX/assets/palettes/Twilight.png){ style="width: 150px; height: 8px !important; border-radius: 2px; border: 1px solid #333; display: block; object-fit: fill;" } |
 
 
 ## Intro and Outro Animations
