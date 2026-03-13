@@ -2139,6 +2139,13 @@ uint16_t mode_dissolve(void) {
   instance->_segment.aux1 = pixel_count;
   instance->_segment.step = state_start;
 
+  // Progress tracking: report fill progress only during FILLING phase (state==0)
+  // so milestones are not re-fired in reverse during DISSOLVING.
+  if ((instance->_segment.aux0 & 0x03) == 0) {
+    if (pixel_count >= 0 && pixel_count < (uint16_t)len)
+      instance->current_leading_pixel = (int32_t)pixel_count;
+  }
+
   return FRAMETIME;
 }
 
@@ -3199,6 +3206,9 @@ uint16_t mode_sunrise(void) {
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
     instance->_segment.setPixelColor(len - i - 1, RGBW32(c.r, c.g, c.b, c.w));
   }
+
+  // Progress tracking: map stage (0-65535) to pixel space
+  instance->current_leading_pixel = (int32_t)((uint32_t)stage * len >> 16);
 
   return FRAMETIME;
 }
@@ -5121,6 +5131,12 @@ uint16_t mode_dropping_time(void) {
     }
   }
 
+  // Progress tracking: filledPixels counts permanently filled pixels (0=empty, len=full)
+  if (state->filledPixels >= (uint16_t)len) {
+    instance->effect_complete_ = true;
+  }
+  instance->current_leading_pixel = (int32_t)state->filledPixels;
+
   return FRAMETIME;
 }
 
@@ -5277,6 +5293,19 @@ uint16_t mode_drip(void) {
     }
   }
 
+  // Progress tracking: lowest active drop position, inverted to read 0%=top, 100%=bottom
+  {
+    int32_t lowest = -1;
+    for (int j = 0; j < MAX_DROPS; j++) {
+      if (drops[j].colIndex > 0) {
+        int32_t p = (int32_t)drops[j].pos;
+        if (p >= 0 && (lowest < 0 || p < lowest)) lowest = p;
+      }
+    }
+    if (lowest >= 0)
+      instance->current_leading_pixel = (int32_t)(len - 1) - lowest;
+  }
+
   return FRAMETIME;
 }
 
@@ -5401,6 +5430,17 @@ uint16_t mode_bouncing_balls(void) {
     uint8_t w = qadd8((existing >> 24) & 0xFF, (colorInt >> 24) & 0xFF);
 
     instance->_segment.setPixelColor(pixel, RGBW32(r, g, b, w));
+  }
+
+  // Progress tracking: highest ball position gives "activity front"
+  {
+    int32_t highest = -1;
+    for (int i = 0; i < numBalls; i++) {
+      int px = (int)(balls[i].height * (instance->_segment.length() - 1));
+      if (px > highest) highest = px;
+    }
+    if (highest >= 0)
+      instance->current_leading_pixel = highest;
   }
 
   return FRAMETIME;
@@ -6432,6 +6472,10 @@ uint16_t mode_follow_me(void) {
 
   } // switch
 
+  // Progress tracking: cursor head position during MOVING phase
+  if (fm->state == FM_MOVING && fm->pos >= 0.0f && fm->pos < (float)len)
+    instance->current_leading_pixel = (int32_t)fm->pos;
+
   return FRAMETIME;
 }
 
@@ -6666,6 +6710,13 @@ uint16_t mode_follow_us(void) {
   }
 
   } // switch
+
+  // Progress tracking: leading particle (parts[0]) during FU_RUN
+  if (fu->state == FU_RUN) {
+    float lead = fu->parts[0].pos;
+    if (lead >= 0.0f && lead < (float)len)
+      instance->current_leading_pixel = (int32_t)lead;
+  }
 
   return FRAMETIME;
 }
@@ -7081,7 +7132,10 @@ uint16_t mode_eclipse(void) {
 
   // Smooth the shadow edges physically
   instance->_segment.blur(32);
-  
+
+  // Progress tracking: shadow_px cycles 0→len continuously (Group B cyclic)
+  instance->current_leading_pixel = (int32_t)shadow_px;
+
   return FRAMETIME;
 }
 
