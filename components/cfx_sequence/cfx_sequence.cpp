@@ -110,6 +110,20 @@ void CFXSequence::start() {
     this->saved_states_.push_back(s);
   }
 
+  // Sync logic: listen for lights turning off while sequence is running
+  for (auto *l : this->lights_) {
+    if (this->monitored_lights_.find(l) == this->monitored_lights_.end()) {
+      l->add_new_remote_values_callback([this, l]() {
+        if (this->is_running_ && !l->remote_values.is_on()) {
+          ESP_LOGD(TAG, "Sequence '%s' stopping because light '%s' turned off",
+                   this->name_.c_str(), l->get_name().c_str());
+          this->stop();
+        }
+      });
+      this->monitored_lights_.insert(l);
+    }
+  }
+
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
@@ -126,7 +140,9 @@ void CFXSequence::start() {
       }
     }
     call.set_color_mode(valid_mode);
-    call.set_transition_length(0);
+    if (this->effect_.empty()) {
+      call.set_transition_length(0);
+    }
     if (this->brightness_.has_value()) {
       call.set_brightness(this->brightness_.value());
     }

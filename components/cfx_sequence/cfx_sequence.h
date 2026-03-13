@@ -13,6 +13,7 @@
 #include <atomic>    // CFX-012: for std::atomic<bool>
 #include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -131,6 +132,7 @@ protected:
   // Sensor pointers (optional)
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
+  std::set<light::LightState *> monitored_lights_;
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
