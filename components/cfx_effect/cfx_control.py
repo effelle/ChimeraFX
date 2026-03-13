@@ -29,9 +29,9 @@ PALETTE_OPTIONS = [
     "OrangeTeal", "Christmas", "RedBlue", "Matrix", "SunnyGold", "Solid", "Fairy", "Twilight", "Smart Random"
 ]
 
-COMMON_TRANSITIONS = ["None", "Wipe", "Fade", "Center", "Glitter", "Twin Pulse", "Morse Code", "Quadrant", "Eclipse", "Gas Discharge", "Harmonic Settle", "Lithograph"]
-INTRO_ONLY = ["Pressurize", "Dropping", "Construct", "Inertia Sweep", "Sonar Reveal", "Venetian", "Crystallize", "Deep Breathe", "Moiré Shift", "Resonance", "Telemetry", "Stellar Dust", "Interference"]
-OUTRO_ONLY = ["Drain", "Emptying", "Dismantle", "Decelerate", "Sonar Fade", "Close Blinds", "Erode", "Exhale", "Moiré Fade", "Resonance Fade", "Telemetry Fade", "Stellar Fade", "Interference Fade"]
+COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Lithograph", "Morse Code", "Quadrant", "Twin Pulse", "Wipe"]
+INTRO_ONLY = ["Construct", "Crystallize", "Deep Breathe", "Dropping", "Inertia Sweep", "Interference", "Moiré Shift", "Pressurize", "Resonance", "Sonar Reveal", "Stellar Dust", "Telemetry", "Venetian"]
+OUTRO_ONLY = ["Close Blinds", "Drain", "Decelerate", "Dismantle", "Emptying", "Erode", "Exhale", "Interference Fade", "Moiré Fade", "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade"]
 
 INTRO_OPTIONS = COMMON_TRANSITIONS + INTRO_ONLY
 OUTRO_OPTIONS = COMMON_TRANSITIONS + OUTRO_ONLY

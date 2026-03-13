@@ -7070,7 +7070,7 @@ uint16_t mode_eclipse(void) {
   float period_ms = 12000.0f - (instance->_segment.speed / 255.0f) * 10000.0f;
   if (period_ms < 1000.0f) period_ms = 1000.0f;
   
-  int shadow_px = (int)((instance->now / period_ms) * (float)len) % len;
+  float shadow_px = fmodf(((float)instance->now / period_ms) * (float)len, (float)len);
 
   // Get base color (monochromatic)
   uint32_t base_col = instance->_segment.colors[0];
@@ -7079,13 +7079,12 @@ uint16_t mode_eclipse(void) {
                            base_col & 0xFF, (base_col >> 24) & 0xFF);
 
   for (int i = 0; i < len; i++) {
-    int dist = i - shadow_px;
-    if (dist < 0) dist = -dist;
-    if (dist > len / 2) dist = len - dist;
+    float dist = fabsf((float)i - shadow_px);
+    if (dist > len / 2.0f) dist = (float)len - dist;
     if (dist > shadow_hw) dist = shadow_hw;
 
     // Smoothstep profile for a "wetter", smoother shadow
-    float d_norm = 1.0f - (float)dist / (float)shadow_hw;
+    float d_norm = 1.0f - dist / (float)shadow_hw;
     float smooth_d = d_norm * d_norm * (3.0f - 2.0f * d_norm);
     uint8_t shadow_depth = (uint8_t)(smooth_d * 215.0f);
 
@@ -7096,6 +7095,10 @@ uint16_t mode_eclipse(void) {
     instance->_segment.setPixelColor(
         i, RGBW32(dimmed.r, dimmed.g, dimmed.b, dimmed.w));
   }
+
+  // Smooth the shadow edges physically
+  instance->_segment.blur(32);
+  
   return FRAMETIME;
 }
 

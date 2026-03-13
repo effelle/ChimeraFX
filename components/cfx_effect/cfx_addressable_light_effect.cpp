@@ -3422,23 +3422,22 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     const uint8_t BASE_B = 180;
     // Map Intensity to shadow width (from 10% up to 50% of the strip)
     float hw_frac = 0.10f + (intensity / 255.0f) * 0.40f;
-    int shadow_hw = (int)(seg_len * hw_frac);
-    if (shadow_hw < 4)
-      shadow_hw = 4;
+    float shadow_hw = seg_len * hw_frac;
+    if (shadow_hw < 4.0f)
+      shadow_hw = 4.0f;
     
-    // Smooth sweep exactly across the string corresponding to intro prog
-    int shadow_px = (int)(-shadow_hw + prog * (float)(seg_len + 2 * shadow_hw));
+    // Smooth sweep exactly across the string (including margins for shadow width)
+    float total_range = (float)seg_len + 2.0f * shadow_hw;
+    float shadow_px = -shadow_hw + prog * total_range;
 
     // ── 4. Draw strip: base brightness minus smoothstep shadow dip ────────────
     for (int i = 0; i < seg_len; i++) {
-      int dist = i - shadow_px;
-      if (dist < 0)
-        dist = -dist;
+      float dist = fabsf((float)i - shadow_px);
       if (dist > shadow_hw)
-        dist = shadow_hw;  // clamp to shadow radius
+        dist = shadow_hw;
 
       // Smoothstep profile for a "wetter", smoother, premium shadow
-      float d_norm = 1.0f - (float)dist / (float)shadow_hw; // 1.0 at center, 0.0 at edge
+      float d_norm = 1.0f - dist / shadow_hw; 
       float smooth_d = d_norm * d_norm * (3.0f - 2.0f * d_norm); 
       uint8_t shadow_depth = (uint8_t)(smooth_d * 215.0f);
 
@@ -3449,6 +3448,11 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       // Apply intro envelope
       uint8_t final_b = (uint8_t)(((uint16_t)(uint8_t)bri * env) >> 8);
       it[seg_start + i] = dim(c, final_b);
+    }
+    
+    // Smooth the physical edges
+    if (this->runner_) {
+        this->runner_->_segment.blur(32);
     }
     break;
   }
