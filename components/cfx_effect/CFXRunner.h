@@ -449,5 +449,22 @@ private:
 
 extern CFXRunner *instance;
 
+// RAII guard to set/reset global instance pointer
+class InstanceGuard {
+  CFXRunner* prev_;
+public:
+  explicit InstanceGuard(CFXRunner* runner) {
+    prev_ = instance;
+    instance = runner;
+  }
+  ~InstanceGuard() {
+    instance = prev_;
+  }
+
+  // Non-copyable
+  InstanceGuard(const InstanceGuard&) = delete;
+  InstanceGuard& operator=(const InstanceGuard&) = delete;
+};
+
 } // namespace chimera_fx
 } // namespace esphome

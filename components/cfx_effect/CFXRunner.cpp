@@ -30,23 +30,6 @@ namespace chimera_fx {
 
 CFXRunner *instance = nullptr;
 
-// RAII guard to set/reset global instance pointer
-class InstanceGuard {
-  CFXRunner* prev_;
-public:
-  explicit InstanceGuard(CFXRunner* runner) {
-    prev_ = instance;
-    instance = runner;
-  }
-  ~InstanceGuard() {
-    instance = prev_;
-  }
-
-  // Non-copyable
-  InstanceGuard(const InstanceGuard&) = delete;
-  InstanceGuard& operator=(const InstanceGuard&) = delete;
-};
-
 // Forward declarations
 uint16_t mode_running_lights(void);
 uint16_t mode_running_dual(void);
