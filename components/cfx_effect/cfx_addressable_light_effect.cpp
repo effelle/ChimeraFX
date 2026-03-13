@@ -1130,9 +1130,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         if (this->active_sequence_ != nullptr) {
           if (r->effect_complete_) {
             auto *completed_seq = this->active_sequence_;
-            completed_seq->stop();
+            this->active_sequence_ = nullptr; // prevent re-entry
             completed_seq->report_event_complete();
-            this->active_sequence_ = nullptr;
+            completed_seq->stop();
           }
         }
 #endif
@@ -1145,9 +1145,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       if (this->runner_->effect_complete_ &&
           this->active_sequence_ != nullptr) {
         auto *completed_seq = this->active_sequence_;
-        completed_seq->stop();
+        this->active_sequence_ = nullptr; // prevent re-entry
         completed_seq->report_event_complete();
-        this->active_sequence_ = nullptr;
+        completed_seq->stop();
       }
 #endif
     }
@@ -5177,6 +5177,9 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
       this->intro_active_ = false;
     }
     this->state_ = TRANSITION_NONE;
+    this->last_triggered_percentage_ = -1.0f;
+    this->last_leading_pixel_ = -1;
+    this->last_triggered_pixel_ = -1;
 
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {

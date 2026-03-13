@@ -58,6 +58,7 @@ public:
   
   // High-level milestone logic (shared for Sequence and Manual)
   void check_milestones(float current_pct);
+  void reset_milestones() { this->last_fired_milestone_ = 0; }
   void pixel_advanced(uint16_t pixel, const std::vector<uint16_t> &whitelist);
 
 protected:
@@ -214,6 +215,8 @@ public:
   void play(const Ts &...x) override {
     for (auto *seq : CFXSequence::instances) {
       if (seq->get_id() == this->target_id_) {
+        // Reset global milestone tracking for the new sequence
+        CFXEventManager::get().reset_milestones();
         seq->start();
         return;
       }

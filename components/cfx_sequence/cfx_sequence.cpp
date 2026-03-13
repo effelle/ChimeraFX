@@ -328,8 +328,8 @@ void CFXSequence::stop() {
   // Update Select UI to reflect the stopped sequence
   if (CFXSequenceSelect::instance != nullptr &&
       CFXSequenceSelect::instance->has_state()) {
-    const char *current = CFXSequenceSelect::instance->current_option();
-    if (current != nullptr && this->name_ == current) {
+    const std::string &current = CFXSequenceSelect::instance->state;
+    if (!current.empty() && this->name_ == current) {
       CFXSequenceSelect::instance->publish_state_silent("None");
     }
   }
