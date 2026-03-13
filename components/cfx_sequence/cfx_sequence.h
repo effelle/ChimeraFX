@@ -151,6 +151,7 @@ protected:
     CFXSequenceListener(CFXSequence *parent, light::LightState *light)
         : parent_(parent), light_(light) {}
     void on_light_remote_values_update() override;
+    void nullify() { this->parent_ = nullptr; }
 
   private:
     CFXSequence *parent_;

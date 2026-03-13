@@ -75,8 +75,9 @@ CFXSequence::CFXSequence(const std::string &id, const std::string &name,
 CFXSequence::~CFXSequence() {
   // Clear any listeners
   for (auto &m : this->monitored_lights_) {
-    m.light->remove_remote_values_listener(m.listener);
-    delete m.listener;
+    m.listener->nullify();
+    // m.light->remove_remote_values_listener(m.listener); // Error: non-existent in ESPHome
+    // delete m.listener; // Unsafe: cannot remove from LightState, so must leak to avoid crash
   }
   this->monitored_lights_.clear();
 
@@ -413,7 +414,7 @@ void CFXSequence::check_milestones(uint8_t current_pct) {
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
-  if (this->parent_->is_running() && !this->light_->remote_values.is_on()) {
+  if (this->parent_ != nullptr && this->parent_->is_running() && !this->light_->remote_values.is_on()) {
     ESP_LOGD("cfx_sequence",
              "Sequence '%s' stopping because light '%s' turned off",
              this->parent_->get_name().c_str(), this->light_->get_name().c_str());
