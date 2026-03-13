@@ -168,6 +168,29 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
 
 ---
 
+## 🚀 Reliable Home Assistant Automations
+
+To ensure your automations fire every time (even for repeating events like `cfx_reach`), the Orchestrator appends a value to the event type. This guarantees a state change in Home Assistant.
+
+### Example: Triggering at 90%
+Use the `event_type` attribute with the value suffix:
+
+```yaml
+trigger:
+  - platform: state
+    entity_id: event.esp32_test_cfx_events
+    attribute: event_type
+    to: "cfx_reach:90"
+```
+
+### Supported Event Types:
+- `cfx_start`: Standard start event.
+- `cfx_complete`: Fired when iterations finish.
+- `cfx_reach:XX`: Fired every X% (set by "Progress Step").
+- `cfx_pixel:ID`: Fired when a "Watched Pixel" is rendered.
+
+---
+
 ## Technical Edge: Why ChimeraFX is Different
 ChimeraFX isn't built to replace all-in-one effects hubs like WLED. It is built for **Industrial-grade lighting logic**. While other platforms focus on visual presets, ChimeraFX focuses on the **Logic Layer**—ensuring that if your light "passes a point," your system knows about it instantly and timing remains absolute, even without a network connection.
 

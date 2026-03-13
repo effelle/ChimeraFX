@@ -4,7 +4,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
-
+.agent
+.agents
 # ESPHome
 .esphome/
 *.bin

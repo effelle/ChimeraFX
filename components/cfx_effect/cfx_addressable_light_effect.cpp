@@ -5090,7 +5090,8 @@ void CFXAddressableLightEffect::check_positional_triggers(
     // Phase D: fire cfx_pixel event for watched pixels (handled inside check_positional_triggers delegation now)
   } else {
     // Phase J: No active sequence (manual usage). Report progress to global hub.
-    float current_percentage = (float)current_pixel / (float)total_pixels;
+    // inclusive math: total_pixels - 1 ensures that the last pixel maps to 100%
+    float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
     cfx_sequence::CFXEventManager::get().check_milestones(current_percentage * 100.0f);
   }
 #endif
