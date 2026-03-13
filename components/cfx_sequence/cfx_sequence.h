@@ -124,20 +124,21 @@ public:
   void fire_event(const char *type) {
     CFXEventManager::get().fire_event(type);
   }
+  void set_event_entity(esphome::event::Event *e) {
+    CFXEventManager::get().set_event_entity(e);
+  }
 
   // Runtime configurable entities
-  void set_progress_step(uint8_t step) { this->progress_step_ = step; }
+  void set_progress_step(uint8_t step) { CFXEventManager::get().set_progress_step(step); }
   void set_pixel_whitelist(const std::vector<uint16_t>& pixels) { this->pixel_whitelist_ = pixels; }
-  void set_progress_sensor(esphome::sensor::Sensor *sensor) { this->progress_pct_sensor_ = sensor; }
-  void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { this->last_pixel_sensor_ = sensor; }
+  void set_progress_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_progress_sensor(sensor); }
+  void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_last_pixel_sensor(sensor); }
 
   // Milestone tracking
   void check_milestones(uint8_t current_pct) {
     CFXEventManager::get().check_milestones(current_pct);
   }
-  void pixel_advanced(uint16_t pixel) {
-    CFXEventManager::get().pixel_advanced(pixel, this->pixel_whitelist_);
-  }
+  void pixel_advanced(uint16_t pixel);
 
 protected:
   std::string id_;
