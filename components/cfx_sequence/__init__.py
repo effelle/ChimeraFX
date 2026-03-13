@@ -104,87 +104,86 @@ async def to_code(config):
         import esphome.core as _core
         api_conf = _core.CORE.config.get("api", {})
         batch_delay = api_conf.get("batch_delay", None)
-        if batch_delay != "0ms" and batch_delay != 0:
+        # batch_delay is typically a TimePeriod object in ESPHome config, so we cast to string to check
+        if batch_delay is not None and str(batch_delay) != "0ms":
             _LOGGER.warning(
                 "ChimeraFX events are enabled but 'api: batch_delay' is '%s'. "
                 "Set 'api: batch_delay: 0ms' for sub-10ms cfx_start/cfx_complete "
                 "event delivery to Home Assistant.",
-                batch_delay if batch_delay is not None else "(default)",
+                str(batch_delay),
             )
     except Exception:
         pass  # Non-fatal: warning is advisory only
 
     # Create global event entity for all sequences (one per device)
-    event_var = None
-    if len(config) > 0:
-        import esphome.core as core
-        event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
-        event_var = cg.new_Pvariable(event_id)
-        core.CORE.component_ids.add("cfx_global_events")
+    import esphome.core as core
+    event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
+    event_var = cg.new_Pvariable(event_id)
+    core.CORE.component_ids.add("cfx_global_events")
 
-        event_conf = {
-            "id": event_id,
-            "name": "CFX Events",
-            "icon": "mdi:animation-play",
-            "disabled_by_default": False,
-            "internal": False,
-            "event_types": ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel"],
-        }
-        await event.register_event(event_var, event_conf)
+    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel"]
+    event_conf = {
+        "id": event_id,
+        "name": "CFX Events",
+        "icon": "mdi:animation-play",
+        "disabled_by_default": False,
+        "internal": False,
+    }
+    await event.register_event(event_var, event_conf, event_types=event_types)
 
-        # 1. Progress Step Number
-        step_id = core.ID("cfx_progress_step", is_declaration=True, type=CFXProgressStepNumber)
-        step_var = cg.new_Pvariable(step_id)
-        core.CORE.component_ids.add("cfx_progress_step")
-        step_conf = {
-            "id": step_id,
-            "name": "CFX Progress Step",
-            "icon": "mdi:percent",
-            "mode": "BOX",
-        }
-        await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
-        await cg.register_component(step_var, step_conf)
-        cg.add(step_var.set_unit_of_measurement("%"))
+    # 1. Progress Step Number
+    step_id = core.ID("cfx_progress_step", is_declaration=True, type=CFXProgressStepNumber)
+    step_var = cg.new_Pvariable(step_id)
+    core.CORE.component_ids.add("cfx_progress_step")
+    step_conf = {
+        "id": step_id,
+        "name": "CFX Progress Step",
+        "icon": "mdi:percent",
+        "mode": "BOX",
+    }
+    await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
+    await cg.register_component(step_var, step_conf)
+    cg.add(step_var.set_unit_of_measurement("%"))
 
-        # 2. Progress Sensor
-        prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
-        prog_var = cg.new_Pvariable(prog_id)
-        core.CORE.component_ids.add("cfx_progress")
-        prog_conf = {
-            "id": prog_id,
-            "name": "CFX Progress",
-            "icon": "mdi:percent-circle",
-            "state_class": "measurement",
-            "accuracy_decimals": 0,
-        }
-        await sensor.register_sensor(prog_var, prog_conf)
-        cg.add(prog_var.set_unit_of_measurement("%"))
+    # 2. Progress Sensor
+    prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
+    prog_var = cg.new_Pvariable(prog_id)
+    core.CORE.component_ids.add("cfx_progress")
+    prog_conf = {
+        "id": prog_id,
+        "name": "CFX Progress",
+        "icon": "mdi:percent-circle",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+    }
+    await sensor.register_sensor(prog_var, prog_conf)
+    cg.add(prog_var.set_unit_of_measurement("%"))
 
-        # 3. Last Pixel Sensor
-        last_px_id = core.ID("cfx_last_pixel", is_declaration=True, type=sensor.Sensor)
-        last_px_var = cg.new_Pvariable(last_px_id)
-        core.CORE.component_ids.add("cfx_last_pixel")
-        last_px_conf = {
-            "id": last_px_id,
-            "name": "CFX Last Pixel",
-            "icon": "mdi:led-on",
-            "state_class": "measurement",
-            "accuracy_decimals": 0,
-        }
-        await sensor.register_sensor(last_px_var, last_px_conf)
+    # 3. Last Pixel Sensor
+    last_px_id = core.ID("cfx_last_pixel", is_declaration=True, type=sensor.Sensor)
+    last_px_var = cg.new_Pvariable(last_px_id)
+    core.CORE.component_ids.add("cfx_last_pixel")
+    last_px_conf = {
+        "id": last_px_id,
+        "name": "CFX Last Pixel",
+        "icon": "mdi:led-on",
+        "state_class": "measurement",
+        "accuracy_decimals": 0,
+    }
+    await sensor.register_sensor(last_px_var, last_px_conf)
 
-        # 4. Pixel Watch List Text
-        watch_id = core.ID("cfx_pixel_watch_list", is_declaration=True, type=CFXPixelWatchText)
-        watch_var = cg.new_Pvariable(watch_id)
-        core.CORE.component_ids.add("cfx_pixel_watch_list")
-        watch_conf = {
-            "id": watch_id,
-            "name": "CFX Pixel Watch List",
-            "icon": "mdi:format-list-numbered",
-            "mode": "TEXT",
-        }
-        await text.register_text(watch_var, watch_conf)
-        await cg.register_component(watch_var, watch_conf)
+    # 4. Pixel Watch List Text
+    watch_id = core.ID("cfx_pixel_watch_list", is_declaration=True, type=CFXPixelWatchText)
+    watch_var = cg.new_Pvariable(watch_id)
+    core.CORE.component_ids.add("cfx_pixel_watch_list")
+    watch_conf = {
+        "id": watch_id,
+        "name": "CFX Pixel Watch List",
+        "icon": "mdi:format-list-numbered",
+        "mode": "TEXT",
+    }
+    await text.register_text(watch_var, watch_conf)
+    await cg.register_component(watch_var, watch_conf)
 
     for seq_conf in config:
         # Pass ID string, Name string, Effect string, and Restore boolean
@@ -239,29 +238,26 @@ async def to_code(config):
     # ----------------------------------------------------
     # Generate the global Sequence Select Dropdown
     # ----------------------------------------------------
-    if len(config) > 0:
-        import esphome.core as core
+    seq_options = ["None"]
+    for seq_conf in config:
+        seq_options.append(seq_conf[CONF_NAME])
         
-        seq_options = ["None"]
-        for seq_conf in config:
-            seq_options.append(seq_conf[CONF_NAME])
-            
-        var_id = core.ID("cfx_global_sequence_select", is_declaration=True, type=CFXSequenceSelect)
-        sel_var = cg.new_Pvariable(var_id)
-        core.CORE.component_ids.add("cfx_global_sequence_select")
+    var_id = core.ID("cfx_global_sequence_select", is_declaration=True, type=CFXSequenceSelect)
+    sel_var = cg.new_Pvariable(var_id)
+    core.CORE.component_ids.add("cfx_global_sequence_select")
 
-        sel_conf = {
-            CONF_ID: var_id,
-            CONF_NAME: "Active Sequence",
-            CONF_ICON: "mdi:movie-open-play",
-            "optimistic": True,
-            CONF_DISABLED_BY_DEFAULT: False,
-            CONF_INTERNAL: False,
-        }
+    sel_conf = {
+        CONF_ID: var_id,
+        CONF_NAME: "Active Sequence",
+        CONF_ICON: "mdi:movie-open-play",
+        "optimistic": True,
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_INTERNAL: False,
+    }
         
-        await select.register_select(sel_var, sel_conf, options=seq_options)
-        await cg.register_component(sel_var, sel_conf)
-        cg.add(sel_var.publish_state("None"))
+    await select.register_select(sel_var, sel_conf, options=seq_options)
+    await cg.register_component(sel_var, sel_conf)
+    cg.add(sel_var.publish_state("None"))
 
 @automation.register_action(
     "cfx_sequence.start",
