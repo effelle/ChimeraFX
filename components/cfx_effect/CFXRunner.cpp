@@ -7060,9 +7060,17 @@ uint16_t mode_eclipse(void) {
   if (len <= 1) return mode_static();
 
   const uint8_t BASE_B = 180;
-  int shadow_hw = len * 18 / 100;
+  
+  // Use Intensity to control shadow width
+  float hw_frac = 0.10f + (instance->_segment.intensity / 255.0f) * 0.40f;
+  int shadow_hw = (int)(len * hw_frac);
   if (shadow_hw < 4) shadow_hw = 4;
-  int shadow_px = (int)((instance->now / 6000.0f) * (float)len) % len;
+  
+  // Use Speed to control cycle time: from 12000ms (slowest) to 2000ms (fastest)
+  float period_ms = 12000.0f - (instance->_segment.speed / 255.0f) * 10000.0f;
+  if (period_ms < 1000.0f) period_ms = 1000.0f;
+  
+  int shadow_px = (int)((instance->now / period_ms) * (float)len) % len;
 
   // Get base color (monochromatic)
   uint32_t base_col = instance->_segment.colors[0];
@@ -7076,10 +7084,12 @@ uint16_t mode_eclipse(void) {
     if (dist > len / 2) dist = len - dist;
     if (dist > shadow_hw) dist = shadow_hw;
 
-    int d_norm = shadow_hw - dist;
-    uint8_t depth = (uint8_t)((uint32_t)d_norm * d_norm * 215u /
-                              (uint32_t)(shadow_hw * shadow_hw));
-    int bri = (int)BASE_B - (int)depth;
+    // Smoothstep profile for a "wetter", smoother shadow
+    float d_norm = 1.0f - (float)dist / (float)shadow_hw;
+    float smooth_d = d_norm * d_norm * (3.0f - 2.0f * d_norm);
+    uint8_t shadow_depth = (uint8_t)(smooth_d * 215.0f);
+
+    int bri = (int)BASE_B - (int)shadow_depth;
     if (bri < 0) bri = 0;
 
     Color dimmed = cfx::dim(base_color, (uint8_t)bri);

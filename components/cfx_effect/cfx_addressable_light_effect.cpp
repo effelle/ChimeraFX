@@ -3392,7 +3392,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   case INTRO_MODE_ECLIPSE: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration / Intensity fetch ──────────────────────────────────────────
     uint32_t duration = 1500;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
@@ -3404,6 +3404,14 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (duration == 0)
       duration = 1;
 
+    uint8_t intensity = 128;
+    if (this->intensity_ != nullptr && this->intensity_->has_state())
+      intensity = (uint8_t)this->intensity_->state;
+    else if (this->controller_ != nullptr && this->controller_->get_intensity() != nullptr && this->controller_->get_intensity()->has_state())
+      intensity = (uint8_t)this->controller_->get_intensity()->state;
+    else if (this->intensity_preset_.has_value())
+      intensity = this->intensity_preset_.value();
+
     // ── 2. Global brightness envelope: cubic ease-in (lingers dark, then glows) ─
     float prog = (float)elapsed / (float)duration;
     if (prog > 1.0f)
@@ -3411,33 +3419,28 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     uint8_t env = (uint8_t)(cfx::ease_in_out(prog) * 255.0f);
 
     // ── 3. Shadow geometry ─────────────────────────────────────────────────────
-    //       Base brightness the strip rests at when fully lit (not 255 —
-    //       this is ambient glow, not a work light)
     const uint8_t BASE_B = 180;
-    //       Shadow half-width: covers ~18% of strip, minimum 4 pixels
-    int shadow_hw = seg_len * 18 / 100;
+    // Map Intensity to shadow width (from 10% up to 50% of the strip)
+    float hw_frac = 0.10f + (intensity / 255.0f) * 0.40f;
+    int shadow_hw = (int)(seg_len * hw_frac);
     if (shadow_hw < 4)
       shadow_hw = 4;
-    //       Shadow centre travels one full strip length per 6 seconds
-    int shadow_px = (int)((elapsed / 6000.0f) * (float)seg_len) % seg_len;
+    
+    // Smooth sweep exactly across the string corresponding to intro prog
+    int shadow_px = (int)(-shadow_hw + prog * (float)(seg_len + 2 * shadow_hw));
 
-    // ── 4. Draw strip: base brightness minus parabolic shadow dip ─────────────
+    // ── 4. Draw strip: base brightness minus smoothstep shadow dip ────────────
     for (int i = 0; i < seg_len; i++) {
-      // Wrap-aware distance from shadow centre
       int dist = i - shadow_px;
       if (dist < 0)
         dist = -dist;
-      if (dist > seg_len / 2)
-        dist = seg_len - dist;  // shortest arc on wrap
       if (dist > shadow_hw)
         dist = shadow_hw;  // clamp to shadow radius
 
-      // Parabolic profile: 255 at centre, 0 at edge — approximates Gaussian
-      // without expf() in a per-pixel loop
-      int d_norm = shadow_hw - dist;  // 0 at edge, shadow_hw at centre
-      uint8_t shadow_depth = (uint8_t)((uint32_t)d_norm * d_norm * 215u /
-                                       (uint32_t)(shadow_hw * shadow_hw));
-      // shadow_depth: 0 at edge → ~215 at centre (85% of BASE_B)
+      // Smoothstep profile for a "wetter", smoother, premium shadow
+      float d_norm = 1.0f - (float)dist / (float)shadow_hw; // 1.0 at center, 0.0 at edge
+      float smooth_d = d_norm * d_norm * (3.0f - 2.0f * d_norm); 
+      uint8_t shadow_depth = (uint8_t)(smooth_d * 215.0f);
 
       int bri = (int)BASE_B - (int)shadow_depth;
       if (bri < 0)
@@ -3536,7 +3539,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   case INTRO_MODE_HARMONIC_SETTLE: {
-    // ── 1. Duration fetch ─────────────────────────────────────────────────────
+    // ── 1. Duration / Intensity fetch ──────────────────────────────────────────
     uint32_t duration = 1600;
     number::Number *dur_num = this->intro_duration_;
     if (dur_num == nullptr && this->controller_ != nullptr)
@@ -3548,18 +3551,33 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (duration == 0)
       duration = 1;
 
-    // ── 2. Spring position — computed ONCE, not per pixel ─────────────────────
+    uint8_t intensity = 128;
+    if (this->intensity_ != nullptr && this->intensity_->has_state())
+      intensity = (uint8_t)this->intensity_->state;
+    else if (this->controller_ != nullptr && this->controller_->get_intensity() != nullptr && this->controller_->get_intensity()->has_state())
+      intensity = (uint8_t)this->controller_->get_intensity()->state;
+    else if (this->intensity_preset_.has_value())
+      intensity = this->intensity_preset_.value();
+
+    // ── 2. Spring position ────────────────────────────────────────────────────
     float t_norm = (float)elapsed / (float)duration;
     if (t_norm > 1.0f)
       t_norm = 1.0f;
 
-    // Damped oscillator: decay=4.0, omega=2π (one full oscillation)
-    // expf() + cosf() called once per frame — see FPU note above
-    float decay_term = expf(-4.0f * t_norm);
-    float osc_term = cosf(6.283185f * t_norm);
-    float fill_frac = 1.0f - decay_term * osc_term;
+    // Intensity controls the stiffness (number of oscillations)
+    float oscillations = 1.0f + (intensity / 255.0f) * 3.0f; // 1 to 4 full bounces
+    float omega = oscillations * 6.283185f;
+    float decay_rate = 2.0f + oscillations * 0.5f;
 
-    // fill_frac can briefly exceed 1.0 (overshoot past seg_len — this is correct)
+    float decay_term = expf(-decay_rate * t_norm);
+    float osc_term = cosf(omega * t_norm);
+    
+    // Envelope to kill off ringing smoothly at conclusion
+    float kill_env = 1.0f - t_norm;
+    kill_env = kill_env * kill_env;
+    
+    float fill_frac = 1.0f - (decay_term * osc_term * kill_env);
+
     int fill_px = (int)(fill_frac * (float)seg_len);
 
     // ── 3. Clear strip ────────────────────────────────────────────────────────
@@ -3576,9 +3594,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     for (int i = 0; i < draw_px; i++)
       it[seg_start + i] = c;
 
-    // ── 5. Overshoot indicator: edge flash when spring extends past strip end ─
-    //       A brief white boost on the final pixel signals the "wall impact"
-    //       that the spring is pushing against.
+    // ── 5. Overshoot indicator & Tension line ─────────────────────────────────
     if (fill_px > seg_len) {
       uint8_t over_b = (uint8_t)((fill_px - seg_len) * 40);
       if (over_b > 80)
@@ -3586,15 +3602,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       it[seg_start + seg_len - 1] = boost(c, over_b);
     }
 
-    // ── 6. Spring tension line: dim pixels behind fill when bouncing back ──────
-    //       When the spring retracts (fill_frac decreasing), a dim "tension"
-    //       gradient behind the head conveys the elastic pull-back.
     if (fill_px > 0 && fill_px < seg_len) {
-      int tension_px = fill_px < 4 ? fill_px : 4;
+      int tension_px = (intensity / 32) + 2; // Scales nicely up to 10
+      if (fill_px < tension_px) tension_px = fill_px;
       for (int g = 0; g < tension_px; g++) {
         int px = fill_px - 1 - g;
         if (px >= 0)
-          it[seg_start + px] = dim(c, (uint8_t)(80 - g * 18));
+          it[seg_start + px] = dim(c, (uint8_t)(100 - g * (100/tension_px)));
       }
     }
     break;
