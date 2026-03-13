@@ -238,26 +238,27 @@ async def to_code(config):
     # ----------------------------------------------------
     # Generate the global Sequence Select Dropdown
     # ----------------------------------------------------
-    seq_options = ["None"]
-    for seq_conf in config:
-        seq_options.append(seq_conf[CONF_NAME])
-        
-    var_id = core.ID("cfx_global_sequence_select", is_declaration=True, type=CFXSequenceSelect)
-    sel_var = cg.new_Pvariable(var_id)
-    core.CORE.component_ids.add("cfx_global_sequence_select")
+    if len(config) > 0:
+        seq_options = ["None"]
+        for seq_conf in config:
+            seq_options.append(seq_conf[CONF_NAME])
+            
+        var_id = core.ID("cfx_global_sequence_select", is_declaration=True, type=CFXSequenceSelect)
+        sel_var = cg.new_Pvariable(var_id)
+        core.CORE.component_ids.add("cfx_global_sequence_select")
 
-    sel_conf = {
-        CONF_ID: var_id,
-        CONF_NAME: "Active Sequence",
-        CONF_ICON: "mdi:movie-open-play",
-        "optimistic": True,
-        CONF_DISABLED_BY_DEFAULT: False,
-        CONF_INTERNAL: False,
-    }
-        
-    await select.register_select(sel_var, sel_conf, options=seq_options)
-    await cg.register_component(sel_var, sel_conf)
-    cg.add(sel_var.publish_state("None"))
+        sel_conf = {
+            CONF_ID: var_id,
+            CONF_NAME: "Internal Sequences",
+            CONF_ICON: "mdi:movie-open-play",
+            "optimistic": True,
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+            
+        await select.register_select(sel_var, sel_conf, options=seq_options)
+        await cg.register_component(sel_var, sel_conf)
+        cg.add(sel_var.publish_state("None"))
 
 @automation.register_action(
     "cfx_sequence.start",
