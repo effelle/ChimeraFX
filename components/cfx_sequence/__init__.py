@@ -137,12 +137,13 @@ async def to_code(config):
     core.CORE.component_ids.add("cfx_progress_step")
     step_conf = {
         "id": step_id,
-        "name": "CFX Progress Step",
+        "name": "Sequence Step",
         "icon": "mdi:percent",
         "mode": number.NUMBER_MODES["BOX"],
         "unit_of_measurement": "%",
         "disabled_by_default": False,
         "internal": False,
+        "entity_category": cv.ENTITY_CATEGORIES["config"],
     }
     await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
     await cg.register_component(step_var, step_conf)
@@ -153,7 +154,7 @@ async def to_code(config):
     core.CORE.component_ids.add("cfx_progress")
     prog_conf = {
         "id": prog_id,
-        "name": "CFX Progress",
+        "name": "Sequence Progress",
         "icon": "mdi:percent-circle",
         "state_class": sensor.STATE_CLASSES["measurement"],
         "accuracy_decimals": 0,
@@ -188,11 +189,12 @@ async def to_code(config):
     core.CORE.component_ids.add("cfx_pixel_watch_list")
     watch_conf = {
         "id": watch_id,
-        "name": "CFX Pixel Watch List",
+        "name": "Watch List",
         "icon": "mdi:format-list-numbered",
         "mode": text.TEXT_MODES["TEXT"],
         "disabled_by_default": False,
         "internal": False,
+        "entity_category": cv.ENTITY_CATEGORIES["config"],
     }
     await text.register_text(watch_var, watch_conf)
     await cg.register_component(watch_var, watch_conf)

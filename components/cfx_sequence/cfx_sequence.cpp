@@ -211,23 +211,34 @@ void CFXSequence::stop() {
         auto saved = this->saved_states_[light_idx];
         auto call = l->make_call();
 
-        // Restore everything: state, mode, brightness, color
-        // This ensures that even if we turn OFF, the "last known" values are
-        // correct.
-        call.set_state(saved.values.is_on());
+        // Restore transition first
+        call.set_transition_length(0);
+
+        // Restore state
+        bool turning_on = saved.values.is_on();
+        call.set_state(turning_on);
+
+        // Restore mode and brightness
         call.set_color_mode(saved.color_mode);
         call.set_brightness(saved.values.get_brightness());
         call.set_rgb(saved.values.get_red(), saved.values.get_green(),
                      saved.values.get_blue());
-        call.set_white(saved.values.get_white());
 
-        if (saved.values.is_on()) {
-          call.set_effect(saved.effect);
-        } else {
-          call.set_effect("None");
+        // Only set white if the strip supports it in this mode
+        if (l->get_traits().supports_color_mode(saved.color_mode) &&
+            (saved.color_mode == light::ColorMode::RGB_WHITE ||
+             saved.color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+             saved.color_mode == light::ColorMode::COLD_WARM_WHITE ||
+             saved.color_mode == light::ColorMode::WHITE)) {
+          call.set_white(saved.values.get_white());
         }
 
-        call.set_transition_length(0); // Instant restore for sequences
+        // Only restore effect if the light is on
+        // Setting an effect (even "None") while turning off triggers warnings.
+        if (turning_on) {
+          call.set_effect(saved.effect);
+        }
+
         call.perform();
       }
       light_idx++;
