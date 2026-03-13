@@ -73,6 +73,13 @@ CFXSequence::CFXSequence(const std::string &id, const std::string &name,
 // Without this, destroying a CFXSequence leaves a dangling pointer in the
 // vector, causing undefined behaviour in stop(), force_reset(), and start().
 CFXSequence::~CFXSequence() {
+  // Clear any listeners
+  for (auto &m : this->monitored_lights_) {
+    m.light->remove_remote_values_listener(m.listener);
+    delete m.listener;
+  }
+  this->monitored_lights_.clear();
+
   auto it = std::find(CFXSequence::instances.begin(),
                       CFXSequence::instances.end(), this);
   if (it != CFXSequence::instances.end())
@@ -112,15 +119,18 @@ void CFXSequence::start() {
 
   // Sync logic: listen for lights turning off while sequence is running
   for (auto *l : this->lights_) {
-    if (this->monitored_lights_.find(l) == this->monitored_lights_.end()) {
-      l->add_new_remote_values_callback([this, l]() {
-        if (this->is_running_ && !l->remote_values.is_on()) {
-          ESP_LOGD(TAG, "Sequence '%s' stopping because light '%s' turned off",
-                   this->name_.c_str(), l->get_name().c_str());
-          this->stop();
-        }
-      });
-      this->monitored_lights_.insert(l);
+    bool already_monitored = false;
+    for (const auto &m : this->monitored_lights_) {
+      if (m.light == l) {
+        already_monitored = true;
+        break;
+      }
+    }
+
+    if (!already_monitored) {
+      auto *listener = new CFXSequenceListener(this, l);
+      l->add_remote_values_listener(listener);
+      this->monitored_lights_.push_back({l, listener});
     }
   }
 
@@ -399,6 +409,15 @@ void CFXSequence::check_milestones(uint8_t current_pct) {
     }
 
     this->fire_event("cfx_reach");
+  }
+}
+
+void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
+  if (this->parent_->is_running() && !this->light_->remote_values.is_on()) {
+    ESP_LOGD("cfx_sequence",
+             "Sequence '%s' stopping because light '%s' turned off",
+             this->parent_->get_name().c_str(), this->light_->get_name().c_str());
+    this->parent_->stop();
   }
 }
 

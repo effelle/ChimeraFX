@@ -132,7 +132,7 @@ protected:
   // Sensor pointers (optional)
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
-  std::set<light::LightState *> monitored_lights_;
+
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
@@ -146,12 +146,29 @@ protected:
   bool is_stopping_{false};
   bool is_running_{false};
 
+  class CFXSequenceListener : public light::LightRemoteValuesListener {
+  public:
+    CFXSequenceListener(CFXSequence *parent, light::LightState *light)
+        : parent_(parent), light_(light) {}
+    void on_light_remote_values_update() override;
+
+  private:
+    CFXSequence *parent_;
+    light::LightState *light_;
+  };
+
   struct SavedState {
     light::LightColorValues values;
     light::ColorMode color_mode;
     std::string effect;
   };
   std::vector<SavedState> saved_states_;
+
+  struct MonitoredLight {
+    light::LightState *light;
+    CFXSequenceListener *listener;
+  };
+  std::vector<MonitoredLight> monitored_lights_;
 
 public:
   bool is_starting() const { return this->is_starting_; }
