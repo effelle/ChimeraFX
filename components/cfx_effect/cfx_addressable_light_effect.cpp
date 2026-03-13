@@ -1518,8 +1518,7 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
     return "Ice";
   case 8:
     return "Party";
-  case 9:
-    return "Lava";
+
   case 10:
     return "Pastel";
   case 11:
