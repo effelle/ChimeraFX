@@ -15,7 +15,8 @@ from esphome.const import CONF_ID, CONF_NAME, CONF_UPDATE_INTERVAL, CONF_EFFECTS
 from esphome.core import CORE
 from esphome import automation
 
-DEPENDENCIES = ["light", "number", "select", "switch"]
+DEPENDENCIES = ["light"]
+AUTO_LOAD = ["number", "select", "switch"]
 CODEOWNERS = ["@effelle"]
 
 # Define the namespace and class

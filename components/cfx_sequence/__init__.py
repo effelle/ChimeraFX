@@ -11,8 +11,8 @@ from esphome.const import (
     CONF_ICON,
 )
 
-DEPENDENCIES = ["light", "select"]
-AUTO_LOAD = ["cfx_effect", "event", "sensor", "number", "text"]
+DEPENDENCIES = ["light"]
+AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number", "text"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
 CFXSequence = cfx_sequence_ns.class_("CFXSequence")
