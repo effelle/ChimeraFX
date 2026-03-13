@@ -28,15 +28,9 @@ CFXEventManager &CFXEventManager::get() {
   return instance;
 }
 
-void CFXEventManager::fire_event(const char *type, int32_t value) {
+void CFXEventManager::fire_event(const char *type) {
   if (this->event_entity_ != nullptr) {
-    if (value == -1) {
-      this->event_entity_->trigger(type);
-    } else {
-      char buffer[32];
-      snprintf(buffer, sizeof(buffer), "%s:%d", type, value);
-      this->event_entity_->trigger(buffer);
-    }
+    this->event_entity_->trigger(type);
   }
 }
 
@@ -61,7 +55,7 @@ void CFXEventManager::check_milestones(float current_pct) {
   if (current_pct >= next_milestone) {
     this->last_fired_milestone_ = next_milestone;
     this->report_progress(current_pct);
-    this->fire_event("cfx_reach", (int32_t)next_milestone);
+    this->fire_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestones if animation restarts or loops
     this->last_fired_milestone_ = 0;
@@ -73,7 +67,7 @@ void CFXEventManager::pixel_advanced(uint16_t pixel, const std::vector<uint16_t>
   for (uint16_t p : whitelist) {
     if (p == pixel) {
       this->report_last_pixel(pixel);
-      this->fire_event("cfx_pixel", (int32_t)pixel);
+      this->fire_event("cfx_pixel");
       break;
     }
   }

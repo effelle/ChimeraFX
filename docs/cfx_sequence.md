@@ -168,29 +168,32 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
 
 ---
 
-## 🚀 Reliable Home Assistant Automations
+- **`cfx_reach`**: Fired when progress reaches a multiple of the **Progress Step**.
+- **`cfx_complete`**: Fired when a sequence finishes its requested **Iterations**.
+- **`cfx_pixel`**: Fired when a "Watched Pixel" is rendered.
 
-To ensure your automations fire every time (even for repeating events like `cfx_reach`), the Orchestrator appends a value to the event type. This guarantees a state change in Home Assistant.
+---
 
-### Example: Triggering at 90%
-Use the `event_type` attribute with the value suffix:
+## 🚀 Home Assistant Automations
+
+ChimeraFX events integrate natively with Home Assistant. You can trigger automations using the built-in event selectors.
+
+### Example: Triggering on Reach
+Since `cfx_reach` fires at multiple milestones (e.g., 10%, 20%), you can filter by the **Progress** sensor if you need a specific point, or simply trigger on the event itself for general progress actions.
 
 ```yaml
 trigger:
   - platform: state
     entity_id: event.esp32_test_cfx_events
     attribute: event_type
-    to: "cfx_reach:90"
+    to: "cfx_reach"
 ```
 
-### Supported Event Types:
-- `cfx_start`: Standard start event.
-- `cfx_complete`: Fired when iterations finish.
-- `cfx_reach:XX`: Fired every X% (set by "Progress Step").
-- `cfx_pixel:ID`: Fired when a "Watched Pixel" is rendered.
+### Tips for Reliable Triggers:
+- **Progress Step**: Set this to a value that matches your automation needs (e.g., `10` for every 10%).
+- **State Transformer**: For immediate reaction, ensure your ESPHome `api` configuration has a low `batch_delay`.
 
 ---
 
 ## Technical Edge: Why ChimeraFX is Different
 ChimeraFX isn't built to replace all-in-one effects hubs like WLED. It is built for **Industrial-grade lighting logic**. While other platforms focus on visual presets, ChimeraFX focuses on the **Logic Layer**—ensuring that if your light "passes a point," your system knows about it instantly and timing remains absolute, even without a network connection.
-

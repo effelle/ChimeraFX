@@ -52,7 +52,7 @@ public:
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_progress_step(uint8_t step) { this->progress_step_ = step; }
 
-  void fire_event(const char *type, int32_t value = -1);
+  void fire_event(const char *type);
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
   
@@ -121,8 +121,8 @@ public:
   void clear_active_binding();
 
   // HA event integration
-  void fire_event(const char *type, int32_t value = -1) {
-    CFXEventManager::get().fire_event(type, value);
+  void fire_event(const char *type) {
+    CFXEventManager::get().fire_event(type);
   }
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
