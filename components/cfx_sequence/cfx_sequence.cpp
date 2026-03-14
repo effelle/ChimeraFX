@@ -423,7 +423,7 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
-  CFXEventManager::get().fire_event("cfx_complete");
+  CFXEventManager::get().queue_event("cfx_complete");
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,

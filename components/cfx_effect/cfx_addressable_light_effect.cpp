@@ -950,7 +950,7 @@ void CFXAddressableLightEffect::stop() {
             // fully dark. This covers standalone monochromatic preset effects that
             // are never bound to a CFXSequence.
             if (this->get_monochromatic_preset_(this->effect_id_).is_active) {
-              cfx_sequence::CFXEventManager::get().fire_event("cfx_complete");
+              cfx_sequence::CFXEventManager::get().queue_event("cfx_complete");
             }
 #endif
             for (auto *r : *captured_runners)
