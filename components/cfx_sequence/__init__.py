@@ -121,7 +121,7 @@ async def to_code(config):
     event_var = cg.new_Pvariable(event_id)
     core.CORE.component_ids.add("cfx_global_events")
 
-    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel"]
+    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel", "cfx_idle"]
     event_conf = {
         "id": event_id,
         "name": "CFX Events",
