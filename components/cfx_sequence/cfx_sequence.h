@@ -10,6 +10,9 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/preferences.h"
 #include "esphome/components/button/button.h"
+#ifdef USE_API
+#include "esphome/components/api/custom_api_device.h"
+#endif
 #include <atomic>    // CFX-012: for std::atomic<bool>
 #include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
@@ -21,8 +24,8 @@
 namespace esphome {
 namespace cfx_sequence {
 
-class CfxSeqOnStartTrigger : public esphome::Trigger<> {};
-class CfxSeqOnCompleteTrigger : public esphome::Trigger<> {};
+class CfxSeqOnStartTrigger : public ::esphome::Trigger<> {};
+class CfxSeqOnCompleteTrigger : public ::esphome::Trigger<> {};
 class CfxSeqOnReachTrigger : public esphome::Trigger<float> {
 public:
   explicit CfxSeqOnReachTrigger(float target_position)
@@ -222,7 +225,7 @@ public:
   }
 };
 
-template <typename... Ts> class StartAction : public Action<Ts...> {
+template <typename... Ts> class StartAction : public ::esphome::Action<Ts...> {
 public:
   StartAction(const std::string &target_id) : target_id_(target_id) {}
 
@@ -241,7 +244,7 @@ protected:
   std::string target_id_;
 };
 
-template <typename... Ts> class StopAction : public Action<Ts...> {
+template <typename... Ts> class StopAction : public ::esphome::Action<Ts...> {
 public:
   StopAction(const std::string &target_id) : target_id_(target_id) {}
 
@@ -275,7 +278,7 @@ public:
   static std::atomic<bool> suppress_callback_;
 };
 
-class CFXProgressStepNumber : public esphome::number::Number, public esphome::Component {
+class CFXProgressStepNumber : public ::esphome::number::Number, public ::esphome::Component {
 public:
   void setup() override;
   void control(float value) override;
@@ -284,17 +287,15 @@ protected:
   esphome::ESPPreferenceObject pref_;
 };
 
-class CFXStopAllButton : public esphome::button::Button,
-                         public esphome::Component {
+class CFXStopAllButton : public ::esphome::button::Button,
+                         public ::esphome::Component {
 public:
   void press_action() override;
 };
 
 #ifdef USE_API
-#include "esphome/components/api/custom_api_device.h"
-
-class CFXSequenceServiceHandler : public esphome::api::CustomAPIDevice,
-                                   public esphome::Component {
+class CFXSequenceServiceHandler : public ::esphome::api::CustomAPIDevice,
+                                   public ::esphome::Component {
 public:
   void setup() override;
 
