@@ -5102,17 +5102,31 @@ void CFXAddressableLightEffect::check_positional_triggers(
     this->active_sequence_->check_positional_triggers(current_pixel,
                                                       total_pixels);
   } else {
-    // Phase J: No active sequence (manual usage). Report progress to global hub.
-    // inclusive math: total_pixels - 1 ensures that the last pixel maps to 100%
-    float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
-    cfx_sequence::CFXEventManager::get().check_milestones(current_percentage * 100.0f);
+    float current_percentage = (total_pixels > 1)
+        ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
+    cfx_sequence::CFXEventManager::get().check_milestones(
+        current_percentage * 100.0f);
   }
-  // cfx_pixel fires for ALL effects and ALL paths — sequence-driven and
-  // standalone — unconditionally on every leading pixel change.
-  // HA filters to specific pixel numbers via a numeric_state condition
-  // on sensor.cfx_last_pixel. No device-side whitelist needed.
-  cfx_sequence::CFXEventManager::get().pixel_advanced(
-      (uint16_t)current_pixel);
+
+  // cfx_pixel fires for ALL effects and ALL paths.
+  // Auto-throttle: target ~30 events per sweep regardless of strip length.
+  // pixel_step is computed from strip length unless overridden via YAML.
+  // User override (pixel_step_ > 0) takes precedence over auto-computed value.
+  {
+    uint16_t step;
+    if (this->cfx_pixel_step_ > 0) {
+      step = this->cfx_pixel_step_;
+    } else {
+      step = (uint16_t)((total_pixels + 29) / 30);
+      if (step < 1) step = 1;
+    }
+    if (this->last_cfx_pixel_pixel_ < 0 ||
+        abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
+      this->last_cfx_pixel_pixel_ = current_pixel;
+      cfx_sequence::CFXEventManager::get().pixel_advanced(
+          (uint16_t)current_pixel);
+    }
+  }
 #endif
 
   // Effect internal triggers (from YAML)
@@ -5199,6 +5213,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
     this->last_triggered_percentage_ = -1.0f;
     this->last_leading_pixel_ = -1;
     this->last_triggered_pixel_ = -1;
+    this->last_cfx_pixel_pixel_ = -1;
 
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
@@ -5209,6 +5224,9 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
       this->runner_->reset();
       this->runner_->target_iterations_ = itr;
     }
+
+    // Apply sequence pixel_step override if set
+    this->cfx_pixel_step_ = seq->get_pixel_step();
   }
 }
 #endif

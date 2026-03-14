@@ -173,6 +173,36 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
 
 ---
 
+## 🛠️ Native ESPHome Integration (Actions)
+
+ChimeraFX isn't a standalone system—it is built to live inside the **ESPHome Automation Engine**. Every sequence is a first-class citizen that can be triggered, stopped, or chained directly from hardware events (buttons) or software logic (MQTT, sensor values).
+
+### `cfx_sequence.start`
+Starts a sequence manually by its YAML ID. This allows you to create high-fidelity hardware interactions that bypass the network entirely.
+
+```yaml
+# Example: Physical Button Trigger
+binary_sensor:
+  - platform: gpio
+    pin: GPIO4
+    on_press:
+      - cfx_sequence.start: my_sequence_id
+```
+
+### `cfx_sequence.stop`
+Immediately stops a running sequence. If `restore: true` was set, the device returns to its pre-sequence state.
+
+```yaml
+# Example: Emergency Stop on sensor trigger
+binary_sensor:
+  - platform: gpio
+    pin: GPIO5
+    on_press:
+      - cfx_sequence.stop: my_sequence_id
+```
+
+---
+
 - **`cfx_reach`**: Fired when progress reaches a multiple of the **Progress Step**.
 - **`cfx_complete`**: Fired when a sequence finishes its requested **Iterations**.
 - **`cfx_pixel`**: Fired unconditionally every time the leading pixel advances. Filter in HA using the `cfx_last_pixel` sensor.

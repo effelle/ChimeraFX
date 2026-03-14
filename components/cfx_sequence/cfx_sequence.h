@@ -105,11 +105,13 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
   void set_brightness(float brightness) { this->brightness_ = brightness; }
+  void set_pixel_step(uint16_t step) { this->pixel_step_ = step; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
   esphome::optional<uint8_t> get_palette() const { return this->palette_; }
   esphome::optional<float> get_brightness() const { return this->brightness_; }
+  uint16_t get_pixel_step() const { return this->pixel_step_; }
   uint32_t get_iterations() const { return this->iterations_; }
 
   std::string get_id() const { return this->id_; }
@@ -162,6 +164,7 @@ protected:
   esphome::optional<uint8_t> palette_;
   esphome::optional<float> brightness_;
   uint32_t iterations_{0};
+  uint16_t pixel_step_{0};  // 0 = auto-computed
   bool restore_state_{true};
 
   std::vector<light::LightState *> lights_;

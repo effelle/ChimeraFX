@@ -158,6 +158,7 @@ public:
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
+  int32_t last_cfx_pixel_pixel_{-1};
 
 protected:
   uint8_t effect_id_{0};
@@ -200,6 +201,8 @@ public:
   std::vector<CfxOnPixelNumTrigger *> on_pixel_num_triggers_;
 
   int32_t last_leading_pixel_{-1};
+  uint16_t cfx_pixel_step_{0};  // 0 = auto-computed from strip length
+  void set_cfx_pixel_step(uint16_t step) { this->cfx_pixel_step_ = step; }
 
   enum TransitionState {
     TRANSITION_NONE,
