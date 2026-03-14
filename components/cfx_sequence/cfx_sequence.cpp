@@ -627,3 +627,12 @@ void CFXSequenceServiceHandler::on_sequence_stop(std::string sequence_name) {
 
 } // namespace cfx_sequence
 } // namespace esphome
+
+#ifdef CHIMERAFX_NEED_API_SYMBOLS
+namespace esphome {
+namespace api {
+template<> std::string get_execute_arg_value<std::string>(const ExecuteServiceArgument &arg) { return arg.string_; }
+template<> enums::ServiceArgType to_service_arg_type<std::string>() { return enums::SERVICE_ARG_TYPE_STRING; }
+} // namespace api
+} // namespace esphome
+#endif

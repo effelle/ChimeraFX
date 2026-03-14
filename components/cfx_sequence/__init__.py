@@ -299,6 +299,13 @@ async def to_code(config):
                     # We define the exact internal macros required by custom_api_device.h
                     cg.add_define("USE_API_USER_DEFINED_ACTIONS")
                     cg.add_define("USE_API_CUSTOM_SERVICES")
+                    
+                    # If the user hasn't explicitly enabled custom_services in YAML,
+                    # the 'api' component won't provide the necessary template symbols
+                    # for std::string arguments. We detect this and tell the C++ side
+                    # to provide fallback symbols to avoid linker errors.
+                    if not _core.CORE.config["api"].get("custom_services", False):
+                        cg.add_define("CHIMERAFX_NEED_API_SYMBOLS")
                 svc_var = cg.new_Pvariable(svc_id)
                 core.CORE.component_ids.add("cfx_sequence_service_handler")
                 await cg.register_component(svc_var, {})
