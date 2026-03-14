@@ -82,7 +82,9 @@ void CFXEventManager::check_milestones(float current_pct) {
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
   if (current_pct >= next_milestone) {
     this->last_fired_milestone_ = next_milestone;
-    this->report_progress(current_pct);
+    // Send the exact milestone (e.g. 50.0) instead of the actual fractional
+    // percentage (e.g. 51.2) so HA state triggers matching exactly "50" fire.
+    this->report_progress((float)next_milestone);
     this->fire_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestones if animation restarts or loops
