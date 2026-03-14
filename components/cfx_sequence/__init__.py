@@ -296,9 +296,9 @@ async def to_code(config):
                 )
                 if "api" in _core.CORE.config:
                     # Unlock CustomAPIDevice::register_service()
-                    # We define both the user-suggested macro and the standard ESPHome one.
-                    cg.add_define("USE_CUSTOM_API_DEVICE")
-                    cg.add_define("USE_API_SERVICES")
+                    # We define the exact internal macros required by custom_api_device.h
+                    cg.add_define("USE_API_USER_DEFINED_ACTIONS")
+                    cg.add_define("USE_API_CUSTOM_SERVICES")
                 svc_var = cg.new_Pvariable(svc_id)
                 core.CORE.component_ids.add("cfx_sequence_service_handler")
                 await cg.register_component(svc_var, {})
