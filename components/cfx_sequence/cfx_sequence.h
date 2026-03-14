@@ -1,8 +1,3 @@
-#ifdef USE_API
-#undef USE_API_SERVICES
-#define USE_API_SERVICES 1
-#endif
-
 #pragma once
 
 #include "esphome/components/light/light_state.h"

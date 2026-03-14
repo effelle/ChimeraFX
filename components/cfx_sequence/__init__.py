@@ -296,7 +296,6 @@ async def to_code(config):
                 )
                 svc_var = cg.new_Pvariable(svc_id)
                 core.CORE.component_ids.add("cfx_sequence_service_handler")
-                cg.add_define("USE_API_SERVICES")
                 await cg.register_component(svc_var, {})
         except Exception:
             pass  # Non-fatal: service handler is advisory only
