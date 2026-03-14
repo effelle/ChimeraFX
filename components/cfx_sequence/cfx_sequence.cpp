@@ -94,7 +94,7 @@ void CFXEventManager::check_milestones(float current_pct) {
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
   this->report_last_pixel((int32_t)pixel);
-  this->queue_event("cfx_pixel");
+  this->fire_event("cfx_pixel");
 }
 
 void CFXSequenceSelect::setup() {
