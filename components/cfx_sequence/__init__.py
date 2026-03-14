@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select, event, sensor, number
+from esphome.components import light, select, event, sensor, number, button
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -12,12 +12,18 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["light"]
-AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number"]
+AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number", "button"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
 CFXSequence = cfx_sequence_ns.class_("CFXSequence")
 CFXSequenceSelect = cfx_sequence_ns.class_("CFXSequenceSelect", select.Select, cg.Component)
 CFXProgressStepNumber = cfx_sequence_ns.class_("CFXProgressStepNumber", number.Number, cg.Component)
+CFXStopAllButton = cfx_sequence_ns.class_(
+    "CFXStopAllButton", button.Button, cg.Component
+)
+CFXSequenceServiceHandler = cfx_sequence_ns.class_(
+    "CFXSequenceServiceHandler", cg.Component
+)
 
 # Actions
 StartAction = cfx_sequence_ns.class_("StartAction", automation.Action)
@@ -262,6 +268,37 @@ async def to_code(config):
         await select.register_select(sel_var, sel_conf, options=seq_options)
         await cg.register_component(sel_var, sel_conf)
         cg.add(sel_var.publish_state("None"))
+
+        # Stop All button
+        stop_id = core.ID(
+            "cfx_stop_all", is_declaration=True, type=CFXStopAllButton
+        )
+        stop_var = cg.new_Pvariable(stop_id)
+        core.CORE.component_ids.add("cfx_stop_all")
+        stop_conf = {
+            CONF_ID: stop_id,
+            CONF_NAME: "Stop All",
+            CONF_ICON: "mdi:stop-circle-outline",
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
+        }
+        await button.register_button(stop_var, stop_conf)
+        await cg.register_component(stop_var, stop_conf)
+
+        # HA Service handler (only when API component is loaded)
+        try:
+            import esphome.core as _core
+            if "api" in _core.CORE.config:
+                svc_id = core.ID(
+                    "cfx_sequence_service_handler",
+                    is_declaration=True,
+                    type=CFXSequenceServiceHandler,
+                )
+                svc_var = cg.new_Pvariable(svc_id)
+                core.CORE.component_ids.add("cfx_sequence_service_handler")
+                await cg.register_component(svc_var, {})
+        except Exception:
+            pass  # Non-fatal: service handler is advisory only
 
 @automation.register_action(
     "cfx_sequence.start",

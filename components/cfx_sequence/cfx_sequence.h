@@ -9,6 +9,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/preferences.h"
+#include "esphome/components/button/button.h"
 #include <atomic>    // CFX-012: for std::atomic<bool>
 #include <algorithm> // CFX-011: for std::find in destructor
 #include <cstdint>
@@ -135,6 +136,7 @@ public:
   void report_event_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
   void clear_active_binding();
+  void force_stop_all();
 
   // HA event integration
   void fire_event(const char *type) {
@@ -281,6 +283,26 @@ public:
 protected:
   esphome::ESPPreferenceObject pref_;
 };
+
+class CFXStopAllButton : public esphome::button::Button,
+                         public esphome::Component {
+public:
+  void press_action() override;
+};
+
+#ifdef USE_API
+#include "esphome/components/api/custom_api_device.h"
+
+class CFXSequenceServiceHandler : public esphome::api::CustomAPIDevice,
+                                   public esphome::Component {
+public:
+  void setup() override;
+
+private:
+  void on_sequence_start(std::string sequence_name);
+  void on_sequence_stop(std::string sequence_name);
+};
+#endif
 
 } // namespace cfx_sequence
 } // namespace esphome

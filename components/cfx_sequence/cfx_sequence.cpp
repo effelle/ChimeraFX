@@ -399,6 +399,28 @@ void CFXSequence::force_reset() {
   }
 }
 
+void CFXSequence::force_stop_all() {
+  if (this->is_stopping_)
+    return;
+  this->is_stopping_ = true;
+  this->is_running_ = false;
+
+  ESP_LOGD(TAG, "Force stop all: '%s'", this->name_.c_str());
+
+  this->clear_active_binding();
+
+  // Always turn lights off — ignore restore_state_
+  for (auto *l : this->lights_) {
+    auto call = l->make_call();
+    call.set_state(false);
+    call.set_effect("None");
+    call.set_transition_length(0);
+    call.perform();
+  }
+
+  this->is_stopping_ = false;
+}
+
 void CFXSequence::clear_active_binding() {
   // Clear binding on ALL effect instances that point to this sequence
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
@@ -532,6 +554,76 @@ void CFXProgressStepNumber::control(float value) {
   
   CFXEventManager::get().set_progress_step(step);
 }
+
+void CFXStopAllButton::press_action() {
+  ESP_LOGD(TAG, "Stop All: stopping all sequences and forcing lights off");
+  // Stop all running sequences, ignoring restore_ setting
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->is_running()) {
+      // Temporarily disable restore so stop() does not restore light state
+      seq->force_stop_all();
+    }
+  }
+  // Update Select UI
+  if (CFXSequenceSelect::instance != nullptr) {
+    CFXSequenceSelect::instance->publish_state_silent("None");
+  }
+}
+
+#ifdef USE_API
+void CFXSequenceServiceHandler::setup() {
+  this->register_service(
+      &CFXSequenceServiceHandler::on_sequence_start,
+      "cfx_sequence_start",
+      {"sequence"}
+  );
+  this->register_service(
+      &CFXSequenceServiceHandler::on_sequence_stop,
+      "cfx_sequence_stop",
+      {"sequence"}
+  );
+}
+
+void CFXSequenceServiceHandler::on_sequence_start(std::string sequence_name) {
+  ESP_LOGD(TAG, "Service: cfx_sequence_start('%s')", sequence_name.c_str());
+  uint8_t match_count = 0;
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->get_name() == sequence_name) {
+      match_count++;
+      if (match_count == 1)
+        seq->start(); // act on first match only
+    }
+  }
+  if (match_count == 0)
+    ESP_LOGW(TAG, "cfx_sequence_start: '%s' not found",
+             sequence_name.c_str());
+  if (match_count > 1)
+    ESP_LOGW(TAG,
+             "cfx_sequence_start: '%s' matched %u sequences — using first. "
+             "Sequence names must be unique.",
+             sequence_name.c_str(), match_count);
+}
+
+void CFXSequenceServiceHandler::on_sequence_stop(std::string sequence_name) {
+  ESP_LOGD(TAG, "Service: cfx_sequence_stop('%s')", sequence_name.c_str());
+  uint8_t match_count = 0;
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->get_name() == sequence_name) {
+      match_count++;
+      if (match_count == 1)
+        seq->stop(); // act on first match only
+    }
+  }
+  if (match_count == 0)
+    ESP_LOGW(TAG, "cfx_sequence_stop: '%s' not found",
+             sequence_name.c_str());
+  if (match_count > 1)
+    ESP_LOGW(TAG,
+             "cfx_sequence_stop: '%s' matched %u sequences — using first. "
+             "Sequence names must be unique.",
+             sequence_name.c_str(), match_count);
+}
+#endif
 
 } // namespace cfx_sequence
 } // namespace esphome
