@@ -138,6 +138,8 @@ public:
 
   // Called by bound effects to report tracking
   void report_event_start();
+  void report_event_complete();
+  void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
   void check_duration();
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();

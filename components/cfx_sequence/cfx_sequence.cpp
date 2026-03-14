@@ -423,7 +423,12 @@ void CFXSequence::force_stop_all() {
 
   this->is_stopping_ = false;
 }
-
+void CFXSequence::clear_active_binding() {
+  // Clear binding on ALL effect instances that point to this sequence
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst->get_active_sequence() == this) {
+      inst->set_is_sequence_outro(true);
+      inst->set_active_sequence(nullptr, {}, {}, {}, 0);
     }
   }
 }
