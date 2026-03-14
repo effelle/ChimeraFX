@@ -31,27 +31,40 @@ CFXEventManager &CFXEventManager::get() {
 }
 
 void CFXEventManager::fire_event(const char *type) {
-  // Queue the event instead of firing immediately
-  this->pending_event_ = type;
+  if (this->event_entity_ != nullptr) {
+    this->event_entity_->trigger(type);
+  }
+}
+
+void CFXEventManager::queue_event(const char *type) {
+  // Two-slot ring buffer. Only string literals are stored (permanent
+  // lifetime). If both slots are occupied the new event is dropped — this
+  // cannot happen in normal operation since at most two events are queued
+  // per tick (cfx_reach + cfx_pixel).
+  uint8_t next = (this->pending_write_ + 1) % PENDING_QUEUE_SIZE;
+  if (next == this->pending_read_) {
+    ESP_LOGW("cfx_sequence", "queue_event: queue full, dropping '%s'", type);
+    return;
+  }
+  this->pending_events_[this->pending_write_] = type;
+  this->pending_write_ = next;
 }
 
 void CFXEventManager::flush_pending() {
   if (this->event_entity_ == nullptr) return;
 
-  if (this->pending_event_ != nullptr) {
-    const char *evt = this->pending_event_;
-    this->pending_event_ = nullptr;
+  // Fire one queued event per call. One event per loop() cycle guarantees
+  // each event lands in a separate WebSocket frame to HA.
+  if (this->pending_read_ != this->pending_write_) {
+    const char *evt = this->pending_events_[this->pending_read_];
+    this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
     this->event_entity_->trigger(evt);
-    // === CRITICAL INVARIANT ===
-    // 'cfx_complete' and 'cfx_start' fire EXACTLY ONCE per sequence run.
-    // They NEVER schedule a 'cfx_idle' reset. This ensures their state remains
-    // stable in Home Assistant long enough for automations to trigger safely
-    // without being immediately overwritten by an idle state.
+    // cfx_complete and cfx_start fire once per sequence — no idle reset.
     if (strcmp(evt, "cfx_complete") != 0 && strcmp(evt, "cfx_start") != 0) {
       this->pending_idle_ = true;
       this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
-    return;
+    return; // one action per call
   }
 
   if (this->pending_idle_) {
@@ -85,7 +98,7 @@ void CFXEventManager::check_milestones(float current_pct) {
     // Send the exact milestone (e.g. 50.0) instead of the actual fractional
     // percentage (e.g. 51.2) so HA state triggers matching exactly "50" fire.
     this->report_progress((float)next_milestone);
-    this->fire_event("cfx_reach");
+    this->queue_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestones if animation restarts or loops
     this->last_fired_milestone_ = 0;
@@ -94,7 +107,7 @@ void CFXEventManager::check_milestones(float current_pct) {
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
   this->report_last_pixel((int32_t)pixel);
-  this->fire_event("cfx_pixel");
+  this->queue_event("cfx_pixel");
 }
 
 void CFXSequenceSelect::setup() {

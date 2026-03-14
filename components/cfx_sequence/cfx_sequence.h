@@ -52,6 +52,7 @@ public:
   void set_progress_step(uint8_t step) { this->progress_step_ = step; }
 
   void fire_event(const char *type);
+  void queue_event(const char *type);
   void flush_pending();
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
@@ -70,10 +71,15 @@ protected:
   uint8_t progress_step_{10};
   uint8_t last_fired_milestone_{0};
 
+  // Ring buffer for deferred events
+  static constexpr uint8_t PENDING_QUEUE_SIZE = 2;
+  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr};
+  uint8_t pending_write_{0};
+  uint8_t pending_read_{0};
+
   // Deferred event pipeline — ensures cfx_idle lands in a separate
   // WebSocket frame from the real event so HA State triggers fire reliably.
   static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;
-  const char *pending_event_{nullptr};
   bool pending_idle_{false};
   uint32_t idle_hold_until_ms_{0};
 };

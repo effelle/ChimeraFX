@@ -4,7 +4,7 @@ The ChimeraFX Orchestrator (`cfx_sequence`) is the **Logic Layer** of your light
 
 ### 🛡️ Built for Reliability: Two Ways to Sequence
 
-ChimeraFX gives you two ways to orchestrate your lights. Choosing the right one is key to a professional lighting setup.
+ChimeraFX gives you two ways to orchestrate your lights, an internal sequence engine and Home Assistant automations. Choosing the right one is key to a professional lighting setup.
 
 | Feature | On-Device Sequence (`cfx_sequence`) | Home Assistant Automation |
 | :--- | :--- | :--- |
@@ -42,9 +42,9 @@ The following examples show how to react to the same sequence logic in both envi
         # Use the 'state' trigger on the CFX Events entity.
         # Filter by the 'event_type' attribute.
         automation:
-          trigger:
-            - platform: state
-              entity_id: event.cfx_events
+          triggers:
+            - trigger: state
+              entity_id: event.YOUR_DEVICE_ID_cfx_events
               attribute: event_type
               to: cfx_complete
           action:
@@ -62,7 +62,7 @@ The following examples show how to react to the same sequence logic in both envi
         cfx_sequence:
           - id: strip_1_wipe
             on_cfx_reach:
-              - position: 100%
+              - position: 50%
                 then:
                   - cfx_sequence.start: strip_2_wipe
         ```
@@ -71,17 +71,20 @@ The following examples show how to react to the same sequence logic in both envi
         ```yaml
         # Sync a secondary lamp to match the current sequence progress.
         automation:
-          trigger:
-            - platform: state
-              entity_id: event.cfx_events
+          triggers:
+            - trigger: state
+              entity_id: event.YOUR_DEVICE_ID_cfx_events
               attribute: event_type
               to: cfx_reach
+          conditions:
+            - condition: numeric_state
+              entity_id: sensor.YOUR_DEVICE_ID_sequence_progress
+              above: 49
+              below: 51
           action:
             - service: light.turn_on
               target: { entity_id: light.mood_lamp }
-              data:
-                # Progress value is stored in the Sequence Progress sensor
-                brightness_pct: "{{ states('sensor.cfx_progress') | int }}"
+              data: {}
         ```
 
 ??? example "3. Precision Pixel Watch (`on_cfx_pixel`)"
@@ -102,15 +105,18 @@ The following examples show how to react to the same sequence logic in both envi
         ```yaml
         # Security: Snapshot when the light "passes" the door (Pixel 124).
         automation:
-          trigger:
-            - platform: state
-              entity_id: event.cfx_events
+          triggers:
+            - trigger: state
+              entity_id: event.YOUR_DEVICE_ID_cfx_events
               attribute: event_type
               to: cfx_pixel
           condition:
-            # Check the 'Last Watch Pixel' sensor for the specific ID
-            - condition: template
-              value_template: "{{ states('sensor.cfx_last_pixel') | int == 124 }}"
+            # cfx_pixel fires unconditionally for every pixel update.
+            # Use a numeric_state condition to gate your automation.
+            - condition: numeric_state
+              entity_id: sensor.YOUR_DEVICE_ID_last_pixel
+              above: 44
+              below: 46
           action:
             - service: camera.snapshot
               target: { entity_id: camera.front_door }
@@ -146,8 +152,7 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
     | **CFX Events** | The event hub used for triggers (Start/Complete/Reach/Pixel). | Diagnostic |
     | **Sequence Progress** | Sensor showing the current position (0-100%). | Diagnostic |
     | **Sequence Step** | Configuration: How often to fire `cfx_reach` (e.g., every 5%). | Configuration |
-    | **Watch List** | Configuration: Comma-separated pixels (e.g., `10,50,100`). | Configuration |
-    | **Last Watch Pixel** | Diagnostic: Shows the ID of the last "watched" pixel. | Diagnostic |
+    | **Last Pixel** | Diagnostic: Shows the index of the leading pixel for filtering `cfx_pixel` events. | Diagnostic |
 
 ---
 
@@ -170,7 +175,7 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
 
 - **`cfx_reach`**: Fired when progress reaches a multiple of the **Progress Step**.
 - **`cfx_complete`**: Fired when a sequence finishes its requested **Iterations**.
-- **`cfx_pixel`**: Fired when a "Watched Pixel" is rendered.
+- **`cfx_pixel`**: Fired unconditionally every time the leading pixel advances. Filter in HA using the `cfx_last_pixel` sensor.
 
 ---
 
