@@ -7,6 +7,10 @@
 #include <vector>
 #include <cstdlib>
 
+#ifdef USE_API
+#undef USE_API_SERVICES
+#define USE_API_SERVICES 1
+#endif
 #include "cfx_sequence.h"
 #include "../cfx_effect/cfx_addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
