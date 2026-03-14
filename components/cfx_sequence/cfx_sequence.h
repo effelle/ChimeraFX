@@ -11,6 +11,9 @@
 #include "esphome/core/preferences.h"
 #include "esphome/components/button/button.h"
 #ifdef USE_API
+#ifndef USE_API_SERVICES
+#define USE_API_SERVICES
+#endif
 #include "esphome/components/api/custom_api_device.h"
 #endif
 #include <atomic>    // CFX-012: for std::atomic<bool>
