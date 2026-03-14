@@ -5,7 +5,6 @@
 #include "esphome/components/event/event.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/number/number.h"
-#include "esphome/components/text/text.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"

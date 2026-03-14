@@ -486,5 +486,29 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
   }
 }
 
+// ----------------------------------------------------
+// Runtime Configurable Entities (Number Inputs)
+// ----------------------------------------------------
+
+void CFXProgressStepNumber::setup() {
+  uint8_t restored;
+  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
+  if (this->pref_.load(&restored)) {
+    this->publish_state(restored);
+    CFXEventManager::get().set_progress_step(restored);
+  } else {
+    this->publish_state(10.0f); // Default 10%
+    CFXEventManager::get().set_progress_step(10);
+  }
+}
+
+void CFXProgressStepNumber::control(float value) {
+  uint8_t step = (uint8_t)value;
+  this->publish_state(value);
+  this->pref_.save(&step);
+  
+  CFXEventManager::get().set_progress_step(step);
+}
+
 } // namespace cfx_sequence
 } // namespace esphome
