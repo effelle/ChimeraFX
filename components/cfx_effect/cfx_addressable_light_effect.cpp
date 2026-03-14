@@ -175,6 +175,12 @@ void CFXAddressableLightEffect::start() {
 
   this->trigger_on_start();
 
+#ifdef USE_CFX_SEQUENCE
+  // cfx_start fires for ALL effects unconditionally — every path, every
+  // effect type. start() is the single universal entry point.
+  cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
+#endif
+
   // Zero the default transition length for virtual segment lights while an
   // effect is running. ESPHome's transition engine (default 1s) repeatedly
   // writes the ON-state color (white) to the buffer and flushes DMA for the
@@ -939,6 +945,14 @@ void CFXAddressableLightEffect::stop() {
           chimera_fx::instance = nullptr;
 
           if (done) {
+#ifdef USE_CFX_SEQUENCE
+            // Fire cfx_complete when the outro animation finishes and the strip is
+            // fully dark. This covers standalone monochromatic preset effects that
+            // are never bound to a CFXSequence.
+            if (this->get_monochromatic_preset_(this->effect_id_).is_active) {
+              cfx_sequence::CFXEventManager::get().fire_event("cfx_complete");
+            }
+#endif
             for (auto *r : *captured_runners)
               delete r;
             captured_runners->clear();

@@ -396,7 +396,8 @@ void CFXSequence::report_event_start() {
   for (auto *t : this->on_start_triggers_) {
     t->trigger();
   }
-  this->fire_event("cfx_start");
+  // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
+  // unconditionally for all effects and all paths. Do NOT fire it here again.
 }
 
 void CFXSequence::report_event_complete() {
