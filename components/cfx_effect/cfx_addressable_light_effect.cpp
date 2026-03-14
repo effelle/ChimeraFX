@@ -217,6 +217,7 @@ void CFXAddressableLightEffect::start() {
 
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   this->outro_start_time_ = 0;
+  this->is_sequence_outro_ = false;
   this->outro_color_cache_.clear();
   this->hydraulics_fluid_level_ = 0.0f;
   this->hydraulics_fluid_velocity_ = 0.0f;
@@ -949,7 +950,10 @@ void CFXAddressableLightEffect::stop() {
             // Fire cfx_complete when the outro animation finishes and the strip is
             // fully dark. This covers standalone monochromatic preset effects that
             // are never bound to a CFXSequence.
-            if (this->get_monochromatic_preset_(this->effect_id_).is_active) {
+            // If is_sequence_outro_ is true, the sequence already fired completion
+            // during its stop() call, so we skip here to avoid double-firing.
+            if (this->get_monochromatic_preset_(this->effect_id_).is_active &&
+                !this->is_sequence_outro_) {
               cfx_sequence::CFXEventManager::get().queue_event("cfx_complete");
             }
 #endif

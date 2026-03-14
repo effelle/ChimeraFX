@@ -44,6 +44,7 @@ CONF_SET_BRIGHTNESS = "set_brightness"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_PIXEL_STEP = "pixel_step"
+CONF_DURATION = "duration"
 
 # Inherited constants
 CONF_ON_START = "on_cfx_start"
@@ -67,6 +68,7 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_PIXEL_STEP, default=0): cv.int_range(min=0, max=255),
+        cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
         
         # Triggers
         cv.Optional(CONF_ON_START): automation.validate_automation(
@@ -217,6 +219,8 @@ async def to_code(config):
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
         if CONF_PIXEL_STEP in seq_conf and seq_conf[CONF_PIXEL_STEP] > 0:
             cg.add(var.set_pixel_step(seq_conf[CONF_PIXEL_STEP]))
+        if CONF_DURATION in seq_conf:
+            cg.add(var.set_duration(seq_conf[CONF_DURATION]))
 
         # Register target lights
         for light_id in seq_conf.get(CONF_LIGHTS, []):

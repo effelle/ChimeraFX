@@ -203,6 +203,7 @@ public:
   int32_t last_leading_pixel_{-1};
   uint16_t cfx_pixel_step_{0};  // 0 = auto-computed from strip length
   void set_cfx_pixel_step(uint16_t step) { this->cfx_pixel_step_ = step; }
+  void set_is_sequence_outro(bool v) { this->is_sequence_outro_ = v; }
 
   enum TransitionState {
     TRANSITION_NONE,
@@ -214,6 +215,7 @@ public:
   TransitionState state_{TRANSITION_NONE};
   uint32_t transition_start_ms_{0};
   std::vector<Color> intro_snapshot_;
+  bool is_sequence_outro_{false};
 
   CFXRunner *runner_{nullptr};
 

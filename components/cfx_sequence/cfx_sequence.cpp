@@ -152,9 +152,7 @@ void CFXSequenceSelect::setup() {
   });
 }
 
-void CFXSequenceSelect::loop() {
-  CFXEventManager::get().flush_pending();
-}
+// void CFXSequenceSelect::loop() implementation moved to header for inlining
 
 void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
@@ -319,6 +317,10 @@ void CFXSequence::start() {
     CFXSequenceSelect::instance->publish_state_silent(this->name_);
   }
 
+  // Reset duration timer
+  this->duration_start_ms_ = millis();
+  this->duration_complete_fired_ = false;
+
   this->report_event_start();
 }
 
@@ -327,6 +329,7 @@ void CFXSequence::stop() {
     return;
   this->is_stopping_ = true;
   this->is_running_ = false;
+  this->duration_complete_fired_ = false;
 
   ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
@@ -421,12 +424,23 @@ void CFXSequence::force_stop_all() {
   this->is_stopping_ = false;
 }
 
-void CFXSequence::clear_active_binding() {
-  // Clear binding on ALL effect instances that point to this sequence
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-    if (inst->get_active_sequence() == this) {
-      inst->set_active_sequence(nullptr, {}, {}, {}, 0);
     }
+  }
+}
+
+void CFXSequence::check_duration() {
+  if (!this->is_running_)
+    return;
+  if (this->duration_ms_ == 0)
+    return;
+  if (this->duration_complete_fired_)
+    return;
+  if ((millis() - this->duration_start_ms_) >= this->duration_ms_) {
+    ESP_LOGD(TAG, "Sequence '%s': duration %u ms elapsed — completing",
+             this->name_.c_str(), this->duration_ms_);
+    this->duration_complete_fired_ = true;
+    this->report_event_complete();
+    this->stop();
   }
 }
 

@@ -117,6 +117,8 @@ public:
   esphome::optional<float> get_brightness() const { return this->brightness_; }
   uint16_t get_pixel_step() const { return this->pixel_step_; }
   uint32_t get_iterations() const { return this->iterations_; }
+  void set_duration_ms(uint32_t ms) { this->duration_ms_ = ms; }
+  uint32_t get_duration_ms() const { return this->duration_ms_; }
 
   std::string get_id() const { return this->id_; }
   std::string get_name() const { return this->name_; }
@@ -136,8 +138,8 @@ public:
 
   // Called by bound effects to report tracking
   void report_event_start();
-  void report_event_complete();
-  void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
+  void check_duration();
+  bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();
   void force_stop_all();
 
@@ -171,6 +173,9 @@ protected:
   uint32_t iterations_{0};
   uint16_t pixel_step_{0};  // 0 = auto-computed
   bool restore_state_{true};
+  uint32_t duration_ms_{0};
+  uint32_t duration_start_ms_{0};
+  bool duration_complete_fired_{false};
 
   std::vector<light::LightState *> lights_;
   // Runtime-configurable entities
@@ -265,7 +270,12 @@ class CFXSequenceSelect : public esphome::select::Select,
                           public esphome::Component {
 public:
   void setup() override;
-  void loop() override;
+  void loop() override {
+    CFXEventManager::get().flush_pending();
+    for (auto *seq : CFXSequence::instances) {
+      seq->check_duration();
+    }
+  }
   void control(const std::string &value) override;
 
   /// Safely update the UI without triggering the callback.
