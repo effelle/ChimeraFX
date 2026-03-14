@@ -294,6 +294,11 @@ async def to_code(config):
                     is_declaration=True,
                     type=CFXSequenceServiceHandler,
                 )
+                if "api" in _core.CORE.config:
+                    # Unlock CustomAPIDevice::register_service() — equivalent to
+                    # setting 'custom_services: true' in api: without requiring
+                    # the user to add it manually.
+                    cg.add_define("USE_CUSTOM_API_DEVICE")
                 svc_var = cg.new_Pvariable(svc_id)
                 core.CORE.component_ids.add("cfx_sequence_service_handler")
                 await cg.register_component(svc_var, {})
