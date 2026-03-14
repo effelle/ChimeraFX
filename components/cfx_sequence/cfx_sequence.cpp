@@ -92,15 +92,9 @@ void CFXEventManager::check_milestones(float current_pct) {
   }
 }
 
-void CFXEventManager::pixel_advanced(uint16_t pixel, const std::vector<uint16_t> &whitelist) {
-  if (whitelist.empty()) return;
-  for (uint16_t p : whitelist) {
-    if (p == pixel) {
-      this->report_last_pixel(pixel);
-      this->fire_event("cfx_pixel");
-      break;
-    }
-  }
+void CFXEventManager::pixel_advanced(uint16_t pixel) {
+  this->report_last_pixel((int32_t)pixel);
+  this->queue_event("cfx_pixel");
 }
 
 void CFXSequenceSelect::setup() {
@@ -489,107 +483,6 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
              "Sequence '%s' stopping because light '%s' turned off",
              this->parent_->get_name().c_str(), this->light_->get_name().c_str());
     this->parent_->stop();
-  }
-}
-
-void CFXSequence::pixel_advanced(uint16_t pixel) {
-  CFXEventManager::get().pixel_advanced(pixel, this->pixel_whitelist_);
-}
-
-// ----------------------------------------------------
-// Runtime Configurable Entities (Number & Text Inputs)
-// ----------------------------------------------------
-
-void CFXProgressStepNumber::setup() {
-  uint8_t restored;
-  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
-  if (this->pref_.load(&restored)) {
-    this->publish_state(restored);
-    CFXEventManager::get().set_progress_step(restored);
-  } else {
-    this->publish_state(10.0f); // Default 10%
-    CFXEventManager::get().set_progress_step(10);
-  }
-}
-
-void CFXProgressStepNumber::control(float value) {
-  uint8_t step = (uint8_t)value;
-  this->publish_state(value);
-  this->pref_.save(&step);
-  
-  CFXEventManager::get().set_progress_step(step);
-  for (auto *seq : CFXSequence::instances) {
-    // Keep internal legacy sequences in sync too just in case
-    // (though they mostly delegate to manager now)
-  }
-}
-
-// Helper to parse CSV string into vector
-static std::vector<uint16_t> parse_csv(const std::string &csv) {
-  std::vector<uint16_t> result;
-  size_t start = 0;
-  size_t end = csv.find(',');
-  while (end != std::string::npos) {
-    std::string token = csv.substr(start, end - start);
-    if (!token.empty()) {
-      char *token_end;
-      long int val = std::strtol(token.c_str(), &token_end, 10);
-      if (token_end != token.c_str()) {
-        result.push_back(static_cast<uint16_t>(val));
-      }
-    }
-    start = end + 1;
-    end = csv.find(',', start);
-  }
-  if (start < csv.length()) {
-    std::string token = csv.substr(start);
-    if (!token.empty()) {
-      char *token_end;
-      long int val = std::strtol(token.c_str(), &token_end, 10);
-      if (token_end != token.c_str()) {
-        result.push_back(static_cast<uint16_t>(val));
-      }
-    }
-  }
-  return result;
-}
-
-void CFXPixelWatchText::setup() {
-  std::string restored;
-  // Use a fixed size hash array for string preference (max 64 chars for pixel list)
-  this->pref_ = global_preferences->make_preference<char[64]>(this->get_object_id_hash());
-  
-  char buffer[64];
-  if (this->pref_.load(&buffer)) {
-    restored = std::string(buffer);
-    this->publish_state(restored);
-    
-    // Parse and apply loaded state
-    std::vector<uint16_t> parsed = parse_csv(restored);
-    for (auto *seq : CFXSequence::instances) {
-      seq->set_pixel_whitelist(parsed);
-    }
-  } else {
-    this->publish_state(""); // Default empty
-  }
-}
-
-void CFXPixelWatchText::control(const std::string &value) {
-  this->publish_state(value);
-  
-  char buffer[64] = {0};
-  strncpy(buffer, value.c_str(), sizeof(buffer) - 1);
-  this->pref_.save(&buffer);
-  
-  std::vector<uint16_t> parsed = parse_csv(value);
-  // (We don't set a global whitelist on manager because whitelist is segment-specific)
-  // Actually, wait: If we want manual lights to fire cfx_pixel, we need a global whitelist too?
-  // Let's think: The USER wants events to track lights.
-  // If I turn on a light manually, I might want to watch certain pixels globally.
-  // Let's add a global_pixel_whitelist_ to CFXEventManager.
-  
-  for (auto *seq : CFXSequence::instances) {
-    seq->set_pixel_whitelist(parsed);
   }
 }
 

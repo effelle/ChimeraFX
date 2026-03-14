@@ -60,7 +60,7 @@ public:
   // High-level milestone logic (shared for Sequence and Manual)
   void check_milestones(float current_pct);
   void reset_milestones() { this->last_fired_milestone_ = 0; }
-  void pixel_advanced(uint16_t pixel, const std::vector<uint16_t> &whitelist);
+  void pixel_advanced(uint16_t pixel);
 
 protected:
   CFXEventManager() = default;
@@ -139,7 +139,6 @@ public:
 
   // Runtime configurable entities
   void set_progress_step(uint8_t step) { CFXEventManager::get().set_progress_step(step); }
-  void set_pixel_whitelist(const std::vector<uint16_t>& pixels) { this->pixel_whitelist_ = pixels; }
   void set_progress_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_progress_sensor(sensor); }
   void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_last_pixel_sensor(sensor); }
 
@@ -147,7 +146,6 @@ public:
   void check_milestones(uint8_t current_pct) {
     CFXEventManager::get().check_milestones(current_pct);
   }
-  void pixel_advanced(uint16_t pixel);
 
 protected:
   std::string id_;
@@ -163,8 +161,6 @@ protected:
 
   std::vector<light::LightState *> lights_;
   // Runtime-configurable entities
-  std::vector<uint16_t> pixel_whitelist_;
-
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
@@ -273,15 +269,6 @@ class CFXProgressStepNumber : public esphome::number::Number, public esphome::Co
 public:
   void setup() override;
   void control(float value) override;
-  
-protected:
-  esphome::ESPPreferenceObject pref_;
-};
-
-class CFXPixelWatchText : public esphome::text::Text, public esphome::Component {
-public:
-  void setup() override;
-  void control(const std::string &value) override;
   
 protected:
   esphome::ESPPreferenceObject pref_;

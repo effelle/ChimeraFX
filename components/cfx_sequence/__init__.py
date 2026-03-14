@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select, event, sensor, number, text
+from esphome.components import light, select, event, sensor, number
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -12,13 +12,12 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["light"]
-AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number", "text"]
+AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
 CFXSequence = cfx_sequence_ns.class_("CFXSequence")
 CFXSequenceSelect = cfx_sequence_ns.class_("CFXSequenceSelect", select.Select, cg.Component)
 CFXProgressStepNumber = cfx_sequence_ns.class_("CFXProgressStepNumber", number.Number, cg.Component)
-CFXPixelWatchText = cfx_sequence_ns.class_("CFXPixelWatchText", text.Text, cg.Component)
 
 # Actions
 StartAction = cfx_sequence_ns.class_("StartAction", automation.Action)
@@ -183,21 +182,7 @@ async def to_code(config):
     }
     await sensor.register_sensor(last_px_var, last_px_conf)
 
-    # 4. Pixel Watch List Text
-    watch_id = core.ID("cfx_pixel_watch_list", is_declaration=True, type=CFXPixelWatchText)
-    watch_var = cg.new_Pvariable(watch_id)
-    core.CORE.component_ids.add("cfx_pixel_watch_list")
-    watch_conf = {
-        "id": watch_id,
-        "name": "Watch List",
-        "icon": "mdi:format-list-numbered",
-        "mode": text.TEXT_MODES["TEXT"],
-        "disabled_by_default": False,
-        "internal": False,
-        "entity_category": cv.ENTITY_CATEGORIES["config"],
-    }
-    await text.register_text(watch_var, watch_conf)
-    await cg.register_component(watch_var, watch_conf)
+
 
     for seq_conf in config:
         # Pass ID string, Name string, Effect string, and Restore boolean

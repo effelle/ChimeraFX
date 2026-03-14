@@ -5101,13 +5101,18 @@ void CFXAddressableLightEffect::check_positional_triggers(
   if (this->active_sequence_ != nullptr) {
     this->active_sequence_->check_positional_triggers(current_pixel,
                                                       total_pixels);
-    // Phase D: fire cfx_pixel event for watched pixels (handled inside check_positional_triggers delegation now)
   } else {
     // Phase J: No active sequence (manual usage). Report progress to global hub.
     // inclusive math: total_pixels - 1 ensures that the last pixel maps to 100%
     float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
     cfx_sequence::CFXEventManager::get().check_milestones(current_percentage * 100.0f);
   }
+  // cfx_pixel fires for ALL effects and ALL paths — sequence-driven and
+  // standalone — unconditionally on every leading pixel change.
+  // HA filters to specific pixel numbers via a numeric_state condition
+  // on sensor.cfx_last_pixel. No device-side whitelist needed.
+  cfx_sequence::CFXEventManager::get().pixel_advanced(
+      (uint16_t)current_pixel);
 #endif
 
   // Effect internal triggers (from YAML)
