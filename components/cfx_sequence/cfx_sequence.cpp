@@ -33,6 +33,13 @@ CFXEventManager &CFXEventManager::get() {
 void CFXEventManager::fire_event(const char *type) {
   if (this->event_entity_ != nullptr) {
     this->event_entity_->trigger(type);
+    // cfx_complete and cfx_start fire once per sequence — no idle reset.
+    // High-frequency events like cfx_pixel benefit from an immediate idle
+    // scheduling to ensure the state transition is visible in HA.
+    if (strcmp(type, "cfx_complete") != 0 && strcmp(type, "cfx_start") != 0) {
+      this->pending_idle_ = true;
+      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
+    }
   }
 }
 
@@ -107,7 +114,10 @@ void CFXEventManager::check_milestones(float current_pct) {
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
   this->report_last_pixel((int32_t)pixel);
-  this->queue_event("cfx_pixel");
+  // Fire immediately rather than via queue_event().
+  // sensor.cfx_last_pixel is published in the line above, so there is no
+  // race between sensor state and trigger evaluation.
+  this->fire_event("cfx_pixel");
 }
 
 void CFXSequenceSelect::setup() {
