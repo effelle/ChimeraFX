@@ -13,6 +13,8 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
+#include <cstring>
 
 namespace esphome {
 namespace cfx_sequence {
@@ -29,8 +31,34 @@ CFXEventManager &CFXEventManager::get() {
 }
 
 void CFXEventManager::fire_event(const char *type) {
-  if (this->event_entity_ != nullptr) {
-    this->event_entity_->trigger(type);
+  // Queue the event instead of firing immediately
+  this->pending_event_ = type;
+}
+
+void CFXEventManager::flush_pending() {
+  if (this->event_entity_ == nullptr) return;
+
+  if (this->pending_event_ != nullptr) {
+    const char *evt = this->pending_event_;
+    this->pending_event_ = nullptr;
+    this->event_entity_->trigger(evt);
+    // === CRITICAL INVARIANT ===
+    // 'cfx_complete' and 'cfx_start' fire EXACTLY ONCE per sequence run.
+    // They NEVER schedule a 'cfx_idle' reset. This ensures their state remains
+    // stable in Home Assistant long enough for automations to trigger safely
+    // without being immediately overwritten by an idle state.
+    if (strcmp(evt, "cfx_complete") != 0 && strcmp(evt, "cfx_start") != 0) {
+      this->pending_idle_ = true;
+      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
+    }
+    return;
+  }
+
+  if (this->pending_idle_) {
+    if (millis() >= this->idle_hold_until_ms_) {
+      this->pending_idle_ = false;
+      this->event_entity_->trigger("cfx_idle");
+    }
   }
 }
 
@@ -103,6 +131,10 @@ void CFXSequenceSelect::setup() {
       }
     }
   });
+}
+
+void CFXSequenceSelect::loop() {
+  CFXEventManager::get().flush_pending();
 }
 
 void CFXSequenceSelect::control(const std::string &value) {

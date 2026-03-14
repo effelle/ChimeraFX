@@ -53,6 +53,7 @@ public:
   void set_progress_step(uint8_t step) { this->progress_step_ = step; }
 
   void fire_event(const char *type);
+  void flush_pending();
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
   
@@ -69,6 +70,13 @@ protected:
   
   uint8_t progress_step_{10};
   uint8_t last_fired_milestone_{0};
+
+  // Deferred event pipeline — ensures cfx_idle lands in a separate
+  // WebSocket frame from the real event so HA State triggers fire reliably.
+  static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;
+  const char *pending_event_{nullptr};
+  bool pending_idle_{false};
+  uint32_t idle_hold_until_ms_{0};
 };
 
 class CFXSequence {
@@ -248,6 +256,7 @@ class CFXSequenceSelect : public esphome::select::Select,
                           public esphome::Component {
 public:
   void setup() override;
+  void loop() override;
   void control(const std::string &value) override;
 
   /// Safely update the UI without triggering the callback.
