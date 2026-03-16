@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include "cfx_utils.h"
 
 #define FASTLED_INTERNAL
 
@@ -218,17 +219,11 @@ FASTLED_INLINE uint8_t cos8(uint8_t theta) {
   return cfx::sin8((uint8_t)(theta + 64));
 }
 
-
-}
-
 FASTLED_INLINE uint8_t max(uint8_t a, uint8_t b) { return (a > b) ? a : b; }
 FASTLED_INLINE uint8_t min(uint8_t a, uint8_t b) { return (a < b) ? a : b; }
 
 // --- Random Helpers (ESP-IDF compatible) ---
 // CFX-023: All random helpers delegate to cfx::hw_random* (backed by esp_random())
-// so that ALL call sites — including mode_fire_2012 and mode_fire_dual which call
-// the unqualified random8() — use hardware entropy. This fully closes CFX-002.
-#include "cfx_utils.h"  // for cfx::hw_random8 / hw_random16
 
 FASTLED_INLINE uint8_t random8() { return cfx::hw_random8(); }
 FASTLED_INLINE uint8_t random8(uint8_t lim) {
