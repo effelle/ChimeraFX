@@ -425,6 +425,7 @@ public:
 
   bool force_white_active_ = false;
   float global_brightness_ = 1.0f;
+  bool is_return_phase_{false};
 
 private:
   RunnerState _state = STATE_RUNNING;
