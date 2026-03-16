@@ -291,6 +291,8 @@ protected:
       return 22;
     if (name == "Twilight")
       return 23;
+    if (name == "Smart Random")
+      return 254;  // CFX-019: routes to _currentRandomPaletteBuffer in getPaletteByIndex
     return 0;
   }
 };

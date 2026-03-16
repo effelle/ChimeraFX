@@ -133,9 +133,9 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
-        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=5),
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=24),  # CFX-024: IntroMode enum has 25 entries (0-24)
         cv.Optional(CONF_SET_INTRO_DURATION): cv.float_range(min=0.0),
-        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=5),
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),  # CFX-024: IntroMode enum has 25 entries (0-24)
         cv.Optional(CONF_SET_OUTRO_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
         cv.Optional(CONF_SET_INTRO_PALETTE): cv.boolean,

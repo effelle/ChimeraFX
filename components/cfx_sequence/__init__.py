@@ -220,7 +220,7 @@ async def to_code(config):
         if CONF_PIXEL_STEP in seq_conf and seq_conf[CONF_PIXEL_STEP] > 0:
             cg.add(var.set_pixel_step(seq_conf[CONF_PIXEL_STEP]))
         if CONF_DURATION in seq_conf:
-            cg.add(var.set_duration(seq_conf[CONF_DURATION]))
+            cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
         # Register target lights
         for light_id in seq_conf.get(CONF_LIGHTS, []):

@@ -71,6 +71,7 @@ struct LedParams {
 
 class CFXLightOutput : public light::AddressableLight {
 public:
+  ~CFXLightOutput(); // CFX-025: closes visualizer socket_fd_ to prevent FD leak
   void setup() override;
   void loop() override;
   void write_state(light::LightState *state) override;

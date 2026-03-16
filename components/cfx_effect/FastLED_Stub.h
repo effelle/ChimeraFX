@@ -201,46 +201,56 @@ static inline void nblendPaletteTowardPalette(CRGBPalette16 &current,
 // --- Math Helpers ---
 
 // Lookup table declarations
-extern const uint8_t sin8_data[256];
+// CFX-022: extern sin8_data[] removed — delegating to cfx::sin8_table via cfx::sin8().
+// This eliminates the duplicate 256-byte flash table and ensures both namespaces
+// produce identical results. cfx_utils.h is already included above (CFX-023).
 extern const uint8_t gamma8_lut[256]; // Gamma 2.2 correction LUT
 
 // Fixed-point math macros for efficient integer arithmetic
 #define FP16_MULT(a, b) (((int32_t)(a) * (int32_t)(b)) >> 16)
 #define FP8_MULT(a, b) (((uint16_t)(a) * (uint16_t)(b)) >> 8)
 
-// sin8: 0-255 input -> 0-255 sine wave output
-FASTLED_INLINE uint8_t sin8(uint8_t theta) { return sin8_data[theta]; }
+// sin8: 0-255 input -> 0-255 sine wave output — delegates to cfx::sin8 LUT
+FASTLED_INLINE uint8_t sin8(uint8_t theta) { return cfx::sin8(theta); }
 
 FASTLED_INLINE uint8_t cos8(uint8_t theta) {
   // cos is sine shifted by 90 degrees (64 in 0-255 space)
-  return sin8_data[(uint8_t)(theta + 64)];
+  return cfx::sin8((uint8_t)(theta + 64));
+}
+
+
 }
 
 FASTLED_INLINE uint8_t max(uint8_t a, uint8_t b) { return (a > b) ? a : b; }
 FASTLED_INLINE uint8_t min(uint8_t a, uint8_t b) { return (a < b) ? a : b; }
 
 // --- Random Helpers (ESP-IDF compatible) ---
-FASTLED_INLINE uint8_t random8() { return rand() & 0xFF; }
+// CFX-023: All random helpers delegate to cfx::hw_random* (backed by esp_random())
+// so that ALL call sites — including mode_fire_2012 and mode_fire_dual which call
+// the unqualified random8() — use hardware entropy. This fully closes CFX-002.
+#include "cfx_utils.h"  // for cfx::hw_random8 / hw_random16
+
+FASTLED_INLINE uint8_t random8() { return cfx::hw_random8(); }
 FASTLED_INLINE uint8_t random8(uint8_t lim) {
   if (lim == 0)
     return 0; // Safety: prevent div/0
-  return rand() % lim;
+  return cfx::hw_random8(lim);
 }
 FASTLED_INLINE uint8_t random8(uint8_t min, uint8_t lim) {
   if (min >= lim)
     return min; // Safety: prevent div/0
-  return min + (rand() % (lim - min));
+  return cfx::hw_random8(min, lim);
 }
-FASTLED_INLINE uint16_t random16() { return rand() & 0xFFFF; }
+FASTLED_INLINE uint16_t random16() { return cfx::hw_random16(); }
 FASTLED_INLINE uint16_t random16(uint16_t lim) {
   if (lim == 0)
     return 0; // Safety: prevent div/0
-  return rand() % lim;
+  return cfx::hw_random16() % lim;
 }
 FASTLED_INLINE uint16_t random16(uint16_t min, uint16_t lim) {
   if (min >= lim)
     return min; // Safety: prevent div/0
-  return min + (rand() % (lim - min));
+  return min + (cfx::hw_random16() % (lim - min));
 }
 
 // --- Math Helpers ---
@@ -281,7 +291,7 @@ FASTLED_INLINE uint8_t gamma8_fast(uint8_t x) { return gamma8_lut[x]; }
 
 // cos8_t: cosine wave using sin8 lookup table (90 degree phase shift)
 FASTLED_INLINE uint8_t cos8_t(uint8_t theta) {
-  return sin8_data[(uint8_t)(theta + 64)];
+  return cfx::sin8((uint8_t)(theta + 64)); // CFX-022: was sin8_data[]
 }
 
 // --- Timing Helpers (for Pacifica and other effects) ---

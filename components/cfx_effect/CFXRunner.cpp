@@ -158,30 +158,40 @@ uint8_t CFXRunner::getSubFactor(uint8_t factor) {
 }
 
 void Segment::setPixelColor(int n, uint32_t c) {
-  if (n < 0 || n >= length())
+  if (n < 0 || n >= (int)virtualLength()) // CFX-001: use virtualLength() — half-strip when mirror active
     return;
 
   if (!instance || !instance->target_light)
     return;
+
   int light_size = instance->target_light->size();
-  int offset = (light_size == length()) ? 0 : start;
 
-  // Map usage to global buffer - apply mirror (inversion) if enabled
-  int global_index = mirror ? (offset + length() - 1 - n) : (offset + n);
+  uint8_t r = CFX_R(c);
+  uint8_t g = CFX_G(c);
+  uint8_t b = CFX_B(c);
+  uint8_t w = CFX_W(c);
 
-  if (global_index >= 0 && global_index < light_size) {
-    uint8_t r = CFX_R(c);
-    uint8_t g = CFX_G(c);
-    uint8_t b = CFX_B(c);
-    uint8_t w = CFX_W(c);
+  // Apply native force_white BEFORE hitting the ESPHome gamma cache
+  if (instance->force_white_active_) {
+    cfx::apply_force_white(r, g, b, w);
+  }
 
-    // Apply native force_white BEFORE hitting the ESPHome gamma cache
-    if (instance->force_white_active_) {
-      cfx::apply_force_white(r, g, b, w);
-    }
+  esphome::Color esphome_color(r, g, b, w);
 
-    esphome::Color esphome_color(r, g, b, w);
-    (*instance->target_light)[global_index] = esphome_color;
+  if (mirror) {
+    // CFX-001: True symmetrical mirror — write both left and right pixels
+    // simultaneously so effects see a full reflected strip at half resolution.
+    int left_index  = start + n;
+    int right_index = stop - 1 - n;
+    if (left_index  >= 0 && left_index  < light_size)
+      (*instance->target_light)[left_index]  = esphome_color;
+    if (right_index >= 0 && right_index < light_size)
+      (*instance->target_light)[right_index] = esphome_color;
+  } else {
+    int offset = (light_size == (int)physicalLength()) ? 0 : start;
+    int global_index = offset + n;
+    if (global_index >= 0 && global_index < light_size)
+      (*instance->target_light)[global_index] = esphome_color;
   }
 }
 
@@ -632,7 +642,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 22:
     return PaletteFairy;
   case 23:
-    return PaletteRainbow; // Reserved for future use
+    return PaletteTwilight; // CFX-019: PaletteTwilight defined at CFXRunner.cpp:566
   case 254:
     // Smart Random (generated on switch)
     // Needs instance to access the buffer
@@ -4258,6 +4268,14 @@ void CFXRunner::service() {
   // CFX-004: Use RAII guard to set global instance pointer for this service call
   InstanceGuard guard(this);
 
+  // CFX-017: Guard against zero-length segments before any effect dispatch.
+  // A segment with start == stop produces len == 0, which causes integer
+  // divide-by-zero in at least 15 effect functions (e.g. i*255/len, val%len).
+  // isActive() checks: on && physicalLength() > 0.
+  if (!_segment.isActive()) {
+    return;
+  }
+
   // Halt animation progression if target iterations reached
   if (this->effect_complete_) {
     return;
@@ -6928,7 +6946,9 @@ uint16_t mode_collider(void) {
 
   // 2. Persistence
   if (!instance->_segment.allocateData(numNodes * sizeof(ColliderNode))) {
-    return FRAMETIME;
+    ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__,
+             numNodes * sizeof(ColliderNode)); // CFX-016 / CFX-007
+    return mode_static();
   }
   ColliderNode *nodes = (ColliderNode *)instance->_segment.data;
 

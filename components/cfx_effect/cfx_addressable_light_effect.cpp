@@ -2498,13 +2498,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_fluid_level_ = target_l;
 
       if (this->hydraulics_fluid_velocity_ > 15.0f) {
-        int splash_count = (rand() % 4) + 3; // 3 to 6 drops
+        int splash_count = (cfx::hw_random8(4)) + 3; // 3 to 6 drops — CFX-023
         for (int d = 0; d < splash_count; d++) {
           if (this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
             this->hydraulics_particles_.push_back(
                 {target_l,
                  -this->hydraulics_fluid_velocity_ *
-                     (0.2f + (rand() % 50) / 100.0f),
+                     (0.2f + (cfx::hw_random8(50)) / 100.0f), // CFX-023
                  true});
           }
         }
@@ -2520,10 +2520,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // --- Continuous Spray Spawning (While moving fast) ---
     if (this->hydraulics_fluid_velocity_ > 8.0f &&
         this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-      if (rand() % 100 < 40) {
+      if (cfx::hw_random8(100) < 40) { // CFX-023
         this->hydraulics_particles_.push_back(
             {this->hydraulics_fluid_level_,
-             this->hydraulics_fluid_velocity_ * (1.1f + (rand() % 40) / 100.0f),
+             this->hydraulics_fluid_velocity_ * (1.1f + (cfx::hw_random8(40)) / 100.0f), // CFX-023
              true});
       }
     }
@@ -4151,7 +4151,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     // Drops cling more based on intensity
     if (this->hydraulics_fluid_level_ < old_level &&
         this->hydraulics_particles_.size() < MAX_HYDRAULICS_PARTICLES) {
-      if ((rand() % 100) < (10 + (int)(intensity_val * 25))) {
+      if ((cfx::hw_random8(100)) < (10 + (int)(intensity_val * 25))) { // CFX-023
         this->hydraulics_particles_.push_back({old_level, 0.0f, true});
       }
     }

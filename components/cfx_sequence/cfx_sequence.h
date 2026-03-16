@@ -78,8 +78,8 @@ protected:
   // Ring buffer for deferred events
   static constexpr uint8_t PENDING_QUEUE_SIZE = 2;
   const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr};
-  uint8_t pending_write_{0};
-  uint8_t pending_read_{0};
+  std::atomic<uint8_t> pending_write_{0}; // CFX-021: atomic to guard queue head/tail across tasks
+  std::atomic<uint8_t> pending_read_{0};  // CFX-021: atomic to guard queue head/tail across tasks
 
   // Deferred event pipeline — ensures cfx_idle lands in a separate
   // WebSocket frame from the real event so HA State triggers fire reliably.
@@ -199,7 +199,8 @@ protected:
     CFXSequenceListener(CFXSequence *parent, light::LightState *light)
         : parent_(parent), light_(light) {}
     void on_light_remote_values_update() override;
-    void nullify() { this->parent_ = nullptr; }
+    void nullify()                  { this->parent_ = nullptr; }
+    void reinstate(CFXSequence *s)  { this->parent_ = s; } // CFX-020: re-arm for new run
 
   private:
     CFXSequence *parent_;

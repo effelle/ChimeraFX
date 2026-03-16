@@ -219,17 +219,18 @@ void CFXSequence::start() {
     this->saved_states_.push_back(s);
   }
 
-  // Sync logic: listen for lights turning off while sequence is running
+  // CFX-020: Listener reuse — CFXSequenceListener cannot be deleted because
+  // LightState holds a permanent reference. Reuse existing listeners across
+  // restart cycles via reinstate() to bound the leak to one allocation per
+  // monitored light per CFXSequence object (not per start() call).
   for (auto *l : this->lights_) {
-    bool already_monitored = false;
-    for (const auto &m : this->monitored_lights_) {
-      if (m.light == l) {
-        already_monitored = true;
-        break;
-      }
-    }
+    auto it = std::find_if(
+        this->monitored_lights_.begin(), this->monitored_lights_.end(),
+        [l](const MonitoredLight &m) { return m.light == l; });
 
-    if (!already_monitored) {
+    if (it != this->monitored_lights_.end()) {
+      it->listener->reinstate(this); // re-arm nullified listener for new run
+    } else {
       auto *listener = new CFXSequenceListener(this, l);
       l->add_remote_values_listener(listener);
       this->monitored_lights_.push_back({l, listener});
