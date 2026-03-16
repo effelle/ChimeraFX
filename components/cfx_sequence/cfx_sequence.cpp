@@ -552,6 +552,20 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
+  // Reset stale tracking state at the start of a new forward pass.
+  // The adapter (cfx_addressable_light_effect.cpp) suppresses calls to this
+  // function during the erase/return phase via runner->is_return_phase_.
+  // This means last_triggered_percentage_ retains its end-of-forward-pass
+  // value (~0.98) when the new forward pass begins at pixel=0.
+  // Without this reset, the backward-crossing condition fires all mid-cycle
+  // targets simultaneously at pixel=0 because:
+  //   current(0.0) <= target(0.25/0.50/0.75) AND last(0.98) > target → crossed
+  // Resetting to -1.0f here causes the initial first-run path to handle
+  // pixel=0 correctly: 0.0 >= 0.25 is false, so nothing fires at the start.
+  if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
+    this->last_triggered_percentage_ = -1.0f;
+  }
+
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
