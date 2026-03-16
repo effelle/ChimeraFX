@@ -893,6 +893,10 @@ void CFXAddressableLightEffect::stop() {
 
       // Capture ALL segment runners for the outro
       auto captured_runners = std::make_shared<std::vector<CFXRunner *>>();
+      // Capture the sequence pointer now — clear_active_binding() in stop()
+      // nulls active_sequence_ before the outro callback runs, so we must
+      // grab it here while it is still valid.
+      CFXSequence *captured_sequence = this->active_sequence_;
 
       if (!this->segment_runners_.empty()) {
         for (auto *r : this->segment_runners_) {
@@ -920,7 +924,7 @@ void CFXAddressableLightEffect::stop() {
       // `out` is already correctly set above (via vseg->get_parent() for
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
-        out->add_outro_callback([this, it_light, captured_runners]() -> bool {
+        out->add_outro_callback([this, it_light, captured_runners, captured_sequence]() -> bool {
           auto *current_state = this->get_light_state();
           // T-05 DIAGNOSTIC: log first callback tick to confirm outro is running
           if (this->outro_start_time_ == 0) {
@@ -967,14 +971,22 @@ void CFXAddressableLightEffect::stop() {
                      (unsigned)this->effect_id_,
                      (int)this->get_monochromatic_preset_(this->effect_id_).is_active);
 #ifdef USE_CFX_SEQUENCE
-            // Fire cfx_complete when the outro animation finishes and the strip is
-            // fully dark. This covers standalone monochromatic preset effects that
-            // are never bound to a CFXSequence.
-            // If is_sequence_outro_ is true, the sequence already fired completion
-            // during its stop() call, so we skip here to avoid double-firing.
+            // Fire cfx_complete when the outro animation finishes.
+            // If is_sequence_outro_ is true, the sequence already fired
+            // completion (report_event_complete was called before stop()),
+            // so we skip here to avoid double-firing.
             if (this->get_monochromatic_preset_(this->effect_id_).is_active &&
                 !this->is_sequence_outro_) {
-              cfx_sequence::CFXEventManager::get().queue_event("cfx_complete");
+              if (captured_sequence != nullptr) {
+                // Sequence-driven path: route through report_event_complete()
+                // so that on_cfx_complete YAML automations fire in addition
+                // to the HA cfx_complete event. Without this, only the HA
+                // event fires and on-device triggers are silently skipped.
+                captured_sequence->report_event_complete();
+              } else {
+                // Standalone (no sequence bound): fire HA event directly.
+                cfx_sequence::CFXEventManager::get().queue_event("cfx_complete");
+              }
             }
 #endif
             for (auto *r : *captured_runners)
@@ -1320,11 +1332,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (leading_pixel >= 0 && total_pixels > 0) {
     float current_percentage = (float)leading_pixel / (float)total_pixels;
     if (leading_pixel != this->last_leading_pixel_) {
-      // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2)
-      // This is much more robust against fast speeds jumping pixels than
-      // checking == 0
+      // Iteration tracking: Detect cycle using percentage wrap (>0.8 to <0.2).
+      // Only count on genuine new loops (erase→forward transition), not on
+      // the forward→erase transition. is_return_phase_ is set by effects like
+      // Color Wipe to distinguish the two wrap directions.
 #ifdef USE_CFX_SEQUENCE
-      if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0) {
+      bool _return_phase = this->runner_ ? this->runner_->is_return_phase_ : false;
+      if (this->active_sequence_ != nullptr && this->sequence_iterations_ > 0 &&
+          !_return_phase) {
         if (this->last_triggered_percentage_ > 0.8f &&
             current_percentage < 0.2f) {
           if (!this->segment_runners_.empty()) {
@@ -5122,33 +5137,40 @@ void CFXAddressableLightEffect::check_positional_triggers(
   }
 
 #ifdef USE_CFX_SEQUENCE
-  if (this->active_sequence_ != nullptr) {
-    this->active_sequence_->check_positional_triggers(current_pixel,
-                                                      total_pixels);
-  } else {
-    float current_percentage = (total_pixels > 1)
-        ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
-    cfx_sequence::CFXEventManager::get().check_milestones(
-        current_percentage * 100.0f);
-  }
+  // Read return-phase flag from the runner. Effects that have a distinct
+  // erase/return sub-phase (e.g. Color Wipe) set this so milestone and
+  // on_reach events are suppressed on the return pass. Without this, the
+  // erase pass produces an identical 0->100% progress curve and all
+  // milestones fire a second time per visual cycle.
+  bool is_return_phase = this->runner_ ? this->runner_->is_return_phase_ : false;
 
-  // cfx_pixel fires for ALL effects and ALL paths.
-  // Auto-throttle: target ~30 events per sweep regardless of strip length.
-  // pixel_step is computed from strip length unless overridden via YAML.
-  // User override (pixel_step_ > 0) takes precedence over auto-computed value.
-  {
-    uint16_t step;
-    if (this->cfx_pixel_step_ > 0) {
-      step = this->cfx_pixel_step_;
+  if (!is_return_phase) {
+    if (this->active_sequence_ != nullptr) {
+      this->active_sequence_->check_positional_triggers(current_pixel,
+                                                        total_pixels);
     } else {
-      step = (uint16_t)((total_pixels + 29) / 30);
-      if (step < 1) step = 1;
+      float current_percentage = (total_pixels > 1)
+          ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
+      cfx_sequence::CFXEventManager::get().check_milestones(
+          current_percentage * 100.0f);
     }
-    if (this->last_cfx_pixel_pixel_ < 0 ||
-        abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
-      this->last_cfx_pixel_pixel_ = current_pixel;
-      cfx_sequence::CFXEventManager::get().pixel_advanced(
-          (uint16_t)current_pixel);
+
+    // cfx_pixel: only fire on the forward pass.
+    // Auto-throttle: target ~30 events per sweep regardless of strip length.
+    {
+      uint16_t step;
+      if (this->cfx_pixel_step_ > 0) {
+        step = this->cfx_pixel_step_;
+      } else {
+        step = (uint16_t)((total_pixels + 29) / 30);
+        if (step < 1) step = 1;
+      }
+      if (this->last_cfx_pixel_pixel_ < 0 ||
+          abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
+        this->last_cfx_pixel_pixel_ = current_pixel;
+        cfx_sequence::CFXEventManager::get().pixel_advanced(
+            (uint16_t)current_pixel);
+      }
     }
   }
 #endif

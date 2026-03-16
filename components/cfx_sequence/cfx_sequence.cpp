@@ -108,22 +108,18 @@ void CFXEventManager::check_milestones(float current_pct) {
     this->report_progress((float)next_milestone);
     this->queue_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
-    // Only reset after a full cycle has completed (reached 100%).
-    // Without this guard, effects with a return/erase phase (e.g. Color Wipe)
-    // fire milestones twice per visual cycle: once on the forward fill pass
-    // and once on the backward erase pass, because both produce an identical
-    // 0%->100% progress curve.
-    // Two conditions are checked:
-    // - last_fired_milestone_ >= 100: handles step values that divide evenly
-    //   into 100 (e.g. step=10 -> last milestone value is exactly 100)
-    // - current_pct >= 100.0f: handles step values that do NOT divide evenly
-    //   into 100 (e.g. step=7 -> last milestone is 98, never reaches 100 as
-    //   uint8_t, but actual percentage reaches 100.0 on the final frame)
+    // Reset milestone counter when a new forward pass begins.
+    // check_milestones is only called during the forward pass (the adapter
+    // suppresses calls during the erase/return phase via runner->is_return_phase_).
+    // So this branch is reached at the start of a genuine new forward pass
+    // where current_pct drops back to ~0 after the previous cycle completed.
+    // The >= 100 guard handles both exact and non-exact step divisors:
+    // - last_fired_milestone_ >= 100: step divides evenly into 100
+    // - current_pct >= 100.0f: step does NOT divide evenly (last milestone
+    //   is e.g. 98 for step=7), but actual percentage reached 100.0
     if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
       this->last_fired_milestone_ = 0;
     }
-    // If neither condition is met, the percentage moved backward before
-    // completing a full cycle. This is a return/erase phase — do NOT reset.
   }
 }
 
@@ -325,7 +321,6 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
-  this->in_return_phase_ = false;
   this->completion_reported_ = false;
   this->is_running_ = true;
   this->is_starting_ = false;
@@ -557,28 +552,12 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
-  // Track erase/return phase: clear when forward pass nears completion,
-  // set when a wrap occurs before the forward pass reached ~100%.
-  // Mirror of check_milestones guard: only suppress if the forward pass never
-  // reached completion. A genuine new loop starts from ~100%.
-  if (current_percentage >= 0.99f) {
-    this->in_return_phase_ = false;
-  }
-  if (this->last_triggered_percentage_ > 0.8f &&
-      current_percentage < 0.2f &&
-      this->last_triggered_percentage_ < 0.99f) {
-    this->in_return_phase_ = true;
-  }
-
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
     bool crossed = false;
 
-    // Suppress all crossing checks during the erase/return phase.
-    if (this->in_return_phase_) {
-      // do nothing — erase pass, not a genuine forward sweep
-    } else if (this->last_triggered_percentage_ == -1.0f) {
+    if (this->last_triggered_percentage_ == -1.0f) {
       if (current_percentage >= target)
         crossed = true;
     } else {
