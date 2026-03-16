@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <set>
 
 #include "cfx_sequence.h"
 #include "../cfx_effect/cfx_addressable_light_effect.h"
@@ -424,6 +425,29 @@ void CFXSequence::force_stop_all() {
 
   this->is_stopping_ = false;
 }
+
+void CFXSequence::stop_all() {
+  std::set<light::LightState *> unique_lights;
+  for (auto *seq : CFXSequence::instances) {
+    for (auto *l : seq->lights_) {
+      unique_lights.insert(l);
+    }
+    if (seq->is_running_) {
+      seq->is_running_ = false;
+      seq->clear_active_binding();
+      seq->duration_complete_fired_ = false;
+    }
+  }
+
+  for (auto *l : unique_lights) {
+    auto call = l->make_call();
+    call.set_state(false);
+    call.set_effect("None");
+    call.set_transition_length(0);
+    call.perform();
+  }
+}
+
 void CFXSequence::clear_active_binding() {
   // Clear binding on ALL effect instances that point to this sequence
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
@@ -577,13 +601,7 @@ void CFXProgressStepNumber::control(float value) {
 
 void CFXStopAllButton::press_action() {
   ESP_LOGD(TAG, "Stop All: stopping all sequences and forcing lights off");
-  // Stop all running sequences, ignoring restore_ setting
-  for (auto *seq : CFXSequence::instances) {
-    if (seq->is_running()) {
-      // Temporarily disable restore so stop() does not restore light state
-      seq->force_stop_all();
-    }
-  }
+  CFXSequence::stop_all();
   // Update Select UI
   if (CFXSequenceSelect::instance != nullptr) {
     CFXSequenceSelect::instance->publish_state_silent("None");

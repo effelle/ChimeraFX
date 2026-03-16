@@ -144,6 +144,7 @@ public:
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();
   void force_stop_all();
+  static void stop_all();
 
   // HA event integration
   void fire_event(const char *type) {
