@@ -38,6 +38,7 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 | **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                 |
 | **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **{task-slug}.md Required** |
 | **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **{task-slug}.md Required** |
+| **EMBEDDED/C++** | "cpp", "c++", "esphome", "esp32", "esp8266", "firmware", "embedded", "component", "runner", "pio" | TIER 0 + TIER 1 + Agent | Inline Edit or Task File    |
 | **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                    |
 
 ---

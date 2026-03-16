@@ -190,10 +190,18 @@ protected:
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
+  // Set when a wrap-around is detected before the forward pass reached ~100%.
+  // While true, on_reach crossing checks are suppressed (erase/return phase).
+  // Cleared when forward pass nears completion (current_percentage >= 0.99).
+  bool in_return_phase_{false};
 
   bool is_starting_{false};
   bool is_stopping_{false};
   bool is_running_{false};
+  // Set to true when report_event_complete() has been called for this run.
+  // Used by clear_active_binding() to decide whether the outro should suppress
+  // cfx_complete (prevent double-fire) or allow it (first completion signal).
+  bool completion_reported_{false};
 
   class CFXSequenceListener : public light::LightRemoteValuesListener {
   public:

@@ -325,6 +325,8 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
+  this->in_return_phase_ = false;
+  this->completion_reported_ = false;
   this->is_running_ = true;
   this->is_starting_ = false;
 
@@ -392,17 +394,22 @@ void CFXSequence::stop() {
       light_idx++;
     }
   } else {
-    // restore: false — explicitly turn lights off and clear the effect so
-    // ESPHome stops the animation apply loop and Home Assistant reflects
-    // the correct OFF state. Without this, the effect runner keeps servicing
-    // on the next loop cycle, HA shows the light as ON, and events such as
-    // cfx_pixel and cfx_idle keep firing indefinitely.
+    // restore: false — clear the effect first, then turn lights off.
+    // Two separate calls are required: ESPHome rejects set_effect("None")
+    // when combined with set_state(false) in the same call, producing:
+    //   [W] 'RGB Light': cannot start effect when turning off
+    // If the effect is not cleared before turning off, ESPHome remembers it
+    // and re-applies it the next time the light turns on.
     for (auto *l : this->lights_) {
-      auto call = l->make_call();
-      call.set_state(false);
-      call.set_effect("None");
-      call.set_transition_length(0);
-      call.perform();
+      auto clear_call = l->make_call();
+      clear_call.set_effect("None");
+      clear_call.set_transition_length(0);
+      clear_call.perform();
+
+      auto off_call = l->make_call();
+      off_call.set_state(false);
+      off_call.set_transition_length(0);
+      off_call.perform();
     }
   }
 
@@ -441,13 +448,18 @@ void CFXSequence::force_stop_all() {
 
   this->clear_active_binding();
 
-  // Always turn lights off — ignore restore_state_
+  // Always turn lights off — ignore restore_state_.
+  // Two calls required: see stop() else branch for explanation.
   for (auto *l : this->lights_) {
-    auto call = l->make_call();
-    call.set_state(false);
-    call.set_effect("None");
-    call.set_transition_length(0);
-    call.perform();
+    auto clear_call = l->make_call();
+    clear_call.set_effect("None");
+    clear_call.set_transition_length(0);
+    clear_call.perform();
+
+    auto off_call = l->make_call();
+    off_call.set_state(false);
+    off_call.set_transition_length(0);
+    off_call.perform();
   }
 
   this->is_stopping_ = false;
@@ -466,20 +478,31 @@ void CFXSequence::stop_all() {
     }
   }
 
+  // Two calls required: see stop() else branch for explanation.
   for (auto *l : unique_lights) {
-    auto call = l->make_call();
-    call.set_state(false);
-    call.set_effect("None");
-    call.set_transition_length(0);
-    call.perform();
+    auto clear_call = l->make_call();
+    clear_call.set_effect("None");
+    clear_call.set_transition_length(0);
+    clear_call.perform();
+
+    auto off_call = l->make_call();
+    off_call.set_state(false);
+    off_call.set_transition_length(0);
+    off_call.perform();
   }
 }
 
 void CFXSequence::clear_active_binding() {
-  // Clear binding on ALL effect instances that point to this sequence
+  // Clear binding on ALL effect instances that point to this sequence.
+  // is_sequence_outro is only set when the sequence has already reported
+  // completion (report_event_complete() was called). This prevents double-
+  // firing of cfx_complete when the outro runs after an iteration/duration
+  // completion, while still allowing cfx_complete to fire when the sequence
+  // is interrupted externally (e.g. light turned off by user) without having
+  // previously completed.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_active_sequence() == this) {
-      inst->set_is_sequence_outro(true);
+      inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_active_sequence(nullptr, {}, {}, {}, 0);
     }
   }
@@ -513,6 +536,7 @@ void CFXSequence::report_event_start() {
 void CFXSequence::report_event_complete() {
   ESP_LOGD(TAG, "Sequence '%s': on_complete triggers firing",
            this->id_.c_str());
+  this->completion_reported_ = true;
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
@@ -533,12 +557,28 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
+  // Track erase/return phase: clear when forward pass nears completion,
+  // set when a wrap occurs before the forward pass reached ~100%.
+  // Mirror of check_milestones guard: only suppress if the forward pass never
+  // reached completion. A genuine new loop starts from ~100%.
+  if (current_percentage >= 0.99f) {
+    this->in_return_phase_ = false;
+  }
+  if (this->last_triggered_percentage_ > 0.8f &&
+      current_percentage < 0.2f &&
+      this->last_triggered_percentage_ < 0.99f) {
+    this->in_return_phase_ = true;
+  }
+
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
     bool crossed = false;
 
-    if (this->last_triggered_percentage_ == -1.0f) {
+    // Suppress all crossing checks during the erase/return phase.
+    if (this->in_return_phase_) {
+      // do nothing — erase pass, not a genuine forward sweep
+    } else if (this->last_triggered_percentage_ == -1.0f) {
       if (current_percentage >= target)
         crossed = true;
     } else {
