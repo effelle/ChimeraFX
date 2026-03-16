@@ -108,8 +108,22 @@ void CFXEventManager::check_milestones(float current_pct) {
     this->report_progress((float)next_milestone);
     this->queue_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
-    // Reset milestones if animation restarts or loops
-    this->last_fired_milestone_ = 0;
+    // Only reset after a full cycle has completed (reached 100%).
+    // Without this guard, effects with a return/erase phase (e.g. Color Wipe)
+    // fire milestones twice per visual cycle: once on the forward fill pass
+    // and once on the backward erase pass, because both produce an identical
+    // 0%->100% progress curve.
+    // Two conditions are checked:
+    // - last_fired_milestone_ >= 100: handles step values that divide evenly
+    //   into 100 (e.g. step=10 -> last milestone value is exactly 100)
+    // - current_pct >= 100.0f: handles step values that do NOT divide evenly
+    //   into 100 (e.g. step=7 -> last milestone is 98, never reaches 100 as
+    //   uint8_t, but actual percentage reaches 100.0 on the final frame)
+    if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
+      this->last_fired_milestone_ = 0;
+    }
+    // If neither condition is met, the percentage moved backward before
+    // completing a full cycle. This is a return/erase phase — do NOT reset.
   }
 }
 
@@ -376,6 +390,19 @@ void CFXSequence::stop() {
         call.perform();
       }
       light_idx++;
+    }
+  } else {
+    // restore: false — explicitly turn lights off and clear the effect so
+    // ESPHome stops the animation apply loop and Home Assistant reflects
+    // the correct OFF state. Without this, the effect runner keeps servicing
+    // on the next loop cycle, HA shows the light as ON, and events such as
+    // cfx_pixel and cfx_idle keep firing indefinitely.
+    for (auto *l : this->lights_) {
+      auto call = l->make_call();
+      call.set_state(false);
+      call.set_effect("None");
+      call.set_transition_length(0);
+      call.perform();
     }
   }
 

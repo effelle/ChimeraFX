@@ -701,6 +701,12 @@ void CFXAddressableLightEffect::start() {
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
 
+  // T-05 DIAGNOSTIC: confirm stop() is called and whether outro can register
+  ESP_LOGD("chimera_fx", "[T05] stop() called: effect_id=%u runner=%p is_virtual=%d",
+           (unsigned)this->effect_id_,
+           (void*)this->runner_,
+           (int)this->is_virtual_segment_);
+
   this->trigger_on_complete();
 
   // Clear intro snapshot vector to reclaim RAM
@@ -916,10 +922,20 @@ void CFXAddressableLightEffect::stop() {
       if (out != nullptr) {
         out->add_outro_callback([this, it_light, captured_runners]() -> bool {
           auto *current_state = this->get_light_state();
+          // T-05 DIAGNOSTIC: log first callback tick to confirm outro is running
+          if (this->outro_start_time_ == 0) {
+            bool light_is_on = (current_state != nullptr &&
+                                current_state->remote_values.is_on());
+            ESP_LOGD("chimera_fx",
+                     "[T05] outro callback first tick: effect_id=%u light_on=%d mode=%u",
+                     (unsigned)this->effect_id_, (int)light_is_on,
+                     (unsigned)this->active_outro_mode_);
+          }
           if (current_state != nullptr &&
               current_state->remote_values.is_on()) {
             // Effect was completely changed or light remained ON.
             // Abort the outro and delete all captured runners cleanly.
+            ESP_LOGD("chimera_fx", "[T05] outro ABORTED — light is on");
             for (auto *r : *captured_runners)
               delete r;
             captured_runners->clear();
@@ -946,6 +962,10 @@ void CFXAddressableLightEffect::stop() {
           chimera_fx::instance = nullptr;
 
           if (done) {
+            ESP_LOGD("chimera_fx",
+                     "[T05] outro DONE: effect_id=%u is_mono=%d",
+                     (unsigned)this->effect_id_,
+                     (int)this->get_monochromatic_preset_(this->effect_id_).is_active);
 #ifdef USE_CFX_SEQUENCE
             // Fire cfx_complete when the outro animation finishes and the strip is
             // fully dark. This covers standalone monochromatic preset effects that
