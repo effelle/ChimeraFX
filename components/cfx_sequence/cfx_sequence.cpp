@@ -119,6 +119,9 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
+    ESP_LOGW("cfx_sequence", "check_milestones: milestone=%u strip_tag='%s'",
+             (unsigned)next_milestone, this->strip_tag_.c_str());
+
     // Build event type string with milestone encoded:
     //   cfx_reach:<tag>:<milestone>   e.g. "cfx_reach:ws_strip:75"
     // Every milestone fires a UNIQUE string so HA's state trigger fires
