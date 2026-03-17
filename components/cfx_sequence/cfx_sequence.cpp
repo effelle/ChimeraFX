@@ -114,15 +114,15 @@ void CFXEventManager::check_milestones(float current_pct) {
     // The caller reads was_milestone_fired() and skips cfx_pixel this frame.
     // (CFX-022)
     this->milestone_fired_this_frame_ = true;
-    // Fire bare "cfx_reach" for single-strip / backward-compat users.
-    this->fire_event("cfx_reach");
-    // Fire tagged "cfx_reach:<strip>" when a strip tag is set so multi-strip
-    // HA automations can discriminate which strip crossed the milestone. (CFX-023)
+    // Fire tagged "cfx_reach:<strip>" when a strip tag is set. Single-strip
+    // users configure the tag via the YAML light id; multi-strip users get
+    // unambiguous per-strip events. When no tag is set (edge case: manual
+    // effect with no sequence bound) fall back to bare "cfx_reach". (CFX-023)
     if (!this->strip_tag_.empty()) {
-      // Build "cfx_reach:<tag>" on the stack — safe for the trigger() call
-      // duration since ESPHome event entity copies the string internally.
       std::string tagged = "cfx_reach:" + this->strip_tag_;
       this->fire_event(tagged.c_str());
+    } else {
+      this->fire_event("cfx_reach");
     }
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestone counter when a new forward pass begins.
@@ -146,12 +146,13 @@ void CFXEventManager::pixel_advanced(uint16_t pixel) {
   // On-device on_cfx_pixel YAML triggers are unaffected — they fire in
   // cfx_addressable_light_effect.cpp before this function is called.
   if (!this->ha_pixel_enabled_) return;
-  // Fire bare "cfx_pixel" for single-strip / backward-compat users.
-  this->fire_event("cfx_pixel");
-  // Fire tagged "cfx_pixel:<strip>" when a strip tag is set. (CFX-023)
+  // Fire tagged "cfx_pixel:<strip>" when a strip tag is set; bare "cfx_pixel"
+  // as fallback when no tag is configured. Mirrors cfx_reach behaviour. (CFX-023)
   if (!this->strip_tag_.empty()) {
     std::string tagged = "cfx_pixel:" + this->strip_tag_;
     this->fire_event(tagged.c_str());
+  } else {
+    this->fire_event("cfx_pixel");
   }
 }
 
@@ -243,7 +244,24 @@ void CFXSequence::start() {
   for (auto *l : this->lights_) {
     SavedState s;
     s.values = l->remote_values;
-    s.color_mode = l->remote_values.get_color_mode();
+
+    // Never save ColorMode::UNKNOWN — ESPHome emits a warning if it is later
+    // passed back to set_color_mode() on restore. Resolve it to the best
+    // supported mode for this light so the restore call is always valid.
+    light::ColorMode cm = l->remote_values.get_color_mode();
+    if (cm == light::ColorMode::UNKNOWN) {
+      if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE))
+        cm = light::ColorMode::RGB_WHITE;
+      else if (l->get_traits().supports_color_mode(light::ColorMode::RGB))
+        cm = light::ColorMode::RGB;
+      else if (l->get_traits().supports_color_mode(light::ColorMode::WHITE))
+        cm = light::ColorMode::WHITE;
+      else if (l->get_traits().supports_color_mode(light::ColorMode::BRIGHTNESS))
+        cm = light::ColorMode::BRIGHTNESS;
+      else
+        cm = light::ColorMode::ON_OFF;
+    }
+    s.color_mode = cm;
     s.effect = "None";
 
     light::LightEffect *effect =
@@ -394,8 +412,11 @@ void CFXSequence::stop() {
         bool turning_on = saved.values.is_on();
         call.set_state(turning_on);
 
-        // Restore mode and brightness
-        call.set_color_mode(saved.color_mode);
+        // Restore mode and brightness.
+        // Guard: never pass UNKNOWN to set_color_mode — ESPHome logs a warning.
+        // The save-time resolution above should prevent this, but be defensive.
+        if (saved.color_mode != light::ColorMode::UNKNOWN)
+          call.set_color_mode(saved.color_mode);
         call.set_brightness(saved.values.get_brightness());
         call.set_rgb(saved.values.get_red(), saved.values.get_green(),
                      saved.values.get_blue());

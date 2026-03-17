@@ -149,14 +149,15 @@ async def to_code(config):
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
-    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_idle"]
-    # Always include bare cfx_pixel so on-device parity is preserved even
-    # when HA pixel events are disabled — the type must be declared even if
-    # the runtime guard prevents it from firing.
-    event_types.append("cfx_pixel")
-    # Per-strip tagged variants (CFX-023)
+    event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
+    # Bare cfx_reach and cfx_pixel are declared as fallback for the edge case
+    # where no strip tag is configured (e.g. manual effect with no sequence).
+    # In normal operation only the tagged variants fire. (CFX-023)
+    event_types += ["cfx_reach", "cfx_pixel"]
+    # Per-strip tagged variants — always add cfx_reach:<tag> for every light.
     for tag in seen_tags:
         event_types.append(f"cfx_reach:{tag}")
+    # cfx_pixel:<tag> only when at least one sequence opts in.
     if any_pixel:
         for tag in seen_tags:
             event_types.append(f"cfx_pixel:{tag}")
