@@ -185,18 +185,20 @@ void CFXAddressableLightEffect::start() {
   // For sequence-driven effects StartAction::play() also calls this, which
   // is harmless (idempotent reset).
   cfx_sequence::CFXEventManager::get().reset_milestones();
-  // Determine strip tag: prefer the value set by CFXSequence::start() via
-  // set_strip_tag() (sequence path), fall back to get_object_id() for bare
-  // effects run directly from the light card. (CFX-024)
+  // Determine the strip tag for this effect run. CFXSequence::start() may have
+  // pre-loaded a tag (from slugify(light.name)) before perform() fired this
+  // start(). Read it first. If empty (bare effect, no sequence), derive from
+  // get_object_id() which ESPHome also sets to slugify(name). Either way the
+  // tag matches what __init__.py registered in event_types. (CFX-024)
   {
-    std::string tag = this->strip_tag_;
+    std::string tag = cfx_sequence::CFXEventManager::get().get_strip_tag();
     if (tag.empty()) {
       auto *ls = this->get_light_state();
       if (ls != nullptr)
         tag = ls->get_object_id();
     }
-    if (!tag.empty())
-      cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
+    // Write back (covers both paths) and clears any stale pre-load.
+    cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
     cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   }
   cfx_sequence::CFXEventManager::get().fire_event("cfx_start");

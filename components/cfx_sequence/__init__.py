@@ -104,7 +104,15 @@ CONFIG_SCHEMA = cv.All(
 )
 
 import logging
+import re
+
 _LOGGER = logging.getLogger(__name__)
+
+def _cfx_slugify(name: str) -> str:
+    """Replicate ESPHome's object_id derivation from a friendly name.
+    Matches what LightState::get_object_id() returns at runtime so that
+    codegen-registered event_types always match the C++ fired strings."""
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
 
 async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCE")
@@ -138,6 +146,18 @@ async def to_code(config):
     core.CORE.component_ids.add("cfx_global_events")
 
     # Collect unique light object_ids and ha_pixel opt-in flags across all sequences.
+    # Build a map of light yaml_id -> slugified_name for all lights in config.
+    # This lets us derive the correct tag (matching get_object_id() at runtime)
+    # from the light's friendly name rather than its YAML id field. (CFX-024)
+    import esphome.core as _core_lights
+    light_name_map = {}  # yaml_id -> slugified_name
+    for lconf in _core_lights.CORE.config.get("light", []):
+        lid_obj = lconf.get("id")
+        lname = lconf.get("name", "")
+        if lid_obj is not None and lname:
+            light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
+
+    # Collect unique slugified tags and ha_pixel opt-in flags across all sequences.
     seen_tags = []
     any_pixel = False
     for seq_conf in config:
@@ -145,24 +165,27 @@ async def to_code(config):
         if seq_conf.get(CONF_HA_PIXEL_EVENTS, False):
             any_pixel = True
         for lid in lights:
-            tag = lid.id  # raw YAML id string, e.g. "living_room_strip"
+            # Use slugified name to match get_object_id() at runtime.
+            # Fall back to lid.id if name not found (should not happen).
+            tag = light_name_map.get(lid.id, lid.id)
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
+    _LOGGER.info("CFX: light_name_map=%s seen_tags=%s", light_name_map, seen_tags)
+
     # Also collect tags for ALL lights on the device that have addressable_cfx
     # effects — so bare effects (run without a sequence) also get tagged events.
-    # get_object_id() at runtime == YAML id field, so lid.id is the right tag. (CFX-024)
+    # Use slugified name to match get_object_id() at runtime. (CFX-024)
     try:
         import esphome.core as _core3
         for lconf in _core3.CORE.config.get("light", []):
-            lid = lconf.get("id")
-            if lid is None:
+            lid_obj = lconf.get("id")
+            lname = lconf.get("name", "")
+            if lid_obj is None or not lname:
                 continue
-            tag = lid.id
+            tag = _cfx_slugify(str(lname))
             if tag in seen_tags:
                 continue
-            # Effects in ESPHome light config may be stored under different keys
-            # depending on version. Scan all effect entries broadly.
             effects_list = lconf.get("effects", [])
             has_cfx = False
             for eff_conf in effects_list:
@@ -295,14 +318,13 @@ async def to_code(config):
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
-        # CFX-024: strip identity tag from the first light's YAML id.
-        # This drives the pre-load in CFXSequence::start() which pushes the
-        # tag into CFXEventManager BEFORE perform() fires the effect's start().
-        # The effect's start() also derives the tag at runtime via get_object_id()
-        # as a fallback for bare effects (run without a sequence).
+        # CFX-024: strip identity tag = slugified name of first light, matching
+        # get_object_id() at runtime so event strings are always consistent.
         lights_list = seq_conf.get(CONF_LIGHTS, [])
         if lights_list:
-            strip_tag = lights_list[0].id
+            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
+            _LOGGER.info("CFX: sequence '%s' -> strip_tag='%s'",
+                         seq_conf.get(CONF_NAME, "?"), strip_tag)
             cg.add(var.set_strip_tag(strip_tag))
 
         # CFX-023: opt-in cfx_pixel events to HA
