@@ -371,6 +371,35 @@ async def to_code(config):
         except Exception:
             pass  # Non-fatal: service handler is advisory only
 
+    # CFX-024: Inject strip_tag into every addressable_cfx effect instance
+    # that belongs to a light referenced by any sequence. This ensures bare
+    # effects (run directly without a sequence) also carry the strip tag so
+    # cfx_reach:<tag>:<milestone> strings are built correctly at runtime.
+    # Effects on lights NOT in any sequence are left untagged (bare cfx_reach).
+    try:
+        import esphome.core as _core2
+        light_configs = _core2.CORE.config.get("light", [])
+        for lconf in light_configs:
+            # Get this light's object id — the tag value
+            lid = lconf.get("id")
+            if lid is None:
+                continue
+            tag = lid.id  # e.g. "ws_strip"
+            if tag not in seen_tags:
+                continue  # only tag lights that are referenced by a sequence
+            # Walk the effects list for this light
+            for eff_conf in lconf.get("effects", []):
+                eff_id = eff_conf.get("id")
+                if eff_id is None:
+                    continue
+                try:
+                    eff_var = await cg.get_variable(eff_id)
+                    cg.add(eff_var.set_strip_tag(tag))
+                except Exception:
+                    pass  # effect not yet registered or wrong type — skip
+    except Exception:
+        pass  # Non-fatal: bare effects fall back to untagged cfx_reach
+
 @automation.register_action(
     "cfx_sequence.start",
     StartAction,

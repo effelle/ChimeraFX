@@ -299,6 +299,17 @@ void CFXSequence::start() {
     }
   }
 
+  // CFX-024: Pre-load strip tag into CFXEventManager before perform() fires
+  // the effect's start(). start() pushes this->strip_tag_ into the singleton,
+  // but that field on the effect instance is only set AFTER perform() in the
+  // bind loop below. Pre-loading here ensures the singleton already has the
+  // correct tag when start() runs, so the first cfx_start event and all
+  // subsequent milestone events carry the right strip identity.
+  if (!this->strip_tag_.empty()) {
+    cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
+    cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
+  }
+
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
