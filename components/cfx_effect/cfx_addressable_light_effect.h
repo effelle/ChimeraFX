@@ -204,11 +204,6 @@ public:
   uint16_t cfx_pixel_step_{0};  // 0 = auto-computed from strip length
   void set_cfx_pixel_step(uint16_t step) { this->cfx_pixel_step_ = step; }
 
-  // Strip identity tag injected by Python codegen from the light's object_id.
-  // Pushed into CFXEventManager::set_strip_tag() at effect start(). (CFX-023)
-  std::string strip_tag_{};
-  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
-
   // Opt-in flag for firing cfx_pixel to HA. Set by codegen when the sequence
   // YAML contains 'ha_pixel_events: true'. (CFX-023)
   bool ha_pixel_enabled_{false};

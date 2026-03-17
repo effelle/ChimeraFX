@@ -119,9 +119,6 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
-    ESP_LOGW("cfx_sequence", "check_milestones: milestone=%u strip_tag='%s'",
-             (unsigned)next_milestone, this->strip_tag_.c_str());
-
     // Build event type string with milestone encoded:
     //   cfx_reach:<tag>:<milestone>   e.g. "cfx_reach:ws_strip:75"
     // Every milestone fires a UNIQUE string so HA's state trigger fires
@@ -302,18 +299,6 @@ void CFXSequence::start() {
     }
   }
 
-  // CFX-024: Pre-load strip tag into CFXEventManager before perform() fires
-  // the effect's start(). start() pushes this->strip_tag_ into the singleton,
-  // but that field on the effect instance is only set AFTER perform() in the
-  // bind loop below. Pre-loading here ensures the singleton already has the
-  // correct tag when start() runs, so the first cfx_start event and all
-  // subsequent milestone events carry the right strip identity.
-  if (!this->strip_tag_.empty()) {
-    ESP_LOGD(TAG, "  Pre-loading strip tag '%s' into CFXEventManager", this->strip_tag_.c_str());
-    cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
-    cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
-  }
-
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
@@ -354,9 +339,6 @@ void CFXSequence::start() {
         ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
-        // CFX-023: push strip identity and pixel opt-in onto the effect so its
-        // start() can forward them into CFXEventManager.
-        inst->set_strip_tag(this->strip_tag_);
         inst->set_ha_pixel_enabled(this->ha_pixel_enabled_);
         bound = true;
         // Do not break! Match other lights as well.
@@ -382,8 +364,6 @@ void CFXSequence::start() {
              this->name_.c_str(), target_names.c_str(), master_fx);
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
-    // CFX-023: push strip identity and pixel opt-in onto the fallback effect.
-    master_fx->set_strip_tag(this->strip_tag_);
     master_fx->set_ha_pixel_enabled(this->ha_pixel_enabled_);
     bound = true;
   }

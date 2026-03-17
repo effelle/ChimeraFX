@@ -149,6 +149,28 @@ async def to_code(config):
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
+    # Also collect tags for ALL lights on the device that have addressable_cfx
+    # effects — so bare effects (run without a sequence) also get tagged events.
+    # We walk CORE.config['light'] looking for effects lists. (CFX-024)
+    try:
+        import esphome.core as _core3
+        for lconf in _core3.CORE.config.get("light", []):
+            lid = lconf.get("id")
+            if lid is None:
+                continue
+            # Check if this light has any addressable_cfx effects
+            has_cfx = any(
+                eff_conf.get("platform") == "addressable_cfx" or
+                eff_conf.get("type") == "addressable_cfx"
+                for eff_conf in lconf.get("effects", [])
+            )
+            if has_cfx:
+                tag = lid.id
+                if tag not in seen_tags:
+                    seen_tags.append(tag)
+    except Exception:
+        pass  # Non-fatal — sequence lights are already covered above
+
     # Compile-time milestone step — must match CFXEventManager::progress_step_
     # default in cfx_sequence.h (currently 5). The runtime number entity can
     # change this, but the event_types list is static — we enumerate the full
@@ -265,14 +287,6 @@ async def to_code(config):
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
-        # CFX-023: strip identity tag — use the first light's object_id as the
-        # canonical tag for this sequence. Multi-light sequences are rare and
-        # the tag is used only for HA event discrimination, not LED rendering.
-        lights_list = seq_conf.get(CONF_LIGHTS, [])
-        if lights_list:
-            strip_tag = lights_list[0].id  # e.g. "living_room_strip"
-            cg.add(var.set_strip_tag(strip_tag))
-
         # CFX-023: opt-in cfx_pixel events to HA
         ha_pixel = seq_conf.get(CONF_HA_PIXEL_EVENTS, False)
         cg.add(var.set_ha_pixel_enabled(ha_pixel))
@@ -370,35 +384,6 @@ async def to_code(config):
                 await cg.register_component(svc_var, {})
         except Exception:
             pass  # Non-fatal: service handler is advisory only
-
-    # CFX-024: Inject strip_tag into every addressable_cfx effect instance
-    # that belongs to a light referenced by any sequence. This ensures bare
-    # effects (run directly without a sequence) also carry the strip tag so
-    # cfx_reach:<tag>:<milestone> strings are built correctly at runtime.
-    # Effects on lights NOT in any sequence are left untagged (bare cfx_reach).
-    try:
-        import esphome.core as _core2
-        light_configs = _core2.CORE.config.get("light", [])
-        for lconf in light_configs:
-            # Get this light's object id — the tag value
-            lid = lconf.get("id")
-            if lid is None:
-                continue
-            tag = lid.id  # e.g. "ws_strip"
-            if tag not in seen_tags:
-                continue  # only tag lights that are referenced by a sequence
-            # Walk the effects list for this light
-            for eff_conf in lconf.get("effects", []):
-                eff_id = eff_conf.get("id")
-                if eff_id is None:
-                    continue
-                try:
-                    eff_var = await cg.get_variable(eff_id)
-                    cg.add(eff_var.set_strip_tag(tag))
-                except Exception:
-                    pass  # effect not yet registered or wrong type — skip
-    except Exception:
-        pass  # Non-fatal: bare effects fall back to untagged cfx_reach
 
 @automation.register_action(
     "cfx_sequence.start",

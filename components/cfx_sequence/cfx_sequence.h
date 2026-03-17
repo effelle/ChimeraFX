@@ -64,10 +64,7 @@ public:
   // Strip tag: set once at start() time from the effect adapter.
   // Stored here so check_milestones/pixel_advanced can build tagged event
   // strings without the caller passing it on every hot-path call. (CFX-023)
-  void set_strip_tag(const std::string &tag) {
-    this->strip_tag_ = tag;
-    ESP_LOGW("cfx_sequence", "CFXEventManager: strip_tag set to '%s'", tag.c_str());
-  }
+  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
   const std::string &get_strip_tag() const { return this->strip_tag_; }
 
   // cfx_pixel opt-in: when false, pixel_advanced() updates the sensor but
@@ -158,15 +155,6 @@ public:
   void set_duration_ms(uint32_t ms) { this->duration_ms_ = ms; }
   uint32_t get_duration_ms() const { return this->duration_ms_; }
 
-  // Strip identity tag passed to bound effects at start() time so the effect's
-  // start() pushes it into CFXEventManager for tagged cfx_reach/cfx_pixel. (CFX-023)
-  void set_strip_tag(const std::string &tag) {
-    this->strip_tag_ = tag;
-    ESP_LOGW("cfx_sequence", "CFXSequence '%s': strip_tag set to '%s'",
-             this->name_.c_str(), tag.c_str());
-  }
-  const std::string &get_strip_tag() const { return this->strip_tag_; }
-
   // Opt-in flag for cfx_pixel events to HA. Passed to bound effects at
   // start() time and forwarded to CFXEventManager. (CFX-023)
   void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
@@ -228,7 +216,6 @@ protected:
   uint16_t pixel_step_{0};  // 0 = auto-computed
   bool restore_state_{true};
   uint32_t duration_ms_{0};
-  std::string strip_tag_{};   // CFX-023: light object_id injected by codegen
   bool ha_pixel_enabled_{false}; // CFX-023: opt-in cfx_pixel to HA
   uint32_t duration_start_ms_{0};
   bool duration_complete_fired_{false};

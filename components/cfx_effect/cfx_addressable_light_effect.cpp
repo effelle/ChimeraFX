@@ -185,12 +185,21 @@ void CFXAddressableLightEffect::start() {
   // For sequence-driven effects StartAction::play() also calls this, which
   // is harmless (idempotent reset).
   cfx_sequence::CFXEventManager::get().reset_milestones();
-  // Push strip identity and pixel opt-in flag into the singleton.
-  // Only overwrite when this effect's own tag is non-empty — if it is empty,
-  // the sequence may have pre-loaded the correct tag already and we must not
-  // clobber it with an empty string. (CFX-024)
-  if (!this->strip_tag_.empty()) {
-    cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
+  // Derive strip tag at runtime from the parent LightState's object_id.
+  // This is the same value as the YAML 'id:' field and matches the
+  // event_types strings registered at compile time (e.g. "led_strip").
+  // Doing this at runtime means bare effects (run without a sequence)
+  // automatically get the correct tag without any codegen injection. (CFX-024)
+  {
+    auto *ls = this->get_light_state();
+    if (ls != nullptr) {
+      std::string derived_tag = ls->get_object_id();
+      ESP_LOGW("chimera_fx", "start(): light name='%s' object_id='%s'",
+               ls->get_name().c_str(), derived_tag.c_str());
+      if (!derived_tag.empty()) {
+        cfx_sequence::CFXEventManager::get().set_strip_tag(derived_tag);
+      }
+    }
     cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   }
   cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
