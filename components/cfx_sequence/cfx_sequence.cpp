@@ -306,6 +306,7 @@ void CFXSequence::start() {
   // correct tag when start() runs, so the first cfx_start event and all
   // subsequent milestone events carry the right strip identity.
   if (!this->strip_tag_.empty()) {
+    ESP_LOGD(TAG, "  Pre-loading strip tag '%s' into CFXEventManager", this->strip_tag_.c_str());
     cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
     cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   }
