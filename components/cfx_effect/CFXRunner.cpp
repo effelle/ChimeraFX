@@ -5792,6 +5792,12 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (back)
     prog -= 32767; // Normalize prog 0..32767
 
+  // CFX-022: Expose the return/erase phase to the event adapter so milestone
+  // and cfx_pixel events are suppressed during the back-sweep and only fire
+  // on the genuine forward (fill) pass. Covers color_wipe, color_wipe_random,
+  // and color_sweep (all route through this function).
+  instance->is_return_phase_ = back;
+
   if (useRandomColors) {
     // Initialization
     if (instance->_segment.call == 0) {
