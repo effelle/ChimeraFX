@@ -649,21 +649,25 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
 
 void CFXProgressStepNumber::setup() {
   uint8_t restored;
-  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
+  // CFX-022: XOR with version salt 0x01 to invalidate the old preference slot
+  // that stored the step-10 default. Devices upgrading from pre-CFX-022 will
+  // not find a saved value here and will correctly fall back to step-5.
+  // Users who explicitly saved a custom value before this version will need to
+  // set it once more from the HA UI — a one-time migration cost.
+  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash() ^ 0x01u);
   if (this->pref_.load(&restored)) {
     this->publish_state(restored);
     CFXEventManager::get().set_progress_step(restored);
   } else {
-    this->publish_state(10.0f); // Default 10%
-    CFXEventManager::get().set_progress_step(10);
+    this->publish_state(5.0f); // Default 5% (CFX-022)
+    CFXEventManager::get().set_progress_step(5);
   }
 }
 
 void CFXProgressStepNumber::control(float value) {
   uint8_t step = (uint8_t)value;
   this->publish_state(value);
-  this->pref_.save(&step);
-  
+  this->pref_.save(&step); // saves to the CFX-022 slot (hash ^ 0x01)
   CFXEventManager::get().set_progress_step(step);
 }
 
