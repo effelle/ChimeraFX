@@ -178,6 +178,13 @@ void CFXAddressableLightEffect::start() {
 #ifdef USE_CFX_SEQUENCE
   // cfx_start fires for ALL effects unconditionally — every path, every
   // effect type. start() is the single universal entry point.
+  // Reset milestone tracking here so standalone effects (not bound to a
+  // cfx_sequence) always begin their milestone counter from 0. Without this,
+  // last_fired_milestone_ retains its value from the previous effect run,
+  // causing the first N milestones of the new effect to be silently skipped.
+  // For sequence-driven effects StartAction::play() also calls this, which
+  // is harmless (idempotent reset).
+  cfx_sequence::CFXEventManager::get().reset_milestones();
   cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
 #endif
 
