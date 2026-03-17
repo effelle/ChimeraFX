@@ -119,6 +119,8 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
+    ESP_LOGW("cfx_seq", "pass=%u milestone=%u fired", (unsigned)this->pass_count_, (unsigned)this->last_fired_milestone_);
+
     // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
     // milestone_events_[i] was built in set_strip_tag() for milestone index
     // (last_fired_milestone_ / progress_step_) - 1.

@@ -82,7 +82,10 @@ public:
 
   // High-level milestone logic (shared for Sequence and Manual)
   void check_milestones(float current_pct);
-  void reset_milestones() { this->last_fired_milestone_ = 0; }
+  void reset_milestones() {
+    this->last_fired_milestone_ = 0;
+    this->pass_count_++;
+  }
   void pixel_advanced(uint16_t pixel);
 
   // Returns true if check_milestones() fired cfx_reach during this frame.
@@ -131,6 +134,7 @@ protected:
 
   uint8_t progress_step_{5};
   uint8_t last_fired_milestone_{0};
+  uint16_t pass_count_{0};  // diagnostic: increments on each reset_milestones()
 
   // Set to true for the remainder of the frame in which cfx_reach fires.
   // cfx_pixel is suppressed on that same frame to guarantee cfx_reach arrives
