@@ -66,18 +66,33 @@ public:
   void reset_milestones() { this->last_fired_milestone_ = 0; }
   void pixel_advanced(uint16_t pixel);
 
+  // Returns true if check_milestones() fired cfx_reach during this frame.
+  // Used by the effect adapter to suppress cfx_pixel on the same frame so
+  // cfx_reach always arrives in its own WebSocket frame to HA. (CFX-022)
+  bool was_milestone_fired() const { return this->milestone_fired_this_frame_; }
+  void clear_milestone_fired() { this->milestone_fired_this_frame_ = false; }
+
 protected:
   CFXEventManager() = default;
   esphome::event::Event *event_entity_{nullptr};
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   
-  uint8_t progress_step_{10};
+  uint8_t progress_step_{5};
   uint8_t last_fired_milestone_{0};
 
-  // Ring buffer for deferred events
-  static constexpr uint8_t PENDING_QUEUE_SIZE = 2;
-  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr};
+  // Set to true for the remainder of the frame in which cfx_reach fires.
+  // cfx_pixel is suppressed on that same frame to guarantee cfx_reach arrives
+  // in its own WebSocket frame and HA automation conditions see the updated
+  // sensor state before the next event fires.
+  bool milestone_fired_this_frame_{false};
+
+  // Ring buffer for deferred events.
+  // Size 3: accommodates cfx_reach + cfx_complete queued simultaneously on the
+  // final milestone frame, plus one spare slot so the buffer never reads full
+  // when only 2 events are pending. (CFX-022)
+  static constexpr uint8_t PENDING_QUEUE_SIZE = 3;
+  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr};
   std::atomic<uint8_t> pending_write_{0}; // CFX-021: atomic to guard queue head/tail across tasks
   std::atomic<uint8_t> pending_read_{0};  // CFX-021: atomic to guard queue head/tail across tasks
 

@@ -45,10 +45,9 @@ void CFXEventManager::fire_event(const char *type) {
 }
 
 void CFXEventManager::queue_event(const char *type) {
-  // Two-slot ring buffer. Only string literals are stored (permanent
-  // lifetime). If both slots are occupied the new event is dropped — this
-  // cannot happen in normal operation since at most two events are queued
-  // per tick (cfx_reach + cfx_pixel).
+  // Three-slot ring buffer (CFX-022). Only string literals are stored
+  // (permanent lifetime). If all slots are occupied the new event is dropped.
+  // Normal operation queues at most cfx_complete + one other event per tick.
   uint8_t next = (this->pending_write_ + 1) % PENDING_QUEUE_SIZE;
   if (next == this->pending_read_) {
     ESP_LOGW("cfx_sequence", "queue_event: queue full, dropping '%s'", type);
@@ -100,13 +99,22 @@ void CFXEventManager::report_last_pixel(int32_t pixel) {
 void CFXEventManager::check_milestones(float current_pct) {
   if (this->progress_step_ == 0) return;
 
+  // Always reset the per-frame flag at the start of each check so callers
+  // can reliably test it after this call. (CFX-022)
+  this->milestone_fired_this_frame_ = false;
+
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
   if (current_pct >= next_milestone) {
     this->last_fired_milestone_ = next_milestone;
-    // Send the exact milestone (e.g. 50.0) instead of the actual fractional
-    // percentage (e.g. 51.2) so HA state triggers matching exactly "50" fire.
+    // Send the exact milestone value (e.g. 25.0) so HA numeric_state
+    // conditions matching that threshold fire reliably.
     this->report_progress((float)next_milestone);
-    this->queue_event("cfx_reach");
+    // Fire cfx_reach directly (not via queue) so it is guaranteed to land
+    // in its own WebSocket frame before any subsequent cfx_pixel.
+    // The caller (check_positional_triggers in cfx_addressable_light_effect)
+    // reads was_milestone_fired() and skips cfx_pixel on this frame. (CFX-022)
+    this->milestone_fired_this_frame_ = true;
+    this->fire_event("cfx_reach");
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestone counter when a new forward pass begins.
     // check_milestones is only called during the forward pass (the adapter
@@ -116,7 +124,7 @@ void CFXEventManager::check_milestones(float current_pct) {
     // The >= 100 guard handles both exact and non-exact step divisors:
     // - last_fired_milestone_ >= 100: step divides evenly into 100
     // - current_pct >= 100.0f: step does NOT divide evenly (last milestone
-    //   is e.g. 98 for step=7), but actual percentage reached 100.0
+    //   is e.g. 95 for step=5), but actual percentage reached 100.0
     if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
       this->last_fired_milestone_ = 0;
     }

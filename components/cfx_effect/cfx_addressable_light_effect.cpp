@@ -5163,20 +5163,27 @@ void CFXAddressableLightEffect::check_positional_triggers(
     }
 
     // cfx_pixel: only fire on the forward pass.
+    // Suppressed on any frame where cfx_reach fired, so that cfx_reach always
+    // arrives in its own WebSocket frame and HA automation conditions have time
+    // to evaluate the updated sensor state. (CFX-022)
     // Auto-throttle: target ~30 events per sweep regardless of strip length.
     {
-      uint16_t step;
-      if (this->cfx_pixel_step_ > 0) {
-        step = this->cfx_pixel_step_;
-      } else {
-        step = (uint16_t)((total_pixels + 29) / 30);
-        if (step < 1) step = 1;
-      }
-      if (this->last_cfx_pixel_pixel_ < 0 ||
-          abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
-        this->last_cfx_pixel_pixel_ = current_pixel;
-        cfx_sequence::CFXEventManager::get().pixel_advanced(
-            (uint16_t)current_pixel);
+      bool milestone_just_fired = cfx_sequence::CFXEventManager::get().was_milestone_fired();
+      cfx_sequence::CFXEventManager::get().clear_milestone_fired();
+      if (!milestone_just_fired) {
+        uint16_t step;
+        if (this->cfx_pixel_step_ > 0) {
+          step = this->cfx_pixel_step_;
+        } else {
+          step = (uint16_t)((total_pixels + 29) / 30);
+          if (step < 1) step = 1;
+        }
+        if (this->last_cfx_pixel_pixel_ < 0 ||
+            abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
+          this->last_cfx_pixel_pixel_ = current_pixel;
+          cfx_sequence::CFXEventManager::get().pixel_advanced(
+              (uint16_t)current_pixel);
+        }
       }
     }
   }
