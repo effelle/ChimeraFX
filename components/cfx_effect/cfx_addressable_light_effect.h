@@ -204,8 +204,12 @@ public:
   uint16_t cfx_pixel_step_{0};  // 0 = auto-computed from strip length
   void set_cfx_pixel_step(uint16_t step) { this->cfx_pixel_step_ = step; }
 
-  // Opt-in flag for firing cfx_pixel to HA. Set by codegen when the sequence
-  // YAML contains 'ha_pixel_events: true'. (CFX-023)
+  // Strip tag — set by CFXSequence::start() via bind loop. Also derived at
+  // runtime from get_object_id() in start() as fallback. (CFX-024)
+  std::string strip_tag_{};
+  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
+
+  // Opt-in flag for firing cfx_pixel to HA. (CFX-023)
   bool ha_pixel_enabled_{false};
   void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
 

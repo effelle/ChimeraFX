@@ -155,6 +155,11 @@ public:
   void set_duration_ms(uint32_t ms) { this->duration_ms_ = ms; }
   uint32_t get_duration_ms() const { return this->duration_ms_; }
 
+  // Strip identity tag — YAML id of the first target light, injected by
+  // codegen. Pre-loaded into CFXEventManager before perform() fires. (CFX-024)
+  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
+  const std::string &get_strip_tag() const { return this->strip_tag_; }
+
   // Opt-in flag for cfx_pixel events to HA. Passed to bound effects at
   // start() time and forwarded to CFXEventManager. (CFX-023)
   void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
@@ -216,6 +221,7 @@ protected:
   uint16_t pixel_step_{0};  // 0 = auto-computed
   bool restore_state_{true};
   uint32_t duration_ms_{0};
+  std::string strip_tag_{};      // CFX-024: YAML id of first target light
   bool ha_pixel_enabled_{false}; // CFX-023: opt-in cfx_pixel to HA
   uint32_t duration_start_ms_{0};
   bool duration_complete_fired_{false};

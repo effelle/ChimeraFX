@@ -151,25 +151,33 @@ async def to_code(config):
 
     # Also collect tags for ALL lights on the device that have addressable_cfx
     # effects — so bare effects (run without a sequence) also get tagged events.
-    # We walk CORE.config['light'] looking for effects lists. (CFX-024)
+    # get_object_id() at runtime == YAML id field, so lid.id is the right tag. (CFX-024)
     try:
         import esphome.core as _core3
         for lconf in _core3.CORE.config.get("light", []):
             lid = lconf.get("id")
             if lid is None:
                 continue
-            # Check if this light has any addressable_cfx effects
-            has_cfx = any(
-                eff_conf.get("platform") == "addressable_cfx" or
-                eff_conf.get("type") == "addressable_cfx"
-                for eff_conf in lconf.get("effects", [])
-            )
+            tag = lid.id
+            if tag in seen_tags:
+                continue
+            # Effects in ESPHome light config may be stored under different keys
+            # depending on version. Scan all effect entries broadly.
+            effects_list = lconf.get("effects", [])
+            has_cfx = False
+            for eff_conf in effects_list:
+                for key in ("platform", "type", "name"):
+                    val = str(eff_conf.get(key, "")).lower()
+                    if "addressable_cfx" in val or val == "cfx":
+                        has_cfx = True
+                        break
+                if has_cfx:
+                    break
             if has_cfx:
-                tag = lid.id
-                if tag not in seen_tags:
-                    seen_tags.append(tag)
-    except Exception:
-        pass  # Non-fatal — sequence lights are already covered above
+                _LOGGER.info("CFX: adding bare-effect tag '%s' to event_types", tag)
+                seen_tags.append(tag)
+    except Exception as ex:
+        _LOGGER.debug("CFX: CORE.config walk failed: %s", ex)
 
     # Compile-time milestone step — must match CFXEventManager::progress_step_
     # default in cfx_sequence.h (currently 5). The runtime number entity can
@@ -286,6 +294,16 @@ async def to_code(config):
             cg.add(var.set_pixel_step(seq_conf[CONF_PIXEL_STEP]))
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
+
+        # CFX-024: strip identity tag from the first light's YAML id.
+        # This drives the pre-load in CFXSequence::start() which pushes the
+        # tag into CFXEventManager BEFORE perform() fires the effect's start().
+        # The effect's start() also derives the tag at runtime via get_object_id()
+        # as a fallback for bare effects (run without a sequence).
+        lights_list = seq_conf.get(CONF_LIGHTS, [])
+        if lights_list:
+            strip_tag = lights_list[0].id
+            cg.add(var.set_strip_tag(strip_tag))
 
         # CFX-023: opt-in cfx_pixel events to HA
         ha_pixel = seq_conf.get(CONF_HA_PIXEL_EVENTS, False)

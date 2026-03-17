@@ -299,6 +299,16 @@ void CFXSequence::start() {
     }
   }
 
+  // CFX-024: Pre-load strip tag into CFXEventManager before perform() fires
+  // the effect's start(). The effect's start() also derives the tag via
+  // get_object_id() but doing it here ensures the singleton is primed even
+  // if get_object_id() and the YAML id differ.
+  if (!this->strip_tag_.empty()) {
+    ESP_LOGD(TAG, "  Pre-loading strip tag '%s' into CFXEventManager", this->strip_tag_.c_str());
+    cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
+    cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
+  }
+
   // Activate effect on all target lights
   for (auto *l : this->lights_) {
     auto call = l->make_call();
@@ -339,6 +349,7 @@ void CFXSequence::start() {
         ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
+        inst->set_strip_tag(this->strip_tag_);
         inst->set_ha_pixel_enabled(this->ha_pixel_enabled_);
         bound = true;
         // Do not break! Match other lights as well.
@@ -364,6 +375,7 @@ void CFXSequence::start() {
              this->name_.c_str(), target_names.c_str(), master_fx);
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
+    master_fx->set_strip_tag(this->strip_tag_);
     master_fx->set_ha_pixel_enabled(this->ha_pixel_enabled_);
     bound = true;
   }
