@@ -119,19 +119,16 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
-    // Build event type string with milestone encoded:
-    //   cfx_reach:<tag>:<milestone>   e.g. "cfx_reach:ws_strip:75"
-    // Every milestone fires a UNIQUE string so HA's state trigger fires
-    // unconditionally — no dependency on cfx_idle as a value separator.
-    // Bare "cfx_reach" kept as fallback when no strip tag is set. (CFX-024)
-    if (!this->strip_tag_.empty()) {
-      // itoa on ESP32 is fast; avoid std::to_string heap alloc on hot path.
-      char milestone_str[4];
-      snprintf(milestone_str, sizeof(milestone_str), "%u", (unsigned)next_milestone);
-      std::string tagged = "cfx_reach:" + this->strip_tag_ + ":" + milestone_str;
-      this->fire_event(tagged.c_str());
-    } else {
-      this->fire_event("cfx_reach");
+    // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
+    // milestone_events_[i] was built in set_strip_tag() for milestone index
+    // (last_fired_milestone_ / progress_step_) - 1.
+    {
+      uint8_t idx = (this->last_fired_milestone_ / this->progress_step_) - 1;
+      if (idx < MAX_MILESTONES) {
+        this->fire_event(this->milestone_events_[idx].c_str());
+      } else {
+        this->fire_event("cfx_reach"); // fallback, should not happen
+      }
     }
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestone counter when a new forward pass begins.
@@ -150,19 +147,12 @@ void CFXEventManager::check_milestones(float current_pct) {
 }
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
-  this->report_last_pixel((int32_t)pixel);
-  // cfx_pixel to HA is opt-in (ha_pixel_events: true in YAML). (CFX-023)
-  // On-device on_cfx_pixel YAML triggers are unaffected — they fire in
-  // cfx_addressable_light_effect.cpp before this function is called.
+  // Both the sensor update and the event are opt-in. When ha_pixel_enabled_
+  // is false there is nothing to do — skip all API work entirely. (CFX-024)
   if (!this->ha_pixel_enabled_) return;
-  // Fire tagged "cfx_pixel:<strip>" when a strip tag is set; bare "cfx_pixel"
-  // as fallback when no tag is configured. Mirrors cfx_reach behaviour. (CFX-023)
-  if (!this->strip_tag_.empty()) {
-    std::string tagged = "cfx_pixel:" + this->strip_tag_;
-    this->fire_event(tagged.c_str());
-  } else {
-    this->fire_event("cfx_pixel");
-  }
+  this->report_last_pixel((int32_t)pixel);
+  // Use pre-computed tagged string — no heap allocation on hot path. (CFX-024)
+  this->fire_event(this->cfx_pixel_tagged_.c_str());
 }
 
 void CFXSequenceSelect::setup() {

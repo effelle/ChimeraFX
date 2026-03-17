@@ -53,7 +53,10 @@ public:
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
-  void set_progress_step(uint8_t step) { this->progress_step_ = step; }
+  void set_progress_step(uint8_t step) {
+    this->progress_step_ = step;
+    this->rebuild_milestone_strings_();
+  }
 
   void fire_event(const char *type);
   void queue_event(const char *type);
@@ -62,9 +65,13 @@ public:
   void report_last_pixel(int32_t pixel);
 
   // Strip tag: set once at start() time from the effect adapter.
-  // Stored here so check_milestones/pixel_advanced can build tagged event
-  // strings without the caller passing it on every hot-path call. (CFX-023)
-  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
+  // Also rebuilds the pre-computed milestone event strings. (CFX-024)
+  void set_strip_tag(const std::string &tag) {
+    this->strip_tag_ = tag;
+    this->rebuild_milestone_strings_();
+    // Pre-compute cfx_pixel tagged string too.
+    this->cfx_pixel_tagged_ = tag.empty() ? "cfx_pixel" : ("cfx_pixel:" + tag);
+  }
   const std::string &get_strip_tag() const { return this->strip_tag_; }
 
   // cfx_pixel opt-in: when false, pixel_advanced() updates the sensor but
@@ -93,6 +100,30 @@ protected:
   // Strip identity tag — set by the effect adapter at start() time.
   // Used to build tagged event strings: "cfx_reach:strip_a". (CFX-023)
   std::string strip_tag_{};
+
+  // Pre-computed milestone event strings: milestone_events_[i] holds the
+  // string for milestone value (i+1)*progress_step_, e.g. "cfx_reach:ws_strip:5".
+  // Built once in set_strip_tag() so check_milestones() does zero allocation
+  // on the hot path. (CFX-024)
+  static constexpr uint8_t MAX_MILESTONES = 20; // 5..100 in steps of 5
+  std::string milestone_events_[MAX_MILESTONES];
+  std::string cfx_pixel_tagged_{"cfx_pixel"};
+
+  void rebuild_milestone_strings_() {
+    if (this->strip_tag_.empty()) {
+      for (uint8_t i = 0; i < MAX_MILESTONES; i++)
+        milestone_events_[i] = "cfx_reach";
+      this->cfx_pixel_tagged_ = "cfx_pixel";
+      return;
+    }
+    char buf[64];
+    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
+      uint8_t m = (i + 1) * this->progress_step_;
+      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
+      milestone_events_[i] = buf;
+    }
+    this->cfx_pixel_tagged_ = "cfx_pixel:" + this->strip_tag_;
+  }
 
   // When false, pixel_advanced() updates the last_pixel sensor but does NOT
   // fire cfx_pixel to HA. Opt-in via YAML 'ha_pixel_events: true'. (CFX-023)
