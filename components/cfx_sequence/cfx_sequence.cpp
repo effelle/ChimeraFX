@@ -34,10 +34,14 @@ CFXEventManager &CFXEventManager::get() {
 void CFXEventManager::fire_event(const char *type) {
   if (this->event_entity_ != nullptr) {
     this->event_entity_->trigger(type);
-    // cfx_complete and cfx_start fire once per sequence — no idle reset.
-    // High-frequency events like cfx_pixel benefit from an immediate idle
-    // scheduling to ensure the state transition is visible in HA.
-    if (strcmp(type, "cfx_complete") != 0 && strcmp(type, "cfx_start") != 0) {
+    // cfx_start and cfx_complete are one-shot lifecycle events — no idle.
+    // cfx_reach:<tag>:<milestone> strings are unique per firing so HA state
+    // trigger fires unconditionally; idle is not needed as a separator.
+    // Only cfx_pixel benefits from idle scheduling so HA sees the transition.
+    bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
+                          strncmp(type, "cfx_start",    9)  == 0 ||
+                          strncmp(type, "cfx_reach",    9)  == 0);
+    if (!suppress_idle) {
       this->pending_idle_ = true;
       this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
@@ -66,8 +70,12 @@ void CFXEventManager::flush_pending() {
     const char *evt = this->pending_events_[this->pending_read_];
     this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
     this->event_entity_->trigger(evt);
-    // cfx_complete and cfx_start fire once per sequence — no idle reset.
-    if (strcmp(evt, "cfx_complete") != 0 && strcmp(evt, "cfx_start") != 0) {
+    // Mirror fire_event's idle suppression: cfx_start, cfx_complete, and any
+    // cfx_reach variant don't need idle scheduling. (CFX-024)
+    bool suppress_idle = (strncmp(evt, "cfx_complete", 12) == 0 ||
+                          strncmp(evt, "cfx_start",    9)  == 0 ||
+                          strncmp(evt, "cfx_reach",    9)  == 0);
+    if (!suppress_idle) {
       this->pending_idle_ = true;
       this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
@@ -106,20 +114,21 @@ void CFXEventManager::check_milestones(float current_pct) {
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
   if (current_pct >= next_milestone) {
     this->last_fired_milestone_ = next_milestone;
-    // Send the exact milestone value (e.g. 25.0) so HA numeric_state
-    // conditions matching that threshold fire reliably.
+    // Publish exact milestone value to the progress sensor for diagnostics.
     this->report_progress((float)next_milestone);
-    // Fire cfx_reach directly (not via queue) so it is guaranteed to land
-    // in its own WebSocket frame before any subsequent cfx_pixel.
-    // The caller reads was_milestone_fired() and skips cfx_pixel this frame.
-    // (CFX-022)
+
     this->milestone_fired_this_frame_ = true;
-    // Fire tagged "cfx_reach:<strip>" when a strip tag is set. Single-strip
-    // users configure the tag via the YAML light id; multi-strip users get
-    // unambiguous per-strip events. When no tag is set (edge case: manual
-    // effect with no sequence bound) fall back to bare "cfx_reach". (CFX-023)
+
+    // Build event type string with milestone encoded:
+    //   cfx_reach:<tag>:<milestone>   e.g. "cfx_reach:ws_strip:75"
+    // Every milestone fires a UNIQUE string so HA's state trigger fires
+    // unconditionally — no dependency on cfx_idle as a value separator.
+    // Bare "cfx_reach" kept as fallback when no strip tag is set. (CFX-024)
     if (!this->strip_tag_.empty()) {
-      std::string tagged = "cfx_reach:" + this->strip_tag_;
+      // itoa on ESP32 is fast; avoid std::to_string heap alloc on hot path.
+      char milestone_str[4];
+      snprintf(milestone_str, sizeof(milestone_str), "%u", (unsigned)next_milestone);
+      std::string tagged = "cfx_reach:" + this->strip_tag_ + ":" + milestone_str;
       this->fire_event(tagged.c_str());
     } else {
       this->fire_event("cfx_reach");

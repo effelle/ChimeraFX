@@ -149,14 +149,27 @@ async def to_code(config):
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
+    # Compile-time milestone step — must match CFXEventManager::progress_step_
+    # default in cfx_sequence.h (currently 5). The runtime number entity can
+    # change this, but the event_types list is static — we enumerate the full
+    # 5-step grid so all standard milestone strings are always declared. (CFX-024)
+    progress_step = 5
+
     event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
-    # Bare cfx_reach and cfx_pixel are declared as fallback for the edge case
-    # where no strip tag is configured (e.g. manual effect with no sequence).
-    # In normal operation only the tagged variants fire. (CFX-023)
+    # Bare fallbacks: fired when no strip tag is configured (edge case).
     event_types += ["cfx_reach", "cfx_pixel"]
-    # Per-strip tagged variants — always add cfx_reach:<tag> for every light.
+
+    # Per-strip milestone events: cfx_reach:<tag>:<milestone>
+    # Each milestone value produces a UNIQUE event_type string so HA's state
+    # trigger fires unconditionally on every pass — no cfx_idle separator
+    # needed. Milestones enumerated from step to 100 inclusive. (CFX-024)
+    milestones = list(range(progress_step, 101, progress_step))
+    if 100 not in milestones:
+        milestones.append(100)  # always include 100 regardless of step divisibility
     for tag in seen_tags:
-        event_types.append(f"cfx_reach:{tag}")
+        for m in milestones:
+            event_types.append(f"cfx_reach:{tag}:{m}")
+
     # cfx_pixel:<tag> only when at least one sequence opts in.
     if any_pixel:
         for tag in seen_tags:
