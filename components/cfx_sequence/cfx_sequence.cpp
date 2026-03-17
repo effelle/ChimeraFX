@@ -111,10 +111,19 @@ void CFXEventManager::check_milestones(float current_pct) {
     this->report_progress((float)next_milestone);
     // Fire cfx_reach directly (not via queue) so it is guaranteed to land
     // in its own WebSocket frame before any subsequent cfx_pixel.
-    // The caller (check_positional_triggers in cfx_addressable_light_effect)
-    // reads was_milestone_fired() and skips cfx_pixel on this frame. (CFX-022)
+    // The caller reads was_milestone_fired() and skips cfx_pixel this frame.
+    // (CFX-022)
     this->milestone_fired_this_frame_ = true;
+    // Fire bare "cfx_reach" for single-strip / backward-compat users.
     this->fire_event("cfx_reach");
+    // Fire tagged "cfx_reach:<strip>" when a strip tag is set so multi-strip
+    // HA automations can discriminate which strip crossed the milestone. (CFX-023)
+    if (!this->strip_tag_.empty()) {
+      // Build "cfx_reach:<tag>" on the stack — safe for the trigger() call
+      // duration since ESPHome event entity copies the string internally.
+      std::string tagged = "cfx_reach:" + this->strip_tag_;
+      this->fire_event(tagged.c_str());
+    }
   } else if (current_pct < this->last_fired_milestone_) {
     // Reset milestone counter when a new forward pass begins.
     // check_milestones is only called during the forward pass (the adapter
@@ -133,10 +142,17 @@ void CFXEventManager::check_milestones(float current_pct) {
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
   this->report_last_pixel((int32_t)pixel);
-  // Fire immediately rather than via queue_event().
-  // sensor.cfx_last_pixel is published in the line above, so there is no
-  // race between sensor state and trigger evaluation.
+  // cfx_pixel to HA is opt-in (ha_pixel_events: true in YAML). (CFX-023)
+  // On-device on_cfx_pixel YAML triggers are unaffected — they fire in
+  // cfx_addressable_light_effect.cpp before this function is called.
+  if (!this->ha_pixel_enabled_) return;
+  // Fire bare "cfx_pixel" for single-strip / backward-compat users.
   this->fire_event("cfx_pixel");
+  // Fire tagged "cfx_pixel:<strip>" when a strip tag is set. (CFX-023)
+  if (!this->strip_tag_.empty()) {
+    std::string tagged = "cfx_pixel:" + this->strip_tag_;
+    this->fire_event(tagged.c_str());
+  }
 }
 
 void CFXSequenceSelect::setup() {
@@ -296,6 +312,10 @@ void CFXSequence::start() {
         ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
+        // CFX-023: push strip identity and pixel opt-in onto the effect so its
+        // start() can forward them into CFXEventManager.
+        inst->set_strip_tag(this->strip_tag_);
+        inst->set_ha_pixel_enabled(this->ha_pixel_enabled_);
         bound = true;
         // Do not break! Match other lights as well.
       }
@@ -320,6 +340,9 @@ void CFXSequence::start() {
              this->name_.c_str(), target_names.c_str(), master_fx);
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
+    // CFX-023: push strip identity and pixel opt-in onto the fallback effect.
+    master_fx->set_strip_tag(this->strip_tag_);
+    master_fx->set_ha_pixel_enabled(this->ha_pixel_enabled_);
     bound = true;
   }
 

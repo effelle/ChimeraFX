@@ -185,6 +185,11 @@ void CFXAddressableLightEffect::start() {
   // For sequence-driven effects StartAction::play() also calls this, which
   // is harmless (idempotent reset).
   cfx_sequence::CFXEventManager::get().reset_milestones();
+  // Push strip identity and pixel opt-in flag into the singleton so
+  // check_milestones/pixel_advanced can build tagged event strings without
+  // needing the tag passed on every hot-path call. (CFX-023)
+  cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
+  cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
 #endif
 

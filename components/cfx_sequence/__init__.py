@@ -45,6 +45,7 @@ CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_PIXEL_STEP = "pixel_step"
 CONF_DURATION = "duration"
+CONF_HA_PIXEL_EVENTS = "ha_pixel_events"  # CFX-023: opt-in cfx_pixel to HA
 
 # Inherited constants
 CONF_ON_START = "on_cfx_start"
@@ -69,6 +70,7 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_PIXEL_STEP, default=0): cv.int_range(min=0, max=255),
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_HA_PIXEL_EVENTS, default=False): cv.boolean,
         
         # Triggers
         cv.Optional(CONF_ON_START): automation.validate_automation(
@@ -124,13 +126,40 @@ async def to_code(config):
     except Exception:
         pass  # Non-fatal: warning is advisory only
 
-    # Create global event entity for all sequences (one per device)
+    # Create global event entity for all sequences (one per device).
+    # event_types always includes the bare types (single-strip / backward-compat).
+    # For each light referenced by any sequence we also add per-strip tagged
+    # variants so HA automations can discriminate which strip fired. (CFX-023)
+    # cfx_pixel:<tag> is only added when at least one sequence sets
+    # ha_pixel_events: true, keeping the type list lean by default.
     import esphome.core as core
     event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
     event_var = cg.new_Pvariable(event_id)
     core.CORE.component_ids.add("cfx_global_events")
 
-    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_pixel", "cfx_idle"]
+    # Collect unique light object_ids and ha_pixel opt-in flags across all sequences.
+    seen_tags = []
+    any_pixel = False
+    for seq_conf in config:
+        lights = seq_conf.get(CONF_LIGHTS, [])
+        if seq_conf.get(CONF_HA_PIXEL_EVENTS, False):
+            any_pixel = True
+        for lid in lights:
+            tag = lid.id  # raw YAML id string, e.g. "living_room_strip"
+            if tag not in seen_tags:
+                seen_tags.append(tag)
+
+    event_types = ["cfx_start", "cfx_complete", "cfx_reach", "cfx_idle"]
+    # Always include bare cfx_pixel so on-device parity is preserved even
+    # when HA pixel events are disabled — the type must be declared even if
+    # the runtime guard prevents it from firing.
+    event_types.append("cfx_pixel")
+    # Per-strip tagged variants (CFX-023)
+    for tag in seen_tags:
+        event_types.append(f"cfx_reach:{tag}")
+    if any_pixel:
+        for tag in seen_tags:
+            event_types.append(f"cfx_pixel:{tag}")
     event_conf = {
         "id": event_id,
         "name": "CFX Events",
@@ -221,6 +250,18 @@ async def to_code(config):
             cg.add(var.set_pixel_step(seq_conf[CONF_PIXEL_STEP]))
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
+
+        # CFX-023: strip identity tag — use the first light's object_id as the
+        # canonical tag for this sequence. Multi-light sequences are rare and
+        # the tag is used only for HA event discrimination, not LED rendering.
+        lights_list = seq_conf.get(CONF_LIGHTS, [])
+        if lights_list:
+            strip_tag = lights_list[0].id  # e.g. "living_room_strip"
+            cg.add(var.set_strip_tag(strip_tag))
+
+        # CFX-023: opt-in cfx_pixel events to HA
+        ha_pixel = seq_conf.get(CONF_HA_PIXEL_EVENTS, False)
+        cg.add(var.set_ha_pixel_enabled(ha_pixel))
 
         # Register target lights
         for light_id in seq_conf.get(CONF_LIGHTS, []):
