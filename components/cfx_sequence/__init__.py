@@ -171,7 +171,7 @@ async def to_code(config):
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
-    _LOGGER.info("CFX: light_name_map=%s seen_tags=%s", light_name_map, seen_tags)
+    _LOGGER.debug("CFX: light_name_map=%s seen_tags=%s", light_name_map, seen_tags)
 
     # Also collect tags for ALL lights on the device that have addressable_cfx
     # effects — so bare effects (run without a sequence) also get tagged events.
@@ -318,13 +318,10 @@ async def to_code(config):
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
-        # CFX-024: strip identity tag = slugified name of first light, matching
-        # get_object_id() at runtime so event strings are always consistent.
+        # CFX-024: strip identity tag = slugify(light.name), matching get_object_id() at runtime.
         lights_list = seq_conf.get(CONF_LIGHTS, [])
         if lights_list:
             strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
-            _LOGGER.info("CFX: sequence '%s' -> strip_tag='%s'",
-                         seq_conf.get(CONF_NAME, "?"), strip_tag)
             cg.add(var.set_strip_tag(strip_tag))
 
         # CFX-023: opt-in cfx_pixel events to HA
