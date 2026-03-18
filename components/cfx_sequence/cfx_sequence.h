@@ -210,6 +210,8 @@ protected:
   bool progress_dirty_{false};
   uint32_t last_progress_publish_ms_{0};
   static constexpr uint32_t PROGRESS_PUBLISH_INTERVAL_MS = 200;  // 5 Hz
+  // CFX-026: Maximum number of events to flush per loop() call to avoid blocking
+  static constexpr uint8_t MAX_EVENTS_PER_LOOP = 10;
 
   int32_t stored_last_pixel_{-1};
   bool pixel_dirty_{false};

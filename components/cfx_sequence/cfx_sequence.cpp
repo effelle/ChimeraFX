@@ -80,13 +80,15 @@ void CFXEventManager::flush_pending() {
   // CFX-026: Removed early return on event_entity_ == nullptr — progress
   // publishing and text_sensor updates shouldn't depend on event entity.
 
-  // Fire one queued event per call. One event per loop() cycle guarantees
-  // each event lands in a separate WebSocket frame to HA.
-  if (this->pending_read_ != this->pending_write_) {
+  // Fire a limited number of queued events per call to avoid blocking
+  // the loop for too long. This prevents the 10-second delay during
+  // the return phase while still ensuring events are delivered.
+  uint8_t events_flushed = 0;
+  while (this->pending_read_ != this->pending_write_ && events_flushed < MAX_EVENTS_PER_LOOP) {
     const char *evt = this->pending_events_[this->pending_read_];
     this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
 
-    // CFX-026: Fire all three channels (matching fire_event's behavior)
+    // Fire all three channels (matching fire_event's behavior)
     // so milestones moved to the deferred queue still update all outputs.
 #ifdef USE_CFX_HA_SERVICES
     if (this->api_device_ != nullptr) {
@@ -108,7 +110,7 @@ void CFXEventManager::flush_pending() {
       this->pending_idle_ = true;
       this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
-    return; // one action per call
+    events_flushed++;
   }
 
   if (this->pending_idle_) {
