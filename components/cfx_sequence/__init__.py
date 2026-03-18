@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select, event, sensor, number, button
+from esphome.components import light, select, event, sensor, number, button, text_sensor
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -236,6 +236,23 @@ async def to_code(config):
     }
     await event.register_event(event_var, event_conf, event_types=event_types)
 
+    # CFX Events State text_sensor — mirrors every event fire as actual entity
+    # state (not an attribute). HA state trigger 'to: cfx_reach:...:75' works
+    # reliably against text_sensor state. Boot fires all milestone strings once
+    # so HA's autocomplete dropdown is populated immediately. (CFX-025)
+    evt_ts_id = core.ID("cfx_event_state", is_declaration=True, type=text_sensor.TextSensor)
+    evt_ts_var = cg.new_Pvariable(evt_ts_id)
+    core.CORE.component_ids.add("cfx_event_state")
+    evt_ts_conf = {
+        "id": evt_ts_id,
+        "name": "CFX Event State",
+        "icon": "mdi:bell-ring",
+        "disabled_by_default": False,
+        "internal": False,
+        "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
+    }
+    await text_sensor.register_text_sensor(evt_ts_var, evt_ts_conf)
+
     # 1. Progress Step Number
     step_id = core.ID("cfx_progress_step", is_declaration=True, type=CFXProgressStepNumber)
     step_var = cg.new_Pvariable(step_id)
@@ -298,6 +315,8 @@ async def to_code(config):
         # Bind the global event entity to this sequence
         if event_var:
             cg.add(var.set_event_entity(event_var))
+        if evt_ts_var:
+            cg.add(var.set_event_text_sensor(evt_ts_var))
         if prog_var:
             cg.add(var.set_progress_sensor(prog_var))
         if last_px_var:
@@ -378,6 +397,14 @@ async def to_code(config):
         await select.register_select(sel_var, sel_conf, options=seq_options)
         await cg.register_component(sel_var, sel_conf)
         cg.add(sel_var.publish_state("None"))
+        # Wire global entities into CFXSequenceSelect (which drives CFXEventManager)
+        if event_var:
+            cg.add(sel_var.set_event_entity(event_var))
+        if evt_ts_var:
+            cg.add(sel_var.set_event_text_sensor(evt_ts_var))
+        # Register all known strip tags so discovery fires all milestones at boot
+        for tag in seen_tags:
+            cg.add(sel_var.add_known_tag(tag))
 
         # Stop All button
         stop_id = core.ID(

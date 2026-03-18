@@ -34,10 +34,6 @@ CFXEventManager &CFXEventManager::get() {
 void CFXEventManager::fire_event(const char *type) {
   if (this->event_entity_ != nullptr) {
     this->event_entity_->trigger(type);
-    // cfx_start and cfx_complete are one-shot lifecycle events — no idle.
-    // cfx_reach:<tag>:<milestone> strings are unique per firing so HA state
-    // trigger fires unconditionally; idle is not needed as a separator.
-    // Only cfx_pixel benefits from idle scheduling so HA sees the transition.
     bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
                           strncmp(type, "cfx_start",    9)  == 0 ||
                           strncmp(type, "cfx_reach",    9)  == 0);
@@ -46,6 +42,10 @@ void CFXEventManager::fire_event(const char *type) {
       this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
   }
+  // Mirror every event to the text_sensor so HA state trigger works
+  // reliably — text_sensor state IS the string, no attribute indirection. (CFX-025)
+  if (this->event_text_sensor_ != nullptr)
+    this->event_text_sensor_->publish_state(type);
 }
 
 void CFXEventManager::queue_event(const char *type) {
@@ -86,6 +86,8 @@ void CFXEventManager::flush_pending() {
     if (millis() >= this->idle_hold_until_ms_) {
       this->pending_idle_ = false;
       this->event_entity_->trigger("cfx_idle");
+      if (this->event_text_sensor_ != nullptr)
+        this->event_text_sensor_->publish_state("cfx_idle");
     }
   }
 }
