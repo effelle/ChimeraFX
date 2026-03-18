@@ -72,8 +72,6 @@ void CFXEventManager::flush_pending() {
 
     if (this->event_entity_ != nullptr)
       this->event_entity_->trigger(evt.c_str());
-    if (this->event_text_sensor_ != nullptr)
-      this->event_text_sensor_->publish_state(evt);
 #ifdef USE_CFX_HA_SERVICES
     if (this->api_device_ != nullptr)
       this->api_device_->fire_homeassistant_event("esphome.cfx_event",
@@ -90,8 +88,6 @@ void CFXEventManager::flush_pending() {
     this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
     if (this->event_entity_ != nullptr)
       this->event_entity_->trigger(evt);
-    if (this->event_text_sensor_ != nullptr)
-      this->event_text_sensor_->publish_state(evt);
     return;
   }
 
@@ -100,8 +96,6 @@ void CFXEventManager::flush_pending() {
       this->pending_idle_ = false;
       if (this->event_entity_ != nullptr)
         this->event_entity_->trigger("cfx_idle");
-      if (this->event_text_sensor_ != nullptr)
-        this->event_text_sensor_->publish_state("cfx_idle");
 #ifdef USE_CFX_HA_SERVICES
       if (this->api_device_ != nullptr)
         this->api_device_->fire_homeassistant_event("esphome.cfx_event",

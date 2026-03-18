@@ -3,7 +3,6 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
@@ -53,36 +52,8 @@ public:
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
-  void set_event_text_sensor(esphome::text_sensor::TextSensor *s) { this->event_text_sensor_ = s; }
   void set_api_device(esphome::api::CustomAPIDevice *d) { this->api_device_ = d; }
 
-  // Called once after API connects to populate HA's text_sensor history with
-  // all valid milestone strings so they appear in the automation dropdown
-  // immediately. Fires all strings in a single loop() tick so HA batches them
-  // as one state write — only the last value persists, no automations fire
-  // on the intermediate values. (CFX-025)
-  void populate_text_sensor_discovery() {
-    if (this->event_text_sensor_ == nullptr) return;
-    if (this->discovery_done_) return;
-    this->discovery_done_ = true;
-    // Fire bare variants first (no tag)
-    char buf[64];
-    for (uint8_t i = 1; i <= 100 / this->progress_step_; i++) {
-      snprintf(buf, sizeof(buf), "cfx_reach:%u", (unsigned)(i * this->progress_step_));
-      this->event_text_sensor_->publish_state(buf);
-    }
-    // Fire tagged variants for every known tag
-    for (const auto &tag : this->known_tags_) {
-      for (uint8_t i = 1; i <= 100 / this->progress_step_; i++) {
-        snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", tag.c_str(), (unsigned)(i * this->progress_step_));
-        this->event_text_sensor_->publish_state(buf);
-      }
-    }
-    this->event_text_sensor_->publish_state("cfx_start");
-    this->event_text_sensor_->publish_state("cfx_complete");
-    this->event_text_sensor_->publish_state("cfx_idle");
-    this->event_text_sensor_->publish_state("cfx_none");  // neutral resting state
-  }
 
   void add_known_tag(const std::string &tag) {
     for (const auto &t : this->known_tags_)
@@ -147,7 +118,6 @@ protected:
   esphome::event::Event *event_entity_{nullptr};
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
-  esphome::text_sensor::TextSensor *event_text_sensor_{nullptr};
   esphome::api::CustomAPIDevice *api_device_{nullptr};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;  // all tags seen at startup for discovery
@@ -284,9 +254,6 @@ public:
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
   }
-  void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
-    CFXEventManager::get().set_event_text_sensor(s);
-  }
   void add_known_tag(const std::string &tag) {
     CFXEventManager::get().add_known_tag(tag);
   }
@@ -418,7 +385,6 @@ public:
   void setup() override;
   void loop() override {
     CFXEventManager::get().flush_pending();
-    CFXEventManager::get().populate_text_sensor_discovery();
     for (auto *seq : CFXSequence::instances) {
       seq->check_duration();
     }
@@ -426,9 +392,6 @@ public:
   void control(const std::string &value) override;
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
-  }
-  void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
-    CFXEventManager::get().set_event_text_sensor(s);
   }
   void add_known_tag(const std::string &tag) {
     CFXEventManager::get().add_known_tag(tag);
