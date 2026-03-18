@@ -463,22 +463,6 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // 7. Intro Use Palette
-  switch_::Switch *intro_pal_sw = (c && c->get_intro_use_palette())
-                                      ? c->get_intro_use_palette()
-                                      : this->intro_use_palette_;
-  if (!this->initial_preset_applied_ && intro_pal_sw != nullptr &&
-      this->intro_use_palette_preset_.has_value()) {
-    bool target = this->intro_use_palette_preset_.value();
-    if (intro_pal_sw->state != target) {
-      if (target) {
-        intro_pal_sw->turn_on();
-      } else {
-        intro_pal_sw->turn_off();
-      }
-    }
-  }
-
   // 9. Outro Effect
   select::Select *outro_sel = (c && c->get_outro_effect())
                                   ? c->get_outro_effect()
@@ -1987,10 +1971,6 @@ void CFXAddressableLightEffect::run_controls_() {
         }
       }
 
-      // 6. Intro Use Palette
-      if (c && c->get_intro_use_palette())
-        this->intro_use_palette_ = c->get_intro_use_palette();
-
       // 7. Debug
       if (c && c->get_debug())
         this->debug_switch_ = c->get_debug();
@@ -2097,50 +2077,85 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   bool use_palette = false;
   uint8_t pal = 0;
 
-  // New Feature: "Intro Use Palette" - Inherit from Runner's active effect
-  // Explicitly handle switch state to avoid fall-through to Legacy auto-mode
-  if (this->intro_use_palette_) {
-    if (this->intro_use_palette_->state && chimera_fx::instance) {
-      pal = chimera_fx::instance->_segment.palette;
-      if (pal == 0) {
-        // If Effect is using Default (0), resolve its Natural Palette ID
-        pal = this->get_default_palette_id_(chimera_fx::instance->getMode());
-      }
-
-      // Fix: If resolved palette is Solid (255), ignore the switch and use
-      // direct color This ensures we use the Target Color (c) instead of the
-      // runner's Fading Color
-      if (pal == 255) {
-        use_palette = false;
-      } else {
-        use_palette = true;
-      }
-    } else {
-      // Switch is OFF or Missing Runner -> Force Solid
-      use_palette = false;
-    }
-  } else {
-    // Legacy Behavior: Use explicit Intro Palette setting (if any)
-    pal = this->get_palette_index_();
-    if (pal > 0 && this->runner_ != nullptr) {
-      use_palette = true;
-    }
-  }
-
-  // Monochromatic Presets always force palette matching Active Effect Palette
-  if (preset.is_active && this->runner_ != nullptr) {
-    pal = this->runner_->_segment.palette;
+  // CFX-026: Always derive intro color from the active effect palette.
+  // Compute dominant color = average of 16 evenly-spaced palette samples.
+  // For solid palettes (255) or no runner, fall back to the solid color c.
+  if (chimera_fx::instance != nullptr) {
+    pal = chimera_fx::instance->_segment.palette;
     if (pal == 0)
-      pal = this->get_default_palette_id_(this->effect_id_);
-    if (pal == 255)
-      use_palette = false;
-    else
+      pal = this->get_default_palette_id_(chimera_fx::instance->getMode());
+    if (pal != 255) {
       use_palette = true;
+    }
   }
 
   if (use_palette && chimera_fx::instance != nullptr) {
     // Force update the runner's palette immediately
     chimera_fx::instance->_segment.palette = pal;
+
+    // CFX-026: Derive intro dominant color per palette.
+    // Hand-tuned representative colors — easy to adjust per palette.
+    // Replaces raw per-pixel palette mapping which produced stripes.
+    // Falls back to averaged math for unknown/future palette IDs.
+    uint8_t dr = 128, dg = 128, db = 128;  // default: mid-grey fallback
+    switch (pal) {
+      case 1:  dr=  0; dg=180; db=200; break; // Aurora      — teal-blue
+      case 2:  dr= 20; dg=120; db= 20; break; // Forest      — mid green
+      case 3:  dr=200; dg= 60; db=  0; break; // Halloween   — deep orange
+      case 4:  dr=160; dg=  0; db=160; break; // Rainbow     — violet (midpoint)
+      case 5:  dr=220; dg= 60; db=  0; break; // Fire        — orange-red
+      case 6:  dr=220; dg=100; db= 20; break; // Sunset      — warm orange
+      case 7:  dr=  0; dg=180; db=220; break; // Ice         — cyan-blue
+      case 8:  dr=200; dg=  0; db=200; break; // Party       — magenta
+      case 9:  dr=220; dg= 20; db=  0; break; // Lava        — deep red
+      case 10: dr=200; dg=160; db=180; break; // Pastel      — soft pink
+      case 11: dr=  0; dg= 80; db=200; break; // Ocean       — deep blue
+      case 12: dr=220; dg= 80; db=  0; break; // HeatColors  — orange
+      case 13: dr=220; dg=100; db=140; break; // Sakura      — cherry pink
+      case 14: dr= 60; dg=120; db= 80; break; // Rivendell   — muted green
+      case 15: dr=180; dg=  0; db=220; break; // Cyberpunk   — neon purple
+      case 16: dr=  0; dg=180; db=160; break; // OrangeTeal  — teal (cooler)
+      case 17: dr=180; dg= 20; db= 20; break; // Christmas   — red
+      case 18: dr= 20; dg= 20; db=200; break; // RedBlue     — blue (cool side)
+      case 19: dr=  0; dg=200; db=  0; break; // Matrix      — green
+      case 20: dr=220; dg=180; db=  0; break; // SunnyGold   — golden yellow
+      case 22: dr=180; dg=100; db=220; break; // Fairy       — lavender
+      case 23: dr= 60; dg= 20; db=140; break; // Twilight    — deep indigo
+      case 254: {
+        // Smart Random — compute average from current random palette
+        uint32_t r_sum = 0, g_sum = 0, b_sum = 0;
+        for (uint8_t s = 0; s < 16; s++) {
+          uint8_t idx = s * 16;
+          uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
+              idx, false, true, 255, 255);
+          r_sum += (cp >> 16) & 0xFF;
+          g_sum += (cp >>  8) & 0xFF;
+          b_sum += (cp      ) & 0xFF;
+        }
+        dr = (uint8_t)(r_sum / 16);
+        dg = (uint8_t)(g_sum / 16);
+        db = (uint8_t)(b_sum / 16);
+        break;
+      }
+      default: {
+        // Unknown palette — fall back to average
+        uint32_t r_sum = 0, g_sum = 0, b_sum = 0;
+        for (uint8_t s = 0; s < 16; s++) {
+          uint8_t idx = s * 16;
+          uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
+              idx, false, true, 255, 255);
+          r_sum += (cp >> 16) & 0xFF;
+          g_sum += (cp >>  8) & 0xFF;
+          b_sum += (cp      ) & 0xFF;
+        }
+        dr = (uint8_t)(r_sum / 16);
+        dg = (uint8_t)(g_sum / 16);
+        db = (uint8_t)(b_sum / 16);
+        break;
+      }
+    }
+    c = Color(dr, dg, db, 0);
+    use_palette = false;  // render as solid from here — no per-pixel mapping
   }
 
   // Segment Aware Bounds

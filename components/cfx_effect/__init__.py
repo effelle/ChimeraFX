@@ -54,8 +54,6 @@ CONF_SET_INTRO = "set_intro"
 CONF_SET_INTRO_DURATION = "set_intro_dur"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_OUTRO_DURATION = "set_outro_dur"
-CONF_SET_TIMER = "set_timer"
-CONF_SET_INTRO_PALETTE = "set_intro_palette"
 CONF_SET_FORCE_WHITE = "set_force_white"
 
 
@@ -137,8 +135,6 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_SET_INTRO_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),  # CFX-024: IntroMode enum has 25 entries (0-24)
         cv.Optional(CONF_SET_OUTRO_DURATION): cv.float_range(min=0.0),
-        cv.Optional(CONF_SET_TIMER): cv.int_range(min=0),
-        cv.Optional(CONF_SET_INTRO_PALETTE): cv.boolean,
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
         cv.Optional(CONF_ON_START): automation.validate_automation(
             {
@@ -227,10 +223,6 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
         cg.add(effect.set_outro_preset(config[CONF_SET_OUTRO]))
     if CONF_SET_OUTRO_DURATION in config:
         cg.add(effect.set_outro_duration_preset(config[CONF_SET_OUTRO_DURATION]))
-    if CONF_SET_TIMER in config:
-        cg.add(effect.set_timer_preset(config[CONF_SET_TIMER]))
-    if CONF_SET_INTRO_PALETTE in config:
-        cg.add(effect.set_intro_use_palette_preset(config[CONF_SET_INTRO_PALETTE]))
     if CONF_SET_FORCE_WHITE in config:
         cg.add(effect.set_force_white_preset(config[CONF_SET_FORCE_WHITE]))
 

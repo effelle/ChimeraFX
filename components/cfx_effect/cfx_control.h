@@ -136,9 +136,6 @@ public:
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
   void set_intro_duration(number::Number *n) { intro_duration_ = n; }
-  void set_intro_use_palette(esphome::switch_::Switch *s) {
-    intro_use_palette_ = s;
-  }
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_light(esphome::light::LightState *light) { light_ = light; }
@@ -189,9 +186,6 @@ public:
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
   number::Number *get_intro_duration() { return intro_duration_; }
-  esphome::switch_::Switch *get_intro_use_palette() {
-    return intro_use_palette_;
-  }
   select::Select *get_outro_effect() { return outro_effect_; }
   number::Number *get_outro_duration() { return outro_duration_; }
 
@@ -205,7 +199,6 @@ protected:
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
-  esphome::switch_::Switch *intro_use_palette_{nullptr};
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
 

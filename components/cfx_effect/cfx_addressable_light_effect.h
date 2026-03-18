@@ -62,9 +62,6 @@ public:
   }
   void set_intro_effect(select::Select *s) { this->intro_effect_ = s; }
   void set_intro_duration(number::Number *n) { this->intro_duration_ = n; }
-  void set_intro_use_palette(switch_::Switch *s) {
-    this->intro_use_palette_ = s;
-  }
   void set_outro_effect(select::Select *s) { this->outro_effect_ = s; }
   void set_outro_duration(number::Number *n) { this->outro_duration_ = n; }
   void set_debug(switch_::Switch *s) { this->debug_switch_ = s; }
@@ -119,9 +116,6 @@ public:
   void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
   void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
   void set_intro_duration_preset(float v) { this->intro_duration_preset_ = v; }
-  void set_intro_use_palette_preset(bool v) {
-    this->intro_use_palette_preset_ = v;
-  }
   void set_outro_preset(uint8_t v) { this->outro_preset_ = v; }
   void set_outro_duration_preset(float v) { this->outro_duration_preset_ = v; }
   void set_intensity_preset(uint8_t v) { this->intensity_preset_ = v; }
@@ -173,7 +167,6 @@ protected:
   number::Number *transition_duration_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *intro_duration_{nullptr};
-  switch_::Switch *intro_use_palette_{nullptr};
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
@@ -269,7 +262,6 @@ public:
   optional<bool> force_white_preset_{};
   optional<uint8_t> intro_preset_{};
   optional<float> intro_duration_preset_{};
-  optional<bool> intro_use_palette_preset_{};
   optional<uint8_t> outro_preset_{};
   optional<float> outro_duration_preset_{};
 

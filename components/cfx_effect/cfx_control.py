@@ -283,21 +283,6 @@ async def to_code(config):
             cg.add(outro_dur.publish_state(1.0))
             cg.add(var.set_outro_duration(outro_dur))
 
-        # 9. Intro Use Palette
-        if is_effect_target and is_included(EXCLUDE_INTRO):
-            conf = {
-                **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_intro_pal"),
-                CONF_NAME: f"{t_name} Intro Use Palette",
-                CONF_ICON: "mdi:palette-swatch-variant",
-                "optimistic": True,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-            }
-            intro_pal = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(intro_pal, conf)
-            cg.add(intro_pal.publish_state(False))
-            cg.add(var.set_intro_use_palette(intro_pal))
-
         # 10. HA Events (CFX-026: replaces Timer)
         # When ID 6 is included (default), HA event firing is enabled.
         # exclude: [6] disables cfx_reach/cfx_idle/cfx_start events to HA.
