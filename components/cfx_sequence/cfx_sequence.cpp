@@ -119,8 +119,6 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
-    ESP_LOGW("cfx_seq", "pass=%u milestone=%u fired", (unsigned)this->pass_count_, (unsigned)this->last_fired_milestone_);
-
     // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
     // milestone_events_[i] was built in set_strip_tag() for milestone index
     // (last_fired_milestone_ / progress_step_) - 1.
@@ -144,6 +142,16 @@ void CFXEventManager::check_milestones(float current_pct) {
     //   is e.g. 95 for step=5), but actual percentage reached 100.0
     if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
       this->last_fired_milestone_ = 0;
+      this->pass_count_++;
+      // Schedule cfx_idle as a pass-boundary separator. At high speeds the
+      // return/erase phase is very short (<375ms at speed 255). Without a gap
+      // event, HA receives :100 and :5 of the next loop in rapid succession.
+      // HA's state machine may not commit :100 before :5 arrives, so the
+      // attribute appears unchanged (:75 -> :75) and the state trigger drops
+      // the event. cfx_idle forces a guaranteed attribute change between loops
+      // regardless of how fast the effect cycles. (CFX-024)
+      this->pending_idle_ = true;
+      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
     }
   }
 }
