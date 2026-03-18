@@ -243,19 +243,19 @@ async def to_code(config):
 
             conf = {
                 **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_intro_dur"),
-                CONF_NAME: f"{t_name} Intro Duration",
+                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_inout_dur"),
+                CONF_NAME: f"{t_name} In/Out Duration",
                 CONF_ICON: "mdi:timer-outline",
                 "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
             }
-            intro_dur = cg.new_Pvariable(conf[CONF_ID])
-            await number.register_number(intro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
-            cg.add(intro_dur.publish_state(1.0))
-            cg.add(var.set_intro_duration(intro_dur))
+            inout_dur = cg.new_Pvariable(conf[CONF_ID])
+            await number.register_number(inout_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
+            cg.add(inout_dur.publish_state(1.0))
+            cg.add(var.set_inout_duration(inout_dur))
 
-        # 8. Outro & Outro Duration
+        # 8. Outro (no separate duration — shares In/Out Duration slider)
         if is_effect_target and is_included(EXCLUDE_OUTRO):
             conf = {
                 **base_entity_conf,
@@ -268,20 +268,6 @@ async def to_code(config):
             await select.register_select(outro, conf, options=OUTRO_OPTIONS)
             cg.add(outro.publish_state("None"))
             cg.add(var.set_outro_effect(outro))
-
-            conf = {
-                **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_outro_dur"),
-                CONF_NAME: f"{t_name} Outro Duration",
-                CONF_ICON: "mdi:timer-outline",
-                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
-                "optimistic": True,
-                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-            }
-            outro_dur = cg.new_Pvariable(conf[CONF_ID])
-            await number.register_number(outro_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
-            cg.add(outro_dur.publish_state(1.0))
-            cg.add(var.set_outro_duration(outro_dur))
 
         # 10. HA Events (CFX-026: replaces Timer)
         # When ID 6 is included (default), HA event firing is enabled.

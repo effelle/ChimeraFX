@@ -135,9 +135,8 @@ public:
   void set_force_white(esphome::switch_::Switch *s) { force_white_ = s; }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
-  void set_intro_duration(number::Number *n) { intro_duration_ = n; }
+  void set_inout_duration(number::Number *n) { inout_duration_ = n; }
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
-  void set_outro_duration(number::Number *n) { outro_duration_ = n; }
   void set_light(esphome::light::LightState *light) { light_ = light; }
 
   void register_runner(CFXRunner *runner) {
@@ -185,9 +184,9 @@ public:
   esphome::switch_::Switch *get_force_white() { return force_white_; }
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
-  number::Number *get_intro_duration() { return intro_duration_; }
+  number::Number *get_intro_duration() { return inout_duration_; }
   select::Select *get_outro_effect() { return outro_effect_; }
-  number::Number *get_outro_duration() { return outro_duration_; }
+  number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
   number::Number *speed_{nullptr};
@@ -198,9 +197,8 @@ protected:
   esphome::switch_::Switch *force_white_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
-  number::Number *intro_duration_{nullptr};
+  number::Number *inout_duration_{nullptr};
   select::Select *outro_effect_{nullptr};
-  number::Number *outro_duration_{nullptr};
 
   esphome::light::LightState *light_{nullptr};
   std::vector<CFXRunner *> runners_;

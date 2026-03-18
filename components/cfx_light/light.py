@@ -48,7 +48,7 @@ CONF_SEGMENT_STOP = "stop"
 CONF_SEGMENT_MIRROR = "mirror"
 CONF_SEGMENT_USE_INTRO = "use_intro"
 CONF_SEGMENT_USE_OUTRO = "use_outro"
-CONF_SEGMENT_INTRO_DUR = "intro_dur"
+CONF_SEGMENT_INTRO_DUR = "inout_dur"
 CONF_SEGMENT_OUTPUT_ID = "output_id"
 CONF_SEGMENT_LIGHT_ID = "light_id"
 
@@ -191,7 +191,7 @@ def _inject_all_effects(config):
                 user_names.add(name)
     use_intro = config.get("use_intro")
     use_outro = config.get("use_outro")
-    intro_dur_raw = config.get("intro_dur")
+    intro_dur_raw = config.get("inout_dur")
     
     intro_dur_sec = None
     if intro_dur_raw is not None:
@@ -226,10 +226,10 @@ def _inject_all_effects(config):
             if use_outro is not None and "set_outro" not in effect_data:
                 effect_data["set_outro"] = use_outro
             if intro_dur_sec is not None:
-                if "set_intro_dur" not in effect_data:
-                    effect_data["set_intro_dur"] = intro_dur_sec
-                if "set_outro_dur" not in effect_data:
-                    effect_data["set_outro_dur"] = intro_dur_sec
+                if "set_inout_dur" not in effect_data:
+                    effect_data["set_inout_dur"] = intro_dur_sec
+                if "set_inout_dur" not in effect_data:
+                    effect_data["set_inout_dur"] = intro_dur_sec
 
     config[CONF_EFFECTS] = user_effects
     return config
@@ -248,7 +248,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ALL_EFFECTS, default=False): cv.boolean,
             cv.Optional("use_intro"): cv.uint8_t,
             cv.Optional("use_outro"): cv.uint8_t,
-            cv.Optional("intro_dur"): cv.positive_time_period_milliseconds,
+            cv.Optional("inout_dur"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
                 cv.positive_time_period_milliseconds
             ),
@@ -332,8 +332,8 @@ async def to_code(config):
         cg.add(var.set_default_intro_mode(config["use_intro"]))
     if "use_outro" in config:
         cg.add(var.set_default_outro_mode(config["use_outro"]))
-    if "intro_dur" in config:
-        intro_dur_ms = config["intro_dur"]
+    if "inout_dur" in config:
+        intro_dur_ms = config["inout_dur"]
         cg.add(var.set_default_intro_dur(float(intro_dur_ms) / 1000.0))
         cg.add(var.set_default_outro_dur(float(intro_dur_ms) / 1000.0))
 
