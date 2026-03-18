@@ -199,6 +199,9 @@ protected:
   std::atomic<uint8_t> pending_write_{0}; // CFX-021: atomic to guard queue head/tail across tasks
   std::atomic<uint8_t> pending_read_{0};  // CFX-021: atomic to guard queue head/tail across tasks
 
+  // Last published integer progress value, used to avoid publishing unchanged values.
+  int32_t last_published_progress_{-1};
+
   // Deferred event pipeline — ensures cfx_idle lands in a separate
   // WebSocket frame from the real event so HA State triggers fire reliably.
   static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;

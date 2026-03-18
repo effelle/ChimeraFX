@@ -154,6 +154,11 @@ void CFXEventManager::publish_progress_if_due() {
 
   if (this->progress_dirty_) {
     this->progress_dirty_ = false;
+    int32_t rounded = std::round(this->stored_progress_);
+    if (rounded == this->last_published_progress_) {
+      return; // no change, skip
+    }
+    this->last_published_progress_ = rounded;
     this->report_progress(this->stored_progress_);
   }
   if (this->pixel_dirty_) {
@@ -164,6 +169,11 @@ void CFXEventManager::publish_progress_if_due() {
 
 void CFXEventManager::check_milestones(float current_pct) {
   if (this->progress_step_ == 0) return;
+
+  // CFX-026: Continuous progress storage + timer-based sensor publishing.
+  // Decouples render-path progress tracking from sensor API calls.
+  this->stored_progress_ = current_pct;
+  this->progress_dirty_ = true;
 
   // Always reset the per-frame flag at the start of each check so callers
   // can reliably test it after this call. (CFX-022)
