@@ -144,6 +144,7 @@ public:
 
 protected:
   CFXEventManager() = default;
+  esphome::event::Event *event_entity_{nullptr};
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   esphome::text_sensor::TextSensor *event_text_sensor_{nullptr};
