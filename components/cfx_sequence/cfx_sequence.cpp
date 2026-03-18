@@ -35,7 +35,8 @@ void CFXEventManager::fire_event(const char *type) {
   // Primary: fire via HA event bus using CustomAPIDevice::fire_homeassistant_event.
   // This bypasses the entity state machine entirely — no deduplication, no
   // WebSocket queue blocking, guaranteed delivery on every call. (CFX-025)
-#ifdef USE_API
+  // Requires homeassistant_services: true in api: YAML (enforced at codegen).
+#ifdef USE_CFX_HA_SERVICES
   if (this->api_device_ != nullptr) {
     this->api_device_->fire_homeassistant_event("esphome.cfx_event",
         {{"type", std::string(type)}});

@@ -117,13 +117,12 @@ def _cfx_slugify(name: str) -> str:
 async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCE")
 
-    # Phase E: Check for api: batch_delay configuration
-    # This is a heuristic — we check if the api component is loaded and advise the user.
+    # Phase E: Check for api: configuration
     try:
         import esphome.core as _core
         api_conf = _core.CORE.config.get("api", {})
+
         batch_delay = api_conf.get("batch_delay", None)
-        # batch_delay is typically a TimePeriod object in ESPHome config, so we cast to string to check
         if batch_delay is not None and str(batch_delay) != "0ms":
             _LOGGER.warning(
                 "ChimeraFX events are enabled but 'api: batch_delay' is '%s'. "
@@ -131,8 +130,23 @@ async def to_code(config):
                 "event delivery to Home Assistant.",
                 str(batch_delay),
             )
+
+        # CFX-025: fire_homeassistant_event() requires homeassistant_services: true.
+        # Enforce it here so the user gets a clear error at build time.
+        ha_services = api_conf.get("homeassistant_services", False)
+        if not ha_services:
+            raise cv.Invalid(
+                "ChimeraFX requires 'homeassistant_services: true' under 'api:' in your "
+                "ESPHome YAML. This enables reliable event delivery to Home Assistant.\n"
+                "Add to your config:\n"
+                "  api:\n"
+                "    homeassistant_services: true"
+            )
+        cg.add_define("USE_CFX_HA_SERVICES")
+    except cv.Invalid:
+        raise
     except Exception:
-        pass  # Non-fatal: warning is advisory only
+        pass  # Non-fatal if api: block not present
 
     # Create global event entity for all sequences (one per device).
     # event_types always includes the bare types (single-strip / backward-compat).
