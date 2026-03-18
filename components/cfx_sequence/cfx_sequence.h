@@ -417,6 +417,16 @@ public:
   }
   void control(const std::string &value) override;
 
+  void set_event_entity(esphome::event::Event *e) {
+    CFXEventManager::get().set_event_entity(e);
+  }
+  void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
+    CFXEventManager::get().set_event_text_sensor(s);
+  }
+  void add_known_tag(const std::string &tag) {
+    CFXEventManager::get().add_known_tag(tag);
+  }
+
   /// Safely update the UI without triggering the callback.
   void publish_state_silent(const std::string &value);
 
