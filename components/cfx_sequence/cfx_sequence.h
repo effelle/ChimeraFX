@@ -56,6 +56,7 @@ public:
   void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) { this->event_text_sensor_ = s; }
+  void set_api_device(esphome::api::CustomAPIDevice *d) { this->api_device_ = d; }
 
   // Called once after API connects to populate HA's text_sensor history with
   // all valid milestone strings so they appear in the automation dropdown
@@ -140,6 +141,7 @@ protected:
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   esphome::text_sensor::TextSensor *event_text_sensor_{nullptr};
+  esphome::api::CustomAPIDevice *api_device_{nullptr};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;  // all tags seen at startup for discovery
 

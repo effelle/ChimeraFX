@@ -32,20 +32,34 @@ CFXEventManager &CFXEventManager::get() {
 }
 
 void CFXEventManager::fire_event(const char *type) {
-  if (this->event_entity_ != nullptr) {
-    this->event_entity_->trigger(type);
-    bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
-                          strncmp(type, "cfx_start",    9)  == 0 ||
-                          strncmp(type, "cfx_reach",    9)  == 0);
-    if (!suppress_idle) {
-      this->pending_idle_ = true;
-      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
-    }
+  // Primary: fire via HA event bus using CustomAPIDevice::fire_homeassistant_event.
+  // This bypasses the entity state machine entirely — no deduplication, no
+  // WebSocket queue blocking, guaranteed delivery on every call. (CFX-025)
+#ifdef USE_API
+  if (this->api_device_ != nullptr) {
+    this->api_device_->fire_homeassistant_event("esphome.cfx_event",
+        {{"type", std::string(type)}});
   }
-  // Mirror every event to the text_sensor so HA state trigger works
-  // reliably — text_sensor state IS the string, no attribute indirection. (CFX-025)
+#endif
+
+  // Secondary: update text_sensor so HA's state history and automation
+  // dropdown stay populated. This is for discovery only — automations should
+  // use the event trigger, not the state trigger. (CFX-025)
   if (this->event_text_sensor_ != nullptr)
     this->event_text_sensor_->publish_state(type);
+
+  // Legacy: keep event entity for backward compat with existing automations.
+  if (this->event_entity_ != nullptr) {
+    this->event_entity_->trigger(type);
+  }
+
+  bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
+                        strncmp(type, "cfx_start",    9)  == 0 ||
+                        strncmp(type, "cfx_reach",    9)  == 0);
+  if (!suppress_idle) {
+    this->pending_idle_ = true;
+    this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
+  }
 }
 
 void CFXEventManager::queue_event(const char *type) {
@@ -743,6 +757,9 @@ void CFXStopAllButton::press_action() {
 
 #ifdef USE_API
 void CFXSequenceServiceHandler::setup() {
+  // Register this as the API device for fire_homeassistant_event. (CFX-025)
+  CFXEventManager::get().set_api_device(this);
+
   this->register_service(
       &CFXSequenceServiceHandler::on_sequence_start,
       "cfx_sequence_start",
