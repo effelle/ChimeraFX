@@ -281,7 +281,7 @@ async def to_code(config):
         "state_class": sensor.STATE_CLASSES["measurement"],
         "accuracy_decimals": 0,
         "disabled_by_default": False,
-        "internal": False,
+        "internal": True,
         "force_update": False,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
     }

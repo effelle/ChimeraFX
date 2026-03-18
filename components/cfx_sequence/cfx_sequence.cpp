@@ -116,14 +116,13 @@ void CFXEventManager::check_milestones(float current_pct) {
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
   if (current_pct >= next_milestone) {
     this->last_fired_milestone_ = next_milestone;
-    // Publish exact milestone value to the progress sensor for diagnostics.
-    this->report_progress((float)next_milestone);
 
     this->milestone_fired_this_frame_ = true;
 
     // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
-    // milestone_events_[i] was built in set_strip_tag() for milestone index
-    // (last_fired_milestone_ / progress_step_) - 1.
+    // Progress value is encoded in the event string (cfx_reach:<tag>:<pct>)
+    // so the separate progress sensor publish is redundant and adds API blocking.
+    // The progress sensor is updated only at start/stop lifecycle points. (CFX-025)
     {
       uint8_t idx = (this->last_fired_milestone_ / this->progress_step_) - 1;
       if (idx < MAX_MILESTONES) {
