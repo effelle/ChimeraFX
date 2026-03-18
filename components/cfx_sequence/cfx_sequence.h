@@ -50,6 +50,7 @@ protected:
 class CFXEventManager {
 public:
   static CFXEventManager &get();
+  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) { this->event_text_sensor_ = s; }
