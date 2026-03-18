@@ -183,9 +183,6 @@ protected:
   uint8_t last_fired_milestone_{0};
   uint16_t pass_count_{0};
 
-  // For progress sensor: last published integer percent (0-100).
-  int16_t last_published_progress_{0};
-
   // Set to true for the remainder of the frame in which cfx_reach fires.
   bool milestone_fired_this_frame_{false};
 

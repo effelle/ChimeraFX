@@ -62,12 +62,16 @@ void CFXEventManager::queue_event(const char *type) {
 void CFXEventManager::flush_pending() {
   if (this->event_entity_ == nullptr) return;
 
-  // Drain one entry from the deferred queue per call.
-  // At 50Hz loop rate, 32 entries drain in 640ms — within any return phase.
-  // One write per call keeps each within ESPHome's 30ms component budget. (CFX-025)
-  if (this->deferred_read_ != this->deferred_write_) {
-    const std::string &evt = this->deferred_queue_[this->deferred_read_];
+  // Drain deferred queue with a 10ms time budget per flush_pending() call.
+  // At low speeds one event per call is sufficient.
+  // At high speeds (250+) where loop() runs slower, multiple events drain
+  // per call to keep pace. 10ms cap keeps us within ESPHome's 30ms
+  // component budget. (CFX-026)
+  uint32_t budget_start = millis();
+  while (this->deferred_read_ != this->deferred_write_) {
+    const std::string evt = this->deferred_queue_[this->deferred_read_];
     this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+
     if (this->event_entity_ != nullptr)
       this->event_entity_->trigger(evt.c_str());
     if (this->event_text_sensor_ != nullptr)
@@ -77,7 +81,9 @@ void CFXEventManager::flush_pending() {
       this->api_device_->fire_homeassistant_event("esphome.cfx_event",
           {{"type", evt}});
 #endif
-    return; // one action per call
+
+    if ((millis() - budget_start) >= 10)
+      return; // time budget exhausted, resume next call
   }
 
   // Legacy small queue (cfx_complete from FreeRTOS task). (CFX-021)
@@ -107,14 +113,11 @@ void CFXEventManager::flush_pending() {
   }
 }
 
+
 void CFXEventManager::report_progress(float pct) {
   if (this->progress_pct_sensor_ != nullptr) {
     // Phase J: Round to 0 decimals as requested by USER
-    int rounded = static_cast<int>(std::round(pct));
-    if (rounded == this->last_published_progress_) {
-      return;
-    }
-    this->last_published_progress_ = rounded;
+    float rounded = std::round(pct);
     this->progress_pct_sensor_->publish_state(rounded);
   }
 }
