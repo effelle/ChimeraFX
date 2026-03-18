@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select, event, sensor, number, button
+from esphome.components import light, select, event, sensor, button
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -12,12 +12,11 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["light"]
-AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "number", "button"]
+AUTO_LOAD = ["cfx_effect", "select", "event", "sensor", "button"]
 
 cfx_sequence_ns = cg.esphome_ns.namespace("cfx_sequence")
 CFXSequence = cfx_sequence_ns.class_("CFXSequence")
 CFXSequenceSelect = cfx_sequence_ns.class_("CFXSequenceSelect", select.Select, cg.Component)
-CFXProgressStepNumber = cfx_sequence_ns.class_("CFXProgressStepNumber", number.Number, cg.Component)
 CFXStopAllButton = cfx_sequence_ns.class_(
     "CFXStopAllButton", button.Button, cg.Component
 )
@@ -209,22 +208,6 @@ async def to_code(config):
     }
     await event.register_event(event_var, event_conf, event_types=event_types)
 
-    # 1. Progress Step Number
-    step_id = core.ID("cfx_progress_step", is_declaration=True, type=CFXProgressStepNumber)
-    step_var = cg.new_Pvariable(step_id)
-    core.CORE.component_ids.add("cfx_progress_step")
-    step_conf = {
-        "id": step_id,
-        "name": "Sequence Step",
-        "icon": "mdi:percent",
-        "mode": number.NUMBER_MODES["BOX"],
-        "unit_of_measurement": "%",
-        "disabled_by_default": False,
-        "internal": False,
-        "entity_category": cv.ENTITY_CATEGORIES["config"],
-    }
-    await number.register_number(step_var, step_conf, min_value=0, max_value=50, step=1)
-    await cg.register_component(step_var, step_conf)
 
     # 2. Progress Sensor
     prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
@@ -351,6 +334,11 @@ async def to_code(config):
         # Wire global entities into CFXSequenceSelect (which drives CFXEventManager)
         if event_var:
             cg.add(sel_var.set_event_entity(event_var))
+        # CFX-026: HA events opt-in — read flag set by cfx_control ID 6.
+        # Defaults to True when cfx_control is not used.
+        import esphome.core as _core_seq
+        ha_events = _core_seq.CORE.data.get("cfx_ha_events_enabled", True)
+        cg.add(sel_var.set_ha_events_enabled(ha_events))
         # Register all known strip tags so discovery fires all milestones at boot
         for tag in seen_tags:
             cg.add(sel_var.add_known_tag(tag))

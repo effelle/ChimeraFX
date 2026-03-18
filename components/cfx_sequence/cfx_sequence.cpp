@@ -32,6 +32,10 @@ CFXEventManager &CFXEventManager::get() {
 }
 
 void CFXEventManager::fire_event(const char *type) {
+  // If HA events are disabled (cfx_control ID 6 excluded), push nothing.
+  // Internal on_cfx_reach / on_cfx_pixel YAML triggers are unaffected. (CFX-026)
+  if (!this->ha_events_enabled_) return;
+
   // Push onto the deferred queue — zero blocking on the render loop hot path.
   // flush_pending() drains one entry per loop() call at ~50Hz. (CFX-025)
   this->push_deferred(std::string(type));
@@ -711,29 +715,6 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
 // Runtime Configurable Entities (Number Inputs)
 // ----------------------------------------------------
 
-void CFXProgressStepNumber::setup() {
-  uint8_t restored;
-  // CFX-022: XOR with version salt 0x01 to invalidate the old preference slot
-  // that stored the step-10 default. Devices upgrading from pre-CFX-022 will
-  // not find a saved value here and will correctly fall back to step-5.
-  // Users who explicitly saved a custom value before this version will need to
-  // set it once more from the HA UI — a one-time migration cost.
-  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash() ^ 0x01u);
-  if (this->pref_.load(&restored)) {
-    this->publish_state(restored);
-    CFXEventManager::get().set_progress_step(restored);
-  } else {
-    this->publish_state(5.0f); // Default 5% (CFX-022)
-    CFXEventManager::get().set_progress_step(5);
-  }
-}
-
-void CFXProgressStepNumber::control(float value) {
-  uint8_t step = (uint8_t)value;
-  this->publish_state(value);
-  this->pref_.save(&step); // saves to the CFX-022 slot (hash ^ 0x01)
-  CFXEventManager::get().set_progress_step(step);
-}
 
 void CFXStopAllButton::press_action() {
   ESP_LOGD(TAG, "Stop All: stopping all sequences and forcing lights off");

@@ -55,7 +55,7 @@ EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
 EXCLUDE_MIRROR = 4
 EXCLUDE_INTRO = 5
-EXCLUDE_TIMER = 6
+EXCLUDE_HA_EVENTS = 6   # CFX-026: replaces Timer — exclude to disable HA event firing
 EXCLUDE_AUTOTUNE = 7
 EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
@@ -298,21 +298,16 @@ async def to_code(config):
             cg.add(intro_pal.publish_state(False))
             cg.add(var.set_intro_use_palette(intro_pal))
 
-        # 10. Timer
-        if is_effect_target and is_included(EXCLUDE_TIMER):
-            conf = {
-                **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_timer"),
-                CONF_NAME: f"{t_name} Timer (min)",
-                CONF_ICON: "mdi:timer-sand",
-                "min_value": 0, "max_value": 360, "step": 1, "initial_value": 0,
-                "optimistic": True,
-                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
-            }
-            timer = cg.new_Pvariable(conf[CONF_ID])
-            await number.register_number(timer, conf, min_value=0, max_value=360, step=1)
-            cg.add(timer.publish_state(0))
-            cg.add(var.set_timer(timer))
+        # 10. HA Events (CFX-026: replaces Timer)
+        # When ID 6 is included (default), HA event firing is enabled.
+        # exclude: [6] disables cfx_reach/cfx_idle/cfx_start events to HA.
+        # Internal on_cfx_reach / on_cfx_pixel YAML triggers are unaffected.
+        # The enabled state is written to a global accessible by cfx_sequence.
+        if is_effect_target:
+            import esphome.core as _core_ha_events
+            _core_ha_events.CORE.data.setdefault("cfx_ha_events_enabled", True)
+            if not is_included(EXCLUDE_HA_EVENTS):
+                _core_ha_events.CORE.data["cfx_ha_events_enabled"] = False
 
         # 11. Debug (ONLY on Master, placed LAST in Master block)
         if is_included(EXCLUDE_DEBUG) and idx == 0:

@@ -3,7 +3,6 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/number/number.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
@@ -54,17 +53,16 @@ public:
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_api_device(esphome::api::CustomAPIDevice *d) { this->api_device_ = d; }
 
+  // HA event delivery opt-in. When false, fire_event() is a no-op for all
+  // HA-facing paths. Internal on_cfx_reach triggers are unaffected. (CFX-026)
+  void set_ha_events_enabled(bool enabled) { this->ha_events_enabled_ = enabled; }
+
 
   void add_known_tag(const std::string &tag) {
     for (const auto &t : this->known_tags_)
       if (t == tag) return;
     this->known_tags_.push_back(tag);
   }
-  void set_progress_step(uint8_t step) {
-    this->progress_step_ = step;
-    this->rebuild_milestone_strings_();
-  }
-
   void fire_event(const char *type);
   void queue_event(const char *type);
   void flush_pending();
@@ -119,6 +117,7 @@ protected:
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   esphome::api::CustomAPIDevice *api_device_{nullptr};
+  bool ha_events_enabled_{true};   // CFX-026: gated by cfx_control ID 6
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;  // all tags seen at startup for discovery
 
@@ -254,12 +253,14 @@ public:
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
   }
+  void set_ha_events_enabled(bool enabled) {
+    CFXEventManager::get().set_ha_events_enabled(enabled);
+  }
   void add_known_tag(const std::string &tag) {
     CFXEventManager::get().add_known_tag(tag);
   }
 
   // Runtime configurable entities
-  void set_progress_step(uint8_t step) { CFXEventManager::get().set_progress_step(step); }
   void set_progress_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_progress_sensor(sensor); }
   void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_last_pixel_sensor(sensor); }
 
@@ -393,6 +394,9 @@ public:
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
   }
+  void set_ha_events_enabled(bool enabled) {
+    CFXEventManager::get().set_ha_events_enabled(enabled);
+  }
   void add_known_tag(const std::string &tag) {
     CFXEventManager::get().add_known_tag(tag);
   }
@@ -407,14 +411,6 @@ public:
   static std::atomic<bool> suppress_callback_;
 };
 
-class CFXProgressStepNumber : public ::esphome::number::Number, public ::esphome::Component {
-public:
-  void setup() override;
-  void control(float value) override;
-  
-protected:
-  esphome::ESPPreferenceObject pref_;
-};
 
 class CFXStopAllButton : public ::esphome::button::Button,
                          public ::esphome::Component {

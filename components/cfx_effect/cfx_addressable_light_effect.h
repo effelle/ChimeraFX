@@ -124,7 +124,6 @@ public:
   }
   void set_outro_preset(uint8_t v) { this->outro_preset_ = v; }
   void set_outro_duration_preset(float v) { this->outro_duration_preset_ = v; }
-  void set_timer_preset(uint16_t v) { this->timer_preset_ = v; }
   void set_intensity_preset(uint8_t v) { this->intensity_preset_ = v; }
   void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
   void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
@@ -273,7 +272,6 @@ public:
   optional<bool> intro_use_palette_preset_{};
   optional<uint8_t> outro_preset_{};
   optional<float> outro_duration_preset_{};
-  optional<uint16_t> timer_preset_{};
 
   float hydraulics_fluid_level_{0.0f};
   float hydraulics_fluid_velocity_{0.0f};

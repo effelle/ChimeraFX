@@ -75,11 +75,6 @@ public:
   CFXControl() { instances.push_back(this); }
 
   void setup() override {
-    if (this->timer_ != nullptr) {
-      this->set_interval("cfx_timer", 60000,
-                         [this]() { this->on_timer_tick_(); });
-    }
-
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_)
@@ -129,13 +124,6 @@ public:
       return;
 
     bool light_on = light_->remote_values.is_on();
-    if (was_on_ && !light_on) {
-      if (timer_ && timer_->state != 0.0f) {
-        auto call = timer_->make_call();
-        call.set_value(0);
-        call.perform();
-      }
-    }
     was_on_ = light_on;
   }
 
@@ -153,7 +141,6 @@ public:
   }
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_outro_duration(number::Number *n) { outro_duration_ = n; }
-  void set_timer(number::Number *n) { timer_ = n; }
   void set_light(esphome::light::LightState *light) { light_ = light; }
 
   void register_runner(CFXRunner *runner) {
@@ -207,7 +194,6 @@ public:
   }
   select::Select *get_outro_effect() { return outro_effect_; }
   number::Number *get_outro_duration() { return outro_duration_; }
-  number::Number *get_timer() { return timer_; }
 
 protected:
   number::Number *speed_{nullptr};
@@ -222,27 +208,11 @@ protected:
   esphome::switch_::Switch *intro_use_palette_{nullptr};
   select::Select *outro_effect_{nullptr};
   number::Number *outro_duration_{nullptr};
-  number::Number *timer_{nullptr};
 
   esphome::light::LightState *light_{nullptr};
   std::vector<CFXRunner *> runners_;
   bool was_on_{false};
 
-  void on_timer_tick_() {
-    if (timer_ == nullptr || light_ == nullptr)
-      return;
-
-    float val = timer_->state;
-    if (val > 0) {
-      val -= 1.0f;
-      if (val <= 0) {
-        val = 0;
-        auto call = light_->turn_off();
-        call.perform();
-      }
-      timer_->publish_state(val);
-    }
-  }
 
   uint8_t get_palette_index_(const std::string &name) {
     if (name == "Aurora")

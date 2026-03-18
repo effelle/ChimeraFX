@@ -479,18 +479,6 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // 8. Timer
-  number::Number *timer_num = (c) ? c->get_timer() : nullptr;
-  if (!this->initial_preset_applied_ && timer_num != nullptr &&
-      this->timer_preset_.has_value()) {
-    float target = (float)this->timer_preset_.value();
-    if (timer_num->state != target) {
-      auto call = timer_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-  }
-
   // 9. Outro Effect
   select::Select *outro_sel = (c && c->get_outro_effect())
                                   ? c->get_outro_effect()
