@@ -144,10 +144,8 @@ async def to_code(config):
     except Exception:
         pass  # Non-fatal if api: block not present
 
-    # CFX Events State text_sensor — mirrors every event fire as actual entity
-    # state (not an attribute). HA state trigger 'to: cfx_reach:...:75' works
-    # reliably against text_sensor state. Boot fires all milestone strings once
-    # so HA's autocomplete dropdown is populated immediately. (CFX-025)
+    # CFX Events State text_sensor (internal/disabled — event entity is primary). (CFX-025)
+    import esphome.core as core
     evt_ts_id = core.ID("cfx_event_state", is_declaration=True, type=text_sensor.TextSensor)
     evt_ts_var = cg.new_Pvariable(evt_ts_id)
     core.CORE.component_ids.add("cfx_event_state")
