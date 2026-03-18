@@ -132,6 +132,11 @@ void CFXEventManager::report_progress(float pct) {
   }
 }
 
+void CFXEventManager::update_progress(float pct) {
+  this->stored_progress_ = pct;
+  this->progress_dirty_ = true;
+}
+
 void CFXEventManager::report_last_pixel(int32_t pixel) {
   if (this->last_pixel_sensor_ != nullptr) {
     this->last_pixel_sensor_->publish_state(pixel);
@@ -163,12 +168,6 @@ void CFXEventManager::check_milestones(float current_pct) {
   // Always reset the per-frame flag at the start of each check so callers
   // can reliably test it after this call. (CFX-022)
   this->milestone_fired_this_frame_ = false;
-
-  // CFX-026: Store progress on every call for timer-based sensor publishing.
-  // The sensor is NOT updated here — publish_progress_if_due() handles that
-  // at 5 Hz from loop(), keeping all API calls off the render path.
-  this->stored_progress_ = current_pct;
-  this->progress_dirty_ = true;
 
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
   if (current_pct >= next_milestone) {

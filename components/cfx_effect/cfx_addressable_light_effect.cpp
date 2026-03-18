@@ -5154,6 +5154,10 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
+  // Update progress continuously (forward and return phases)
+  float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
+  cfx_sequence::CFXEventManager::get().update_progress(current_percentage * 100.0f);
+
   // Prevent multiple identical triggers in sequence, debounce across frames
   if (current_pixel == this->last_triggered_pixel_) {
     return;

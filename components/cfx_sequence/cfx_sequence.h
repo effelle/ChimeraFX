@@ -102,6 +102,7 @@ public:
   void queue_event(const char *type);
   void flush_pending();
   void publish_progress_if_due();  // CFX-026: rate-limited sensor publishing
+  void update_progress(float pct);  // CFX-026: unconditional progress storage (no milestone check)
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
 
