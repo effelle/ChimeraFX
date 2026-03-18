@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import light, select, event, sensor, number, button, text_sensor
+from esphome.components import light, select, sensor, number, button, text_sensor
 from esphome import automation
 from esphome.const import (
     CONF_ID,
@@ -144,93 +144,6 @@ async def to_code(config):
     except Exception:
         pass  # Non-fatal if api: block not present
 
-    # Create global event entity for all sequences (one per device).
-    # event_types always includes the bare types (single-strip / backward-compat).
-    # For each light referenced by any sequence we also add per-strip tagged
-    # variants so HA automations can discriminate which strip fired. (CFX-023)
-    import esphome.core as core
-    event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
-    event_var = cg.new_Pvariable(event_id)
-    core.CORE.component_ids.add("cfx_global_events")
-
-    # Build a map of light yaml_id -> slugified_name for all lights in config.
-    # This lets us derive the correct tag (matching get_object_id() at runtime)
-    # from the light's friendly name rather than its YAML id field. (CFX-024)
-    import esphome.core as _core_lights
-    light_name_map = {}  # yaml_id -> slugified_name
-    for lconf in _core_lights.CORE.config.get("light", []):
-        lid_obj = lconf.get("id")
-        lname = lconf.get("name", "")
-        if lid_obj is not None and lname:
-            light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
-
-    seen_tags = []
-    for seq_conf in config:
-        lights = seq_conf.get(CONF_LIGHTS, [])
-        for lid in lights:
-            # Use slugified name to match get_object_id() at runtime.
-            # Fall back to lid.id if name not found (should not happen).
-            tag = light_name_map.get(lid.id, lid.id)
-            if tag not in seen_tags:
-                seen_tags.append(tag)
-
-    _LOGGER.debug("CFX: light_name_map=%s seen_tags=%s", light_name_map, seen_tags)
-
-    # Also collect tags for ALL lights on the device that have addressable_cfx
-    # effects — so bare effects (run without a sequence) also get tagged events.
-    # Use slugified name to match get_object_id() at runtime. (CFX-024)
-    try:
-        import esphome.core as _core3
-        for lconf in _core3.CORE.config.get("light", []):
-            lid_obj = lconf.get("id")
-            lname = lconf.get("name", "")
-            if lid_obj is None or not lname:
-                continue
-            tag = _cfx_slugify(str(lname))
-            if tag in seen_tags:
-                continue
-            effects_list = lconf.get("effects", [])
-            has_cfx = False
-            for eff_conf in effects_list:
-                for key in ("platform", "type", "name"):
-                    val = str(eff_conf.get(key, "")).lower()
-                    if "addressable_cfx" in val or val == "cfx":
-                        has_cfx = True
-                        break
-                if has_cfx:
-                    break
-            if has_cfx:
-                _LOGGER.info("CFX: adding bare-effect tag '%s' to event_types", tag)
-                seen_tags.append(tag)
-    except Exception as ex:
-        _LOGGER.debug("CFX: CORE.config walk failed: %s", ex)
-
-    # Compile-time milestone step — must match CFXEventManager::progress_step_
-    # default in cfx_sequence.h (currently 5). The runtime number entity can
-    # change this, but the event_types list is static — we enumerate the full
-    # 5-step grid so all standard milestone strings are always declared. (CFX-024)
-    progress_step = 5
-
-    event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
-    # Bare fallback: fired when no strip tag is configured (edge case).
-    event_types += ["cfx_reach"]
-
-    # Per-strip milestone events: cfx_reach:<tag>:<milestone> (CFX-024)
-    milestones = list(range(progress_step, 101, progress_step))
-    if 100 not in milestones:
-        milestones.append(100)
-    for tag in seen_tags:
-        for m in milestones:
-            event_types.append(f"cfx_reach:{tag}:{m}")
-    event_conf = {
-        "id": event_id,
-        "name": "CFX Events",
-        "icon": "mdi:animation-play",
-        "disabled_by_default": False,
-        "internal": False,
-    }
-    await event.register_event(event_var, event_conf, event_types=event_types)
-
     # CFX Events State text_sensor — mirrors every event fire as actual entity
     # state (not an attribute). HA state trigger 'to: cfx_reach:...:75' works
     # reliably against text_sensor state. Boot fires all milestone strings once
@@ -242,8 +155,8 @@ async def to_code(config):
         "id": evt_ts_id,
         "name": "CFX Event State",
         "icon": "mdi:bell-ring",
-        "disabled_by_default": False,
-        "internal": False,
+        "disabled_by_default": True,
+        "internal": True,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
     }
     await text_sensor.register_text_sensor(evt_ts_var, evt_ts_conf)
@@ -308,8 +221,6 @@ async def to_code(config):
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
         # Bind the global event entity to this sequence
-        if event_var:
-            cg.add(var.set_event_entity(event_var))
         if evt_ts_var:
             cg.add(var.set_event_text_sensor(evt_ts_var))
         if prog_var:
@@ -390,8 +301,6 @@ async def to_code(config):
         await cg.register_component(sel_var, sel_conf)
         cg.add(sel_var.publish_state("None"))
         # Wire global entities into CFXSequenceSelect (which drives CFXEventManager)
-        if event_var:
-            cg.add(sel_var.set_event_entity(event_var))
         if evt_ts_var:
             cg.add(sel_var.set_event_text_sensor(evt_ts_var))
         # Register all known strip tags so discovery fires all milestones at boot

@@ -2,7 +2,6 @@
 
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/select/select.h"
-#include "esphome/components/event/event.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/number/number.h"
@@ -51,8 +50,6 @@ protected:
 class CFXEventManager {
 public:
   static CFXEventManager &get();
-
-  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
   void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) { this->event_text_sensor_ = s; }
@@ -146,7 +143,6 @@ public:
 
 protected:
   CFXEventManager() = default;
-  esphome::event::Event *event_entity_{nullptr};
   esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
   esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   esphome::text_sensor::TextSensor *event_text_sensor_{nullptr};
@@ -282,9 +278,6 @@ public:
   // HA event integration
   void fire_event(const char *type) {
     CFXEventManager::get().fire_event(type);
-  }
-  void set_event_entity(esphome::event::Event *e) {
-    CFXEventManager::get().set_event_entity(e);
   }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
     CFXEventManager::get().set_event_text_sensor(s);
@@ -426,10 +419,6 @@ public:
     }
   }
   void control(const std::string &value) override;
-
-  void set_event_entity(esphome::event::Event *e) {
-    CFXEventManager::get().set_event_entity(e);
-  }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
     CFXEventManager::get().set_event_text_sensor(s);
   }

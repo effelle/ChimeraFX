@@ -4017,9 +4017,11 @@ uint16_t mode_scanner_internal(bool dualMode) {
       // RESET the old trail age counter (upper 16 bits)
       instance->_segment.step &= 0xFFFF;
 
-      // Reverse
+      // Reverse — preserve overshoot so multi-pixel advances don't
+      // lose pixels at the bounce point (CFX-026: fixes speed 255 break)
       instance->_segment.aux0 = !instance->_segment.aux0;
-      instance->_segment.aux1 = 0;
+      unsigned overshoot = index - len;
+      instance->_segment.aux1 = (overshoot < (unsigned)len) ? overshoot : 0;
     } else {
       instance->_segment.aux1 = index;
     }
