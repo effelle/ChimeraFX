@@ -279,6 +279,9 @@ public:
   void fire_event(const char *type) {
     CFXEventManager::get().fire_event(type);
   }
+  void set_event_entity(esphome::event::Event *e) {
+    CFXEventManager::get().set_event_entity(e);
+  }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
     CFXEventManager::get().set_event_text_sensor(s);
   }
@@ -419,6 +422,9 @@ public:
     }
   }
   void control(const std::string &value) override;
+  void set_event_entity(esphome::event::Event *e) {
+    CFXEventManager::get().set_event_entity(e);
+  }
   void set_event_text_sensor(esphome::text_sensor::TextSensor *s) {
     CFXEventManager::get().set_event_text_sensor(s);
   }
