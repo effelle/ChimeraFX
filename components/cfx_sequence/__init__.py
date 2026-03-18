@@ -45,7 +45,6 @@ CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_PIXEL_STEP = "pixel_step"
 CONF_DURATION = "duration"
-CONF_HA_PIXEL_EVENTS = "ha_pixel_events"  # CFX-023: opt-in cfx_pixel to HA
 
 # Inherited constants
 CONF_ON_START = "on_cfx_start"
@@ -70,7 +69,6 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_PIXEL_STEP, default=0): cv.int_range(min=0, max=255),
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
-        cv.Optional(CONF_HA_PIXEL_EVENTS, default=False): cv.boolean,
         
         # Triggers
         cv.Optional(CONF_ON_START): automation.validate_automation(
@@ -131,18 +129,16 @@ async def to_code(config):
                 str(batch_delay),
             )
 
-        # CFX-025: fire_homeassistant_event() requires homeassistant_services: true.
-        # Enforce it here so the user gets a clear error at build time.
+        # CFX-025: auto-enable homeassistant_services if available for
+        # fire_homeassistant_event() direct event bus delivery.
+        # Optional — falls back to event entity if not set.
         ha_services = api_conf.get("homeassistant_services", False)
-        if not ha_services:
-            raise cv.Invalid(
-                "ChimeraFX requires 'homeassistant_services: true' under 'api:' in your "
-                "ESPHome YAML. This enables reliable event delivery to Home Assistant.\n"
-                "Add to your config:\n"
-                "  api:\n"
-                "    homeassistant_services: true"
-            )
-        cg.add_define("USE_CFX_HA_SERVICES")
+        if ha_services:
+            cg.add_define("USE_CFX_HA_SERVICES")
+            _LOGGER.info("CFX: homeassistant_services enabled — using direct event bus delivery")
+        else:
+            _LOGGER.info("CFX: add 'homeassistant_services: true' under 'api:' for "
+                         "most reliable event delivery to Home Assistant.")
     except cv.Invalid:
         raise
     except Exception:
@@ -152,14 +148,11 @@ async def to_code(config):
     # event_types always includes the bare types (single-strip / backward-compat).
     # For each light referenced by any sequence we also add per-strip tagged
     # variants so HA automations can discriminate which strip fired. (CFX-023)
-    # cfx_pixel:<tag> is only added when at least one sequence sets
-    # ha_pixel_events: true, keeping the type list lean by default.
     import esphome.core as core
     event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
     event_var = cg.new_Pvariable(event_id)
     core.CORE.component_ids.add("cfx_global_events")
 
-    # Collect unique light object_ids and ha_pixel opt-in flags across all sequences.
     # Build a map of light yaml_id -> slugified_name for all lights in config.
     # This lets us derive the correct tag (matching get_object_id() at runtime)
     # from the light's friendly name rather than its YAML id field. (CFX-024)
@@ -171,13 +164,9 @@ async def to_code(config):
         if lid_obj is not None and lname:
             light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
 
-    # Collect unique slugified tags and ha_pixel opt-in flags across all sequences.
     seen_tags = []
-    any_pixel = False
     for seq_conf in config:
         lights = seq_conf.get(CONF_LIGHTS, [])
-        if seq_conf.get(CONF_HA_PIXEL_EVENTS, False):
-            any_pixel = True
         for lid in lights:
             # Use slugified name to match get_object_id() at runtime.
             # Fall back to lid.id if name not found (should not happen).
@@ -223,24 +212,16 @@ async def to_code(config):
     progress_step = 5
 
     event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
-    # Bare fallbacks: fired when no strip tag is configured (edge case).
-    event_types += ["cfx_reach", "cfx_pixel"]
+    # Bare fallback: fired when no strip tag is configured (edge case).
+    event_types += ["cfx_reach"]
 
-    # Per-strip milestone events: cfx_reach:<tag>:<milestone>
-    # Each milestone value produces a UNIQUE event_type string so HA's state
-    # trigger fires unconditionally on every pass — no cfx_idle separator
-    # needed. Milestones enumerated from step to 100 inclusive. (CFX-024)
+    # Per-strip milestone events: cfx_reach:<tag>:<milestone> (CFX-024)
     milestones = list(range(progress_step, 101, progress_step))
     if 100 not in milestones:
-        milestones.append(100)  # always include 100 regardless of step divisibility
+        milestones.append(100)
     for tag in seen_tags:
         for m in milestones:
             event_types.append(f"cfx_reach:{tag}:{m}")
-
-    # cfx_pixel:<tag> only when at least one sequence opts in.
-    if any_pixel:
-        for tag in seen_tags:
-            event_types.append(f"cfx_pixel:{tag}")
     event_conf = {
         "id": event_id,
         "name": "CFX Events",
@@ -295,8 +276,8 @@ async def to_code(config):
         "state_class": sensor.STATE_CLASSES["measurement"],
         "accuracy_decimals": 0,
         "disabled_by_default": False,
-        "internal": False,
-        "force_update": True,
+        "internal": True,
+        "force_update": False,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
     }
     await sensor.register_sensor(prog_var, prog_conf)
@@ -312,8 +293,8 @@ async def to_code(config):
         "icon": "mdi:led-on",
         "state_class": sensor.STATE_CLASSES["measurement"],
         "accuracy_decimals": 0,
-        "disabled_by_default": False,
-        "internal": False,
+        "disabled_by_default": True,
+        "internal": True,
         "force_update": False,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
     }
@@ -357,9 +338,6 @@ async def to_code(config):
             strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
             cg.add(var.set_strip_tag(strip_tag))
 
-        # CFX-023: opt-in cfx_pixel events to HA
-        ha_pixel = seq_conf.get(CONF_HA_PIXEL_EVENTS, False)
-        cg.add(var.set_ha_pixel_enabled(ha_pixel))
 
         # Register target lights
         for light_id in seq_conf.get(CONF_LIGHTS, []):

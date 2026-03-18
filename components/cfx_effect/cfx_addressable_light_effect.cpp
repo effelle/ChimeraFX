@@ -199,7 +199,6 @@ void CFXAddressableLightEffect::start() {
     }
     // Write back (covers both paths) and clears any stale pre-load.
     cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
-    cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   }
   cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
 #endif
@@ -5154,24 +5153,26 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
-  // Update progress continuously (forward and return phases)
-  float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
-  cfx_sequence::CFXEventManager::get().update_progress(current_percentage * 100.0f);
-
   // Prevent multiple identical triggers in sequence, debounce across frames
   if (current_pixel == this->last_triggered_pixel_) {
     return;
   }
 
 #ifdef USE_CFX_SEQUENCE
-  // Read return-phase flag from the runner. Effects that have a distinct
-  // erase/return sub-phase (e.g. Color Wipe) set this so milestone and
-  // on_reach events are suppressed on the return pass. Without this, the
-  // erase pass produces an identical 0->100% progress curve and all
-  // milestones fire a second time per visual cycle.
+  // CFX-026: milestones fire on BOTH fill and erase passes.
+  // is_return_phase_ is still read to detect the pass boundary and fire
+  // cfx_idle as a separator — but it no longer suppresses milestones.
   bool is_return_phase = this->runner_ ? this->runner_->is_return_phase_ : false;
 
-  if (!is_return_phase) {
+  // Detect forward→erase transition: reset milestones and fire cfx_idle
+  // immediately so HA sees a clean boundary between passes. (CFX-025)
+  if (is_return_phase && !this->last_return_phase_) {
+    cfx_sequence::CFXEventManager::get().reset_milestones();
+    cfx_sequence::CFXEventManager::get().fire_event("cfx_idle");
+  }
+  this->last_return_phase_ = is_return_phase;
+
+  {
     if (this->active_sequence_ != nullptr) {
       this->active_sequence_->check_positional_triggers(current_pixel,
                                                         total_pixels);

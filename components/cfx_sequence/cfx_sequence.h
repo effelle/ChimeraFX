@@ -79,11 +79,9 @@ public:
         snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", tag.c_str(), (unsigned)(i * this->progress_step_));
         this->event_text_sensor_->publish_state(buf);
       }
-      this->event_text_sensor_->publish_state(("cfx_pixel:" + tag).c_str());
     }
     this->event_text_sensor_->publish_state("cfx_start");
     this->event_text_sensor_->publish_state("cfx_complete");
-    this->event_text_sensor_->publish_state("cfx_pixel");
     this->event_text_sensor_->publish_state("cfx_idle");
     this->event_text_sensor_->publish_state("cfx_none");  // neutral resting state
   }
@@ -101,8 +99,6 @@ public:
   void fire_event(const char *type);
   void queue_event(const char *type);
   void flush_pending();
-  void publish_progress_if_due();  // CFX-026: rate-limited sensor publishing
-  void update_progress(float pct);  // CFX-026: unconditional progress storage (no milestone check)
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
 
@@ -113,15 +109,15 @@ public:
     if (!tag.empty())
       this->add_known_tag(tag);
     this->rebuild_milestone_strings_();
-    this->cfx_pixel_tagged_ = tag.empty() ? "cfx_pixel" : ("cfx_pixel:" + tag);
   }
   const std::string &get_strip_tag() const { return this->strip_tag_; }
 
   // cfx_pixel opt-in: when false, pixel_advanced() updates the sensor but
   // does NOT fire cfx_pixel to HA. On-device on_cfx_pixel YAML triggers are
   // unaffected — they run before pixel_advanced() is called. (CFX-023)
-  void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
-  bool get_ha_pixel_enabled() const { return this->ha_pixel_enabled_; }
+  // cfx_pixel: on-device only. pixel_advanced() is called from the effect
+  // adapter for on_cfx_pixel YAML triggers — no HA API write. (CFX-026)
+  void pixel_advanced(uint16_t pixel);
 
   // High-level milestone logic (shared for Sequence and Manual)
   void check_milestones(float current_pct);
@@ -129,7 +125,18 @@ public:
     this->last_fired_milestone_ = 0;
     this->pass_count_++;
   }
-  void pixel_advanced(uint16_t pixel);
+
+  // Push one event string onto the deferred queue (called from render loop).
+  // Zero blocking — just a ring buffer write. (CFX-025)
+  void push_deferred(const std::string &evt) {
+    uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
+    if (next == this->deferred_read_) {
+      ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
+      return;
+    }
+    this->deferred_queue_[this->deferred_write_] = evt;
+    this->deferred_write_ = next;
+  }
 
   // Returns true if check_milestones() fired cfx_reach during this frame.
   // Used by the effect adapter to suppress cfx_pixel on the same frame so
@@ -157,13 +164,11 @@ protected:
   // on the hot path. (CFX-024)
   static constexpr uint8_t MAX_MILESTONES = 20; // 5..100 in steps of 5
   std::string milestone_events_[MAX_MILESTONES];
-  std::string cfx_pixel_tagged_{"cfx_pixel"};
 
   void rebuild_milestone_strings_() {
     if (this->strip_tag_.empty()) {
       for (uint8_t i = 0; i < MAX_MILESTONES; i++)
         milestone_events_[i] = "cfx_reach";
-      this->cfx_pixel_tagged_ = "cfx_pixel";
       return;
     }
     char buf[64];
@@ -172,53 +177,45 @@ protected:
       snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
       milestone_events_[i] = buf;
     }
-    this->cfx_pixel_tagged_ = "cfx_pixel:" + this->strip_tag_;
   }
-
-  // When false, pixel_advanced() updates the last_pixel sensor but does NOT
-  // fire cfx_pixel to HA. Opt-in via YAML 'ha_pixel_events: true'. (CFX-023)
-  bool ha_pixel_enabled_{false};
 
   uint8_t progress_step_{5};
   uint8_t last_fired_milestone_{0};
-  uint16_t pass_count_{0};  // diagnostic: increments on each reset_milestones()
+  uint16_t pass_count_{0};
+
+  // For progress sensor: last published integer percent (0-100).
+  int16_t last_published_progress_{0};
 
   // Set to true for the remainder of the frame in which cfx_reach fires.
-  // cfx_pixel is suppressed on that same frame to guarantee cfx_reach arrives
-  // in its own WebSocket frame and HA automation conditions see the updated
-  // sensor state before the next event fires.
   bool milestone_fired_this_frame_{false};
 
-  // Ring buffer for deferred events.
-  // Size 8: at extreme speeds, multiple milestones can cross in a single frame
-  // (e.g., speed 255 jumps 20% in one frame = 4 milestones). The previous
-  // 3-slot buffer would drop events. 8 slots covers worst case with spare. (CFX-026)
-  static constexpr uint8_t PENDING_QUEUE_SIZE = 8;
-  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr, nullptr,
-                                                   nullptr, nullptr, nullptr, nullptr};
-  std::atomic<uint8_t> pending_write_{0}; // CFX-021: atomic to guard queue head/tail across tasks
-  std::atomic<uint8_t> pending_read_{0};  // CFX-021: atomic to guard queue head/tail across tasks
+  // Deferred event queue — ALL events are pushed here from the hot path
+  // (render loop) and drained ONE PER loop() CALL from flush_pending().
+  // This decouples milestone firing from API writes entirely: the render loop
+  // does zero blocking WebSocket calls; the API writes happen in loop()
+  // between frames, each within ESPHome's 30ms component budget. (CFX-025)
+  //
+  // Capacity 32: forward pass fires 20 milestones + cfx_idle + cfx_start +
+  // cfx_complete + spare = 24 max in flight. 32 gives comfortable headroom.
+  // At 50Hz loop rate the queue drains in 640ms — well within the return
+  // phase at any speed. String storage avoids const char* lifetime issues.
+  static constexpr uint8_t DEFERRED_QUEUE_SIZE = 32;
+  std::string deferred_queue_[DEFERRED_QUEUE_SIZE];
+  uint8_t deferred_write_{0};
+  uint8_t deferred_read_{0};
 
-  // Last published integer progress value, used to avoid publishing unchanged values.
-  int32_t last_published_progress_{-1};
+  // Legacy small queue kept for cfx_complete (queued from a different task).
+  // CFX-021: atomic to guard queue head/tail across FreeRTOS tasks.
+  static constexpr uint8_t PENDING_QUEUE_SIZE = 3;
+  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr};
+  std::atomic<uint8_t> pending_write_{0};
+  std::atomic<uint8_t> pending_read_{0};
 
   // Deferred event pipeline — ensures cfx_idle lands in a separate
   // WebSocket frame from the real event so HA State triggers fire reliably.
   static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;
   bool pending_idle_{false};
   uint32_t idle_hold_until_ms_{0};
-
-  // CFX-026: Continuous progress storage + timer-based sensor publishing.
-  // Decouples render-path progress tracking from sensor API calls.
-  float stored_progress_{0.0f};
-  bool progress_dirty_{false};
-  uint32_t last_progress_publish_ms_{0};
-  static constexpr uint32_t PROGRESS_PUBLISH_INTERVAL_MS = 200;  // 5 Hz
-  // CFX-026: Maximum number of events to flush per loop() call to avoid blocking
-  static constexpr uint8_t MAX_EVENTS_PER_LOOP = 10;
-
-  int32_t stored_last_pixel_{-1};
-  bool pixel_dirty_{false};
 };
 
 class CFXSequence {
@@ -259,9 +256,6 @@ public:
   const std::string &get_strip_tag() const { return this->strip_tag_; }
 
   // Opt-in flag for cfx_pixel events to HA. Passed to bound effects at
-  // start() time and forwarded to CFXEventManager. (CFX-023)
-  void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
-
   std::string get_id() const { return this->id_; }
   std::string get_name() const { return this->name_; }
 
@@ -326,7 +320,6 @@ protected:
   bool restore_state_{true};
   uint32_t duration_ms_{0};
   std::string strip_tag_{};      // CFX-024: YAML id of first target light
-  bool ha_pixel_enabled_{false}; // CFX-023: opt-in cfx_pixel to HA
   uint32_t duration_start_ms_{0};
   bool duration_complete_fired_{false};
 
@@ -430,7 +423,6 @@ public:
   void setup() override;
   void loop() override {
     CFXEventManager::get().flush_pending();
-    CFXEventManager::get().publish_progress_if_due();  // CFX-026: rate-limited sensor updates
     CFXEventManager::get().populate_text_sensor_discovery();
     for (auto *seq : CFXSequence::instances) {
       seq->check_duration();

@@ -6496,9 +6496,27 @@ uint16_t mode_follow_me(void) {
 
   } // switch
 
-  // Progress tracking: cursor head position during MOVING phase
-  if (fm->state == FM_MOVING && fm->pos >= 0.0f && fm->pos < (float)len)
-    instance->current_leading_pixel = (int32_t)fm->pos;
+  // Progress tracking: expose cursor position as 0→(len-1) in ALL states
+  // so cfx_reach fires continuously including the strobe/restart phases.
+  // During FM_MOVING: live position. After reaching the end: clamp to len-1
+  // so the 100% milestone fires. During FM_PULSE_START: reset to 0. (CFX-026)
+  {
+    int32_t px;
+    switch (fm->state) {
+      case FM_PULSE_START:
+        px = 0;
+        break;
+      case FM_MOVING:
+        px = (int32_t)fm->pos;
+        if (px >= len) px = len - 1;
+        break;
+      default: // FM_STROBE_END, FM_RESTART
+        px = len - 1;
+        break;
+    }
+    if (px >= 0 && px < len)
+      instance->current_leading_pixel = px;
+  }
 
   return FRAMETIME;
 }
@@ -6735,11 +6753,24 @@ uint16_t mode_follow_us(void) {
 
   } // switch
 
-  // Progress tracking: leading particle (parts[0]) during FU_RUN
-  if (fu->state == FU_RUN) {
-    float lead = fu->parts[0].pos;
-    if (lead >= 0.0f && lead < (float)len)
-      instance->current_leading_pixel = (int32_t)lead;
+  // Progress tracking: expose lead particle position in ALL states. (CFX-026)
+  {
+    int32_t px;
+    switch (fu->state) {
+      case FU_PULSE:
+        px = 0;
+        break;
+      case FU_RUN: {
+        float lead = fu->parts[0].pos;
+        px = (lead >= 0.0f) ? (int32_t)lead : 0;
+        if (px >= len) px = len - 1;
+        break;
+      }
+      default: // FU_FINALE, FU_RESTART
+        px = len - 1;
+        break;
+    }
+    instance->current_leading_pixel = px;
   }
 
   return FRAMETIME;

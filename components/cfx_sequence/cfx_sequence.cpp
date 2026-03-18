@@ -32,31 +32,14 @@ CFXEventManager &CFXEventManager::get() {
 }
 
 void CFXEventManager::fire_event(const char *type) {
-  // Primary: fire via HA event bus using CustomAPIDevice::fire_homeassistant_event.
-  // This bypasses the entity state machine entirely — no deduplication, no
-  // WebSocket queue blocking, guaranteed delivery on every call. (CFX-025)
-  // Requires homeassistant_services: true in api: YAML (enforced at codegen).
-#ifdef USE_CFX_HA_SERVICES
-  if (this->api_device_ != nullptr) {
-    this->api_device_->fire_homeassistant_event("esphome.cfx_event",
-        {{"type", std::string(type)}});
-  }
-#endif
-
-  // Secondary: update text_sensor so HA's state history and automation
-  // dropdown stay populated. This is for discovery only — automations should
-  // use the event trigger, not the state trigger. (CFX-025)
-  if (this->event_text_sensor_ != nullptr)
-    this->event_text_sensor_->publish_state(type);
-
-  // Legacy: keep event entity for backward compat with existing automations.
-  if (this->event_entity_ != nullptr) {
-    this->event_entity_->trigger(type);
-  }
+  // Push onto the deferred queue — zero blocking on the render loop hot path.
+  // flush_pending() drains one entry per loop() call at ~50Hz. (CFX-025)
+  this->push_deferred(std::string(type));
 
   bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
                         strncmp(type, "cfx_start",    9)  == 0 ||
-                        strncmp(type, "cfx_reach",    9)  == 0);
+                        strncmp(type, "cfx_reach",    9)  == 0 ||
+                        strncmp(type, "cfx_idle",     8)  == 0);
   if (!suppress_idle) {
     this->pending_idle_ = true;
     this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
@@ -77,40 +60,35 @@ void CFXEventManager::queue_event(const char *type) {
 }
 
 void CFXEventManager::flush_pending() {
-  // CFX-026: Removed early return on event_entity_ == nullptr — progress
-  // publishing and text_sensor updates shouldn't depend on event entity.
+  if (this->event_entity_ == nullptr) return;
 
-  // Fire a limited number of queued events per call to avoid blocking
-  // the loop for too long. This prevents the 10-second delay during
-  // the return phase while still ensuring events are delivered.
-  uint8_t events_flushed = 0;
-  while (this->pending_read_ != this->pending_write_ && events_flushed < MAX_EVENTS_PER_LOOP) {
-    const char *evt = this->pending_events_[this->pending_read_];
-    this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
-
-    // Fire all three channels (matching fire_event's behavior)
-    // so milestones moved to the deferred queue still update all outputs.
-#ifdef USE_CFX_HA_SERVICES
-    if (this->api_device_ != nullptr) {
-      this->api_device_->fire_homeassistant_event("esphome.cfx_event",
-          {{"type", std::string(evt)}});
-    }
-#endif
+  // Drain one entry from the deferred queue per call.
+  // At 50Hz loop rate, 32 entries drain in 640ms — within any return phase.
+  // One write per call keeps each within ESPHome's 30ms component budget. (CFX-025)
+  if (this->deferred_read_ != this->deferred_write_) {
+    const std::string &evt = this->deferred_queue_[this->deferred_read_];
+    this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+    if (this->event_entity_ != nullptr)
+      this->event_entity_->trigger(evt.c_str());
     if (this->event_text_sensor_ != nullptr)
       this->event_text_sensor_->publish_state(evt);
+#ifdef USE_CFX_HA_SERVICES
+    if (this->api_device_ != nullptr)
+      this->api_device_->fire_homeassistant_event("esphome.cfx_event",
+          {{"type", evt}});
+#endif
+    return; // one action per call
+  }
+
+  // Legacy small queue (cfx_complete from FreeRTOS task). (CFX-021)
+  if (this->pending_read_ != this->pending_write_) {
+    const char *evt = this->pending_events_[this->pending_read_];
+    this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
     if (this->event_entity_ != nullptr)
       this->event_entity_->trigger(evt);
-
-    // Mirror fire_event's idle suppression: cfx_start, cfx_complete, and any
-    // cfx_reach variant don't need idle scheduling. (CFX-024)
-    bool suppress_idle = (strncmp(evt, "cfx_complete", 12) == 0 ||
-                          strncmp(evt, "cfx_start",    9)  == 0 ||
-                          strncmp(evt, "cfx_reach",    9)  == 0);
-    if (!suppress_idle) {
-      this->pending_idle_ = true;
-      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
-    }
-    events_flushed++;
+    if (this->event_text_sensor_ != nullptr)
+      this->event_text_sensor_->publish_state(evt);
+    return;
   }
 
   if (this->pending_idle_) {
@@ -120,6 +98,11 @@ void CFXEventManager::flush_pending() {
         this->event_entity_->trigger("cfx_idle");
       if (this->event_text_sensor_ != nullptr)
         this->event_text_sensor_->publish_state("cfx_idle");
+#ifdef USE_CFX_HA_SERVICES
+      if (this->api_device_ != nullptr)
+        this->api_device_->fire_homeassistant_event("esphome.cfx_event",
+            {{"type", std::string("cfx_idle")}});
+#endif
     }
   }
 }
@@ -127,14 +110,13 @@ void CFXEventManager::flush_pending() {
 void CFXEventManager::report_progress(float pct) {
   if (this->progress_pct_sensor_ != nullptr) {
     // Phase J: Round to 0 decimals as requested by USER
-    float rounded = std::round(pct);
+    int rounded = static_cast<int>(std::round(pct));
+    if (rounded == this->last_published_progress_) {
+      return;
+    }
+    this->last_published_progress_ = rounded;
     this->progress_pct_sensor_->publish_state(rounded);
   }
-}
-
-void CFXEventManager::update_progress(float pct) {
-  this->stored_progress_ = pct;
-  this->progress_dirty_ = true;
 }
 
 void CFXEventManager::report_last_pixel(int32_t pixel) {
@@ -143,37 +125,8 @@ void CFXEventManager::report_last_pixel(int32_t pixel) {
   }
 }
 
-void CFXEventManager::publish_progress_if_due() {
-  // CFX-026: Rate-limited sensor publishing at 5 Hz. Called from loop(),
-  // never from the render callback. This decouples progress tracking from
-  // the API call overhead that was causing 10-second blocking on return phase.
-  uint32_t now = millis();
-  if ((now - this->last_progress_publish_ms_) < PROGRESS_PUBLISH_INTERVAL_MS)
-    return;
-  this->last_progress_publish_ms_ = now;
-
-  if (this->progress_dirty_) {
-    this->progress_dirty_ = false;
-    int32_t rounded = std::round(this->stored_progress_);
-    if (rounded == this->last_published_progress_) {
-      return; // no change, skip
-    }
-    this->last_published_progress_ = rounded;
-    this->report_progress(this->stored_progress_);
-  }
-  if (this->pixel_dirty_) {
-    this->pixel_dirty_ = false;
-    this->report_last_pixel(this->stored_last_pixel_);
-  }
-}
-
 void CFXEventManager::check_milestones(float current_pct) {
   if (this->progress_step_ == 0) return;
-
-  // CFX-026: Continuous progress storage + timer-based sensor publishing.
-  // Decouples render-path progress tracking from sensor API calls.
-  this->stored_progress_ = current_pct;
-  this->progress_dirty_ = true;
 
   // Always reset the per-frame flag at the start of each check so callers
   // can reliably test it after this call. (CFX-022)
@@ -185,14 +138,16 @@ void CFXEventManager::check_milestones(float current_pct) {
 
     this->milestone_fired_this_frame_ = true;
 
-    // CFX-026: Queue instead of fire — removes all blocking API calls from
-    // the render callback. flush_pending() delivers via all 3 channels.
+    // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
+    // Progress value is encoded in the event string (cfx_reach:<tag>:<pct>)
+    // so the separate progress sensor publish is redundant and adds API blocking.
+    // The progress sensor is updated only at start/stop lifecycle points. (CFX-025)
     {
       uint8_t idx = (this->last_fired_milestone_ / this->progress_step_) - 1;
       if (idx < MAX_MILESTONES) {
-        this->queue_event(this->milestone_events_[idx].c_str());
+        this->fire_event(this->milestone_events_[idx].c_str());
       } else {
-        this->queue_event("cfx_reach"); // fallback, should not happen
+        this->fire_event("cfx_reach"); // fallback, should not happen
       }
     }
   } else if (current_pct < this->last_fired_milestone_) {
@@ -208,33 +163,18 @@ void CFXEventManager::check_milestones(float current_pct) {
     if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
       this->last_fired_milestone_ = 0;
       this->pass_count_++;
-      // CFX-026: Reset stored progress to 0 at pass boundary so HA's
-      // numeric_state trigger re-arms (value drops below threshold).
-      this->stored_progress_ = 0.0f;
-      this->progress_dirty_ = true;
-      // Schedule cfx_idle as a pass-boundary separator. At high speeds the
-      // return/erase phase is very short (<375ms at speed 255). Without a gap
-      // event, HA receives :100 and :5 of the next loop in rapid succession.
-      // HA's state machine may not commit :100 before :5 arrives, so the
-      // attribute appears unchanged (:75 -> :75) and the state trigger drops
-      // the event. cfx_idle forces a guaranteed attribute change between loops
-      // regardless of how fast the effect cycles. (CFX-024)
-      this->pending_idle_ = true;
-      this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
+      // CFX-025: cfx_idle is now fired immediately at the forward→erase
+      // transition in check_positional_triggers. No pending_idle needed here.
     }
   }
 }
 
 void CFXEventManager::pixel_advanced(uint16_t pixel) {
-  // Both the sensor update and the event are opt-in. When ha_pixel_enabled_
-  // is false there is nothing to do — skip all API work entirely. (CFX-024)
-  if (!this->ha_pixel_enabled_) return;
-  // CFX-026: Store pixel + dirty flag instead of calling report_last_pixel()
-  // directly. The sensor is updated by publish_progress_if_due() at 5 Hz.
-  this->stored_last_pixel_ = (int32_t)pixel;
-  this->pixel_dirty_ = true;
-  // CFX-026: Queue instead of fire — removes blocking from render path.
-  this->queue_event(this->cfx_pixel_tagged_.c_str());
+  // On-device only — no API writes. The CFX Last Pixel sensor is not
+  // updated here since that would spam the API at ~30 calls/sweep.
+  // on_cfx_pixel YAML triggers fire from check_positional_triggers
+  // directly, before this function is called. (CFX-026)
+  (void)pixel;
 }
 
 void CFXSequenceSelect::setup() {
@@ -378,7 +318,6 @@ void CFXSequence::start() {
   if (!this->strip_tag_.empty()) {
     ESP_LOGD(TAG, "  Pre-loading strip tag '%s' into CFXEventManager", this->strip_tag_.c_str());
     cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
-    cfx_sequence::CFXEventManager::get().set_ha_pixel_enabled(this->ha_pixel_enabled_);
   }
 
   // Activate effect on all target lights
@@ -422,7 +361,6 @@ void CFXSequence::start() {
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
         inst->set_strip_tag(this->strip_tag_);
-        inst->set_ha_pixel_enabled(this->ha_pixel_enabled_);
         bound = true;
         // Do not break! Match other lights as well.
       }
@@ -448,7 +386,6 @@ void CFXSequence::start() {
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
     master_fx->set_strip_tag(this->strip_tag_);
-    master_fx->set_ha_pixel_enabled(this->ha_pixel_enabled_);
     bound = true;
   }
 

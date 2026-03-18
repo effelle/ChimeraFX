@@ -159,6 +159,7 @@ public:
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
   int32_t last_cfx_pixel_pixel_{-1};
+  bool last_return_phase_{false};  // CFX-025: detect forward→erase transition
 
 protected:
   uint8_t effect_id_{0};
@@ -208,10 +209,6 @@ public:
   // runtime from get_object_id() in start() as fallback. (CFX-024)
   std::string strip_tag_{};
   void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
-
-  // Opt-in flag for firing cfx_pixel to HA. (CFX-023)
-  bool ha_pixel_enabled_{false};
-  void set_ha_pixel_enabled(bool enabled) { this->ha_pixel_enabled_ = enabled; }
 
   void set_is_sequence_outro(bool v) { this->is_sequence_outro_ = v; }
 
