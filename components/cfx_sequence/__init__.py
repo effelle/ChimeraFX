@@ -295,8 +295,8 @@ async def to_code(config):
         "state_class": sensor.STATE_CLASSES["measurement"],
         "accuracy_decimals": 0,
         "disabled_by_default": False,
-        "internal": True,
-        "force_update": False,
+        "internal": False,
+        "force_update": True,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
     }
     await sensor.register_sensor(prog_var, prog_conf)

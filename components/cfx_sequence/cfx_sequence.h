@@ -101,6 +101,7 @@ public:
   void fire_event(const char *type);
   void queue_event(const char *type);
   void flush_pending();
+  void publish_progress_if_due();  // CFX-026: rate-limited sensor publishing
   void report_progress(float pct);
   void report_last_pixel(int32_t pixel);
 
@@ -188,11 +189,12 @@ protected:
   bool milestone_fired_this_frame_{false};
 
   // Ring buffer for deferred events.
-  // Size 3: accommodates cfx_reach + cfx_complete queued simultaneously on the
-  // final milestone frame, plus one spare slot so the buffer never reads full
-  // when only 2 events are pending. (CFX-022)
-  static constexpr uint8_t PENDING_QUEUE_SIZE = 3;
-  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr};
+  // Size 8: at extreme speeds, multiple milestones can cross in a single frame
+  // (e.g., speed 255 jumps 20% in one frame = 4 milestones). The previous
+  // 3-slot buffer would drop events. 8 slots covers worst case with spare. (CFX-026)
+  static constexpr uint8_t PENDING_QUEUE_SIZE = 8;
+  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr, nullptr,
+                                                   nullptr, nullptr, nullptr, nullptr};
   std::atomic<uint8_t> pending_write_{0}; // CFX-021: atomic to guard queue head/tail across tasks
   std::atomic<uint8_t> pending_read_{0};  // CFX-021: atomic to guard queue head/tail across tasks
 
@@ -201,6 +203,16 @@ protected:
   static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;
   bool pending_idle_{false};
   uint32_t idle_hold_until_ms_{0};
+
+  // CFX-026: Continuous progress storage + timer-based sensor publishing.
+  // Decouples render-path progress tracking from sensor API calls.
+  float stored_progress_{0.0f};
+  bool progress_dirty_{false};
+  uint32_t last_progress_publish_ms_{0};
+  static constexpr uint32_t PROGRESS_PUBLISH_INTERVAL_MS = 200;  // 5 Hz
+
+  int32_t stored_last_pixel_{-1};
+  bool pixel_dirty_{false};
 };
 
 class CFXSequence {
@@ -412,6 +424,7 @@ public:
   void setup() override;
   void loop() override {
     CFXEventManager::get().flush_pending();
+    CFXEventManager::get().publish_progress_if_due();  // CFX-026: rate-limited sensor updates
     CFXEventManager::get().populate_text_sensor_discovery();
     for (auto *seq : CFXSequence::instances) {
       seq->check_duration();
