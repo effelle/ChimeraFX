@@ -200,7 +200,7 @@ void CFXAddressableLightEffect::start() {
     // Write back (covers both paths) and clears any stale pre-load.
     cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
   }
-  cfx_sequence::CFXEventManager::get().fire_event("cfx_start");
+  cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_start");
 #endif
 
   // Zero the default transition length for virtual segment lights while an
@@ -970,7 +970,7 @@ void CFXAddressableLightEffect::stop() {
                 captured_sequence->report_event_complete();
               } else {
                 // Standalone (no sequence bound): fire HA event directly.
-                cfx_sequence::CFXEventManager::get().queue_event("cfx_complete");
+                cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_complete");
               }
             }
 #endif
@@ -5165,7 +5165,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
   // immediately so HA sees a clean boundary between passes. (CFX-025)
   if (is_return_phase && !this->last_return_phase_) {
     cfx_sequence::CFXEventManager::get().reset_milestones();
-    cfx_sequence::CFXEventManager::get().fire_event("cfx_idle");
+    cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_idle");
   }
   this->last_return_phase_ = is_return_phase;
 

@@ -63,6 +63,18 @@ public:
     this->known_tags_.push_back(tag);
   }
   void fire_event(const char *type);
+
+  // Fire a lifecycle event (cfx_start, cfx_idle, cfx_complete) both bare and
+  // tagged with the current strip tag. Bare form preserves backward compat;
+  // tagged form allows per-strip automation targeting. (CFX-026)
+  // e.g. fire_lifecycle("cfx_start") -> fires "cfx_start" + "cfx_start:rgb_light"
+  void fire_lifecycle(const char *type) {
+    this->fire_event(type);
+    if (!this->strip_tag_.empty()) {
+      std::string tagged = std::string(type) + ":" + this->strip_tag_;
+      this->fire_event(tagged.c_str());
+    }
+  }
   void queue_event(const char *type);
   void flush_pending();
   void report_progress(float pct);

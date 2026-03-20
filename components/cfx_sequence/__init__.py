@@ -192,6 +192,14 @@ async def to_code(config):
     progress_step = 5
     event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
     event_types += ["cfx_reach"]  # bare fallback
+
+    # Per-strip tagged lifecycle events — fired alongside bare form. (CFX-026)
+    # Allows per-strip automation targeting when multiple strips run simultaneously.
+    for tag in seen_tags:
+        event_types.append(f"cfx_start:{tag}")
+        event_types.append(f"cfx_idle:{tag}")
+        event_types.append(f"cfx_complete:{tag}")
+
     milestones = list(range(progress_step, 101, progress_step))
     if 100 not in milestones:
         milestones.append(100)

@@ -40,6 +40,8 @@ void CFXEventManager::fire_event(const char *type) {
   // flush_pending() drains one entry per loop() call at ~50Hz. (CFX-025)
   this->push_deferred(std::string(type));
 
+  // Suppress idle scheduling for lifecycle and milestone events (bare and tagged).
+  // Tagged form e.g. "cfx_start:rgb_light" still starts with "cfx_start".
   bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
                         strncmp(type, "cfx_start",    9)  == 0 ||
                         strncmp(type, "cfx_reach",    9)  == 0 ||
@@ -611,7 +613,8 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
-  CFXEventManager::get().queue_event("cfx_complete");
+  // Fire both bare and tagged cfx_complete so per-strip automations work. (CFX-026)
+  CFXEventManager::get().fire_lifecycle("cfx_complete");
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,
