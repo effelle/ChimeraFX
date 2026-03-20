@@ -190,11 +190,9 @@ async def to_code(config):
 
     # Build event_types list — pre-registers all valid strings in HA UI. (CFX-024)
     progress_step = 5
-    event_types = ["cfx_start", "cfx_complete", "cfx_idle"]
-    event_types += ["cfx_reach"]  # bare fallback
-
-    # Per-strip tagged lifecycle events — fired alongside bare form. (CFX-026)
-    # Allows per-strip automation targeting when multiple strips run simultaneously.
+    # All events are tagged with the strip name — no bare forms. (CFX-026)
+    # Tagged events allow per-strip automation targeting for multi-strip setups.
+    event_types = []
     for tag in seen_tags:
         event_types.append(f"cfx_start:{tag}")
         event_types.append(f"cfx_idle:{tag}")
@@ -262,10 +260,6 @@ async def to_code(config):
         # Bind the global event entity to this sequence
         if event_var:
             cg.add(var.set_event_entity(event_var))
-        if prog_var:
-            cg.add(var.set_progress_sensor(prog_var))
-        if last_px_var:
-            cg.add(var.set_last_pixel_sensor(last_px_var))
 
         if CONF_SET_SPEED in seq_conf:
             cg.add(var.set_speed(seq_conf[CONF_SET_SPEED]))
