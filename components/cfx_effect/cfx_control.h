@@ -222,8 +222,6 @@ protected:
       return 7;
     if (name == "Party")
       return 8;
-    if (name == "Lava")
-      return 9;
     if (name == "Pastel")
       return 10;
     if (name == "Ocean")
@@ -251,7 +249,7 @@ protected:
     if (name == "Fairy")
       return 22;
     if (name == "Twilight")
-      return 23;
+      return 9;
     if (name == "Smart Random")
       return 254;  // CFX-019: routes to _currentRandomPaletteBuffer in getPaletteByIndex
     return 0;

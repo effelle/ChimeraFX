@@ -29,7 +29,7 @@ bool CFXControl::global_debug_enabled_ = false;
 std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_effects;
 uint8_t CFXAddressableLightEffect::last_roulette_id_ = 0;
 
-static const char *TAG = "chimera_fx";
+static const char *const TAG = "chimera_fx";
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
     : light::AddressableLightEffect(name) {
@@ -748,7 +748,8 @@ void CFXAddressableLightEffect::stop() {
       } else {
         // 2. Fallback to UI Selectors / YAML Presets
         if (out_eff != nullptr && out_eff->has_state()) {
-          std::string s = out_eff->current_option();
+          const char *raw_opt = out_eff->current_option();
+          std::string s = raw_opt ? raw_opt : "";
           if (s == "Wipe")
             this->active_outro_mode_ = INTRO_MODE_WIPE;
           else if (s == "Fade")
@@ -1856,7 +1857,7 @@ void CFXAddressableLightEffect::run_controls_() {
           return 7;
         if (strcmp(opt, "Party") == 0)
           return 8;
-        if (strcmp(opt, "Lava") == 0)
+        if (strcmp(opt, "Twilight") == 0)
           return 9;
         if (strcmp(opt, "Pastel") == 0)
           return 10;
@@ -1886,8 +1887,6 @@ void CFXAddressableLightEffect::run_controls_() {
           return 254;
         if (strcmp(opt, "Fairy") == 0)
           return 22;
-        if (strcmp(opt, "Twilight") == 0)
-          return 23;
         if (strcmp(opt, "Default") == 0) {
           // Resolve the natural default for this effect
           // FIX: Use this->effect_id_ (Requested Effect) instead of
