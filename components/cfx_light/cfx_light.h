@@ -264,6 +264,7 @@ protected:
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
+  std::vector<uint8_t> visualizer_pkt_;  // Pre-allocated packet buffer
 
   // State synchronization listeners
   class MasterListener : public light::LightRemoteValuesListener {

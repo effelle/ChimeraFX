@@ -527,16 +527,14 @@ void CFXLightOutput::write_state(light::LightState *state) {
       dest_addr.sin_family = AF_INET;
       dest_addr.sin_port = htons(this->visualizer_port_);
 
-      // Prepend Type Header (0x00 = Pixels)
-      // To avoid sendmsg issues, we'll use a local buffer for small strips
-      // or a vector for larger ones.
+      // Reuse pre-allocated packet buffer to avoid per-frame heap allocation
       size_t buf_len = this->get_buffer_size_();
-      std::vector<uint8_t> pkt;
-      pkt.reserve(buf_len + 1);
-      pkt.push_back(VISUALIZER_TYPE_PIXELS);
-      pkt.insert(pkt.end(), this->buf_, this->buf_ + buf_len);
+      this->visualizer_pkt_.clear();
+      this->visualizer_pkt_.reserve(buf_len + 1);
+      this->visualizer_pkt_.push_back(VISUALIZER_TYPE_PIXELS);
+      this->visualizer_pkt_.insert(this->visualizer_pkt_.end(), this->buf_, this->buf_ + buf_len);
 
-      sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
+      sendto(this->socket_fd_, this->visualizer_pkt_.data(), this->visualizer_pkt_.size(), 0,
              (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     }
   }

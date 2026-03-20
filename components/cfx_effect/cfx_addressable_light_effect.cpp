@@ -209,14 +209,7 @@ void CFXAddressableLightEffect::start() {
   // full transition period — causing a prolonged white flash before the effect
   // renders. Setting it to 0 makes the ON instant; the intro animation handles
   // the visual ramp instead. Restored in stop() for normal ON/OFF behavior.
-  if (this->is_virtual_segment_) {
-    auto *ls = this->get_light_state();
-    if (ls != nullptr) {
-      // NOTE: We no longer zero the default transition length here.
-      // The transformer bypass in cfx_virtual_segment_light.h already prevents
-      // the white flash, so we can let the native brightness transition run.
-    }
-  }
+
 
   // State Machine Init: Check if we are turning ON from OFF BEFORE modifying
   // state
@@ -686,20 +679,13 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // Initialize Outro state tracking
-  if (state != nullptr) {
-    // last_target_on_ removed, state transitions handled natively
-  }
+
 }
 
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
 
-  // T-05 DIAGNOSTIC: confirm stop() is called and whether outro can register
-  ESP_LOGD("chimera_fx", "[T05] stop() called: effect_id=%u runner=%p is_virtual=%d",
-           (unsigned)this->effect_id_,
-           (void*)this->runner_,
-           (int)this->is_virtual_segment_);
+
 
   this->trigger_on_complete();
 
@@ -921,20 +907,12 @@ void CFXAddressableLightEffect::stop() {
       if (out != nullptr) {
         out->add_outro_callback([this, it_light, captured_runners, captured_sequence]() -> bool {
           auto *current_state = this->get_light_state();
-          // T-05 DIAGNOSTIC: log first callback tick to confirm outro is running
-          if (this->outro_start_time_ == 0) {
-            bool light_is_on = (current_state != nullptr &&
-                                current_state->remote_values.is_on());
-            ESP_LOGD("chimera_fx",
-                     "[T05] outro callback first tick: effect_id=%u light_on=%d mode=%u",
-                     (unsigned)this->effect_id_, (int)light_is_on,
-                     (unsigned)this->active_outro_mode_);
-          }
+
           if (current_state != nullptr &&
               current_state->remote_values.is_on()) {
             // Effect was completely changed or light remained ON.
             // Abort the outro and delete all captured runners cleanly.
-            ESP_LOGD("chimera_fx", "[T05] outro ABORTED — light is on");
+
             for (auto *r : *captured_runners)
               delete r;
             captured_runners->clear();

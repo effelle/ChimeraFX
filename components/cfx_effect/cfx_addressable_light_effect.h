@@ -272,12 +272,6 @@ public:
   CFXControl *controller_{nullptr};
   void run_controls_();
 
-  bool intro_pending_{false};
-
-  // INTRO_NONE fade-in: ramp brightness from 0→1 over default_transition_length
-  uint32_t fade_in_duration_ms_{0};
-  uint32_t fade_in_start_ms_{0};
-  bool fade_in_active_{false};
   bool active_outro_mirror_{false};
   bool active_force_white_{false};
   bool active_outro_force_white_{false};

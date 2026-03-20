@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <set>
 #include <string>
-#include <vector>
 
 namespace esphome {
 namespace cfx_sequence {
