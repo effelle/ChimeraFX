@@ -960,9 +960,11 @@ void CFXAddressableLightEffect::stop() {
             // If is_sequence_outro_ is true, the sequence already fired
             // completion (report_event_complete was called before stop()),
             // so we skip here to avoid double-firing.
-            // Guard removed: cfx_complete fires for ALL effects (architectural
-            // and regular alike) — any effect that completes an outro gets it.
-            if (!this->is_sequence_outro_) {
+            // cfx_complete fires when a real outro completes: architectural
+            // preset or user-configured outro selector. INTRO_MODE_NONE is the
+            // default fade-to-black on every light-off — not a meaningful outro,
+            // must not fire cfx_complete.
+            if (!this->is_sequence_outro_ && this->active_outro_mode_ != INTRO_MODE_NONE) {
               if (captured_sequence != nullptr) {
                 // Sequence-driven path: route through report_event_complete()
                 // so that on_cfx_complete YAML automations fire in addition
@@ -5176,6 +5178,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
   // Detect forward→erase transition: reset milestones and fire cfx_idle
   // immediately so HA sees a clean boundary between passes. (CFX-025)
   if (is_return_phase && !this->last_return_phase_) {
+    // Force-sweep to 100% before resetting so the final milestone is never
+    // lost to a frame-boundary miss. At speed=255 the 95%→phase-flip window
+    // is ~19ms, smaller than one 24ms frame, so without this check 100% fires
+    // only ~78% of passes by luck.
+    cfx_sequence::CFXEventManager::get().check_milestones(100.0f);
     cfx_sequence::CFXEventManager::get().reset_milestones();
     cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_idle");
   }

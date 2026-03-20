@@ -78,25 +78,29 @@ void CFXEventManager::check_milestones(float current_pct) {
   // can reliably test it after this call. (CFX-022)
   this->milestone_fired_this_frame_ = false;
 
+  // Sweep loop: fire ALL milestones crossed since last call in a single pass.
+  // At high speeds (e.g. speed=255 on Wipe) the leading pixel can jump several
+  // percent in one 24ms frame, skipping milestones with a plain if().
+  // The while loop guarantees every 5% boundary fires in order regardless of
+  // how large the frame step is. Worst case at speed=255: ~4 iterations.
   uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
-  if (current_pct >= next_milestone) {
+  while (current_pct >= next_milestone && next_milestone <= 100) {
     this->last_fired_milestone_ = next_milestone;
-
     this->milestone_fired_this_frame_ = true;
 
     // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
-    // Progress value is encoded in the event string (cfx_reach:<tag>:<pct>)
-    // so the separate progress sensor publish is redundant and adds API blocking.
-    // The progress sensor is updated only at start/stop lifecycle points. (CFX-025)
     {
       uint8_t idx = (this->last_fired_milestone_ / this->progress_step_) - 1;
       if (idx < MAX_MILESTONES) {
         this->fire_event(this->milestone_events_[idx].c_str());
       } else {
-        ESP_LOGW("cfx_sequence", "check_milestones: idx out of range, skipping"); // should not happen
+        ESP_LOGW("cfx_sequence", "check_milestones: idx out of range, skipping");
       }
     }
-  } else if (current_pct < this->last_fired_milestone_) {
+    next_milestone = this->last_fired_milestone_ + this->progress_step_;
+  }
+
+  if (current_pct < this->last_fired_milestone_) {
     // Reset milestone counter when a new forward pass begins.
     // check_milestones is only called during the forward pass (the adapter
     // suppresses calls during the erase/return phase via runner->is_return_phase_).
