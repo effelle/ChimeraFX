@@ -191,13 +191,17 @@ void CFXAddressableLightEffect::start() {
   // get_object_id() which ESPHome also sets to slugify(name). Either way the
   // tag matches what __init__.py registered in event_types. (CFX-024)
   {
-    std::string tag = cfx_sequence::CFXEventManager::get().get_strip_tag();
-    if (tag.empty()) {
-      auto *ls = this->get_light_state();
-      if (ls != nullptr)
-        tag = ls->get_object_id();
-    }
-    // Write back (covers both paths) and clears any stale pre-load.
+    // Always derive tag fresh from this light's object_id first.
+    // Then let a pre-loaded sequence tag override it if present.
+    // This prevents stale tags from previous lights leaking in. (CFX-026)
+    std::string tag;
+    auto *ls = this->get_light_state();
+    if (ls != nullptr)
+      tag = ls->get_object_id();
+    // If a sequence pre-loaded a tag for this run, prefer it.
+    const std::string &preloaded = cfx_sequence::CFXEventManager::get().get_strip_tag();
+    if (!preloaded.empty())
+      tag = preloaded;
     cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
   }
   cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_start");
@@ -697,10 +701,7 @@ void CFXAddressableLightEffect::start() {
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
 
-  // Clear strip tag so the next effect start() always derives it fresh from
-  // get_object_id(). Without this, a stale tag from a previous light leaks
-  // into the next effect when no sequence pre-loads a new tag. (CFX-026)
-  cfx_sequence::CFXEventManager::get().set_strip_tag("");
+
 
 
 

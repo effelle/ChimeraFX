@@ -188,11 +188,11 @@ async def to_code(config):
             if lid_obj is not None and lname:
                 tag = _cfx_slugify(str(lname))
                 if tag not in seen_tags:
+                    # cfx_light stores effects as {"addressable_cfx": {...}}
                     for eff_conf in lconf.get("effects", []):
-                        for key in ("platform", "type", "name"):
-                            if "addressable_cfx" in str(eff_conf.get(key, "")).lower():
-                                seen_tags.append(tag)
-                                break
+                        if "addressable_cfx" in eff_conf:
+                            seen_tags.append(tag)
+                            break
             # Segment lights — each is an independent LightState
             for seg in lconf.get("segments", []):
                 seg_id_obj = seg.get("id")
