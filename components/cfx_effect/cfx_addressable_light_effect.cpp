@@ -960,8 +960,9 @@ void CFXAddressableLightEffect::stop() {
             // If is_sequence_outro_ is true, the sequence already fired
             // completion (report_event_complete was called before stop()),
             // so we skip here to avoid double-firing.
-            if (this->get_monochromatic_preset_(this->effect_id_).is_active &&
-                !this->is_sequence_outro_) {
+            // Guard removed: cfx_complete fires for ALL effects (architectural
+            // and regular alike) — any effect that completes an outro gets it.
+            if (!this->is_sequence_outro_) {
               if (captured_sequence != nullptr) {
                 // Sequence-driven path: route through report_event_complete()
                 // so that on_cfx_complete YAML automations fire in addition
@@ -3776,6 +3777,17 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       it[seg_start + i] = Color::BLACK;
     }
     break;
+  }
+
+  // Feed intro progress into the existing leading-pixel pipeline so that
+  // cfx_reach milestones fire for architectural (monochromatic) effects.
+  // apply() reads current_leading_pixel immediately after run_intro() returns
+  // and routes it through check_positional_triggers() unchanged — no new
+  // milestone logic needed here. INTRO_MODE_NONE leaves progress=0 so no
+  // spurious milestones fire for effects with no intro configured.
+  if (chimera_fx::instance != nullptr && seg_len > 0) {
+    chimera_fx::instance->current_leading_pixel =
+        (int32_t)(progress * (float)seg_len);
   }
 }
 
