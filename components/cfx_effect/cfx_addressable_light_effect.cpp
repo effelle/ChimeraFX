@@ -325,8 +325,20 @@ void CFXAddressableLightEffect::start() {
     this->runner_->reset();
   }
 
-  // Pre-seed the UI with this effect's default palette
-  if (this->controller_) {
+  // Pre-seed the UI with this effect's default palette — only when autotune is
+  // active. When autotune is OFF, the user's last palette selection is preserved.
+  bool autotune_will_run = true;
+  {
+    switch_::Switch *at_sw =
+        (this->controller_ && this->controller_->get_autotune())
+            ? this->controller_->get_autotune()
+            : this->autotune_;
+    if (this->autotune_preset_.has_value())
+      autotune_will_run = this->autotune_preset_.value();
+    else if (at_sw != nullptr)
+      autotune_will_run = at_sw->state;
+  }
+  if (autotune_will_run && this->controller_) {
     select::Select *palette_sel_init = this->controller_->get_palette()
                                            ? this->controller_->get_palette()
                                            : this->palette_;
@@ -5096,12 +5108,17 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
     this->autotune_expected_intensity_ = intensity_num->state;
   }
 
-  // 3. Palette
+  // 3. Palette — set selector to "Default" so the runner resolves its own
+  //    built-in palette for this effect. Don't resolve to a concrete name
+  //    (e.g. "Aurora") — that would prevent the runner from using its native
+  //    default and would confuse the auto-disable override detection.
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->palette_;
   if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
-    uint8_t default_pal_id = this->get_default_palette_id_(this->effect_id_);
-    std::string pal_name = this->get_palette_name_(default_pal_id);
+    std::string pal_name = "Default";
+    if (this->is_monochromatic_(this->effect_id_)) {
+      pal_name = "Solid";
+    }
 
     if (palette_sel->current_option() != pal_name) {
       auto call = palette_sel->make_call();
