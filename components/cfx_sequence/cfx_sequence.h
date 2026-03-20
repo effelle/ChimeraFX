@@ -48,8 +48,6 @@ class CFXEventManager {
 public:
   static CFXEventManager &get();
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
-  void set_progress_sensor(esphome::sensor::Sensor *s) { this->progress_pct_sensor_ = s; }
-  void set_last_pixel_sensor(esphome::sensor::Sensor *s) { this->last_pixel_sensor_ = s; }
   void set_api_device(esphome::api::CustomAPIDevice *d) { this->api_device_ = d; }
 
   // HA event delivery opt-in. When false, fire_event() is a no-op for all
@@ -64,21 +62,18 @@ public:
   }
   void fire_event(const char *type);
 
-  // Fire a lifecycle event (cfx_start, cfx_idle, cfx_complete) both bare and
-  // tagged with the current strip tag. Bare form preserves backward compat;
-  // tagged form allows per-strip automation targeting. (CFX-026)
-  // e.g. fire_lifecycle("cfx_start") -> fires "cfx_start" + "cfx_start:rgb_light"
+  // Fire a lifecycle event tagged with the current strip tag. (CFX-026)
+  // e.g. fire_lifecycle("cfx_start") -> fires "cfx_start:rgb_light"
+  // Falls back to bare form only when no strip tag is set (edge case).
   void fire_lifecycle(const char *type) {
-    this->fire_event(type);
     if (!this->strip_tag_.empty()) {
       std::string tagged = std::string(type) + ":" + this->strip_tag_;
       this->fire_event(tagged.c_str());
+    } else {
+      this->fire_event(type);
     }
   }
-  void queue_event(const char *type);
   void flush_pending();
-  void report_progress(float pct);
-  void report_last_pixel(int32_t pixel);
 
   // Strip tag: set once at start() time from the effect adapter.
   // Also rebuilds the pre-computed milestone event strings. (CFX-024)
@@ -145,8 +140,9 @@ protected:
 
   void rebuild_milestone_strings_() {
     if (this->strip_tag_.empty()) {
+      // No strip tag — milestone events disabled. Should not happen in normal use.
       for (uint8_t i = 0; i < MAX_MILESTONES; i++)
-        milestone_events_[i] = "cfx_reach";
+        milestone_events_[i] = "";
       return;
     }
     char buf[64];
@@ -179,18 +175,8 @@ protected:
   uint8_t deferred_write_{0};
   uint8_t deferred_read_{0};
 
-  // Legacy small queue kept for cfx_complete (queued from a different task).
-  // CFX-021: atomic to guard queue head/tail across FreeRTOS tasks.
-  static constexpr uint8_t PENDING_QUEUE_SIZE = 3;
-  const char *pending_events_[PENDING_QUEUE_SIZE]{nullptr, nullptr, nullptr};
-  std::atomic<uint8_t> pending_write_{0};
-  std::atomic<uint8_t> pending_read_{0};
 
-  // Deferred event pipeline — ensures cfx_idle lands in a separate
-  // WebSocket frame from the real event so HA State triggers fire reliably.
-  static constexpr uint32_t CFX_IDLE_HOLD_MS = 200;
-  bool pending_idle_{false};
-  uint32_t idle_hold_until_ms_{0};
+
 };
 
 class CFXSequence {
@@ -272,8 +258,6 @@ public:
   }
 
   // Runtime configurable entities
-  void set_progress_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_progress_sensor(sensor); }
-  void set_last_pixel_sensor(esphome::sensor::Sensor *sensor) { CFXEventManager::get().set_last_pixel_sensor(sensor); }
 
   // Milestone tracking
   void check_milestones(uint8_t current_pct) {

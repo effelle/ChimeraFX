@@ -40,29 +40,6 @@ void CFXEventManager::fire_event(const char *type) {
   // flush_pending() drains one entry per loop() call at ~50Hz. (CFX-025)
   this->push_deferred(std::string(type));
 
-  // Suppress idle scheduling for lifecycle and milestone events (bare and tagged).
-  // Tagged form e.g. "cfx_start:rgb_light" still starts with "cfx_start".
-  bool suppress_idle = (strncmp(type, "cfx_complete", 12) == 0 ||
-                        strncmp(type, "cfx_start",    9)  == 0 ||
-                        strncmp(type, "cfx_reach",    9)  == 0 ||
-                        strncmp(type, "cfx_idle",     8)  == 0);
-  if (!suppress_idle) {
-    this->pending_idle_ = true;
-    this->idle_hold_until_ms_ = millis() + CFX_IDLE_HOLD_MS;
-  }
-}
-
-void CFXEventManager::queue_event(const char *type) {
-  // Three-slot ring buffer (CFX-022). Only string literals are stored
-  // (permanent lifetime). If all slots are occupied the new event is dropped.
-  // Normal operation queues at most cfx_complete + one other event per tick.
-  uint8_t next = (this->pending_write_ + 1) % PENDING_QUEUE_SIZE;
-  if (next == this->pending_read_) {
-    ESP_LOGW("cfx_sequence", "queue_event: queue full, dropping '%s'", type);
-    return;
-  }
-  this->pending_events_[this->pending_write_] = type;
-  this->pending_write_ = next;
 }
 
 void CFXEventManager::flush_pending() {
@@ -88,43 +65,11 @@ void CFXEventManager::flush_pending() {
       return; // time budget exhausted, resume next call
   }
 
-  // Legacy small queue (cfx_complete from FreeRTOS task). (CFX-021)
-  if (this->pending_read_ != this->pending_write_) {
-    const char *evt = this->pending_events_[this->pending_read_];
-    this->pending_read_ = (this->pending_read_ + 1) % PENDING_QUEUE_SIZE;
-    if (this->event_entity_ != nullptr)
-      this->event_entity_->trigger(evt);
-    return;
-  }
 
-  if (this->pending_idle_) {
-    if (millis() >= this->idle_hold_until_ms_) {
-      this->pending_idle_ = false;
-      if (this->event_entity_ != nullptr)
-        this->event_entity_->trigger("cfx_idle");
-#ifdef USE_CFX_HA_SERVICES
-      if (this->api_device_ != nullptr)
-        this->api_device_->fire_homeassistant_event("esphome.cfx_event",
-            {{"type", std::string("cfx_idle")}});
-#endif
-    }
-  }
 }
 
 
-void CFXEventManager::report_progress(float pct) {
-  if (this->progress_pct_sensor_ != nullptr) {
-    // Phase J: Round to 0 decimals as requested by USER
-    float rounded = std::round(pct);
-    this->progress_pct_sensor_->publish_state(rounded);
-  }
-}
 
-void CFXEventManager::report_last_pixel(int32_t pixel) {
-  if (this->last_pixel_sensor_ != nullptr) {
-    this->last_pixel_sensor_->publish_state(pixel);
-  }
-}
 
 void CFXEventManager::check_milestones(float current_pct) {
   if (this->progress_step_ == 0) return;
@@ -148,7 +93,7 @@ void CFXEventManager::check_milestones(float current_pct) {
       if (idx < MAX_MILESTONES) {
         this->fire_event(this->milestone_events_[idx].c_str());
       } else {
-        this->fire_event("cfx_reach"); // fallback, should not happen
+        ESP_LOGW("cfx_sequence", "check_milestones: idx out of range, skipping"); // should not happen
       }
     }
   } else if (current_pct < this->last_fired_milestone_) {
