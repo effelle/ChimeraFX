@@ -697,6 +697,11 @@ void CFXAddressableLightEffect::start() {
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
 
+  // Clear strip tag so the next effect start() always derives it fresh from
+  // get_object_id(). Without this, a stale tag from a previous light leaks
+  // into the next effect when no sequence pre-loads a new tag. (CFX-026)
+  cfx_sequence::CFXEventManager::get().set_strip_tag("");
+
 
 
   this->trigger_on_complete();
