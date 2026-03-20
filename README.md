@@ -24,19 +24,17 @@ The documentation includes everything you need:
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
 * **Segment Runner Core** — High-performance parallel rendering for up to 8 independent segments.
-* **ChimeraFX Orchestrator** — The powerhouse logic layer for hardware-precise events and reactive Home Assistant automations.
+* **ChimeraFX Orchestrator** — The event driven powerhouse logic layer for hardware-precise sequences and reactive Home Assistant automations.
 * **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **100% Home Assistant Native** — Instantly exposes speed, intensity, palette, and other controls.
-* **Built-in Toolkit** — Supports Presets, Timers, and a runtime Debug Logger.
+* **Built-in Toolkit** — Supports Presets, Sequences and a runtime Debug Logger to help you creating the perfect setup.
 
 ---
 
 ### Beyond WLED (The Philosophy)
 
 ChimeraFX stands as a distinct, high-performance lighting engine. It bridges the gap between hand-tuned open-source favorites and **exclusive original algorithms** designed specifically for architectural integration and fluid motion.
-
-Every effect in this library is selected for visual fidelity and rewritten for maximum efficiency. To ensure your device remains fast, responsive, and stable, unoptimized 2D matrix effects or animations requiring multi-color segment layering are intentionally excluded in favor of streamlined, high-speed rendering.
 
 #### Is this for me?
 This project is **not** a full WLED replacement. Choose the right tool for your hardware:

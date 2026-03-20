@@ -11,7 +11,8 @@
       "Bash(if ! git diff --quiet HEAD -- components/cfx_sequence/__init__.py)",
       "Bash(then)",
       "Bash(else)",
-      "Bash(fi)"
+      "Bash(fi)",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file"
     ]
   }
 }

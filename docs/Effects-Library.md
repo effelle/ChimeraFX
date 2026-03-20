@@ -39,11 +39,9 @@
 
 ## Beyond the Port: A New Standard
 
-While ChimeraFX began as a project to bring WLED classics to ESPHome, it has evolved into something unique. The focus has shifted from simple replication to **innovation**.
+While ChimeraFX began as a project to bring some WLED classics to ESPHome, it has evolved into something unique. The focus has shifted from simple replication to **innovation**.
 
 Today, ChimeraFX is a precision-engineered lighting engine offering a curated suite of effects designed specifically for the ESPHome architecture, prioritizing **visual fidelity and resource efficiency** over raw quantity.
-
-*Note: To maintain this focus on performance and quality, unoptimized effects or those requiring complex 2D matrices/multi-segment layering are intentionally excluded.*
 
 ---
 
@@ -51,14 +49,14 @@ Today, ChimeraFX is a precision-engineered lighting engine offering a curated su
 | Icon | Description | Icon | Description |
 |:---:|:---|:---:|:---|
 | :material-tag-outline: | **Minimum Version**: The ChimeraFX version where this effect was introduced. | :material-speedometer: | **Performance Class**: The resource intensity of the effect (Low, Mid, High). |
-| :material-palette: | **Palette Support**: Whether the effect supports color palettes. | :material-bullseye-arrow: | **Orchestrator Ready**: Fully compatible with position-based triggers (**on_cfx_reach**, **on_cfx_pixel**). |
+| :material-palette: | **Palette Support**: Whether the effect supports color palettes. | :material-bullseye-arrow: | **Orchestrator Ready**: Compatible with position-based triggers. See effect description for details.|
 
 ---
 
 ## 1. ChimeraFX Original Effects
 **Signature algorithms engineered exclusively for this engine.**
 
-These are the flagship animations of ChimeraFX. They feature advanced fluid simulations, chaos theory, and custom physics engines not found in any other library.
+Original animations featuring advanced fluid simulations, chaos theory, and custom physics engines.
 
 ??? abstract "152 | Center Gauge | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
 
@@ -269,6 +267,9 @@ These are the flagship animations of ChimeraFX. They feature advanced fluid simu
 ??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High | :material-palette:</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Interference.webm" type="video/webm">
+        </video>
         *A "Batch 2" signature effect. High-frequency light waves collide and interfere, creating a shimmering, high-energy field. Unlike other monochromatic effects, Interference fully supports palettes and features a dedicated "Interference" soft fade-in.*
 
     === "⚙️ Controls"
@@ -553,7 +554,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Four_Times_the_Charm.webm" type="video/webm">
         </video>
         *A multi-center architectural sweep. Splitting the strip into quadrants, it runs two simultaneous 'Curtain Sweeps' starting from the 25% and 75% positions. Perfect for complex architectural highlight sequences.*
 
@@ -604,6 +605,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
+        </video>
         *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
 
     === "⚙️ Controls"
@@ -626,6 +630,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Deep_Breathe.webm" type="video/webm">
+        </video>
         *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
 
     === "⚙️ Controls"
@@ -648,6 +655,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "171 | Inertia Sweep | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Inertia_Sweep.webm" type="video/webm">
+        </video>
         *A precisely-eased fill that sweeps from dark to full brightness in a single pass, with a hot leading edge that pulses three pixels of decreasing intensity ahead of the cursor.*
 
     === "⚙️ Controls"
@@ -670,6 +680,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Sonar_Reveal.webm" type="video/webm">
+        </video>
         *A radar-like scanning beam sweeps back and forth four times, each pass permanently lifting the brightness floor — like sonar gradually resolving a picture from nothing to full presence.*
 
     === "⚙️ Controls"
@@ -692,6 +705,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Venetian.webm" type="video/webm">
+        </video>
         *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
 
     === "⚙️ Controls"
@@ -714,8 +730,8 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
 
     === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Moire_Shift.webm" type="video/webm">
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
         </video>
         *A high-frequency interference pattern that shifts and breathes. Features a complex overlapping sinewave engine that creates organic, shifting shadows and light pockets. Now refined with a proper architectural transition that resolves to a solid floor.*
 
@@ -835,6 +851,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "181 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Eclipse.webm" type="video/webm">
+        </video>
         *A masterclass in negative space. The strip remains gently illuminated while a smooth, deep shadow slowly glides across the light, creating a calming, reverse-kinetic effect.*
 
     === "⚙️ Controls"
@@ -857,6 +876,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "182 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Gas_Discharge.webm" type="video/webm">
+        </video>
         *A digital homage to analog ignition. The strip stutters to life with high-frequency flashes before finally catching and settling into a solid block of light.*
 
     === "⚙️ Controls"
@@ -879,6 +901,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "183 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Harmonic_Settle.webm" type="video/webm">
+        </video>
         *A physical collision transformed into light. The strip fills rapidly, overshoots its brightness target, and then rhythmically 'bounces' back into its stable state like a tuned spring.*
 
     === "⚙️ Controls"
@@ -901,6 +926,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Lithograph.webm" type="video/webm">
+        </video>
         *A precise, machine-like drawing process. A bright, sharp cursor 'prints' the light onto the strip line by line, leaving a solid trail behind it until the entire sequence is complete.*
 
     === "⚙️ Controls"
@@ -1788,7 +1816,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Sparkle.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Sparkle_Plus.webm" type="video/webm">
         </video>
         
         *Intense high-frequency sparkles with overlapping flash cycles.*

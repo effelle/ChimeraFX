@@ -1,8 +1,8 @@
 # ChimeraFX Orchestrator
 
-The ChimeraFX Orchestrator (`cfx_sequence`) is the **Logic Layer** of your lighting. It allows your LED strips to move beyond simple repeating loops and become an organic, responsive part of your environment.
+The ChimeraFX Orchestrator is the **Logic Layer** of your lighting. It allows your LED strips to move beyond simple repeating loops and become an organic, responsive part of your environment.
 
-### 🛡️ Built for Reliability: Two Ways to Sequence
+### Built for Reliability: Two Ways to Sequence
 
 ChimeraFX gives you two ways to orchestrate your lights, an internal sequence engine and Home Assistant automations. Choosing the right one is key to a professional lighting setup.
 
@@ -16,7 +16,7 @@ ChimeraFX gives you two ways to orchestrate your lights, an internal sequence en
 
 ---
 
-## ⚡ Examples: Internal vs. External
+## Examples: Internal vs. External
 
 The following examples show how to react to the same sequence logic in both environments.
 
@@ -124,39 +124,23 @@ The following examples show how to react to the same sequence logic in both envi
 
 ---
 
-## ⚡ Performance Optimization: Event Latency
+## Performance Optimization: Event Latency
 
 By default, ESPHome batches network updates to prevent Wi-Fi congestion. While this is great for standard sensors, it can introduce a ~200ms delay in Home Assistant receiving your lighting events.
 
-For the most responsive "Logic Layer," we recommend reducing the API batch delay:
+For the most responsive "Logic Layer," is recommend reducing the API batch delay:
 
 ```yaml
 api:
   batch_delay: 0ms
 ```
 
-> [!NOTE]
 > **Why is there a delay?**
 > ESPHome defaults to `200ms` to group multiple sensor updates into a single network packet, saving energy and reducing network noise. Setting it to `0ms` tells the device to fire events **instantly** the microsecond they occur—critical for tightly synced automations.
 
 ---
 
-## 🏠 Home Assistant Dashboard Setup
-
-ChimeraFX exposes several entities to help you monitor and configure your logic from the dashboard.
-
-??? info "Entity List & Usage (Click to expand)"
-    | Entity | Usage | Location |
-    | :--- | :--- | :--- |
-    | **Internal Sequences** | The main dropdown to trigger sequences stored on-device. | **Controls** |
-    | **CFX Events** | The event hub used for triggers (Start/Complete/Reach/Pixel). | Diagnostic |
-    | **Sequence Progress** | Sensor showing the current position (0-100%). | Diagnostic |
-    | **Sequence Step** | Configuration: How often to fire `cfx_reach` (e.g., every 5%). | Configuration |
-    | **Last Pixel** | Diagnostic: Shows the index of the leading pixel for filtering `cfx_pixel` events. | Diagnostic |
-
----
-
-## Configuration Variables (YAML)
+## INternal Orchestrator Configuration Variables (YAML)
 
 | Variable | Type | Required | Description |
 |----------|------|----------|-------------|
@@ -173,9 +157,15 @@ ChimeraFX exposes several entities to help you monitor and configure your logic 
 
 ---
 
-## 🛠️ Native ESPHome Integration (Actions)
+## Home Assistant Orchestrator Events Listener
 
-ChimeraFX isn't a standalone system—it is built to live inside the **ESPHome Automation Engine**. Every sequence is a first-class citizen that can be triggered, stopped, or chained directly from hardware events (buttons) or software logic (MQTT, sensor values).
+ChimeraFX exposes several events trough `cfx_events` entity to help you monitor and configure your logic from the dashboard. Is the event hub used for triggers (Start/Complete/Reach/Idle) and can be found on **Events** tab from your device page.
+
+---
+
+##  Native ESPHome Integration (Actions)
+
+ChimeraFX isn't a standalone system, it is built to live inside the **ESPHome Automation Engine**. Every sequence is a first-class citizen that can be triggered, stopped, or chained directly from hardware events (buttons) or software logic (API, sensor values).
 
 ### `cfx_sequence.start`
 Starts a sequence manually by its YAML ID. This allows you to create high-fidelity hardware interactions that bypass the network entirely.
@@ -205,11 +195,11 @@ binary_sensor:
 
 - **`cfx_reach`**: Fired when progress reaches a multiple of the **Progress Step**.
 - **`cfx_complete`**: Fired when a sequence finishes its requested **Iterations**.
-- **`cfx_pixel`**: Fired unconditionally every time the leading pixel advances. Filter in HA using the `cfx_last_pixel` sensor.
+- **`cfx_pixel`**: Fired unconditionally every time the leading pixel advances. Due the high traffic this event can generate, it is not available for the Home Assistant Orchestrator. 
 
 ---
 
-## 🚀 Home Assistant Automations
+## Home Assistant Automations
 
 ChimeraFX events integrate natively with Home Assistant. You can trigger automations using the built-in event selectors.
 

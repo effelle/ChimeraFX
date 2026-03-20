@@ -17,7 +17,7 @@ cfx_effect:
     
 
       # Optional: Exclude controls you don't need
-      # exclude: [5, 6] # This example will exclude Intro Effects and Timer
+      # exclude: [5, 6] # This example will exclude Intro Effects and HA Events
 ```
 
 **Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
@@ -30,9 +30,8 @@ The component creates the following entities based on your controller name (e.g.
 - `LED Strip Palette` (Select)
 - `LED Strip Mirror` (Switch)
 - `LED Strip Intro` (Select)
-- `LED Strip Use Palette` (Switch)
-- `LED Strip Intro Duration` (Number)
-- `LED Strip Timer` (Number)
+- `LED Strip Outro` (Select)
+- `LED Strip In/Out Duration` (Number)
 - `LED Strip Debug` (Switch)
 - `LED Strip Autotune` (Switch)
 
@@ -45,8 +44,8 @@ If you want to keep your dashboard clean, you can exclude specific controls by a
 | 2 | Intensity |
 | 3 | Palette |
 | 4 | Mirror |
-| 5 | Intro Effects (Intro, Duration, Use Palette) |
-| 6 | Timer |
+| 5 | Intro Effects (Intro, Outro and Duration) |
+| 6 | HA Events |
 | 7 | Autotune |
 | 9 | Debug (Diagnostic) |
 
@@ -62,13 +61,13 @@ If you want independent control for each strip (e.g., Roof vs Desk), create sepa
 ```yaml
 cfx_effect:
   cfx_control:
-    - id: my_cfx_controller   # The ID of the first controller. Customizable
-      name: "LED Strip"       # The prefix name of the first control set. Customizable
-      light_id: led_strip     # The ID of the first light you want to manage
+    - id: my_cfx_controller  # The ID of the first controller. Customizable
+      name: "LED Strip"      # The prefix name of the first control set. Customizable
+      light_id: led_strip    # The ID of the first light you want to manage
 
-    - id: desk_controller     # The ID of the second controller. Customizable
-      name: "Desk Lights"     # The prefix name of the second control set. Customizable
-      light_id: led_strip_2   # The ID of the second light you want to manage
+    - id: desk_controller    # The ID of the second controller. Customizable
+      name: "Desk Lights"    # The prefix name of the second control set. Customizable
+      light_id: led_strip_2  # The ID of the second light you want to manage
 ```
 
 ### Option 2: Unified Control (Grouped)
@@ -98,10 +97,10 @@ Controls the palette used by the effect. A palette is a set of colors that are u
 Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro and Outro Animations too.
 
 ### ID 5: Intro and Outro Animation
-A group of three controls: Intro Style (None, Wipe, Fade, Center, Glitter), Intro Duration (0.5 - 10.0 seconds) and Intro Palette Support. The latter allows the intro animation to inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
+A group of three controls: Intro and Outro Style, and In/Out Duration (0.5 - 10.0 seconds). The Intro use the average color of the effect that will follow, the latter always inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
 
-### ID 6: Timer
-Controls how long a light stays on. From 0 (timer OFF) to 360 minutes.
+### ID 6: Home Assistant Events
+Let the user leverage Home Assistant as the Orchestrator for complex animation, using special event triggers (`cfx_start`, `cfx_idle`, `cfx_reach` and `cfx_complete`) or anything else you want to use.
 
 ### ID 7: Autotune
 Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the recommended defaults immediately upon being selected.
