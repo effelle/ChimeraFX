@@ -113,8 +113,8 @@ void CFXEventManager::check_milestones(float current_pct) {
     if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
       this->last_fired_milestone_ = 0;
       this->pass_count_++;
-      // CFX-025: cfx_idle is now fired immediately at the forward→erase
-      // transition in check_positional_triggers. No pending_idle needed here.
+      // CFX-025: milestones are reset at the forward→erase transition
+      // in check_positional_triggers via reset_milestones().
     }
   }
 }

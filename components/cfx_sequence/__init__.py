@@ -212,7 +212,6 @@ async def to_code(config):
     event_types = []
     for tag in seen_tags:
         event_types.append(f"cfx_start:{tag}")
-        event_types.append(f"cfx_idle:{tag}")
         event_types.append(f"cfx_complete:{tag}")
 
     milestones = list(range(progress_step, 101, progress_step))

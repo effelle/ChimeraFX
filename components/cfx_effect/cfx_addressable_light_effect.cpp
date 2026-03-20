@@ -5184,7 +5184,6 @@ void CFXAddressableLightEffect::check_positional_triggers(
     // only ~78% of passes by luck.
     cfx_sequence::CFXEventManager::get().check_milestones(100.0f);
     cfx_sequence::CFXEventManager::get().reset_milestones();
-    cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_idle");
   }
   this->last_return_phase_ = is_return_phase;
 
