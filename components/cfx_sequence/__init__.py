@@ -158,6 +158,14 @@ async def to_code(config):
         lname = lconf.get("name", "")
         if lid_obj is not None and lname:
             light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
+        # Also register segment lights — each segment is an independent LightState
+        # with its own object_id and its own event tag. (CFX-026)
+        for seg in lconf.get("segments", []):
+            seg_id_obj = seg.get("id")
+            seg_name = seg.get("name", "")
+            if seg_id_obj is not None:
+                slug = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
+                light_name_map[seg_id_obj.id] = slug
 
     # Collect unique strip tags across all sequences. (CFX-024)
     seen_tags = []
@@ -169,22 +177,31 @@ async def to_code(config):
 
     _LOGGER.debug("CFX: light_name_map=%s seen_tags=%s", light_name_map, seen_tags)
 
-    # Also collect tags for bare effects (no sequence) on CFX-capable lights.
+    # Also collect tags for bare effects (no sequence) on CFX-capable lights
+    # and their segments. (CFX-026)
     try:
         import esphome.core as _core3
         for lconf in _core3.CORE.config.get("light", []):
+            # Parent light
             lid_obj = lconf.get("id")
             lname = lconf.get("name", "")
-            if lid_obj is None or not lname:
-                continue
-            tag = _cfx_slugify(str(lname))
-            if tag in seen_tags:
-                continue
-            for eff_conf in lconf.get("effects", []):
-                for key in ("platform", "type", "name"):
-                    if "addressable_cfx" in str(eff_conf.get(key, "")).lower():
-                        seen_tags.append(tag)
-                        break
+            if lid_obj is not None and lname:
+                tag = _cfx_slugify(str(lname))
+                if tag not in seen_tags:
+                    for eff_conf in lconf.get("effects", []):
+                        for key in ("platform", "type", "name"):
+                            if "addressable_cfx" in str(eff_conf.get(key, "")).lower():
+                                seen_tags.append(tag)
+                                break
+            # Segment lights — each is an independent LightState
+            for seg in lconf.get("segments", []):
+                seg_id_obj = seg.get("id")
+                seg_name = seg.get("name", "")
+                if seg_id_obj is None:
+                    continue
+                seg_tag = light_name_map.get(seg_id_obj.id, str(seg_id_obj.id))
+                if seg_tag not in seen_tags:
+                    seen_tags.append(seg_tag)
     except Exception as ex:
         _LOGGER.debug("CFX: CORE.config walk failed: %s", ex)
 
