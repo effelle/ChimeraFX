@@ -185,23 +185,17 @@ void CFXAddressableLightEffect::start() {
   // For sequence-driven effects StartAction::play() also calls this, which
   // is harmless (idempotent reset).
   cfx_sequence::CFXEventManager::get().reset_milestones();
-  // Determine the strip tag for this effect run. CFXSequence::start() may have
-  // pre-loaded a tag (from slugify(light.name)) before perform() fired this
-  // start(). Read it first. If empty (bare effect, no sequence), derive from
-  // get_object_id() which ESPHome also sets to slugify(name). Either way the
-  // tag matches what __init__.py registered in event_types. (CFX-024)
+  // Always derive the strip tag from this light's own object_id.
+  // get_object_id() == slugify(light.name) — the same slug registered in
+  // event_types at codegen time. Never use a preloaded tag here; preloaded
+  // tags come from CFXSequence and may refer to a different light (e.g. a
+  // segment ID when the sequence targets a segment but the effect runs on
+  // the parent). (CFX-026)
   {
-    // Always derive tag fresh from this light's object_id first.
-    // Then let a pre-loaded sequence tag override it if present.
-    // This prevents stale tags from previous lights leaking in. (CFX-026)
     std::string tag;
     auto *ls = this->get_light_state();
     if (ls != nullptr)
       tag = ls->get_object_id();
-    // If a sequence pre-loaded a tag for this run, prefer it.
-    const std::string &preloaded = cfx_sequence::CFXEventManager::get().get_strip_tag();
-    if (!preloaded.empty())
-      tag = preloaded;
     cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
   }
   cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_start");
