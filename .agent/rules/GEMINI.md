@@ -31,6 +31,7 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 
 - **ESPHome Compilation**: Do NOT attempt to run `esphome compile` or equivalent build commands. The platform/target environment (esp32-test) does not support it, and attempting it will result in failure. Verification must be performed manually or via other tools provided.
 - **Automatic Push**: ALL code changes MUST be committed and pushed to the current branch on GitHub (currently `stage`) immediately after verification or as requested.
+- **Statement Separators**: The token `&&` is NOT a valid statement separator in this environment (Windows PowerShell). You MUST run multiple commands sequentially as separate tool calls or separate lines in a script, never joined by `&&`.
 
 ---
 

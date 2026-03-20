@@ -105,6 +105,7 @@ No formal linter configured. Follow these conventions:
 - Python: PEP 8, 4-space indents (follow ESPHome conventions)
 - YAML: 2-space indents
 - Commit messages: Use Conventional Commits: `feat(component): ...`, `fix: ...`, `docs: ...`
+- **Shell Usage**: The token `&&` is NOT a valid statement separator in this environment (Windows PowerShell). You MUST run multiple commands sequentially, never joined by `&&`.
 
 ### Documentation
 
