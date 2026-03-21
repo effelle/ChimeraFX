@@ -154,6 +154,51 @@ public:
   int32_t last_cfx_pixel_pixel_{-1};
   bool last_return_phase_{false};  // CFX-025: detect forward→erase transition
 
+  // Per-instance milestone tracking — replaces CFXEventManager singleton state.
+  // Each effect instance tracks its own progress so concurrent strips are
+  // fully independent. (multi-strip fix)
+  static constexpr uint8_t MILESTONE_STEP = 5;
+  static constexpr uint8_t MAX_MILESTONES = 20;  // 5..100 in steps of 5
+  uint8_t  last_fired_milestone_{0};
+  bool     milestone_fired_this_frame_{false};
+  std::string milestone_events_[MAX_MILESTONES];
+
+  void rebuild_milestone_strings_() {
+    char buf[64];
+    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
+      uint8_t m = (i + 1) * MILESTONE_STEP;
+      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
+      milestone_events_[i] = buf;
+    }
+  }
+
+  // Sweep all milestones crossed since last call. While loop ensures no
+  // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
+  void check_milestones_(float current_pct) {
+    this->milestone_fired_this_frame_ = false;
+    uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
+    while (current_pct >= next && next <= 100) {
+      this->last_fired_milestone_ = next;
+      this->milestone_fired_this_frame_ = true;
+      uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
+      if (idx < MAX_MILESTONES) {
+#ifdef USE_CFX_SEQUENCE
+        cfx_sequence::CFXEventManager::get().fire_event(this->milestone_events_[idx].c_str());
+#endif
+      }
+      next = this->last_fired_milestone_ + MILESTONE_STEP;
+    }
+    if (current_pct < this->last_fired_milestone_) {
+      if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
+        this->last_fired_milestone_ = 0;
+    }
+  }
+
+  void reset_milestones_() {
+    this->last_fired_milestone_ = 0;
+    this->milestone_fired_this_frame_ = false;
+  }
+
 protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};

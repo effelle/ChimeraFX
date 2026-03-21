@@ -54,50 +54,13 @@ public:
   // HA-facing paths. Internal on_cfx_reach triggers are unaffected. (CFX-026)
   void set_ha_events_enabled(bool enabled) { this->ha_events_enabled_ = enabled; }
 
-
   void add_known_tag(const std::string &tag) {
     for (const auto &t : this->known_tags_)
       if (t == tag) return;
     this->known_tags_.push_back(tag);
   }
   void fire_event(const char *type);
-
-  // Fire a lifecycle event tagged with the current strip tag. (CFX-026)
-  // e.g. fire_lifecycle("cfx_start") -> fires "cfx_start:rgb_light"
-  // Falls back to bare form only when no strip tag is set (edge case).
-  void fire_lifecycle(const char *type) {
-    if (!this->strip_tag_.empty()) {
-      std::string tagged = std::string(type) + ":" + this->strip_tag_;
-      this->fire_event(tagged.c_str());
-    } else {
-      this->fire_event(type);
-    }
-  }
   void flush_pending();
-
-  // Strip tag: set once at start() time from the effect adapter.
-  // Also rebuilds the pre-computed milestone event strings. (CFX-024)
-  void set_strip_tag(const std::string &tag) {
-    this->strip_tag_ = tag;
-    if (!tag.empty())
-      this->add_known_tag(tag);
-    this->rebuild_milestone_strings_();
-  }
-  const std::string &get_strip_tag() const { return this->strip_tag_; }
-
-  // cfx_pixel opt-in: when false, pixel_advanced() updates the sensor but
-  // does NOT fire cfx_pixel to HA. On-device on_cfx_pixel YAML triggers are
-  // unaffected — they run before pixel_advanced() is called. (CFX-023)
-  // cfx_pixel: on-device only. pixel_advanced() is called from the effect
-  // adapter for on_cfx_pixel YAML triggers — no HA API write. (CFX-026)
-  void pixel_advanced(uint16_t pixel);
-
-  // High-level milestone logic (shared for Sequence and Manual)
-  void check_milestones(float current_pct);
-  void reset_milestones() {
-    this->last_fired_milestone_ = 0;
-    this->pass_count_++;
-  }
 
   // Push one event string onto the deferred queue (called from render loop).
   // Zero blocking — just a ring buffer write. (CFX-025)
@@ -111,72 +74,18 @@ public:
     this->deferred_write_ = next;
   }
 
-  // Returns true if check_milestones() fired cfx_reach during this frame.
-  // Used by the effect adapter to suppress cfx_pixel on the same frame so
-  // cfx_reach always arrives in its own WebSocket frame to HA. (CFX-022)
-  bool was_milestone_fired() const { return this->milestone_fired_this_frame_; }
-  void clear_milestone_fired() { this->milestone_fired_this_frame_ = false; }
-
 protected:
   CFXEventManager() = default;
   esphome::event::Event *event_entity_{nullptr};
-  esphome::sensor::Sensor *progress_pct_sensor_{nullptr};
-  esphome::sensor::Sensor *last_pixel_sensor_{nullptr};
   esphome::api::CustomAPIDevice *api_device_{nullptr};
-  bool ha_events_enabled_{true};   // CFX-026: gated by cfx_control ID 6
+  bool ha_events_enabled_{true};
   bool discovery_done_{false};
-  std::vector<std::string> known_tags_;  // all tags seen at startup for discovery
+  std::vector<std::string> known_tags_;
 
-  // Strip identity tag — set by the effect adapter at start() time.
-  // Used to build tagged event strings: "cfx_reach:strip_a". (CFX-023)
-  std::string strip_tag_{};
-
-  // Pre-computed milestone event strings: milestone_events_[i] holds the
-  // string for milestone value (i+1)*progress_step_, e.g. "cfx_reach:ws_strip:5".
-  // Built once in set_strip_tag() so check_milestones() does zero allocation
-  // on the hot path. (CFX-024)
-  static constexpr uint8_t MAX_MILESTONES = 20; // 5..100 in steps of 5
-  std::string milestone_events_[MAX_MILESTONES];
-
-  void rebuild_milestone_strings_() {
-    if (this->strip_tag_.empty()) {
-      // No strip tag — milestone events disabled. Should not happen in normal use.
-      for (uint8_t i = 0; i < MAX_MILESTONES; i++)
-        milestone_events_[i] = "";
-      return;
-    }
-    char buf[64];
-    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
-      uint8_t m = (i + 1) * this->progress_step_;
-      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
-      milestone_events_[i] = buf;
-    }
-  }
-
-  uint8_t progress_step_{5};
-  uint8_t last_fired_milestone_{0};
-  uint16_t pass_count_{0};
-
-  // Set to true for the remainder of the frame in which cfx_reach fires.
-  bool milestone_fired_this_frame_{false};
-
-  // Deferred event queue — ALL events are pushed here from the hot path
-  // (render loop) and drained ONE PER loop() CALL from flush_pending().
-  // This decouples milestone firing from API writes entirely: the render loop
-  // does zero blocking WebSocket calls; the API writes happen in loop()
-  // between frames, each within ESPHome's 30ms component budget. (CFX-025)
-  //
-  // Capacity 32: forward pass fires 20 milestones + cfx_idle + cfx_start +
-  // cfx_complete + spare = 24 max in flight. 32 gives comfortable headroom.
-  // At 50Hz loop rate the queue drains in 640ms — well within the return
-  // phase at any speed. String storage avoids const char* lifetime issues.
   static constexpr uint8_t DEFERRED_QUEUE_SIZE = 32;
   std::string deferred_queue_[DEFERRED_QUEUE_SIZE];
   uint8_t deferred_write_{0};
   uint8_t deferred_read_{0};
-
-
-
 };
 
 class CFXSequence {
@@ -257,13 +166,6 @@ public:
     CFXEventManager::get().add_known_tag(tag);
   }
 
-  // Runtime configurable entities
-
-  // Milestone tracking
-  void check_milestones(uint8_t current_pct) {
-    CFXEventManager::get().check_milestones(current_pct);
-  }
-
 protected:
   std::string id_;
   std::string name_;
@@ -291,6 +193,48 @@ protected:
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
+
+  // Per-instance milestone tracking — decoupled from CFXEventManager singleton
+  // so concurrent strips each maintain their own counter. (multi-strip fix)
+  static constexpr uint8_t MILESTONE_STEP    = 5;
+  static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
+  uint8_t  last_fired_milestone_{0};
+  bool     milestone_fired_this_frame_{false};
+  std::string milestone_events_[MAX_MILESTONES];
+
+  void rebuild_milestone_strings_() {
+    char buf[64];
+    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
+      uint8_t m = (i + 1) * MILESTONE_STEP;
+      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
+      milestone_events_[i] = buf;
+    }
+  }
+
+  // Sweep all milestones crossed since last call. While loop ensures no
+  // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
+  void check_milestones_(float current_pct) {
+    this->milestone_fired_this_frame_ = false;
+    uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
+    while (current_pct >= next && next <= 100) {
+      this->last_fired_milestone_ = next;
+      this->milestone_fired_this_frame_ = true;
+      uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
+      if (idx < MAX_MILESTONES)
+        CFXEventManager::get().fire_event(this->milestone_events_[idx].c_str());
+      next = this->last_fired_milestone_ + MILESTONE_STEP;
+    }
+    // Auto-reset when a new forward pass begins (pct wraps back to ~0)
+    if (current_pct < this->last_fired_milestone_) {
+      if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
+        this->last_fired_milestone_ = 0;
+    }
+  }
+
+  void reset_milestones_() {
+    this->last_fired_milestone_ = 0;
+    this->milestone_fired_this_frame_ = false;
+  }
 
   bool is_starting_{false};
   bool is_stopping_{false};
@@ -346,8 +290,7 @@ public:
   void play(const Ts &...x) override {
     for (auto *seq : CFXSequence::instances) {
       if (seq->get_id() == this->target_id_) {
-        // Reset global milestone tracking for the new sequence
-        CFXEventManager::get().reset_milestones();
+        seq->reset_milestones_();
         seq->start();
         return;
       }

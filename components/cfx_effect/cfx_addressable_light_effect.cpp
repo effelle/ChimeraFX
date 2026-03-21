@@ -184,21 +184,20 @@ void CFXAddressableLightEffect::start() {
   // causing the first N milestones of the new effect to be silently skipped.
   // For sequence-driven effects StartAction::play() also calls this, which
   // is harmless (idempotent reset).
-  cfx_sequence::CFXEventManager::get().reset_milestones();
-  // Always derive the strip tag from this light's own object_id.
-  // get_object_id() == slugify(light.name) — the same slug registered in
-  // event_types at codegen time. Never use a preloaded tag here; preloaded
-  // tags come from CFXSequence and may refer to a different light (e.g. a
-  // segment ID when the sequence targets a segment but the effect runs on
-  // the parent). (CFX-026)
+  // Per-instance: derive strip tag from this light's own object_id and
+  // build milestone event strings locally. No singleton state touched.
   {
-    std::string tag;
     auto *ls = this->get_light_state();
     if (ls != nullptr)
-      tag = ls->get_object_id();
-    cfx_sequence::CFXEventManager::get().set_strip_tag(tag);
+      this->strip_tag_ = ls->get_object_id();
+    cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
+    this->rebuild_milestone_strings_();
+    this->reset_milestones_();
   }
-  cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_start");
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_start:") + this->strip_tag_;
+    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+  }
 #endif
 
   // Zero the default transition length for virtual segment lights while an
@@ -973,7 +972,11 @@ void CFXAddressableLightEffect::stop() {
                 captured_sequence->report_event_complete();
               } else {
                 // Standalone (no sequence bound): fire HA event directly.
-                cfx_sequence::CFXEventManager::get().fire_lifecycle("cfx_complete");
+                // Use instance strip_tag_ — no singleton dependency.
+                if (!this->strip_tag_.empty()) {
+                  std::string evt = std::string("cfx_complete:") + this->strip_tag_;
+                  cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+                }
               }
             }
 #endif
@@ -5179,11 +5182,9 @@ void CFXAddressableLightEffect::check_positional_triggers(
   // immediately so HA sees a clean boundary between passes. (CFX-025)
   if (is_return_phase && !this->last_return_phase_) {
     // Force-sweep to 100% before resetting so the final milestone is never
-    // lost to a frame-boundary miss. At speed=255 the 95%→phase-flip window
-    // is ~19ms, smaller than one 24ms frame, so without this check 100% fires
-    // only ~78% of passes by luck.
-    cfx_sequence::CFXEventManager::get().check_milestones(100.0f);
-    cfx_sequence::CFXEventManager::get().reset_milestones();
+    // lost to a frame-boundary miss. Per-instance — no singleton.
+    this->check_milestones_(100.0f);
+    this->reset_milestones_();
   }
   this->last_return_phase_ = is_return_phase;
 
@@ -5194,8 +5195,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
     } else {
       float current_percentage = (total_pixels > 1)
           ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
-      cfx_sequence::CFXEventManager::get().check_milestones(
-          current_percentage * 100.0f);
+      this->check_milestones_(current_percentage * 100.0f);
     }
 
     // cfx_pixel: only fire on the forward pass.
@@ -5204,8 +5204,8 @@ void CFXAddressableLightEffect::check_positional_triggers(
     // to evaluate the updated sensor state. (CFX-022)
     // Auto-throttle: target ~30 events per sweep regardless of strip length.
     {
-      bool milestone_just_fired = cfx_sequence::CFXEventManager::get().was_milestone_fired();
-      cfx_sequence::CFXEventManager::get().clear_milestone_fired();
+      bool milestone_just_fired = this->milestone_fired_this_frame_;
+      this->milestone_fired_this_frame_ = false;
       if (!milestone_just_fired) {
         uint16_t step;
         if (this->cfx_pixel_step_ > 0) {
@@ -5217,8 +5217,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
         if (this->last_cfx_pixel_pixel_ < 0 ||
             abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
           this->last_cfx_pixel_pixel_ = current_pixel;
-          cfx_sequence::CFXEventManager::get().pixel_advanced(
-              (uint16_t)current_pixel);
+          // cfx_pixel: on-device trigger fires above; no HA event needed.
         }
       }
     }

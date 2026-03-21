@@ -71,62 +71,6 @@ void CFXEventManager::flush_pending() {
 
 
 
-void CFXEventManager::check_milestones(float current_pct) {
-  if (this->progress_step_ == 0) return;
-
-  // Always reset the per-frame flag at the start of each check so callers
-  // can reliably test it after this call. (CFX-022)
-  this->milestone_fired_this_frame_ = false;
-
-  // Sweep loop: fire ALL milestones crossed since last call in a single pass.
-  // At high speeds (e.g. speed=255 on Wipe) the leading pixel can jump several
-  // percent in one 24ms frame, skipping milestones with a plain if().
-  // The while loop guarantees every 5% boundary fires in order regardless of
-  // how large the frame step is. Worst case at speed=255: ~4 iterations.
-  uint8_t next_milestone = this->last_fired_milestone_ + this->progress_step_;
-  while (current_pct >= next_milestone && next_milestone <= 100) {
-    this->last_fired_milestone_ = next_milestone;
-    this->milestone_fired_this_frame_ = true;
-
-    // Fire using pre-computed string — no heap allocation on hot path. (CFX-024)
-    {
-      uint8_t idx = (this->last_fired_milestone_ / this->progress_step_) - 1;
-      if (idx < MAX_MILESTONES) {
-        this->fire_event(this->milestone_events_[idx].c_str());
-      } else {
-        ESP_LOGW("cfx_sequence", "check_milestones: idx out of range, skipping");
-      }
-    }
-    next_milestone = this->last_fired_milestone_ + this->progress_step_;
-  }
-
-  if (current_pct < this->last_fired_milestone_) {
-    // Reset milestone counter when a new forward pass begins.
-    // check_milestones is only called during the forward pass (the adapter
-    // suppresses calls during the erase/return phase via runner->is_return_phase_).
-    // So this branch is reached at the start of a genuine new forward pass
-    // where current_pct drops back to ~0 after the previous cycle completed.
-    // The >= 100 guard handles both exact and non-exact step divisors:
-    // - last_fired_milestone_ >= 100: step divides evenly into 100
-    // - current_pct >= 100.0f: step does NOT divide evenly (last milestone
-    //   is e.g. 95 for step=5), but actual percentage reached 100.0
-    if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f) {
-      this->last_fired_milestone_ = 0;
-      this->pass_count_++;
-      // CFX-025: milestones are reset at the forward→erase transition
-      // in check_positional_triggers via reset_milestones().
-    }
-  }
-}
-
-void CFXEventManager::pixel_advanced(uint16_t pixel) {
-  // On-device only — no API writes. The CFX Last Pixel sensor is not
-  // updated here since that would spam the API at ~30 calls/sweep.
-  // on_cfx_pixel YAML triggers fire from check_positional_triggers
-  // directly, before this function is called. (CFX-026)
-  (void)pixel;
-}
-
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
   // Phase E: Remind integrators to set api: batch_delay: 0ms for best event delivery.
@@ -261,13 +205,12 @@ void CFXSequence::start() {
     }
   }
 
-  // CFX-024: Pre-load strip tag into CFXEventManager before perform() fires
-  // the effect's start(). The effect's start() also derives the tag via
-  // get_object_id() but doing it here ensures the singleton is primed even
-  // if get_object_id() and the YAML id differ.
+  // Rebuild per-instance milestone event strings now that strip_tag_ is known.
+  // Each CFXSequence instance maintains its own strings — no singleton shared state.
   if (!this->strip_tag_.empty()) {
-    ESP_LOGD(TAG, "  Pre-loading strip tag '%s' into CFXEventManager", this->strip_tag_.c_str());
-    cfx_sequence::CFXEventManager::get().set_strip_tag(this->strip_tag_);
+    ESP_LOGD(TAG, "  Strip tag '%s': building per-instance milestone strings", this->strip_tag_.c_str());
+    this->rebuild_milestone_strings_();
+    this->reset_milestones_();
   }
 
   // Activate effect on all target lights
@@ -562,8 +505,12 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     t->trigger();
   }
-  // Fire both bare and tagged cfx_complete so per-strip automations work. (CFX-026)
-  CFXEventManager::get().fire_lifecycle("cfx_complete");
+  // Fire tagged cfx_complete using this sequence's own strip_tag_.
+  // No global singleton state — each sequence instance fires for its own strip.
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_complete:") + this->strip_tag_;
+    CFXEventManager::get().fire_event(evt.c_str());
+  }
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,
@@ -650,8 +597,9 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   this->last_triggered_percentage_ = current_percentage;
   this->last_triggered_pixel_ = current_pixel;
 
-  // Check runtime milestones (cfx_reach) via global manager
-  CFXEventManager::get().check_milestones(current_percentage * 100.0f);
+  // Check runtime milestones (cfx_reach) using per-instance state.
+  // No singleton — each sequence tracks its own progress independently.
+  this->check_milestones_(current_percentage * 100.0f);
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
