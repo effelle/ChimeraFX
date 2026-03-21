@@ -31,15 +31,22 @@ void CfxSetActionBase::do_play_() {
     return;
 
   // Apply params to all CFX effect instances registered for this light.
-  // Covers both the currently active effect and any that may start next.
+  // Also set runner ownership flags so CFXControl push callbacks don't
+  // stomp the cfx_set values via UI slider on_state callbacks.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_light_state() == this->light_) {
-      if (this->speed_.has_value())
+      if (this->speed_.has_value()) {
         inst->set_sequence_speed(this->speed_.value());
-      if (this->intensity_.has_value())
+        inst->set_runner_owns_speed(true);
+      }
+      if (this->intensity_.has_value()) {
         inst->set_sequence_intensity(this->intensity_.value());
-      if (this->palette_.has_value())
+        inst->set_runner_owns_intensity(true);
+      }
+      if (this->palette_.has_value()) {
         inst->set_sequence_palette(this->palette_.value());
+        inst->set_runner_owns_palette(true);
+      }
     }
   }
 
@@ -61,7 +68,6 @@ CFXEventManager &CFXEventManager::get() {
 
 void CFXEventManager::fire_event(const char *type) {
   // If HA events are disabled (cfx_control ID 6 excluded), push nothing.
-  // Internal on_cfx_reach / on_cfx_pixel YAML triggers are unaffected. (CFX-026)
   if (!this->ha_events_enabled_) return;
 
   // Push onto the deferred queue — zero blocking on the render loop hot path.
@@ -623,15 +629,6 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
       ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
                this->id_.c_str(), target * 100.0f);
       t->trigger(current_percentage);
-    }
-  }
-
-  // Evaluate on_pixel_num (Discrete based)
-  for (auto *t : this->on_pixel_num_triggers_) {
-    if (current_pixel == t->get_target_pixel()) {
-      ESP_LOGD(TAG, "Sequence '%s': on_pixel_num %d triggered",
-               this->id_.c_str(), current_pixel);
-      t->trigger(current_pixel);
     }
   }
 

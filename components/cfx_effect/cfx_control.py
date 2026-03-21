@@ -272,7 +272,7 @@ async def to_code(config):
         # 10. HA Events (CFX-026: replaces Timer)
         # When ID 6 is included (default), HA event firing is enabled.
         # exclude: [6] disables cfx_reach/cfx_idle/cfx_start events to HA.
-        # Internal on_cfx_reach / on_cfx_pixel YAML triggers are unaffected.
+        # Internal on_cfx_reach YAML triggers are unaffected.
         # The enabled state is written to a global accessible by cfx_sequence.
         if is_effect_target:
             import esphome.core as _core_ha_events

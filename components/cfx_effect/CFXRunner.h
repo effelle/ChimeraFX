@@ -331,6 +331,12 @@ public:
   uint32_t iteration_count_{0};
   uint32_t target_iterations_{0};
   bool effect_complete_{false};
+  // Set by set_active_sequence() / cfx_set when sequence or cfx_set params
+  // override speed/intensity/palette. Checked by CFXControl push callbacks
+  // to prevent UI slider callbacks from stomping sequence-injected values.
+  bool sequence_owns_speed_{false};
+  bool sequence_owns_intensity_{false};
+  bool sequence_owns_palette_{false};
 
   void setGamma(float g);
   inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }

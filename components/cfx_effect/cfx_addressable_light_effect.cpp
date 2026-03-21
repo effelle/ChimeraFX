@@ -1928,13 +1928,19 @@ void CFXAddressableLightEffect::run_controls_() {
         }
         this->runner_->setMirror(current_mirror);
       } else {
-        // Controller present: Load directly from controller components
+        // Controller present: sequence/cfx_set params take priority over UI sliders.
+        // sequence_speed_/intensity_/palette_ are set by cfx_sequence or cfx_set
+        // and override the controller number entities for the duration of the run.
         uint8_t current_speed = 128;
-        if (c->get_speed()) {
+        if (this->sequence_speed_.has_value()) {
+          current_speed = this->sequence_speed_.value();
+        } else if (c->get_speed()) {
           current_speed = (uint8_t)c->get_speed()->state;
         }
         uint8_t current_intensity = 128;
-        if (c->get_intensity()) {
+        if (this->sequence_intensity_.has_value()) {
+          current_intensity = this->sequence_intensity_.value();
+        } else if (c->get_intensity()) {
           current_intensity = (uint8_t)c->get_intensity()->state;
         }
 
@@ -1942,6 +1948,8 @@ void CFXAddressableLightEffect::run_controls_() {
             this->get_default_palette_id_(this->effect_id_);
         if (this->is_monochromatic_(this->effect_id_)) {
           current_palette = 255;
+        } else if (this->sequence_palette_.has_value()) {
+          current_palette = this->sequence_palette_.value();
         } else if (c->get_palette()) {
           current_palette = get_pal_idx(c->get_palette());
         }
@@ -5220,35 +5228,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
       this->check_milestones_(current_percentage * 100.0f);
     }
 
-    // cfx_pixel: only fire on the forward pass.
-    // Suppressed on any frame where cfx_reach fired, so that cfx_reach always
-    // arrives in its own WebSocket frame and HA automation conditions have time
-    // to evaluate the updated sensor state. (CFX-022)
-    // Auto-throttle: target ~30 events per sweep regardless of strip length.
-    {
-      bool milestone_just_fired = this->milestone_fired_this_frame_;
-      this->milestone_fired_this_frame_ = false;
-      if (!milestone_just_fired) {
-        uint16_t step;
-        if (this->cfx_pixel_step_ > 0) {
-          step = this->cfx_pixel_step_;
-        } else {
-          step = (uint16_t)((total_pixels + 29) / 30);
-          if (step < 1) step = 1;
-        }
-        if (this->last_cfx_pixel_pixel_ < 0 ||
-            abs(current_pixel - this->last_cfx_pixel_pixel_) >= (int32_t)step) {
-          this->last_cfx_pixel_pixel_ = current_pixel;
-          // cfx_pixel: on-device trigger fires above; no HA event needed.
-        }
-      }
-    }
   }
 #endif
 
   // Effect internal triggers (from YAML)
-  if (!this->on_reach_triggers_.empty() ||
-      !this->on_pixel_num_triggers_.empty()) {
+  if (!this->on_reach_triggers_.empty()) {
     float current_percentage = (float)current_pixel / (float)total_pixels;
 
     for (auto *t : this->on_reach_triggers_) {
@@ -5294,13 +5278,6 @@ void CFXAddressableLightEffect::check_positional_triggers(
       }
     }
 
-    for (auto *t : this->on_pixel_num_triggers_) {
-      if (current_pixel == t->get_target_pixel()) {
-        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_pixel_num %d triggered",
-                 this->get_name(), this, current_pixel);
-        t->trigger(current_pixel);
-      }
-    }
   }
 
   this->last_triggered_percentage_ = (float)current_pixel / (float)total_pixels;
@@ -5330,20 +5307,23 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
     this->last_triggered_percentage_ = -1.0f;
     this->last_leading_pixel_ = -1;
     this->last_triggered_pixel_ = -1;
-    this->last_cfx_pixel_pixel_ = -1;
 
     if (!this->segment_runners_.empty()) {
       for (auto *r : this->segment_runners_) {
         r->reset();
         r->target_iterations_ = itr;
+        r->sequence_owns_speed_     = spd.has_value();
+        r->sequence_owns_intensity_ = iten.has_value();
+        r->sequence_owns_palette_   = pal.has_value();
       }
     } else if (this->runner_) {
       this->runner_->reset();
       this->runner_->target_iterations_ = itr;
+      this->runner_->sequence_owns_speed_     = spd.has_value();
+      this->runner_->sequence_owns_intensity_ = iten.has_value();
+      this->runner_->sequence_owns_palette_   = pal.has_value();
     }
 
-    // Apply sequence pixel_step override if set
-    this->cfx_pixel_step_ = seq->get_pixel_step();
   }
 }
 #endif

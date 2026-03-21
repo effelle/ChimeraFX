@@ -34,16 +34,6 @@ protected:
   float target_position_;
 };
 
-class CfxSeqOnPixelNumTrigger : public esphome::Trigger<int32_t> {
-public:
-  explicit CfxSeqOnPixelNumTrigger(int32_t target_pixel)
-      : target_pixel_(target_pixel) {}
-  int32_t get_target_pixel() const { return target_pixel_; }
-
-protected:
-  int32_t target_pixel_;
-};
-
 class CFXEventManager {
 public:
   static CFXEventManager &get();
@@ -109,13 +99,11 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
   void set_brightness(float brightness) { this->brightness_ = brightness; }
-  void set_pixel_step(uint16_t step) { this->pixel_step_ = step; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
   esphome::optional<uint8_t> get_palette() const { return this->palette_; }
   esphome::optional<float> get_brightness() const { return this->brightness_; }
-  uint16_t get_pixel_step() const { return this->pixel_step_; }
   uint32_t get_iterations() const { return this->iterations_; }
   void set_duration_ms(uint32_t ms) { this->duration_ms_ = ms; }
   uint32_t get_duration_ms() const { return this->duration_ms_; }
@@ -125,7 +113,6 @@ public:
   void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
   const std::string &get_strip_tag() const { return this->strip_tag_; }
 
-  // Opt-in flag for cfx_pixel events to HA. Passed to bound effects at
   std::string get_id() const { return this->id_; }
   std::string get_name() const { return this->name_; }
 
@@ -137,9 +124,6 @@ public:
   }
   void add_on_reach_trigger(CfxSeqOnReachTrigger *t) {
     this->on_reach_triggers_.push_back(t);
-  }
-  void add_on_pixel_num_trigger(CfxSeqOnPixelNumTrigger *t) {
-    this->on_pixel_num_triggers_.push_back(t);
   }
 
   // Called by bound effects to report tracking
@@ -176,7 +160,6 @@ protected:
   esphome::optional<uint8_t> palette_;
   esphome::optional<float> brightness_;
   uint32_t iterations_{0};
-  uint16_t pixel_step_{0};  // 0 = auto-computed
   bool restore_state_{true};
   uint32_t duration_ms_{0};
   std::string strip_tag_{};      // CFX-024: YAML id of first target light
@@ -189,7 +172,6 @@ protected:
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxSeqOnReachTrigger *> on_reach_triggers_;
-  std::vector<CfxSeqOnPixelNumTrigger *> on_pixel_num_triggers_;
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};

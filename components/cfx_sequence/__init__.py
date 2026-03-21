@@ -33,7 +33,6 @@ CfxSetAction = cfx_sequence_ns.class_("CfxSetAction", automation.Action)
 CfxSeqOnStartTrigger = cfx_sequence_ns.class_("CfxSeqOnStartTrigger", automation.Trigger.template())
 CfxSeqOnCompleteTrigger = cfx_sequence_ns.class_("CfxSeqOnCompleteTrigger", automation.Trigger.template())
 CfxSeqOnReachTrigger = cfx_sequence_ns.class_("CfxSeqOnReachTrigger", automation.Trigger.template(cg.float_))
-CfxSeqOnPixelNumTrigger = cfx_sequence_ns.class_("CfxSeqOnPixelNumTrigger", automation.Trigger.template(cg.int32))
 
 CONF_LIGHTS = "lights"
 CONF_EFFECT = "effect"
@@ -43,7 +42,6 @@ CONF_SET_PALETTE = "set_palette"
 CONF_SET_BRIGHTNESS = "set_brightness"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
-CONF_PIXEL_STEP = "pixel_step"
 CONF_DURATION = "duration"
 
 # Inherited constants
@@ -51,8 +49,6 @@ CONF_ON_START = "on_cfx_start"
 CONF_ON_COMPLETE = "on_cfx_complete"
 CONF_ON_REACH = "on_cfx_reach"
 CONF_POSITION = "position"
-CONF_ON_PIXEL_NUM = "on_cfx_pixel"
-CONF_PIXEL = "pixel"
 
 
 SEQUENCE_SCHEMA = cv.Schema(
@@ -67,7 +63,6 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
-        cv.Optional(CONF_PIXEL_STEP, default=0): cv.int_range(min=0, max=255),
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
         
         # Triggers
@@ -85,12 +80,6 @@ SEQUENCE_SCHEMA = cv.Schema(
             {
                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnReachTrigger),
                 cv.Required(CONF_POSITION): cv.percentage,
-            }
-        ),
-        cv.Optional(CONF_ON_PIXEL_NUM): automation.validate_automation(
-            {
-                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnPixelNumTrigger),
-                cv.Required(CONF_PIXEL): cv.int_,
             }
         ),
     }
@@ -308,8 +297,6 @@ async def to_code(config):
             cg.add(var.set_brightness(seq_conf[CONF_SET_BRIGHTNESS]))
         if CONF_ITERATIONS in seq_conf:
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
-        if CONF_PIXEL_STEP in seq_conf and seq_conf[CONF_PIXEL_STEP] > 0:
-            cg.add(var.set_pixel_step(seq_conf[CONF_PIXEL_STEP]))
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
@@ -341,10 +328,6 @@ async def to_code(config):
             cg.add(var.add_on_reach_trigger(trigger))
             await automation.build_automation(trigger, [(cg.float_, "position")], trigger_conf)
 
-        for trigger_conf in seq_conf.get(CONF_ON_PIXEL_NUM, []):
-            trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID], trigger_conf[CONF_PIXEL])
-            cg.add(var.add_on_pixel_num_trigger(trigger))
-            await automation.build_automation(trigger, [(cg.int32, "pixel")], trigger_conf)
 
     # ----------------------------------------------------
     # Generate the global Sequence Select Dropdown

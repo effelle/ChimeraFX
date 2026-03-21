@@ -141,9 +141,6 @@ public:
   void add_on_reach_trigger(CfxOnReachTrigger *t) {
     this->on_reach_triggers_.push_back(t);
   }
-  void add_on_pixel_num_trigger(CfxOnPixelNumTrigger *t) {
-    this->on_pixel_num_triggers_.push_back(t);
-  }
 
   void trigger_on_start();
   void trigger_on_complete();
@@ -151,7 +148,6 @@ public:
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};
-  int32_t last_cfx_pixel_pixel_{-1};
   bool last_return_phase_{false};  // CFX-025: detect forward→erase transition
 
   // Per-instance milestone tracking — replaces CFXEventManager singleton state.
@@ -214,16 +210,28 @@ public:
   void set_sequence_speed(uint8_t v)     { this->sequence_speed_     = v; }
   void set_sequence_intensity(uint8_t v) { this->sequence_intensity_ = v; }
   void set_sequence_palette(uint8_t v)   { this->sequence_palette_   = v; }
+
+  // Propagate ownership flags to all runners so CFXControl push callbacks
+  // don't overwrite cfx_set values via UI slider on_state_callback.
+  void set_runner_owns_speed(bool v) {
+    if (this->runner_) this->runner_->sequence_owns_speed_ = v;
+    for (auto *r : this->segment_runners_) r->sequence_owns_speed_ = v;
+  }
+  void set_runner_owns_intensity(bool v) {
+    if (this->runner_) this->runner_->sequence_owns_intensity_ = v;
+    for (auto *r : this->segment_runners_) r->sequence_owns_intensity_ = v;
+  }
+  void set_runner_owns_palette(bool v) {
+    if (this->runner_) this->runner_->sequence_owns_palette_ = v;
+    for (auto *r : this->segment_runners_) r->sequence_owns_palette_ = v;
+  }
 #endif
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxOnReachTrigger *> on_reach_triggers_;
-  std::vector<CfxOnPixelNumTrigger *> on_pixel_num_triggers_;
 
   int32_t last_leading_pixel_{-1};
-  uint16_t cfx_pixel_step_{0};  // 0 = auto-computed from strip length
-  void set_cfx_pixel_step(uint16_t step) { this->cfx_pixel_step_ = step; }
 
   // Strip tag — set by CFXSequence::start() via bind loop. Also derived at
   // runtime from get_object_id() in start() as fallback. (CFX-024)

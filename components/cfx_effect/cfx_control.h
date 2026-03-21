@@ -78,14 +78,16 @@ public:
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_)
-          r->setSpeed((uint8_t)value);
+          if (!r->sequence_owns_speed_)
+            r->setSpeed((uint8_t)value);
       });
     }
 
     if (this->intensity_) {
       this->intensity_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_)
-          r->setIntensity((uint8_t)value);
+          if (!r->sequence_owns_intensity_)
+            r->setIntensity((uint8_t)value);
       });
     }
 
@@ -113,7 +115,8 @@ public:
           [this](const std::string &value, size_t index) {
             uint8_t r_pal_idx = this->get_palette_index_(value);
             for (auto *r : this->runners_) {
-              r->setPalette(r_pal_idx);
+              if (!r->sequence_owns_palette_)
+                r->setPalette(r_pal_idx);
             }
           });
     }
