@@ -174,6 +174,7 @@ void CFXAddressableLightEffect::start() {
   }
 
   this->trigger_on_start();
+  this->trigger_on_begin();
 
 #ifdef USE_CFX_SEQUENCE
   // cfx_start fires for ALL effects unconditionally — every path, every
@@ -5168,6 +5169,12 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 
 void CFXAddressableLightEffect::trigger_on_start() {
   for (auto *t : this->on_start_triggers_) {
+    t->trigger();
+  }
+}
+
+void CFXAddressableLightEffect::trigger_on_begin() {
+  for (auto *t : this->on_begin_triggers_) {
     t->trigger();
   }
 }

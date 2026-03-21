@@ -65,6 +65,7 @@ CONF_OUTRO_EFFECT = "outro_effect"
 
 # Sequencer Triggers
 CONF_ON_START = "on_start"
+CONF_ON_BEGIN    = "on_begin"
 CONF_ON_STOP     = "on_stop"
 CONF_ON_COMPLETE = "on_complete"
 CONF_ON_REACH = "on_reach"
@@ -73,6 +74,7 @@ CONF_POSITION = "position"
 
 # Trigger Classes
 CfxOnStartTrigger = chimera_fx_ns.class_("CfxOnStartTrigger", automation.Trigger.template())
+CfxOnBeginTrigger    = chimera_fx_ns.class_("CfxOnBeginTrigger",    automation.Trigger.template())
 CfxOnStopTrigger     = chimera_fx_ns.class_("CfxOnStopTrigger",     automation.Trigger.template())
 CfxOnCompleteTrigger = chimera_fx_ns.class_("CfxOnCompleteTrigger", automation.Trigger.template())
 CfxOnReachTrigger = chimera_fx_ns.class_("CfxOnReachTrigger", automation.Trigger.template(cg.float_))
@@ -134,6 +136,11 @@ CFX_EFFECT_NAMES = {
         cv.Optional(CONF_ON_START): automation.validate_automation(
             {
                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnStartTrigger),
+            }
+        ),
+        cv.Optional(CONF_ON_BEGIN): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnBeginTrigger),
             }
         ),
         cv.Optional(CONF_ON_STOP): automation.validate_automation(
@@ -219,6 +226,11 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
     for conf in config.get(CONF_ON_START, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID])
         cg.add(effect.add_on_start_trigger(trigger))
+        await automation.build_automation(trigger, [], conf)
+
+    for conf in config.get(CONF_ON_BEGIN, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID])
+        cg.add(effect.add_on_begin_trigger(trigger))
         await automation.build_automation(trigger, [], conf)
 
     for conf in config.get(CONF_ON_STOP, []):

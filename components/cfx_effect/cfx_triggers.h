@@ -6,6 +6,7 @@ namespace chimera_fx {
 
 class CfxOnStartTrigger : public Trigger<> {};
 
+class CfxOnBeginTrigger   : public Trigger<> {};
 class CfxOnStopTrigger    : public Trigger<> {};
 class CfxOnCompleteTrigger : public Trigger<> {};
 

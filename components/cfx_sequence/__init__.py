@@ -31,6 +31,7 @@ CfxSetAction = cfx_sequence_ns.class_("CfxSetAction", automation.Action)
 
 # Trigger classes
 CfxSeqOnStartTrigger = cfx_sequence_ns.class_("CfxSeqOnStartTrigger", automation.Trigger.template())
+CfxSeqOnBeginTrigger    = cfx_sequence_ns.class_("CfxSeqOnBeginTrigger",    automation.Trigger.template())
 CfxSeqOnStopTrigger     = cfx_sequence_ns.class_("CfxSeqOnStopTrigger",     automation.Trigger.template())
 CfxSeqOnCompleteTrigger = cfx_sequence_ns.class_("CfxSeqOnCompleteTrigger", automation.Trigger.template())
 CfxSeqOnReachTrigger = cfx_sequence_ns.class_("CfxSeqOnReachTrigger", automation.Trigger.template(cg.float_))
@@ -47,6 +48,7 @@ CONF_DURATION = "duration"
 
 # Inherited constants
 CONF_ON_START = "on_cfx_start"
+CONF_ON_BEGIN    = "on_cfx_begin"
 CONF_ON_STOP     = "on_cfx_stop"
 CONF_ON_COMPLETE = "on_cfx_complete"
 CONF_ON_REACH = "on_cfx_reach"
@@ -71,6 +73,11 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_ON_START): automation.validate_automation(
             {
                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnStartTrigger),
+            }
+        ),
+        cv.Optional(CONF_ON_BEGIN): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnBeginTrigger),
             }
         ),
         cv.Optional(CONF_ON_STOP): automation.validate_automation(
@@ -222,6 +229,7 @@ async def to_code(config):
     event_types = []
     for tag in seen_tags:
         event_types.append(f"cfx_start:{tag}")
+        event_types.append(f"cfx_begin:{tag}")
         event_types.append(f"cfx_stop:{tag}")
         event_types.append(f"cfx_complete:{tag}")
 
@@ -317,6 +325,11 @@ async def to_code(config):
         for trigger_conf in seq_conf.get(CONF_ON_START, []):
             trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID])
             cg.add(var.add_on_start_trigger(trigger))
+            await automation.build_automation(trigger, [], trigger_conf)
+
+        for trigger_conf in seq_conf.get(CONF_ON_BEGIN, []):
+            trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID])
+            cg.add(var.add_on_begin_trigger(trigger))
             await automation.build_automation(trigger, [], trigger_conf)
 
         for trigger_conf in seq_conf.get(CONF_ON_STOP, []):

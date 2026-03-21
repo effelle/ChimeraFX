@@ -135,6 +135,9 @@ public:
   void add_on_start_trigger(CfxOnStartTrigger *t) {
     this->on_start_triggers_.push_back(t);
   }
+  void add_on_begin_trigger(CfxOnBeginTrigger *t) {
+    this->on_begin_triggers_.push_back(t);
+  }
   void add_on_stop_trigger(CfxOnStopTrigger *t) {
     this->on_stop_triggers_.push_back(t);
   }
@@ -146,6 +149,7 @@ public:
   }
 
   void trigger_on_start();
+  void trigger_on_begin();
   void trigger_on_stop();
   void trigger_on_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
@@ -232,6 +236,7 @@ public:
 #endif
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
+  std::vector<CfxOnBeginTrigger *>   on_begin_triggers_;
   std::vector<CfxOnStopTrigger *>    on_stop_triggers_;
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxOnReachTrigger *> on_reach_triggers_;

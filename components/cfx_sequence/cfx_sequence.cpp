@@ -183,6 +183,8 @@ void CFXSequence::start() {
   ESP_LOGD(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
            this->id_.c_str());
 
+  this->report_event_begin();
+
   // Save current states before changing
   this->saved_states_.clear();
   for (auto *l : this->lights_) {
@@ -539,6 +541,17 @@ void CFXSequence::report_event_start() {
   }
   // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
   // unconditionally for all effects and all paths. Do NOT fire it here again.
+}
+
+void CFXSequence::report_event_begin() {
+  ESP_LOGD(TAG, "Sequence '%s': on_begin triggers firing", this->id_.c_str());
+  for (auto *t : this->on_begin_triggers_) {
+    t->trigger();
+  }
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_begin:") + this->strip_tag_;
+    CFXEventManager::get().fire_event(evt.c_str());
+  }
 }
 
 void CFXSequence::report_event_stop() {
