@@ -89,11 +89,6 @@ void CFXEventManager::flush_pending() {
 
     if (this->event_entity_ != nullptr)
       this->event_entity_->trigger(evt.c_str());
-#ifdef USE_CFX_HA_SERVICES
-    if (this->api_device_ != nullptr)
-      this->api_device_->fire_homeassistant_event("esphome.cfx_event",
-          {{"type", evt}});
-#endif
 
     if ((millis() - budget_start) >= 10)
       return; // time budget exhausted, resume next call
@@ -678,8 +673,6 @@ void CFXStopAllButton::press_action() {
 
 #ifdef USE_API
 void CFXSequenceServiceHandler::setup() {
-  // Register this as the API device for fire_homeassistant_event. (CFX-025)
-  CFXEventManager::get().set_api_device(this);
 
   this->register_service(
       &CFXSequenceServiceHandler::on_sequence_start,

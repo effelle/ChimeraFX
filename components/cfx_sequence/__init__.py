@@ -145,16 +145,9 @@ async def to_code(config):
         import esphome.core as _core
         api_conf = _core.CORE.config.get("api", {})
 
-        # CFX-025: auto-enable homeassistant_services if available for
-        # fire_homeassistant_event() direct event bus delivery.
-        # Optional — falls back to event entity if not set.
-        ha_services = api_conf.get("homeassistant_services", False)
-        if ha_services:
-            cg.add_define("USE_CFX_HA_SERVICES")
-            _LOGGER.info("CFX: homeassistant_services enabled — using direct event bus delivery")
-        else:
-            _LOGGER.info("CFX: add 'homeassistant_services: true' under 'api:' for "
-                         "most reliable event delivery to Home Assistant.")
+        # Event delivery uses the CFX Events entity (event.<node>_cfx_events).
+        # Use 'state' trigger in HA automations — the event_type attribute
+        # is pre-populated with all registered event strings for autocomplete.
     except cv.Invalid:
         raise
     except Exception:

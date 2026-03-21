@@ -39,7 +39,6 @@ class CFXEventManager {
 public:
   static CFXEventManager &get();
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
-  void set_api_device(esphome::api::CustomAPIDevice *d) { this->api_device_ = d; }
 
   // HA event delivery opt-in. When false, fire_event() is a no-op for all
   // HA-facing paths. Internal on_cfx_reach triggers are unaffected. (CFX-026)
@@ -68,7 +67,6 @@ public:
 protected:
   CFXEventManager() = default;
   esphome::event::Event *event_entity_{nullptr};
-  esphome::api::CustomAPIDevice *api_device_{nullptr};
   bool ha_events_enabled_{true};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;
