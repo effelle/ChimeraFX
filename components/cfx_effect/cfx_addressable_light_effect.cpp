@@ -5169,7 +5169,7 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
     if (idx < MAX_MILESTONES) {
 #ifdef USE_CFX_SEQUENCE
-      cfx_sequence::CFXEventManager::get().fire_event(this->milestone_events_[idx].c_str());
+      cfx_sequence::CFXEventManager::get().fire_event(this->milestone_events_[idx]);
 #endif
     }
     next = this->last_fired_milestone_ + MILESTONE_STEP;

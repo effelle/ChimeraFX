@@ -200,14 +200,15 @@ protected:
   static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
-  std::string milestone_events_[MAX_MILESTONES];
+  // Fixed-size char arrays — no heap allocation at construction time.
+  static constexpr uint8_t MILESTONE_EVENT_LEN = 48;
+  char milestone_events_[MAX_MILESTONES][MILESTONE_EVENT_LEN];
 
   void rebuild_milestone_strings_() {
-    char buf[64];
     for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
       uint8_t m = (i + 1) * MILESTONE_STEP;
-      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
-      milestone_events_[i] = buf;
+      snprintf(milestone_events_[i], MILESTONE_EVENT_LEN,
+               "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
     }
   }
 
@@ -221,7 +222,7 @@ protected:
       this->milestone_fired_this_frame_ = true;
       uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
       if (idx < MAX_MILESTONES)
-        CFXEventManager::get().fire_event(this->milestone_events_[idx].c_str());
+        CFXEventManager::get().fire_event(this->milestone_events_[idx]);
       next = this->last_fired_milestone_ + MILESTONE_STEP;
     }
     // Auto-reset when a new forward pass begins (pct wraps back to ~0)
