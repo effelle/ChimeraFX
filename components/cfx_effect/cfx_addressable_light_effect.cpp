@@ -173,8 +173,20 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+#ifdef USE_CFX_SEQUENCE
+  // Derive strip_tag_ early — needed by both cfx_begin and cfx_start events.
+  {
+    auto *ls = this->get_light_state();
+    if (ls != nullptr)
+      this->strip_tag_ = ls->get_object_id();
+    cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
+    this->rebuild_milestone_strings_();
+    this->reset_milestones_();
+  }
+#endif
+
   // cfx_begin fires before the intro — the moment the effect is activated.
-  // On-device trigger fires unconditionally; HA event is gated on no active
+  // On-device trigger fires unconditionally; HA event gated on no active
   // sequence (sequence path fires cfx_begin from report_event_begin()).
   this->trigger_on_begin();
 #ifdef USE_CFX_SEQUENCE
@@ -187,24 +199,6 @@ void CFXAddressableLightEffect::start() {
   this->trigger_on_start();
 
 #ifdef USE_CFX_SEQUENCE
-  // cfx_start fires for ALL effects unconditionally — every path, every
-  // effect type. start() is the single universal entry point.
-  // Reset milestone tracking here so standalone effects (not bound to a
-  // cfx_sequence) always begin their milestone counter from 0. Without this,
-  // last_fired_milestone_ retains its value from the previous effect run,
-  // causing the first N milestones of the new effect to be silently skipped.
-  // For sequence-driven effects StartAction::play() also calls this, which
-  // is harmless (idempotent reset).
-  // Per-instance: derive strip tag from this light's own object_id and
-  // build milestone event strings locally. No singleton state touched.
-  {
-    auto *ls = this->get_light_state();
-    if (ls != nullptr)
-      this->strip_tag_ = ls->get_object_id();
-    cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
-    this->rebuild_milestone_strings_();
-    this->reset_milestones_();
-  }
   if (!this->strip_tag_.empty()) {
     std::string evt = std::string("cfx_start:") + this->strip_tag_;
     cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
