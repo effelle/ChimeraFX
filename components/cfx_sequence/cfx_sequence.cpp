@@ -26,6 +26,34 @@ std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
+void CfxSetActionBase::do_play_() {
+  if (this->light_ == nullptr)
+    return;
+
+  // Apply params to all CFX effect instances registered for this light.
+  // Covers both the currently active effect and any that may start next.
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst->get_light_state() == this->light_) {
+      if (this->speed_.has_value())
+        inst->set_sequence_speed(this->speed_.value());
+      if (this->intensity_.has_value())
+        inst->set_sequence_intensity(this->intensity_.value());
+      if (this->palette_.has_value())
+        inst->set_sequence_palette(this->palette_.value());
+    }
+  }
+
+  // Optionally turn the light on with the specified effect.
+  if (!this->effect_.empty()) {
+    auto call = this->light_->make_call();
+    call.set_state(true);
+    call.set_effect(this->effect_);
+    if (this->brightness_.has_value())
+      call.set_brightness(this->brightness_.value());
+    call.perform();
+  }
+}
+
 CFXEventManager &CFXEventManager::get() {
   static CFXEventManager instance;
   return instance;

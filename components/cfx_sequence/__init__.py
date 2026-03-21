@@ -458,12 +458,12 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
     CfxSetAction,
     cv.Schema(
         {
-            cv.Required(CONF_ID): cv.use_id(light.LightState),
-            cv.Optional("effect"):     cv.string,
-            cv.Optional("speed"):      cv.int_range(0, 255),
-            cv.Optional("intensity"):  cv.int_range(0, 255),
-            cv.Optional("palette"):    cv.int_range(0, 255),
-            cv.Optional("brightness"): cv.percentage,
+            cv.Required(CONF_ID):                    cv.use_id(light.LightState),
+            cv.Optional("effect"):                   cv.string,
+            cv.Optional(CONF_SET_SPEED):             cv.int_range(0, 255),
+            cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
+            cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
+            cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
         }
     ),
 )
@@ -473,12 +473,12 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
     cg.add(var.set_light(light_var))
     if "effect" in config:
         cg.add(var.set_effect(config["effect"]))
-    if "speed" in config:
-        cg.add(var.set_speed(config["speed"]))
-    if "intensity" in config:
-        cg.add(var.set_intensity(config["intensity"]))
-    if "palette" in config:
-        cg.add(var.set_palette(config["palette"]))
-    if "brightness" in config:
-        cg.add(var.set_brightness(config["brightness"]))
+    if CONF_SET_SPEED in config:
+        cg.add(var.set_speed(config[CONF_SET_SPEED]))
+    if CONF_SET_INTENSITY in config:
+        cg.add(var.set_intensity(config[CONF_SET_INTENSITY]))
+    if CONF_SET_PALETTE in config:
+        cg.add(var.set_palette(config[CONF_SET_PALETTE]))
+    if CONF_SET_BRIGHTNESS in config:
+        cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
     return var
