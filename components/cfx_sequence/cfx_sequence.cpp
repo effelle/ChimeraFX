@@ -347,6 +347,7 @@ void CFXSequence::stop() {
 
   ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
+  this->report_event_stop();
   this->clear_active_binding();
 
   // Restore States: Only if explicitly requested
@@ -543,6 +544,18 @@ void CFXSequence::report_event_start() {
   }
   // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
   // unconditionally for all effects and all paths. Do NOT fire it here again.
+}
+
+void CFXSequence::report_event_stop() {
+  ESP_LOGD(TAG, "Sequence '%s': on_stop triggers firing", this->id_.c_str());
+  for (auto *t : this->on_stop_triggers_) {
+    t->trigger();
+  }
+  // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_stop:") + this->strip_tag_;
+    CFXEventManager::get().fire_event(evt.c_str());
+  }
 }
 
 void CFXSequence::report_event_complete() {

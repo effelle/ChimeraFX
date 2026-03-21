@@ -698,6 +698,14 @@ void CFXAddressableLightEffect::stop() {
 
 
 
+  this->trigger_on_stop();
+#ifdef USE_CFX_SEQUENCE
+  // Fire cfx_stop HA event — outro is beginning.
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_stop:") + this->strip_tag_;
+    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+  }
+#endif
   this->trigger_on_complete();
 
   // Clear intro snapshot vector to reclaim RAM
@@ -5158,6 +5166,12 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 
 void CFXAddressableLightEffect::trigger_on_start() {
   for (auto *t : this->on_start_triggers_) {
+    t->trigger();
+  }
+}
+
+void CFXAddressableLightEffect::trigger_on_stop() {
+  for (auto *t : this->on_stop_triggers_) {
     t->trigger();
   }
 }

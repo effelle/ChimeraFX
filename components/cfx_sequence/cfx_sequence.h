@@ -23,6 +23,7 @@ namespace esphome {
 namespace cfx_sequence {
 
 class CfxSeqOnStartTrigger : public ::esphome::Trigger<> {};
+class CfxSeqOnStopTrigger     : public ::esphome::Trigger<> {};
 class CfxSeqOnCompleteTrigger : public ::esphome::Trigger<> {};
 class CfxSeqOnReachTrigger : public esphome::Trigger<float> {
 public:
@@ -119,6 +120,9 @@ public:
   void add_on_start_trigger(CfxSeqOnStartTrigger *t) {
     this->on_start_triggers_.push_back(t);
   }
+  void add_on_stop_trigger(CfxSeqOnStopTrigger *t) {
+    this->on_stop_triggers_.push_back(t);
+  }
   void add_on_complete_trigger(CfxSeqOnCompleteTrigger *t) {
     this->on_complete_triggers_.push_back(t);
   }
@@ -128,6 +132,7 @@ public:
 
   // Called by bound effects to report tracking
   void report_event_start();
+  void report_event_stop();
   void report_event_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
   void check_duration();
@@ -170,6 +175,7 @@ protected:
   // Runtime-configurable entities
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
+  std::vector<CfxSeqOnStopTrigger *>    on_stop_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxSeqOnReachTrigger *> on_reach_triggers_;
 
