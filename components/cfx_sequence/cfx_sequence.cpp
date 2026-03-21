@@ -394,12 +394,25 @@ void CFXSequence::force_reset() {
   // Hard reset: turn off all lights managed by this sequence.
   // Called by "None" handler to ensure lights are off even when
   // the sequence has already completed and on_complete overrode state.
+  // Guard: skip sequences that were never started — firing light calls on
+  // non-running sequences produces ESPHome warnings on unrelated lights.
+  if (!this->is_running_ && !this->completion_reported_)
+    return;
+
   for (auto *l : this->lights_) {
-    auto call = l->make_call();
-    call.set_state(false);
-    call.set_effect("None");
-    call.set_transition_length(0);
-    call.perform();
+    // Two-call pattern required: ESPHome rejects set_effect("None") combined
+    // with set_state(false) in a single call, producing:
+    //   [W] 'X': effect cannot be used with transition/flash
+    //   [W] 'X': cannot start effect when turning off
+    auto clear_call = l->make_call();
+    clear_call.set_effect("None");
+    clear_call.set_transition_length(0);
+    clear_call.perform();
+
+    auto off_call = l->make_call();
+    off_call.set_state(false);
+    off_call.set_transition_length(0);
+    off_call.perform();
   }
 }
 
