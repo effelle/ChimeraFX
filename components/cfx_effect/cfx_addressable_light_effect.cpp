@@ -5160,6 +5160,26 @@ void CFXAddressableLightEffect::trigger_on_complete() {
   }
 }
 
+void CFXAddressableLightEffect::check_milestones_(float current_pct) {
+  this->milestone_fired_this_frame_ = false;
+  uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
+  while (current_pct >= next && next <= 100) {
+    this->last_fired_milestone_ = next;
+    this->milestone_fired_this_frame_ = true;
+    uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
+    if (idx < MAX_MILESTONES) {
+#ifdef USE_CFX_SEQUENCE
+      cfx_sequence::CFXEventManager::get().fire_event(this->milestone_events_[idx].c_str());
+#endif
+    }
+    next = this->last_fired_milestone_ + MILESTONE_STEP;
+  }
+  if (current_pct < this->last_fired_milestone_) {
+    if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
+      this->last_fired_milestone_ = 0;
+  }
+}
+
 void CFXAddressableLightEffect::check_positional_triggers(
     int32_t current_pixel, int32_t total_pixels) {
   // Defensive bounds check
