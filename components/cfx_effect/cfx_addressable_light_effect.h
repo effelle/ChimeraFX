@@ -161,21 +161,15 @@ public:
   static constexpr uint8_t MAX_MILESTONES = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
-  // Fixed-size char arrays — no heap allocation at construction time.
-  // 48 bytes covers "cfx_reach:<32-char-tag>:100" with room to spare.
-  static constexpr uint8_t MILESTONE_EVENT_LEN = 48;
-  char milestone_events_[MAX_MILESTONES][MILESTONE_EVENT_LEN];
+  // No pre-computed string array — there are 100+ effect instances per light
+  // so per-instance arrays would exhaust the heap at setup time.
+  // Event strings are built on the stack at fire time (snprintf into 48-byte
+  // local) — runs at most 4x per 24ms frame, negligible cost.
 
-  void rebuild_milestone_strings_() {
-    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
-      uint8_t m = (i + 1) * MILESTONE_STEP;
-      snprintf(milestone_events_[i], MILESTONE_EVENT_LEN,
-               "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
-    }
-  }
+  // No-op: strings are built on-demand in check_milestones_(), not pre-computed.
+  void rebuild_milestone_strings_() {}
 
-  // Sweep all milestones crossed since last call. Implemented in .cpp
-  // where cfx_sequence.h (CFXEventManager) is already in scope.
+  // Implemented in .cpp where cfx_sequence.h (CFXEventManager) is in scope.
   void check_milestones_(float current_pct);
 
   void reset_milestones_() {

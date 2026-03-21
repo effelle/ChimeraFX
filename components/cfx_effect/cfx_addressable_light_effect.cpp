@@ -5166,12 +5166,14 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
   while (current_pct >= next && next <= 100) {
     this->last_fired_milestone_ = next;
     this->milestone_fired_this_frame_ = true;
-    uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
-    if (idx < MAX_MILESTONES) {
 #ifdef USE_CFX_SEQUENCE
-      cfx_sequence::CFXEventManager::get().fire_event(this->milestone_events_[idx]);
+    // Build event string on the stack — no heap, no pre-computed array.
+    // Runs at most ~4x per 24ms frame at max speed. Negligible cost.
+    char buf[48];
+    snprintf(buf, sizeof(buf), "cfx_reach:%s:%u",
+             this->strip_tag_.c_str(), (unsigned)this->last_fired_milestone_);
+    cfx_sequence::CFXEventManager::get().fire_event(buf);
 #endif
-    }
     next = this->last_fired_milestone_ + MILESTONE_STEP;
   }
   if (current_pct < this->last_fired_milestone_) {

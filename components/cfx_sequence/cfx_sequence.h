@@ -200,17 +200,11 @@ protected:
   static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
-  // Fixed-size char arrays — no heap allocation at construction time.
-  static constexpr uint8_t MILESTONE_EVENT_LEN = 48;
-  char milestone_events_[MAX_MILESTONES][MILESTONE_EVENT_LEN];
+  // Strings built on-demand — no pre-computed array, matching the effect side.
+  // CFXSequence instances are few (one per declared sequence) so memory is not
+  // the concern here, but consistency with the effect side is cleaner.
 
-  void rebuild_milestone_strings_() {
-    for (uint8_t i = 0; i < MAX_MILESTONES; i++) {
-      uint8_t m = (i + 1) * MILESTONE_STEP;
-      snprintf(milestone_events_[i], MILESTONE_EVENT_LEN,
-               "cfx_reach:%s:%u", this->strip_tag_.c_str(), (unsigned)m);
-    }
-  }
+  void rebuild_milestone_strings_() {}  // no-op: strings built at fire time
 
   // Sweep all milestones crossed since last call. While loop ensures no
   // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
@@ -220,9 +214,10 @@ protected:
     while (current_pct >= next && next <= 100) {
       this->last_fired_milestone_ = next;
       this->milestone_fired_this_frame_ = true;
-      uint8_t idx = (this->last_fired_milestone_ / MILESTONE_STEP) - 1;
-      if (idx < MAX_MILESTONES)
-        CFXEventManager::get().fire_event(this->milestone_events_[idx]);
+      char buf[48];
+      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u",
+               this->strip_tag_.c_str(), (unsigned)this->last_fired_milestone_);
+      CFXEventManager::get().fire_event(buf);
       next = this->last_fired_milestone_ + MILESTONE_STEP;
     }
     // Auto-reset when a new forward pass begins (pct wraps back to ~0)
