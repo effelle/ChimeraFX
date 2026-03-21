@@ -119,15 +119,6 @@ async def to_code(config):
         import esphome.core as _core
         api_conf = _core.CORE.config.get("api", {})
 
-        batch_delay = api_conf.get("batch_delay", None)
-        if batch_delay is not None and str(batch_delay) != "0ms":
-            _LOGGER.warning(
-                "ChimeraFX events are enabled but 'api: batch_delay' is '%s'. "
-                "Set 'api: batch_delay: 0ms' for sub-10ms cfx_start/cfx_complete "
-                "event delivery to Home Assistant.",
-                str(batch_delay),
-            )
-
         # CFX-025: auto-enable homeassistant_services if available for
         # fire_homeassistant_event() direct event bus delivery.
         # Optional — falls back to event entity if not set.

@@ -264,6 +264,60 @@ CONFIG_SCHEMA = cv.All(
 )
 
 
+# RMT hardware budget per ESP32 variant.
+# total_symbols: total RMT symbol memory available across all TX channels.
+# block_size:    minimum allocation granularity (symbols must be a multiple).
+# Source: ESP-IDF RMT driver docs + empirical testing.
+_RMT_BUDGET = {
+    "ESP32":   {"total": 512, "block": 64},
+    "ESP32S2": {"total": 256, "block": 64},
+    "ESP32S3": {"total": 192, "block": 48},
+    "ESP32P4": {"total": 192, "block": 48},
+    "ESP32C3": {"total":  96, "block": 48},
+    "ESP32C5": {"total":  96, "block": 48},
+    "ESP32C6": {"total":  96, "block": 48},
+    "ESP32H2": {"total":  96, "block": 48},
+}
+_RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
+
+
+def _get_rmt_symbols_auto(n_strips: int) -> int:
+    """Compute the per-strip RMT symbol count given the number of cfx_light
+    instances declared in this config.  Divides the hardware total evenly,
+    floors to the nearest block boundary, and enforces a one-block minimum.
+    Emits a compile-time warning if the strip count exceeds hardware capacity."""
+    import logging as _log
+    import esphome.core as _core
+    variant = "ESP32"  # safe default
+    try:
+        esp32_conf = _core.CORE.config.get("esp32", {})
+        variant_raw = esp32_conf.get("variant", "ESP32")
+        # ESPHome stores variant as e.g. "esp32s3" or "ESP32S3" — normalise
+        variant = str(variant_raw).upper().replace("-", "").replace("_", "")
+    except Exception:
+        pass
+
+    budget   = _RMT_BUDGET.get(variant, _RMT_DEFAULT_BUDGET)
+    total    = budget["total"]
+    block    = budget["block"]
+    max_strips = total // block
+
+    if n_strips > max_strips:
+        _log.getLogger(__name__).error(
+            "CFXLight: %s supports max %d RMT TX channel(s) (%d total symbols / "
+            "%d per block) but %d strip(s) are declared. "
+            "Reduce strip count or use I2S output instead.",
+            variant, max_strips, total, block, n_strips,
+        )
+
+    per_strip = total // max(n_strips, 1)
+    # Floor to block boundary
+    per_strip = (per_strip // block) * block
+    # Never less than one block — hardware minimum
+    per_strip = max(per_strip, block)
+    return per_strip
+
+
 async def to_code(config):
     # Re-enable ESP-IDF's RMT driver (newer ESPHome excludes it by default)
     try:
@@ -316,8 +370,33 @@ async def to_code(config):
         rgb_order = DEFAULT_ORDER.get(chipset_name, RGBOrder.ORDER_GRB)
     cg.add(var.set_rgb_order(rgb_order))
 
-    # 0 = auto-detect from chip variant in C++
-    cg.add(var.set_rmt_symbols(config[CONF_RMT_SYMBOLS]))
+    # Auto-compute RMT symbols if not set manually.
+    # Two-pass approach: on the first call scan CORE.config to count ALL
+    # cfx_light instances upfront, so every strip uses the same correct
+    # divisor rather than an incrementally-growing one.
+    import esphome.core as _core_rmt
+    import logging as _log_rmt
+    rmt_sym = config[CONF_RMT_SYMBOLS]
+    if rmt_sym == 0:
+        if "cfx_light_total" not in _core_rmt.CORE.data:
+            # First call: count all cfx_light entries in the config
+            n_total = sum(
+                1 for lconf in _core_rmt.CORE.config.get("light", [])
+                if lconf.get("platform", "") == "cfx_light"
+                   and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
+            )
+            _core_rmt.CORE.data["cfx_light_total"] = max(n_total, 1)
+            _log_rmt.getLogger(__name__).info(
+                "CFXLight: detected %d strip(s) — dividing RMT budget evenly",
+                _core_rmt.CORE.data["cfx_light_total"],
+            )
+        n_total = _core_rmt.CORE.data["cfx_light_total"]
+        rmt_sym = _get_rmt_symbols_auto(n_total)
+        _log_rmt.getLogger(__name__).info(
+            "CFXLight: auto rmt_symbols=%d (%d strip(s))",
+            rmt_sym, n_total,
+        )
+    cg.add(var.set_rmt_symbols(rmt_sym))
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))

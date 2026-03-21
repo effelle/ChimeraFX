@@ -180,18 +180,19 @@ void CFXLightOutput::setup() {
 #endif
 
   // Auto-detect RMT symbol buffer size from chip variant
-  // These match ESPHome's proven defaults — larger buffers reduce
-  // interrupt-refill frequency, preventing glitches on multi-strip setups
+  // rmt_symbols_ is set by Python codegen (light.py) which divides the
+  // hardware total evenly across all cfx_light instances at compile time.
+  // This fallback only triggers if someone calls setup() without codegen
+  // (e.g. unit tests) — use the minimum safe value of one block.
   if (this->rmt_symbols_ == 0) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
-    this->rmt_symbols_ = 192; // Classic: 512 total (2 strips × 192 = 384, safe)
+    this->rmt_symbols_ = 64;  // Classic: 1 block fallback
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    this->rmt_symbols_ = 192; // S2: 256 total
+    this->rmt_symbols_ = 64;  // S2: 1 block fallback
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
-    this->rmt_symbols_ =
-        192; // S3/P4: 192 total (with DMA, effectively unlimited)
+    this->rmt_symbols_ = 48;  // S3/P4: 1 block fallback
 #else
-    this->rmt_symbols_ = 96; // C3/C5/C6/H2: 96 total
+    this->rmt_symbols_ = 48;  // C3/C5/C6/H2: 1 block fallback
 #endif
   }
 
