@@ -281,11 +281,11 @@ _RMT_BUDGET = {
 _RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
 
 
-def _get_rmt_symbols_auto(n_strips: int) -> int:
-    """Compute the per-strip RMT symbol count given the number of cfx_light
-    instances declared in this config.  Divides the hardware total evenly,
+def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
+    """Compute the per-strip RMT symbol count for auto-configured strips.
+    Subtracts manually-set allocations from the hardware total before dividing,
     floors to the nearest block boundary, and enforces a one-block minimum.
-    Emits a compile-time warning if the strip count exceeds hardware capacity."""
+    Emits a compile-time error if the total allocation exceeds hardware capacity."""
     import logging as _log
     import esphome.core as _core
     variant = "ESP32"  # safe default
@@ -300,17 +300,27 @@ def _get_rmt_symbols_auto(n_strips: int) -> int:
     budget   = _RMT_BUDGET.get(variant, _RMT_DEFAULT_BUDGET)
     total    = budget["total"]
     block    = budget["block"]
-    max_strips = total // block
 
-    if n_strips > max_strips:
+    # Remaining budget after subtracting manually-set allocations
+    remaining = total - manual_reserved
+    if remaining <= 0:
         _log.getLogger(__name__).error(
-            "CFXLight: %s supports max %d RMT TX channel(s) (%d total symbols / "
-            "%d per block) but %d strip(s) are declared. "
-            "Reduce strip count or use I2S output instead.",
-            variant, max_strips, total, block, n_strips,
+            "CFXLight: manually-set rmt_symbols (%d) exhausts the entire "
+            "%s RMT budget (%d). No budget left for auto strips.",
+            manual_reserved, variant, total,
+        )
+        remaining = block  # give at least one block as fallback
+
+    max_auto_strips = remaining // block
+    if n_strips > max_auto_strips:
+        _log.getLogger(__name__).error(
+            "CFXLight: %s has %d RMT symbols remaining after manual "
+            "reservations (%d used). That supports max %d auto strip(s) "
+            "but %d are declared.",
+            variant, remaining, manual_reserved, max_auto_strips, n_strips,
         )
 
-    per_strip = total // max(n_strips, 1)
+    per_strip = remaining // max(n_strips, 1)
     # Floor to block boundary
     per_strip = (per_strip // block) * block
     # Never less than one block — hardware minimum
@@ -379,19 +389,29 @@ async def to_code(config):
     rmt_sym = config[CONF_RMT_SYMBOLS]
     if rmt_sym == 0:
         if "cfx_light_total" not in _core_rmt.CORE.data:
-            # First call: count all cfx_light entries in the config
-            n_total = sum(
+            # First call: count auto strips AND subtract manually-set budget
+            # so manual overrides are accounted for in the remaining budget.
+            manual_total = sum(
+                lconf.get(CONF_RMT_SYMBOLS, 0)
+                for lconf in _core_rmt.CORE.config.get("light", [])
+                if lconf.get("platform", "") == "cfx_light"
+                   and lconf.get(CONF_RMT_SYMBOLS, 0) != 0
+            )
+            n_auto = sum(
                 1 for lconf in _core_rmt.CORE.config.get("light", [])
                 if lconf.get("platform", "") == "cfx_light"
                    and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
             )
-            _core_rmt.CORE.data["cfx_light_total"] = max(n_total, 1)
+            _core_rmt.CORE.data["cfx_light_total"]   = max(n_auto, 1)
+            _core_rmt.CORE.data["cfx_light_manual"]  = manual_total
             _log_rmt.getLogger(__name__).info(
-                "CFXLight: detected %d strip(s) — dividing RMT budget evenly",
-                _core_rmt.CORE.data["cfx_light_total"],
+                "CFXLight: %d auto strip(s), %d manual symbols reserved — "
+                "dividing remaining RMT budget evenly",
+                n_auto, manual_total,
             )
-        n_total = _core_rmt.CORE.data["cfx_light_total"]
-        rmt_sym = _get_rmt_symbols_auto(n_total)
+        n_total      = _core_rmt.CORE.data["cfx_light_total"]
+        manual_used  = _core_rmt.CORE.data.get("cfx_light_manual", 0)
+        rmt_sym = _get_rmt_symbols_auto(n_total, manual_used)
         _log_rmt.getLogger(__name__).info(
             "CFXLight: auto rmt_symbols=%d (%d strip(s))",
             rmt_sym, n_total,
