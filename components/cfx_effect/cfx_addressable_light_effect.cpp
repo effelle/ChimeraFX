@@ -173,8 +173,18 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  this->trigger_on_start();
+  // cfx_begin fires before the intro — the moment the effect is activated.
+  // On-device trigger fires unconditionally; HA event is gated on no active
+  // sequence (sequence path fires cfx_begin from report_event_begin()).
   this->trigger_on_begin();
+#ifdef USE_CFX_SEQUENCE
+  if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
+    std::string evt = std::string("cfx_begin:") + this->strip_tag_;
+    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+  }
+#endif
+
+  this->trigger_on_start();
 
 #ifdef USE_CFX_SEQUENCE
   // cfx_start fires for ALL effects unconditionally — every path, every
