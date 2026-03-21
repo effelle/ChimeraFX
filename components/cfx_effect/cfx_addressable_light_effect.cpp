@@ -700,8 +700,10 @@ void CFXAddressableLightEffect::stop() {
 
   this->trigger_on_stop();
 #ifdef USE_CFX_SEQUENCE
-  // Fire cfx_stop HA event — outro is beginning.
-  if (!this->strip_tag_.empty()) {
+  // Fire cfx_stop HA event only when no sequence is bound.
+  // When a sequence owns this effect, CFXSequence::report_event_stop() fires it.
+  // Firing both would produce a double cfx_stop event.
+  if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
     std::string evt = std::string("cfx_stop:") + this->strip_tag_;
     cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
   }
@@ -958,7 +960,7 @@ void CFXAddressableLightEffect::stop() {
           chimera_fx::instance = nullptr;
 
           if (done) {
-            ESP_LOGD("chimera_fx",
+            ESP_LOGV("chimera_fx",
                      "[T05] outro DONE: effect_id=%u is_mono=%d",
                      (unsigned)this->effect_id_,
                      (int)this->get_monochromatic_preset_(this->effect_id_).is_active);

@@ -655,7 +655,7 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
   if (this->parent_ != nullptr && this->parent_->is_running() && !this->light_->remote_values.is_on()) {
-    ESP_LOGD("cfx_sequence",
+    ESP_LOGV("cfx_sequence",
              "Sequence '%s' stopping because light '%s' turned off",
              this->parent_->get_name().c_str(), this->light_->get_name().c_str());
     this->parent_->stop();
