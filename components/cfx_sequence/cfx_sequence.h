@@ -346,6 +346,56 @@ public:
 };
 
 
+// cfx_set action — applies CFX parameters (speed/intensity/palette/brightness)
+// to the active CFX effect on a target light, and optionally starts an effect.
+// Parameters override sequence-injected values and persist until the next
+// start() call clears them. Works with both bare light.turn_on and cfx_sequence.
+template <typename... Ts> class CfxSetAction : public ::esphome::Action<Ts...> {
+public:
+  void set_light(light::LightState *light) { this->light_ = light; }
+  void set_effect(const std::string &effect) { this->effect_ = effect; }
+  void set_speed(uint8_t v)      { this->speed_      = v; }
+  void set_intensity(uint8_t v)  { this->intensity_  = v; }
+  void set_palette(uint8_t v)    { this->palette_    = v; }
+  void set_brightness(float v)   { this->brightness_ = v; }
+
+  void play(const Ts &...x) override {
+    if (this->light_ == nullptr)
+      return;
+
+    // Apply params to ALL registered CFX effects for this light so they take
+    // effect whether the effect is already running or starts immediately after.
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+      if (inst->get_light_state() == this->light_) {
+        if (this->speed_.has_value())
+          inst->set_sequence_speed(this->speed_.value());
+        if (this->intensity_.has_value())
+          inst->set_sequence_intensity(this->intensity_.value());
+        if (this->palette_.has_value())
+          inst->set_sequence_palette(this->palette_.value());
+      }
+    }
+
+    // Optionally turn the light on with the given effect
+    if (!this->effect_.empty()) {
+      auto call = this->light_->make_call();
+      call.set_state(true);
+      call.set_effect(this->effect_);
+      if (this->brightness_.has_value())
+        call.set_brightness(this->brightness_.value());
+      call.perform();
+    }
+  }
+
+protected:
+  light::LightState *light_{nullptr};
+  std::string effect_{};
+  esphome::optional<uint8_t> speed_{};
+  esphome::optional<uint8_t> intensity_{};
+  esphome::optional<uint8_t> palette_{};
+  esphome::optional<float>   brightness_{};
+};
+
 class CFXStopAllButton : public ::esphome::button::Button,
                          public ::esphome::Component {
 public:

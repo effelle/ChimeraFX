@@ -25,8 +25,9 @@ CFXSequenceServiceHandler = cfx_sequence_ns.class_(
 )
 
 # Actions
-StartAction = cfx_sequence_ns.class_("StartAction", automation.Action)
-StopAction = cfx_sequence_ns.class_("StopAction", automation.Action)
+StartAction  = cfx_sequence_ns.class_("StartAction",  automation.Action)
+StopAction   = cfx_sequence_ns.class_("StopAction",   automation.Action)
+CfxSetAction = cfx_sequence_ns.class_("CfxSetAction", automation.Action)
 
 # Trigger classes
 CfxSeqOnStartTrigger = cfx_sequence_ns.class_("CfxSeqOnStartTrigger", automation.Trigger.template())
@@ -96,8 +97,37 @@ SEQUENCE_SCHEMA = cv.Schema(
 )
 
 
+def _validate_unique_sequences(configs):
+    """Reject duplicate sequence IDs or names at compile time."""
+    seen_ids   = {}
+    seen_names = {}
+    for i, conf in enumerate(configs):
+        sid  = conf[CONF_ID].id
+        name = conf[CONF_NAME]
+
+        if sid in seen_ids:
+            raise cv.Invalid(
+                f"Duplicate cfx_sequence id '{sid}' — each sequence must have a unique id. "
+                f"First declared at sequence index {seen_ids[sid]}.",
+                [i],
+            )
+        seen_ids[sid] = i
+
+        if name in seen_names:
+            raise cv.Invalid(
+                f"Duplicate cfx_sequence name '{name}' — each sequence must have a unique name "
+                f"(names populate the Internal Sequences dropdown). "
+                f"First declared at sequence index {seen_names[name]}.",
+                [i],
+            )
+        seen_names[name] = i
+
+    return configs
+
+
 CONFIG_SCHEMA = cv.All(
     cv.ensure_list(SEQUENCE_SCHEMA),
+    _validate_unique_sequences,
 )
 
 import logging
@@ -421,3 +451,34 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
     # Pass the raw target ID string directly to break the codegen dependency graph
     return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
+
+
+@automation.register_action(
+    "cfx_set",
+    CfxSetAction,
+    cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.use_id(light.LightState),
+            cv.Optional("effect"):     cv.string,
+            cv.Optional("speed"):      cv.int_range(0, 255),
+            cv.Optional("intensity"):  cv.int_range(0, 255),
+            cv.Optional("palette"):    cv.int_range(0, 255),
+            cv.Optional("brightness"): cv.percentage,
+        }
+    ),
+)
+async def cfx_set_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    light_var = await cg.get_variable(config[CONF_ID])
+    cg.add(var.set_light(light_var))
+    if "effect" in config:
+        cg.add(var.set_effect(config["effect"]))
+    if "speed" in config:
+        cg.add(var.set_speed(config["speed"]))
+    if "intensity" in config:
+        cg.add(var.set_intensity(config["intensity"]))
+    if "palette" in config:
+        cg.add(var.set_palette(config["palette"]))
+    if "brightness" in config:
+        cg.add(var.set_brightness(config["brightness"]))
+    return var

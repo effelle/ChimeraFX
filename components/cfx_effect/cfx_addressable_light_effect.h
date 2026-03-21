@@ -208,6 +208,12 @@ public:
                            optional<uint8_t> iten, optional<uint8_t> pal,
                            uint32_t itr);
   CFXSequence *get_active_sequence() const { return this->active_sequence_; }
+
+  // cfx_set action setters — override sequence params on the active effect.
+  // Persist until the next start() call resets them via set_active_sequence().
+  void set_sequence_speed(uint8_t v)     { this->sequence_speed_     = v; }
+  void set_sequence_intensity(uint8_t v) { this->sequence_intensity_ = v; }
+  void set_sequence_palette(uint8_t v)   { this->sequence_palette_   = v; }
 #endif
 
   std::vector<CfxOnStartTrigger *> on_start_triggers_;
