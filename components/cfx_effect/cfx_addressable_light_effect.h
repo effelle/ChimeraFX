@@ -363,20 +363,31 @@ public:
   void start() override {}
   void stop() override {}
 
-  // apply() is called every frame after the state machine has committed.
-  // Fire turn_off on the first frame — by then the transition/effect conflict
-  // is resolved and ESPHome accepts the call cleanly.
+  // apply() fires every frame after the state machine commits the turn_on.
+  // Step 1: silently clear the separator effect from ESPHome's memory
+  //         (no publish to HA) so the next turn_on remembers Effect: None.
+  // Step 2: turn the light off cleanly with zero transition.
+  // sep_fired_ stays true so subsequent start()/apply() cycles are no-ops —
+  // the light remains in normal operation after this fires once.
   void apply(light::AddressableLight &it, const Color &current_color) override {
     if (this->sep_fired_)
       return;
     this->sep_fired_ = true;
     auto *ls = this->get_light_state();
-    if (ls != nullptr) {
-      auto call = ls->make_call();
-      call.set_state(false);
-      call.set_transition_length(0);
-      call.perform();
-    }
+    if (ls == nullptr)
+      return;
+    // Silently reset the effect to None without publishing to HA.
+    // This ensures the separator name is not saved to preferences.
+    auto clear = ls->make_call();
+    clear.set_effect("None");
+    clear.set_transition_length(0);
+    clear.set_publish_state(false);
+    clear.perform();
+    // Now turn off — effect is already cleared so no rejection.
+    auto off = ls->make_call();
+    off.set_state(false);
+    off.set_transition_length(0);
+    off.perform();
   }
 
 protected:
