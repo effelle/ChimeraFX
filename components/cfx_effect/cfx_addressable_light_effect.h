@@ -360,15 +360,27 @@ public:
   // turns the light on after our turn_off — resetting the flag would cause
   // apply() to fire turn_off again, trapping the light in an off loop.
   // Once fired, the separator stays inert until a real effect is selected.
-  void start() override {}
-  void stop() override {}
+  // Reset on every start() so each separator selection is treated fresh.
+  // Without this, after the first fire sep_fired_ stays true and subsequent
+  // selections are silent no-ops.
+  void start() override { this->sep_fired_ = false; }
 
-  // apply() fires every frame after the state machine commits the turn_on.
-  // Step 1: silently clear the separator effect from ESPHome's memory
-  //         (no publish to HA) so the next turn_on remembers Effect: None.
-  // Step 2: turn the light off cleanly with zero transition.
-  // sep_fired_ stays true so subsequent start()/apply() cycles are no-ops —
-  // the light remains in normal operation after this fires once.
+  // Clear the separator effect name after turn_off completes so ESPHome
+  // doesn't restore it on the next turn_on.
+  void stop() override {
+    auto *ls = this->get_light_state();
+    if (ls == nullptr)
+      return;
+    auto call = ls->make_call();
+    call.set_effect("None");
+    call.set_transition_length(0);
+    call.perform();
+  }
+
+  // apply() fires after the state machine commits. Fire turn_off on the first
+  // frame — by then the transition conflict is resolved.
+  // Plain set_state(false) only — no effect manipulation here to avoid the
+  // "effect cannot be used with transition/flash" rejection.
   void apply(light::AddressableLight &it, const Color &current_color) override {
     if (this->sep_fired_)
       return;
@@ -376,18 +388,10 @@ public:
     auto *ls = this->get_light_state();
     if (ls == nullptr)
       return;
-    // Silently reset the effect to None without publishing to HA.
-    // This ensures the separator name is not saved to preferences.
-    auto clear = ls->make_call();
-    clear.set_effect("None");
-    clear.set_transition_length(0);
-    clear.set_publish(false);
-    clear.perform();
-    // Now turn off — effect is already cleared so no rejection.
-    auto off = ls->make_call();
-    off.set_state(false);
-    off.set_transition_length(0);
-    off.perform();
+    auto call = ls->make_call();
+    call.set_state(false);
+    call.set_transition_length(0);
+    call.perform();
   }
 
 protected:
