@@ -356,22 +356,27 @@ public:
   // Counter the turn_on that ESPHome already fired before start() was called.
   // We can't prevent the turn_on, but we can immediately reverse it with
   // turn_off at zero transition so it's invisible to the user.
-  void start() override {
-    auto *ls = this->get_light_state();
-    if (ls == nullptr)
+  void start() override { this->sep_fired_ = false; }
+  void stop() override {}
+
+  // apply() is called every frame after the state machine has committed.
+  // Fire turn_off on the first frame — by then the transition/effect conflict
+  // is resolved and ESPHome accepts the call cleanly.
+  void apply(light::AddressableLight &it, const Color &current_color) override {
+    if (this->sep_fired_)
       return;
-    // Defer turn-off by one loop tick. start() fires while the light is
-    // mid-transition into the effect state — immediate calls are rejected.
-    // After 50ms the transition has committed and we can cleanly turn off.
-    App.scheduler.set_timeout(this, "sep_off", 50, [ls]() {
+    this->sep_fired_ = true;
+    auto *ls = this->get_light_state();
+    if (ls != nullptr) {
       auto call = ls->make_call();
       call.set_state(false);
       call.set_transition_length(0);
       call.perform();
-    });
+    }
   }
-  void stop() override {}
-  void apply(light::AddressableLight &it, const Color &current_color) override {}
+
+protected:
+  bool sep_fired_{false};
 };
 
 } // namespace chimera_fx
