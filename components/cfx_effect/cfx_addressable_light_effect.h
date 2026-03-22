@@ -381,7 +381,7 @@ public:
     auto clear = ls->make_call();
     clear.set_effect("None");
     clear.set_transition_length(0);
-    clear.set_publish_state(false);
+    clear.set_publish(false);
     clear.perform();
     // Now turn off — effect is already cleared so no rejection.
     auto off = ls->make_call();
