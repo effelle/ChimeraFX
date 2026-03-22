@@ -93,7 +93,14 @@ CFX_EFFECT_NAMES = {
     90: "Fireworks Starburst", 91: "Bouncing Balls", 92: "Sinelon", 93: "Sinelon Dual", 94: "Sinelon Rainbow", 95: "Popcorn", 96: "Drip", 97: "Plasma", 98: "Percent", 99: "Ripple Rainbow",
     100: "Heartbeat", 101: "Ocean", 102: "Candle Multi", 103: "Solid Glitter", 104: "Sunrise", 105: "Phased", 106: "Twinkleup", 107: "Noise Pal", 108: "Sine", 109: "Phased Noise",
     110: "Flow", 111: "Chunchun", 112: "Dancing Shadows", 113: "Washing Machine",
+    155: "Kaleidos",
+    156: "Follow Me",
+    157: "Follow Us",
+    158: "Energy",
+    159: "Chaos Theory",
+    160: "Fluid Rain",
     161: "Horizon Sweep",
+    170: "Assembly",
     171: "Inertia Sweep",
     172: "Sonar Reveal",
     173: "Venetian",
@@ -108,6 +115,7 @@ CFX_EFFECT_NAMES = {
     182: "Gas Discharge",
     183: "Harmonic Settle",
     184: "Lithograph",
+    185: "--- separator ---",
     255: "Ambient Roulette"
 }
 

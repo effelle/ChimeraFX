@@ -950,7 +950,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
 ---
 ## 3. WLED Classics (Remastered)
-
 **The definitive collection of open-source favorites.**
 
 A hand-picked selection of the community's best effects, meticulously optimized and rewritten to run natively within the ChimeraFX engine with zero overhead.

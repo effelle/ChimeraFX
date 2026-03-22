@@ -51,6 +51,7 @@ uint16_t mode_kaleidos(void);
 uint16_t mode_follow_me(void);
 uint16_t mode_follow_us(void);
 uint16_t mode_cfx_horizon_sweep(void);
+uint16_t mode_separator(void);
 uint16_t mode_collider(void);
 uint16_t mode_hydro_pulse(void);
 uint16_t mode_dropping_fill(void);
@@ -869,6 +870,15 @@ struct AuroraWave {
 };
 
 // --- Effect Implementations ---
+
+// Separator effect — signals immediate completion when a dropdown separator
+// is accidentally selected. The effect layer detects FX_MODE_SEPARATOR in
+// start() and fires light.turn_off before the runner even renders a frame.
+uint16_t mode_separator(void) {
+  if (instance)
+    instance->effect_complete_ = true;
+  return 350;
+}
 
 uint16_t mode_static(void) {
   if (!instance)
@@ -4484,6 +4494,9 @@ void CFXRunner::service() {
     break;
   case FX_MODE_FLUID_RAIN: // 160
     mode_fluid_rain();
+    break;
+  case FX_MODE_SEPARATOR: // 185 — turn off immediately, no animation
+    mode_separator();
     break;
   case FX_MODE_HORIZON_SWEEP:        // 161
   case FX_MODE_CENTER_SWEEP:         // 162
