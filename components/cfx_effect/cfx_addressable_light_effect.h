@@ -359,11 +359,17 @@ public:
   void start() override {
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
-      auto call = ls->make_call();
-      call.set_state(false);
-      call.set_transition_length(0);
-      call.set_effect("None");
-      call.perform();
+      // Two-call pattern: ESPHome rejects set_effect("None") + set_state(false)
+      // in a single call. Clear the effect first, then turn off.
+      auto clear = ls->make_call();
+      clear.set_effect("None");
+      clear.set_transition_length(0);
+      clear.perform();
+
+      auto off = ls->make_call();
+      off.set_state(false);
+      off.set_transition_length(0);
+      off.perform();
     }
   }
   void stop() override {}
