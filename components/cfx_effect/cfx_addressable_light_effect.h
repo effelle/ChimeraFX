@@ -353,10 +353,18 @@ public:
   explicit CFXSeparatorEffect(const char *name)
       : CFXAddressableLightEffect(name) {}
 
-  // Immediately stop the effect when started — this causes ESPHome to revert
-  // the light to its previous state before the separator was selected.
+  // Counter the turn_on that ESPHome already fired before start() was called.
+  // We can't prevent the turn_on, but we can immediately reverse it with
+  // turn_off at zero transition so it's invisible to the user.
   void start() override {
-    light::AddressableLightEffect::stop();
+    auto *ls = this->get_light_state();
+    if (ls != nullptr) {
+      auto call = ls->make_call();
+      call.set_state(false);
+      call.set_transition_length(0);
+      call.set_effect("None");
+      call.perform();
+    }
   }
   void stop() override {}
   void apply(light::AddressableLight &it, const Color &current_color) override {}
