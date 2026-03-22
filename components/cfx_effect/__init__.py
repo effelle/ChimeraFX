@@ -24,9 +24,6 @@ chimera_fx_ns = cg.esphome_ns.namespace("chimera_fx")
 CFXAddressableLightEffect = chimera_fx_ns.class_(
     "CFXAddressableLightEffect", AddressableLightEffect
 )
-CFXSeparatorEffect = chimera_fx_ns.class_(
-    "CFXSeparatorEffect", AddressableLightEffect
-)
 
 from . import cfx_control
 
@@ -180,15 +177,6 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
         if eid in CFX_EFFECT_NAMES:
             name = CFX_EFFECT_NAMES[eid]
     
-    # Separator entries (effect_id 185) get a no-op effect — selecting them
-    # does nothing at all. No flash, no turn-off, no state change.
-    # Use Pvariable with a RawExpression so the generated new uses CFXSeparatorEffect
-    # as the type, not as a constructor argument.
-    if eid == 185:
-        effect = cg.Pvariable(effect_id,
-                              cg.RawExpression(f'new chimera_fx::CFXSeparatorEffect("{name}")'))
-        return effect
-
     effect = cg.new_Pvariable(effect_id, name)
     cg.add(effect.set_update_interval(config[CONF_UPDATE_INTERVAL]))
     cg.add(effect.set_effect_id(config[CONF_EFFECT_ID]))

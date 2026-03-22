@@ -345,58 +345,6 @@ public:
   uint32_t saved_transition_length_{0};
 };
 
-// Separator effect — registered for "--- Category ---" entries in the effect list.
-// start() is a deliberate no-op: the light stays in whatever state it was in
-// before the user accidentally selected the separator. No flash, no turn-off.
-class CFXSeparatorEffect : public CFXAddressableLightEffect {
-public:
-  explicit CFXSeparatorEffect(const char *name)
-      : CFXAddressableLightEffect(name) {}
-
-  // Counter the turn_on that ESPHome already fired before start() was called.
-  // We can't prevent the turn_on, but we can immediately reverse it with
-  // turn_off at zero transition so it's invisible to the user.
-  // Do NOT reset sep_fired_ here. ESPHome re-calls start() when the user
-  // turns the light on after our turn_off — resetting the flag would cause
-  // apply() to fire turn_off again, trapping the light in an off loop.
-  // Once fired, the separator stays inert until a real effect is selected.
-  // Reset on every start() so each separator selection is treated fresh.
-  // Without this, after the first fire sep_fired_ stays true and subsequent
-  // selections are silent no-ops.
-  void start() override { this->sep_fired_ = false; }
-
-  // Clear the separator effect name after turn_off completes so ESPHome
-  // doesn't restore it on the next turn_on.
-  void stop() override {
-    auto *ls = this->get_light_state();
-    if (ls == nullptr)
-      return;
-    auto call = ls->make_call();
-    call.set_effect("None");
-    call.set_transition_length(0);
-    call.perform();
-  }
-
-  // apply() fires after the state machine commits. Fire turn_off on the first
-  // frame — by then the transition conflict is resolved.
-  // Plain set_state(false) only — no effect manipulation here to avoid the
-  // "effect cannot be used with transition/flash" rejection.
-  void apply(light::AddressableLight &it, const Color &current_color) override {
-    if (this->sep_fired_)
-      return;
-    this->sep_fired_ = true;
-    auto *ls = this->get_light_state();
-    if (ls == nullptr)
-      return;
-    auto call = ls->make_call();
-    call.set_state(false);
-    call.set_transition_length(0);
-    call.perform();
-  }
-
-protected:
-  bool sep_fired_{false};
-};
 
 } // namespace chimera_fx
 } // namespace esphome

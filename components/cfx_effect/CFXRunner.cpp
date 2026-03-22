@@ -871,13 +871,31 @@ struct AuroraWave {
 
 // --- Effect Implementations ---
 
-// Separator effect — signals immediate completion when a dropdown separator
-// is accidentally selected. The effect layer detects FX_MODE_SEPARATOR in
-// start() and fires light.turn_off before the runner even renders a frame.
+// Separator effect — blinks red 3 times then self-terminates.
+// Visual feedback that tells the user "that was a category divider, not an effect".
+// Uses _segment.call as a frame counter. Each blink = 2 frames (on + off).
+// After 6 frames (3 blinks) sets effect_complete_ and the normal turn_off fires.
 uint16_t mode_separator(void) {
-  if (instance)
+  if (!instance)
+    return 300;
+
+  uint16_t len = instance->_segment.length();
+  uint32_t frame = instance->_segment.call;
+
+  // 6 half-cycles = 3 blinks. Each half-cycle = 300ms.
+  if (frame >= 6) {
     instance->effect_complete_ = true;
-  return 350;
+    instance->fill_solid(0, len, RGBW32(0, 0, 0, 0));
+    return 300;
+  }
+
+  // Even frames: red on. Odd frames: off.
+  if (frame % 2 == 0) {
+    instance->fill_solid(0, len, RGBW32(180, 0, 0, 0));
+  } else {
+    instance->fill_solid(0, len, RGBW32(0, 0, 0, 0));
+  }
+  return 300;
 }
 
 uint16_t mode_static(void) {
