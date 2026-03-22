@@ -348,12 +348,13 @@ public:
 // Separator effect — registered for "--- Category ---" entries in the effect list.
 // start() is a deliberate no-op: the light stays in whatever state it was in
 // before the user accidentally selected the separator. No flash, no turn-off.
-class CFXSeparatorEffect : public light::AddressableLightEffect {
+class CFXSeparatorEffect : public CFXAddressableLightEffect {
 public:
   explicit CFXSeparatorEffect(const char *name)
-      : light::AddressableLightEffect(name) {}
+      : CFXAddressableLightEffect(name) {}
 
   // No-op: do not change the light state at all.
+  // Selecting a category separator in the dropdown does nothing visible.
   void start() override {}
   void stop() override {}
   void apply(light::AddressableLight &it, const Color &current_color) override {}
