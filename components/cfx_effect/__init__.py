@@ -182,8 +182,11 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
     
     # Separator entries (effect_id 185) get a no-op effect — selecting them
     # does nothing at all. No flash, no turn-off, no state change.
+    # Use Pvariable with a RawExpression so the generated new uses CFXSeparatorEffect
+    # as the type, not as a constructor argument.
     if eid == 185:
-        effect = cg.new_Pvariable(effect_id, CFXSeparatorEffect, name)
+        effect = cg.Pvariable(effect_id,
+                              cg.RawExpression(f'new chimera_fx::CFXSeparatorEffect("{name}")'))
         return effect
 
     effect = cg.new_Pvariable(effect_id, name)

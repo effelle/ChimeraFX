@@ -350,7 +350,7 @@ public:
 // before the user accidentally selected the separator. No flash, no turn-off.
 class CFXSeparatorEffect : public light::AddressableLightEffect {
 public:
-  explicit CFXSeparatorEffect(const std::string &name)
+  explicit CFXSeparatorEffect(const char *name)
       : light::AddressableLightEffect(name) {}
 
   // No-op: do not change the light state at all.
