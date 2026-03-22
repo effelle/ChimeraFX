@@ -143,19 +143,6 @@ std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
-  // Separator guard — user accidentally selected a category separator.
-  // Turn the light off immediately with no animation, no brightness side-effect.
-  if (this->configured_effect_id_ == 185) { // FX_MODE_SEPARATOR
-    auto *ls = this->get_light_state();
-    if (ls != nullptr) {
-      auto call = ls->make_call();
-      call.set_state(false);
-      call.set_transition_length(0);
-      call.perform();
-    }
-    return;
-  }
-
   // --- Ambient Roulette (Randomizer) ---
   if (this->configured_effect_id_ == 255) {
     this->effect_id_ = 255; // Reset to roulette base

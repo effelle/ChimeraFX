@@ -345,6 +345,20 @@ public:
   uint32_t saved_transition_length_{0};
 };
 
+// Separator effect — registered for "--- Category ---" entries in the effect list.
+// start() is a deliberate no-op: the light stays in whatever state it was in
+// before the user accidentally selected the separator. No flash, no turn-off.
+class CFXSeparatorEffect : public light::AddressableLightEffect {
+public:
+  explicit CFXSeparatorEffect(const std::string &name)
+      : light::AddressableLightEffect(name) {}
+
+  // No-op: do not change the light state at all.
+  void start() override {}
+  void stop() override {}
+  void apply(light::AddressableLight &it, const Color &current_color) override {}
+};
+
 } // namespace chimera_fx
 } // namespace esphome
 
