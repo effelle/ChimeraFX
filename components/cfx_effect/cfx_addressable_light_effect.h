@@ -356,7 +356,11 @@ public:
   // Counter the turn_on that ESPHome already fired before start() was called.
   // We can't prevent the turn_on, but we can immediately reverse it with
   // turn_off at zero transition so it's invisible to the user.
-  void start() override { this->sep_fired_ = false; }
+  // Do NOT reset sep_fired_ here. ESPHome re-calls start() when the user
+  // turns the light on after our turn_off — resetting the flag would cause
+  // apply() to fire turn_off again, trapping the light in an off loop.
+  // Once fired, the separator stays inert until a real effect is selected.
+  void start() override {}
   void stop() override {}
 
   // apply() is called every frame after the state machine has committed.
