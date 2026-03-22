@@ -353,9 +353,11 @@ public:
   explicit CFXSeparatorEffect(const char *name)
       : CFXAddressableLightEffect(name) {}
 
-  // No-op: do not change the light state at all.
-  // Selecting a category separator in the dropdown does nothing visible.
-  void start() override {}
+  // Immediately stop the effect when started — this causes ESPHome to revert
+  // the light to its previous state before the separator was selected.
+  void start() override {
+    light::AddressableLightEffect::stop();
+  }
   void stop() override {}
   void apply(light::AddressableLight &it, const Color &current_color) override {}
 };

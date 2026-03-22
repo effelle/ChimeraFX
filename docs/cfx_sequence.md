@@ -140,7 +140,7 @@ api:
 
 ---
 
-## INternal Orchestrator Configuration Variables (YAML)
+## Internal Orchestrator Configuration Variables (YAML)
 
 | Variable | Type | Required | Description |
 |----------|------|----------|-------------|
@@ -151,7 +151,6 @@ api:
 | **on_cfx_start** | trigger | No | Action to fire when the sequence begins. |
 | **on_cfx_complete** | trigger | No | Action to fire when iterations are complete. |
 | **on_cfx_reach** | trigger | No | Fires at a specific % position (requires position). |
-| **on_cfx_pixel** | trigger | No | Fires at a specific pixel index (requires pixel). |
 | **iterations** | int | No | Cycles before finishing. 0 = indefinitely. |
 | **restore** | bool | No | Return strips to their pre-sequence state on stop. |
 
@@ -165,7 +164,7 @@ ChimeraFX exposes several events trough `cfx_events` entity to help you monitor 
 
 ##  Native ESPHome Integration (Actions)
 
-ChimeraFX isn't a standalone system, it is built to live inside the **ESPHome Automation Engine**. Every sequence is a first-class citizen that can be triggered, stopped, or chained directly from hardware events (buttons) or software logic (API, sensor values).
+ChimeraFX Orchestrator isn't a standalone system, it is built to live inside the **ESPHome Automation Engine**. Every sequence is a first-class citizen that can be triggered, stopped, or chained directly from hardware events (buttons) or software logic (API, sensor values).
 
 ### `cfx_sequence.start`
 Starts a sequence manually by its YAML ID. This allows you to create high-fidelity hardware interactions that bypass the network entirely.
@@ -195,7 +194,6 @@ binary_sensor:
 
 - **`cfx_reach`**: Fired when progress reaches a multiple of the **Progress Step**.
 - **`cfx_complete`**: Fired when a sequence finishes its requested **Iterations**.
-- **`cfx_pixel`**: Fired unconditionally every time the leading pixel advances. Due the high traffic this event can generate, it is not available for the Home Assistant Orchestrator. 
 
 ---
 
