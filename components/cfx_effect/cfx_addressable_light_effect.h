@@ -358,19 +358,17 @@ public:
   // turn_off at zero transition so it's invisible to the user.
   void start() override {
     auto *ls = this->get_light_state();
-    if (ls != nullptr) {
-      // Two-call pattern: ESPHome rejects set_effect("None") + set_state(false)
-      // in a single call. Clear the effect first, then turn off.
-      auto clear = ls->make_call();
-      clear.set_effect("None");
-      clear.set_transition_length(0);
-      clear.perform();
-
-      auto off = ls->make_call();
-      off.set_state(false);
-      off.set_transition_length(0);
-      off.perform();
-    }
+    if (ls == nullptr)
+      return;
+    // Defer turn-off by one loop tick. start() fires while the light is
+    // mid-transition into the effect state — immediate calls are rejected.
+    // After 50ms the transition has committed and we can cleanly turn off.
+    App.scheduler.set_timeout(this, "sep_off", 50, [ls]() {
+      auto call = ls->make_call();
+      call.set_state(false);
+      call.set_transition_length(0);
+      call.perform();
+    });
   }
   void stop() override {}
   void apply(light::AddressableLight &it, const Color &current_color) override {}
