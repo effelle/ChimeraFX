@@ -264,9 +264,9 @@ async def to_code(config):
         "internal": True,
         "force_update": False,
         "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
+        "unit_of_measurement": "%",
     }
     await sensor.register_sensor(prog_var, prog_conf)
-    cg.add(prog_var.set_unit_of_measurement("%"))
 
     # 3. Last Pixel Sensor
     last_px_id = core.ID("cfx_last_pixel", is_declaration=True, type=sensor.Sensor)
@@ -435,6 +435,7 @@ async def to_code(config):
             cv.Required(CONF_ID): cv.string,
         }
     ),
+    synchronous=True,
 )
 async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
     # Pass the raw target ID string directly to break the codegen dependency graph
@@ -449,6 +450,7 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
             cv.Required(CONF_ID): cv.string,
         }
     ),
+    synchronous=True,
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
     # Pass the raw target ID string directly to break the codegen dependency graph
@@ -468,6 +470,7 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
             cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
         }
     ),
+    synchronous=True,
 )
 async def cfx_set_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)

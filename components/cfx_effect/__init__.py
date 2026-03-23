@@ -275,6 +275,7 @@ PlayEffectAction = chimera_fx_ns.class_("PlayEffectAction", automation.Action)
             cv.Optional("mirror"): cv.templatable(cv.boolean),
         }
     ),
+    synchronous=True,
 )
 async def cfx_play_effect_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
