@@ -107,7 +107,8 @@ void CFXSequenceSelect::setup() {
   ESP_LOGW(TAG,
            "ChimeraFX: For sub-10ms cfx_start/cfx_complete event delivery to "
            "Home Assistant, set 'api: batch_delay: 0ms' in your ESPHome config.");
-  this->add_on_state_callback([](const std::string &value, size_t index) {
+  this->add_on_state_callback([this](size_t index) {
+    std::string value(this->current_option());
     if (CFXSequenceSelect::suppress_callback_)
       return;
 
