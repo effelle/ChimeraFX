@@ -15,6 +15,7 @@
 #include "esphome/core/hal.h" // For millis_64()
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <span>
 
 #ifdef USE_CFX_SEQUENCE
 #include "../cfx_sequence/cfx_sequence.h"
@@ -179,7 +180,7 @@ void CFXAddressableLightEffect::start() {
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
       char id_buf[64] = {};
-      ls->get_object_id_to({id_buf, sizeof(id_buf)});
+      ls->get_object_id_to(std::span<char>(id_buf, sizeof(id_buf)));
       this->strip_tag_ = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
     }
     cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
