@@ -12,7 +12,7 @@
 #include "cfx_utils.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
-#include "esphome/core/hal.h" // For millis()
+#include "esphome/core/hal.h" // For millis_64()
 #include "esphome/core/log.h"
 #include <algorithm>
 
@@ -548,7 +548,7 @@ void CFXAddressableLightEffect::start() {
     if (!this->intro_active_) {
       this->intro_active_ = is_fresh_turn_on;
       if (this->intro_active_) {
-        this->intro_start_time_ = millis();
+        this->intro_start_time_ = millis_64();
       }
     } else {
       // Intro is already running, do NOT kill it just because the light is now
@@ -959,7 +959,7 @@ void CFXAddressableLightEffect::stop() {
 
           // Initialize outro start time on the very first allowed frame
           if (this->outro_start_time_ == 0) {
-            this->outro_start_time_ = millis();
+            this->outro_start_time_ = millis_64();
             this->hydraulics_last_ms_ = this->outro_start_time_;
             if (this->active_outro_mode_ == INTRO_MODE_HYDRAULICS) {
               this->hydraulics_fluid_level_ = (float)it_light->size();
@@ -1056,7 +1056,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
   // This provides CPU headroom while maintaining smooth animation
 
-  const uint32_t now = cfx_millis();
+  const uint64_t now = millis_64();
   if (now - this->last_run_ < this->update_interval_) {
     return; // Not time for update yet (apply_guard auto-restores instance)
   }
@@ -1109,10 +1109,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
 
   } else {
-    static uint32_t null_state_log = 0;
-    if (millis() - null_state_log > 5000) {
+    static uint64_t null_state_log = 0;
+    if (millis_64() - null_state_log > 5000) {
       ESP_LOGW("chimera_fx", "apply() - get_light_state() is NULL!");
-      null_state_log = millis();
+      null_state_log = millis_64();
     }
   }
 
@@ -1258,7 +1258,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->run_intro(it, current_color);
     }
 
-    if (millis() - this->intro_start_time_ > this->active_intro_duration_ms_) {
+    if (millis_64() - this->intro_start_time_ > this->active_intro_duration_ms_) {
       this->intro_active_ = false;
 
       // Check if Transition is enabled via config
@@ -1281,7 +1281,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         }
         this->state_ =
             TRANSITION_RUNNING; // Use RUNNING to signify Active Blend
-        this->transition_start_ms_ = millis();
+        this->transition_start_ms_ = millis_64();
       } else {
         this->state_ = TRANSITION_NONE;
       }
@@ -1294,7 +1294,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Handle Intro→Main Blending
   if (this->state_ == TRANSITION_RUNNING) {
-    uint32_t trans_elapsed = millis() - this->transition_start_ms_;
+    uint32_t trans_elapsed = (uint32_t)(millis_64() - this->transition_start_ms_);
     float trans_dur_ms = (this->transition_duration_
                               ? this->transition_duration_->state * 1000.0f
                               : 1500.0f);
@@ -1306,7 +1306,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     float progress = ((float)trans_elapsed / trans_dur_ms) * (1.0f + softness);
 
     // Seed for deterministic random mask
-    uint32_t seed = this->transition_start_ms_;
+    uint32_t seed = (uint32_t)this->transition_start_ms_;
 
     for (int i = 0; i < it.size(); i++) {
       if (i >= this->intro_snapshot_.size())
@@ -1736,8 +1736,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
 void CFXAddressableLightEffect::run_controls_() {
   // 1. Find controller if not linked (with throttle to prevent log flooding)
   if (this->controller_ == nullptr) {
-    static uint32_t last_ctrl_check = 0;
-    uint32_t now = millis();
+    static uint64_t last_ctrl_check = 0;
+    uint64_t now = millis_64();
     if (now - last_ctrl_check > 5000) {
       last_ctrl_check = now;
       this->controller_ = CFXControl::find(this->get_light_state());
@@ -1842,7 +1842,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
   // --- Visualizer: Periodic Metadata Refresh (Every 5s) ---
   if (!this->is_virtual_segment_) {
-    uint32_t now = millis();
+    uint64_t now = millis_64();
     if (now - this->last_metadata_refresh_ > 5000) {
       auto *out = static_cast<cfx_light::CFXLightOutput *>(
           this->get_light_state()->get_output());
@@ -2026,7 +2026,7 @@ void CFXAddressableLightEffect::run_controls_() {
 // Intro Routine Implementation
 void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                                           const Color &target_color) {
-  uint32_t elapsed = millis() - this->intro_start_time_;
+  uint32_t elapsed = (uint32_t)(millis_64() - this->intro_start_time_);
 
   // Safety: If mode is NONE, abort immediately and release control
   // Ensure we clear the flag so next frame service() runs.
@@ -2568,7 +2568,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_HYDRAULICS: {
-    uint32_t now_ms = millis();
+    uint64_t now_ms = millis_64();
     if (this->hydraulics_last_ms_ == 0) {
       this->hydraulics_last_ms_ = now_ms;
       this->hydraulics_fluid_level_ = 0.0f;
@@ -2576,7 +2576,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       this->hydraulics_particles_.clear();
       this->hydraulics_particles_.reserve(MAX_HYDRAULICS_PARTICLES);
     }
-    uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+    uint32_t dt_ms = (uint32_t)(now_ms - this->hydraulics_last_ms_);
     if (dt_ms == 0)
       dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
@@ -2713,7 +2713,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_MORSE: {
     uint32_t speed_val = this->active_intro_speed_;
     uint32_t unit_ms = 80 + ((255 - speed_val) * 100 / 255);
-    uint32_t elapsed_m = millis() - this->intro_start_time_;
+    uint32_t elapsed_m = (uint32_t)(millis_64() - this->intro_start_time_);
     uint32_t current_bit = elapsed_m / unit_ms;
 
     uint64_t mask = 0b1110111011100011101ULL;
@@ -3861,7 +3861,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
   uint32_t duration_ms = this->active_outro_duration_ms_;
 
-  uint32_t elapsed = millis() - this->outro_start_time_;
+  uint32_t elapsed = (uint32_t)(millis_64() - this->outro_start_time_);
   float progress = (float)elapsed / (duration_ms > 0 ? duration_ms : 1);
   if (progress > 1.0f)
     progress = 1.0f;
@@ -4238,10 +4238,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     break;
   }
   case INTRO_MODE_HYDRAULICS: {
-    uint32_t now_ms = millis();
+    uint64_t now_ms = millis_64();
     if (this->hydraulics_last_ms_ == 0)
       this->hydraulics_last_ms_ = now_ms;
-    uint32_t dt_ms = now_ms - this->hydraulics_last_ms_;
+    uint32_t dt_ms = (uint32_t)(now_ms - this->hydraulics_last_ms_);
     if (dt_ms == 0)
       dt_ms = 1;
     this->hydraulics_last_ms_ = now_ms;
@@ -4337,7 +4337,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         it[seg_start + i] = Color::BLACK;
       return true;
     }
-    if (millis() - this->outro_start_time_ >
+    if (millis_64() - this->outro_start_time_ >
         this->active_outro_duration_ms_ + 2000) {
       for (int i = 0; i < seg_len; i++)
         it[seg_start + i] = Color::BLACK;
@@ -4651,7 +4651,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_MORSE: {
 
     uint32_t unit_ms = 80 + ((255 - this->active_outro_intensity_) * 100 / 255);
-    uint32_t elapsed_morse = millis() - this->outro_start_time_;
+    uint32_t elapsed_morse = (uint32_t)(millis_64() - this->outro_start_time_);
     uint32_t current_bit = elapsed_morse / unit_ms;
 
     uint64_t mask = 0b11101110111000101011101000101011101ULL;

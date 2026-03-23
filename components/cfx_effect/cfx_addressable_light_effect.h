@@ -102,7 +102,7 @@ public:
   bool intro_active_{false};
   uint8_t active_intro_mode_{0};
   uint8_t active_intro_speed_{128};
-  uint32_t intro_start_time_{0};
+  uint64_t intro_start_time_{0};
   uint32_t active_intro_duration_ms_{1000};
 
   bool outro_active_{false};
@@ -111,7 +111,7 @@ public:
   uint8_t active_outro_speed_{128};
   uint8_t active_outro_intensity_{128};
   float active_outro_brightness_{1.0f};
-  uint32_t outro_start_time_{0};
+  uint64_t outro_start_time_{0};
 
   void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
   void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
@@ -258,7 +258,7 @@ public:
     OUTRO_RUNNING
   };
   TransitionState state_{TRANSITION_NONE};
-  uint32_t transition_start_ms_{0};
+  uint64_t transition_start_ms_{0};
   std::vector<Color> intro_snapshot_;
   bool is_sequence_outro_{false};
 
@@ -273,7 +273,7 @@ public:
   bool palette_synced_{false};
 
   uint32_t update_interval_{16};
-  uint32_t last_run_{0};
+  uint64_t last_run_{0};
 
   struct MonochromaticPreset {
     bool is_active;
@@ -313,7 +313,7 @@ public:
   float hydraulics_fluid_level_{0.0f};
   float hydraulics_fluid_velocity_{0.0f};
   std::vector<HydraulicsParticle> hydraulics_particles_;
-  uint32_t hydraulics_last_ms_{0};
+  uint64_t hydraulics_last_ms_{0};
   static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;
 
   CFXControl *controller_{nullptr};
@@ -334,7 +334,7 @@ public:
   float autotune_expected_intensity_{-1.0f};
   std::string autotune_expected_palette_{""};
   std::string last_sent_palette_{""};
-  uint32_t last_metadata_refresh_{0};
+  uint64_t last_metadata_refresh_{0};
 
   // Applies per-effect defaults to UI sliders/palette and records expected
   // values. Only touches controls that don't have a hard YAML preset.

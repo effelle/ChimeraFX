@@ -26,6 +26,16 @@
 // TIMING FUNCTIONS
 // ============================================================================
 
+inline uint64_t cfx_millis_64() {
+#ifdef CFX_ARDUINO
+  // millis_64() is the optimized 2.5x-faster path added in ESPHome 2026.3.0
+  extern uint64_t millis_64();
+  return millis_64();
+#else
+  return esp_timer_get_time() / 1000ULL;
+#endif
+}
+
 inline uint32_t cfx_millis() {
 #ifdef CFX_ARDUINO
   return millis();
