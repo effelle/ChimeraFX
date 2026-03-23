@@ -178,7 +178,11 @@ void CFXAddressableLightEffect::start() {
   {
     auto *ls = this->get_light_state();
     if (ls != nullptr)
+      // TODO(2026.7.0): migrate to get_object_id_to() when StringRef buffer API is stable
+      #pragma GCC diagnostic push
+      #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       this->strip_tag_ = ls->get_object_id();
+      #pragma GCC diagnostic pop
     cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
     this->rebuild_milestone_strings_();
     this->reset_milestones_();
@@ -451,7 +455,8 @@ void CFXAddressableLightEffect::start() {
   if (!this->initial_preset_applied_ && intro_sel != nullptr &&
       this->intro_preset_.has_value()) {
     // Only apply if still at "None" factory default — preserve user choices
-    const char *cur = intro_sel->current_option();
+    std::string cur_str(intro_sel->current_option());
+    const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = intro_sel->make_call();
       call.set_index(this->intro_preset_.value());
@@ -480,7 +485,8 @@ void CFXAddressableLightEffect::start() {
   if (!this->initial_preset_applied_ && outro_sel != nullptr &&
       this->outro_preset_.has_value()) {
     // Only apply if still at "None" factory default — preserve user choices
-    const char *cur = outro_sel->current_option();
+    std::string cur_str(outro_sel->current_option());
+    const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = outro_sel->make_call();
       call.set_index(this->outro_preset_.value());
@@ -513,7 +519,8 @@ void CFXAddressableLightEffect::start() {
     if (out != nullptr) {
       std::string pal_name = "";
       if (palette_sel && palette_sel->has_state()) {
-        const char *opt = palette_sel->current_option();
+        std::string opt_s(palette_sel->current_option());
+        const char *opt = opt_s.c_str();
         if (opt != nullptr)
           pal_name = opt;
       }
@@ -579,7 +586,8 @@ void CFXAddressableLightEffect::start() {
     } else {
       // 2. Fallback to UI Selectors / YAML Presets
       if (intro_sel != nullptr && intro_sel->has_state()) {
-        const char *opt = intro_sel->current_option();
+        std::string opt_s(intro_sel->current_option());
+        const char *opt = opt_s.c_str();
         std::string s = opt ? opt : "";
         if (s == "Wipe")
           this->active_intro_mode_ = INTRO_MODE_WIPE;
@@ -762,7 +770,8 @@ void CFXAddressableLightEffect::stop() {
       } else {
         // 2. Fallback to UI Selectors / YAML Presets
         if (out_eff != nullptr && out_eff->has_state()) {
-          const char *raw_opt = out_eff->current_option();
+          std::string raw_opt_s(out_eff->current_option());
+          const char *raw_opt = raw_opt_s.c_str();
           std::string s = raw_opt ? raw_opt : "";
           if (s == "Wipe")
             this->active_outro_mode_ = INTRO_MODE_WIPE;
@@ -1393,7 +1402,8 @@ uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
   if (s == nullptr)
     return 0;
 
-  const char *option = s->current_option();
+  std::string option_s(s->current_option());
+  const char *option = option_s.c_str();
   if (option == nullptr)
     return 0;
 
@@ -1817,7 +1827,8 @@ void CFXAddressableLightEffect::run_controls_() {
 
   // --- Visualizer: Dynamic Palette Sync ---
   if (!this->is_virtual_segment_ && palette_sel && palette_sel->has_state()) {
-    const char *opt = palette_sel->current_option();
+    std::string opt_s(palette_sel->current_option());
+    const char *opt = opt_s.c_str();
     std::string current_pal = opt ? opt : "";
     if (!current_pal.empty() && current_pal != this->last_sent_palette_) {
       auto *out = static_cast<cfx_light::CFXLightOutput *>(
@@ -1838,7 +1849,8 @@ void CFXAddressableLightEffect::run_controls_() {
       if (out != nullptr) {
         std::string pal_name = "";
         if (palette_sel && palette_sel->has_state()) {
-          const char *opt = palette_sel->current_option();
+          std::string opt_s(palette_sel->current_option());
+          const char *opt = opt_s.c_str();
           if (opt != nullptr)
             pal_name = opt;
         }
@@ -1860,7 +1872,8 @@ void CFXAddressableLightEffect::run_controls_() {
       auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
         if (!sel || !sel->has_state())
           return 0;
-        const char *opt = sel->current_option();
+        std::string opt_s(sel->current_option());
+        const char *opt = opt_s.c_str();
         if (!opt)
           return 0;
 
