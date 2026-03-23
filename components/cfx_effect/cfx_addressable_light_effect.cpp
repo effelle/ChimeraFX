@@ -5347,9 +5347,9 @@ void CFXAddressableLightEffect::check_positional_triggers(
 
 #ifdef USE_CFX_SEQUENCE
 void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
-                                                    optional<uint8_t> spd,
-                                                    optional<uint8_t> iten,
-                                                    optional<uint8_t> pal,
+                                                    std::optional<uint8_t> spd,
+                                                    std::optional<uint8_t> iten,
+                                                    std::optional<uint8_t> pal,
                                                     uint32_t itr) {
   this->active_sequence_ = seq;
   this->sequence_speed_ = spd;

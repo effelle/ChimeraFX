@@ -16,6 +16,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
+#include <optional>
 #include <cstdint>
 #include <vector>
 
@@ -201,15 +202,15 @@ protected:
   // Sequence tracking data
   CFXSequence *active_sequence_{nullptr};
 #endif
-  esphome::optional<uint8_t> sequence_speed_;
-  esphome::optional<uint8_t> sequence_intensity_;
-  esphome::optional<uint8_t> sequence_palette_;
+  std::optional<uint8_t> sequence_speed_;
+  std::optional<uint8_t> sequence_intensity_;
+  std::optional<uint8_t> sequence_palette_;
   uint32_t sequence_iterations_{0};
 
 public:
 #ifdef USE_CFX_SEQUENCE
-  void set_active_sequence(CFXSequence *seq, optional<uint8_t> spd,
-                           optional<uint8_t> iten, optional<uint8_t> pal,
+  void set_active_sequence(CFXSequence *seq, std::optional<uint8_t> spd,
+                           std::optional<uint8_t> iten, std::optional<uint8_t> pal,
                            uint32_t itr);
   CFXSequence *get_active_sequence() const { return this->active_sequence_; }
 
@@ -300,15 +301,15 @@ public:
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 
-  optional<uint8_t> speed_preset_{};
-  optional<uint8_t> intensity_preset_{};
-  optional<uint8_t> palette_preset_{};
-  optional<bool> mirror_preset_{};
-  optional<bool> autotune_preset_{};
-  optional<bool> force_white_preset_{};
-  optional<uint8_t> intro_preset_{};
-  optional<float> inout_duration_preset_{};
-  optional<uint8_t> outro_preset_{};
+  std::optional<uint8_t> speed_preset_{};
+  std::optional<uint8_t> intensity_preset_{};
+  std::optional<uint8_t> palette_preset_{};
+  std::optional<bool> mirror_preset_{};
+  std::optional<bool> autotune_preset_{};
+  std::optional<bool> force_white_preset_{};
+  std::optional<uint8_t> intro_preset_{};
+  std::optional<float> inout_duration_preset_{};
+  std::optional<uint8_t> outro_preset_{};
 
   float hydraulics_fluid_level_{0.0f};
   float hydraulics_fluid_velocity_{0.0f};
