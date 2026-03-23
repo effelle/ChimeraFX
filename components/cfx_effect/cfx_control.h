@@ -111,13 +111,18 @@ public:
     }
 
     if (this->palette_) {
+      for (auto &opt : this->palette_->traits.get_options()) {
+        this->palette_mapping_.push_back(this->get_palette_index_(opt));
+      }
+
       this->palette_->add_on_state_callback(
           [this](size_t index) {
-            std::string value(this->palette_->current_option());
-            uint8_t r_pal_idx = this->get_palette_index_(value);
-            for (auto *r : this->runners_) {
-              if (!r->sequence_owns_palette_)
-                r->setPalette(r_pal_idx);
+            if (index < this->palette_mapping_.size()) {
+              uint8_t r_pal_idx = this->palette_mapping_[index];
+              for (auto *r : this->runners_) {
+                if (!r->sequence_owns_palette_)
+                  r->setPalette(r_pal_idx);
+              }
             }
           });
     }
@@ -208,6 +213,7 @@ protected:
   esphome::light::LightState *light_{nullptr};
   std::vector<CFXRunner *> runners_;
   bool was_on_{false};
+  std::vector<uint8_t> palette_mapping_;
 
 
   uint8_t get_palette_index_(const std::string &name) {
