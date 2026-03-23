@@ -429,7 +429,6 @@ async def to_code(config):
 
 @automation.register_action(
     "cfx_sequence.start",
-    synchronous=True,
     StartAction,
     cv.Schema(
         {
@@ -444,7 +443,6 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
 
 @automation.register_action(
     "cfx_sequence.stop",
-    synchronous=True,
     StopAction,
     cv.Schema(
         {
@@ -459,7 +457,6 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
 
 @automation.register_action(
     "cfx_set",
-    synchronous=True,
     CfxSetAction,
     cv.Schema(
         {
