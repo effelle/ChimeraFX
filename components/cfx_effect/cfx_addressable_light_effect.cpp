@@ -188,22 +188,25 @@ void CFXAddressableLightEffect::start() {
   // cfx_begin fires before the intro — the moment the effect is activated.
   // On-device trigger fires unconditionally; HA event gated on no active
   // sequence (sequence path fires cfx_begin from report_event_begin()).
-  this->trigger_on_begin();
+  // Separator (ID 185) is a UI-only divider — suppress all lifecycle events.
+  if (this->effect_id_ != 185) {
+    this->trigger_on_begin();
 #ifdef USE_CFX_SEQUENCE
-  if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
-    std::string evt = std::string("cfx_begin:") + this->strip_tag_;
-    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
-  }
+    if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
+      std::string evt = std::string("cfx_begin:") + this->strip_tag_;
+      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+    }
 #endif
 
-  this->trigger_on_start();
+    this->trigger_on_start();
 
 #ifdef USE_CFX_SEQUENCE
-  if (!this->strip_tag_.empty()) {
-    std::string evt = std::string("cfx_start:") + this->strip_tag_;
-    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
-  }
+    if (!this->strip_tag_.empty()) {
+      std::string evt = std::string("cfx_start:") + this->strip_tag_;
+      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+    }
 #endif
+  }
 
   // Zero the default transition length for virtual segment lights while an
   // effect is running. ESPHome's transition engine (default 1s) repeatedly
@@ -703,16 +706,15 @@ void CFXAddressableLightEffect::stop() {
 
 
 
-  this->trigger_on_stop();
+  if (this->effect_id_ != 185) {
+    this->trigger_on_stop();
 #ifdef USE_CFX_SEQUENCE
-  // Fire cfx_stop HA event only when no sequence is bound.
-  // When a sequence owns this effect, CFXSequence::report_event_stop() fires it.
-  // Firing both would produce a double cfx_stop event.
-  if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
-    std::string evt = std::string("cfx_stop:") + this->strip_tag_;
-    cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
-  }
+    if (!this->strip_tag_.empty() && this->active_sequence_ == nullptr) {
+      std::string evt = std::string("cfx_stop:") + this->strip_tag_;
+      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+    }
 #endif
+  }
   this->trigger_on_complete();
 
   // Clear intro snapshot vector to reclaim RAM
@@ -1198,12 +1200,23 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->runner_->global_brightness_ = bri;
       this->runner_->service();
 #ifdef USE_CFX_SEQUENCE
-      if (this->runner_->effect_complete_ &&
-          this->active_sequence_ != nullptr) {
-        auto *completed_seq = this->active_sequence_;
-        this->active_sequence_ = nullptr; // prevent re-entry
-        completed_seq->report_event_complete();
-        completed_seq->stop();
+      if (this->runner_->effect_complete_) {
+        if (this->active_sequence_ != nullptr) {
+          auto *completed_seq = this->active_sequence_;
+          this->active_sequence_ = nullptr; // prevent re-entry
+          completed_seq->report_event_complete();
+          completed_seq->stop();
+        } else {
+          // Standalone self-terminating effect (e.g. separator blink).
+          // No sequence owns this — turn the light off directly.
+          auto *ls = this->get_light_state();
+          if (ls != nullptr) {
+            auto call = ls->make_call();
+            call.set_state(false);
+            call.set_transition_length(0);
+            call.perform();
+          }
+        }
       }
 #endif
     }
@@ -5219,6 +5232,9 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
 
 void CFXAddressableLightEffect::check_positional_triggers(
     int32_t current_pixel, int32_t total_pixels) {
+  // Separator is a UI divider — suppress all positional events.
+  if (this->effect_id_ == 185)
+    return;
   // Defensive bounds check
   if (total_pixels <= 0 || current_pixel < 0 || current_pixel > total_pixels) {
     return;
