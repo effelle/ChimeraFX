@@ -914,7 +914,11 @@ void CFXAddressableLightEffect::stop() {
       // Capture the sequence pointer now — clear_active_binding() in stop()
       // nulls active_sequence_ before the outro callback runs, so we must
       // grab it here while it is still valid.
+#ifdef USE_CFX_SEQUENCE
       CFXSequence *captured_sequence = this->active_sequence_;
+#else
+      CFXSequence *captured_sequence = nullptr;
+#endif
 
       if (!this->segment_runners_.empty()) {
         for (auto *r : this->segment_runners_) {
