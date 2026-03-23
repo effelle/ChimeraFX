@@ -179,8 +179,8 @@ void CFXAddressableLightEffect::start() {
   {
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
-      char id_buf[64] = {};
-      ls->get_object_id_to(std::span<char>(id_buf, sizeof(id_buf)));
+      char id_buf[128] = {};
+      ls->get_object_id_to(std::span(id_buf));
       this->strip_tag_ = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
     }
     cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
