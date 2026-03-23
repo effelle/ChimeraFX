@@ -885,15 +885,15 @@ uint16_t mode_separator(void) {
   // 6 half-cycles = 3 blinks. Each half-cycle = 300ms.
   if (frame >= 6) {
     instance->effect_complete_ = true;
-    instance->fill_solid(0, len, RGBW32(0, 0, 0, 0));
+    instance->_segment.fill(RGBW32(0, 0, 0, 0));
     return 300;
   }
 
   // Even frames: red on. Odd frames: off.
   if (frame % 2 == 0) {
-    instance->fill_solid(0, len, RGBW32(180, 0, 0, 0));
+    instance->_segment.fill(RGBW32(180, 0, 0, 0));
   } else {
-    instance->fill_solid(0, len, RGBW32(0, 0, 0, 0));
+    instance->_segment.fill(RGBW32(0, 0, 0, 0));
   }
   return 300;
 }
