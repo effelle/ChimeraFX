@@ -264,6 +264,7 @@ PlayEffectAction = chimera_fx_ns.class_("PlayEffectAction", automation.Action)
 
 @automation.register_action(
     "cfx.play_effect",
+    synchronous=True,
     PlayEffectAction,
     cv.Schema(
         {

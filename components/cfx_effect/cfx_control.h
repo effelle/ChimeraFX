@@ -112,7 +112,8 @@ public:
 
     if (this->palette_) {
       this->palette_->add_on_state_callback(
-          [this](const std::string &value, size_t index) {
+          [this](size_t index) {
+            std::string value(this->palette_->current_option());
             uint8_t r_pal_idx = this->get_palette_index_(value);
             for (auto *r : this->runners_) {
               if (!r->sequence_owns_palette_)
@@ -163,7 +164,8 @@ public:
     else
       runner->setDebug(global_debug_enabled_);
     if (palette_ && palette_->has_state()) {
-      const char *opt_ptr = palette_->current_option();
+      std::string opt_str(palette_->current_option());
+      const char *opt_ptr = opt_str.c_str();
       std::string opt = opt_ptr ? opt_ptr : "";
       if (opt.length() > 0) {
         uint8_t pal_idx = get_palette_index_(opt);

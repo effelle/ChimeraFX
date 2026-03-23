@@ -873,29 +873,31 @@ struct AuroraWave {
 
 // Separator effect — blinks red 3 times then self-terminates.
 // Visual feedback that tells the user "that was a category divider, not an effect".
-// Uses _segment.call as a frame counter. Each blink = 2 frames (on + off).
-// After 6 frames (3 blinks) sets effect_complete_ and the normal turn_off fires.
+// Uses _segment.call (increments every frame at ~16ms) with 15 frames per half-cycle
+// → ~240ms per half/cycle, 3 blinks = ~1.4s total.
+#define SEP_FRAMES_PER_HALF 15
 uint16_t mode_separator(void) {
   if (!instance)
-    return 300;
+    return FRAMETIME;
 
   uint16_t len = instance->_segment.length();
-  uint32_t frame = instance->_segment.call;
+  uint32_t call = instance->_segment.call;
+  uint32_t half_cycle = call / SEP_FRAMES_PER_HALF;
 
-  // 6 half-cycles = 3 blinks. Each half-cycle = 300ms.
-  if (frame >= 6) {
+  // 6 half-cycles = 3 blinks
+  if (half_cycle >= 6) {
     instance->effect_complete_ = true;
     instance->_segment.fill(RGBW32(0, 0, 0, 0));
-    return 300;
+    return FRAMETIME;
   }
 
-  // Even frames: red on. Odd frames: off.
-  if (frame % 2 == 0) {
-    instance->_segment.fill(RGBW32(180, 0, 0, 0));
+  // Even half-cycles: red on. Odd: off.
+  if (half_cycle % 2 == 0) {
+    instance->_segment.fill(RGBW32(160, 0, 0, 0));
   } else {
     instance->_segment.fill(RGBW32(0, 0, 0, 0));
   }
-  return 300;
+  return FRAMETIME;
 }
 
 uint16_t mode_static(void) {
