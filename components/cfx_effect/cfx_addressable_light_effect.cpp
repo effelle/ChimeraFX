@@ -177,12 +177,11 @@ void CFXAddressableLightEffect::start() {
   // Derive strip_tag_ early — needed by both cfx_begin and cfx_start events.
   {
     auto *ls = this->get_light_state();
-    if (ls != nullptr)
-      // TODO(2026.7.0): migrate to get_object_id_to() when StringRef buffer API is stable
-      #pragma GCC diagnostic push
-      #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-      this->strip_tag_ = ls->get_object_id();
-      #pragma GCC diagnostic pop
+    if (ls != nullptr) {
+      char id_buf[64] = {};
+      ls->get_object_id_to({id_buf, sizeof(id_buf)});
+      this->strip_tag_ = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
+    }
     cfx_sequence::CFXEventManager::get().add_known_tag(this->strip_tag_);
     this->rebuild_milestone_strings_();
     this->reset_milestones_();

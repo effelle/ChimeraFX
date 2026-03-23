@@ -4007,8 +4007,10 @@ uint16_t mode_scanner_internal(bool dualMode) {
   }
 
   // Ensure data is allocated
-  if (instance->_segment.data == nullptr)
+  if (instance->_segment.data == nullptr) {
+    ESP_LOGW("CFX", "%s: data is null (allocateData failed earlier)", __func__);
     return mode_static();
+  }
 
   // 2. Movement: WLED speed mapping
   uint8_t spd = instance->_segment.speed;
