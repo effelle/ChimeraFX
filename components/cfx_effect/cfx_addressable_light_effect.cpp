@@ -1208,19 +1208,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           completed_seq->stop();
         } else {
           // Standalone self-terminating effect (e.g. separator blink).
-          // Clear the effect name first so the selector reverts to None,
-          // then turn off. Two-call pattern — ESPHome rejects combining them.
+          // Simple turn_off — ESPHome resets the effect selector to None
+          // automatically when the light turns off.
           auto *ls = this->get_light_state();
           if (ls != nullptr) {
-            auto clear = ls->make_call();
-            clear.set_effect("None");
-            clear.set_transition_length(0);
-            clear.perform();
-
-            auto off = ls->make_call();
-            off.set_state(false);
-            off.set_transition_length(0);
-            off.perform();
+            auto call = ls->make_call();
+            call.set_state(false);
+            call.set_transition_length(0);
+            call.perform();
           }
         }
       }
