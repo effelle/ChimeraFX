@@ -94,7 +94,7 @@ async def to_code(config):
                 # Add segments
                 if "segments" in lconf:
                     for seg in lconf["segments"]:
-                        seg_light_id = seg.get("light_id")
+                        seg_light_id = seg.get("id")
                         seg_name = str(seg.get(CONF_NAME, f"{master_name} Segment"))
                         if seg_light_id:
                             seg_state = await cg.get_variable(seg_light_id)

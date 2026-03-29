@@ -16,6 +16,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
+#include <algorithm>
 #include <optional>
 #include <cstdint>
 #include <vector>
@@ -121,6 +122,43 @@ public:
 #endif
   };
 
+  // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──
+  // UI entity pointers, preset optionals, and trigger vectors live here.
+  // Virtual segment effects leave cfg_ null, saving ~122 bytes per instance.
+  // Allocated lazily on first setter call via ensure_cfg_().
+  struct CFXEffectConfig {
+    // 11 UI entity pointers (44 bytes) — null for virtual segments
+    number::Number *speed{nullptr};
+    number::Number *intensity{nullptr};
+    select::Select *palette{nullptr};
+    switch_::Switch *mirror{nullptr};
+    switch_::Switch *autotune{nullptr};
+    select::Select *transition_effect{nullptr};
+    number::Number *transition_duration{nullptr};
+    select::Select *intro_effect{nullptr};
+    number::Number *inout_duration{nullptr};
+    select::Select *outro_effect{nullptr};
+    switch_::Switch *debug_switch{nullptr};
+
+    // 9 preset optionals (~24 bytes) — empty for most virtual segments
+    std::optional<uint8_t> speed_preset{};
+    std::optional<uint8_t> intensity_preset{};
+    std::optional<uint8_t> palette_preset{};
+    std::optional<bool> mirror_preset{};
+    std::optional<bool> autotune_preset{};
+    std::optional<bool> force_white_preset{};
+    std::optional<uint8_t> intro_preset{};
+    std::optional<float> inout_duration_preset{};
+    std::optional<uint8_t> outro_preset{};
+
+    // 5 trigger vectors (60 bytes) — always empty for virtual segments
+    std::vector<CfxOnStartTrigger *> on_start_triggers;
+    std::vector<CfxOnBeginTrigger *> on_begin_triggers;
+    std::vector<CfxOnStopTrigger *> on_stop_triggers;
+    std::vector<CfxOnCompleteTrigger *> on_complete_triggers;
+    std::vector<CfxOnReachTrigger *> on_reach_triggers;
+  };
+
   CFXAddressableLightEffect(const char *name);
   virtual ~CFXAddressableLightEffect();
 
@@ -134,29 +172,24 @@ public:
     this->effect_id_ = effect_id;
     this->configured_effect_id_ = effect_id;
   }
-  void set_speed(number::Number *speed) { this->speed_ = speed; }
-  void set_intensity(number::Number *intensity) {
-    this->intensity_ = intensity;
-  }
-  void set_palette(select::Select *palette) { this->palette_ = palette; }
-  void set_mirror(switch_::Switch *mirror) { this->mirror_ = mirror; }
-  void set_autotune(switch_::Switch *autotune) { this->autotune_ = autotune; }
+  // ── Setters — lazily allocate cfg_ on first call ──────────────────────────
+  void set_speed(number::Number *v) { ensure_cfg_(); cfg_->speed = v; }
+  void set_intensity(number::Number *v) { ensure_cfg_(); cfg_->intensity = v; }
+  void set_palette(select::Select *v) { ensure_cfg_(); cfg_->palette = v; }
+  void set_mirror(switch_::Switch *v) { ensure_cfg_(); cfg_->mirror = v; }
+  void set_autotune(switch_::Switch *v) { ensure_cfg_(); cfg_->autotune = v; }
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
   }
-  void set_transition_effect(select::Select *s) {
-    this->transition_effect_ = s;
-  }
-  void set_transition_duration(number::Number *n) {
-    this->transition_duration_ = n;
-  }
-  void set_intro_effect(select::Select *s) { this->intro_effect_ = s; }
-  void set_inout_duration(number::Number *n) { this->inout_duration_ = n; }
-  void set_outro_effect(select::Select *s) { this->outro_effect_ = s; }
-  void set_outro_duration(number::Number *n) { this->inout_duration_ = n; }
-  void set_debug(switch_::Switch *s) { this->debug_switch_ = s; }
+  void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
+  void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
+  void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }
+  void set_inout_duration(number::Number *v) { ensure_cfg_(); cfg_->inout_duration = v; }
+  void set_outro_effect(select::Select *v) { ensure_cfg_(); cfg_->outro_effect = v; }
+  void set_outro_duration(number::Number *v) { ensure_cfg_(); cfg_->inout_duration = v; }
+  void set_debug(switch_::Switch *v) { ensure_cfg_(); cfg_->debug_switch = v; }
 
-  select::Select *get_intro_effect() { return this->intro_effect_; }
+  select::Select *get_intro_effect() { return cfg_ ? cfg_->intro_effect : nullptr; }
 
   enum IntroMode {
     INTRO_MODE_NONE = 0,
@@ -190,39 +223,45 @@ public:
   bool run_outro_frame(light::AddressableLight &it, CFXRunner *runner);
 
 
-  void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
-  void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
-  void set_inout_duration_preset(float v) { this->inout_duration_preset_ = v; }
-  void set_outro_preset(uint8_t v) { this->outro_preset_ = v; }
-  void set_outro_duration_preset(float v) { this->inout_duration_preset_ = v; }
-  void set_intensity_preset(uint8_t v) { this->intensity_preset_ = v; }
-  void set_palette_preset(uint8_t v) { this->palette_preset_ = v; }
-  void set_mirror_preset(bool v) { this->mirror_preset_ = v; }
-  void set_autotune_preset(bool v) { this->autotune_preset_ = v; }
-  void set_force_white_preset(bool v) { this->force_white_preset_ = v; }
+  // ── Preset setters — lazily allocate cfg_ ─────────────────────────────────
+  void set_speed_preset(uint8_t v) { ensure_cfg_(); cfg_->speed_preset = v; }
+  void set_intro_preset(uint8_t v) { ensure_cfg_(); cfg_->intro_preset = v; }
+  void set_inout_duration_preset(float v) { ensure_cfg_(); cfg_->inout_duration_preset = v; }
+  void set_outro_preset(uint8_t v) { ensure_cfg_(); cfg_->outro_preset = v; }
+  void set_outro_duration_preset(float v) { ensure_cfg_(); cfg_->inout_duration_preset = v; }
+  void set_intensity_preset(uint8_t v) { ensure_cfg_(); cfg_->intensity_preset = v; }
+  void set_palette_preset(uint8_t v) { ensure_cfg_(); cfg_->palette_preset = v; }
+  void set_mirror_preset(bool v) { ensure_cfg_(); cfg_->mirror_preset = v; }
+  void set_autotune_preset(bool v) { ensure_cfg_(); cfg_->autotune_preset = v; }
+  void set_force_white_preset(bool v) { ensure_cfg_(); cfg_->force_white_preset = v; }
 
   void set_virtual_segment(bool virtual_segment) {
     this->is_virtual_segment_ = virtual_segment;
+    if (virtual_segment) {
+      auto it = std::find(all_effects.begin(), all_effects.end(), this);
+      if (it != all_effects.end()) all_effects.erase(it);
+    }
   }
 
   void set_controller(CFXControl *controller) {
     this->controller_ = controller;  // stored flat; copied into act_ on start()
   }
 
+  // ── Trigger adders — lazily allocate cfg_ ─────────────────────────────────
   void add_on_start_trigger(CfxOnStartTrigger *t) {
-    this->on_start_triggers_.push_back(t);
+    ensure_cfg_(); cfg_->on_start_triggers.push_back(t);
   }
   void add_on_begin_trigger(CfxOnBeginTrigger *t) {
-    this->on_begin_triggers_.push_back(t);
+    ensure_cfg_(); cfg_->on_begin_triggers.push_back(t);
   }
   void add_on_stop_trigger(CfxOnStopTrigger *t) {
-    this->on_stop_triggers_.push_back(t);
+    ensure_cfg_(); cfg_->on_stop_triggers.push_back(t);
   }
   void add_on_complete_trigger(CfxOnCompleteTrigger *t) {
-    this->on_complete_triggers_.push_back(t);
+    ensure_cfg_(); cfg_->on_complete_triggers.push_back(t);
   }
   void add_on_reach_trigger(CfxOnReachTrigger *t) {
-    this->on_reach_triggers_.push_back(t);
+    ensure_cfg_(); cfg_->on_reach_triggers.push_back(t);
   }
 
   void trigger_on_start();
@@ -257,17 +296,47 @@ public:
 protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};
-  number::Number *speed_{nullptr};
-  number::Number *intensity_{nullptr};
-  select::Select *palette_{nullptr};
-  switch_::Switch *mirror_{nullptr};
-  switch_::Switch *autotune_{nullptr};
-  select::Select *transition_effect_{nullptr};
-  number::Number *transition_duration_{nullptr};
-  select::Select *intro_effect_{nullptr};
-  number::Number *inout_duration_{nullptr};
-  select::Select *outro_effect_{nullptr};
-  switch_::Switch *debug_switch_{nullptr};
+
+  // ── CFXEffectConfig pointer — null for virtual segments ────────────────────
+  // Holds UI entity pointers, preset optionals, and trigger vectors.
+  // Allocated on first setter call via ensure_cfg_().
+  CFXEffectConfig *cfg_{nullptr};
+
+  void ensure_cfg_() { if (!cfg_) cfg_ = new CFXEffectConfig(); }
+
+  // ── Inline accessors — return null/empty when cfg_ absent ─────────────────
+  number::Number *local_speed_() const { return cfg_ ? cfg_->speed : nullptr; }
+  number::Number *local_intensity_() const { return cfg_ ? cfg_->intensity : nullptr; }
+  select::Select *local_palette_() const { return cfg_ ? cfg_->palette : nullptr; }
+  switch_::Switch *local_mirror_() const { return cfg_ ? cfg_->mirror : nullptr; }
+  switch_::Switch *local_autotune_() const { return cfg_ ? cfg_->autotune : nullptr; }
+  select::Select *local_transition_effect_() const { return cfg_ ? cfg_->transition_effect : nullptr; }
+  number::Number *local_transition_duration_() const { return cfg_ ? cfg_->transition_duration : nullptr; }
+  select::Select *local_intro_effect_() const { return cfg_ ? cfg_->intro_effect : nullptr; }
+  number::Number *local_inout_duration_() const { return cfg_ ? cfg_->inout_duration : nullptr; }
+  select::Select *local_outro_effect_() const { return cfg_ ? cfg_->outro_effect : nullptr; }
+  switch_::Switch *local_debug_switch_() const { return cfg_ ? cfg_->debug_switch : nullptr; }
+
+  // ── Preset accessors ──────────────────────────────────────────────────────
+  bool has_speed_preset_() const { return cfg_ && cfg_->speed_preset.has_value(); }
+  bool has_intensity_preset_() const { return cfg_ && cfg_->intensity_preset.has_value(); }
+  bool has_palette_preset_() const { return cfg_ && cfg_->palette_preset.has_value(); }
+  bool has_mirror_preset_() const { return cfg_ && cfg_->mirror_preset.has_value(); }
+  bool has_autotune_preset_() const { return cfg_ && cfg_->autotune_preset.has_value(); }
+  bool has_force_white_preset_() const { return cfg_ && cfg_->force_white_preset.has_value(); }
+  bool has_intro_preset_() const { return cfg_ && cfg_->intro_preset.has_value(); }
+  bool has_inout_duration_preset_() const { return cfg_ && cfg_->inout_duration_preset.has_value(); }
+  bool has_outro_preset_() const { return cfg_ && cfg_->outro_preset.has_value(); }
+
+  uint8_t speed_preset_val_() const { return cfg_->speed_preset.value(); }
+  uint8_t intensity_preset_val_() const { return cfg_->intensity_preset.value(); }
+  uint8_t palette_preset_val_() const { return cfg_->palette_preset.value(); }
+  bool mirror_preset_val_() const { return cfg_->mirror_preset.value(); }
+  bool autotune_preset_val_() const { return cfg_->autotune_preset.value(); }
+  bool force_white_preset_val_() const { return cfg_->force_white_preset.value(); }
+  uint8_t intro_preset_val_() const { return cfg_->intro_preset.value(); }
+  float inout_duration_preset_val_() const { return cfg_->inout_duration_preset.value(); }
+  uint8_t outro_preset_val_() const { return cfg_->outro_preset.value(); }
 
 
 public:
@@ -302,11 +371,13 @@ public:
   }
 #endif
 
-  std::vector<CfxOnStartTrigger *> on_start_triggers_;
-  std::vector<CfxOnBeginTrigger *>   on_begin_triggers_;
-  std::vector<CfxOnStopTrigger *>    on_stop_triggers_;
-  std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
-  std::vector<CfxOnReachTrigger *> on_reach_triggers_;
+  // Trigger vectors moved into CFXEffectConfig (accessed via cfg_->on_start_triggers etc.)
+  // Empty static vectors returned when cfg_ is null (virtual segments).
+  static const std::vector<CfxOnStartTrigger *> empty_start_triggers_;
+  static const std::vector<CfxOnBeginTrigger *> empty_begin_triggers_;
+  static const std::vector<CfxOnStopTrigger *> empty_stop_triggers_;
+  static const std::vector<CfxOnCompleteTrigger *> empty_complete_triggers_;
+  static const std::vector<CfxOnReachTrigger *> empty_reach_triggers_;
 
 
   void set_strip_tag(const std::string &tag) { if (act_) act_->strip_tag = tag; }
@@ -345,15 +416,7 @@ public:
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 
-  std::optional<uint8_t> speed_preset_{};
-  std::optional<uint8_t> intensity_preset_{};
-  std::optional<uint8_t> palette_preset_{};
-  std::optional<bool> mirror_preset_{};
-  std::optional<bool> autotune_preset_{};
-  std::optional<bool> force_white_preset_{};
-  std::optional<uint8_t> intro_preset_{};
-  std::optional<float> inout_duration_preset_{};
-  std::optional<uint8_t> outro_preset_{};
+  // Preset optionals moved into CFXEffectConfig (accessed via has_*_preset_() / *_preset_val_()).
 
 
   void run_controls_();

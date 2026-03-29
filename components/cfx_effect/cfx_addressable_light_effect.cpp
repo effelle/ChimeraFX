@@ -30,6 +30,13 @@ bool CFXControl::global_debug_enabled_ = false;
 std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_effects;
 uint8_t CFXAddressableLightEffect::last_roulette_id_ = 0;
 
+// Static empty vectors for trigger accessors when cfg_ is null (virtual segments).
+const std::vector<CfxOnStartTrigger *> CFXAddressableLightEffect::empty_start_triggers_;
+const std::vector<CfxOnBeginTrigger *> CFXAddressableLightEffect::empty_begin_triggers_;
+const std::vector<CfxOnStopTrigger *> CFXAddressableLightEffect::empty_stop_triggers_;
+const std::vector<CfxOnCompleteTrigger *> CFXAddressableLightEffect::empty_complete_triggers_;
+const std::vector<CfxOnReachTrigger *> CFXAddressableLightEffect::empty_reach_triggers_;
+
 static const char *const TAG = "chimera_fx";
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
@@ -45,6 +52,8 @@ CFXAddressableLightEffect::~CFXAddressableLightEffect() {
   }
   delete this->act_;
   this->act_ = nullptr;
+  delete this->cfg_;
+  this->cfg_ = nullptr;
 }
 
 CFXAddressableLightEffect::MonochromaticPreset
@@ -351,16 +360,16 @@ void CFXAddressableLightEffect::start() {
     switch_::Switch *at_sw =
         (act_->controller && act_->controller->get_autotune())
             ? act_->controller->get_autotune()
-            : this->autotune_;
-    if (this->autotune_preset_.has_value())
-      autotune_will_run = this->autotune_preset_.value();
+            : this->local_autotune_();
+    if (this->has_autotune_preset_())
+      autotune_will_run = this->autotune_preset_val_();
     else if (at_sw != nullptr)
       autotune_will_run = at_sw->state;
   }
   if (autotune_will_run && act_->controller) {
     select::Select *palette_sel_init = act_->controller->get_palette()
                                            ? act_->controller->get_palette()
-                                           : this->palette_;
+                                           : this->local_palette_();
     if (palette_sel_init != nullptr) {
       std::string pal_name = "Default";
       if (this->is_monochromatic_(this->effect_id_)) {
@@ -382,10 +391,10 @@ void CFXAddressableLightEffect::start() {
   // 0. Autotune Resolution
   bool autotune_enabled = true; // Default to true if not found (Constraint)
   switch_::Switch *autotune_sw =
-      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
+      (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
 
-  if (this->autotune_preset_.has_value()) {
-    autotune_enabled = this->autotune_preset_.value();
+  if (this->has_autotune_preset_()) {
+    autotune_enabled = this->autotune_preset_val_();
   } else if (autotune_sw != nullptr) {
     autotune_enabled = autotune_sw->state;
   }
@@ -413,9 +422,9 @@ void CFXAddressableLightEffect::start() {
 
   // 1. Speed (YAML Preset Override Only)
   number::Number *speed_num =
-      (c && c->get_speed()) ? c->get_speed() : this->speed_;
-  if (speed_num != nullptr && this->speed_preset_.has_value()) {
-    float target = (float)this->speed_preset_.value();
+      (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
+  if (speed_num != nullptr && this->has_speed_preset_()) {
+    float target = (float)this->speed_preset_val_();
     if (speed_num->state != target) {
       auto call = speed_num->make_call();
       call.set_value(target);
@@ -425,9 +434,9 @@ void CFXAddressableLightEffect::start() {
 
   // 2. Intensity (YAML Preset Override Only)
   number::Number *intensity_num =
-      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
-  if (intensity_num != nullptr && this->intensity_preset_.has_value()) {
-    float target = (float)this->intensity_preset_.value();
+      (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
+  if (intensity_num != nullptr && this->has_intensity_preset_()) {
+    float target = (float)this->intensity_preset_val_();
     if (intensity_num->state != target) {
       auto call = intensity_num->make_call();
       call.set_value(target);
@@ -437,18 +446,18 @@ void CFXAddressableLightEffect::start() {
 
   // 3. Palette (YAML Preset Override Only)
   select::Select *palette_sel =
-      (c && c->get_palette()) ? c->get_palette() : this->palette_;
-  if (palette_sel != nullptr && this->palette_preset_.has_value()) {
+      (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
+  if (palette_sel != nullptr && this->has_palette_preset_()) {
     auto call = palette_sel->make_call();
-    call.set_index(this->palette_preset_.value());
+    call.set_index(this->palette_preset_val_());
     call.perform();
   }
 
   // 4. Mirror
   switch_::Switch *mirror_sw =
-      (c && c->get_mirror()) ? c->get_mirror() : this->mirror_;
-  if (mirror_sw != nullptr && this->mirror_preset_.has_value()) {
-    bool target = this->mirror_preset_.value();
+      (c && c->get_mirror()) ? c->get_mirror() : this->local_mirror_();
+  if (mirror_sw != nullptr && this->has_mirror_preset_()) {
+    bool target = this->mirror_preset_val_();
     if (mirror_sw->state != target) {
       if (target) {
         mirror_sw->turn_on();
@@ -461,15 +470,15 @@ void CFXAddressableLightEffect::start() {
   // 5. Intro Effect
   select::Select *intro_sel = (c && c->get_intro_effect())
                                   ? c->get_intro_effect()
-                                  : this->intro_effect_;
+                                  : this->local_intro_effect_();
   if (!act_->initial_preset_applied && intro_sel != nullptr &&
-      this->intro_preset_.has_value()) {
+      this->has_intro_preset_()) {
     // Only apply if still at "None" factory default — preserve user choices
     std::string cur_str(intro_sel->current_option());
     const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = intro_sel->make_call();
-      call.set_index(this->intro_preset_.value());
+      call.set_index(this->intro_preset_val_());
       call.perform();
     }
   }
@@ -477,10 +486,10 @@ void CFXAddressableLightEffect::start() {
   // 6. Intro Duration
   number::Number *intro_dur_num = (c && c->get_intro_duration())
                                       ? c->get_intro_duration()
-                                      : this->inout_duration_;
+                                      : this->local_inout_duration_();
   if (!act_->initial_preset_applied && intro_dur_num != nullptr &&
-      this->inout_duration_preset_.has_value()) {
-    float target = this->inout_duration_preset_.value();
+      this->has_inout_duration_preset_()) {
+    float target = this->inout_duration_preset_val_();
     if (intro_dur_num->state != target) {
       auto call = intro_dur_num->make_call();
       call.set_value(target);
@@ -491,15 +500,15 @@ void CFXAddressableLightEffect::start() {
   // 9. Outro Effect
   select::Select *outro_sel = (c && c->get_outro_effect())
                                   ? c->get_outro_effect()
-                                  : this->outro_effect_;
+                                  : this->local_outro_effect_();
   if (!act_->initial_preset_applied && outro_sel != nullptr &&
-      this->outro_preset_.has_value()) {
+      this->has_outro_preset_()) {
     // Only apply if still at "None" factory default — preserve user choices
     std::string cur_str(outro_sel->current_option());
     const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = outro_sel->make_call();
-      call.set_index(this->outro_preset_.value());
+      call.set_index(this->outro_preset_val_());
       call.perform();
     }
   }
@@ -507,10 +516,10 @@ void CFXAddressableLightEffect::start() {
   // 10. Outro Duration
   number::Number *outro_dur_num = (c && c->get_outro_duration())
                                       ? c->get_outro_duration()
-                                      : this->inout_duration_;
+                                      : this->local_inout_duration_();
   if (!act_->initial_preset_applied && outro_dur_num != nullptr &&
-      this->inout_duration_preset_.has_value()) {
-    float target = this->inout_duration_preset_.value();
+      this->has_inout_duration_preset_()) {
+    float target = this->inout_duration_preset_val_();
     if (outro_dur_num->state != target) {
       auto call = outro_dur_num->make_call();
       call.set_value(target);
@@ -585,7 +594,7 @@ void CFXAddressableLightEffect::start() {
     }
     // Also check local member if controller failed
     if (intro_sel == nullptr)
-      intro_sel = this->intro_effect_;
+      intro_sel = this->local_intro_effect_();
 
     // 1. Highest Priority: Embedded Monochromatic Presets
     MonochromaticPreset preset =
@@ -652,7 +661,7 @@ void CFXAddressableLightEffect::start() {
 
     // 10. Intro Duration Priority Chain (Calculated ONCE during start)
     uint32_t duration_ms = 1000; // Final Default: 1.0s
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
 
@@ -662,7 +671,7 @@ void CFXAddressableLightEffect::start() {
       number::Number *intensity_num =
           (act_->controller && act_->controller->get_intensity())
               ? act_->controller->get_intensity()
-              : this->intensity_;
+              : this->local_intensity_();
       if (intensity_num != nullptr && intensity_num->has_state()) {
         current_speed = (uint8_t)intensity_num->state;
       }
@@ -671,15 +680,15 @@ void CFXAddressableLightEffect::start() {
     } else if (dur_num != nullptr && dur_num->has_state()) {
       // B. High Priority: UI Slider
       duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->inout_duration_preset_.has_value()) {
+    } else if (this->has_inout_duration_preset_()) {
       // C. Medium Priority: YAML Preset
-      duration_ms = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+      duration_ms = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     } else {
       // D. Monochromatic Preset Fallback: Speed Slider
       MonochromaticPreset preset =
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
-        number::Number *speed_num = this->speed_;
+        number::Number *speed_num = this->local_speed_();
         if (speed_num == nullptr && act_->controller != nullptr)
           speed_num = act_->controller->get_speed();
 
@@ -697,17 +706,17 @@ void CFXAddressableLightEffect::start() {
     // Cache Speed for Intro (since Morse needs it for unit_ms)
     act_->active_intro_speed = 128; // fallback
     number::Number *speed_num =
-        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+        (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
     if (speed_num != nullptr && speed_num->has_state()) {
       act_->active_intro_speed = (uint8_t)speed_num->state;
-    } else if (this->speed_preset_.has_value()) {
-      act_->active_intro_speed = this->speed_preset_.value();
+    } else if (this->has_speed_preset_()) {
+      act_->active_intro_speed = this->speed_preset_val_();
     } else {
       act_->active_intro_speed = this->get_default_speed_(this->effect_id_);
     }
 
     // Cache for this run
-    this->intro_effect_ = intro_sel;
+    ensure_cfg_(); cfg_->intro_effect = intro_sel;
 
     if (act_->active_intro_mode == INTRO_NONE && !preset.is_active) {
       act_->intro_active = false;
@@ -763,7 +772,7 @@ void CFXAddressableLightEffect::stop() {
 
       // Resolve Outro Mode synchronously before dropping controller mapping
       act_->active_outro_mode = INTRO_MODE_NONE;
-      select::Select *out_eff = this->outro_effect_;
+      select::Select *out_eff = this->local_outro_effect_();
       if (out_eff == nullptr && c != nullptr)
         out_eff = c->get_outro_effect();
 
@@ -829,7 +838,7 @@ void CFXAddressableLightEffect::stop() {
             act_->active_outro_mode = INTRO_MODE_INTERFERENCE;
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
-        } else if (this->outro_preset_.has_value()) {
+        } else if (this->has_outro_preset_()) {
           act_->active_outro_mode = *this->outro_preset_;
         } else {
           act_->active_outro_mode = act_->active_intro_mode;
@@ -839,7 +848,7 @@ void CFXAddressableLightEffect::stop() {
       // 10. Outro Duration Priority Chain
       uint32_t duration_ms = 1000; // Hard Default
 
-      number::Number *dur_num = this->inout_duration_;
+      number::Number *dur_num = this->local_inout_duration_();
       if (dur_num == nullptr && c != nullptr)
         dur_num = c->get_outro_duration();
 
@@ -847,7 +856,7 @@ void CFXAddressableLightEffect::stop() {
         // A. Highest: Morse Code Timing (Message length based)
         uint8_t current_speed = 128;
         number::Number *intensity_num =
-            (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+            (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
         if (intensity_num != nullptr && intensity_num->has_state()) {
           current_speed = (uint8_t)intensity_num->state;
         }
@@ -856,13 +865,13 @@ void CFXAddressableLightEffect::stop() {
       } else if (dur_num != nullptr && dur_num->has_state()) {
         // B. High: UI Slider
         duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-      } else if (this->inout_duration_preset_.has_value()) {
+      } else if (this->has_inout_duration_preset_()) {
         // C. Medium: YAML Preset
         duration_ms =
-            (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+            (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
       } else if (preset.is_active) {
         // D. Fallback: Monochromatic Mode Speed Slider
-        number::Number *speed_num = this->speed_;
+        number::Number *speed_num = this->local_speed_();
         if (speed_num == nullptr && c != nullptr)
           speed_num = c->get_speed();
 
@@ -882,7 +891,7 @@ void CFXAddressableLightEffect::stop() {
 
       // Cache Intensity for Outro (since controller is detached during Outro)
       act_->active_outro_intensity = 128; // fallback
-      number::Number *intensity_num = this->intensity_;
+      number::Number *intensity_num = this->local_intensity_();
       if (intensity_num == nullptr && c != nullptr)
         intensity_num = c->get_intensity();
 
@@ -895,7 +904,7 @@ void CFXAddressableLightEffect::stop() {
 
       // Cache Speed for Outro
       act_->active_outro_speed = 128; // fallback
-      number::Number *speed_num = this->speed_;
+      number::Number *speed_num = this->local_speed_();
       if (speed_num == nullptr && c != nullptr)
         speed_num = c->get_speed();
 
@@ -909,7 +918,7 @@ void CFXAddressableLightEffect::stop() {
 
       // Cache Mirror for Outro
       act_->active_outro_mirror = false;
-      switch_::Switch *mirror_sw = this->mirror_;
+      switch_::Switch *mirror_sw = this->local_mirror_();
       if (mirror_sw == nullptr && c != nullptr)
         mirror_sw = c->get_mirror();
       if (mirror_sw != nullptr)
@@ -1093,8 +1102,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       CFXControl::global_debug_enabled_; // Default to Master global state
   if (act_->controller && act_->controller->get_debug()) {
     debug_active = act_->controller->get_debug()->state; // Master local state
-  } else if (this->debug_switch_) {
-    debug_active = this->debug_switch_->state; // Legacy fallback
+  } else if (this->local_debug_switch_()) {
+    debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
 
   if (act_->controller && act_->controller->get_force_white()) {
@@ -1279,9 +1288,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->intro_active = false;
 
       // Check if Transition is enabled via config
-      float trans_dur = (this->transition_duration_ != nullptr &&
-                         this->transition_duration_->has_state())
-                            ? this->transition_duration_->state
+      float trans_dur = (this->local_transition_duration_() != nullptr &&
+                         this->local_transition_duration_()->has_state())
+                            ? this->local_transition_duration_()->state
                             : 1.5f;
 
       MonochromaticPreset preset =
@@ -1312,8 +1321,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Handle Intro→Main Blending
   if (act_->state == TRANSITION_RUNNING) {
     uint32_t trans_elapsed = (uint32_t)(millis_64() - act_->transition_start_ms);
-    float trans_dur_ms = (this->transition_duration_
-                              ? this->transition_duration_->state * 1000.0f
+    float trans_dur_ms = (this->local_transition_duration_()
+                              ? this->local_transition_duration_()->state * 1000.0f
                               : 1500.0f);
 
     // Soft Dissolve (Fairy Dust with Crossfade) Logic
@@ -1491,13 +1500,13 @@ uint8_t CFXAddressableLightEffect::get_palette_index_() {
   }
 #endif
 
-  select::Select *palette_sel = this->palette_;
+  select::Select *palette_sel = this->local_palette_();
   if (act_->controller != nullptr && act_->controller->get_palette()) {
     palette_sel = act_->controller->get_palette();
   }
 
-  if (this->palette_preset_.has_value()) {
-    return this->palette_preset_.value();
+  if (this->has_palette_preset_()) {
+    return this->palette_preset_val_();
   } else if (palette_sel != nullptr) {
     return this->get_pal_idx(palette_sel);
   }
@@ -1794,13 +1803,13 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   select::Select *palette_sel =
-      (c && c->get_palette()) ? c->get_palette() : this->palette_;
+      (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
 
   // --- Autotune Auto-Disable State Machine ---
   bool current_autotune_state =
       true; // Constraint: No switch = always respect defaults
   switch_::Switch *autotune_sw =
-      (c && c->get_autotune()) ? c->get_autotune() : this->autotune_;
+      (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
   if (autotune_sw != nullptr) {
     current_autotune_state = autotune_sw->state;
   }
@@ -1822,12 +1831,12 @@ void CFXAddressableLightEffect::run_controls_() {
     bool is_currently_target = true;
 
     number::Number *speed_num =
-        (c && c->get_speed()) ? c->get_speed() : this->speed_;
+        (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
     if (speed_num && speed_num->state != act_->autotune_expected_speed)
       manual_override = true;
 
     number::Number *intensity_num =
-        (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
+        (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
     if (intensity_num &&
         intensity_num->state != act_->autotune_expected_intensity)
       manual_override = true;
@@ -1957,16 +1966,16 @@ void CFXAddressableLightEffect::run_controls_() {
       if (!c) {
         // 2. Speed (standalone mode)
         uint8_t current_speed = this->get_default_speed_(this->effect_id_);
-        if (this->speed_) {
-          current_speed = (uint8_t)this->speed_->state;
+        if (this->local_speed_()) {
+          current_speed = (uint8_t)this->local_speed_()->state;
         }
         act_->runner->setSpeed(current_speed);
 
         // 3. Intensity (standalone mode)
         uint8_t current_intensity =
             this->get_default_intensity_(this->effect_id_);
-        if (this->intensity_) {
-          current_intensity = (uint8_t)this->intensity_->state;
+        if (this->local_intensity_()) {
+          current_intensity = (uint8_t)this->local_intensity_()->state;
         }
         act_->runner->setIntensity(current_intensity);
 
@@ -1975,15 +1984,15 @@ void CFXAddressableLightEffect::run_controls_() {
             this->get_default_palette_id_(this->effect_id_);
         if (this->is_monochromatic_(this->effect_id_)) {
           current_palette = 255;
-        } else if (this->palette_) {
-          current_palette = get_pal_idx(this->palette_);
+        } else if (this->local_palette_()) {
+          current_palette = get_pal_idx(this->local_palette_());
         }
         act_->runner->setPalette(current_palette);
 
         // 5. Mirror (standalone mode)
         bool current_mirror = false;
-        if (this->mirror_) {
-          current_mirror = this->mirror_->state;
+        if (this->local_mirror_()) {
+          current_mirror = this->local_mirror_()->state;
         }
         act_->runner->setMirror(current_mirror);
       } else {
@@ -2035,7 +2044,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
       // 7. Debug
       if (c && c->get_debug())
-        this->debug_switch_ = c->get_debug();
+        ensure_cfg_(); cfg_->debug_switch = c->get_debug();
     }
   } // end if (!is_virtual_segment_)
 }
@@ -2053,7 +2062,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   uint32_t duration = 1000; // Initial Default: 1.0s
-  number::Number *dur_num = this->inout_duration_;
+  number::Number *dur_num = this->local_inout_duration_();
   if (dur_num == nullptr && act_->controller != nullptr)
     dur_num = act_->controller->get_intro_duration();
 
@@ -2063,12 +2072,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   if (dur_num != nullptr && dur_num->has_state()) {
     // High Priority: UI Slider
     duration = (uint32_t)(dur_num->state * 1000.0f);
-  } else if (this->inout_duration_preset_.has_value()) {
+  } else if (this->has_inout_duration_preset_()) {
     // Medium Priority: YAML Preset
-    duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
   } else if (preset.is_active) {
     // Monochromatic Preset Fallback: Speed Slider
-    number::Number *speed_num = this->speed_;
+    number::Number *speed_num = this->local_speed_();
     if (speed_num == nullptr && act_->controller != nullptr)
       speed_num = act_->controller->get_speed();
 
@@ -2233,7 +2242,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   // Control State
-  switch_::Switch *mirror_sw = this->mirror_;
+  switch_::Switch *mirror_sw = this->local_mirror_();
   if (mirror_sw == nullptr && act_->controller != nullptr)
     mirror_sw = act_->controller->get_mirror();
 
@@ -2261,7 +2270,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // Intensity defines blur radius
     float blur_percent = 0.0f;
-    number::Number *intensity_num = this->intensity_;
+    number::Number *intensity_num = this->local_intensity_();
     if (intensity_num == nullptr && act_->controller != nullptr) {
       intensity_num = act_->controller->get_intensity();
     }
@@ -2765,14 +2774,14 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_DROPPING: {
     // ── 1. Duration fetch ───────────────────────────────────────────────────
     uint32_t duration = 1000;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
 
     if (dur_num != nullptr && dur_num->has_state()) {
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->inout_duration_preset_.has_value()) {
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    } else if (this->has_inout_duration_preset_()) {
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     }
     if (duration == 0)
       duration = 1;
@@ -2884,14 +2893,14 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1000;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
 
     if (dur_num != nullptr && dur_num->has_state()) {
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->inout_duration_preset_.has_value()) {
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    } else if (this->has_inout_duration_preset_()) {
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     }
     if (duration == 0)
       duration = 1;
@@ -2984,13 +2993,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1000;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3055,13 +3064,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 2000;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3120,13 +3129,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3173,13 +3182,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1500;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3244,13 +3253,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1800;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3294,13 +3303,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3339,13 +3348,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1400;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3406,13 +3415,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 1200;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3474,13 +3483,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
     uint32_t duration = 2000;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3533,23 +3542,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_ECLIPSE: {
     // ── 1. Duration / Intensity fetch ──────────────────────────────────────────
     uint32_t duration = 1500;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
     uint8_t intensity = 128;
-    if (this->intensity_ != nullptr && this->intensity_->has_state())
-      intensity = (uint8_t)this->intensity_->state;
+    if (this->local_intensity_() != nullptr && this->local_intensity_()->has_state())
+      intensity = (uint8_t)this->local_intensity_()->state;
     else if (act_->controller != nullptr && act_->controller->get_intensity() != nullptr && act_->controller->get_intensity()->has_state())
       intensity = (uint8_t)act_->controller->get_intensity()->state;
-    else if (this->intensity_preset_.has_value())
-      intensity = this->intensity_preset_.value();
+    else if (this->has_intensity_preset_())
+      intensity = this->intensity_preset_val_();
 
     // ── 2. Global brightness envelope: cubic ease-in (lingers dark, then glows) ─
     float prog = (float)elapsed / (float)duration;
@@ -3599,13 +3608,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_GAS_DISCHARGE: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 2200;  // default longer: the stutter IS the experience
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -3684,23 +3693,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_HARMONIC_SETTLE: {
     // ── 1. Duration / Intensity fetch ──────────────────────────────────────────
     uint32_t duration = 1600;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
     uint8_t intensity = 128;
-    if (this->intensity_ != nullptr && this->intensity_->has_state())
-      intensity = (uint8_t)this->intensity_->state;
+    if (this->local_intensity_() != nullptr && this->local_intensity_()->has_state())
+      intensity = (uint8_t)this->local_intensity_()->state;
     else if (act_->controller != nullptr && act_->controller->get_intensity() != nullptr && act_->controller->get_intensity()->has_state())
       intensity = (uint8_t)act_->controller->get_intensity()->state;
-    else if (this->intensity_preset_.has_value())
-      intensity = this->intensity_preset_.value();
+    else if (this->has_intensity_preset_())
+      intensity = this->intensity_preset_val_();
 
     // ── 2. Spring position ────────────────────────────────────────────────────
     float t_norm = (float)elapsed / (float)duration;
@@ -3760,13 +3769,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_LITHOGRAPH: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 1100;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -4886,13 +4895,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_ECLIPSE: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 1500;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_outro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -4940,13 +4949,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_GAS_DISCHARGE: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 1800;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_outro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -5007,13 +5016,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_HARMONIC_SETTLE: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 1600;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_outro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -5064,13 +5073,13 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   case INTRO_MODE_LITHOGRAPH: {
     // ── 1. Duration fetch ─────────────────────────────────────────────────────
     uint32_t duration = 1100;
-    number::Number *dur_num = this->inout_duration_;
+    number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_outro_duration();
     if (dur_num != nullptr && dur_num->has_state())
       duration = (uint32_t)(dur_num->state * 1000.0f);
-    else if (this->inout_duration_preset_.has_value())
-      duration = (uint32_t)(this->inout_duration_preset_.value() * 1000.0f);
+    else if (this->has_inout_duration_preset_())
+      duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
     if (duration == 0)
       duration = 1;
 
@@ -5164,8 +5173,8 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 
   // 1. Speed
   number::Number *speed_num =
-      (c && c->get_speed()) ? c->get_speed() : this->speed_;
-  if (speed_num != nullptr && !this->speed_preset_.has_value()) {
+      (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
+  if (speed_num != nullptr && !this->has_speed_preset_()) {
     float target = (float)this->get_default_speed_(this->effect_id_);
     if (speed_num->state != target) {
       auto call = speed_num->make_call();
@@ -5179,8 +5188,8 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 
   // 2. Intensity
   number::Number *intensity_num =
-      (c && c->get_intensity()) ? c->get_intensity() : this->intensity_;
-  if (intensity_num != nullptr && !this->intensity_preset_.has_value()) {
+      (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
+  if (intensity_num != nullptr && !this->has_intensity_preset_()) {
     float target = (float)this->get_default_intensity_(this->effect_id_);
     if (intensity_num->state != target) {
       auto call = intensity_num->make_call();
@@ -5197,8 +5206,8 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
   //    (e.g. "Aurora") — that would prevent the runner from using its native
   //    default and would confuse the auto-disable override detection.
   select::Select *palette_sel =
-      (c && c->get_palette()) ? c->get_palette() : this->palette_;
-  if (palette_sel != nullptr && !this->palette_preset_.has_value()) {
+      (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
+  if (palette_sel != nullptr && !this->has_palette_preset_()) {
     std::string pal_name = "Default";
     if (this->is_monochromatic_(this->effect_id_)) {
       pal_name = "Solid";
@@ -5216,25 +5225,25 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
 }
 
 void CFXAddressableLightEffect::trigger_on_start() {
-  for (auto *t : this->on_start_triggers_) {
+  for (auto *t : (cfg_ ? cfg_->on_start_triggers : empty_start_triggers_)) {
     t->trigger();
   }
 }
 
 void CFXAddressableLightEffect::trigger_on_begin() {
-  for (auto *t : this->on_begin_triggers_) {
+  for (auto *t : (cfg_ ? cfg_->on_begin_triggers : empty_begin_triggers_)) {
     t->trigger();
   }
 }
 
 void CFXAddressableLightEffect::trigger_on_stop() {
-  for (auto *t : this->on_stop_triggers_) {
+  for (auto *t : (cfg_ ? cfg_->on_stop_triggers : empty_stop_triggers_)) {
     t->trigger();
   }
 }
 
 void CFXAddressableLightEffect::trigger_on_complete() {
-  for (auto *t : this->on_complete_triggers_) {
+  for (auto *t : (cfg_ ? cfg_->on_complete_triggers : empty_complete_triggers_)) {
     t->trigger();
   }
 }
@@ -5306,10 +5315,10 @@ void CFXAddressableLightEffect::check_positional_triggers(
 #endif
 
   // Effect internal triggers (from YAML)
-  if (!this->on_reach_triggers_.empty()) {
+  if (!(cfg_ ? cfg_->on_reach_triggers : empty_reach_triggers_).empty()) {
     float current_percentage = (float)current_pixel / (float)total_pixels;
 
-    for (auto *t : this->on_reach_triggers_) {
+    for (auto *t : (cfg_ ? cfg_->on_reach_triggers : empty_reach_triggers_)) {
       float target = t->get_target_position();
       bool crossed = false;
 
