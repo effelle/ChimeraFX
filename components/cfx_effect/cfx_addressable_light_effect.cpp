@@ -2000,23 +2000,26 @@ void CFXAddressableLightEffect::run_controls_() {
         // sequence_speed_/intensity_/palette_ are set by cfx_sequence or cfx_set
         // and override the controller number entities for the duration of the run.
         uint8_t current_speed = 128;
-        if (act_->sequence_speed.has_value()) {
+        bool has_seq_speed = act_->sequence_speed.has_value();
+        if (has_seq_speed) {
           current_speed = act_->sequence_speed.value();
         } else if (c->get_speed()) {
           current_speed = (uint8_t)c->get_speed()->state;
         }
+
         uint8_t current_intensity = 128;
-        if (act_->sequence_intensity.has_value()) {
+        bool has_seq_intensity = act_->sequence_intensity.has_value();
+        if (has_seq_intensity) {
           current_intensity = act_->sequence_intensity.value();
         } else if (c->get_intensity()) {
           current_intensity = (uint8_t)c->get_intensity()->state;
         }
 
-        uint8_t current_palette =
-            this->get_default_palette_id_(this->effect_id_);
+        uint8_t current_palette = this->get_default_palette_id_(this->effect_id_);
+        bool has_seq_palette = act_->sequence_palette.has_value();
         if (this->is_monochromatic_(this->effect_id_)) {
           current_palette = 255;
-        } else if (act_->sequence_palette.has_value()) {
+        } else if (has_seq_palette) {
           current_palette = act_->sequence_palette.value();
         } else if (c->get_palette()) {
           current_palette = get_pal_idx(c->get_palette());
@@ -2027,13 +2030,18 @@ void CFXAddressableLightEffect::run_controls_() {
           current_mirror = c->get_mirror()->state;
         }
 
+        bool sequence_override_active = (has_seq_speed || has_seq_intensity || has_seq_palette);
+
         if (!act_->segment_runners.empty()) {
-          for (auto *r : act_->segment_runners) {
-            r->setSpeed(current_speed);
-            r->setIntensity(current_intensity);
-            r->setPalette(current_palette);
-            r->setMirror(current_mirror);
+          if (sequence_override_active) {
+            for (auto *r : act_->segment_runners) {
+              if (has_seq_speed) r->setSpeed(current_speed);
+              if (has_seq_intensity) r->setIntensity(current_intensity);
+              if (has_seq_palette) r->setPalette(current_palette);
+            }
           }
+          // Do NOT apply the master's mirror or standard UI properties to segment runners
+          // in standalone mode. They are independently managed via their own CFXControl.
         } else {
           act_->runner->setSpeed(current_speed);
           act_->runner->setIntensity(current_intensity);
