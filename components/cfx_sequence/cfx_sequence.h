@@ -205,6 +205,10 @@ protected:
   // the concern here, but consistency with the effect side is cleaner.
 
   void rebuild_milestone_strings_() {}  // no-op: strings built at fire time
+  void reset_milestones_() {
+    this->last_fired_milestone_ = 0;
+    this->milestone_fired_this_frame_ = false;
+  }
 
   // Sweep all milestones crossed since last call. While loop ensures no
   // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
@@ -225,11 +229,6 @@ protected:
       if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
         this->last_fired_milestone_ = 0;
     }
-  }
-
-  void reset_milestones_() {
-    this->last_fired_milestone_ = 0;
-    this->milestone_fired_this_frame_ = false;
   }
 
   bool is_starting_{false};
