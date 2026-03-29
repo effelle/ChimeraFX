@@ -839,7 +839,7 @@ void CFXAddressableLightEffect::stop() {
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
         } else if (this->has_outro_preset_()) {
-          act_->active_outro_mode = *this->outro_preset_;
+          act_->active_outro_mode = this->outro_preset_val_();
         } else {
           act_->active_outro_mode = act_->active_intro_mode;
         }

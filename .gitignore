@@ -11,7 +11,7 @@ __pycache__/
 *.swo
 *~
 
-# OS
+# OS    
 .DS_Store
 Thumbs.db
 desktop.ini
