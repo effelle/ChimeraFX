@@ -151,7 +151,8 @@ void CFXAddressableLightEffect::start() {
   if (this->act_ == nullptr) {
     this->act_ = new CFXActivation();
   }
-  this->act_->is_virtual_segment = this->is_virtual_segment_;
+  // Copy codegen-time fields into the activation context.
+  this->act_->controller = this->controller_;
 
   // --- Ambient Roulette (Randomizer) ---
   if (this->configured_effect_id_ == 255) {
@@ -184,7 +185,7 @@ void CFXAddressableLightEffect::start() {
   }
 
 #ifdef USE_CFX_SEQUENCE
-  // Derive strip_tag_ early — needed by both cfx_begin and cfx_start events.
+  // Derive act_->strip_tag early — needed by both cfx_begin and cfx_start events.
   {
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
@@ -731,8 +732,8 @@ void CFXAddressableLightEffect::stop() {
   this->trigger_on_complete();
 
   // Clear intro snapshot vector to reclaim RAM
-  intro_snapshot_.clear();
-  intro_snapshot_.shrink_to_fit();
+  act_->intro_snapshot.clear();
+  act_->intro_snapshot.shrink_to_fit();
 
   // Restore default transition length zeroed in start() for virtual segments
   if (this->is_virtual_segment_ && act_->saved_transition_length > 0) {
@@ -1007,7 +1008,7 @@ void CFXAddressableLightEffect::stop() {
                 captured_sequence->report_event_complete();
               } else {
                 // Standalone (no sequence bound): fire HA event directly.
-                // Use instance strip_tag_ — no singleton dependency.
+                // Use instance act_->strip_tag — no singleton dependency.
                 if (!act_->strip_tag.empty()) {
                   std::string evt = std::string("cfx_complete:") + act_->strip_tag;
                   cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());

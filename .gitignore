@@ -4,14 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-# .agent
-# .agents
-# .claude
-# ESPHome
-.esphome/
-*.bin
-*.elf
-
 # IDE
 .vscode/
 .idea/
@@ -24,26 +16,8 @@ __pycache__/
 Thumbs.db
 desktop.ini
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# PlatformIO / Local Development
-.pio/
-platformio.ini
-src/
-
-# Manual Dependencies (IntelliSense)
-.dependencies/
-
-# Development Reference Files
-effects_preset.md
-
-next-version.md
-wled_fx.cpp
 # Visualizer Tools
 tools/visualizer/
 all_blobs.txt
 local_only
-
+.agent

@@ -206,7 +206,7 @@ public:
   }
 
   void set_controller(CFXControl *controller) {
-    this->controller_ = controller;
+    this->controller_ = controller;  // stored flat; copied into act_ on start()
   }
 
   void add_on_start_trigger(CfxOnStartTrigger *t) {
@@ -321,6 +321,13 @@ public:
   // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
   uint32_t update_interval_{16};
+
+  // controller_ is set at codegen time via set_controller(), before start()
+  // is ever called. Copied into act_->controller on each start().
+  CFXControl *controller_{nullptr};
+
+  // MAX_HYDRAULICS_PARTICLES stays as a class constant (used in run_intro/outro).
+  static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;
 
 
 
