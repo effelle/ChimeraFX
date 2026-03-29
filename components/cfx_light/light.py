@@ -10,9 +10,6 @@ Drop-in replacement for esp32_rmt_led_strip with:
 - all_effects: true — auto-register all ChimeraFX effects from YAML
 """
 
-import os
-import yaml
-
 import esphome.codegen as cg
 from esphome.components import light
 import esphome.config_validation as cv
@@ -161,24 +158,15 @@ def _validate_segments(config):
     return config
 
 
-def _load_effects_yaml():
-    """Load chimera_fx_effects.yaml from the project root (sibling of components/)."""
-    this_dir = os.path.dirname(__file__)
-    # components/cfx_light/ → components/ → project root
-    project_root = os.path.dirname(os.path.dirname(this_dir))
-    yaml_path = os.path.join(project_root, "chimera_fx_effects.yaml")
-    if not os.path.isfile(yaml_path):
-        return []
-    with open(yaml_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or []
-
-
 def _inject_all_effects(config):
-    """If all_effects is true, parse chimera_fx_effects.yaml and inject
-    synthetic addressable_cfx entries into the effects list.
+    """If all_effects is true, inject synthetic addressable_cfx entries from
+    the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
+    No external yaml file needed — works for local and GitHub installs.
     User-defined effects with the same name take priority (overrides)."""
     if not config.get(CONF_ALL_EFFECTS, False):
         return config
+
+    from esphome.components.cfx_effect import CFX_EFFECTS
 
     user_effects = list(config.get(CONF_EFFECTS, []))
 
@@ -189,47 +177,31 @@ def _inject_all_effects(config):
             name = eff["addressable_cfx"].get(CONF_NAME, "")
             if name:
                 user_names.add(name)
+
     use_intro = config.get("use_intro")
     use_outro = config.get("use_outro")
     intro_dur_raw = config.get("inout_dur")
-    
     intro_dur_sec = None
     if intro_dur_raw is not None:
         try:
             parsed_ms = cv.positive_time_period_milliseconds(intro_dur_raw)
             intro_dur_sec = float(parsed_ms) / 1000.0
         except Exception:
-            # Fallback if invalid format during pre-validation
             pass
 
-    # Parse the YAML and inject effects not already defined by the user
-    for entry in _load_effects_yaml():
-        if "addressable_cfx" not in entry:
+    # Build synthetic entries from the Python registry (order preserved).
+    for (cat, eid, name) in CFX_EFFECTS:
+        if name in user_names:
             continue
-        effect_data = entry["addressable_cfx"]
-        name = effect_data.get("name", "")
-        if name and name not in user_names:
-            user_effects.append(entry)
-
-    # Finally, apply global use_intro / use_outro to ALL effects if they don't already have one
-    for eff in user_effects:
-        if "addressable_cfx" in eff:
-            effect_data = eff["addressable_cfx"]
-            effect_id = effect_data.get("effect_id", -1)
-            
-            # Skip hardcoded exceptions
-            if effect_id in [158, 159, 161]:
-                continue
-                
-            if use_intro is not None and "set_intro" not in effect_data:
+        effect_data = {"effect_id": eid, CONF_NAME: name}
+        if cat != "sep" and eid not in [158, 159, 161]:
+            if use_intro is not None:
                 effect_data["set_intro"] = use_intro
-            if use_outro is not None and "set_outro" not in effect_data:
+            if use_outro is not None:
                 effect_data["set_outro"] = use_outro
             if intro_dur_sec is not None:
-                if "set_inout_dur" not in effect_data:
-                    effect_data["set_inout_dur"] = intro_dur_sec
-                if "set_inout_dur" not in effect_data:
-                    effect_data["set_inout_dur"] = intro_dur_sec
+                effect_data["set_inout_dur"] = intro_dur_sec
+        user_effects.append({"addressable_cfx": effect_data})
 
     config[CONF_EFFECTS] = user_effects
     return config
@@ -245,7 +217,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
             cv.Optional(CONF_IS_RGBW): cv.boolean,
             cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
-            cv.Optional(CONF_ALL_EFFECTS, default=False): cv.boolean,
+            cv.Optional(CONF_ALL_EFFECTS, default=True): cv.boolean,
             cv.Optional("use_intro"): cv.uint8_t,
             cv.Optional("use_outro"): cv.uint8_t,
             cv.Optional("inout_dur"): cv.positive_time_period_milliseconds,

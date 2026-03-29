@@ -32,6 +32,95 @@ class CFXControl;
 
 class CFXAddressableLightEffect : public light::AddressableLightEffect {
 public:
+  // ── Forward declarations needed by CFXActivation ─────────────────────────
+  enum TransitionState {
+    TRANSITION_NONE,
+    TRANSITION_ENTRY,
+    TRANSITION_EXIT,
+    TRANSITION_RUNNING,
+    OUTRO_RUNNING
+  };
+
+  struct MonochromaticPreset {
+    bool is_active;
+    uint8_t intro_mode;
+    uint8_t outro_mode;
+  };
+
+  struct HydraulicsParticle {
+    float pos;
+    float vel;
+    bool active;
+  };
+
+  // ── CFXActivation — heap-allocated per active light ───────────────────────
+  // All members that are only meaningful while the effect is running live here.
+  // Allocated in start(), deleted in stop(). At rest the object is ~100 bytes
+  // instead of ~304 bytes, saving ~15 KB across 77 effect objects.
+  struct CFXActivation {
+    CFXRunner *runner{nullptr};
+    std::vector<CFXRunner *> segment_runners{};
+    bool segments_initialized{false};
+    bool palette_synced{false};
+    uint64_t last_run{0};
+
+    TransitionState state{TRANSITION_NONE};
+    uint64_t transition_start_ms{0};
+    std::vector<Color> intro_snapshot{};
+    bool is_sequence_outro{false};
+
+    bool intro_active{false};
+    uint8_t active_intro_mode{0};
+    uint8_t active_intro_speed{128};
+    uint64_t intro_start_time{0};
+    uint32_t active_intro_duration_ms{1000};
+
+    bool outro_active{false};
+    uint8_t active_outro_mode{0};
+    uint32_t active_outro_duration_ms{1000};
+    uint8_t active_outro_speed{128};
+    uint8_t active_outro_intensity{128};
+    float active_outro_brightness{1.0f};
+    uint64_t outro_start_time{0};
+    std::vector<Color> outro_color_cache{};
+
+    float hydraulics_fluid_level{0.0f};
+    float hydraulics_fluid_velocity{0.0f};
+    std::vector<HydraulicsParticle> hydraulics_particles{};
+    uint64_t hydraulics_last_ms{0};
+
+    CFXControl *controller{nullptr};
+    bool active_outro_mirror{false};
+    bool active_force_white{false};
+    bool active_outro_force_white{false};
+    bool initial_preset_applied{false};
+
+    bool autotune_active{false};
+    float autotune_expected_speed{-1.0f};
+    float autotune_expected_intensity{-1.0f};
+    std::string autotune_expected_palette{};
+    std::string last_sent_palette{};
+    uint64_t last_metadata_refresh{0};
+
+    uint32_t saved_transition_length{0};
+
+    std::string strip_tag{};
+    float last_triggered_percentage{-1.0f};
+    int32_t last_triggered_pixel{-1};
+    bool last_return_phase{false};
+    int32_t last_leading_pixel{-1};
+    uint8_t last_fired_milestone{0};
+    bool milestone_fired_this_frame{false};
+
+#ifdef USE_CFX_SEQUENCE
+    CFXSequence *active_sequence{nullptr};
+    std::optional<uint8_t> sequence_speed{};
+    std::optional<uint8_t> sequence_intensity{};
+    std::optional<uint8_t> sequence_palette{};
+    uint32_t sequence_iterations{0};
+#endif
+  };
+
   CFXAddressableLightEffect(const char *name);
   virtual ~CFXAddressableLightEffect();
 
@@ -100,19 +189,6 @@ public:
   void run_intro(light::AddressableLight &it, const Color &target_color);
   bool run_outro_frame(light::AddressableLight &it, CFXRunner *runner);
 
-  bool intro_active_{false};
-  uint8_t active_intro_mode_{0};
-  uint8_t active_intro_speed_{128};
-  uint64_t intro_start_time_{0};
-  uint32_t active_intro_duration_ms_{1000};
-
-  bool outro_active_{false};
-  uint8_t active_outro_mode_{0};
-  uint32_t active_outro_duration_ms_{1000};
-  uint8_t active_outro_speed_{128};
-  uint8_t active_outro_intensity_{128};
-  float active_outro_brightness_{1.0f};
-  uint64_t outro_start_time_{0};
 
   void set_speed_preset(uint8_t v) { this->speed_preset_ = v; }
   void set_intro_preset(uint8_t v) { this->intro_preset_ = v; }
@@ -155,17 +231,12 @@ public:
   void trigger_on_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
 
-  float last_triggered_percentage_{-1.0f};
-  int32_t last_triggered_pixel_{-1};
-  bool last_return_phase_{false};  // CFX-025: detect forward→erase transition
 
   // Per-instance milestone tracking — replaces CFXEventManager singleton state.
   // Each effect instance tracks its own progress so concurrent strips are
   // fully independent. (multi-strip fix)
   static constexpr uint8_t MILESTONE_STEP = 5;
   static constexpr uint8_t MAX_MILESTONES = 20;  // 5..100 in steps of 5
-  uint8_t  last_fired_milestone_{0};
-  bool     milestone_fired_this_frame_{false};
   // No pre-computed string array — there are 100+ effect instances per light
   // so per-instance arrays would exhaust the heap at setup time.
   // Event strings are built on the stack at fire time (snprintf into 48-byte
@@ -178,14 +249,14 @@ public:
   void check_milestones_(float current_pct);
 
   void reset_milestones_() {
-    this->last_fired_milestone_ = 0;
-    this->milestone_fired_this_frame_ = false;
+    if (!act_) return;
+    act_->last_fired_milestone = 0;
+    act_->milestone_fired_this_frame = false;
   }
 
 protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};
-  std::vector<esphome::Color> outro_color_cache_;
   number::Number *speed_{nullptr};
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};
@@ -198,41 +269,36 @@ protected:
   select::Select *outro_effect_{nullptr};
   switch_::Switch *debug_switch_{nullptr};
 
-#ifdef USE_CFX_SEQUENCE
-  // Sequence tracking data
-  CFXSequence *active_sequence_{nullptr};
-#endif
-  std::optional<uint8_t> sequence_speed_;
-  std::optional<uint8_t> sequence_intensity_;
-  std::optional<uint8_t> sequence_palette_;
-  uint32_t sequence_iterations_{0};
 
 public:
 #ifdef USE_CFX_SEQUENCE
   void set_active_sequence(CFXSequence *seq, std::optional<uint8_t> spd,
                            std::optional<uint8_t> iten, std::optional<uint8_t> pal,
                            uint32_t itr);
-  CFXSequence *get_active_sequence() const { return this->active_sequence_; }
+  CFXSequence *get_active_sequence() const { return act_ ? act_->active_sequence : nullptr; }
 
   // cfx_set action setters — override sequence params on the active effect.
   // Persist until the next start() call resets them via set_active_sequence().
-  void set_sequence_speed(uint8_t v)     { this->sequence_speed_     = v; }
-  void set_sequence_intensity(uint8_t v) { this->sequence_intensity_ = v; }
-  void set_sequence_palette(uint8_t v)   { this->sequence_palette_   = v; }
+  void set_sequence_speed(uint8_t v)     { if (act_) act_->sequence_speed     = v; }
+  void set_sequence_intensity(uint8_t v) { if (act_) act_->sequence_intensity = v; }
+  void set_sequence_palette(uint8_t v)   { if (act_) act_->sequence_palette   = v; }
 
   // Propagate ownership flags to all runners so CFXControl push callbacks
   // don't overwrite cfx_set values via UI slider on_state_callback.
   void set_runner_owns_speed(bool v) {
-    if (this->runner_) this->runner_->sequence_owns_speed_ = v;
-    for (auto *r : this->segment_runners_) r->sequence_owns_speed_ = v;
+    if (!act_) return;
+    if (act_->runner) act_->runner->sequence_owns_speed_ = v;
+    for (auto *r : act_->segment_runners) r->sequence_owns_speed_ = v;
   }
   void set_runner_owns_intensity(bool v) {
-    if (this->runner_) this->runner_->sequence_owns_intensity_ = v;
-    for (auto *r : this->segment_runners_) r->sequence_owns_intensity_ = v;
+    if (!act_) return;
+    if (act_->runner) act_->runner->sequence_owns_intensity_ = v;
+    for (auto *r : act_->segment_runners) r->sequence_owns_intensity_ = v;
   }
   void set_runner_owns_palette(bool v) {
-    if (this->runner_) this->runner_->sequence_owns_palette_ = v;
-    for (auto *r : this->segment_runners_) r->sequence_owns_palette_ = v;
+    if (!act_) return;
+    if (act_->runner) act_->runner->sequence_owns_palette_ = v;
+    for (auto *r : act_->segment_runners) r->sequence_owns_palette_ = v;
   }
 #endif
 
@@ -242,51 +308,22 @@ public:
   std::vector<CfxOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxOnReachTrigger *> on_reach_triggers_;
 
-  int32_t last_leading_pixel_{-1};
 
-  // Strip tag — set by CFXSequence::start() via bind loop. Also derived at
-  // runtime from get_object_id() in start() as fallback. (CFX-024)
-  std::string strip_tag_{};
-  void set_strip_tag(const std::string &tag) { this->strip_tag_ = tag; }
+  void set_strip_tag(const std::string &tag) { if (act_) act_->strip_tag = tag; }
 
-  void set_is_sequence_outro(bool v) { this->is_sequence_outro_ = v; }
+  void set_is_sequence_outro(bool v) { if (act_) act_->is_sequence_outro = v; }
 
-  enum TransitionState {
-    TRANSITION_NONE,
-    TRANSITION_ENTRY,
-    TRANSITION_EXIT,
-    TRANSITION_RUNNING,
-    OUTRO_RUNNING
-  };
-  TransitionState state_{TRANSITION_NONE};
-  uint64_t transition_start_ms_{0};
-  std::vector<Color> intro_snapshot_;
-  bool is_sequence_outro_{false};
+  // ── Activation pointer — null when effect is not running ─────────────────
+  // All per-run state lives in CFXActivation, allocated in start(), freed in
+  // stop(). At rest this object carries ~100 bytes instead of ~304 bytes.
+  CFXActivation *act_{nullptr};
 
-  CFXRunner *runner_{nullptr};
-
-  // Multi-segment support (Phase 1): all runners including runner_
-  // When segments are configured, runner_ points to segment_runners_[0].
-  // When no segments, segment_runners_ is empty and runner_ works alone.
-  std::vector<CFXRunner *> segment_runners_;
-  bool segments_initialized_{false};
+  // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
-  bool palette_synced_{false};
-
   uint32_t update_interval_{16};
-  uint64_t last_run_{0};
 
-  struct MonochromaticPreset {
-    bool is_active;
-    uint8_t intro_mode;
-    uint8_t outro_mode;
-  };
 
-  struct HydraulicsParticle {
-    float pos;
-    float vel;
-    bool active;
-  };
+
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool is_monochromatic_(uint8_t effect_id);
@@ -311,31 +348,11 @@ public:
   std::optional<float> inout_duration_preset_{};
   std::optional<uint8_t> outro_preset_{};
 
-  float hydraulics_fluid_level_{0.0f};
-  float hydraulics_fluid_velocity_{0.0f};
-  std::vector<HydraulicsParticle> hydraulics_particles_;
-  uint64_t hydraulics_last_ms_{0};
-  static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;
 
-  CFXControl *controller_{nullptr};
   void run_controls_();
 
-  bool active_outro_mirror_{false};
-  bool active_force_white_{false};
-  bool active_outro_force_white_{false};
 
-  bool initial_preset_applied_{false};
 
-  // --- Autotune Auto-Disable (Option A) ---
-  // Snapshots of what Autotune last wrote to the UI so we can detect user
-  // overrides
-  bool autotune_active_{
-      false}; // True when Autotune is ON and managing parameters
-  float autotune_expected_speed_{-1.0f};
-  float autotune_expected_intensity_{-1.0f};
-  std::string autotune_expected_palette_{""};
-  std::string last_sent_palette_{""};
-  uint64_t last_metadata_refresh_{0};
 
   // Applies per-effect defaults to UI sliders/palette and records expected
   // values. Only touches controls that don't have a hard YAML preset.
@@ -343,7 +360,6 @@ public:
 
   // Transition length saved/restored around effect runs for virtual segments
   // to prevent the white flash from ESPHome's transition engine.
-  uint32_t saved_transition_length_{0};
 };
 
 
