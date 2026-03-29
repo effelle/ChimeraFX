@@ -42,6 +42,10 @@ CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
 CONF_SET_BRIGHTNESS = "set_brightness"
+CONF_SET_MIRROR = "set_mirror"
+CONF_SET_INTRO = "set_intro"
+CONF_SET_OUTRO = "set_outro"
+CONF_SET_INOUT_DURATION = "set_inout_dur"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_DURATION = "duration"
@@ -65,6 +69,10 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
+        cv.Optional(CONF_SET_MIRROR): cv.boolean,
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=24),
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),
+        cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
@@ -304,6 +312,14 @@ async def to_code(config):
             cg.add(var.set_palette(seq_conf[CONF_SET_PALETTE]))
         if CONF_SET_BRIGHTNESS in seq_conf:
             cg.add(var.set_brightness(seq_conf[CONF_SET_BRIGHTNESS]))
+        if CONF_SET_MIRROR in seq_conf:
+            cg.add(var.set_mirror(seq_conf[CONF_SET_MIRROR]))
+        if CONF_SET_INTRO in seq_conf:
+            cg.add(var.set_intro(seq_conf[CONF_SET_INTRO]))
+        if CONF_SET_OUTRO in seq_conf:
+            cg.add(var.set_outro(seq_conf[CONF_SET_OUTRO]))
+        if CONF_SET_INOUT_DURATION in seq_conf:
+            cg.add(var.set_inout_duration(seq_conf[CONF_SET_INOUT_DURATION]))
         if CONF_ITERATIONS in seq_conf:
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
         if CONF_DURATION in seq_conf:
@@ -427,33 +443,33 @@ async def to_code(config):
         except Exception:
             pass  # Non-fatal: service handler is advisory only
 
+def _sequence_action_schema(value):
+    """Accept both shorthand string and dict form:
+      cfx_sequence.start: my_id
+      cfx_sequence.start:
+        id: my_id
+    """
+    if isinstance(value, str):
+        value = {CONF_ID: value}
+    return cv.Schema({cv.Required(CONF_ID): cv.string})(value)
+
 @automation.register_action(
     "cfx_sequence.start",
     StartAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.string,
-        }
-    ),
+    _sequence_action_schema,
     synchronous=True,
 )
 async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
-    # Pass the raw target ID string directly to break the codegen dependency graph
     return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
 
 
 @automation.register_action(
     "cfx_sequence.stop",
     StopAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.string,
-        }
-    ),
+    _sequence_action_schema,
     synchronous=True,
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
-    # Pass the raw target ID string directly to break the codegen dependency graph
     return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
 
 
@@ -468,6 +484,10 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
             cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
             cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
             cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
+            cv.Optional(CONF_SET_MIRROR):            cv.boolean,
+            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
         }
     ),
     synchronous=True,
@@ -484,6 +504,14 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
         cg.add(var.set_intensity(config[CONF_SET_INTENSITY]))
     if CONF_SET_PALETTE in config:
         cg.add(var.set_palette(config[CONF_SET_PALETTE]))
+    if CONF_SET_MIRROR in config:
+        cg.add(var.set_mirror(config[CONF_SET_MIRROR]))
+    if CONF_SET_INTRO in config:
+        cg.add(var.set_intro(config[CONF_SET_INTRO]))
+    if CONF_SET_OUTRO in config:
+        cg.add(var.set_outro(config[CONF_SET_OUTRO]))
+    if CONF_SET_INOUT_DURATION in config:
+        cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
     return var

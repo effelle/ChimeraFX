@@ -99,6 +99,10 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
   void set_brightness(float brightness) { this->brightness_ = brightness; }
+  void set_mirror(bool mirror) { this->mirror_ = mirror; }
+  void set_intro(uint8_t intro) { this->intro_ = intro; }
+  void set_outro(uint8_t outro) { this->outro_ = outro; }
+  void set_inout_duration(float dur) { this->inout_duration_ = dur; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
@@ -167,6 +171,10 @@ protected:
   esphome::optional<uint8_t> intensity_;
   esphome::optional<uint8_t> palette_;
   esphome::optional<float> brightness_;
+  esphome::optional<bool>    mirror_;
+  esphome::optional<uint8_t> intro_;
+  esphome::optional<uint8_t> outro_;
+  esphome::optional<float>   inout_duration_;
   uint32_t iterations_{0};
   bool restore_state_{true};
   uint32_t duration_ms_{0};
@@ -352,6 +360,10 @@ public:
   void set_intensity(uint8_t v)  { this->intensity_  = v; }
   void set_palette(uint8_t v)    { this->palette_    = v; }
   void set_brightness(float v)   { this->brightness_ = v; }
+  void set_mirror(bool v)        { this->mirror_     = v; }
+  void set_intro(uint8_t v)      { this->intro_      = v; }
+  void set_outro(uint8_t v)      { this->outro_      = v; }
+  void set_inout_duration(float v) { this->inout_duration_ = v; }
 
 protected:
   void do_play_();
@@ -362,6 +374,10 @@ protected:
   esphome::optional<uint8_t> intensity_{};
   esphome::optional<uint8_t> palette_{};
   esphome::optional<float>   brightness_{};
+  esphome::optional<bool>    mirror_{};
+  esphome::optional<uint8_t> intro_{};
+  esphome::optional<uint8_t> outro_{};
+  esphome::optional<float>   inout_duration_{};
 };
 
 template <typename... Ts>

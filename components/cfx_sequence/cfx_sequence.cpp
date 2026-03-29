@@ -47,6 +47,14 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_palette(this->palette_.value());
         inst->set_runner_owns_palette(true);
       }
+      if (this->mirror_.has_value())
+        inst->set_mirror_preset(this->mirror_.value());
+      if (this->intro_.has_value())
+        inst->set_intro_preset(this->intro_.value());
+      if (this->outro_.has_value())
+        inst->set_outro_preset(this->outro_.value());
+      if (this->inout_duration_.has_value())
+        inst->set_inout_duration_preset(this->inout_duration_.value());
     }
   }
 
@@ -286,6 +294,14 @@ void CFXSequence::start() {
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
         inst->set_strip_tag(this->strip_tag_);
+        if (this->mirror_.has_value())
+          inst->set_mirror_preset(this->mirror_.value());
+        if (this->intro_.has_value())
+          inst->set_intro_preset(this->intro_.value());
+        if (this->outro_.has_value())
+          inst->set_outro_preset(this->outro_.value());
+        if (this->inout_duration_.has_value())
+          inst->set_inout_duration_preset(this->inout_duration_.value());
         bound = true;
         // Do not break! Match other lights as well.
       }
@@ -311,6 +327,14 @@ void CFXSequence::start() {
     master_fx->set_active_sequence(this, this->speed_, this->intensity_,
                                    this->palette_, this->iterations_);
     master_fx->set_strip_tag(this->strip_tag_);
+    if (this->mirror_.has_value())
+      master_fx->set_mirror_preset(this->mirror_.value());
+    if (this->intro_.has_value())
+      master_fx->set_intro_preset(this->intro_.value());
+    if (this->outro_.has_value())
+      master_fx->set_outro_preset(this->outro_.value());
+    if (this->inout_duration_.has_value())
+      master_fx->set_inout_duration_preset(this->inout_duration_.value());
     bound = true;
   }
 
