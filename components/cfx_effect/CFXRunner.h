@@ -339,6 +339,7 @@ public:
   void setMirror(bool m) {
     if (_segment.mirror != m) {
       _segment.mirror = m;
+      _segment.fill(0); // clear the segment when direction changes
     }
   }
   bool getMirror() const { return _segment.mirror; }
