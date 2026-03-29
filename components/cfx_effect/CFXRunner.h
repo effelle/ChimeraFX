@@ -208,11 +208,10 @@ public:
     colors[2] = 0x0;
   }
 
-  uint16_t length() const { return stop - start; }
-  // CFX-001: physicalLength() is the full pixel span; virtualLength() is the
-  // addressable half when mirror is active (each pixel written symmetrically).
+  // CFX-001 mapping reverted: mirror now correctly reverses the axis as intended.
   uint16_t physicalLength() const { return stop - start; }
-  uint16_t virtualLength() const { return mirror ? physicalLength() / 2 : physicalLength(); }
+  uint16_t virtualLength() const { return physicalLength(); }
+  uint16_t length() const { return physicalLength(); }
   bool isActive() const { return on && physicalLength() > 0; }
 
   bool allocateData(size_t len) {

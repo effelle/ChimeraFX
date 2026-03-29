@@ -179,20 +179,11 @@ void Segment::setPixelColor(int n, uint32_t c) {
 
   esphome::Color esphome_color(r, g, b, w);
 
-  if (mirror) {
-    // CFX-001: True symmetrical mirror — write both left and right pixels
-    // simultaneously so effects see a full reflected strip at half resolution.
-    int left_index  = start + n;
-    int right_index = stop - 1 - n;
-    if (left_index  >= 0 && left_index  < light_size)
-      (*instance->target_light)[left_index]  = esphome_color;
-    if (right_index >= 0 && right_index < light_size)
-      (*instance->target_light)[right_index] = esphome_color;
-  } else {
-    int offset = (light_size == (int)physicalLength()) ? 0 : start;
-    int global_index = offset + n;
-    if (global_index >= 0 && global_index < light_size)
-      (*instance->target_light)[global_index] = esphome_color;
+  int offset = (light_size == (int)physicalLength()) ? 0 : start;
+  int global_index = mirror ? (offset + length() - 1 - n) : (offset + n);
+
+  if (global_index >= 0 && global_index < light_size) {
+    (*instance->target_light)[global_index] = esphome_color;
   }
 }
 
