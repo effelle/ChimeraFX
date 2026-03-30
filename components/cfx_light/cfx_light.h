@@ -69,7 +69,7 @@ struct LedParams {
   rmt_symbol_word_t reset;
 };
 
-class CFXLightOutput : public light::AddressableLight, public Component {
+class CFXLightOutput : public light::AddressableLight {
 public:
   ~CFXLightOutput(); // CFX-025: closes visualizer socket_fd_ to prevent FD leak
   void setup() override;

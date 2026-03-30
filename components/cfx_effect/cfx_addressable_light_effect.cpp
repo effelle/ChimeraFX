@@ -24,7 +24,6 @@
 namespace esphome {
 namespace chimera_fx {
 
-std::vector<CFXControl *> CFXControl::instances;
 bool CFXControl::global_debug_enabled_ = false;
 
 std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_effects;

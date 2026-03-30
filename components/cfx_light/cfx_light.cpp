@@ -44,6 +44,7 @@ static uint32_t rmt_resolution_hz() {
 #endif
 // --- Core Control Loop & Initialization ---
 
+CFXLightOutput::~CFXLightOutput() {
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
 // ESP32 has a small FD pool (~5 sockets under default ESP-IDF config). Without
 // this, each OTA cycle or component teardown leaks one FD, eventually causing

@@ -107,7 +107,7 @@ public:
         ESP_LOGD("chimera_fx",
                  "Debug switch toggled: %d. Applying to all instances.", value);
         global_debug_enabled_ = value;
-        for (auto *c : instances) {
+        for (auto *c : get_instances()) {
           for (auto *r : c->runners_)
             r->setDebug(value);
         }
