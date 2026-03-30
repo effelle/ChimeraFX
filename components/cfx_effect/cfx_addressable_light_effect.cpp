@@ -2048,12 +2048,47 @@ void CFXAddressableLightEffect::run_controls_() {
         // segment_runners is only non-empty for master (non-virtual) effects, so
         // virtual segments (single runner, empty segment_runners) use the else branch.
         if (!act_->segment_runners.empty()) {
-          for (auto *r : act_->segment_runners) {
-            // Sequence overrides take priority; fall back to controller UI values.
-            r->setSpeed(current_speed);
-            r->setIntensity(current_intensity);
-            r->setPalette(current_palette);
-            r->setMirror(current_mirror);
+          auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(this->get_light_state()->get_output());
+
+          for (size_t i = 0; i < act_->segment_runners.size(); i++) {
+            auto *r = act_->segment_runners[i];
+
+            uint8_t r_speed = current_speed;  // from sequence or master
+            uint8_t r_intensity = current_intensity;
+            uint8_t r_palette = current_palette;
+            bool r_mirror = current_mirror;
+
+            // If no sequence override is forcing global synchronization, prioritize the segment's independent UI!
+            if (!sequence_override_active) {
+                if (i < cfx_out->get_segment_light_states().size()) {
+                    auto *seg_state = cfx_out->get_segment_light_states()[i];
+                    CFXControl *seg_c = CFXControl::find(seg_state);
+                    if (seg_c) {
+                        if (seg_c->get_speed() && seg_c->get_speed()->has_state())
+                            r_speed = (uint8_t)seg_c->get_speed()->state;
+
+                        if (seg_c->get_intensity() && seg_c->get_intensity()->has_state())
+                            r_intensity = (uint8_t)seg_c->get_intensity()->state;
+
+                        if (seg_c->get_mirror() && seg_c->get_mirror()->has_state())
+                            r_mirror = seg_c->get_mirror()->state;
+
+                        if (seg_c->get_palette() && seg_c->get_palette()->has_state()) {
+                            std::string opt_str(seg_c->get_palette()->current_option());
+                            const char *opt_ptr = opt_str.c_str();
+                            std::string opt = opt_ptr ? opt_ptr : "";
+                            if (opt.length() > 0) {
+                                r_palette = get_pal_idx(seg_c->get_palette());
+                            }
+                        }
+                    }
+                }
+            }
+
+            r->setSpeed(r_speed);
+            r->setIntensity(r_intensity);
+            r->setPalette(r_palette);
+            r->setMirror(r_mirror);
           }
         } else {
           act_->runner->setSpeed(current_speed);
