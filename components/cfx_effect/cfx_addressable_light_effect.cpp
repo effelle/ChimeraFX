@@ -1891,10 +1891,11 @@ void CFXAddressableLightEffect::run_controls_() {
       }
       act_->last_metadata_refresh = now;
     }
+  } // End of Visualizer block
 
-    if (act_->runner) {
-      // Helper lambda for Palette Index Lookup
-      // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
+  if (act_->runner) {
+    // Helper lambda for Palette Index Lookup
+    // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
       auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
         if (!sel || !sel->has_state())
           return 0;
@@ -2110,10 +2111,11 @@ void CFXAddressableLightEffect::run_controls_() {
       }
 
       // 7. Debug
-      if (c && c->get_debug())
-        ensure_cfg_(); cfg_->debug_switch = c->get_debug();
+      if (c && c->get_debug()) {
+        ensure_cfg_(); 
+        cfg_->debug_switch = c->get_debug();
+      }
     }
-  } // end if (act_->controller)
 }
 
 // Intro Routine Implementation
