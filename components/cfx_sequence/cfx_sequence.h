@@ -55,7 +55,30 @@ public:
 
   // Push one event string onto the deferred queue (called from render loop).
   // Zero blocking — just a ring buffer write. (CFX-025)
+  // Coalescing: cfx_reach events for the same strip replace any pending entry
+  // instead of appending, preventing API buffer overflow with 4+ strips. (CFX-027)
   void push_deferred(const std::string &evt) {
+    // cfx_reach coalescing: extract "cfx_reach:<tag>:" prefix and scan for a
+    // pending entry with the same prefix. If found, overwrite it in-place
+    // so HA only sees the latest position per strip per flush cycle.
+    static constexpr const char REACH_PREFIX[] = "cfx_reach:";
+    static constexpr size_t REACH_PREFIX_LEN = sizeof(REACH_PREFIX) - 1;
+    if (evt.compare(0, REACH_PREFIX_LEN, REACH_PREFIX) == 0) {
+      // Find the second colon (after "cfx_reach:<tag>:")
+      size_t tag_end = evt.find(':', REACH_PREFIX_LEN);
+      if (tag_end != std::string::npos) {
+        // Scan pending entries for a matching cfx_reach:<tag>: prefix
+        for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
+             i = (i + 1) % DEFERRED_QUEUE_SIZE) {
+          if (this->deferred_queue_[i].compare(0, tag_end + 1, evt, 0, tag_end + 1) == 0) {
+            // Same strip — overwrite with latest percentage
+            this->deferred_queue_[i] = evt;
+            return;
+          }
+        }
+      }
+    }
+
     uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
     if (next == this->deferred_read_) {
       ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
@@ -196,8 +219,8 @@ protected:
 
   // Per-instance milestone tracking — decoupled from CFXEventManager singleton
   // so concurrent strips each maintain their own counter. (multi-strip fix)
-  static constexpr uint8_t MILESTONE_STEP    = 25;
-  static constexpr uint8_t MAX_MILESTONES    = 4;  // 25..100 in steps of 25
+  static constexpr uint8_t MILESTONE_STEP    = 5;
+  static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
   // Strings built on-demand — no pre-computed array, matching the effect side.
