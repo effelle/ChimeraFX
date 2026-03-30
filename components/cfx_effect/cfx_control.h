@@ -59,6 +59,7 @@ public:
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
       for (auto *seg_state : cfx_out->get_segment_light_states()) {
         if (seg_state == light) {
+          ESP_LOGD("chimera_fx", "CFXControl::find: FALLBACK MATCH for light %p -> Returning Master Controller %p", light, c);
           return c;
         }
       }

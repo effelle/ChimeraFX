@@ -338,6 +338,7 @@ public:
   }
   void setMirror(bool m) {
     if (_segment.mirror != m) {
+      ESP_LOGD("chimera_fx", "CFXRunner[%s]: Mirror toggle -> %d", _name.c_str(), m);
       _segment.mirror = m;
       _segment.fill(0); // clear the segment when direction changes
     }
