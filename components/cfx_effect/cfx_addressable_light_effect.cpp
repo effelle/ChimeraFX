@@ -2101,6 +2101,7 @@ void CFXAddressableLightEffect::run_controls_() {
             r->setMirror(r_mirror);
           }
         } else {
+          ESP_LOGV("chimera_fx", "Virtual/Single-Segment: Pulling Mirror -> %d (c=%p)", current_mirror, c);
           act_->runner->setSpeed(current_speed);
           act_->runner->setIntensity(current_intensity);
           act_->runner->setPalette(current_palette);
@@ -2112,7 +2113,7 @@ void CFXAddressableLightEffect::run_controls_() {
       if (c && c->get_debug())
         ensure_cfg_(); cfg_->debug_switch = c->get_debug();
     }
-  } // end if (!is_virtual_segment_)
+  } // end if (act_->controller)
 }
 
 // Intro Routine Implementation
