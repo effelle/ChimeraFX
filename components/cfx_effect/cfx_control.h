@@ -38,36 +38,25 @@ public:
 
 class CFXControl : public Component {
 public:
-  static std::vector<CFXControl *> instances;
+  static std::vector<CFXControl *> &get_instances() {
+    static std::vector<CFXControl *> inst;
+    return inst;
+  }
   static bool global_debug_enabled_;
 
   static CFXControl *find(light::LightState *light) {
     // 1. Direct master match
-    for (auto *c : instances) {
+    for (auto *c : get_instances()) {
       if (c->get_light() == light)
         return c;
     }
 
     // 2. Segment match fallback: iterate masters and check segment configs
-    for (auto *c : instances) {
+    for (auto *c : get_instances()) {
       if (c->get_light() == nullptr)
         continue;
       auto *output = c->get_light()->get_output();
       if (output == nullptr)
-        continue;
-
-      // Type-safety guard: ensure output is actually a CFXLightOutput
-      // before attempting to read segments, otherwise fastled/neopixelbus
-      // lights will cause an invalid static_cast and segfault.
-      bool is_cfx = false;
-      for (auto *cfx_instance : cfx_light::CFXLightOutput::instances) {
-        if (cfx_instance == output) {
-          is_cfx = true;
-          break;
-        }
-      }
-      
-      if (!is_cfx)
         continue;
 
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
@@ -80,14 +69,14 @@ public:
     }
     ESP_LOGD("chimera_fx",
              "CFXControl::find failed for light %p. Instances: %zu", light,
-             instances.size());
-    for (auto *c : instances) {
+             get_instances().size());
+    for (auto *c : get_instances()) {
       ESP_LOGD("chimera_fx", "  Instance %p light: %p", c, c->get_light());
     }
     return nullptr;
   }
 
-  CFXControl() { instances.push_back(this); }
+  CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
     if (this->speed_) {

@@ -42,10 +42,7 @@ static uint32_t rmt_resolution_hz() {
 #else
   freq = 80000000; // APB clock default for older ESP-IDF
 #endif
-  return freq;
-}
-
-std::vector<CFXLightOutput *> CFXLightOutput::instances;
+// --- Core Control Loop & Initialization ---
 
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
 // ESP32 has a small FD pool (~5 sockets under default ESP-IDF config). Without
