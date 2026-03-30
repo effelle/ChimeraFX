@@ -95,8 +95,25 @@ void CFXEventManager::flush_pending() {
   const std::string evt = this->deferred_queue_[this->deferred_read_];
   this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
 
-  if (this->event_entity_ != nullptr)
-    this->event_entity_->trigger(evt.c_str());
+  // CFX-028: route to the per-strip entity whose tag appears in the event
+  // string.  All CFX event strings have the form "<verb>:<tag>[:<extra>]",
+  // so the tag sits between the first and second colon.
+  esphome::event::Event *target = this->event_entity_;  // fallback
+  if (!this->strip_entities_.empty()) {
+    size_t colon1 = evt.find(':');
+    if (colon1 != std::string::npos) {
+      size_t colon2 = evt.find(':', colon1 + 1);
+      std::string tag = (colon2 != std::string::npos)
+                            ? evt.substr(colon1 + 1, colon2 - colon1 - 1)
+                            : evt.substr(colon1 + 1);
+      auto it = this->strip_entities_.find(tag);
+      if (it != this->strip_entities_.end())
+        target = it->second;
+    }
+  }
+
+  if (target != nullptr)
+    target->trigger(evt.c_str());
 }
 
 
@@ -564,10 +581,15 @@ void CFXSequence::report_event_start() {
 
 void CFXSequence::report_event_begin() {
   ESP_LOGD(TAG, "Sequence '%s': on_begin triggers firing", this->id_.c_str());
+  // on_cfx_begin YAML trigger always fires (on-device automation).
   for (auto *t : this->on_begin_triggers_) {
     t->trigger();
   }
-  if (!this->strip_tag_.empty()) {
+  // CFX-029: HA cfx_begin event only fires when the sequence has a real
+  // intro configured (intro_ != 0). Without an intro, cfx_begin and
+  // cfx_start fire at the same millisecond and are redundant.
+  if (!this->strip_tag_.empty()
+      && this->intro_.has_value() && this->intro_.value() != 0) {
     std::string evt = std::string("cfx_begin:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
   }

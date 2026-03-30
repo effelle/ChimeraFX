@@ -168,11 +168,8 @@ async def to_code(config):
     except Exception:
         pass  # Non-fatal if api: block not present
 
-    # Create global event entity for all sequences (one per device). (CFX-023/024)
+    # One event entity per strip — see CFX-028 note below for why.
     import esphome.core as core
-    event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
-    event_var = cg.new_Pvariable(event_id)
-    core.CORE.component_ids.add("cfx_global_events")
 
     # Build light yaml_id -> slugified_name map so strip tags match
     # get_object_id() at runtime. (CFX-024)
@@ -230,32 +227,68 @@ async def to_code(config):
     except Exception as ex:
         _LOGGER.debug("CFX: CORE.config walk failed: %s", ex)
 
-    # Build event_types list — pre-registers all valid strings in HA UI. (CFX-024)
-    progress_step = 5
-    # All events are tagged with the strip name — no bare forms. (CFX-026)
-    # Tagged events allow per-strip automation targeting for multi-strip setups.
-    event_types = []
-    for tag in seen_tags:
-        event_types.append(f"cfx_start:{tag}")
-        event_types.append(f"cfx_begin:{tag}")
-        event_types.append(f"cfx_stop:{tag}")
-        event_types.append(f"cfx_complete:{tag}")
+    # CFX-028: Per-strip event entities.
+    #
+    # The old design registered ONE global "CFX Events" entity whose
+    # ListEntitiesEventResponse packet contained every event string for
+    # every strip (4 lifecycle × N strips  +  20 reach milestones × N strips).
+    # That packet exceeds the ESP32 API TCP send buffer for any non-trivial
+    # setup, causing "Message too large to send: type=108" and the entity
+    # never appearing in HA.
+    #
+    # Fix: create one event entity per strip.  Each registration packet only
+    # carries strings for that single strip — 4 lifecycle + 20 reach = 24
+    # strings — well within the buffer limit regardless of strip count.
+    # HA sees entities named "CFX Events: <strip>" (e.g.
+    # "CFX Events: led_strip1"), preserving full autocomplete for every
+    # milestone value in the automation editor exactly as before.
+    #
+    # The C++ side is unchanged: CFXEventManager fires into whichever
+    # event entity each CFXSequence instance was bound to at setup.
+    # Sequences are bound to their strip's entity via CFXEventManager.strip_entities_ (CFX-028)
+    # in the per-sequence codegen block further below.
 
+    progress_step = 5
     milestones = list(range(progress_step, 101, progress_step))
     if 100 not in milestones:
         milestones.append(100)
-    for tag in seen_tags:
-        for m in milestones:
-            event_types.append(f"cfx_reach:{tag}:{m}")
 
-    event_conf = {
-        "id": event_id,
-        "name": "CFX Events",
-        "icon": "mdi:animation-play",
-        "disabled_by_default": False,
-        "internal": False,
-    }
-    await event.register_event(event_var, event_conf, event_types=event_types)
+    # tag -> event_var  (populated below, consumed in the per-sequence loop)
+    strip_event_vars: dict = {}
+
+    for tag in seen_tags:
+        safe_id = re.sub(r'[^a-z0-9_]', '_', tag)
+        eid = core.ID(
+            f"cfx_events_{safe_id}",
+            is_declaration=True,
+            type=event.Event,
+        )
+        evar = cg.new_Pvariable(eid)
+        core.CORE.component_ids.add(f"cfx_events_{safe_id}")
+        strip_event_vars[tag] = evar
+
+        event_types = (
+            [f"cfx_start:{tag}", f"cfx_begin:{tag}",
+             f"cfx_stop:{tag}",  f"cfx_complete:{tag}"]
+            + [f"cfx_reach:{tag}:{m}" for m in milestones]
+        )
+        econf = {
+            "id": eid,
+            "name": f"CFX Events: {tag}",
+            "icon": "mdi:animation-play",
+            "disabled_by_default": False,
+            "internal": False,
+        }
+        await event.register_event(evar, econf, event_types=event_types)
+        # Register this strip's entity in CFXEventManager's dispatch table.
+        cg.add(cg.RawExpression(
+            f'cfx_sequence::CFXEventManager::get().register_strip_entity'
+            f'("{tag}", {evar})'
+        ))
+
+    # Backward-compat alias: code below that references event_var falls back to
+    # the first strip's entity when there is only one strip (common case).
+    event_var = next(iter(strip_event_vars.values())) if strip_event_vars else None
 
 
     # 2. Progress Sensor
@@ -300,9 +333,18 @@ async def to_code(config):
         var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT], seq_conf[CONF_RESTORE])
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
-        # Bind the global event entity to this sequence
-        if event_var:
-            cg.add(var.set_event_entity(event_var))
+        # Bind this sequence to its strip's dedicated event entity (CFX-028).
+        lights_list = seq_conf.get(CONF_LIGHTS, [])
+        if lights_list:
+            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
+            cg.add(var.set_strip_tag(strip_tag))
+            seq_event_var = strip_event_vars.get(strip_tag, event_var)
+        else:
+            strip_tag = None
+            seq_event_var = event_var
+
+        # CFX-028: routing is handled by CFXEventManager.strip_entities_ map;
+        # set_event_entity() on individual sequences is no longer needed.
 
         if CONF_SET_SPEED in seq_conf:
             cg.add(var.set_speed(seq_conf[CONF_SET_SPEED]))
@@ -325,11 +367,7 @@ async def to_code(config):
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
-        # CFX-024: strip identity tag = slugify(light.name), matching get_object_id() at runtime.
-        lights_list = seq_conf.get(CONF_LIGHTS, [])
-        if lights_list:
-            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
-            cg.add(var.set_strip_tag(strip_tag))
+
 
 
         # Register target lights
@@ -388,9 +426,8 @@ async def to_code(config):
         await select.register_select(sel_var, sel_conf, options=seq_options)
         await cg.register_component(sel_var, sel_conf)
         cg.add(sel_var.publish_state("None"))
-        # Wire global entities into CFXSequenceSelect (which drives CFXEventManager)
-        if event_var:
-            cg.add(sel_var.set_event_entity(event_var))
+        # CFX-028: CFXEventManager.strip_entities_ map handles routing;
+        # no single event_entity pointer needed on the select.
         # CFX-026: HA events opt-in — read flag set by cfx_control ID 6.
         # Defaults to True when cfx_control is not used.
         import esphome.core as _core_seq

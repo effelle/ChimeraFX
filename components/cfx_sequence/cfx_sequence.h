@@ -16,6 +16,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <map>
 #include <set>
 #include <string>
 
@@ -39,6 +40,17 @@ protected:
 class CFXEventManager {
 public:
   static CFXEventManager &get();
+  // CFX-028: register a dedicated HA event entity for one strip tag.
+  // Called from generated code once per strip at setup time.
+  void register_strip_entity(const std::string &tag, esphome::event::Event *e) {
+    this->strip_entities_[tag] = e;
+    // Keep event_entity_ pointing at the first registered strip so any
+    // legacy call sites that still use it get a valid (non-null) pointer.
+    if (this->event_entity_ == nullptr)
+      this->event_entity_ = e;
+  }
+  // Legacy single-entity setter — kept for backward compat; maps to the
+  // "no tag" fallback slot used when a strip tag cannot be resolved.
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
 
   // HA event delivery opt-in. When false, fire_event() is a no-op for all
@@ -90,7 +102,8 @@ public:
 
 protected:
   CFXEventManager() = default;
-  esphome::event::Event *event_entity_{nullptr};
+  esphome::event::Event *event_entity_{nullptr};  // fallback / first-strip alias
+  std::map<std::string, esphome::event::Event *> strip_entities_;  // CFX-028
   bool ha_events_enabled_{true};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;

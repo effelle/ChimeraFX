@@ -207,18 +207,12 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
-  // cfx_begin fires before the intro — the moment the effect is activated.
-  // On-device trigger fires unconditionally; HA event gated on no active
-  // sequence (sequence path fires cfx_begin from report_event_begin()).
+  // on_cfx_begin trigger (on-device YAML) fires unconditionally.
+  // The HA cfx_begin *event* fires only when an actual intro is configured;
+  // see end of start() below. (CFX-029)
   // Separator (ID 185) is a UI-only divider — suppress all lifecycle events.
   if (this->effect_id_ != 185) {
     this->trigger_on_begin();
-#ifdef USE_CFX_SEQUENCE
-    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
-      std::string evt = std::string("cfx_begin:") + act_->strip_tag;
-      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
-    }
-#endif
 
     this->trigger_on_start();
 
@@ -721,6 +715,22 @@ void CFXAddressableLightEffect::start() {
       act_->intro_active = false;
     }
   }
+
+  // CFX-029: cfx_begin HA event fires only when a real intro is playing.
+  // Without an intro, cfx_begin and cfx_start would fire at the same
+  // millisecond and carry identical information, which is confusing.
+  // Bare effects (active_sequence == nullptr) follow the same rule.
+#ifdef USE_CFX_SEQUENCE
+  if (this->effect_id_ != 185 && !act_->strip_tag.empty()
+      && act_->active_intro_mode != INTRO_NONE) {
+    if (act_->active_sequence == nullptr) {
+      // Bare effect path: fire cfx_begin directly.
+      std::string evt = std::string("cfx_begin:") + act_->strip_tag;
+      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+    }
+    // Sequence path: report_event_begin() fires cfx_begin when intro_.has_value().
+  }
+#endif
 
 
 }
