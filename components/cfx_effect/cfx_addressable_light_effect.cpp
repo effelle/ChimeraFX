@@ -2087,11 +2087,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
                         if (seg_c->get_light() != seg_state) {
                             ESP_LOGW("chimera_fx", "Segment %zu: FALLBACK! seg_c is %p (Target %p), but expected %p", i, seg_c, seg_c->get_light(), seg_state);
-                        } else {
-                            ESP_LOGD("chimera_fx", "Segment %zu: Mirror Polled -> %d", i, r_mirror);
                         }
-                    } else {
-                        ESP_LOGD("chimera_fx", "Segment %zu: CFXControl::find FAILED entirely for light %p!", i, seg_state);
                     }
                 }
             }
@@ -2102,7 +2098,6 @@ void CFXAddressableLightEffect::run_controls_() {
             r->setMirror(r_mirror);
           }
         } else {
-          ESP_LOGD("chimera_fx", "Virtual/Single-Segment: Pulling Mirror -> %d (c=%p)", current_mirror, c);
           act_->runner->setSpeed(current_speed);
           act_->runner->setIntensity(current_intensity);
           act_->runner->setPalette(current_palette);
