@@ -274,8 +274,8 @@ public:
   // Per-instance milestone tracking — replaces CFXEventManager singleton state.
   // Each effect instance tracks its own progress so concurrent strips are
   // fully independent. (multi-strip fix)
-  static constexpr uint8_t MILESTONE_STEP = 5;
-  static constexpr uint8_t MAX_MILESTONES = 20;  // 5..100 in steps of 5
+  static constexpr uint8_t MILESTONE_STEP = 25;
+  static constexpr uint8_t MAX_MILESTONES = 4;  // 25..100 in steps of 25
   // No pre-computed string array — there are 100+ effect instances per light
   // so per-instance arrays would exhaust the heap at setup time.
   // Event strings are built on the stack at fire time (snprintf into 48-byte

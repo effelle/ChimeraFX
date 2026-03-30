@@ -196,8 +196,8 @@ protected:
 
   // Per-instance milestone tracking — decoupled from CFXEventManager singleton
   // so concurrent strips each maintain their own counter. (multi-strip fix)
-  static constexpr uint8_t MILESTONE_STEP    = 5;
-  static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
+  static constexpr uint8_t MILESTONE_STEP    = 25;
+  static constexpr uint8_t MAX_MILESTONES    = 4;  // 25..100 in steps of 25
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
   // Strings built on-demand — no pre-computed array, matching the effect side.
