@@ -56,6 +56,20 @@ public:
       if (output == nullptr)
         continue;
 
+      // Type-safety guard: ensure output is actually a CFXLightOutput
+      // before attempting to read segments, otherwise fastled/neopixelbus
+      // lights will cause an invalid static_cast and segfault.
+      bool is_cfx = false;
+      for (auto *cfx_instance : cfx_light::CFXLightOutput::instances) {
+        if (cfx_instance == output) {
+          is_cfx = true;
+          break;
+        }
+      }
+      
+      if (!is_cfx)
+        continue;
+
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
       for (auto *seg_state : cfx_out->get_segment_light_states()) {
         if (seg_state == light) {
