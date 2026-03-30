@@ -425,14 +425,11 @@ void CFXLightOutput::loop() {
     }
   }
 
-  // Segment-driven DMA flush: segments write pixels to the parent buffer and
-  // call request_segment_flush() instead of schedule_show(). We flush here
-  // with write_state(nullptr) which bypasses the Master mute guard below,
-  // ensuring segment pixels reach the hardware without the Master paint.
-  if (this->segment_needs_flush_) {
-    this->segment_needs_flush_ = false;
-    this->write_state(nullptr);
-  }
+  // Segment-driven DMA flush: counter-based approach.
+  // Each segment calls request_segment_flush() via write_state(). Only when
+  // ALL N segments have reported (or 50ms safety timeout), we flush once.
+  // This prevents premature DMA from firing with a partially-rendered frame.
+  // Handled inside request_segment_flush() itself — nothing to do here.
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -478,6 +475,32 @@ void CFXLightOutput::update_state(light::LightState *state) {
 
   this->all() = c;
   this->schedule_show();
+}
+
+// --- Segment Flush: Counter-Based Multi-Segment Synchronization ---
+
+// Each VirtualSegmentLight::write_state() calls this instead of directly
+// firing the DMA. We count how many segments have reported their render done
+// for the current frame. Only when ALL N segments are ready (or a 50ms safety
+// timeout expires for the solid-color / mixed path), we flush once with the
+// complete buffer. This prevents partial-frame DMA which causes random color
+// artifacts on segments with misaligned update_interval_ phases.
+void CFXLightOutput::request_segment_flush() {
+  this->segments_pending_flush_++;
+
+  uint32_t now = esphome::millis();
+  if (this->segment_flush_first_ms_ == 0)
+    this->segment_flush_first_ms_ = now;
+
+  const uint8_t n_segs = (uint8_t)this->segment_light_states_.size();
+  bool all_ready = (this->segments_pending_flush_ >= n_segs);
+  bool timeout   = (now - (uint32_t)this->segment_flush_first_ms_) > 50;
+
+  if (all_ready || (timeout && this->segments_pending_flush_ > 0)) {
+    this->segments_pending_flush_ = 0;
+    this->segment_flush_first_ms_ = 0;
+    this->write_state(nullptr);
+  }
 }
 
 // --- Write State (Fire-and-Forget DMA) ---

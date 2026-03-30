@@ -88,7 +88,9 @@ public:
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
-  void request_segment_flush() { this->segment_needs_flush_ = true; }
+  // Counter-based: fires write_state(nullptr) only when ALL N segments have
+  // reported their render complete, preventing premature DMA on partial frames.
+  void request_segment_flush();
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
@@ -294,7 +296,8 @@ protected:
 
   bool is_syncing_{false};
   bool prev_master_state_{false};
-  bool segment_needs_flush_{false};
+  uint8_t segments_pending_flush_{0};  // counter: incremented by each segment's write_state()
+  uint64_t segment_flush_first_ms_{0}; // timestamp of first segment flush request this cycle
   uint8_t tracked_brightness_{0};
 };
 
