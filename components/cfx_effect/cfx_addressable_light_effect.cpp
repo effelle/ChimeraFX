@@ -2044,6 +2044,8 @@ void CFXAddressableLightEffect::run_controls_() {
           current_mirror = c->get_mirror()->state;
         }
 
+        bool sequence_override_active = (has_seq_speed || has_seq_intensity || has_seq_palette);
+
         // Apply UI/sequence overrides to ALL physical segment runners.
         // segment_runners is only non-empty for master (non-virtual) effects, so
         // virtual segments (single runner, empty segment_runners) use the else branch.
