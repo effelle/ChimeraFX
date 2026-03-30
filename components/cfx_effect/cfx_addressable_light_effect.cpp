@@ -1969,7 +1969,6 @@ void CFXAddressableLightEffect::run_controls_() {
         if (this->local_speed_()) {
           current_speed = (uint8_t)this->local_speed_()->state;
         }
-        act_->runner->setSpeed(current_speed);
 
         // 3. Intensity (standalone mode)
         uint8_t current_intensity =
@@ -1977,7 +1976,6 @@ void CFXAddressableLightEffect::run_controls_() {
         if (this->local_intensity_()) {
           current_intensity = (uint8_t)this->local_intensity_()->state;
         }
-        act_->runner->setIntensity(current_intensity);
 
         // 4. Palette (standalone mode)
         uint8_t current_palette =
@@ -1987,14 +1985,30 @@ void CFXAddressableLightEffect::run_controls_() {
         } else if (this->local_palette_()) {
           current_palette = get_pal_idx(this->local_palette_());
         }
-        act_->runner->setPalette(current_palette);
 
         // 5. Mirror (standalone mode)
         bool current_mirror = false;
         if (this->local_mirror_()) {
           current_mirror = this->local_mirror_()->state;
         }
-        act_->runner->setMirror(current_mirror);
+
+        // Apply to ALL physical segment runners. act_->runner == segment_runners[0],
+        // so iterating only act_->runner silently drops segments 1..N.
+        // segment_runners is ONLY populated for non-virtual master effects, so
+        // virtual segment effects (empty segment_runners) are unaffected.
+        if (!act_->segment_runners.empty()) {
+          for (auto *r : act_->segment_runners) {
+            r->setSpeed(current_speed);
+            r->setIntensity(current_intensity);
+            r->setPalette(current_palette);
+            r->setMirror(current_mirror);
+          }
+        } else {
+          act_->runner->setSpeed(current_speed);
+          act_->runner->setIntensity(current_intensity);
+          act_->runner->setPalette(current_palette);
+          act_->runner->setMirror(current_mirror);
+        }
       } else {
         // Controller present: sequence/cfx_set params take priority over UI sliders.
         // sequence_speed_/intensity_/palette_ are set by cfx_sequence or cfx_set
@@ -2030,18 +2044,17 @@ void CFXAddressableLightEffect::run_controls_() {
           current_mirror = c->get_mirror()->state;
         }
 
-        bool sequence_override_active = (has_seq_speed || has_seq_intensity || has_seq_palette);
-
+        // Apply UI/sequence overrides to ALL physical segment runners.
+        // segment_runners is only non-empty for master (non-virtual) effects, so
+        // virtual segments (single runner, empty segment_runners) use the else branch.
         if (!act_->segment_runners.empty()) {
-          if (sequence_override_active) {
-            for (auto *r : act_->segment_runners) {
-              if (has_seq_speed) r->setSpeed(current_speed);
-              if (has_seq_intensity) r->setIntensity(current_intensity);
-              if (has_seq_palette) r->setPalette(current_palette);
-            }
+          for (auto *r : act_->segment_runners) {
+            // Sequence overrides take priority; fall back to controller UI values.
+            r->setSpeed(current_speed);
+            r->setIntensity(current_intensity);
+            r->setPalette(current_palette);
+            r->setMirror(current_mirror);
           }
-          // Do NOT apply the master's mirror or standard UI properties to segment runners
-          // in standalone mode. They are independently managed via their own CFXControl.
         } else {
           act_->runner->setSpeed(current_speed);
           act_->runner->setIntensity(current_intensity);
