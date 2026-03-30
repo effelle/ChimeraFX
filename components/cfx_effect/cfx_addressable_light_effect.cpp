@@ -2083,6 +2083,14 @@ void CFXAddressableLightEffect::run_controls_() {
                                 r_palette = get_pal_idx(seg_c->get_palette());
                             }
                         }
+
+                        if (seg_c->get_light() != seg_state) {
+                            ESP_LOGW("chimera_fx", "Segment %zu: FALLBACK! seg_c uses Master UI instead of Segment UI!", i);
+                        } else {
+                            ESP_LOGV("chimera_fx", "Segment %zu: Mirror Polled -> %d", i, r_mirror);
+                        }
+                    } else {
+                        ESP_LOGW("chimera_fx", "Segment %zu: CFXControl::find FAILED entirely!", i);
                     }
                 }
             }
