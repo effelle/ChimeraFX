@@ -85,24 +85,18 @@ void CFXEventManager::fire_event(const char *type) {
 }
 
 void CFXEventManager::flush_pending() {
-  // Drain deferred queue with a 10ms time budget per flush_pending() call.
-  // At low speeds one event per call is sufficient.
-  // At high speeds (250+) where loop() runs slower, multiple events drain
-  // per call to keep pace. 10ms cap keeps us within ESPHome's 30ms
-  // component budget. (CFX-026)
-  uint32_t budget_start = millis();
-  while (this->deferred_read_ != this->deferred_write_) {
-    const std::string evt = this->deferred_queue_[this->deferred_read_];
-    this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+  // Drain exactly ONE event per loop() call. Combined with cfx_reach
+  // coalescing in push_deferred(), the queue holds at most ~6 entries
+  // (one per strip) so single-drain keeps pace at 50Hz loop rate while
+  // preventing the API TCP send buffer from overflowing. (CFX-027)
+  if (this->deferred_read_ == this->deferred_write_)
+    return;
 
-    if (this->event_entity_ != nullptr)
-      this->event_entity_->trigger(evt.c_str());
+  const std::string evt = this->deferred_queue_[this->deferred_read_];
+  this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
 
-    if ((millis() - budget_start) >= 10)
-      return; // time budget exhausted, resume next call
-  }
-
-
+  if (this->event_entity_ != nullptr)
+    this->event_entity_->trigger(evt.c_str());
 }
 
 
