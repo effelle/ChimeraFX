@@ -310,7 +310,10 @@ void CFXLightOutput::on_master_update() {
       this->segment_light_states_.empty()) {
     return;
   }
-
+  ESP_LOGI("cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
+    this->is_syncing_,
+    (int)this->master_light_state_->remote_values.is_on(),
+    (int)this->prev_master_state_);
   if (this->is_syncing_)
     return;
   this->is_syncing_ = true; // Lock recursion
@@ -375,6 +378,13 @@ void CFXLightOutput::on_segment_update() {
       break;
     }
   }
+
+  // DBG-SEG
+  ESP_LOGI("cfx_dbg", "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
+    master_on, is_any_segment_on,
+    (int)this->segment_light_states_.size() > 0 ? (int)this->segment_light_states_[0]->remote_values.is_on() : -1,
+    (int)this->segment_light_states_.size() > 1 ? (int)this->segment_light_states_[1]->remote_values.is_on() : -1,
+    (int)this->segment_light_states_.size() > 2 ? (int)this->segment_light_states_[2]->remote_values.is_on() : -1);
 
   if (master_on != is_any_segment_on) {
     // We are commanding the master to change state.
@@ -493,6 +503,9 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // complete buffer. This prevents partial-frame DMA which causes random color
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush() {
+  ESP_LOGI("cfx_dbg", "[request_segment_flush] pending=%d n_segs=%d",
+    this->segments_pending_flush_ + 1,
+    (int)this->segment_light_states_.size());
   // CFX-032: The old counter waited for ALL N segments before flushing.
   // When only one segment changes state the others are idle and never
   // contribute their count, so the DMA was deferred to the 50ms timeout.
@@ -511,6 +524,14 @@ void CFXLightOutput::request_segment_flush() {
   bool timeout   = (now - (uint32_t)this->segment_flush_first_ms_) >= 2;
 
   if (all_ready || timeout) {
+    // DBG-FLUSH
+    ESP_LOGI("cfx_dbg", "[segment_flush] pending=%d n=%d all=%d timeout=%d firing_dma=%d",
+      this->segments_pending_flush_, n_segs, (int)all_ready, (int)timeout);
+    for (size_t di = 0; di < this->segment_light_states_.size(); di++) {
+      auto *ss = this->segment_light_states_[di];
+      ESP_LOGI("cfx_dbg", "  [flush seg[%d]] remote_on=%d current_on=%d",
+        (int)di, (int)ss->remote_values.is_on(), (int)ss->current_values.is_on());
+    }
     this->segments_pending_flush_ = 0;
     this->segment_flush_first_ms_ = 0;
     this->write_state(nullptr);
@@ -541,10 +562,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   } else if (!this->segment_light_states_.empty()) {
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
+      ESP_LOGI("cfx_dbg", "[scrub check] seg[%d] remote_on=%d current_on=%d",
+        (int)i,
+        (int)seg_state->remote_values.is_on(),
+        (int)seg_state->current_values.is_on());
       // CFX-032: scrub on remote_values only; current_values may lag
       // by a frame with 0ms transitions, leaving stale lit pixels.
       if (!seg_state->remote_values.is_on()) {
         const auto &def = this->segment_defs_[i];
+        ESP_LOGI("cfx_dbg", "  [SCRUB] seg[%d] pixels %d-%d", (int)i, def.start, def.stop);
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
             (*this)[p] = esphome::Color::BLACK;
