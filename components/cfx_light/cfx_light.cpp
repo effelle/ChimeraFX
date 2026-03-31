@@ -440,12 +440,11 @@ void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
 
   if (this->has_segments()) {
-    // CFX-032: In segmented mode the master LightState is a logical
-    // aggregator only. Individual segments own their pixel ranges and
-    // pre-scale their colors before writing into the shared buffer.
-    // correction_.set_local_brightness() must stay at 255 so that the
-    // master being OFF does not zero-gate ALL segment pixels via the
-    // shared correction_ object referenced by every ESPColorView.
+    // CFX-032: correction_ is shared by every segment's ESPColorView.
+    // Never derive it from master current_values: the master may be OFF
+    // (get_state()==0) the frame a segment first turns ON, zero-gating
+    // all pixels. Hold gate at 255; each segment's update_state() bakes
+    // its own brightness into pixel values via set_local_brightness.
     this->correction_.set_local_brightness(255);
     this->tracked_brightness_ = 255;
     return;

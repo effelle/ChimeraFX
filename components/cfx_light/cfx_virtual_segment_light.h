@@ -62,58 +62,51 @@ public:
   // it takes full ownership of brightness and pixels. Creating a Transformer
   // here would corrupt the pixels (flashes/spikes).
   void update_state(light::LightState *state) override {
-    // Suppress during outro or when master CFX effect owns pixels.
-    if (parent_->has_outro()) return;
+    if (parent_->has_outro())
+      return;
+
     if (parent_->get_master_light_state() != nullptr &&
-        parent_->get_master_light_state()->get_effect_name() != "None") return;
-    if (this->is_effect_active()) return;
-    // Only service the transformer-driven fade (transition_length > 0).
-    // Solid-color ON/OFF is handled in write_state instead. (CFX-032)
-    if (!state->is_transformer_active()) return;
-    // Fade: paint the interpolated mid-transition color.
-    // parent_->correction_ is held at 255 in segmented mode, so brightness
-    // must be baked into color channel values directly.
+        parent_->get_master_light_state()->get_effect_name() != "None") {
+      return;
+    }
+
     auto val = state->current_values;
+
+    if (this->is_effect_active())
+      return;
+
+    // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
+    // AddressableLightTransformer handle the per-pixel fade natively.
+    if (state->is_transformer_active()) {
+      return;
+    }
+
+    // CFX-032: parent_->correction_ is held at 255 in segmented mode so
+    // that the master being OFF cannot zero-gate segment pixels. Bake
+    // brightness directly into the color channel values instead.
     float bri = val.get_brightness() * val.get_state();
     Color c = light::color_from_light_color_values(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
+
+    // BUG 13 FIX: Apply force_white to solid segment colors
     if (parent_->get_force_white_switch() != nullptr &&
         parent_->get_force_white_switch()->state &&
         parent_->has_white_channel()) {
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
+
     this->all() = c;
     this->schedule_show();
   }
 
   void write_state(light::LightState *state) override {
-    if (parent_->has_outro()) return;
-    // CFX-032: Solid-color path. Use remote_values (the commanded target)
-    // so the correct color and brightness are set even on the first frame
-    // of a 0ms transition. parent_->correction_ is held at 255 in segmented
-    // mode, so brightness is baked into color channel values directly.
-    // Skip when an effect or master CFX effect owns the pixels.
-    if (state != nullptr &&
-        !this->is_effect_active() &&
-        (parent_->get_master_light_state() == nullptr ||
-         parent_->get_master_light_state()->get_effect_name() == "None")) {
-      auto val = state->remote_values;
-      float bri = val.get_brightness() * val.get_state();
-      Color c = light::color_from_light_color_values(val);
-      c.r = (uint8_t)(c.r * bri);
-      c.g = (uint8_t)(c.g * bri);
-      c.b = (uint8_t)(c.b * bri);
-      c.w = (uint8_t)(c.w * bri);
-      if (parent_->get_force_white_switch() != nullptr &&
-          parent_->get_force_white_switch()->state &&
-          parent_->has_white_channel()) {
-        cfx::apply_force_white(c.r, c.g, c.b, c.w);
-      }
-      this->all() = c;
-    }
+    // Delegate DMA to parent via the segment-flush path.
+    // Suppress flush while parent has an outro in progress.
+    if (parent_->has_outro())
+      return;
     parent_->request_segment_flush();
   }
 
