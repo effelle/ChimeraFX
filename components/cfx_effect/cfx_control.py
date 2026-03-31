@@ -94,7 +94,7 @@ async def to_code(config):
                 # Add segments
                 if "segments" in lconf:
                     for seg in lconf["segments"]:
-                        seg_light_id = seg.get("light_id")
+                        seg_light_id = seg.get("id")
                         seg_name = str(seg.get(CONF_NAME, f"{master_name} Segment"))
                         if seg_light_id:
                             seg_state = await cg.get_variable(seg_light_id)
@@ -289,7 +289,7 @@ async def to_code(config):
                 CONF_ICON: "mdi:bug",
                 "optimistic": True,
                 CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
-                CONF_ENTITY_CATEGORY: cg.RawExpression("EntityCategory::ENTITY_CATEGORY_DIAGNOSTIC"),
+                CONF_ENTITY_CATEGORY: "diagnostic",
             }
             debug = cg.new_Pvariable(conf[CONF_ID])
             await switch.register_switch(debug, conf)

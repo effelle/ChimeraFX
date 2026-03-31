@@ -47,6 +47,14 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_palette(this->palette_.value());
         inst->set_runner_owns_palette(true);
       }
+      if (this->mirror_.has_value())
+        inst->set_mirror_preset(this->mirror_.value());
+      if (this->intro_.has_value())
+        inst->set_intro_preset(this->intro_.value());
+      if (this->outro_.has_value())
+        inst->set_outro_preset(this->outro_.value());
+      if (this->inout_duration_.has_value())
+        inst->set_inout_duration_preset(this->inout_duration_.value());
     }
   }
 
@@ -77,24 +85,35 @@ void CFXEventManager::fire_event(const char *type) {
 }
 
 void CFXEventManager::flush_pending() {
-  // Drain deferred queue with a 10ms time budget per flush_pending() call.
-  // At low speeds one event per call is sufficient.
-  // At high speeds (250+) where loop() runs slower, multiple events drain
-  // per call to keep pace. 10ms cap keeps us within ESPHome's 30ms
-  // component budget. (CFX-026)
-  uint32_t budget_start = millis();
-  while (this->deferred_read_ != this->deferred_write_) {
-    const std::string evt = this->deferred_queue_[this->deferred_read_];
-    this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+  // Drain exactly ONE event per loop() call. Combined with cfx_reach
+  // coalescing in push_deferred(), the queue holds at most ~6 entries
+  // (one per strip) so single-drain keeps pace at 50Hz loop rate while
+  // preventing the API TCP send buffer from overflowing. (CFX-027)
+  if (this->deferred_read_ == this->deferred_write_)
+    return;
 
-    if (this->event_entity_ != nullptr)
-      this->event_entity_->trigger(evt.c_str());
+  const std::string evt = this->deferred_queue_[this->deferred_read_];
+  this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
 
-    if ((millis() - budget_start) >= 10)
-      return; // time budget exhausted, resume next call
+  // CFX-028: route to the per-strip entity whose tag appears in the event
+  // string.  All CFX event strings have the form "<verb>:<tag>[:<extra>]",
+  // so the tag sits between the first and second colon.
+  esphome::event::Event *target = this->event_entity_;  // fallback
+  if (!this->strip_entities_.empty()) {
+    size_t colon1 = evt.find(':');
+    if (colon1 != std::string::npos) {
+      size_t colon2 = evt.find(':', colon1 + 1);
+      std::string tag = (colon2 != std::string::npos)
+                            ? evt.substr(colon1 + 1, colon2 - colon1 - 1)
+                            : evt.substr(colon1 + 1);
+      auto it = this->strip_entities_.find(tag);
+      if (it != this->strip_entities_.end())
+        target = it->second;
+    }
   }
 
-
+  if (target != nullptr)
+    target->trigger(evt.c_str());
 }
 
 
@@ -286,6 +305,14 @@ void CFXSequence::start() {
         inst->set_active_sequence(this, this->speed_, this->intensity_,
                                   this->palette_, this->iterations_);
         inst->set_strip_tag(this->strip_tag_);
+        if (this->mirror_.has_value())
+          inst->set_mirror_preset(this->mirror_.value());
+        if (this->intro_.has_value())
+          inst->set_intro_preset(this->intro_.value());
+        if (this->outro_.has_value())
+          inst->set_outro_preset(this->outro_.value());
+        if (this->inout_duration_.has_value())
+          inst->set_inout_duration_preset(this->inout_duration_.value());
         bound = true;
         // Do not break! Match other lights as well.
       }
@@ -296,26 +323,50 @@ void CFXSequence::start() {
   // and the effect it actually binds to, so misconfigured sequences are
   // immediately visible in the serial log.
   if (!bound && !chimera_fx::CFXAddressableLightEffect::all_effects.empty()) {
+    // CFX-030: only fall back to master_fx if its activation context is live.
+    // all_effects[0] may have act_==nullptr when the light is off or removed;
+    // calling set_active_sequence on it would dereference null and brownout.
     auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
-    // Build a comma-separated list of target light names for the warning
-    std::string target_names;
-    for (auto *l : this->lights_) {
-      if (!target_names.empty()) target_names += ", ";
-      target_names += l->get_name();
+    if (master_fx->get_act() == nullptr) {
+      std::string target_names;
+      for (auto *l : this->lights_) {
+        if (!target_names.empty()) target_names += ", ";
+        target_names += l->get_name();
+      }
+      ESP_LOGW(TAG,
+               "Sequence '%s': target light(s) [%s] have no running CFX effect "
+               "and fallback effect is also not running. Sequence aborted. "
+               "Ensure the light is on and a CFX effect is active before triggering.",
+               this->name_.c_str(), target_names.c_str());
+    } else {
+      // Build a comma-separated list of target light names for the warning
+      std::string target_names;
+      for (auto *l : this->lights_) {
+        if (!target_names.empty()) target_names += ", ";
+        target_names += l->get_name();
+      }
+      ESP_LOGW(TAG,
+               "Sequence '%s': no active CFX effect found for target light(s) [%s]. "
+               "Falling back to first registered effect %p. "
+               "Check that the correct CFX effect is active.",
+               this->name_.c_str(), target_names.c_str(), master_fx);
+      master_fx->set_active_sequence(this, this->speed_, this->intensity_,
+                                     this->palette_, this->iterations_);
+      master_fx->set_strip_tag(this->strip_tag_);
+      if (this->mirror_.has_value())
+        master_fx->set_mirror_preset(this->mirror_.value());
+      if (this->intro_.has_value())
+        master_fx->set_intro_preset(this->intro_.value());
+      if (this->outro_.has_value())
+        master_fx->set_outro_preset(this->outro_.value());
+      if (this->inout_duration_.has_value())
+        master_fx->set_inout_duration_preset(this->inout_duration_.value());
+      bound = true;
     }
-    ESP_LOGW(TAG,
-             "Sequence '%s': no active CFX effect found for target light(s) [%s]. "
-             "Falling back to first registered effect %p — animation may target "
-             "the wrong strip. Check that the correct CFX effect is active.",
-             this->name_.c_str(), target_names.c_str(), master_fx);
-    master_fx->set_active_sequence(this, this->speed_, this->intensity_,
-                                   this->palette_, this->iterations_);
-    master_fx->set_strip_tag(this->strip_tag_);
-    bound = true;
   }
 
   if (!bound) {
-    ESP_LOGW(TAG, "  FAILED to bind — no CFXAddressableLightEffect found");
+    ESP_LOGW(TAG, "  FAILED to bind: no running CFX effect found");
   }
 
   this->last_triggered_percentage_ = -1.0f;
@@ -546,10 +597,15 @@ void CFXSequence::report_event_start() {
 
 void CFXSequence::report_event_begin() {
   ESP_LOGD(TAG, "Sequence '%s': on_begin triggers firing", this->id_.c_str());
+  // on_cfx_begin YAML trigger always fires (on-device automation).
   for (auto *t : this->on_begin_triggers_) {
     t->trigger();
   }
-  if (!this->strip_tag_.empty()) {
+  // CFX-029: HA cfx_begin event only fires when the sequence has a real
+  // intro configured (intro_ != 0). Without an intro, cfx_begin and
+  // cfx_start fire at the same millisecond and are redundant.
+  if (!this->strip_tag_.empty()
+      && this->intro_.has_value() && this->intro_.value() != 0) {
     std::string evt = std::string("cfx_begin:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
   }

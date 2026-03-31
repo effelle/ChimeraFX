@@ -45,6 +45,8 @@ static uint32_t rmt_resolution_hz() {
   return freq;
 }
 
+// --- Core Control Loop & Initialization ---
+
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
 // ESP32 has a small FD pool (~5 sockets under default ESP-IDF config). Without
 // this, each OTA cycle or component teardown leaks one FD, eventually causing
@@ -309,6 +311,10 @@ void CFXLightOutput::on_master_update() {
     return;
   }
 
+  ESP_LOGI("cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
+    this->is_syncing_,
+    (int)this->master_light_state_->remote_values.is_on(),
+    (int)this->prev_master_state_);
   if (this->is_syncing_)
     return;
   this->is_syncing_ = true; // Lock recursion
@@ -374,6 +380,11 @@ void CFXLightOutput::on_segment_update() {
     }
   }
 
+  ESP_LOGI("cfx_dbg", "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
+    master_on, is_any_segment_on,
+    (int)this->segment_light_states_.size() > 0 ? (int)this->segment_light_states_[0]->remote_values.is_on() : -1,
+    (int)this->segment_light_states_.size() > 1 ? (int)this->segment_light_states_[1]->remote_values.is_on() : -1,
+    (int)this->segment_light_states_.size() > 2 ? (int)this->segment_light_states_[2]->remote_values.is_on() : -1);
   if (master_on != is_any_segment_on) {
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master
@@ -425,20 +436,28 @@ void CFXLightOutput::loop() {
     }
   }
 
-  // Segment-driven DMA flush: segments write pixels to the parent buffer and
-  // call request_segment_flush() instead of schedule_show(). We flush here
-  // with write_state(nullptr) which bypasses the Master mute guard below,
-  // ensuring segment pixels reach the hardware without the Master paint.
-  if (this->segment_needs_flush_) {
-    this->segment_needs_flush_ = false;
-    this->write_state(nullptr);
-  }
+  // Segment-driven DMA flush: counter-based approach.
+  // Each segment calls request_segment_flush() via write_state(). Only when
+  // ALL N segments have reported (or 50ms safety timeout), we flush once.
+  // This prevents premature DMA from firing with a partially-rendered frame.
+  // Handled inside request_segment_flush() itself — nothing to do here.
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
 
 void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
+
+  if (this->has_segments()) {
+    // CFX-032: correction_ is shared by every segment's ESPColorView.
+    // Never derive it from master current_values: the master may be OFF
+    // (get_state()==0) the frame a segment first turns ON, zero-gating
+    // all pixels. Hold gate at 255; each segment's update_state() bakes
+    // its own brightness into pixel values via color channel scaling.
+    this->correction_.set_local_brightness(255);
+    this->tracked_brightness_ = 255;
+    return;
+  }
 
   // ALWAYS update the hardware brightness gate. If we don't, and an effect
   // starts while the light is OFF, the gate stays at 0 and the strip stays
@@ -447,12 +466,6 @@ void CFXLightOutput::update_state(light::LightState *state) {
       light::to_uint8_scale(val.get_brightness() * val.get_state());
   this->tracked_brightness_ = max_brightness;
   this->correction_.set_local_brightness(max_brightness);
-
-  if (this->has_segments()) {
-    // Segmented mode: Master LightState is muted.
-    // Individual segments handle their own update_state().
-    return;
-  }
 
   if (this->is_effect_active()) {
     // Effect handles its own pixel math in apply().
@@ -480,6 +493,27 @@ void CFXLightOutput::update_state(light::LightState *state) {
   this->schedule_show();
 }
 
+// --- Segment Flush: Counter-Based Multi-Segment Synchronization ---
+
+// Each VirtualSegmentLight::write_state() calls this instead of directly
+// firing the DMA. We count how many segments have reported their render done
+// for the current frame. Only when ALL N segments are ready (or a 50ms safety
+// timeout expires for the solid-color / mixed path), we flush once with the
+// complete buffer. This prevents partial-frame DMA which causes random color
+// artifacts on segments with misaligned update_interval_ phases.
+void CFXLightOutput::request_segment_flush() {
+  // CFX-032: Flush immediately on every call. The counter/timeout approach
+  // was broken because ESPHome's AddressableLight::loop() calls write_state()
+  // every frame as a background tick, pre-incrementing the counter before
+  // any real state change. This made the count unpredictable. The timeout
+  // also never fired for single-segment changes because it only re-evaluated
+  // inside this function, not in loop(). Flushing immediately is safe:
+  // the scrub in write_state(nullptr) ensures OFF segments are blacked out,
+  // and multiple DMA calls per frame for solid color are harmless.
+  ESP_LOGI("cfx_dbg", "[request_segment_flush] -> immediate DMA");
+  this->write_state(nullptr);
+}
+
 // --- Write State (Fire-and-Forget DMA) ---
 
 void CFXLightOutput::write_state(light::LightState *state) {
@@ -504,8 +538,10 @@ void CFXLightOutput::write_state(light::LightState *state) {
   } else if (!this->segment_light_states_.empty()) {
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (!seg_state->remote_values.is_on() &&
-          !seg_state->current_values.is_on()) {
+      // CFX-032: scrub on remote_values only; current_values may lag
+      // by a frame with 0ms transitions, leaving stale lit pixels.
+      if (!seg_state->remote_values.is_on()) {
+        ESP_LOGI("cfx_dbg", "  [SCRUB] seg[%d] pixels %d-%d", (int)i, this->segment_defs_[i].start, this->segment_defs_[i].stop);
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {

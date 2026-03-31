@@ -38,18 +38,21 @@ public:
 
 class CFXControl : public Component {
 public:
-  static std::vector<CFXControl *> instances;
+  static std::vector<CFXControl *> &get_instances() {
+    static std::vector<CFXControl *> inst;
+    return inst;
+  }
   static bool global_debug_enabled_;
 
   static CFXControl *find(light::LightState *light) {
     // 1. Direct master match
-    for (auto *c : instances) {
+    for (auto *c : get_instances()) {
       if (c->get_light() == light)
         return c;
     }
 
     // 2. Segment match fallback: iterate masters and check segment configs
-    for (auto *c : instances) {
+    for (auto *c : get_instances()) {
       if (c->get_light() == nullptr)
         continue;
       auto *output = c->get_light()->get_output();
@@ -59,20 +62,21 @@ public:
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
       for (auto *seg_state : cfx_out->get_segment_light_states()) {
         if (seg_state == light) {
+          ESP_LOGD("chimera_fx", "CFXControl::find: FALLBACK MATCH for light %p -> Returning Master Controller %p", light, c);
           return c;
         }
       }
     }
     ESP_LOGD("chimera_fx",
              "CFXControl::find failed for light %p. Instances: %zu", light,
-             instances.size());
-    for (auto *c : instances) {
+             get_instances().size());
+    for (auto *c : get_instances()) {
       ESP_LOGD("chimera_fx", "  Instance %p light: %p", c, c->get_light());
     }
     return nullptr;
   }
 
-  CFXControl() { instances.push_back(this); }
+  CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
     if (this->speed_) {
@@ -103,7 +107,7 @@ public:
         ESP_LOGD("chimera_fx",
                  "Debug switch toggled: %d. Applying to all instances.", value);
         global_debug_enabled_ = value;
-        for (auto *c : instances) {
+        for (auto *c : get_instances()) {
           for (auto *r : c->runners_)
             r->setDebug(value);
         }

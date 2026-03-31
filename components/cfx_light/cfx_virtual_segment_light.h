@@ -75,19 +75,21 @@ public:
     if (this->is_effect_active())
       return;
 
-    // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
-    // AddressableLightTransformer handle the per-pixel fade natively.
-    if (state->is_transformer_active()) {
+    // CFX-032: correction_ is held at 255; bake brightness into channels.
+    // For a real fade (bri > 0 and transformer active), let ESPHome drive
+    // the pixels. Always fall through when bri==0 so turning OFF paints
+    // black even if a 0ms transformer exists on that frame.
+    float bri = val.get_brightness() * val.get_state();
+    if (state->is_transformer_active() && bri > 0.0f)
       return;
-    }
-
-    // We are NOT in a transition. Apply the manual brightness correction.
-    auto max_brightness =
-        light::to_uint8_scale(val.get_brightness() * val.get_state());
-    this->correction_.set_local_brightness(max_brightness);
-
-    // Solid Color for segments
     Color c = light::color_from_light_color_values(val);
+    c.r = (uint8_t)(c.r * bri);
+    c.g = (uint8_t)(c.g * bri);
+    c.b = (uint8_t)(c.b * bri);
+    c.w = (uint8_t)(c.w * bri);
+    ESP_LOGI("cfx_dbg", "[SEG update_state] '%s' bri=%.2f c=(%d,%d,%d,%d) remote_on=%d transformer=%d",
+      seg_id_.c_str(), bri, c.r, c.g, c.b, c.w,
+      (int)state->remote_values.is_on(), (int)state->is_transformer_active());
 
     // BUG 13 FIX: Apply force_white to solid segment colors
     if (parent_->get_force_white_switch() != nullptr &&
@@ -97,7 +99,10 @@ public:
     }
 
     this->all() = c;
-    this->schedule_show();
+    // Do NOT call schedule_show() here. ESPHome will call write_state()
+    // as part of its normal output pipeline. Calling schedule_show() causes
+    // write_state to fire twice per update, making pending=2 instead of 1
+    // and breaking the flush counter logic. (CFX-032)
   }
 
   void write_state(light::LightState *state) override {
@@ -105,6 +110,9 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
+    ESP_LOGI("cfx_dbg", "[SEG write_state] '%s' remote_on=%d",
+      seg_id_.c_str(),
+      (state != nullptr) ? (int)state->remote_values.is_on() : -1);
     parent_->request_segment_flush();
   }
 

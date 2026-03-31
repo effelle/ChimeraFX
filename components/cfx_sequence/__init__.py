@@ -42,6 +42,10 @@ CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
 CONF_SET_BRIGHTNESS = "set_brightness"
+CONF_SET_MIRROR = "set_mirror"
+CONF_SET_INTRO = "set_intro"
+CONF_SET_OUTRO = "set_outro"
+CONF_SET_INOUT_DURATION = "set_inout_dur"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_DURATION = "duration"
@@ -65,6 +69,10 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
+        cv.Optional(CONF_SET_MIRROR): cv.boolean,
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=24),
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),
+        cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
@@ -160,11 +168,8 @@ async def to_code(config):
     except Exception:
         pass  # Non-fatal if api: block not present
 
-    # Create global event entity for all sequences (one per device). (CFX-023/024)
+    # One event entity per strip — see CFX-028 note below for why.
     import esphome.core as core
-    event_id = core.ID("cfx_global_events", is_declaration=True, type=event.Event)
-    event_var = cg.new_Pvariable(event_id)
-    core.CORE.component_ids.add("cfx_global_events")
 
     # Build light yaml_id -> slugified_name map so strip tags match
     # get_object_id() at runtime. (CFX-024)
@@ -222,32 +227,68 @@ async def to_code(config):
     except Exception as ex:
         _LOGGER.debug("CFX: CORE.config walk failed: %s", ex)
 
-    # Build event_types list — pre-registers all valid strings in HA UI. (CFX-024)
-    progress_step = 5
-    # All events are tagged with the strip name — no bare forms. (CFX-026)
-    # Tagged events allow per-strip automation targeting for multi-strip setups.
-    event_types = []
-    for tag in seen_tags:
-        event_types.append(f"cfx_start:{tag}")
-        event_types.append(f"cfx_begin:{tag}")
-        event_types.append(f"cfx_stop:{tag}")
-        event_types.append(f"cfx_complete:{tag}")
+    # CFX-028: Per-strip event entities.
+    #
+    # The old design registered ONE global "CFX Events" entity whose
+    # ListEntitiesEventResponse packet contained every event string for
+    # every strip (4 lifecycle × N strips  +  20 reach milestones × N strips).
+    # That packet exceeds the ESP32 API TCP send buffer for any non-trivial
+    # setup, causing "Message too large to send: type=108" and the entity
+    # never appearing in HA.
+    #
+    # Fix: create one event entity per strip.  Each registration packet only
+    # carries strings for that single strip — 4 lifecycle + 20 reach = 24
+    # strings — well within the buffer limit regardless of strip count.
+    # HA sees entities named "CFX Events: <strip>" (e.g.
+    # "CFX Events: led_strip1"), preserving full autocomplete for every
+    # milestone value in the automation editor exactly as before.
+    #
+    # The C++ side is unchanged: CFXEventManager fires into whichever
+    # event entity each CFXSequence instance was bound to at setup.
+    # Sequences are bound to their strip's entity via CFXEventManager.strip_entities_ (CFX-028)
+    # in the per-sequence codegen block further below.
 
+    progress_step = 5
     milestones = list(range(progress_step, 101, progress_step))
     if 100 not in milestones:
         milestones.append(100)
-    for tag in seen_tags:
-        for m in milestones:
-            event_types.append(f"cfx_reach:{tag}:{m}")
 
-    event_conf = {
-        "id": event_id,
-        "name": "CFX Events",
-        "icon": "mdi:animation-play",
-        "disabled_by_default": False,
-        "internal": False,
-    }
-    await event.register_event(event_var, event_conf, event_types=event_types)
+    # tag -> event_var  (populated below, consumed in the per-sequence loop)
+    strip_event_vars: dict = {}
+
+    for tag in seen_tags:
+        safe_id = re.sub(r'[^a-z0-9_]', '_', tag)
+        eid = core.ID(
+            f"cfx_events_{safe_id}",
+            is_declaration=True,
+            type=event.Event,
+        )
+        evar = cg.new_Pvariable(eid)
+        core.CORE.component_ids.add(f"cfx_events_{safe_id}")
+        strip_event_vars[tag] = evar
+
+        event_types = (
+            [f"cfx_start:{tag}", f"cfx_begin:{tag}",
+             f"cfx_stop:{tag}",  f"cfx_complete:{tag}"]
+            + [f"cfx_reach:{tag}:{m}" for m in milestones]
+        )
+        econf = {
+            "id": eid,
+            "name": f"CFX Events: {tag}",
+            "icon": "mdi:animation-play",
+            "disabled_by_default": False,
+            "internal": False,
+        }
+        await event.register_event(evar, econf, event_types=event_types)
+        # Register this strip's entity in CFXEventManager's dispatch table.
+        cg.add(cg.RawExpression(
+            f'cfx_sequence::CFXEventManager::get().register_strip_entity'
+            f'("{tag}", {evar})'
+        ))
+
+    # Backward-compat alias: code below that references event_var falls back to
+    # the first strip's entity when there is only one strip (common case).
+    event_var = next(iter(strip_event_vars.values())) if strip_event_vars else None
 
 
     # 2. Progress Sensor
@@ -292,9 +333,18 @@ async def to_code(config):
         var = cg.new_Pvariable(seq_conf[CONF_ID], seq_conf[CONF_ID].id, seq_conf[CONF_NAME], seq_conf[CONF_EFFECT], seq_conf[CONF_RESTORE])
         # Note: We do NOT await cg.register_component(var, seq_conf) to avoid Circular Dependency on IDs
 
-        # Bind the global event entity to this sequence
-        if event_var:
-            cg.add(var.set_event_entity(event_var))
+        # Bind this sequence to its strip's dedicated event entity (CFX-028).
+        lights_list = seq_conf.get(CONF_LIGHTS, [])
+        if lights_list:
+            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
+            cg.add(var.set_strip_tag(strip_tag))
+            seq_event_var = strip_event_vars.get(strip_tag, event_var)
+        else:
+            strip_tag = None
+            seq_event_var = event_var
+
+        # CFX-028: routing is handled by CFXEventManager.strip_entities_ map;
+        # set_event_entity() on individual sequences is no longer needed.
 
         if CONF_SET_SPEED in seq_conf:
             cg.add(var.set_speed(seq_conf[CONF_SET_SPEED]))
@@ -304,16 +354,20 @@ async def to_code(config):
             cg.add(var.set_palette(seq_conf[CONF_SET_PALETTE]))
         if CONF_SET_BRIGHTNESS in seq_conf:
             cg.add(var.set_brightness(seq_conf[CONF_SET_BRIGHTNESS]))
+        if CONF_SET_MIRROR in seq_conf:
+            cg.add(var.set_mirror(seq_conf[CONF_SET_MIRROR]))
+        if CONF_SET_INTRO in seq_conf:
+            cg.add(var.set_intro(seq_conf[CONF_SET_INTRO]))
+        if CONF_SET_OUTRO in seq_conf:
+            cg.add(var.set_outro(seq_conf[CONF_SET_OUTRO]))
+        if CONF_SET_INOUT_DURATION in seq_conf:
+            cg.add(var.set_inout_duration(seq_conf[CONF_SET_INOUT_DURATION]))
         if CONF_ITERATIONS in seq_conf:
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
         if CONF_DURATION in seq_conf:
             cg.add(var.set_duration_ms(seq_conf[CONF_DURATION]))  # CFX-018: method is set_duration_ms()
 
-        # CFX-024: strip identity tag = slugify(light.name), matching get_object_id() at runtime.
-        lights_list = seq_conf.get(CONF_LIGHTS, [])
-        if lights_list:
-            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
-            cg.add(var.set_strip_tag(strip_tag))
+
 
 
         # Register target lights
@@ -372,9 +426,8 @@ async def to_code(config):
         await select.register_select(sel_var, sel_conf, options=seq_options)
         await cg.register_component(sel_var, sel_conf)
         cg.add(sel_var.publish_state("None"))
-        # Wire global entities into CFXSequenceSelect (which drives CFXEventManager)
-        if event_var:
-            cg.add(sel_var.set_event_entity(event_var))
+        # CFX-028: CFXEventManager.strip_entities_ map handles routing;
+        # no single event_entity pointer needed on the select.
         # CFX-026: HA events opt-in — read flag set by cfx_control ID 6.
         # Defaults to True when cfx_control is not used.
         import esphome.core as _core_seq
@@ -427,33 +480,33 @@ async def to_code(config):
         except Exception:
             pass  # Non-fatal: service handler is advisory only
 
+def _sequence_action_schema(value):
+    """Accept both shorthand string and dict form:
+      cfx_sequence.start: my_id
+      cfx_sequence.start:
+        id: my_id
+    """
+    if isinstance(value, str):
+        value = {CONF_ID: value}
+    return cv.Schema({cv.Required(CONF_ID): cv.string})(value)
+
 @automation.register_action(
     "cfx_sequence.start",
     StartAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.string,
-        }
-    ),
+    _sequence_action_schema,
     synchronous=True,
 )
 async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
-    # Pass the raw target ID string directly to break the codegen dependency graph
     return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
 
 
 @automation.register_action(
     "cfx_sequence.stop",
     StopAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.string,
-        }
-    ),
+    _sequence_action_schema,
     synchronous=True,
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
-    # Pass the raw target ID string directly to break the codegen dependency graph
     return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
 
 
@@ -468,6 +521,10 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
             cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
             cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
             cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
+            cv.Optional(CONF_SET_MIRROR):            cv.boolean,
+            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
         }
     ),
     synchronous=True,
@@ -484,6 +541,14 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
         cg.add(var.set_intensity(config[CONF_SET_INTENSITY]))
     if CONF_SET_PALETTE in config:
         cg.add(var.set_palette(config[CONF_SET_PALETTE]))
+    if CONF_SET_MIRROR in config:
+        cg.add(var.set_mirror(config[CONF_SET_MIRROR]))
+    if CONF_SET_INTRO in config:
+        cg.add(var.set_intro(config[CONF_SET_INTRO]))
+    if CONF_SET_OUTRO in config:
+        cg.add(var.set_outro(config[CONF_SET_OUTRO]))
+    if CONF_SET_INOUT_DURATION in config:
+        cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
     return var

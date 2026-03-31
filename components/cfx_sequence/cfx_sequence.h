@@ -16,6 +16,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <map>
 #include <set>
 #include <string>
 
@@ -39,6 +40,17 @@ protected:
 class CFXEventManager {
 public:
   static CFXEventManager &get();
+  // CFX-028: register a dedicated HA event entity for one strip tag.
+  // Called from generated code once per strip at setup time.
+  void register_strip_entity(const std::string &tag, esphome::event::Event *e) {
+    this->strip_entities_[tag] = e;
+    // Keep event_entity_ pointing at the first registered strip so any
+    // legacy call sites that still use it get a valid (non-null) pointer.
+    if (this->event_entity_ == nullptr)
+      this->event_entity_ = e;
+  }
+  // Legacy single-entity setter — kept for backward compat; maps to the
+  // "no tag" fallback slot used when a strip tag cannot be resolved.
   void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
 
   // HA event delivery opt-in. When false, fire_event() is a no-op for all
@@ -55,7 +67,30 @@ public:
 
   // Push one event string onto the deferred queue (called from render loop).
   // Zero blocking — just a ring buffer write. (CFX-025)
+  // Coalescing: cfx_reach events for the same strip replace any pending entry
+  // instead of appending, preventing API buffer overflow with 4+ strips. (CFX-027)
   void push_deferred(const std::string &evt) {
+    // cfx_reach coalescing: extract "cfx_reach:<tag>:" prefix and scan for a
+    // pending entry with the same prefix. If found, overwrite it in-place
+    // so HA only sees the latest position per strip per flush cycle.
+    static constexpr const char REACH_PREFIX[] = "cfx_reach:";
+    static constexpr size_t REACH_PREFIX_LEN = sizeof(REACH_PREFIX) - 1;
+    if (evt.compare(0, REACH_PREFIX_LEN, REACH_PREFIX) == 0) {
+      // Find the second colon (after "cfx_reach:<tag>:")
+      size_t tag_end = evt.find(':', REACH_PREFIX_LEN);
+      if (tag_end != std::string::npos) {
+        // Scan pending entries for a matching cfx_reach:<tag>: prefix
+        for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
+             i = (i + 1) % DEFERRED_QUEUE_SIZE) {
+          if (this->deferred_queue_[i].compare(0, tag_end + 1, evt, 0, tag_end + 1) == 0) {
+            // Same strip — overwrite with latest percentage
+            this->deferred_queue_[i] = evt;
+            return;
+          }
+        }
+      }
+    }
+
     uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
     if (next == this->deferred_read_) {
       ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
@@ -67,7 +102,8 @@ public:
 
 protected:
   CFXEventManager() = default;
-  esphome::event::Event *event_entity_{nullptr};
+  esphome::event::Event *event_entity_{nullptr};  // fallback / first-strip alias
+  std::map<std::string, esphome::event::Event *> strip_entities_;  // CFX-028
   bool ha_events_enabled_{true};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;
@@ -99,6 +135,10 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
   void set_brightness(float brightness) { this->brightness_ = brightness; }
+  void set_mirror(bool mirror) { this->mirror_ = mirror; }
+  void set_intro(uint8_t intro) { this->intro_ = intro; }
+  void set_outro(uint8_t outro) { this->outro_ = outro; }
+  void set_inout_duration(float dur) { this->inout_duration_ = dur; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
@@ -167,6 +207,10 @@ protected:
   esphome::optional<uint8_t> intensity_;
   esphome::optional<uint8_t> palette_;
   esphome::optional<float> brightness_;
+  esphome::optional<bool>    mirror_;
+  esphome::optional<uint8_t> intro_;
+  esphome::optional<uint8_t> outro_;
+  esphome::optional<float>   inout_duration_;
   uint32_t iterations_{0};
   bool restore_state_{true};
   uint32_t duration_ms_{0};
@@ -197,6 +241,10 @@ protected:
   // the concern here, but consistency with the effect side is cleaner.
 
   void rebuild_milestone_strings_() {}  // no-op: strings built at fire time
+  void reset_milestones_() {
+    this->last_fired_milestone_ = 0;
+    this->milestone_fired_this_frame_ = false;
+  }
 
   // Sweep all milestones crossed since last call. While loop ensures no
   // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
@@ -217,11 +265,6 @@ protected:
       if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
         this->last_fired_milestone_ = 0;
     }
-  }
-
-  void reset_milestones_() {
-    this->last_fired_milestone_ = 0;
-    this->milestone_fired_this_frame_ = false;
   }
 
   bool is_starting_{false};
@@ -352,6 +395,10 @@ public:
   void set_intensity(uint8_t v)  { this->intensity_  = v; }
   void set_palette(uint8_t v)    { this->palette_    = v; }
   void set_brightness(float v)   { this->brightness_ = v; }
+  void set_mirror(bool v)        { this->mirror_     = v; }
+  void set_intro(uint8_t v)      { this->intro_      = v; }
+  void set_outro(uint8_t v)      { this->outro_      = v; }
+  void set_inout_duration(float v) { this->inout_duration_ = v; }
 
 protected:
   void do_play_();
@@ -362,6 +409,10 @@ protected:
   esphome::optional<uint8_t> intensity_{};
   esphome::optional<uint8_t> palette_{};
   esphome::optional<float>   brightness_{};
+  esphome::optional<bool>    mirror_{};
+  esphome::optional<uint8_t> intro_{};
+  esphome::optional<uint8_t> outro_{};
+  esphome::optional<float>   inout_duration_{};
 };
 
 template <typename... Ts>
