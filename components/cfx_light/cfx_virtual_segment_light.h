@@ -75,13 +75,13 @@ public:
     if (this->is_effect_active())
       return;
 
-    // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
-    // AddressableLightTransformer handle the per-pixel fade natively.
-    if (state->is_transformer_active()) {
-      return;
-    }
-
-    // We are NOT in a transition. Apply the manual brightness correction.
+    // CFX-032: Do NOT early-return when a transformer is active for the
+    // solid-color path (no effect running). The transformer guard was
+    // only needed to protect CFX effect pixels from corruption. Without
+    // an effect, ESPHome still creates a one-frame transformer even for
+    // 0ms transitions, causing update_state() to return before the
+    // segment flush fires. The segment stays black because pixels were
+    // never painted. Painting a solid color over a 0ms transformer is safe.
     auto max_brightness =
         light::to_uint8_scale(val.get_brightness() * val.get_state());
     this->correction_.set_local_brightness(max_brightness);
