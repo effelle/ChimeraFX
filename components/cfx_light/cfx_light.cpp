@@ -493,6 +493,13 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // complete buffer. This prevents partial-frame DMA which causes random color
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush() {
+  // CFX-032: The old counter waited for ALL N segments before flushing.
+  // When only one segment changes state the others are idle and never
+  // contribute their count, so the DMA was deferred to the 50ms timeout.
+  // Fix: use a short 2ms coalesce window instead of an ALL-ready gate.
+  // Within one ESPHome loop tick all active segments fire write_state in
+  // rapid succession; 2ms captures them without introducing visible lag
+  // when only a single segment changes.
   this->segments_pending_flush_++;
 
   uint32_t now = esphome::millis();
@@ -501,9 +508,9 @@ void CFXLightOutput::request_segment_flush() {
 
   const uint8_t n_segs = (uint8_t)this->segment_light_states_.size();
   bool all_ready = (this->segments_pending_flush_ >= n_segs);
-  bool timeout   = (now - (uint32_t)this->segment_flush_first_ms_) > 50;
+  bool timeout   = (now - (uint32_t)this->segment_flush_first_ms_) >= 2;
 
-  if (all_ready || (timeout && this->segments_pending_flush_ > 0)) {
+  if (all_ready || timeout) {
     this->segments_pending_flush_ = 0;
     this->segment_flush_first_ms_ = 0;
     this->write_state(nullptr);
