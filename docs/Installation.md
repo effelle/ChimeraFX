@@ -1,14 +1,17 @@
 # Installation & Setup
 
-  ## Prerequisites
+## Prerequisites
 
-  *   **Supported Hardware**:
-      *   **ESP32 (Classic)**: Fully supported.
-      *   **ESP32-S3**: Fully supported (and recommended for new builds).
-      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues.
+*   **ESPHome Version**: The minimal version to run ChimeraFX for ESPHome is **2026.3.0**
+*   **Supported Hardware**:
+      *   **ESP32 (Classic)**: Fully supported and can control up to 4 strips.
+      *   **ESP32-S3**: Fully supported (and recommended for new builds). Up to 4 strips.
+      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues. Up to 2 strips.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported!
+
+---
 
 You can install the component in two ways:
 

@@ -49,7 +49,6 @@ Today, ChimeraFX is a precision-engineered lighting engine offering a curated su
 | Icon | Description | Icon | Description |
 |:---:|:---|:---:|:---|
 | :material-tag-outline: | **Minimum Version**: The ChimeraFX version where this effect was introduced. | :material-speedometer: | **Performance Class**: The resource intensity of the effect (Low, Mid, High). |
-| :material-palette: | **Palette Support**: Whether the effect supports color palettes. | :material-bullseye-arrow: | **Orchestrator Ready**: Compatible with position-based triggers. See effect description for details.|
 
 ---
 
@@ -58,7 +57,7 @@ Today, ChimeraFX is a precision-engineered lighting engine offering a curated su
 
 Original animations featuring advanced fluid simulations, chaos theory, and custom physics engines.
 
-??? abstract "152 | Center Gauge | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "152 | Center Gauge | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -110,7 +109,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 159
         ```
 
-??? abstract "164 | Collider | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "164 | Collider | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -136,7 +135,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 164
         ```
 
-??? abstract "151 | Dropping Time | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "151 | Dropping Time | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -187,7 +186,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 158
         ```
 
-??? abstract "160 | Fluid Rain | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: High | :material-palette:</span>"
+??? abstract "160 | Fluid Rain | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: High </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -264,7 +263,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 157
         ```
 
-??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High | :material-palette:</span>"
+??? abstract "180 | Interference | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -288,7 +287,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 180
         ```
 
-??? abstract "155 | Kaleidos | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "155 | Kaleidos | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -313,7 +312,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 155
         ```
 
-??? abstract "154 | Reactor Beat | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "154 | Reactor Beat | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -339,7 +338,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
               effect_id: 154
         ```
 
-??? abstract "153 | Twin Flames | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "153 | Twin Flames | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -371,7 +370,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
 
 Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling, and feature integrated "Horizon Sweep" transitions for seamless power-on/off sequences.
 
-??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -385,7 +384,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
         | **Speed** | `128` | **Gravity**: controls the velocity of falling and peeling blocks. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -397,7 +396,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         ```
 
 
-??? abstract "162 | Curtain Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "162 | Curtain Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -412,7 +411,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -422,7 +421,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               name: "Curtain Sweep"
               effect_id: 162
         ```
-??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -437,7 +436,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
         | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
         | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -447,7 +446,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               name: "Hydro-Pulse"
               effect_id: 168
         ```
-??? abstract "161 | Horizon Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "161 | Horizon Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -462,7 +461,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -473,7 +472,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 161
         ```
 
-??? abstract "163 | Stardust Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "163 | Stardust Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -488,7 +487,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -499,7 +498,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 163
         ```
 
-??? abstract "165 | Twin Pulse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "165 | Twin Pulse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -514,7 +513,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -540,6 +539,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Morse speed**: controls the playback speed of the Morse sequence. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -550,7 +550,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 166
         ```
 
-??? abstract "167 | Four Times the Charm | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "167 | Four Times the Charm | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -564,7 +564,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edges. |
         | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transitions. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -575,7 +575,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 167
         ```
 
-??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -590,7 +590,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
         | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -616,7 +616,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -641,7 +641,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -666,7 +666,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -691,7 +691,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -716,7 +716,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
         | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -741,6 +741,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Complexity**: adjusts the frequency of the overlapping waves. |
         | **Speed** | `128` | **Drift**: controls the velocity of the interference shift. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -751,7 +752,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 176
         ```
 
-??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -765,7 +766,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Ripple Decadence**: controls the frequency and decay of the feedback ripples. |
         | **Speed** | `100` | **Flow Pressure**: controls the velocity of the fill surge. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -776,7 +777,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 177
         ```
 
-??? abstract "178 | Telemetry | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "178 | Telemetry | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -790,7 +791,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Data Density**: adjusts the length and spacing of the telemetry dashes. |
         | **Speed** | `128` | **Baud Rate**: controls the transmission speed across the strip. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -815,6 +816,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Star Density**: adjusts the contrast between breathing pixels. |
         | **Speed** | `128` | **Blink Rate**: controls the frequency of the stellar breathing. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -837,6 +839,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
         | **Speed** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
         
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -848,7 +851,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         ```
 
 
-??? abstract "181 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "181 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -862,7 +865,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Shadow width**: determines the size of the negative space. |
         | **Speed** | `128` | **Glide velocity**: controls the speed of the drifting shadow. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -873,7 +876,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 181
         ```
 
-??? abstract "182 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "182 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -887,7 +890,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Flutter intensity**: controls the contrast and aggressiveness of the stutter sequence. |
         | **Speed** | `128` | **Ignition duration**: controls the length of the ignition phase. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -898,7 +901,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 182
         ```
 
-??? abstract "183 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "183 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -912,7 +915,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Spring stiffness**: determines the tension and number of bounces before settling. |
         | **Speed** | `128` | **Surge velocity**: controls the speed of the initial brightness jump. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -923,7 +926,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 183
         ```
 
-??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low | :material-bullseye-arrow:</span>"
+??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -937,7 +940,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Intensity** | `128` | **Cursor sharpness**: controls the brightness and width of the leading edge. |
         | **Speed** | `128` | **Print speed**: controls the velocity of the print cursor. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -954,7 +957,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
 A hand-picked selection of the community's best effects, meticulously optimized and rewritten to run natively within the ChimeraFX engine with zero overhead.
 
-??? abstract "38 | Aurora | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "38 | Aurora | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -980,7 +983,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 38
         ```
 
-??? abstract "1 | Blink | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "1 | Blink | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1006,7 +1009,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 1
         ```
 
-??? abstract "26 | Blink Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "26 | Blink Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1032,7 +1035,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 26
         ```
 
-??? abstract "91 | Bouncing Balls | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "91 | Bouncing Balls | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1058,7 +1061,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 91
         ```
 
-??? abstract "2 | Breathe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "2 | Breathe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1084,7 +1087,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 2
         ```
 
-??? abstract "28 | Chase | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "28 | Chase | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1110,7 +1113,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 28
         ```
 
-??? abstract "54 | Chase multi | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "54 | Chase multi | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1136,7 +1139,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 54
         ```
 
-??? abstract "8 | Colorloop | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "8 | Colorloop | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1162,7 +1165,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 8
         ```
 
-??? abstract "74 | Colortwinkle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "74 | Colortwinkle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1188,7 +1191,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 74
         ```
 
-??? abstract "63 | Colorwaves | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "63 | Colorwaves | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1214,7 +1217,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 63
         ```
 
-??? abstract "18 | Dissolve | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "18 | Dissolve | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1240,7 +1243,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 18
         ```
 
-??? abstract "96 | Drip | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "96 | Drip | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1266,7 +1269,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 96
         ```
 
-??? abstract "66 | Fire | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "66 | Fire | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1292,7 +1295,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 66
         ```
 
-??? abstract "90 | Fireworks | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "90 | Fireworks | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1318,7 +1321,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 90
         ```
 
-??? abstract "110 | Flow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "110 | Flow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1344,7 +1347,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 110
         ```
 
-??? abstract "87 | Glitter | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "87 | Glitter | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1370,7 +1373,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 87
         ```
 
-??? abstract "100 | HeartBeat | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "100 | HeartBeat | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1396,7 +1399,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 100
         ```
 
-??? abstract "64 | Juggle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "64 | Juggle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1422,7 +1425,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 64
         ```
 
-??? abstract "76 | Meteor | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "76 | Meteor | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1448,7 +1451,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 76
         ```
 
-??? abstract "25 | Multi Strobe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "25 | Multi Strobe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1473,7 +1476,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               name: "Multi Strobe"
               effect_id: 25
         ```
-??? abstract "107 | Noise Pal | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "107 | Noise Pal | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1525,7 +1528,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 101
         ```
 
-??? abstract "98 | Percent | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "98 | Percent | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1551,7 +1554,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 98
         ```
 
-??? abstract "97 | Plasma | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "97 | Plasma | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1577,7 +1580,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 97
         ```
 
-??? abstract "95 | Popcorn | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "95 | Popcorn | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Mid </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1603,7 +1606,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 95
         ```
 
-??? abstract "9 | Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "9 | Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1629,7 +1632,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 9
         ```
 
-??? abstract "79 | Ripple | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "79 | Ripple | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1655,7 +1658,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 79
         ```
 
-??? abstract "52 | Running Dual | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "52 | Running Dual | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1681,7 +1684,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 52
         ```
 
-??? abstract "15 | Running lights | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "15 | Running lights | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1707,7 +1710,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 15
         ```
 
-??? abstract "16 | Saw | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "16 | Saw | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1733,7 +1736,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 16
         ```
 
-??? abstract "40 | Scanner | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "40 | Scanner | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1759,7 +1762,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 40
         ```
 
-??? abstract "60 | Scanner Dual | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "60 | Scanner Dual | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1785,7 +1788,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 60
         ```
 
-??? abstract "20 | Sparkle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "20 | Sparkle | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1811,7 +1814,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 20
         ```
 
-??? abstract "22 | Sparkle + | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "22 | Sparkle + | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1837,7 +1840,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 22
         ```
 
-??? abstract "21 | Sparkle Dark | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "21 | Sparkle Dark | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1863,7 +1866,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 21
         ```
 
-??? abstract "0 | Static | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "0 | Static | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1889,7 +1892,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 0
         ```
 
-??? abstract "23 | Strobe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: High | :material-palette:</span>"
+??? abstract "23 | Strobe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: High </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1915,7 +1918,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 23
         ```
 
-??? abstract "24 | Strobe Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: High | :material-palette:</span>"
+??? abstract "24 | Strobe Rainbow | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: High </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1941,7 +1944,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 24
         ```
 
-??? abstract "104 | Sunrise | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "104 | Sunrise | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1967,7 +1970,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 104
         ```
 
-??? abstract "6 | Sweep | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "6 | Sweep | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -1993,7 +1996,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 6
         ```
 
-??? abstract "3 | Wipe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "3 | Wipe | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -2019,7 +2022,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
               effect_id: 3
         ```
 
-??? abstract "4 | Wipe Random | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "4 | Wipe Random | <span class='extra-info'>:material-tag-outline: 1.0.0 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -2089,109 +2092,109 @@ You can assign any of these palettes to compatible effects using the `palette` s
 
 These short animations play once when the light is turned ON or OFF.
 
-??? abstract "0 | None | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "0 | None | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/none_io.webm" type="video/webm">
         </video>
     *Standard behavior (Main effect starts immediately).*
 
-??? abstract "3 | Center | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "3 | Center | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/center_io.webm" type="video/webm">
         </video>
     *Wipe from center outwards (or inwards if reversed).*
 
-??? abstract "10 | Construct / Dismantle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "10 | Construct / Dismantle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/assembly.webm" type="video/webm">
         </video>
     *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
-??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *Geological nucleation transition. **Crystallize** grow seeds of light outward into a solid floor during the intro. **Erode** causes the light to fragment and dissolve at the edges, slowly consuming the strip from within.*
 
-??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A slow, organic brightness ramp. **Deep Breathe** rises from darkness with a subtle triangular shimmer during the intro. **Exhale** provides a natural, lung-like curve that gently releases the light into darkness.*
 
-??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
         </video>
     *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
 
-??? abstract "21 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "21 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A masterclass in negative space. **Eclipse** sweeps a deep, smooth shadow across the strip, modulating the brightness in a calming reverse-kinetic motion. Perfect for transitions into solid, ambient colors.*
 
-??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/fade_io.webm" type="video/webm">
         </video>
     *Smooth brightness fade-in.*
 
-??? abstract "22 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "22 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *The strip stutters to life with high-frequency flashes and crackling brightness surges, simulating an old neon tube or high-pressure lamp striking before it settles into stable illumination.*
 
-??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
         </video>
     *Random pixels sparkle as brightness increases.*
 
-??? abstract "23 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "23 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A highly physical, spring-loaded transition. The light surges forward, overshoots the target brightness, and bounces back and forth with decaying momentum until it smoothly settles into its final solid state.*
 
-??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
 
-??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High | :material-palette:</span>"
+??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High </span>"
     *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
 
-??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A precise, technical construction. A razor-sharp bright cursor 'prints' the light onto the strip line by line with mechanical precision, constructng a solid trail until the entire segment is fully revealed.*
 
-??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-palette:</span>"
+??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
     *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
 
-??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
         </video>
     *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
 
-??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid | :material-bullseye-arrow:</span>"
+??? abstract "8 | Pressurize / Drain | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
         </video>
     *Simulates fluid dynamics within the strip. **Pressurize** surges the light forward during the intro, while **Drain** pulls it back and leaves droplets during the outro.*
 
-??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
         </video>
     *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
 
-??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
 
-??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
 
-??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette:</span>"
+??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
     *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
 
-??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
 
-??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
         </video>
     *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
 
-??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
 
-??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low | :material-palette: | :material-bullseye-arrow:</span>"
+??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/wipe_io.webm" type="video/webm">
         </video>

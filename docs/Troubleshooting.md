@@ -39,13 +39,15 @@ Check your `rgb_order` in the YAML.
 
 ---
 
-## Performance Tuning
+## Performance Tuning for RMT Lights
 
-ESP-IDF doesn't always play well with RGB lights. If you experience issues like flickering leds or data corruption and you are sure is not a power or wiring issue, you must ensure your `rmt_symbols` are set correctly for your chip type. Each "symbol" represents a bit of data. Limited memory means you can't buffer infinite data. 
+ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the best values for `rmt_symbols` automatically, but if you experience issues like flickering leds or data corruption and you are sure is not a power or wiring issue, you must ensure your `rmt_symbols` are set correctly for your chip type. Each "symbol" represents a bit of data. Limited memory means you can't buffer infinite data. 
 
 - **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
 - **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
 - **ESP32-C3**: 96 Total Symbols - Block size 48 symbols 
+
+**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 maxes out at 2 TX channels. Declaring 3 or more `cfx_light` strips on a C3 is a **compile-time error**.
 
 Example configuration:
 

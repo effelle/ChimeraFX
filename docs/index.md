@@ -29,6 +29,9 @@ Visual effects are computationally expensive.
     *   **RGB (WS2812B/WS2811):** ~30µs per LED. Theoretical max for 30 FPS: **~1,000 LEDs.**
     *   **RGBW (SK6812):** ~40µs per LED. Theoretical max for 30 FPS: **~800 LEDs.**
 
+    **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
+    2-wire SPI strips (APA102, WS2801, etc.) are **not yet supported**.
+
     ### 2. The Computational Limit (Processing Overhead)
     Because ChimeraFX operates as a modular component, it must share the ESP32’s CPU cycles with other tasks (such as Wi-Fi, Bluetooth, sensor polling, or web servers). 
     *   **The "Math" Tax:** Every additional LED increases the time the CPU needs to calculate complex math for an effect.
@@ -48,17 +51,16 @@ Visual effects are computationally expensive.
 ## Key Features
 
 *   **Native Performance**: Optimized for ESP-IDF and dual-core ESP32s.
-*   **ChimeraFX Light Platform**: A custom ESPHome light platform that allows you to run up to 4 parallel complex RGB LED effects on ESP32 devices.
+*   **ChimeraFX Light Platform**: A custom ESPHome light platform that support segments, allows you to run parallel complex RGB LED effects on ESP32 devices.
+*   **ChimeraFX Orchestrator**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
 *   **Zero-Lambda Config**: Uses a clean `external_components` setup.
 *   **Rich Effect Library**: Ports of complex effects that were previously impossible or slow in pure YAML using `addressable_lambda`.
 *   **Custom Palettes**: A curated selection of palettes to choose from.
 *   **Intro and Outro Effects**: Run a special effect when the light turns on or off.
 *   **Presets**: Create your own effect configurations.
-*   **Timers**: Run an effect for a specific amount of time.
 *   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
 *   **Autotuning**: Automatically load default parameters and tune the effect for you .
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
-*   **ChimeraFX Orchestrator**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
 
 ## Quick Links
 
