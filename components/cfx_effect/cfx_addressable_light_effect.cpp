@@ -1296,6 +1296,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (millis_64() - act_->intro_start_time > act_->active_intro_duration_ms) {
       act_->intro_active = false;
 
+      // CFX-031: Reset milestones when intro ends so the main effect starts
+      // its own 0->100% sweep cleanly. Without this, the intro's wipe pass
+      // already consumed milestones 5..100, and the effect's first forward
+      // pass would appear to start at whatever the intro left behind.
+      this->reset_milestones_();
+
       // Check if Transition is enabled via config
       float trans_dur = (this->local_transition_duration_() != nullptr &&
                          this->local_transition_duration_()->has_state())
@@ -5446,6 +5452,12 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
                                                     std::optional<uint8_t> iten,
                                                     std::optional<uint8_t> pal,
                                                     uint32_t itr) {
+  // CFX-030: act_ is null when the effect is not running (light off or
+  // removed). Bail out silently rather than dereferencing null.
+  if (this->act_ == nullptr) {
+    ESP_LOGW("cfx_seq", "set_active_sequence: act_ is null (effect not running), skipping");
+    return;
+  }
   act_->active_sequence = seq;
   act_->sequence_speed = spd;
   act_->sequence_intensity = iten;

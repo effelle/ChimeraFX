@@ -345,6 +345,9 @@ public:
                            std::optional<uint8_t> iten, std::optional<uint8_t> pal,
                            uint32_t itr);
   CFXSequence *get_active_sequence() const { return act_ ? act_->active_sequence : nullptr; }
+  // CFX-030: allows callers to check whether the effect is currently running
+  // before calling set_active_sequence() (act_==nullptr means effect is stopped).
+  CFXActivation *get_act() const { return act_; }
 
   // cfx_set action setters — override sequence params on the active effect.
   // Persist until the next start() call resets them via set_active_sequence().
