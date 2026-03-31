@@ -62,20 +62,24 @@ public:
   // it takes full ownership of brightness and pixels. Creating a Transformer
   // here would corrupt the pixels (flashes/spikes).
   void update_state(light::LightState *state) override {
+    // Suppress during outro or when master CFX effect owns pixels.
     if (parent_->has_outro()) return;
     if (parent_->get_master_light_state() != nullptr &&
         parent_->get_master_light_state()->get_effect_name() != "None") return;
     if (this->is_effect_active()) return;
-    // Only handle the transformer-driven fade path here (transition_length > 0).
-    // When no transformer is active the solid-color paint happens in
-    // write_state() using remote_values instead. (CFX-032)
+    // Only service the transformer-driven fade (transition_length > 0).
+    // Solid-color ON/OFF is handled in write_state instead. (CFX-032)
     if (!state->is_transformer_active()) return;
+    // Fade: paint the interpolated mid-transition color.
+    // parent_->correction_ is held at 255 in segmented mode, so brightness
+    // must be baked into color channel values directly.
     auto val = state->current_values;
-    auto max_brightness =
-        light::to_uint8_scale(val.get_brightness() * val.get_state());
-    this->correction_.set_local_brightness(max_brightness);
+    float bri = val.get_brightness() * val.get_state();
     Color c = light::color_from_light_color_values(val);
-    // BUG 13 FIX: Apply force_white to solid segment colors
+    c.r = (uint8_t)(c.r * bri);
+    c.g = (uint8_t)(c.g * bri);
+    c.b = (uint8_t)(c.b * bri);
+    c.w = (uint8_t)(c.w * bri);
     if (parent_->get_force_white_switch() != nullptr &&
         parent_->get_force_white_switch()->state &&
         parent_->has_white_channel()) {
@@ -87,21 +91,22 @@ public:
 
   void write_state(light::LightState *state) override {
     if (parent_->has_outro()) return;
-    // CFX-032: Paint solid color using remote_values (the commanded target)
-    // rather than current_values (transformer-interpolated). current_values
-    // can be 0 on the first frame even with 0ms transition_length, causing
-    // segments to stay black or ignore brightness changes. remote_values
-    // always reflects the final desired state. Skip when an effect or master
-    // CFX effect owns the pixels.
+    // CFX-032: Solid-color path. Use remote_values (the commanded target)
+    // so the correct color and brightness are set even on the first frame
+    // of a 0ms transition. parent_->correction_ is held at 255 in segmented
+    // mode, so brightness is baked into color channel values directly.
+    // Skip when an effect or master CFX effect owns the pixels.
     if (state != nullptr &&
         !this->is_effect_active() &&
         (parent_->get_master_light_state() == nullptr ||
          parent_->get_master_light_state()->get_effect_name() == "None")) {
       auto val = state->remote_values;
-      auto max_brightness =
-          light::to_uint8_scale(val.get_brightness() * val.get_state());
-      this->correction_.set_local_brightness(max_brightness);
+      float bri = val.get_brightness() * val.get_state();
       Color c = light::color_from_light_color_values(val);
+      c.r = (uint8_t)(c.r * bri);
+      c.g = (uint8_t)(c.g * bri);
+      c.b = (uint8_t)(c.b * bri);
+      c.w = (uint8_t)(c.w * bri);
       if (parent_->get_force_white_switch() != nullptr &&
           parent_->get_force_white_switch()->state &&
           parent_->has_white_channel()) {

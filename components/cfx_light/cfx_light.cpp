@@ -439,6 +439,18 @@ void CFXLightOutput::loop() {
 void CFXLightOutput::update_state(light::LightState *state) {
   auto val = state->current_values;
 
+  if (this->has_segments()) {
+    // CFX-032: In segmented mode the master LightState is a logical
+    // aggregator only. Individual segments own their pixel ranges and
+    // pre-scale their colors before writing into the shared buffer.
+    // correction_.set_local_brightness() must stay at 255 so that the
+    // master being OFF does not zero-gate ALL segment pixels via the
+    // shared correction_ object referenced by every ESPColorView.
+    this->correction_.set_local_brightness(255);
+    this->tracked_brightness_ = 255;
+    return;
+  }
+
   // ALWAYS update the hardware brightness gate. If we don't, and an effect
   // starts while the light is OFF, the gate stays at 0 and the strip stays
   // black.
@@ -446,12 +458,6 @@ void CFXLightOutput::update_state(light::LightState *state) {
       light::to_uint8_scale(val.get_brightness() * val.get_state());
   this->tracked_brightness_ = max_brightness;
   this->correction_.set_local_brightness(max_brightness);
-
-  if (this->has_segments()) {
-    // Segmented mode: Master LightState is muted.
-    // Individual segments handle their own update_state().
-    return;
-  }
 
   if (this->is_effect_active()) {
     // Effect handles its own pixel math in apply().
