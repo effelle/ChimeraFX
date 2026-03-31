@@ -99,7 +99,10 @@ public:
     }
 
     this->all() = c;
-    this->schedule_show();
+    // Do NOT call schedule_show() here. ESPHome will call write_state()
+    // as part of its normal output pipeline. Calling schedule_show() causes
+    // write_state to fire twice per update, making pending=2 instead of 1
+    // and breaking the flush counter logic. (CFX-032)
   }
 
   void write_state(light::LightState *state) override {
