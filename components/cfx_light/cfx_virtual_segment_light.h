@@ -62,49 +62,53 @@ public:
   // it takes full ownership of brightness and pixels. Creating a Transformer
   // here would corrupt the pixels (flashes/spikes).
   void update_state(light::LightState *state) override {
-    if (parent_->has_outro())
-      return;
-
+    if (parent_->has_outro()) return;
     if (parent_->get_master_light_state() != nullptr &&
-        parent_->get_master_light_state()->get_effect_name() != "None") {
-      return;
-    }
-
+        parent_->get_master_light_state()->get_effect_name() != "None") return;
+    if (this->is_effect_active()) return;
+    // Only handle the transformer-driven fade path here (transition_length > 0).
+    // When no transformer is active the solid-color paint happens in
+    // write_state() using remote_values instead. (CFX-032)
+    if (!state->is_transformer_active()) return;
     auto val = state->current_values;
-
-    if (this->is_effect_active())
-      return;
-
-    // CFX-032: Do NOT early-return when a transformer is active for the
-    // solid-color path (no effect running). The transformer guard was
-    // only needed to protect CFX effect pixels from corruption. Without
-    // an effect, ESPHome still creates a one-frame transformer even for
-    // 0ms transitions, causing update_state() to return before the
-    // segment flush fires. The segment stays black because pixels were
-    // never painted. Painting a solid color over a 0ms transformer is safe.
     auto max_brightness =
         light::to_uint8_scale(val.get_brightness() * val.get_state());
     this->correction_.set_local_brightness(max_brightness);
-
-    // Solid Color for segments
     Color c = light::color_from_light_color_values(val);
-
     // BUG 13 FIX: Apply force_white to solid segment colors
     if (parent_->get_force_white_switch() != nullptr &&
         parent_->get_force_white_switch()->state &&
         parent_->has_white_channel()) {
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
-
     this->all() = c;
     this->schedule_show();
   }
 
   void write_state(light::LightState *state) override {
-    // Delegate DMA to parent via the segment-flush path.
-    // Suppress flush while parent has an outro in progress.
-    if (parent_->has_outro())
-      return;
+    if (parent_->has_outro()) return;
+    // CFX-032: Paint solid color using remote_values (the commanded target)
+    // rather than current_values (transformer-interpolated). current_values
+    // can be 0 on the first frame even with 0ms transition_length, causing
+    // segments to stay black or ignore brightness changes. remote_values
+    // always reflects the final desired state. Skip when an effect or master
+    // CFX effect owns the pixels.
+    if (state != nullptr &&
+        !this->is_effect_active() &&
+        (parent_->get_master_light_state() == nullptr ||
+         parent_->get_master_light_state()->get_effect_name() == "None")) {
+      auto val = state->remote_values;
+      auto max_brightness =
+          light::to_uint8_scale(val.get_brightness() * val.get_state());
+      this->correction_.set_local_brightness(max_brightness);
+      Color c = light::color_from_light_color_values(val);
+      if (parent_->get_force_white_switch() != nullptr &&
+          parent_->get_force_white_switch()->state &&
+          parent_->has_white_channel()) {
+        cfx::apply_force_white(c.r, c.g, c.b, c.w);
+      }
+      this->all() = c;
+    }
     parent_->request_segment_flush();
   }
 
