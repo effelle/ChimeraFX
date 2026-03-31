@@ -87,7 +87,7 @@ public:
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
-    ESP_LOGI("cfx_dbg", "[SEG update_state] '%s' bri=%.2f c=(%d,%d,%d,%d) remote_on=%d transformer=%d",
+    ESP_LOGD("cfx_dbg", "[SEG update_state] '%s' bri=%.2f c=(%d,%d,%d,%d) remote_on=%d transformer=%d",
       seg_id_.c_str(), bri, c.r, c.g, c.b, c.w,
       (int)state->remote_values.is_on(), (int)state->is_transformer_active());
 
@@ -110,7 +110,7 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
-    ESP_LOGI("cfx_dbg", "[SEG write_state] '%s' remote_on=%d",
+    ESP_LOGD("cfx_dbg", "[SEG write_state] '%s' remote_on=%d",
       seg_id_.c_str(),
       (state != nullptr) ? (int)state->remote_values.is_on() : -1);
     parent_->request_segment_flush();

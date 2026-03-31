@@ -311,7 +311,7 @@ void CFXLightOutput::on_master_update() {
     return;
   }
 
-  ESP_LOGI("cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
+  ESP_LOGD("cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
     this->is_syncing_,
     (int)this->master_light_state_->remote_values.is_on(),
     (int)this->prev_master_state_);
@@ -380,7 +380,7 @@ void CFXLightOutput::on_segment_update() {
     }
   }
 
-  ESP_LOGI("cfx_dbg", "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
+  ESP_LOGD("cfx_dbg", "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
     master_on, is_any_segment_on,
     (int)this->segment_light_states_.size() > 0 ? (int)this->segment_light_states_[0]->remote_values.is_on() : -1,
     (int)this->segment_light_states_.size() > 1 ? (int)this->segment_light_states_[1]->remote_values.is_on() : -1,
@@ -510,7 +510,7 @@ void CFXLightOutput::request_segment_flush() {
   // inside this function, not in loop(). Flushing immediately is safe:
   // the scrub in write_state(nullptr) ensures OFF segments are blacked out,
   // and multiple DMA calls per frame for solid color are harmless.
-  ESP_LOGI("cfx_dbg", "[request_segment_flush] -> immediate DMA");
+  ESP_LOGD("cfx_dbg", "[request_segment_flush] -> immediate DMA");
   this->write_state(nullptr);
 }
 
@@ -541,7 +541,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
       // CFX-032: scrub on remote_values only; current_values may lag
       // by a frame with 0ms transitions, leaving stale lit pixels.
       if (!seg_state->remote_values.is_on()) {
-        ESP_LOGI("cfx_dbg", "  [SCRUB] seg[%d] pixels %d-%d", (int)i, this->segment_defs_[i].start, this->segment_defs_[i].stop);
+        ESP_LOGD("cfx_dbg", "  [SCRUB] seg[%d] pixels %d-%d", (int)i, this->segment_defs_[i].start, this->segment_defs_[i].stop);
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
