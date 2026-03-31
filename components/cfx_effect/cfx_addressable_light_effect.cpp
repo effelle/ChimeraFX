@@ -1435,6 +1435,30 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // (Duplicate completion handler removed — handled in service loop above)
 
+  // CFX-032: Scrub OFF segments before DMA fires.
+  // The effect writes into the full strip buffer without knowing which
+  // segments are OFF. If it bleeds into an OFF segment's pixel range,
+  // those pixels go live on the next schedule_show(). Fix: zero out every
+  // OFF segment's range here, after the effect has painted but before DMA.
+  // Only applies to non-virtual-segment effects (virtual segments each own
+  // their own strip and have no siblings to protect).
+  if (!this->is_virtual_segment_) {
+    auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(
+        this->get_light_state()->get_output());
+    if (cfx_out != nullptr && cfx_out->has_segments()) {
+      const auto &seg_defs   = cfx_out->get_segment_defs();
+      const auto &seg_states = cfx_out->get_segment_light_states();
+      for (size_t si = 0; si < seg_defs.size() && si < seg_states.size(); si++) {
+        if (!seg_states[si]->remote_values.is_on()) {
+          const auto &def = seg_defs[si];
+          for (int p = def.start; p < def.stop; p++) {
+            it[p] = Color::BLACK;
+          }
+        }
+      }
+    }
+  }
+
   it.schedule_show();
   chimera_fx::instance = nullptr;
 }
