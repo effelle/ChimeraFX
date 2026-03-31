@@ -75,16 +75,13 @@ public:
     if (this->is_effect_active())
       return;
 
-    // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
-    // AddressableLightTransformer handle the per-pixel fade natively.
-    if (state->is_transformer_active()) {
-      return;
-    }
-
-    // CFX-032: parent_->correction_ is held at 255 in segmented mode so
-    // that the master being OFF cannot zero-gate segment pixels. Bake
-    // brightness directly into the color channel values instead.
+    // CFX-032: correction_ is held at 255; bake brightness into channels.
+    // For a real fade (bri > 0 and transformer active), let ESPHome drive
+    // the pixels. Always fall through when bri==0 so turning OFF paints
+    // black even if a 0ms transformer exists on that frame.
     float bri = val.get_brightness() * val.get_state();
+    if (state->is_transformer_active() && bri > 0.0f)
+      return;
     Color c = light::color_from_light_color_values(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);

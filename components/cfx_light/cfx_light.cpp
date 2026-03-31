@@ -534,8 +534,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
   } else if (!this->segment_light_states_.empty()) {
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (!seg_state->remote_values.is_on() &&
-          !seg_state->current_values.is_on()) {
+      // CFX-032: scrub on remote_values only; current_values may lag
+      // by a frame with 0ms transitions, leaving stale lit pixels.
+      if (!seg_state->remote_values.is_on()) {
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
