@@ -296,8 +296,6 @@ protected:
 
   bool is_syncing_{false};
   bool prev_master_state_{false};
-  uint8_t segments_pending_flush_{0};  // counter: incremented by each segment's write_state()
-  uint64_t segment_flush_first_ms_{0}; // timestamp of first segment flush request this cycle
   uint8_t tracked_brightness_{0};
 };
 
