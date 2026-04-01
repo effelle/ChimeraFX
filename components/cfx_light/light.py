@@ -107,7 +107,7 @@ SEGMENT_SCHEMA = cv.Schema(
     }
 )
 
-MAX_CFX_SEGMENTS = 6
+MAX_CFX_SEGMENTS = 4
 
 
 def _validate_segments(config):
@@ -252,6 +252,24 @@ _RMT_BUDGET = {
 }
 _RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
 
+# Maximum CFXLight instances per ESP32 variant.
+# Derived from RMT channel count and practical CPU headroom.
+#   ESP32 classic : 8 RMT TX channels, 4 lights @ 2 blocks each
+#   ESP32-S2      : 4 RMT TX channels, 4 lights @ 1 block each
+#   ESP32-S3/P4   : 4 RMT TX channels, 4 lights @ 1 block each
+#   ESP32-C3/C5/C6/H2 : 2 RMT TX channels, 2 lights @ 1 block each
+_MAX_LIGHTS = {
+    "ESP32":   4,
+    "ESP32S2": 4,
+    "ESP32S3": 4,
+    "ESP32P4": 4,
+    "ESP32C3": 2,
+    "ESP32C5": 2,
+    "ESP32C6": 2,
+    "ESP32H2": 2,
+}
+_MAX_LIGHTS_DEFAULT = 4  # conservative fallback
+
 
 def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     """Compute the per-strip RMT symbol count for auto-configured strips.
@@ -374,6 +392,25 @@ async def to_code(config):
                 if lconf.get("platform", "") == "cfx_light"
                    and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
             )
+            n_total_lights = n_auto + (1 if manual_total > 0 else 0)
+            # Enforce per-chip light limit
+            _esp32_variant = "ESP32"
+            try:
+                from esphome.core import CORE as _c
+                _esp32_variant = str(_c.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
+            except Exception:
+                pass
+            _n_all_lights = sum(
+                1 for lconf in _core_rmt.CORE.config.get("light", [])
+                if lconf.get("platform", "") == "cfx_light"
+            )
+            _max_lights = _MAX_LIGHTS.get(_esp32_variant, _MAX_LIGHTS_DEFAULT)
+            if _n_all_lights > _max_lights:
+                _log_rmt.getLogger(__name__).error(
+                    "CFXLight: %s supports max %d light(s) but %d are declared. "
+                    "Reduce the number of cfx_light instances.",
+                    _esp32_variant, _max_lights, _n_all_lights,
+                )
             _core_rmt.CORE.data["cfx_light_total"]   = max(n_auto, 1)
             _core_rmt.CORE.data["cfx_light_manual"]  = manual_total
             _log_rmt.getLogger(__name__).info(

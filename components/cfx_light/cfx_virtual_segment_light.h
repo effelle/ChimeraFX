@@ -87,12 +87,6 @@ public:
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
-    ESP_LOGV("cfx_dbg",
-             "[SEG update_state] '%s' bri=%.2f c=(%d,%d,%d,%d) remote_on=%d "
-             "transformer=%d",
-             seg_id_.c_str(), bri, c.r, c.g, c.b, c.w,
-             (int)state->remote_values.is_on(),
-             (int)state->is_transformer_active());
 
     // BUG 13 FIX: Apply force_white to solid segment colors
     if (parent_->get_force_white_switch() != nullptr &&
@@ -113,8 +107,6 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
-    ESP_LOGV("cfx_dbg", "[SEG write_state] '%s' remote_on=%d", seg_id_.c_str(),
-             (state != nullptr) ? (int)state->remote_values.is_on() : -1);
     parent_->request_segment_flush();
   }
 

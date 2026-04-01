@@ -32,7 +32,7 @@ using OutroCallback = std::function<bool()>;
 
 // --- Segment Infrastructure (Phase 1) ---
 
-#define MAX_CFX_SEGMENTS 6
+#define MAX_CFX_SEGMENTS 4
 
 struct CFXSegmentDef {
   std::string id;
