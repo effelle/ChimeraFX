@@ -92,6 +92,10 @@ public:
   // reported their render complete, preventing premature DMA on partial frames.
   void request_segment_flush();
 
+  // Segment flush coalescing state (Fix-2: one DMA call per frame)
+  bool     seg_flush_pending_{false};
+  uint32_t seg_flush_first_ms_{0};
+
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
     if (this->has_segments()) {
@@ -191,11 +195,13 @@ public:
   }
 
   // Visualizer setters
+#ifdef CFX_VISUALIZER_ENABLED
   void set_visualizer_ip(const std::string &ip) { this->visualizer_ip_ = ip; }
   void set_visualizer_port(uint16_t port) { this->visualizer_port_ = port; }
   void set_visualizer_enabled(bool enabled) {
     this->visualizer_enabled_ = enabled;
   }
+#endif  // CFX_VISUALIZER_ENABLED
 
 protected:
   enum VisualizerPacketType : uint8_t {
@@ -263,10 +269,12 @@ protected:
 
   // Visualizer
   int socket_fd_{-1};
+#ifdef CFX_VISUALIZER_ENABLED
   std::string visualizer_ip_{""};
   uint16_t visualizer_port_{7777};
   bool visualizer_enabled_{false};
-  std::vector<uint8_t> visualizer_pkt_;  // Pre-allocated packet buffer
+  std::vector<uint8_t> visualizer_pkt_;
+#endif  // CFX_VISUALIZER_ENABLED
 
   // State synchronization listeners
   class MasterListener : public light::LightRemoteValuesListener {

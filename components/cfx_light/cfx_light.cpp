@@ -436,11 +436,18 @@ void CFXLightOutput::loop() {
     }
   }
 
-  // Segment-driven DMA flush: counter-based approach.
-  // Each segment calls request_segment_flush() via write_state(). Only when
-  // ALL N segments have reported (or 50ms safety timeout), we flush once.
-  // This prevents premature DMA from firing with a partially-rendered frame.
-  // Handled inside request_segment_flush() itself — nothing to do here.
+  // Fix-2: Drain the coalesced segment flush.
+  // request_segment_flush() sets a dirty flag instead of calling write_state()
+  // immediately. Here we fire exactly ONE DMA call once all segments in the
+  // same ESPHome loop tick have contributed their updates (2ms window).
+  if (this->seg_flush_pending_) {
+    uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
+    if (elapsed >= 2) {
+      this->seg_flush_pending_  = false;
+      this->seg_flush_first_ms_ = 0;
+      this->write_state(nullptr);
+    }
+  }
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -550,30 +557,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
     }
   }
 
-  // 1.5. Visualizer UDP Broadcast
-#ifdef USE_WIFI
-  if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
-    if (this->socket_fd_ < 0) {
-      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    }
-    if (this->socket_fd_ >= 0) {
-      struct sockaddr_in dest_addr;
-      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
-      dest_addr.sin_family = AF_INET;
-      dest_addr.sin_port = htons(this->visualizer_port_);
-
-      // Reuse pre-allocated packet buffer to avoid per-frame heap allocation
-      size_t buf_len = this->get_buffer_size_();
-      this->visualizer_pkt_.clear();
-      this->visualizer_pkt_.reserve(buf_len + 1);
-      this->visualizer_pkt_.push_back(VISUALIZER_TYPE_PIXELS);
-      this->visualizer_pkt_.insert(this->visualizer_pkt_.end(), this->buf_, this->buf_ + buf_len);
-
-      sendto(this->socket_fd_, this->visualizer_pkt_.data(), this->visualizer_pkt_.size(), 0,
-             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-    }
-  }
-#endif
   this->status_clear_warning();
 
   // Protect from refreshing too often
@@ -585,6 +568,31 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
   this->last_refresh_ = now;
   this->mark_shown_();
+
+#if defined(CFX_VISUALIZER_ENABLED) && defined(USE_WIFI)
+  // Visualizer UDP broadcast. Runs BEFORE rmt_tx_wait_all_done so the
+  // sendto() syscall cannot stall between the DMA wait and rmt_transmit.
+  // Internal dev tool only -- not compiled unless CFX_VISUALIZER_ENABLED.
+  if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
+    if (this->socket_fd_ < 0)
+      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (this->socket_fd_ >= 0) {
+      struct sockaddr_in dest_addr;
+      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
+      dest_addr.sin_family = AF_INET;
+      dest_addr.sin_port = htons(this->visualizer_port_);
+      size_t buf_len = this->get_buffer_size_();
+      this->visualizer_pkt_.clear();
+      this->visualizer_pkt_.reserve(buf_len + 1);
+      this->visualizer_pkt_.push_back(VISUALIZER_TYPE_PIXELS);
+      this->visualizer_pkt_.insert(this->visualizer_pkt_.end(),
+                                   this->buf_, this->buf_ + buf_len);
+      sendto(this->socket_fd_, this->visualizer_pkt_.data(),
+             this->visualizer_pkt_.size(), 0,
+             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    }
+  }
+#endif  // CFX_VISUALIZER_ENABLED
 
   // Wait for previous DMA transmission to complete (safety valve)
   // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
@@ -652,7 +660,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
 void CFXLightOutput::send_visualizer_metadata(const std::string &name,
                                               const std::string &palette) {
-#ifdef USE_WIFI
+#if defined(CFX_VISUALIZER_ENABLED) && defined(USE_WIFI)
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
     if (this->socket_fd_ < 0) {
       this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -678,7 +686,7 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name,
              (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     }
   }
-#endif
+#endif  // CFX_VISUALIZER_ENABLED
 }
 
 // --- Color View (Maps ESPHome pixel access to our buffer) ---

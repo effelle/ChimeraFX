@@ -51,7 +51,10 @@ public:
         return c;
     }
 
-    // 2. Segment match fallback: iterate masters and check segment configs
+    // 2. Segment match fallback: iterate masters and check segment configs.
+    // Fix-3: Guard the static_cast with has_segments(). If the output is a
+    // CFXVirtualSegmentLight (not a CFXLightOutput), the cast is undefined
+    // behaviour and crashes under rapid concurrent effect-start calls.
     for (auto *c : get_instances()) {
       if (c->get_light() == nullptr)
         continue;
@@ -59,10 +62,13 @@ public:
       if (output == nullptr)
         continue;
 
+      // Only cast when we know the output is a CFXLightOutput with segments.
+      // Virtual segment lights share the same base type but are NOT castable.
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+      if (!cfx_out->has_segments())
+        continue;
       for (auto *seg_state : cfx_out->get_segment_light_states()) {
         if (seg_state == light) {
-          ESP_LOGD("chimera_fx", "CFXControl::find: FALLBACK MATCH for light %p -> Returning Master Controller %p", light, c);
           return c;
         }
       }

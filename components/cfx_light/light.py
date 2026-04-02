@@ -431,6 +431,10 @@ async def to_code(config):
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
 
     if CONF_VISUALIZER_IP in config:
+        # Visualizer is an internal dev tool. Gated behind a build flag so
+        # it compiles to zero code in production builds. The flag activates
+        # the sendto() path inside write_state() and the private fields.
+        cg.add_build_flag("-DCFX_VISUALIZER_ENABLED")
         cg.add(var.set_visualizer_ip(config[CONF_VISUALIZER_IP]))
         cg.add(var.set_visualizer_port(config[CONF_VISUALIZER_PORT]))
         cg.add(var.set_visualizer_enabled(True))

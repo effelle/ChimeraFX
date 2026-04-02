@@ -2054,30 +2054,33 @@ void CFXAddressableLightEffect::run_controls_() {
         // sequence_speed_/intensity_/palette_ are set by cfx_sequence or cfx_set
         // and override the controller number entities for the duration of the run.
         uint8_t current_speed = 128;
-        bool has_seq_speed = act_->sequence_speed.has_value();
-        if (has_seq_speed) {
-          current_speed = act_->sequence_speed.value();
-        } else if (c->get_speed()) {
-          current_speed = (uint8_t)c->get_speed()->state;
-        }
+        bool has_seq_speed = false;
+        bool has_seq_intensity = false;
+        bool has_seq_palette = false;
+#ifdef USE_CFX_SEQUENCE
+        has_seq_speed     = act_->sequence_speed.has_value();
+        has_seq_intensity = act_->sequence_intensity.has_value();
+        has_seq_palette   = act_->sequence_palette.has_value();
+        if (has_seq_speed)     current_speed = act_->sequence_speed.value();
+        else
+#endif
+        if (c->get_speed()) current_speed = (uint8_t)c->get_speed()->state;
 
         uint8_t current_intensity = 128;
-        bool has_seq_intensity = act_->sequence_intensity.has_value();
-        if (has_seq_intensity) {
-          current_intensity = act_->sequence_intensity.value();
-        } else if (c->get_intensity()) {
-          current_intensity = (uint8_t)c->get_intensity()->state;
-        }
+#ifdef USE_CFX_SEQUENCE
+        if (has_seq_intensity) current_intensity = act_->sequence_intensity.value();
+        else
+#endif
+        if (c->get_intensity()) current_intensity = (uint8_t)c->get_intensity()->state;
 
         uint8_t current_palette = this->get_default_palette_id_(this->effect_id_);
-        bool has_seq_palette = act_->sequence_palette.has_value();
         if (this->is_monochromatic_(this->effect_id_)) {
           current_palette = 255;
-        } else if (has_seq_palette) {
-          current_palette = act_->sequence_palette.value();
-        } else if (c->get_palette()) {
-          current_palette = get_pal_idx(c->get_palette());
         }
+#ifdef USE_CFX_SEQUENCE
+        else if (has_seq_palette) current_palette = act_->sequence_palette.value();
+#endif
+        else if (c->get_palette()) current_palette = get_pal_idx(c->get_palette());
 
         bool current_mirror = false;
         if (c->get_mirror()) {
