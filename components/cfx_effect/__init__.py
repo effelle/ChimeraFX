@@ -16,7 +16,7 @@ from esphome.core import CORE
 from esphome import automation
 
 DEPENDENCIES = ["light"]
-AUTO_LOAD = ["number", "select", "switch"]
+AUTO_LOAD = ["number", "select", "switch", "event"]
 CODEOWNERS = ["@effelle"]
 
 # Define the namespace and class

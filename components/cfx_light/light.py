@@ -51,6 +51,7 @@ CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
+AUTO_LOAD = ["event"]
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
