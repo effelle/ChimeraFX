@@ -279,6 +279,9 @@ async def to_code(config):
             _core_ha_events.CORE.data.setdefault("cfx_ha_events_enabled", True)
             if not is_included(EXCLUDE_HA_EVENTS):
                 _core_ha_events.CORE.data["cfx_ha_events_enabled"] = False
+                cg.add(var.set_ha_events_enabled(False))
+            else:
+                cg.add(var.set_ha_events_enabled(True))
 
         # 11. Debug (ONLY on Master, placed LAST in Master block)
         if is_included(EXCLUDE_DEBUG) and idx == 0:

@@ -145,6 +145,12 @@ public:
     was_on_ = light_on;
   }
 
+  void set_ha_events_enabled(bool enabled) {
+#ifdef USE_CFX_EVENTS
+    CFXEventManager::get().set_ha_events_enabled(enabled);
+#endif
+  }
+
   void set_speed(number::Number *n) { speed_ = n; }
   void set_intensity(number::Number *n) { intensity_ = n; }
   void set_palette(select::Select *s) { palette_ = s; }
