@@ -724,7 +724,11 @@ void CFXAddressableLightEffect::start() {
 #ifdef USE_CFX_EVENTS
   if (this->effect_id_ != 185 && !act_->strip_tag.empty()
       && act_->active_intro_mode != INTRO_NONE) {
+#ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence == nullptr) {
+#else
+    {
+#endif
       // Bare effect path: fire cfx_begin directly.
       std::string evt = std::string("cfx_begin:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
@@ -742,7 +746,11 @@ void CFXAddressableLightEffect::stop() {
   if (this->effect_id_ != 185) {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
+#ifdef USE_CFX_SEQUENCE
     if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
+#else
+    if (!act_->strip_tag.empty()) {
+#endif
       std::string evt = std::string("cfx_stop:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
@@ -1019,13 +1027,16 @@ void CFXAddressableLightEffect::stop() {
             // default fade-to-black on every light-off — not a meaningful outro,
             // must not fire cfx_complete.
             if (!act_->is_sequence_outro && act_->active_outro_mode != INTRO_MODE_NONE) {
+#ifdef USE_CFX_SEQUENCE
               if (captured_sequence != nullptr) {
                 // Sequence-driven path: route through report_event_complete()
                 // so that on_cfx_complete YAML automations fire in addition
                 // to the HA cfx_complete event. Without this, only the HA
                 // event fires and on-device triggers are silently skipped.
                 captured_sequence->report_event_complete();
-              } else {
+              } else
+#endif
+              {
                 // Standalone (no sequence bound): fire HA event directly.
                 // Use instance act_->strip_tag — no singleton dependency.
                 if (!act_->strip_tag.empty()) {
