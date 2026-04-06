@@ -69,10 +69,21 @@ CHIPSETS = {
     "WS2812X": ChimeraChipset.CHIPSET_WS2812X,
     "SK6812": ChimeraChipset.CHIPSET_SK6812,
     "WS2811": ChimeraChipset.CHIPSET_WS2811,
+    "APA102": ChimeraChipset.CHIPSET_APA102,
+    "SK9822": ChimeraChipset.CHIPSET_SK9822,
 }
+
+# Chipsets that use SPI transport instead of RMT
+SPI_CHIPSETS = {"APA102", "SK9822"}
 
 # Chipsets that use 4-byte RGBW protocol by default
 RGBW_CHIPSETS = {"SK6812"}
+
+# SPI Host mapping
+SPI_HOSTS = {
+    "SPI2_HOST": cfx_light_ns.enum("CFXSPIHost").SPI_HOST_2,
+    "SPI3_HOST": cfx_light_ns.enum("CFXSPIHost").SPI_HOST_3,
+}
 
 # RGB byte order mapping
 RGB_ORDERS = {
@@ -89,8 +100,15 @@ DEFAULT_ORDER = {
     "WS2812X": RGBOrder.ORDER_GRB,
     "SK6812": RGBOrder.ORDER_GRB,
     "WS2811": RGBOrder.ORDER_RGB,
+    "APA102": RGBOrder.ORDER_BGR,
+    "SK9822": RGBOrder.ORDER_BGR,
 }
 
+# Config keys
+CONF_DATA_PIN = "data_pin"
+CONF_CLOCK_PIN = "clock_pin"
+CONF_SPI_SPEED = "spi_speed"
+CONF_SPI_HOST = "spi_host"
 
 # --- Segment Schema & Validation (Phase 1) ---
 
@@ -212,9 +230,16 @@ CONFIG_SCHEMA = cv.All(
     light.ADDRESSABLE_LIGHT_SCHEMA.extend(
         {
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(CFXLightOutput),
-            cv.Required(CONF_PIN): pins.internal_gpio_output_pin_schema,
             cv.Required(CONF_NUM_LEDS): cv.positive_not_null_int,
             cv.Required(CONF_CHIPSET): cv.one_of(*CHIPSETS, upper=True),
+            # RMT pins (Optional, validated by _validate_transport)
+            cv.Optional(CONF_PIN): pins.internal_gpio_output_pin_schema,
+            # SPI pins (Optional, validated by _validate_transport)
+            cv.Optional(CONF_DATA_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Optional(CONF_SPI_SPEED, default="10MHz"): cv.frequency,
+            cv.Optional(CONF_SPI_HOST, default="SPI2_HOST"): cv.enum(SPI_HOSTS, upper=True),
+            # General config
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
             cv.Optional(CONF_IS_RGBW): cv.boolean,
             cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
@@ -235,6 +260,42 @@ CONFIG_SCHEMA = cv.All(
     ).extend(cv.COMPONENT_SCHEMA),
     _validate_segments,  # Must run AFTER schema accepts the 'segments' key
 )
+
+def _validate_transport(config):
+    """Ensure transport-specific configuration maps to the selected chipset."""
+    chipset = config[CONF_CHIPSET]
+    is_spi = chipset in SPI_CHIPSETS
+    
+    if is_spi:
+        if CONF_PIN in config:
+            raise cv.Invalid(f"'{CONF_PIN}' cannot be used with SPI chipset {chipset}")
+        if CONF_DATA_PIN not in config:
+            raise cv.RequiredFieldInvalid(f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}", path=[CONF_DATA_PIN])
+        if CONF_CLOCK_PIN not in config:
+            raise cv.RequiredFieldInvalid(f"'{CONF_CLOCK_PIN}' is required for SPI chipset {chipset}", path=[CONF_CLOCK_PIN])
+        if config.get(CONF_RMT_SYMBOLS, 0) != 0:
+            raise cv.Invalid(f"'{CONF_RMT_SYMBOLS}' has no effect on SPI chipsets")
+            
+        # Detect invalid SPI_HOST selection
+        host = config.get(CONF_SPI_HOST, "SPI2_HOST")
+        if host == "SPI3_HOST":
+            import esphome.core as _core
+            try:
+                variant = str(_core.CORE.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
+                if variant in ("ESP32C3", "ESP32C5", "ESP32C6", "ESP32H2"):
+                    raise cv.Invalid(f"SPI3_HOST is not available on {variant}. Use SPI2_HOST or let it default.")
+            except Exception:
+                pass # fallback to compile-time check in C++
+    else:
+        # RMT
+        if CONF_PIN not in config:
+            raise cv.RequiredFieldInvalid(f"'{CONF_PIN}' is required for RMT chipset {chipset}", path=[CONF_PIN])
+        if CONF_DATA_PIN in config or CONF_CLOCK_PIN in config or CONF_SPI_SPEED in config or CONF_SPI_HOST in config:
+            raise cv.Invalid(f"SPI options ({CONF_DATA_PIN}, {CONF_CLOCK_PIN}, {CONF_SPI_SPEED}, {CONF_SPI_HOST}) cannot be used with RMT chipset {chipset}")
+            
+    return config
+
+CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, _validate_transport)
 
 
 # RMT hardware budget per ESP32 variant.
@@ -320,39 +381,36 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
 
 
 async def to_code(config):
-    # Re-enable ESP-IDF's RMT driver (newer ESPHome excludes it by default)
-    try:
-        from esphome.components.esp32 import include_builtin_idf_component
-        include_builtin_idf_component("esp_driver_rmt")
-    except ImportError:
-        pass  # Older ESPHome: RMT driver included by default
-
-    var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
-
-    segments = config.get(CONF_SEGMENTS, [])
-
-    if segments:
-        # --- Phase 2: Per-segment light entities ---
-        # Register parent as master light (no effects, acts as global relay)
-        master_config = dict(config)
-        master_config[CONF_EFFECTS] = []  # No effects on master
-        await light.register_light(var, master_config)
-        light_state = await cg.get_variable(config[CONF_ID])
-        cg.add(var.set_master_light_state(light_state))
-        await cg.register_component(var, config)
-    else:
-        # No segments: original single-light behavior
-        await light.register_light(var, config)
-        light_state = await cg.get_variable(config[CONF_ID])
-        cg.add(var.set_master_light_state(light_state))
-        await cg.register_component(var, config)
-
     # --- Hardware configuration (always) ---
-    cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
-
     chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
+    
+    is_spi = chipset_name in SPI_CHIPSETS
+    
+    if is_spi:
+        # Re-enable ESP-IDF's SPI driver
+        try:
+            from esphome.components.esp32 import include_builtin_idf_component
+            include_builtin_idf_component("esp_driver_spi")
+        except ImportError:
+            pass
+            
+        cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
+        cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
+        cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
+        cg.add(var.set_spi_speed_hz(config[CONF_SPI_SPEED]))
+        cg.add(var.set_spi_host(SPI_HOSTS[config[CONF_SPI_HOST]]))
+    else:
+        # Re-enable ESP-IDF's RMT driver
+        try:
+            from esphome.components.esp32 import include_builtin_idf_component
+            include_builtin_idf_component("esp_driver_rmt")
+        except ImportError:
+            pass
+            
+        cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
+        cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
 
     # RGBW: explicit override > auto-detect from chipset
     if CONF_IS_RGBW in config:
@@ -372,61 +430,62 @@ async def to_code(config):
     cg.add(var.set_rgb_order(rgb_order))
 
     # Auto-compute RMT symbols if not set manually.
-    # Two-pass approach: on the first call scan CORE.config to count ALL
-    # cfx_light instances upfront, so every strip uses the same correct
-    # divisor rather than an incrementally-growing one.
-    import esphome.core as _core_rmt
-    import logging as _log_rmt
-    rmt_sym = config[CONF_RMT_SYMBOLS]
-    if rmt_sym == 0:
-        if "cfx_light_total" not in _core_rmt.CORE.data:
-            # First call: count auto strips AND subtract manually-set budget
-            # so manual overrides are accounted for in the remaining budget.
-            manual_total = sum(
-                lconf.get(CONF_RMT_SYMBOLS, 0)
-                for lconf in _core_rmt.CORE.config.get("light", [])
-                if lconf.get("platform", "") == "cfx_light"
-                   and lconf.get(CONF_RMT_SYMBOLS, 0) != 0
-            )
-            n_auto = sum(
-                1 for lconf in _core_rmt.CORE.config.get("light", [])
-                if lconf.get("platform", "") == "cfx_light"
-                   and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
-            )
-            n_total_lights = n_auto + (1 if manual_total > 0 else 0)
-            # Enforce per-chip light limit
-            _esp32_variant = "ESP32"
-            try:
-                from esphome.core import CORE as _c
-                _esp32_variant = str(_c.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
-            except Exception:
-                pass
-            _n_all_lights = sum(
-                1 for lconf in _core_rmt.CORE.config.get("light", [])
-                if lconf.get("platform", "") == "cfx_light"
-            )
-            _max_lights = _MAX_LIGHTS.get(_esp32_variant, _MAX_LIGHTS_DEFAULT)
-            if _n_all_lights > _max_lights:
-                _log_rmt.getLogger(__name__).error(
-                    "CFXLight: %s supports max %d light(s) but %d are declared. "
-                    "Reduce the number of cfx_light instances.",
-                    _esp32_variant, _max_lights, _n_all_lights,
+    # We must EXCLUDE SPI strips from the auto-budget calculation!
+    if not is_spi:
+        import esphome.core as _core_rmt
+        import logging as _log_rmt
+        rmt_sym = config.get(CONF_RMT_SYMBOLS, 0)
+        if rmt_sym == 0:
+            if "cfx_light_total" not in _core_rmt.CORE.data:
+                # First call: count auto RMT strips AND subtract manually-set budget
+                manual_total = sum(
+                    lconf.get(CONF_RMT_SYMBOLS, 0)
+                    for lconf in _core_rmt.CORE.config.get("light", [])
+                    if lconf.get("platform", "") == "cfx_light"
+                       and lconf.get(CONF_RMT_SYMBOLS, 0) != 0
+                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
                 )
-            _core_rmt.CORE.data["cfx_light_total"]   = max(n_auto, 1)
-            _core_rmt.CORE.data["cfx_light_manual"]  = manual_total
+                n_auto = sum(
+                    1 for lconf in _core_rmt.CORE.config.get("light", [])
+                    if lconf.get("platform", "") == "cfx_light"
+                       and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
+                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
+                )
+                n_total_lights = n_auto + (1 if manual_total > 0 else 0)
+                # Enforce per-chip light limit (RMT only)
+                _esp32_variant = "ESP32"
+                try:
+                    from esphome.core import CORE as _c
+                    _esp32_variant = str(_c.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
+                except Exception:
+                    pass
+                _n_all_rmt_lights = sum(
+                    1 for lconf in _core_rmt.CORE.config.get("light", [])
+                    if lconf.get("platform", "") == "cfx_light"
+                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
+                )
+                _max_lights = _MAX_LIGHTS.get(_esp32_variant, _MAX_LIGHTS_DEFAULT)
+                if _n_all_rmt_lights > _max_lights:
+                    _log_rmt.getLogger(__name__).error(
+                        "CFXLight: %s supports max %d RMT light(s) but %d are declared. "
+                        "Reduce the number of RMT cfx_light instances.",
+                        _esp32_variant, _max_lights, _n_all_rmt_lights,
+                    )
+                _core_rmt.CORE.data["cfx_light_total"]   = max(n_auto, 1)
+                _core_rmt.CORE.data["cfx_light_manual"]  = manual_total
+                _log_rmt.getLogger(__name__).info(
+                    "CFXLight: %d auto RMT strip(s), %d manual symbols reserved — "
+                    "dividing remaining RMT budget evenly",
+                    n_auto, manual_total,
+                )
+            n_total      = _core_rmt.CORE.data["cfx_light_total"]
+            manual_used  = _core_rmt.CORE.data.get("cfx_light_manual", 0)
+            rmt_sym = _get_rmt_symbols_auto(n_total, manual_used)
             _log_rmt.getLogger(__name__).info(
-                "CFXLight: %d auto strip(s), %d manual symbols reserved — "
-                "dividing remaining RMT budget evenly",
-                n_auto, manual_total,
+                "CFXLight: auto rmt_symbols=%d (%d strip(s))",
+                rmt_sym, n_total,
             )
-        n_total      = _core_rmt.CORE.data["cfx_light_total"]
-        manual_used  = _core_rmt.CORE.data.get("cfx_light_manual", 0)
-        rmt_sym = _get_rmt_symbols_auto(n_total, manual_used)
-        _log_rmt.getLogger(__name__).info(
-            "CFXLight: auto rmt_symbols=%d (%d strip(s))",
-            rmt_sym, n_total,
-        )
-    cg.add(var.set_rmt_symbols(rmt_sym))
+        cg.add(var.set_rmt_symbols(rmt_sym))
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))

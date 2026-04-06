@@ -61,6 +61,18 @@ CFXLightOutput::~CFXLightOutput() {
     close(this->socket_fd_);
     this->socket_fd_ = -1;
   }
+  // SPI teardown
+  if (this->spi_device_ != nullptr) {
+    spi_bus_remove_device(this->spi_device_);
+    this->spi_device_ = nullptr;
+  }
+  if (this->transport_ == TRANSPORT_SPI) {
+    spi_bus_free(resolve_spi_host_(this->spi_host_));
+  }
+  if (this->spi_frame_buf_ != nullptr) {
+    free(this->spi_frame_buf_);
+    this->spi_frame_buf_ = nullptr;
+  }
 }
 
 // --- Timing Configuration ---
@@ -177,9 +189,71 @@ void CFXLightOutput::setup() {
     return;
   }
 
+  // Transport-specific hardware init
+  if (this->transport_ == TRANSPORT_SPI) {
+    this->setup_spi_();
+  } else {
+    this->setup_rmt_();
+  }
+  if (this->is_failed())
+    return;
+
+  // --- Phase 2: Set up Event-Driven State Synchronization ---
+  // Decoupled from the high-frequency DMA write loop to prevent recursion!
+  if (this->master_light_state_ != nullptr &&
+      !this->segment_light_states_.empty()) {
+
+    // Wire up listeners.
+    this->master_listener_ = new MasterListener(this);
+    this->master_light_state_->add_remote_values_listener(
+        this->master_listener_);
+
+    for (auto *seg_state : this->segment_light_states_) {
+      auto *listener = new SegmentListener(this);
+      this->segment_listeners_.push_back(listener);
+      seg_state->add_remote_values_listener(listener);
+    }
+  }
+
+  // QoL FIX: Live force_white reactivity for solid colors
+  // If no effect is active, toggling the switch must immediately repaint
+  // the current solid color with/without the RGB->W conversion.
+  if (this->force_white_sw_ != nullptr) {
+    this->force_white_sw_->add_on_state_callback([this](bool state) {
+      if (this->is_effect_active() || this->has_segments())
+        return;
+
+      if (this->state_parent_ != nullptr) {
+        auto val = this->state_parent_->current_values;
+        Color c = light::color_from_light_color_values(val);
+        if (state && this->has_white_channel()) {
+          cfx::apply_force_white(c.r, c.g, c.b, c.w);
+        }
+        this->all() = c;
+        this->schedule_show();
+      }
+    });
+  }
+
+  if (this->transport_ == TRANSPORT_SPI) {
+    ESP_LOGI(TAG, "CFXLight ready: %u LEDs on SPI (data=GPIO%u clock=GPIO%u speed=%" PRIu32 " Hz)",
+             this->num_leds_, this->spi_data_pin_, this->spi_clock_pin_,
+             this->spi_speed_hz_);
+  } else {
+    ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
+             this->num_leds_, this->pin_, this->rmt_symbols_);
+  }
+}
+
+// --- RMT Transport Setup (extracted from setup()) ---
+
+void CFXLightOutput::setup_rmt_() {
+  size_t buffer_size = this->get_buffer_size_();
+
   // Allocate RMT transmission buffer
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  this->rmt_buf_ = allocator.allocate(buffer_size);
+  RAMAllocator<uint8_t> rmt_alloc(RAMAllocator<uint8_t>::ALLOC_INTERNAL);
+  this->rmt_buf_ = rmt_alloc.allocate(buffer_size);
 #else
   RAMAllocator<rmt_symbol_word_t> rmt_allocator(
       RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
@@ -187,19 +261,15 @@ void CFXLightOutput::setup() {
 #endif
 
   // Auto-detect RMT symbol buffer size from chip variant
-  // rmt_symbols_ is set by Python codegen (light.py) which divides the
-  // hardware total evenly across all cfx_light instances at compile time.
-  // This fallback only triggers if someone calls setup() without codegen
-  // (e.g. unit tests) — use the minimum safe value of one block.
   if (this->rmt_symbols_ == 0) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
-    this->rmt_symbols_ = 64; // Classic: 1 block fallback
+    this->rmt_symbols_ = 64;
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    this->rmt_symbols_ = 64; // S2: 1 block fallback
+    this->rmt_symbols_ = 64;
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
-    this->rmt_symbols_ = 48; // S3/P4: 1 block fallback
+    this->rmt_symbols_ = 48;
 #else
-    this->rmt_symbols_ = 48; // C3/C5/C6/H2: 1 block fallback
+    this->rmt_symbols_ = 48;
 #endif
   }
 
@@ -266,46 +336,90 @@ void CFXLightOutput::setup() {
     this->mark_failed();
     return;
   }
+}
 
-  // --- Phase 2: Set up Event-Driven State Synchronization ---
-  // Decoupled from the high-frequency DMA write loop to prevent recursion!
-  if (this->master_light_state_ != nullptr &&
-      !this->segment_light_states_.empty()) {
+// --- SPI Transport Setup ---
 
-    // Wire up listeners.
-    this->master_listener_ = new MasterListener(this);
-    this->master_light_state_->add_remote_values_listener(
-        this->master_listener_);
+spi_host_device_t CFXLightOutput::resolve_spi_host_(CFXSPIHost host) {
+  switch (host) {
+  case SPI_HOST_3:
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2) || \
+    defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
+    return SPI3_HOST;
+#else
+    ESP_LOGE(TAG, "SPI3_HOST not available on this chip variant, falling back to SPI2_HOST");
+    return SPI2_HOST;
+#endif
+  case SPI_HOST_2:
+  default:
+    return SPI2_HOST;
+  }
+}
 
-    for (auto *seg_state : this->segment_light_states_) {
-      auto *listener = new SegmentListener(this);
-      this->segment_listeners_.push_back(listener);
-      seg_state->add_remote_values_listener(listener);
-    }
+size_t CFXLightOutput::get_spi_end_frame_size_() const {
+  if (this->chipset_ == CHIPSET_SK9822) {
+    // SK9822: ceil(num_leds / 2) + 1 bytes of 0x00
+    return (this->num_leds_ + 1) / 2 + 1;
+  } else {
+    // APA102: ceil(num_leds / 16) + 1 bytes of 0xFF
+    return (this->num_leds_ + 15) / 16 + 1;
+  }
+}
+
+uint8_t CFXLightOutput::get_spi_end_frame_byte_() const {
+  return (this->chipset_ == CHIPSET_SK9822) ? 0x00 : 0xFF;
+}
+
+size_t CFXLightOutput::get_spi_frame_size_() const {
+  // Start frame (4) + LED frames (num_leds * 4) + end frame
+  size_t raw = 4 + (this->num_leds_ * 4) + this->get_spi_end_frame_size_();
+  // Round up to 4-byte alignment for DMA
+  return (raw + 3) & ~3;
+}
+
+void CFXLightOutput::setup_spi_() {
+  size_t frame_size = this->get_spi_frame_size_();
+
+  // Allocate DMA-capable frame buffer (must be 32-bit aligned internal RAM)
+  this->spi_frame_buf_ = (uint8_t *)heap_caps_malloc(frame_size, MALLOC_CAP_DMA);
+  if (this->spi_frame_buf_ == nullptr) {
+    ESP_LOGE(TAG, "Cannot allocate SPI frame buffer (%u bytes, DMA)!", frame_size);
+    this->mark_failed();
+    return;
+  }
+  memset(this->spi_frame_buf_, 0, frame_size);
+
+  spi_host_device_t host = resolve_spi_host_(this->spi_host_);
+
+  spi_bus_config_t bus_cfg = {};
+  bus_cfg.mosi_io_num = this->spi_data_pin_;
+  bus_cfg.miso_io_num = -1;   // not needed
+  bus_cfg.sclk_io_num = this->spi_clock_pin_;
+  bus_cfg.quadwp_io_num = -1;
+  bus_cfg.quadhd_io_num = -1;
+  bus_cfg.max_transfer_sz = frame_size;
+
+  esp_err_t err = spi_bus_initialize(host, &bus_cfg, SPI_DMA_CH_AUTO);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "SPI bus init failed (err=%d, data=GPIO%u clock=GPIO%u)",
+             err, this->spi_data_pin_, this->spi_clock_pin_);
+    this->mark_failed();
+    return;
   }
 
-  // QoL FIX: Live force_white reactivity for solid colors
-  // If no effect is active, toggling the switch must immediately repaint
-  // the current solid color with/without the RGB->W conversion.
-  if (this->force_white_sw_ != nullptr) {
-    this->force_white_sw_->add_on_state_callback([this](bool state) {
-      if (this->is_effect_active() || this->has_segments())
-        return;
+  spi_device_interface_config_t dev_cfg = {};
+  dev_cfg.clock_speed_hz = this->spi_speed_hz_;
+  dev_cfg.mode = 0;             // CPOL=0, CPHA=0
+  dev_cfg.spics_io_num = -1;    // APA102/SK9822 have no CS line
+  dev_cfg.queue_size = 1;
+  dev_cfg.flags = SPI_DEVICE_NO_DUMMY;  // required for long strips
 
-      if (this->state_parent_ != nullptr) {
-        auto val = this->state_parent_->current_values;
-        Color c = light::color_from_light_color_values(val);
-        if (state && this->has_white_channel()) {
-          cfx::apply_force_white(c.r, c.g, c.b, c.w);
-        }
-        this->all() = c;
-        this->schedule_show();
-      }
-    });
+  err = spi_bus_add_device(host, &dev_cfg, &this->spi_device_);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "SPI device add failed (err=%d)", err);
+    this->mark_failed();
+    return;
   }
-
-  ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
-           this->num_leds_, this->pin_, this->rmt_symbols_);
 }
 
 // --- Dynamic State Synchronization ---
@@ -624,7 +738,18 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
 
-// Copy pixel buffer → RMT buffer and fire
+  if (this->transport_ == TRANSPORT_SPI) {
+    this->flush_spi_();
+  } else {
+    this->flush_rmt_();
+  }
+}
+
+// --- RMT Transport Flush ---
+
+void CFXLightOutput::flush_rmt_() {
+  esp_err_t error;
+  // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
 #else
@@ -672,6 +797,53 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
   this->status_clear_warning();
+}
+
+// --- SPI Transport Flush ---
+
+void CFXLightOutput::flush_spi_() {
+  // Wait for previous transaction to complete
+  memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
+  this->spi_trans_.length = this->get_spi_frame_size_() * 8; // length in bits
+  this->spi_trans_.tx_buffer = this->spi_frame_buf_;
+
+  uint8_t *ptr = this->spi_frame_buf_;
+
+  // 1. Start frame: 32 bits of 0x00
+  *ptr++ = 0x00;
+  *ptr++ = 0x00;
+  *ptr++ = 0x00;
+  *ptr++ = 0x00;
+
+  // 2. LED frames: 0xFF, Blue, Green, Red
+  uint8_t *src = this->buf_;
+  for (int i = 0; i < this->num_leds_; i++) {
+    *ptr++ = 0xFF; // Global brightness: max (11111111)
+
+    // Source buffer `buf_` is already ordered according to `rgb_order_`
+    // (handled by get_view_internal / ESPColorView).
+    // For APA102/SK9822 matching fastled behavior, we default to BGR order
+    // in light.py, so buf_[0] is B, buf_[1] is G, buf_[2] is R.
+    *ptr++ = *src++;
+    *ptr++ = *src++;
+    *ptr++ = *src++;
+  }
+
+  // 3. End frame
+  size_t end_size = this->get_spi_end_frame_size_();
+  uint8_t end_byte = this->get_spi_end_frame_byte_();
+  for (size_t i = 0; i < end_size; i++) {
+    *ptr++ = end_byte;
+  }
+
+  // Fire-and-forget DMA SPI transmit
+  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, pdMS_TO_TICKS(10));
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "SPI TX error / queue full (err=%d)", err);
+    this->status_set_warning();
+  } else {
+    this->status_clear_warning();
+  }
 }
 
 void CFXLightOutput::send_visualizer_metadata(const std::string &name,
@@ -768,6 +940,12 @@ void CFXLightOutput::dump_config() {
   case CHIPSET_WS2811:
     chipset_str = "WS2811";
     break;
+  case CHIPSET_APA102:
+    chipset_str = "APA102";
+    break;
+  case CHIPSET_SK9822:
+    chipset_str = "SK9822";
+    break;
   default:
     chipset_str = "UNKNOWN";
     break;
@@ -796,16 +974,30 @@ void CFXLightOutput::dump_config() {
     order_str = "UNKNOWN";
     break;
   }
-  ESP_LOGCONFIG(TAG,
-                "CFXLight:\n"
-                "  Pin: %u\n"
-                "  Chipset: %s\n"
-                "  LEDs: %u\n"
-                "  RGBW: %s\n"
-                "  RGB Order: %s\n"
-                "  RMT Symbols: %" PRIu32,
-                this->pin_, chipset_str, this->num_leds_,
-                this->is_rgbw_ ? "yes" : "no", order_str, this->rmt_symbols_);
+  
+  if (this->transport_ == TRANSPORT_SPI) {
+    ESP_LOGCONFIG(TAG,
+                  "CFXLight (SPI):\n"
+                  "  Data Pin: GPIO%u\n"
+                  "  Clock Pin: GPIO%u\n"
+                  "  Speed: %" PRIu32 " Hz\n"
+                  "  Chipset: %s\n"
+                  "  LEDs: %u\n"
+                  "  RGB Order: %s",
+                  this->spi_data_pin_, this->spi_clock_pin_, this->spi_speed_hz_,
+                  chipset_str, this->num_leds_, order_str);
+  } else {
+    ESP_LOGCONFIG(TAG,
+                  "CFXLight (RMT):\n"
+                  "  Pin: GPIO%u\n"
+                  "  Chipset: %s\n"
+                  "  LEDs: %u\n"
+                  "  RGBW: %s\n"
+                  "  RGB Order: %s\n"
+                  "  RMT Symbols: %" PRIu32,
+                  this->pin_, chipset_str, this->num_leds_,
+                  this->is_rgbw_ ? "yes" : "no", order_str, this->rmt_symbols_);
+  }
 
   // Segment layout
   if (!this->segment_defs_.empty()) {

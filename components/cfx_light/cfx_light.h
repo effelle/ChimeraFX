@@ -18,6 +18,7 @@
 
 #include <driver/gpio.h>
 #include <driver/rmt_tx.h>
+#include <driver/spi_master.h>
 #include <esp_err.h>
 #include <esp_idf_version.h>
 #include <functional>
@@ -50,6 +51,20 @@ enum ChimeraChipset : uint8_t {
   CHIPSET_WS2812X, // WS2812B, WS2812C, WS2813 (compatible timings)
   CHIPSET_SK6812,
   CHIPSET_WS2811,
+  CHIPSET_APA102,  // SPI two-wire, BGR native
+  CHIPSET_SK9822,  // SPI two-wire, BGR native
+};
+
+// Transport bus type (inferred from chipset)
+enum CFXTransport : uint8_t {
+  TRANSPORT_RMT,  // One-wire (WS2812X, SK6812, WS2811)
+  TRANSPORT_SPI,  // Two-wire clock+data (APA102, SK9822)
+};
+
+// SPI host selection (maps to ESP-IDF spi_host_device_t)
+enum CFXSPIHost : uint8_t {
+  SPI_HOST_2,  // SPI2_HOST — available on all ESP32 variants
+  SPI_HOST_3,  // SPI3_HOST — ESP32/S2/S3/P4 only
 };
 
 // RGB byte order in the protocol
@@ -124,7 +139,7 @@ public:
   // Public accessor for effect_data_ (used by virtual segment lights)
   uint8_t *get_effect_data() { return effect_data_; }
 
-  // Config setters (called by __init__.py codegen)
+  // Config setters (called by light.py codegen)
   void set_pin(uint8_t pin) { this->pin_ = pin; }
   void set_num_leds(uint16_t num_leds) { this->num_leds_ = num_leds; }
   void set_chipset(ChimeraChipset chipset) { this->chipset_ = chipset; }
@@ -142,6 +157,13 @@ public:
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
   }
+
+  // SPI transport setters
+  void set_transport(CFXTransport t) { this->transport_ = t; }
+  void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
+  void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
+  void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
+  void set_spi_host(CFXSPIHost host) { this->spi_host_ = host; }
 
   // --- Segment configuration (codegen setters) ---
   void add_segment_def(const std::string &id, uint16_t start, uint16_t stop,
@@ -216,8 +238,20 @@ protected:
     return this->num_leds_ * ((this->is_rgbw_ || this->is_wrgb_) ? 4 : 3);
   }
 
-  // Compute timing parameters from chipset
+  // Compute timing parameters from chipset (RMT only)
   void configure_timing_();
+
+  // Transport-specific setup/flush helpers
+  void setup_rmt_();
+  void setup_spi_();
+  void flush_rmt_();
+  void flush_spi_();
+
+  // SPI frame geometry helpers
+  size_t get_spi_frame_size_() const;
+  size_t get_spi_end_frame_size_() const;
+  uint8_t get_spi_end_frame_byte_() const;
+  static spi_host_device_t resolve_spi_host_(CFXSPIHost host);
 
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
@@ -262,6 +296,16 @@ protected:
   bool is_wrgb_{false};
   switch_::Switch *force_white_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
+
+  // SPI transport fields (idle harmlessly for RMT instances)
+  CFXTransport transport_{TRANSPORT_RMT};
+  uint8_t spi_data_pin_{0};
+  uint8_t spi_clock_pin_{0};
+  uint32_t spi_speed_hz_{10000000};  // 10 MHz default
+  CFXSPIHost spi_host_{SPI_HOST_2};
+  spi_device_handle_t spi_device_{nullptr};
+  uint8_t *spi_frame_buf_{nullptr};
+  spi_transaction_t spi_trans_{};
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};
