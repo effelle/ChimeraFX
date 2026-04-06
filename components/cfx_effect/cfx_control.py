@@ -272,16 +272,14 @@ async def to_code(config):
         # 10. HA Events (CFX-026: replaces Timer)
         # When ID 6 is included (default), HA event firing is enabled.
         # exclude: [6] disables cfx_reach/cfx_idle/cfx_start events to HA.
-        # Internal on_cfx_reach YAML triggers are unaffected.
-        # The enabled state is written to a global accessible by cfx_sequence.
         if is_effect_target:
-            import esphome.core as _core_ha_events
-            _core_ha_events.CORE.data.setdefault("cfx_ha_events_enabled", True)
+            import re
+            def _cfx_slugify(name: str) -> str:
+                return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+            t_tag = _cfx_slugify(str(t_name)) if t_name else str(target["id"])
+            
             if not is_included(EXCLUDE_HA_EVENTS):
-                _core_ha_events.CORE.data["cfx_ha_events_enabled"] = False
-                cg.add(var.set_ha_events_enabled(False))
-            else:
-                cg.add(var.set_ha_events_enabled(True))
+                cg.add(cg.RawExpression(f'chimera_fx::CFXEventManager::get().set_ha_events_disabled_for_tag("{t_tag}");'))
 
         # 11. Debug (ONLY on Master, placed LAST in Master block)
         if is_included(EXCLUDE_DEBUG) and idx == 0:

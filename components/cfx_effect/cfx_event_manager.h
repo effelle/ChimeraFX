@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace esphome {
 namespace chimera_fx {
@@ -28,6 +29,13 @@ public:
   // HA event delivery opt-in. When false, fire_event() is a no-op for all
   // HA-facing paths. Internal on_cfx_reach triggers are unaffected. (CFX-026)
   void set_ha_events_enabled(bool enabled) { this->ha_events_enabled_ = enabled; }
+
+  // Per-tag event delivery opt-out (CFX-040)
+  void set_ha_events_disabled_for_tag(const std::string &tag) {
+    if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) == this->disabled_tags_.end()) {
+      this->disabled_tags_.push_back(tag);
+    }
+  }
 
   void add_known_tag(const std::string &tag) {
     for (const auto &t : this->known_tags_)
@@ -72,6 +80,7 @@ protected:
   bool ha_events_enabled_{true};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;
+  std::vector<std::string> disabled_tags_;
 
   static constexpr uint8_t DEFERRED_QUEUE_SIZE = 32;
   std::string deferred_queue_[DEFERRED_QUEUE_SIZE];

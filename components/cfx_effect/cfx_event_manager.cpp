@@ -38,6 +38,12 @@ void CFXEventManager::flush_pending() {
     std::string tag = (second_colon != std::string::npos)
                           ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
                           : evt.substr(first_colon + 1);
+
+    // CFX-040: Per-tag opt-out check
+    if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
+      return; 
+    }
+
     auto it = this->strip_entities_.find(tag);
     if (it != this->strip_entities_.end() && it->second != nullptr) {
       target_entity = it->second;
