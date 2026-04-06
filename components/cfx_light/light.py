@@ -237,8 +237,8 @@ CONFIG_SCHEMA = cv.All(
             # SPI pins (Optional, validated by _validate_transport)
             cv.Optional(CONF_DATA_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
-            cv.Optional(CONF_SPI_SPEED, default="10MHz"): cv.frequency,
-            cv.Optional(CONF_SPI_HOST, default="SPI2_HOST"): cv.enum(SPI_HOSTS, upper=True),
+            cv.Optional(CONF_SPI_SPEED): cv.frequency,
+            cv.Optional(CONF_SPI_HOST): cv.enum(SPI_HOSTS, upper=True),
             # General config
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
             cv.Optional(CONF_IS_RGBW): cv.boolean,
@@ -290,8 +290,16 @@ def _validate_transport(config):
         # RMT
         if CONF_PIN not in config:
             raise cv.RequiredFieldInvalid(f"'{CONF_PIN}' is required for RMT chipset {chipset}", path=[CONF_PIN])
-        if CONF_DATA_PIN in config or CONF_CLOCK_PIN in config or CONF_SPI_SPEED in config or CONF_SPI_HOST in config:
-            raise cv.Invalid(f"SPI options ({CONF_DATA_PIN}, {CONF_CLOCK_PIN}, {CONF_SPI_SPEED}, {CONF_SPI_HOST}) cannot be used with RMT chipset {chipset}")
+        
+        # Ensure no SPI configuration keys were provided
+        invalid_keys = []
+        for key in [CONF_DATA_PIN, CONF_CLOCK_PIN, CONF_SPI_SPEED, CONF_SPI_HOST]:
+            if key in config:
+                invalid_keys.append(key)
+        
+        if invalid_keys:
+            joined_keys = ", ".join(invalid_keys)
+            raise cv.Invalid(f"SPI options ({joined_keys}) cannot be used with RMT chipset {chipset}")
             
     return config
 
@@ -399,8 +407,8 @@ async def to_code(config):
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
         cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
-        cg.add(var.set_spi_speed_hz(config[CONF_SPI_SPEED]))
-        cg.add(var.set_spi_host(SPI_HOSTS[config[CONF_SPI_HOST]]))
+        cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
+        cg.add(var.set_spi_host(SPI_HOSTS[config.get(CONF_SPI_HOST, "SPI2_HOST")]))
     else:
         # Re-enable ESP-IDF's RMT driver
         try:
