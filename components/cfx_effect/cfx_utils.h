@@ -420,7 +420,13 @@ struct FrameDiagnostics {
     last_frame_us = now_us;
   }
 
-  // Call periodically to log statistics
+  // Deferred logging state — set by maybe_log(), consumed by flush_log().
+  // Keeps heap queries out of the effect service hot path. (CFX-033)
+  bool pending_log_{false};
+  const char *pending_name_{nullptr};
+
+  // Call from the service loop hot path — zero-cost flag check only.
+  // If the log interval has elapsed, sets pending_log_ for flush_log().
   void maybe_log(const char *effect_name) {
     if (!enabled)
       return;
@@ -434,37 +440,48 @@ struct FrameDiagnostics {
         last_log_time = now_ms;
         return;
       }
+      pending_log_ = true;
+      pending_name_ = effect_name;
+    }
+  }
 
-      uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
-      float fps =
-          frame_count > 0 ? (1000000.0f * frame_count) / total_frame_us : 0;
-      float jitter_pct =
-          frame_count > 0 ? (100.0f * jitter_count) / frame_count : 0;
+  // Call from apply() AFTER runners finish — safely outside the DMA window.
+  // Performs the expensive heap queries and full log output. (CFX-033)
+  void flush_log() {
+    if (!pending_log_)
+      return;
+    pending_log_ = false;
 
-      uint32_t free_heap = 0;
-      uint32_t max_block = 0;
+    uint32_t avg_frame_us = (uint32_t)(total_frame_us / frame_count);
+    float fps =
+        frame_count > 0 ? (1000000.0f * frame_count) / total_frame_us : 0;
+    float jitter_pct =
+        frame_count > 0 ? (100.0f * jitter_count) / frame_count : 0;
+
+    uint32_t free_heap = 0;
+    uint32_t max_block = 0;
 
 #ifdef ARDUINO
-      free_heap = ESP.getFreeHeap();
-      max_block = ESP.getMaxAllocHeap();
+    free_heap = ESP.getFreeHeap();
+    max_block = ESP.getMaxAllocHeap();
 #else
-      free_heap = esp_get_free_heap_size();
-      max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    free_heap = esp_get_free_heap_size();
+    max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
 #endif
 
-      float avg_frame_ms = (float)avg_frame_us / 1000.0f;
-      uint32_t free_heap_kb = free_heap / 1024;
-      uint32_t max_block_kb = max_block / 1024;
+    float avg_frame_ms = (float)avg_frame_us / 1000.0f;
+    uint32_t free_heap_kb = free_heap / 1024;
+    uint32_t max_block_kb = max_block / 1024;
 
-      ESP_LOGI("chimera_fx",
-               "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
-               "Free (%ukB Max)",
-               effect_name, fps, avg_frame_ms, jitter_pct, free_heap_kb,
-               max_block_kb);
+    ESP_LOGI("chimera_fx",
+             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
+             "Free (%ukB Max)",
+             pending_name_ ? pending_name_ : "?",
+             fps, avg_frame_ms, jitter_pct, free_heap_kb,
+             max_block_kb);
 
-      reset();
-      last_log_time = now_ms;
-    }
+    reset();
+    last_log_time = cfx_millis();
   }
 };
 

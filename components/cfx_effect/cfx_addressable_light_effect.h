@@ -112,6 +112,7 @@ public:
     int32_t last_leading_pixel{-1};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
+    bool milestone_suppress{false};  // CFX-035: blocks re-fire after intro reset
 
 #ifdef USE_CFX_SEQUENCE
     CFXSequence *active_sequence{nullptr};
@@ -291,6 +292,7 @@ public:
     if (!act_) return;
     act_->last_fired_milestone = 0;
     act_->milestone_fired_this_frame = false;
+    act_->milestone_suppress = true;  // CFX-035: suppress until effect restarts from ~0%
   }
 
 protected:

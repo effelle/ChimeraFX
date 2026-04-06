@@ -67,27 +67,20 @@ public:
 
   // Push one event string onto the deferred queue (called from render loop).
   // Zero blocking — just a ring buffer write. (CFX-025)
-  // Coalescing: cfx_reach events for the same strip replace any pending entry
-  // instead of appending, preventing API buffer overflow with 4+ strips. (CFX-027)
+  // Coalescing: identical events (full string match) replace any pending entry
+  // instead of appending, preventing API buffer overflow with 4+ strips.
+  // CFX-034: Changed from prefix match to full-string match so that different
+  // milestones (e.g. 95% and 100%) firing in the same check_milestones_()
+  // while-loop are never coalesced — only truly duplicate events are merged.
   void push_deferred(const std::string &evt) {
-    // cfx_reach coalescing: extract "cfx_reach:<tag>:" prefix and scan for a
-    // pending entry with the same prefix. If found, overwrite it in-place
-    // so HA only sees the latest position per strip per flush cycle.
-    static constexpr const char REACH_PREFIX[] = "cfx_reach:";
-    static constexpr size_t REACH_PREFIX_LEN = sizeof(REACH_PREFIX) - 1;
-    if (evt.compare(0, REACH_PREFIX_LEN, REACH_PREFIX) == 0) {
-      // Find the second colon (after "cfx_reach:<tag>:")
-      size_t tag_end = evt.find(':', REACH_PREFIX_LEN);
-      if (tag_end != std::string::npos) {
-        // Scan pending entries for a matching cfx_reach:<tag>: prefix
-        for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
-             i = (i + 1) % DEFERRED_QUEUE_SIZE) {
-          if (this->deferred_queue_[i].compare(0, tag_end + 1, evt, 0, tag_end + 1) == 0) {
-            // Same strip — overwrite with latest percentage
-            this->deferred_queue_[i] = evt;
-            return;
-          }
-        }
+    // Full-string coalescing: scan pending entries for an exact duplicate.
+    // If found, no need to push again (idempotent). This protects against
+    // burst spam (same milestone re-firing across rapid frames) while never
+    // losing distinct milestone events (95% vs 100%). (CFX-034)
+    for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
+         i = (i + 1) % DEFERRED_QUEUE_SIZE) {
+      if (this->deferred_queue_[i] == evt) {
+        return;  // exact duplicate already queued — skip
       }
     }
 
@@ -236,6 +229,7 @@ protected:
   static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
+  bool     milestone_suppress_{false};  // CFX-035: blocks re-fire after intro reset
   // Strings built on-demand — no pre-computed array, matching the effect side.
   // CFXSequence instances are few (one per declared sequence) so memory is not
   // the concern here, but consistency with the effect side is cleaner.
@@ -244,11 +238,19 @@ protected:
   void reset_milestones_() {
     this->last_fired_milestone_ = 0;
     this->milestone_fired_this_frame_ = false;
+    this->milestone_suppress_ = true;  // CFX-035: suppress until effect restarts from ~0%
   }
 
   // Sweep all milestones crossed since last call. While loop ensures no
   // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
   void check_milestones_(float current_pct) {
+    // CFX-035: After intro reset, suppress until effect restarts from ~0%.
+    if (this->milestone_suppress_) {
+      if (current_pct < MILESTONE_STEP)
+        this->milestone_suppress_ = false;
+      else
+        return;  // block residual high-pct frames
+    }
     this->milestone_fired_this_frame_ = false;
     uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
     while (current_pct >= next && next <= 100) {

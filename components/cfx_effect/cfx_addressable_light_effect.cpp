@@ -1459,6 +1459,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+  // CFX-033: Deferred diagnostics — flush pending heap queries AFTER all
+  // runners finish but BEFORE DMA fires. Zero cost when debug is off.
+  if (act_->runner)
+    act_->runner->diagnostics.flush_log();
+  for (auto *sr : act_->segment_runners)
+    sr->diagnostics.flush_log();
+
   it.schedule_show();
   chimera_fx::instance = nullptr;
 }
@@ -5355,6 +5362,15 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
+  // CFX-035: After intro reset, suppress until effect actually restarts from ~0%.
+  // Without this, the first apply() frame after intro still has current_pct ≈ 100%
+  // from the intro transition blend, causing a duplicate 100% milestone.
+  if (act_->milestone_suppress) {
+    if (current_pct < MILESTONE_STEP)
+      act_->milestone_suppress = false;
+    else
+      return;  // block residual high-pct frames from re-firing
+  }
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
   while (current_pct >= next && next <= 100) {

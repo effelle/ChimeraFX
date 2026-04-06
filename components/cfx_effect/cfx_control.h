@@ -111,12 +111,11 @@ public:
     if (this->debug_) {
       this->debug_->add_on_state_callback([this](bool value) {
         ESP_LOGD("chimera_fx",
-                 "Debug switch toggled: %d. Applying to all instances.", value);
+                 "Debug switch toggled: %d. Applying to own runners (%zu).",
+                 value, this->runners_.size());
         global_debug_enabled_ = value;
-        for (auto *c : get_instances()) {
-          for (auto *r : c->runners_)
-            r->setDebug(value);
-        }
+        for (auto *r : this->runners_)
+          r->setDebug(value);
       });
     }
 
