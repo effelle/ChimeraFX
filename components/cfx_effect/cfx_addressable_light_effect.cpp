@@ -1327,8 +1327,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->state = TRANSITION_NONE;
       }
 
-      // Ensure Main Runner is reset/started (CFX-004: scoped guard)
+      // CFX-035: Reset the runner so we clear the stale current_leading_pixel
+      // and is_return_phase_ that accumulated during the invisible background
+      // run. Without reset(), the first frame after intro sees a mid-sweep
+      // pixel position against a freshly-wiped milestone table and bursts all
+      // milestones 5..100 in a single pass.
       chimera_fx::InstanceGuard start_guard(act_->runner);
+      act_->runner->reset();
       act_->runner->start();
     }
   }
