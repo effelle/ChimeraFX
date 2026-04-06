@@ -724,6 +724,16 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 #endif // CFX_VISUALIZER_ENABLED
 
+  if (this->transport_ == TRANSPORT_SPI) {
+    this->flush_spi_();
+  } else {
+    this->flush_rmt_();
+  }
+}
+
+// --- RMT Transport Flush ---
+
+void CFXLightOutput::flush_rmt_() {
   // Wait for previous DMA transmission to complete (safety valve)
   // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
   int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
@@ -738,17 +748,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
 
-  if (this->transport_ == TRANSPORT_SPI) {
-    this->flush_spi_();
-  } else {
-    this->flush_rmt_();
-  }
-}
-
-// --- RMT Transport Flush ---
-
-void CFXLightOutput::flush_rmt_() {
-  esp_err_t error;
   // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
