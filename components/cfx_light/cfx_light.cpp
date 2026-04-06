@@ -26,6 +26,10 @@
 #include <esp_clk_tree.h>
 #endif
 
+#ifdef USE_CFX_EVENTS
+#include "esphome/components/cfx_effect/cfx_event_manager.h"
+#endif
+
 namespace esphome {
 namespace cfx_light {
 
@@ -456,6 +460,10 @@ void CFXLightOutput::loop() {
       this->write_state(nullptr);
     }
   }
+
+#ifdef USE_CFX_EVENTS
+  chimera_fx::CFXEventManager::get().flush_pending();
+#endif
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
