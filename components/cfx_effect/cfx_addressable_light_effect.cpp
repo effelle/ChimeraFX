@@ -5426,7 +5426,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
     return;
   }
 
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
   // CFX-026: milestones fire on BOTH fill and erase passes.
   // is_return_phase_ is still read to detect the pass boundary and fire
   // cfx_idle as a separator — but it no longer suppresses milestones.
@@ -5443,10 +5443,13 @@ void CFXAddressableLightEffect::check_positional_triggers(
   act_->last_return_phase = is_return_phase;
 
   {
+#ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence != nullptr) {
       act_->active_sequence->check_positional_triggers(current_pixel,
                                                         total_pixels);
-    } else {
+    } else 
+#endif
+    {
       float current_percentage = (total_pixels > 1)
           ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
       this->check_milestones_(current_percentage * 100.0f);
