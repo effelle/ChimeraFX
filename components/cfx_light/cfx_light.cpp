@@ -50,7 +50,8 @@ static uint32_t rmt_resolution_hz() {
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
 // ESP32 has a small FD pool (~5 sockets under default ESP-IDF config). Without
 // this, each OTA cycle or component teardown leaks one FD, eventually causing
-// all subsequent socket() calls to fail. close() is available via lwip/sockets.h.
+// all subsequent socket() calls to fail. close() is available via
+// lwip/sockets.h.
 CFXLightOutput::~CFXLightOutput() {
   if (this->socket_fd_ >= 0) {
     close(this->socket_fd_);
@@ -188,13 +189,13 @@ void CFXLightOutput::setup() {
   // (e.g. unit tests) — use the minimum safe value of one block.
   if (this->rmt_symbols_ == 0) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
-    this->rmt_symbols_ = 64;  // Classic: 1 block fallback
+    this->rmt_symbols_ = 64; // Classic: 1 block fallback
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    this->rmt_symbols_ = 64;  // S2: 1 block fallback
+    this->rmt_symbols_ = 64; // S2: 1 block fallback
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
-    this->rmt_symbols_ = 48;  // S3/P4: 1 block fallback
+    this->rmt_symbols_ = 48; // S3/P4: 1 block fallback
 #else
-    this->rmt_symbols_ = 48;  // C3/C5/C6/H2: 1 block fallback
+    this->rmt_symbols_ = 48; // C3/C5/C6/H2: 1 block fallback
 #endif
   }
 
@@ -311,10 +312,10 @@ void CFXLightOutput::on_master_update() {
     return;
   }
 
-  ESP_LOGD("cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
-    this->is_syncing_,
-    (int)this->master_light_state_->remote_values.is_on(),
-    (int)this->prev_master_state_);
+  ESP_LOGD(
+      "cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
+      this->is_syncing_, (int)this->master_light_state_->remote_values.is_on(),
+      (int)this->prev_master_state_);
   if (this->is_syncing_)
     return;
   this->is_syncing_ = true; // Lock recursion
@@ -380,11 +381,18 @@ void CFXLightOutput::on_segment_update() {
     }
   }
 
-  ESP_LOGD("cfx_dbg", "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
-    master_on, is_any_segment_on,
-    (int)this->segment_light_states_.size() > 0 ? (int)this->segment_light_states_[0]->remote_values.is_on() : -1,
-    (int)this->segment_light_states_.size() > 1 ? (int)this->segment_light_states_[1]->remote_values.is_on() : -1,
-    (int)this->segment_light_states_.size() > 2 ? (int)this->segment_light_states_[2]->remote_values.is_on() : -1);
+  ESP_LOGD("cfx_dbg",
+           "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
+           master_on, is_any_segment_on,
+           (int)this->segment_light_states_.size() > 0
+               ? (int)this->segment_light_states_[0]->remote_values.is_on()
+               : -1,
+           (int)this->segment_light_states_.size() > 1
+               ? (int)this->segment_light_states_[1]->remote_values.is_on()
+               : -1,
+           (int)this->segment_light_states_.size() > 2
+               ? (int)this->segment_light_states_[2]->remote_values.is_on()
+               : -1);
   if (master_on != is_any_segment_on) {
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master
@@ -443,7 +451,7 @@ void CFXLightOutput::loop() {
   if (this->seg_flush_pending_) {
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= 2) {
-      this->seg_flush_pending_  = false;
+      this->seg_flush_pending_ = false;
       this->seg_flush_first_ms_ = 0;
       this->write_state(nullptr);
     }
@@ -585,14 +593,14 @@ void CFXLightOutput::write_state(light::LightState *state) {
       this->visualizer_pkt_.clear();
       this->visualizer_pkt_.reserve(buf_len + 1);
       this->visualizer_pkt_.push_back(VISUALIZER_TYPE_PIXELS);
-      this->visualizer_pkt_.insert(this->visualizer_pkt_.end(),
-                                   this->buf_, this->buf_ + buf_len);
+      this->visualizer_pkt_.insert(this->visualizer_pkt_.end(), this->buf_,
+                                   this->buf_ + buf_len);
       sendto(this->socket_fd_, this->visualizer_pkt_.data(),
-             this->visualizer_pkt_.size(), 0,
-             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+             this->visualizer_pkt_.size(), 0, (struct sockaddr *)&dest_addr,
+             sizeof(dest_addr));
     }
   }
-#endif  // CFX_VISUALIZER_ENABLED
+#endif // CFX_VISUALIZER_ENABLED
 
   // Wait for previous DMA transmission to complete (safety valve)
   // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
@@ -686,7 +694,7 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name,
              (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     }
   }
-#endif  // CFX_VISUALIZER_ENABLED
+#endif // CFX_VISUALIZER_ENABLED
 }
 
 // --- Color View (Maps ESPHome pixel access to our buffer) ---

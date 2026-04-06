@@ -6051,7 +6051,7 @@ bool CFXRunner::serviceIntro() {
 }
 
 void CFXRunner::reset() {
-  _virtual_now = 0;
+  _virtual_now = cfx_millis();
   _accum_ms = 0;
   _segment.call = 0;
   iteration_count_ = 0;
