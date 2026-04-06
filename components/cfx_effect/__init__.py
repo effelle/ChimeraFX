@@ -34,6 +34,7 @@ CONFIG_SCHEMA = cv.Schema(
 )
 
 def to_code(config):
+    cg.add_define("USE_CFX_EVENTS")
     if "cfx_control" in config:
         for conf in config["cfx_control"]:
             yield cfx_control.to_code(conf)

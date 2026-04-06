@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <span>
 
+#include "cfx_event_manager.h"
 #ifdef USE_CFX_SEQUENCE
 #include "../cfx_sequence/cfx_sequence.h"
 #endif
@@ -192,7 +193,7 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
   // Derive act_->strip_tag early — needed by both cfx_begin and cfx_start events.
   {
     auto *ls = this->get_light_state();
@@ -201,7 +202,7 @@ void CFXAddressableLightEffect::start() {
       ls->get_object_id_to(std::span(id_buf));
       act_->strip_tag = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
     }
-    cfx_sequence::CFXEventManager::get().add_known_tag(act_->strip_tag);
+    chimera_fx::CFXEventManager::get().add_known_tag(act_->strip_tag);
     this->rebuild_milestone_strings_();
     this->reset_milestones_();
   }
@@ -216,10 +217,10 @@ void CFXAddressableLightEffect::start() {
 
     this->trigger_on_start();
 
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
     if (!act_->strip_tag.empty()) {
       std::string evt = std::string("cfx_start:") + act_->strip_tag;
-      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
 #endif
   }
@@ -720,13 +721,13 @@ void CFXAddressableLightEffect::start() {
   // Without an intro, cfx_begin and cfx_start would fire at the same
   // millisecond and carry identical information, which is confusing.
   // Bare effects (active_sequence == nullptr) follow the same rule.
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
   if (this->effect_id_ != 185 && !act_->strip_tag.empty()
       && act_->active_intro_mode != INTRO_NONE) {
     if (act_->active_sequence == nullptr) {
       // Bare effect path: fire cfx_begin directly.
       std::string evt = std::string("cfx_begin:") + act_->strip_tag;
-      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
     // Sequence path: report_event_begin() fires cfx_begin when intro_.has_value().
   }
@@ -740,10 +741,10 @@ void CFXAddressableLightEffect::stop() {
 
   if (this->effect_id_ != 185) {
     this->trigger_on_stop();
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
     if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
       std::string evt = std::string("cfx_stop:") + act_->strip_tag;
-      cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
 #endif
   }
@@ -1008,7 +1009,7 @@ void CFXAddressableLightEffect::stop() {
                      "[T05] outro DONE: effect_id=%u is_mono=%d",
                      (unsigned)this->effect_id_,
                      (int)this->get_monochromatic_preset_(this->effect_id_).is_active);
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
             // Fire cfx_complete when the outro animation finishes.
             // If is_sequence_outro_ is true, the sequence already fired
             // completion (report_event_complete was called before stop()),
@@ -1029,7 +1030,7 @@ void CFXAddressableLightEffect::stop() {
                 // Use instance act_->strip_tag — no singleton dependency.
                 if (!act_->strip_tag.empty()) {
                   std::string evt = std::string("cfx_complete:") + act_->strip_tag;
-                  cfx_sequence::CFXEventManager::get().fire_event(evt.c_str());
+                  chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
                 }
               }
             }
@@ -5378,13 +5379,13 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
   while (current_pct >= next && next <= 100) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
-#ifdef USE_CFX_SEQUENCE
+#ifdef USE_CFX_EVENTS
     // Build event string on the stack — no heap, no pre-computed array.
     // Runs at most ~4x per 24ms frame at max speed. Negligible cost.
     char buf[48];
     snprintf(buf, sizeof(buf), "cfx_reach:%s:%u",
              act_->strip_tag.c_str(), (unsigned)act_->last_fired_milestone);
-    cfx_sequence::CFXEventManager::get().fire_event(buf);
+    chimera_fx::CFXEventManager::get().fire_event(buf);
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;
   }

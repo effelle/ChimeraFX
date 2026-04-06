@@ -11,7 +11,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 """
 
 import esphome.codegen as cg
-from esphome.components import light
+from esphome.components import light, event
 import esphome.config_validation as cv
 from esphome import pins
 from esphome.const import (
@@ -519,3 +519,61 @@ async def to_code(config):
             
         # Register the segment with the parent output so it can sync on/off and brightness
         cg.add(var.add_segment_light_state(light_state))
+
+    # --- Phase 3: Event Entity Setup (CFX-037) ---
+    import re
+    def _cfx_slugify(name: str) -> str:
+        return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+        
+    import esphome.core as core
+    progress_step = 5
+    milestones = list(range(progress_step, 101, progress_step))
+    if 100 not in milestones:
+        milestones.append(100)
+        
+    tags_to_register = []
+    
+    # 1. Parent light tag
+    parent_obj = config[CONF_ID]
+    parent_name = config.get(CONF_NAME, "")
+    parent_tag = _cfx_slugify(str(parent_name)) if parent_name else str(parent_obj.id)
+    tags_to_register.append(parent_tag)
+    
+    # 2. Segment tags
+    for seg in segments:
+        seg_id_obj = seg[CONF_SEGMENT_ID]
+        seg_name = seg.get(CONF_SEGMENT_NAME, "")
+        seg_tag = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
+        tags_to_register.append(seg_tag)
+        
+    for tag in tags_to_register:
+        safe_id = re.sub(r'[^a-z0-9_]', '_', tag)
+        eid = core.ID(
+            f"cfx_events_{safe_id}",
+            is_declaration=True,
+            type=event.Event,
+        )
+        evar = cg.new_Pvariable(eid)
+        core.CORE.component_ids.add(f"cfx_events_{safe_id}")
+        
+        event_types = (
+            [f"cfx_start:{tag}", f"cfx_begin:{tag}",
+             f"cfx_stop:{tag}",  f"cfx_complete:{tag}"]
+            + [f"cfx_reach:{tag}:{m}" for m in milestones]
+        )
+        
+        econf = {
+            "id": eid,
+            "name": f"CFX Events: {tag}",
+            "icon": "mdi:animation-play",
+            "disabled_by_default": False,
+            "internal": False,
+        }
+        await event.register_event(evar, econf, event_types=event_types)
+        
+        # Register this strip's entity with the EventManager directly
+        cg.add(cg.RawExpression(
+            f'chimera_fx::CFXEventManager::get().register_strip_entity'
+            f'("{tag}", {evar})'
+        ))
+
