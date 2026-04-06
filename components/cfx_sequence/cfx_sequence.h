@@ -229,28 +229,24 @@ protected:
   static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
-  bool     milestone_suppress_{false};  // CFX-035: blocks re-fire after intro reset
-  // Strings built on-demand — no pre-computed array, matching the effect side.
-  // CFXSequence instances are few (one per declared sequence) so memory is not
-  // the concern here, but consistency with the effect side is cleaner.
+  // No suppress field — intro guard is handled at the effect layer (act_->intro_active).
+  // CFXSequence::check_milestones_() is only called from check_positional_triggers(),
+  // which is only called from apply() after the intro_active guard below.
 
   void rebuild_milestone_strings_() {}  // no-op: strings built at fire time
   void reset_milestones_() {
     this->last_fired_milestone_ = 0;
     this->milestone_fired_this_frame_ = false;
-    this->milestone_suppress_ = true;  // CFX-035: suppress until effect restarts from ~0%
+    // Simple reset: main effect starts at pixel 0, so last_fired_milestone_ = 0
+    // guarantees the first milestone (5%) fires correctly without any suppression.
   }
 
   // Sweep all milestones crossed since last call. While loop ensures no
   // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
+  // Note: intro guard is enforced at the effect layer (check_milestones_ in
+  // cfx_addressable_light_effect.cpp returns early when intro_active is true),
+  // so this sequence-side function is only reached during the main effect.
   void check_milestones_(float current_pct) {
-    // CFX-035: After intro reset, suppress until effect restarts from ~0%.
-    if (this->milestone_suppress_) {
-      if (current_pct < MILESTONE_STEP)
-        this->milestone_suppress_ = false;
-      else
-        return;  // block residual high-pct frames
-    }
     this->milestone_fired_this_frame_ = false;
     uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
     while (current_pct >= next && next <= 100) {

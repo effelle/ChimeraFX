@@ -5362,15 +5362,12 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
-  // CFX-035: After intro reset, suppress until effect actually restarts from ~0%.
-  // Without this, the first apply() frame after intro still has current_pct ≈ 100%
-  // from the intro transition blend, causing a duplicate 100% milestone.
-  if (act_->milestone_suppress) {
-    if (current_pct < MILESTONE_STEP)
-      act_->milestone_suppress = false;
-    else
-      return;  // block residual high-pct frames from re-firing
-  }
+  // CFX-035: Suppress milestones while the intro is playing.
+  // The intro is a fast visual transition — its runner's leading pixel
+  // advances and would fire cfx_reach events that are meaningless to HA.
+  // Milestones fire only for the main effect after intro ends.
+  if (act_->intro_active)
+    return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
   while (current_pct >= next && next <= 100) {
