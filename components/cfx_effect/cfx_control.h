@@ -15,7 +15,9 @@
 
 #include "../cfx_light/cfx_light.h"
 #include "cfx_addressable_light_effect.h"
-
+#ifdef USE_CFX_EVENTS
+#include "cfx_event_manager.h"
+#endif
 namespace esphome {
 namespace chimera_fx {
 
