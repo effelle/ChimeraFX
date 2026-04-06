@@ -5394,6 +5394,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
   // Separator is a UI divider — suppress all positional events.
   if (this->effect_id_ == 185)
     return;
+
+  // Intro is a transitional overlay. Positional events track the main effect,
+  // which is running silently underneath but shouldn't fire triggers until intro ends.
+  if (act_ && act_->intro_active)
+    return;
   // Defensive bounds check
   if (total_pixels <= 0 || current_pixel < 0 || current_pixel > total_pixels) {
     return;

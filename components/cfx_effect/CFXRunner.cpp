@@ -6058,6 +6058,7 @@ void CFXRunner::reset() {
   effect_complete_ = false;
   _segment.reset = true;
   _last_frame = cfx_millis();
+  current_leading_pixel = -1;
   // Ownership flags are cleared on reset so a bare light.turn_on after a
   // sequence ends lets the UI sliders take back control.
   sequence_owns_speed_     = false;
