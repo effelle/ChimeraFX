@@ -389,6 +389,26 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
 
 
 async def to_code(config):
+    var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
+
+    segments = config.get(CONF_SEGMENTS, [])
+
+    if segments:
+        # --- Phase 2: Per-segment light entities ---
+        # Register parent as master light (no effects, acts as global relay)
+        master_config = dict(config)
+        master_config[CONF_EFFECTS] = []  # No effects on master
+        await light.register_light(var, master_config)
+        light_state = await cg.get_variable(config[CONF_ID])
+        cg.add(var.set_master_light_state(light_state))
+        await cg.register_component(var, config)
+    else:
+        # No segments: original single-light behavior
+        await light.register_light(var, config)
+        light_state = await cg.get_variable(config[CONF_ID])
+        cg.add(var.set_master_light_state(light_state))
+        await cg.register_component(var, config)
+
     # --- Hardware configuration (always) ---
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
     chipset_name = config[CONF_CHIPSET]
