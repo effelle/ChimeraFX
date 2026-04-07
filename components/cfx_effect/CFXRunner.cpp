@@ -5864,7 +5864,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // cleared the last pixel. Range expanded to allow the wipe front to travel
   // across the entire segment PLUS the fade width.
   uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
-  uint32_t totalPos = ((uint32_t)prog * ((len << 15) + fadeWidth)) >> 15;
+  uint32_t totalPos = (uint32_t)(((uint64_t)prog * (((uint32_t)len << 15) + fadeWidth)) >> 15);
   uint16_t ledIndex = totalPos >> 15;
   instance->current_leading_pixel = ledIndex;
 
