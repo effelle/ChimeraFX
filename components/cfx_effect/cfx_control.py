@@ -29,7 +29,7 @@ PALETTE_OPTIONS = [
     "RedBlue", "Rivendell", "Sakura", "Smart Random", "Solid", "SunnyGold", "Sunset", "Twilight"
 ]
 
-COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Lithograph", "Morse Code", "Quadrant", "Twin Pulse", "Wipe"]
+COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Lithograph", "Morse Code", "Quadrant", "Tidal Surge", "Twin Pulse", "Wipe"]
 INTRO_ONLY = ["Construct", "Crystallize", "Deep Breathe", "Dropping", "Inertia Sweep", "Interference", "Moiré Shift", "Pressurize", "Resonance", "Sonar Reveal", "Stellar Dust", "Telemetry", "Venetian"]
 OUTRO_ONLY = ["Close Blinds", "Drain", "Decelerate", "Dismantle", "Emptying", "Erode", "Exhale", "Interference Fade", "Moiré Fade", "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade"]
 

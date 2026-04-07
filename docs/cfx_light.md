@@ -34,15 +34,10 @@ light:
 * **pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
 * **num_leds** (*int*): The total number of LEDs in your strip.
 ### Supported Chipsets
-`cfx_light` is a high-speed **1-wire (NRZ)** driver. It utilizes the ESP32 RMT peripheral to generate industrial-grade timings for the following chipsets:
+`cfx_light` supports both **1-wire (NRZ)** and **2-wire (SPI)** chipsets. It utilizes native hardware peripherals (RMT and SPI Master) to generate precise timings:
 
-* **WS2812 / WS2812B / WS2813 / WS2815** (General 3-pin RGB strips)
-* **SK6812** (RGBW strips with a dedicated white channel)
-* **WS2811** (Standard 12V 3-LED segment strips)
-
-> [!WARNING]
-> **SPI strips are NOT supported at this moment.**  
-> 2-wire chipsets that require a separate Clock signal (such as **APA102, SK9822, WS2801, LPD8806**) are not compatible with this driver for now.
+* **1-wire NRZ**: WS2812, WS2812B, WS2813, WS2815, SK6812 (RGBW), WS2811.
+* **2-wire SPI**: APA102, SK9822.
 
 ### Configuration Variables
 To use a specific chipset, use the `chipset` variable in your YAML:
@@ -154,6 +149,7 @@ When segments are defined:
 `cfx_light` is a high-performance, asynchronous DMA driver. Unlike standard platforms that provide a broad but generic compatibility layer, `cfx_light` is specifically optimized for visual excellence and stability on the ESP32:
 
 - **Universal RMT Backend:** Whether you use the **ESP-IDF** or **Arduino** framework in ESPHome, this component leverages the native ESP32 RMT (Remote Control) peripheral directly via the IDF drivers. This ensures fire-and-forget DMA transmissions regardless of your framework choice.
-- **Curated Timing Engine:** Because we use a custom timing generator to ensure 1:1 color accuracy and zero-flicker performance, we support a curated list of the most popular 1-wire NRZ chipsets. We do not support the broad and often unstable list of older or 2-wire chipsets found in generic platforms.
+- **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822)
+- **Curated Timing Engine:** Because ChimeraFX uses a custom timing generator to ensure 1:1 color accuracy and zero-flicker performance, it supports a curated list of the most popular 1-wire NRZ and 2-wire SPI chipsets.
 
-If your chipset is not on the supported list but uses standard 800Kbps timings, `WS2812X` is often a compatible drop-in choice.
+If your 1-wire NRZ chipset is not on the supported list but uses standard 800Kbps timings, `WS2812X` is often a compatible drop-in choice. If your 2-wire SPI chipset is not on the supported list, `APA102` is often a compatible drop-in choice.

@@ -105,6 +105,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_HARMONIC_SETTLE, INTRO_MODE_HARMONIC_SETTLE};
   case 184: // Lithograph
     return {true, INTRO_MODE_LITHOGRAPH, INTRO_MODE_LITHOGRAPH};
+  case 186: // Tidal Surge
+    return {true, INTRO_MODE_TIDAL_SURGE, INTRO_MODE_TIDAL_SURGE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -134,6 +136,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 182: // Gas Discharge
   case 183: // Harmonic Settle
   case 184: // Lithograph
+  case 186: // Tidal Surge
     return true;
   default:
     return false;
@@ -4529,6 +4532,44 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       return true;
     }
     return false;
+  }
+  case INTRO_MODE_TIDAL_SURGE: {
+    // Reversed waypoints — mirrored personality of the intro.
+    // Outro: 100% → 20% → 50% → 20% → 30% (reverse of [30, 20, 50, 20, 100])
+    static constexpr uint8_t OUTRO_WAYPOINTS[]  = {100, 20, 50, 20, 30};
+    static constexpr uint8_t NUM_OUTRO_WP = 5;
+
+    uint32_t seg_dur = duration_ms / NUM_OUTRO_WP;
+    if (seg_dur == 0) seg_dur = 1;
+
+    uint8_t wp_idx = (uint8_t)std::min(
+        (uint32_t)(elapsed / seg_dur), (uint32_t)(NUM_OUTRO_WP - 1));
+
+    uint32_t seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+
+    uint8_t prev_pct = (wp_idx == 0) ? 100 : OUTRO_WAYPOINTS[wp_idx - 1];
+    uint8_t curr_pct = OUTRO_WAYPOINTS[wp_idx];
+
+    float t = (seg_dur > 0)
+               ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
+               : 1.0f;
+    float pct = prev_pct + (curr_pct - (int)prev_pct) * t;
+    uint16_t lit = (uint16_t)((pct / 100.0f) * (float)seg_len);
+    if (lit > seg_len) lit = seg_len;
+
+    uint32_t col = act_->outro_color_cache.empty()
+                   ? 0 : RGBW32(act_->outro_color_cache[0].r,
+                                 act_->outro_color_cache[0].g,
+                                 act_->outro_color_cache[0].b,
+                                 act_->outro_color_cache[0].w);
+
+    for (uint16_t i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i; // Reverse here matches mirror config
+      it[seg_start + idx] = (i < lit) ? Color(CFX_R(col), CFX_G(col), CFX_B(col), CFX_W(col))
+                          : Color::BLACK;
+    }
+    // Final frame is covered by the progress >= 1.0f check at the end of the function
+    break;
   }
   case INTRO_MODE_ASSEMBLY: {
     // ── 1. Mirroring & Duration

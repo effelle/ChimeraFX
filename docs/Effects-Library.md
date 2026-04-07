@@ -368,7 +368,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
 ## 2. Monochromatic & Architectural
 **Kinetic animations designed specifically for single-color setups.**
 
-Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling, and feature integrated "Horizon Sweep" transitions for seamless power-on/off sequences.
+Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling. Unlike traditional effects, monochromatic entries are state-aware and use custom Intro/Outro animations to provide their motion, ensuring the strip remains solid during the "active" phase while providing sophisticated kinetic reveals and retractions.
 
 ??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
 
@@ -818,13 +818,32 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
+        ```yaml
+          - addressable_cfx:
+              name: "Stellar Dust"
+              effect_id: 179
+        ```
+
+??? abstract "186 | Tidal Surge | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        *A rhythmic, state-aware architectural reveal. Mimics the organic ebb and flow of a tide, surging forward and retracting across specific waypoints before settling into full presence. Features a mirrored retraction wave during its outro.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Not used**: Reserved for future layout variations. |
+        | **Speed** | `1` | **Duration**: slider maps to the wave rhythm and transition time. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
     === "💻 Config"
         **YAML Setup / Custom Preset:**
         *(Optional if `all_effects: true`)*
         ```yaml
           - addressable_cfx:
-              name: "Stellar Dust"
-              effect_id: 179
+              name: "Tidal Surge"
+              effect_id: 186
         ```
 
 ??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
@@ -2193,6 +2212,9 @@ These short animations play once when the light is turned ON or OFF.
 
 ??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
+
+??? abstract "25 | Tidal Surge | <span class='extra-info'>:material-tag-outline: 1.5.0 | :material-speedometer: Low  </span>"
+    *The signature wave-based transition. **Tidal Surge** intro ebbs and flows through waypoints [30%, 20%, 50%, 20%, 100%] to build the strip. The **Tidal Surge** outro retracts symmetrically, pulling the light back in a mirrored wave before clearing to black.*
 
 ??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">

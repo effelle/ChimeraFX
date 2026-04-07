@@ -144,6 +144,7 @@ struct ColliderNode {
 #define FX_MODE_HARMONIC_SETTLE 183
 #define FX_MODE_LITHOGRAPH 184
 #define FX_MODE_SEPARATOR				185
+#define FX_MODE_TIDAL_SURGE				186
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -161,9 +162,10 @@ struct ColliderNode {
 #define INTRO_VENETIAN 13
 #define INTRO_CRYSTALLIZE 14
 #define INTRO_DEEP_BREATHE 15
+#define INTRO_TIDAL_SURGE  25
 
 // CFX-008: Cover full 0–255 ID range (Ambient Roulette = 255)
-#define MODE_COUNT					186
+#define MODE_COUNT					188
 
 enum RunnerState { STATE_RUNNING = 0, STATE_INTRO = 1 };
 

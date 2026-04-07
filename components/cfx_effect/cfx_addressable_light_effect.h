@@ -220,7 +220,8 @@ public:
     INTRO_MODE_ECLIPSE = 21,
     INTRO_MODE_GAS_DISCHARGE = 22,
     INTRO_MODE_HARMONIC_SETTLE = 23,
-    INTRO_MODE_LITHOGRAPH = 24
+    INTRO_MODE_LITHOGRAPH = 24,
+    INTRO_MODE_TIDAL_SURGE = 25
   };
 
   void run_intro(light::AddressableLight &it, const Color &target_color);

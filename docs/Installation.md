@@ -59,7 +59,7 @@ light:
     id: led_strip
     pin: GPIO16             # Remember to select the correct pin for your board
     num_leds: 60            # Number of LEDs in your strip
-    chipset: WS2812X        # WS2812X, SK6812, WS2811
+    chipset: WS2812X        # WS2812X, SK6812, WS2811, etc.
     all_effects: true       # Magic! Automatically registers all ChimeraFX effects.
 ```
 
@@ -118,10 +118,6 @@ cfx_effect: # Mandatory! Loads the component
 
 ## Dependencies
 
-The component handles its own dependencies automatically. The native `cfx_light` driver utilizes the built-in ESP-IDF RMT APIs for asynchronous hardware rendering and Neopixelbus as fallback for Arduino Framework.
-
-You don't need to install anything else manually.
-
-
+The component handles its own dependencies automatically. You don't need to install anything else manually.
 
 ---

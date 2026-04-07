@@ -116,6 +116,7 @@ CFX_EFFECT_NAMES = {
     182: "Gas Discharge",
     183: "Harmonic Settle",
     184: "Lithograph",
+    186: "Tidal Surge",
     185: "--- separator ---",
     255: "Ambient Roulette"
 }
@@ -150,6 +151,7 @@ CFX_EFFECTS = [
     ("architectural",  163, "Stardust Sweep"),
     ("architectural",  179, "Stellar Dust"),
     ("architectural",  178, "Telemetry"),
+    ("architectural",  186, "Tidal Surge"),
     ("architectural",  166, "Transmission"),
     ("architectural",  165, "Twin Pulse Sweep"),
     ("architectural",  173, "Venetian"),
@@ -231,9 +233,9 @@ CFX_EFFECTS = [
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
-        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=24),  # CFX-024: IntroMode enum has 25 entries (0-24)
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=25),  # CFX-024: IntroMode enum has 26 entries (0-25)
         cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
-        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),  # CFX-024: IntroMode enum has 25 entries (0-24)
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=25),  # CFX-024: IntroMode enum has 26 entries (0-25)
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
         cv.Optional(CONF_ON_START): automation.validate_automation(
             {

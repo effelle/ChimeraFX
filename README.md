@@ -45,11 +45,10 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 
 ### Platform Compatibility
 
-- **Framework:** **ESP-IDF** and **Arduino** (via RMT DMA)
+- **Framework:** **ESP-IDF** and **Arduino**
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
   - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
-- **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
-  - *2-wire SPI strips (APA102, WS2801, etc.) are **not yet supported**.*
+- **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822)
 
 > **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.
 

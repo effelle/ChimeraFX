@@ -61,6 +61,7 @@ uint16_t mode_telemetry(void);
 uint16_t mode_interference(void);
 uint16_t mode_eclipse(void);
 uint16_t mode_lithograph(void);
+uint16_t mode_tidal_surge(void);
 
 // (get_millis is defined globally before the namespace - see top of file)
 
@@ -4549,6 +4550,9 @@ void CFXRunner::service() {
   case FX_MODE_LITHOGRAPH: // 184
     mode_lithograph();
     break;
+  case FX_MODE_TIDAL_SURGE: // 186
+    mode_tidal_surge();
+    break;
   default:
     mode_static();
     break;
@@ -5971,6 +5975,7 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
 
   // Clean start
   _segment.fill(0);
+  _segment.aux0 = 0;   // Reset waypoint index for multi-waypoint intros
 }
 
 bool CFXRunner::serviceIntro() {
@@ -6022,6 +6027,47 @@ bool CFXRunner::serviceIntro() {
       uint16_t pos = hw_random16() % len; // CFX-002: was rand() % len
       _segment.setPixelColor(pos, _intro_color);
     }
+  } else if (_intro_mode == INTRO_TIDAL_SURGE) {
+    // Tidal Surge: Multi-waypoint oscillating sweep to 100%
+    static constexpr uint8_t WAYPOINTS[]  = {30, 20, 50, 20, 100};
+    static constexpr uint8_t NUM_WAYPOINTS = 5;
+
+    uint32_t seg_dur = _intro_duration_ms / NUM_WAYPOINTS;
+    if (seg_dur == 0) seg_dur = 1;
+
+    uint8_t wp_idx = (uint8_t)(_segment.aux0 < NUM_WAYPOINTS
+                                ? _segment.aux0
+                                : NUM_WAYPOINTS - 1);
+
+    uint32_t seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+
+    // Advance waypoint if elapsed
+    if (seg_elapsed >= seg_dur && wp_idx < NUM_WAYPOINTS - 1) {
+      _segment.aux0++;
+      wp_idx++;
+      seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+    }
+
+    uint8_t prev_pct = (wp_idx == 0) ? 0 : WAYPOINTS[wp_idx - 1];
+    uint8_t curr_pct = WAYPOINTS[wp_idx];
+
+    // Linear interpolation
+    float t = (seg_dur > 0)
+               ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
+               : 1.0f;
+
+    float pct = prev_pct + (curr_pct - (int)prev_pct) * t;
+    uint16_t lit = (uint16_t)((pct / 100.0f) * (float)len);
+    if (lit > len) lit = len;
+
+    // Render ON/OFF
+    for (uint16_t i = 0; i < len; i++) {
+      int idx = _segment.mirror ? (len - 1 - i) : i;
+      _segment.setPixelColor(idx, i < lit ? _intro_color : 0u);
+    }
+
+    // Expose for cfx_reach events
+    current_leading_pixel = (int32_t)lit;
   }
 
   return finishing;
@@ -7268,6 +7314,17 @@ uint16_t mode_lithograph(void) {
       instance->_segment.setPixelColor(i, 0);  // Black
     }
   }
+  return FRAMETIME;
+}
+
+uint16_t mode_tidal_surge(void) {
+  if (!instance)
+    return FRAMETIME;
+  
+  // Tidal Surge (ID 186)
+  // Monochromatic static hold — fully lit solid strip.
+  // The intro animation (INTRO_TIDAL_SURGE) handles all the visual work.
+  instance->_segment.fill(instance->_segment.colors[0]);
   return FRAMETIME;
 }
 
