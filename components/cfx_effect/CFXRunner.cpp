@@ -6028,35 +6028,49 @@ bool CFXRunner::serviceIntro() {
       _segment.setPixelColor(pos, _intro_color);
     }
   } else if (_intro_mode == INTRO_TIDAL_SURGE) {
-    // Tidal Surge: Multi-waypoint oscillating sweep to 100%
+    // Tidal Surge: Multi-waypoint oscillating sweep.
+    // Starts AT the first waypoint (30%), oscillates through remaining waypoints to 100%.
+    // No 0→30% sweep — the strip snaps to 30% on frame 1, giving the effect its
+    // distinct tidal personality vs a plain wipe.
     static constexpr uint8_t WAYPOINTS[]  = {30, 20, 50, 20, 100};
     static constexpr uint8_t NUM_WAYPOINTS = 5;
 
-    uint32_t seg_dur = _intro_duration_ms / NUM_WAYPOINTS;
+    // Each inter-waypoint segment owns an equal slice of the total duration.
+    // There are (NUM_WAYPOINTS - 1) transitions between waypoints.
+    // Segment 0: snap to WP[0] instantly.
+    // Segments 1‥N-1: interpolate WP[i-1] → WP[i].
+    static constexpr uint8_t NUM_SEGS = NUM_WAYPOINTS - 1; // 4 animated transitions
+    uint32_t seg_dur = (NUM_SEGS > 0) ? (_intro_duration_ms / NUM_SEGS) : 1;
     if (seg_dur == 0) seg_dur = 1;
 
-    uint8_t wp_idx = (uint8_t)(_segment.aux0 < NUM_WAYPOINTS
+    // Determine which segment we are in (0 = first transition WP[0]→WP[1], etc.)
+    uint8_t seg_idx = (uint8_t)(_segment.aux0 < NUM_SEGS
                                 ? _segment.aux0
-                                : NUM_WAYPOINTS - 1);
+                                : NUM_SEGS - 1);
 
-    uint32_t seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+    uint32_t seg_elapsed = elapsed - (uint32_t)seg_idx * seg_dur;
 
-    // Advance waypoint if elapsed
-    if (seg_elapsed >= seg_dur && wp_idx < NUM_WAYPOINTS - 1) {
+    // Advance segment counter if current segment is complete
+    if (seg_elapsed >= seg_dur && seg_idx < NUM_SEGS - 1) {
       _segment.aux0++;
-      wp_idx++;
-      seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+      seg_idx++;
+      seg_elapsed = elapsed - (uint32_t)seg_idx * seg_dur;
     }
 
-    uint8_t prev_pct = (wp_idx == 0) ? 0 : WAYPOINTS[wp_idx - 1];
-    uint8_t curr_pct = WAYPOINTS[wp_idx];
+    // For elapsed < seg_dur on first segment, snap to WP[0] immediately
+    float pct;
+    if (elapsed == 0) {
+      pct = (float)WAYPOINTS[0]; // Snap to first waypoint on frame 0
+    } else {
+      uint8_t prev_pct = WAYPOINTS[seg_idx];       // start of this segment
+      uint8_t curr_pct = WAYPOINTS[seg_idx + 1];   // end of this segment
 
-    // Linear interpolation
-    float t = (seg_dur > 0)
-               ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
-               : 1.0f;
+      float t = (seg_dur > 0)
+                 ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
+                 : 1.0f;
+      pct = prev_pct + (curr_pct - (int)prev_pct) * t;
+    }
 
-    float pct = prev_pct + (curr_pct - (int)prev_pct) * t;
     uint16_t lit = (uint16_t)((pct / 100.0f) * (float)len);
     if (lit > len) lit = len;
 

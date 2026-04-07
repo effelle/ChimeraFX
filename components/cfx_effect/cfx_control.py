@@ -37,14 +37,14 @@ INTRO_OPTIONS = [
     "None", "Center", "Construct", "Crystallize", "Deep Breathe", "Dropping", "Eclipse", 
     "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Inertia Sweep", "Interference", 
     "Lithograph", "Moiré Shift", "Morse Code", "Pressurize", "Quadrant", "Resonance", 
-    "Sonar Reveal", "Stellar Dust", "Telemetry", "Twin Pulse", "Venetian", "Wipe"
+    "Sonar Reveal", "Stellar Dust", "Telemetry", "Tidal Surge", "Twin Pulse", "Venetian", "Wipe"
 ]
 
 OUTRO_OPTIONS = [
     "None", "Center", "Close Blinds", "Decelerate", "Dismantle", "Drain", "Eclipse", 
     "Emptying", "Erode", "Exhale", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", 
     "Interference Fade", "Lithograph", "Moiré Fade", "Morse Code", "Quadrant", 
-    "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade", "Twin Pulse", "Wipe"
+    "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade", "Tidal Surge", "Twin Pulse", "Wipe"
 ]
 
 CONF_LIGHT = "light_id"

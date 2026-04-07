@@ -657,6 +657,8 @@ void CFXAddressableLightEffect::start() {
           act_->active_intro_mode = INTRO_MODE_STELLAR_DUST;
         else if (s == "Interference")
           act_->active_intro_mode = INTRO_MODE_INTERFERENCE;
+        else if (s == "Tidal Surge")
+          act_->active_intro_mode = INTRO_MODE_TIDAL_SURGE;
       }
     }
 
@@ -861,6 +863,8 @@ void CFXAddressableLightEffect::stop() {
             act_->active_outro_mode = INTRO_MODE_STELLAR_DUST;
           else if (s == "Interference Fade")
             act_->active_outro_mode = INTRO_MODE_INTERFERENCE;
+          else if (s == "Tidal Surge")
+            act_->active_outro_mode = INTRO_MODE_TIDAL_SURGE;
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
         } else if (this->has_outro_preset_()) {
