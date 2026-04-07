@@ -4042,16 +4042,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
-  // Feed intro progress into the existing leading-pixel pipeline so that
-  // cfx_reach milestones fire for architectural (monochromatic) effects.
-  // apply() reads current_leading_pixel immediately after run_intro() returns
-  // and routes it through check_positional_triggers() unchanged — no new
-  // milestone logic needed here. INTRO_MODE_NONE leaves progress=0 so no
-  // spurious milestones fire for effects with no intro configured.
-  if (chimera_fx::instance != nullptr && seg_len > 0) {
-    chimera_fx::instance->current_leading_pixel =
-        (int32_t)(progress * (float)seg_len);
-  }
+  // (CFX-035b: removed the legacy current_leading_pixel overwrite here so 
+  // that the main runner's actual leading pixel remains clean for detection 
+  // in apply(). Our new intro_suppresses_milestones tracking handles all this natively).
 }
 
 bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
