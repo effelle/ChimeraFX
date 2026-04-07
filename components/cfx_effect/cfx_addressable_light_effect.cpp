@@ -1280,6 +1280,25 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   // === State Machine: Intro vs Main Effect ===
+
+  // CFX-035b: Detect right here — after the service block — whether the main
+  // effect is progressive (Wipe/Sweep etc.). The main runner has been serviced
+  // above and its current_leading_pixel is up-to-date. If it is >= 0 the effect
+  // will supply its own 0→100% milestone data after the intro, so we must NOT
+  // also fire milestone events from the intro's wipe progress.
+  // Monochromatic effects (skip_service=true → runner stalled → lp = -1) and
+  // non-progressive effects (Aurora, Ocean → no leading pixel → lp = -1) leave
+  // this false so their intro progress fires cfx_reach normally.
+  if (act_->intro_active && !act_->intro_suppresses_milestones) {
+    int32_t main_lp = -1;
+    if (!act_->segment_runners.empty())
+      main_lp = act_->segment_runners[0]->current_leading_pixel;
+    else if (act_->runner)
+      main_lp = act_->runner->current_leading_pixel;
+    if (main_lp >= 0)
+      act_->intro_suppresses_milestones = true;
+  }
+
   bool needs_autotune = (act_->autotune_active &&
 #ifdef USE_CFX_SEQUENCE
                          (act_->active_sequence == nullptr || is_mono_preset));
@@ -1303,6 +1322,19 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     } else {
       chimera_fx::InstanceGuard intro_guard(act_->runner); // CFX-004: scoped single-runner
       this->run_intro(it, current_color);
+    }
+
+    // CFX-035b: Fire progress-based milestones from the intro for monochromatic
+    // effects (intro IS the effect) and non-progressive intros (Aurora, Ocean…).
+    // Progressive effects set intro_suppresses_milestones=true above so this
+    // branch is skipped for them — their milestones come from their own runner.
+    if (!act_->intro_suppresses_milestones) {
+      uint64_t _elapsed = millis_64() - act_->intro_start_time;
+      float _progress = (act_->active_intro_duration_ms > 0)
+          ? ((float)_elapsed / (float)act_->active_intro_duration_ms)
+          : 1.0f;
+      if (_progress > 1.0f) _progress = 1.0f;
+      this->check_milestones_(_progress * 100.0f);
     }
 
     if (millis_64() - act_->intro_start_time > act_->active_intro_duration_ms) {
