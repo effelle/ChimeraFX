@@ -4025,6 +4025,45 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
+  case INTRO_MODE_TIDAL_SURGE: {
+    // Tidal Surge intro: oscillates between waypoints [30, 20, 50, 20, 100].
+    // Snaps to WP[0]=30% on the first frame, then interpolates through
+    // 4 transitions. The strip is filled solid up to `lit` pixels;
+    // the rest are black. No leading-pixel sweep — personality is tidal, not wipe.
+    static constexpr uint8_t WAYPOINTS[]     = {30, 20, 50, 20, 100};
+    static constexpr uint8_t NUM_WAYPOINTS   = 5;
+    static constexpr uint8_t NUM_SEGS        = NUM_WAYPOINTS - 1; // 4 transitions
+
+    uint32_t seg_dur = (NUM_SEGS > 0) ? (duration / NUM_SEGS) : 1;
+    if (seg_dur == 0) seg_dur = 1;
+
+    // Which inter-waypoint segment are we in?
+    uint8_t seg_idx = (uint8_t)std::min(
+        (uint32_t)(elapsed / seg_dur), (uint32_t)(NUM_SEGS - 1));
+    uint32_t seg_elapsed = elapsed - (uint32_t)seg_idx * seg_dur;
+
+    float pct;
+    if (elapsed < seg_dur / 4) {
+      // First quarter of first segment: snap to WP[0] to avoid 0->30% wipe look
+      pct = (float)WAYPOINTS[0];
+    } else {
+      uint8_t prev_pct = WAYPOINTS[seg_idx];
+      uint8_t curr_pct = WAYPOINTS[seg_idx + 1];
+      float t = std::min(1.0f, (float)seg_elapsed / (float)seg_dur);
+      pct = prev_pct + (curr_pct - (int)prev_pct) * t;
+    }
+
+    int lit = (int)((pct / 100.0f) * (float)seg_len);
+    if (lit > seg_len) lit = seg_len;
+    if (lit < 0) lit = 0;
+
+    for (int i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i;
+      it[seg_start + idx] = (i < lit) ? c : Color::BLACK;
+    }
+    break;
+  }
+
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -4538,41 +4577,43 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     return false;
   }
   case INTRO_MODE_TIDAL_SURGE: {
-    // Reversed waypoints — mirrored personality of the intro.
-    // Outro: 100% → 20% → 50% → 20% → 30% (reverse of [30, 20, 50, 20, 100])
-    static constexpr uint8_t OUTRO_WAYPOINTS[]  = {100, 20, 50, 20, 30};
-    static constexpr uint8_t NUM_OUTRO_WP = 5;
+    // Outro: reversed waypoints — mirrored personality of the intro.
+    // Waypoints: [100, 20, 50, 20, 30] — oscillates from full down to 30%.
+    // NOTE: Modulates the background pixels already rendered above (lines
+    // 4110-4126). Do NOT paint from outro_color_cache here — the cache is
+    // empty for monochromatic effects and would produce all-black immediately.
+    static constexpr uint8_t OUTRO_WAYPOINTS[] = {100, 20, 50, 20, 30};
+    static constexpr uint8_t NUM_OUTRO_WP      = 5;
+    // 4 inter-waypoint transitions (matches intro redesign)
+    static constexpr uint8_t NUM_OUTRO_SEGS    = NUM_OUTRO_WP - 1;
 
-    uint32_t seg_dur = duration_ms / NUM_OUTRO_WP;
+    uint32_t seg_dur = (NUM_OUTRO_SEGS > 0)
+                           ? (duration_ms / NUM_OUTRO_SEGS)
+                           : 1;
     if (seg_dur == 0) seg_dur = 1;
 
-    uint8_t wp_idx = (uint8_t)std::min(
-        (uint32_t)(elapsed / seg_dur), (uint32_t)(NUM_OUTRO_WP - 1));
+    uint8_t seg_idx = (uint8_t)std::min(
+        (uint32_t)(elapsed / seg_dur), (uint32_t)(NUM_OUTRO_SEGS - 1));
 
-    uint32_t seg_elapsed = elapsed - (uint32_t)wp_idx * seg_dur;
+    uint32_t seg_elapsed = elapsed - (uint32_t)seg_idx * seg_dur;
 
-    uint8_t prev_pct = (wp_idx == 0) ? 100 : OUTRO_WAYPOINTS[wp_idx - 1];
-    uint8_t curr_pct = OUTRO_WAYPOINTS[wp_idx];
+    uint8_t prev_pct = OUTRO_WAYPOINTS[seg_idx];
+    uint8_t curr_pct = OUTRO_WAYPOINTS[seg_idx + 1];
 
     float t = (seg_dur > 0)
-               ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
-               : 1.0f;
+                  ? std::min(1.0f, (float)seg_elapsed / (float)seg_dur)
+                  : 1.0f;
     float pct = prev_pct + (curr_pct - (int)prev_pct) * t;
     uint16_t lit = (uint16_t)((pct / 100.0f) * (float)seg_len);
-    if (lit > seg_len) lit = seg_len;
+    if (lit > (uint16_t)seg_len) lit = (uint16_t)seg_len;
 
-    uint32_t col = act_->outro_color_cache.empty()
-                   ? 0 : RGBW32(act_->outro_color_cache[0].r,
-                                 act_->outro_color_cache[0].g,
-                                 act_->outro_color_cache[0].b,
-                                 act_->outro_color_cache[0].w);
-
-    for (uint16_t i = 0; i < seg_len; i++) {
-      int idx = reverse ? (seg_len - 1 - i) : i; // Reverse here matches mirror config
-      it[seg_start + idx] = (i < lit) ? Color(CFX_R(col), CFX_G(col), CFX_B(col), CFX_W(col))
-                          : Color::BLACK;
+    for (int i = 0; i < seg_len; i++) {
+      int idx = reverse ? (seg_len - 1 - i) : i;
+      if (i >= lit) {
+        it[seg_start + idx] = Color::BLACK;
+      }
+      // else: keep the background pixel already written by the preamble
     }
-    // Final frame is covered by the progress >= 1.0f check at the end of the function
     break;
   }
   case INTRO_MODE_ASSEMBLY: {
