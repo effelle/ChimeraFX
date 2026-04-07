@@ -1150,14 +1150,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // use the RAW channels (get_*) which DO NOT have brightness applied,
     // because global_brightness_ will be applied later in setPixelColor().
     // This avoids "Double Brightness Scaling".
-    
-    // FRAME TRACE
-    static uint32_t total_apply_frames = 0;
-    if (total_apply_frames++ < 10) {
-        ESP_LOGI("chimera_fx", "apply_trace: frame=%lu, intro_active=%d, suppress=%d", 
-                 total_apply_frames, act_->intro_active, act_->intro_suppresses_milestones);
-    }
-
     float r = state_ptr->remote_values.get_red();
     float g = state_ptr->remote_values.get_green();
     float b = state_ptr->remote_values.get_blue();
@@ -1346,15 +1338,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           ? ((float)_elapsed / (float)act_->active_intro_duration_ms)
           : 1.0f;
       if (_progress > 1.0f) _progress = 1.0f;
-      // We will track the first 50 frames to see where it stops
-      static uint32_t intro_frame_counter = 0;
-      if (intro_frame_counter++ % 5 == 0) {
-        ESP_LOGI("chimera_fx", "cfx_reach debug: frame=%lu, Pct=%.2f, elapsed=%llu, dur=%u", 
-                 intro_frame_counter, _progress * 100.0f, _elapsed, act_->active_intro_duration_ms);
-      }
       this->check_milestones_(_progress * 100.0f);
-    } else {
-        ESP_LOGI("chimera_fx", "cfx_reach debug: SKIPPED because intro_suppresses_milestones = true !");
     }
 
     if (millis_64() - act_->intro_start_time > act_->active_intro_duration_ms) {
@@ -5433,7 +5417,6 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
-  ESP_LOGI("chimera_fx", "DEBUG check_milestones - pct: %.2f, last: %d, next: %d", current_pct, act_->last_fired_milestone, next);
   while (current_pct >= next && next <= 100) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
