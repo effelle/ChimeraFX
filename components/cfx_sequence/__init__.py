@@ -151,6 +151,26 @@ def _cfx_slugify(name: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
 
 
+async def to_code(config):
+    cg.add_define("USE_CFX_SEQUENCE")
+    import esphome.core as core
+
+    light_name_map = {}
+    strip_event_vars = {}
+    event_var = None
+    seen_tags = []
+
+    # Collect unique light object_ids for mapping
+    for lconf in core.CORE.config.get("light", []):
+        lid_obj = lconf.get("id")
+        lname = lconf.get("name", "")
+        if lid_obj is not None and lname:
+            tag = _cfx_slugify(str(lname))
+            light_name_map[lid_obj.id] = tag
+            if tag not in seen_tags:
+                seen_tags.append(tag)
+
+
     # 2. Progress Sensor
     prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
     prog_var = cg.new_Pvariable(prog_id)
