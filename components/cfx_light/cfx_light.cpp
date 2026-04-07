@@ -639,15 +639,14 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // complete buffer. This prevents partial-frame DMA which causes random color
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush() {
-  // CFX-032: Flush immediately on every call. The counter/timeout approach
-  // was broken because ESPHome's AddressableLight::loop() calls write_state()
-  // every frame as a background tick, pre-incrementing the counter before
-  // any real state change. This made the count unpredictable. The timeout
-  // also never fired for single-segment changes because it only re-evaluated
-  // inside this function, not in loop(). Flushing immediately is safe:
-  // the scrub in write_state(nullptr) ensures OFF segments are blacked out,
-  // and multiple DMA calls per frame for solid color are harmless.
-  this->write_state(nullptr);
+  // CFX-032: Coalesced Segment Flush.
+  // Instead of calling write_state(nullptr) immediately (which blocks the
+  // loop N-times per frame), we set a dirty flag and record the timestamp.
+  // loop() will fire a single DMA call for all pending segments in one tick.
+  if (!this->seg_flush_pending_) {
+    this->seg_flush_pending_ = true;
+    this->seg_flush_first_ms_ = esphome::millis();
+  }
 }
 
 // --- Write State (Fire-and-Forget DMA) ---

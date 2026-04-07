@@ -5859,7 +5859,12 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
 
   // Robust Smoothness Logic (No shimmering)
   // 1. Calculate precise position in "sub-pixels"
-  uint32_t totalPos = (uint32_t)prog * len;
+  // CFX-032 FIX: Wipe calculation was clipping the range, finishing
+  // exactly at pixel center. For intensity > 0 (soft edges), the "tail" never
+  // cleared the last pixel. Range expanded to allow the wipe front to travel
+  // across the entire segment PLUS the fade width.
+  uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
+  uint32_t totalPos = ((uint32_t)prog * ((len << 15) + fadeWidth)) >> 15;
   uint16_t ledIndex = totalPos >> 15;
   instance->current_leading_pixel = ledIndex;
 
@@ -5931,7 +5936,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
 
     // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536
     // steps)
-    uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
+    // fadeWidth defined above for totalPos scaling
 
     uint8_t blendVal;
     if (dist <= 0) {
@@ -5999,13 +6004,14 @@ void CFXRunner::startIntro(uint8_t mode, float duration_s, uint32_t color) {
 
 bool CFXRunner::serviceIntro() {
   uint32_t elapsed = now - _intro_start_time;
+  bool finishing = (elapsed >= _intro_duration_ms);
 
-  if (elapsed >= _intro_duration_ms) {
-    return true; // Intro Done
+  if (finishing && _state != STATE_RUNNING) {
+    // Force final render on finish state before notifying completion
   }
-
-  // Normalised progress 0.0 to 1.0
-  float progress = (float)elapsed / (float)_intro_duration_ms;
+  
+  // Normalised progress 0.0 to 1.0 (Clamp to 1.0 on finish)
+  float progress = finishing ? 1.0f : (float)elapsed / (float)_intro_duration_ms;
   uint16_t len = _segment.length();
 
   if (_intro_mode == INTRO_WIPE) {
@@ -6047,7 +6053,10 @@ bool CFXRunner::serviceIntro() {
     }
   }
 
-  return false; // Still running
+    }
+  }
+
+  return finishing;
 }
 
 void CFXRunner::reset() {
