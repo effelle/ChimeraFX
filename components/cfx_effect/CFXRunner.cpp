@@ -6032,8 +6032,8 @@ bool CFXRunner::serviceIntro() {
     // Starts AT the first waypoint (30%), oscillates through remaining waypoints to 100%.
     // No 0→30% sweep — the strip snaps to 30% on frame 1, giving the effect its
     // distinct tidal personality vs a plain wipe.
-    static constexpr uint8_t WAYPOINTS[]  = {30, 20, 50, 20, 100};
-    static constexpr uint8_t NUM_WAYPOINTS = 5;
+    static constexpr uint8_t WAYPOINTS[]  = {30, 20, 50, 70, 40, 100};
+    static constexpr uint8_t NUM_WAYPOINTS = 6;
 
     // Each inter-waypoint segment owns an equal slice of the total duration.
     // There are (NUM_WAYPOINTS - 1) transitions between waypoints.

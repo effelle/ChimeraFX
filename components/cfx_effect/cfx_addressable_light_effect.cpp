@@ -4026,13 +4026,13 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   case INTRO_MODE_TIDAL_SURGE: {
-    // Tidal Surge intro: oscillates between waypoints [30, 20, 50, 20, 100].
+    // Tidal Surge intro: oscillates between waypoints [30, 20, 50, 70, 40, 100].
     // Snaps to WP[0]=30% on the first frame, then interpolates through
-    // 4 transitions. The strip is filled solid up to `lit` pixels;
+    // 5 transitions. The strip is filled solid up to `lit` pixels;
     // the rest are black. No leading-pixel sweep — personality is tidal, not wipe.
-    static constexpr uint8_t WAYPOINTS[]     = {30, 20, 50, 20, 100};
-    static constexpr uint8_t NUM_WAYPOINTS   = 5;
-    static constexpr uint8_t NUM_SEGS        = NUM_WAYPOINTS - 1; // 4 transitions
+    static constexpr uint8_t WAYPOINTS[]     = {30, 20, 50, 70, 40, 100};
+    static constexpr uint8_t NUM_WAYPOINTS   = 6;
+    static constexpr uint8_t NUM_SEGS        = NUM_WAYPOINTS - 1; // 5 transitions
 
     uint32_t seg_dur = (NUM_SEGS > 0) ? (duration / NUM_SEGS) : 1;
     if (seg_dur == 0) seg_dur = 1;
@@ -4578,13 +4578,14 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
   case INTRO_MODE_TIDAL_SURGE: {
     // Outro: reversed waypoints — mirrored personality of the intro.
-    // Waypoints: [100, 20, 50, 20, 30] — oscillates from full down to 30%.
-    // NOTE: Modulates the background pixels already rendered above (lines
-    // 4110-4126). Do NOT paint from outro_color_cache here — the cache is
-    // empty for monochromatic effects and would produce all-black immediately.
-    static constexpr uint8_t OUTRO_WAYPOINTS[] = {100, 20, 50, 20, 30};
-    static constexpr uint8_t NUM_OUTRO_WP      = 5;
-    // 4 inter-waypoint transitions (matches intro redesign)
+    // Waypoints: [100, 40, 70, 50, 20, 30, 0]
+    //   - Mirrors the intro's organic oscillation in reverse.
+    //   - Ends at 0 so the strip drains smoothly to black instead of
+    //     cutting off abruptly when progress >= 1.0.
+    // NOTE: Modulates the background pixels already rendered above.
+    static constexpr uint8_t OUTRO_WAYPOINTS[] = {100, 40, 70, 50, 20, 30, 0};
+    static constexpr uint8_t NUM_OUTRO_WP      = 7;
+    // 6 inter-waypoint transitions
     static constexpr uint8_t NUM_OUTRO_SEGS    = NUM_OUTRO_WP - 1;
 
     uint32_t seg_dur = (NUM_OUTRO_SEGS > 0)
