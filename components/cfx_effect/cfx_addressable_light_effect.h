@@ -112,7 +112,10 @@ public:
     int32_t last_leading_pixel{-1};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
-    // CFX-035: suppress is handled at call site (intro_active guard) — no field needed
+    // CFX-035: true only when the MAIN effect is progressive (pixel-marching,
+    // e.g. Wipe/Sweep). Intro milestones are suppressed only in that case so
+    // that monochromatic and non-progressive intros still fire cfx_reach. (CFX-035b)
+    bool intro_suppresses_milestones{false};
 
 #ifdef USE_CFX_SEQUENCE
     CFXSequence *active_sequence{nullptr};

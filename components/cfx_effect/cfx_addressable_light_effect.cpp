@@ -5379,11 +5379,12 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
-  // CFX-035: Suppress milestones while the intro is playing.
-  // The intro is a fast visual transition — its runner's leading pixel
-  // advances and would fire cfx_reach events that are meaningless to HA.
-  // Milestones fire only for the main effect after intro ends.
-  if (act_->intro_active)
+  // CFX-035b: Suppress milestones during intro ONLY when the main effect is
+  // progressive (Wipe/Sweep/etc.) and will supply its own 0→100% tracking
+  // after the intro ends. For monochromatic effects (intro IS the effect) and
+  // non-progressive effects (Aurora, Ocean, …), the intro's wipe IS the source
+  // of cfx_reach events and must NOT be silenced.
+  if (act_->intro_active && act_->intro_suppresses_milestones)
     return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
@@ -5412,9 +5413,25 @@ void CFXAddressableLightEffect::check_positional_triggers(
   if (this->effect_id_ == 185)
     return;
 
-  // Intro is a transitional overlay. Positional events track the main effect,
-  // which is running silently underneath but shouldn't fire triggers until intro ends.
-  if (act_ && act_->intro_active)
+  // CFX-035b: Lazily determine if the main effect is progressive (pixel-marching
+  // type like Wipe/Sweep). During the intro the main runner is serviced silently;
+  // if it advances current_leading_pixel the effect will produce its own milestone
+  // data after the intro ends and we should NOT also fire from the intro's wipe.
+  // Monochromatic effects (skip_service=true, runner stalled) and non-progressive
+  // effects (Aurora, Ocean, etc.) never set a leading pixel, so the flag stays
+  // false and their intro milestones flow through normally.
+  if (act_ && act_->intro_active && !act_->intro_suppresses_milestones) {
+    int32_t main_lp = -1;
+    if (!act_->segment_runners.empty())
+      main_lp = act_->segment_runners[0]->current_leading_pixel;
+    else if (act_->runner)
+      main_lp = act_->runner->current_leading_pixel;
+    if (main_lp >= 0)
+      act_->intro_suppresses_milestones = true;
+  }
+
+  // Suppress intro positional tracking only for progressive main effects. (CFX-035b)
+  if (act_ && act_->intro_active && act_->intro_suppresses_milestones)
     return;
   // Defensive bounds check
   if (total_pixels <= 0 || current_pixel < 0 || current_pixel > total_pixels) {
