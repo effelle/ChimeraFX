@@ -6053,9 +6053,6 @@ bool CFXRunner::serviceIntro() {
     }
   }
 
-    }
-  }
-
   return finishing;
 }
 
