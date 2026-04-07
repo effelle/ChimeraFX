@@ -2,6 +2,7 @@
 
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -12,22 +13,19 @@ namespace chimera_fx {
 
 class CFXEventManager {
 public:
-  static CFXEventManager &get();
+  static CFXEventManager &get() {
+    static CFXEventManager instance;
+    return instance;
+  }
+
   // CFX-028: register a dedicated HA event entity for one strip tag.
-  // Called from generated code once per strip at setup time.
   void register_strip_entity(const std::string &tag, esphome::event::Event *e) {
     this->strip_entities_[tag] = e;
-    // Keep event_entity_ pointing at the first registered strip so any
-    // legacy call sites that still use it get a valid (non-null) pointer.
     if (this->event_entity_ == nullptr)
       this->event_entity_ = e;
   }
-  // Legacy single-entity setter — kept for backward compat; maps to the
-  // "no tag" fallback slot used when a strip tag cannot be resolved.
-  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
 
-  // HA event delivery opt-in. When false, fire_event() is a no-op for all
-  // HA-facing paths. Internal on_cfx_reach triggers are unaffected. (CFX-026)
+  void set_event_entity(esphome::event::Event *e) { this->event_entity_ = e; }
   void set_ha_events_enabled(bool enabled) { this->ha_events_enabled_ = enabled; }
 
   // Per-tag event delivery opt-out (CFX-040)
@@ -42,28 +40,21 @@ public:
       if (t == tag) return;
     this->known_tags_.push_back(tag);
   }
-  void fire_event(const char *type);
-  void flush_pending();
 
-  // Push one event string onto the deferred queue (called from render loop).
-  // Zero blocking — just a ring buffer write. (CFX-025)
-  // Coalescing: identical events (full string match) replace any pending entry
-  // instead of appending, preventing API buffer overflow with 4+ strips.
-  // CFX-034: Changed from prefix match to full-string match so that different
-  // milestones (e.g. 95% and 100%) firing in the same check_milestones_()
-  // while-loop are never coalesced — only truly duplicate events are merged.
+  void fire_event(const char *type) {
+    if (!this->ha_events_enabled_) return;
+    this->push_deferred(std::string(type));
+  }
+
+  // Push one event string onto the deferred ring-buffer queue.
+  // Full-string coalescing: exact duplicates are dropped. (CFX-034)
   void push_deferred(const std::string &evt) {
-    // Full-string coalescing: scan pending entries for an exact duplicate.
-    // If found, no need to push again (idempotent). This protects against
-    // burst spam (same milestone re-firing across rapid frames) while never
-    // losing distinct milestone events (95% vs 100%). (CFX-034)
     for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
          i = (i + 1) % DEFERRED_QUEUE_SIZE) {
       if (this->deferred_queue_[i] == evt) {
         return;  // exact duplicate already queued — skip
       }
     }
-
     uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
     if (next == this->deferred_read_) {
       ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
@@ -73,10 +64,50 @@ public:
     this->deferred_write_ = next;
   }
 
+  // Drain exactly one queued event per ESPHome loop() tick. (CFX-025)
+  void flush_pending() {
+    static uint32_t last_flush_ms = 0;
+    uint32_t now = esphome::millis();
+    if (now == last_flush_ms)
+      return;
+
+    if (this->deferred_read_ == this->deferred_write_)
+      return;
+
+    last_flush_ms = now;
+
+    const std::string evt = this->deferred_queue_[this->deferred_read_];
+    this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+
+    // CFX-028: route to the per-strip entity whose tag appears in the string.
+    esphome::event::Event *target_entity = this->event_entity_;
+    size_t first_colon = evt.find(':');
+    if (first_colon != std::string::npos) {
+      size_t second_colon = evt.find(':', first_colon + 1);
+      std::string tag = (second_colon != std::string::npos)
+                            ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
+                            : evt.substr(first_colon + 1);
+
+      // CFX-040: per-tag opt-out
+      if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
+        return;
+      }
+
+      auto it = this->strip_entities_.find(tag);
+      if (it != this->strip_entities_.end() && it->second != nullptr) {
+        target_entity = it->second;
+      }
+    }
+
+    if (target_entity != nullptr) {
+      target_entity->trigger(evt);
+    }
+  }
+
 protected:
   CFXEventManager() = default;
-  esphome::event::Event *event_entity_{nullptr};  // fallback / first-strip alias
-  std::map<std::string, esphome::event::Event *> strip_entities_;  // CFX-028
+  esphome::event::Event *event_entity_{nullptr};
+  std::map<std::string, esphome::event::Event *> strip_entities_;
   bool ha_events_enabled_{true};
   bool discovery_done_{false};
   std::vector<std::string> known_tags_;
