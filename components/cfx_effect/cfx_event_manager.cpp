@@ -1,4 +1,6 @@
 #include "cfx_event_manager.h"
+#include "esphome/core/hal.h"
+#include <cstdint>
 
 namespace esphome {
 namespace chimera_fx {
@@ -18,12 +20,20 @@ void CFXEventManager::fire_event(const char *type) {
 }
 
 void CFXEventManager::flush_pending() {
-  // Drain exactly ONE event per loop() call. Combined with cfx_reach
-  // coalescing in push_deferred(), the queue holds at most ~6 entries
-  // (one per strip) so single-drain keeps pace at 50Hz loop rate while
-  // preventing the API TCP send buffer from overflowing. (CFX-027)
+  // Drain exactly ONE event per ESPHome loop() tick. Combined with cfx_reach
+  // coalescing in push_deferred(), the queue holds at most ~6 entries.
+  // Using esphome::millis() prevents multiple lights in the same tick from
+  // draining 3+ events simultaneously, guaranteeing a safe global maximum
+  // of ~60Hz to prevent API buffer overflow and heap fragmentation.
+  static uint32_t last_flush_ms = 0;
+  uint32_t now = esphome::millis();
+  if (now == last_flush_ms)
+    return;
+
   if (this->deferred_read_ == this->deferred_write_)
     return;
+
+  last_flush_ms = now;
 
   const std::string evt = this->deferred_queue_[this->deferred_read_];
   this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;

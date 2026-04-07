@@ -463,22 +463,19 @@ struct FrameDiagnostics {
 
 #ifdef ARDUINO
     free_heap = ESP.getFreeHeap();
-    max_block = ESP.getMaxAllocHeap();
+    // max_block omitted to prevent ISR starvation
 #else
     free_heap = esp_get_free_heap_size();
-    max_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    // max_block omitted to prevent ISR starvation
 #endif
 
     float avg_frame_ms = (float)avg_frame_us / 1000.0f;
     uint32_t free_heap_kb = free_heap / 1024;
-    uint32_t max_block_kb = max_block / 1024;
 
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
-             "Free (%ukB Max)",
+             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB",
              pending_name_ ? pending_name_ : "?",
-             fps, avg_frame_ms, jitter_pct, free_heap_kb,
-             max_block_kb);
+             fps, avg_frame_ms, jitter_pct, free_heap_kb);
 
     reset();
     last_log_time = cfx_millis();
