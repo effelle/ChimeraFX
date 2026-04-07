@@ -20,6 +20,8 @@
 #include <set>
 #include <string>
 
+#include "../cfx_effect/cfx_event_manager.h"
+
 namespace esphome {
 namespace cfx_sequence {
 
@@ -37,7 +39,6 @@ protected:
   float target_position_;
 };
 
-#include "../cfx_effect/cfx_event_manager.h"
 using CFXEventManager = chimera_fx::CFXEventManager;
 
 class CFXSequence {
