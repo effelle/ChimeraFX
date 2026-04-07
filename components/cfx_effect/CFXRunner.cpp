@@ -7063,6 +7063,10 @@ uint16_t mode_collider(void) {
   // 5. Rendering
   instance->_segment.fill(0);                         // Pure dark background
   uint8_t pal_offset = (uint8_t)(instance->now >> 4); // Scrolling speed
+  
+  // CFX-032 FIX: Moving palette retrieval OUTSIDE the inner pixel loop! 
+  // Prevents massive instruction cache thrashing and rendering delays under heavy load
+  const uint32_t *palData = getPaletteByIndex(instance->_segment.palette);
 
   for (uint16_t n = 0; n < numNodes; n++) {
     // Calculate center with drift
@@ -7078,19 +7082,24 @@ uint16_t mode_collider(void) {
     int r_start = (int)floorf(center_f - node_r - 1.0f);
     int r_stop = (int)ceilf(center_f + node_r + 1.0f);
 
+    // CFX-032 FIX: Precalculate Q8.8 fixed-point variables to avoid heavy FPU logic 
+    // inside the tight pixel loop, dodging interrupt-context float corruption in ESP32
+    int32_t center_fp = (int32_t)(center_f * 256.0f);
+    int32_t node_r_fp = (int32_t)(node_r * 256.0f);
+
     for (int i = r_start; i <= r_stop; i++) {
-      // Distance from center for anti-aliasing
-      float dist = fabsf((float)i - center_f);
+      // Distance from center for anti-aliasing (fixed point)
+      int32_t i_fp = (int32_t)i * 256;
+      int32_t dist_fp = abs(i_fp - center_fp);
 
-      // Coverage calculation: 100% inside, 0% outside, linear slope at
-      // boundary Slope width is 1.0 pixel for sub-pixel smoothing.
-      float coverage = node_r - dist + 0.5f;
-      if (coverage <= 0.0f)
+      // Coverage calculation: 256 inside, 0 outside, linear slope at boundary
+      // 128 integer equivalent to 0.5f in Q8.8 math
+      int32_t coverage_fp = node_r_fp - dist_fp + 128;
+      
+      if (coverage_fp <= 0)
         continue;
-      if (coverage > 1.0f)
-        coverage = 1.0f;
-
-      uint8_t bri = (uint8_t)(coverage * 255.0f);
+        
+      uint8_t bri = (coverage_fp >= 256) ? 255 : (uint8_t)coverage_fp;
 
       // Circular wrap indexing
       int idx = i;
@@ -7101,7 +7110,6 @@ uint16_t mode_collider(void) {
 
       // Palette Scrolling Logic (inside the mask)
       uint8_t color_idx = (uint8_t)idx + pal_offset;
-      const uint32_t *palData = getPaletteByIndex(instance->_segment.palette);
       CRGBW pulse_rgbw = ColorFromPalette(palData, color_idx, bri);
 
       // Additive pixel mixing
