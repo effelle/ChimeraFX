@@ -5864,35 +5864,13 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // cleared the last pixel. Range expanded to allow the wipe front to travel
   // across the entire segment PLUS the fade width.
   uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
-  uint32_t totalPos = (uint32_t)(((uint64_t)prog * (((uint32_t)len << 15) + fadeWidth)) >> 15);
+  // CFX-032 FIX: Avoid 64-bit math (can cause ROM bugs/jitter) while expanding range
+  uint32_t totalPos = ((uint32_t)prog * len) + (((uint32_t)prog * fadeWidth) >> 15);
   uint16_t ledIndex = totalPos >> 15;
   instance->current_leading_pixel = ledIndex;
 
-  // rem is fractional progress (0-255)
-  uint8_t rem = (totalPos & 0x7FFF) >> 7;
-
-  // 2. Map Intensity to Fade Width (Softness)
-  if (instance->_segment.intensity < 255) {
-    uint8_t width = instance->_segment.intensity;
-    int16_t lower = 128 - (width / 2);
-    int16_t upper = 128 + (width / 2);
-
-    if (rem <= lower)
-      rem = 0;
-    else if (rem >= upper)
-      rem = 255;
-    else {
-      if (upper > lower) {
-        rem = (uint8_t)(((uint16_t)(rem - lower) * 255) / (upper - lower));
-      } else {
-        rem = (rem > 128) ? 255 : 0;
-      }
-    }
-  }
-
   const uint32_t *active_palette;
   if (useRandomColors) {
-    // Random Mode: Always use Rainbow/Wheel logic (Ignore user selection)
     active_palette = PaletteRainbow;
   } else if (instance->_segment.palette == 255) {
     active_palette = PaletteSolid;
@@ -5907,6 +5885,9 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     col1 = RGBW32(c1.r, c1.g, c1.b, c1.w);
   }
 
+  // Optimize gradient mapping division out of the loop
+  uint32_t palStep = len > 0 ? (255 << 8) / len : 0;
+
   for (int i = 0; i < len; i++) {
     int index = (rev && back) ? len - 1 - i : i;
 
@@ -5919,24 +5900,14 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
                (!useRandomColors && instance->_segment.palette == 0)) {
       col0 = instance->_segment.colors[0]; // Solid Color
     } else {
-      // FIX: Use Stretched Palette mapping (i * 255 / len) instead of fixed
-      // pattern (i * 12) This fixes "holes" and creates a smooth gradient
-      // across the strip.
-      uint8_t colorIndex = (i * 255) / len;
+      // CFX-035: Smooth gradient across the strip (optimized div)
+      uint8_t colorIndex = (i * palStep) >> 8;
       CRGBW c0 = ColorFromPalette(active_palette, colorIndex, 255);
       col0 = RGBW32(c0.r, c0.g, c0.b, c0.w);
     }
 
-    // Blend Logic based on Distance from Wipe Front
-    // 1 Pixel = 32768 steps.
-    // totalPos is the front position.
-
     uint32_t pixelPos = (uint32_t)i << 15;
     int32_t dist = (int32_t)(totalPos - pixelPos);
-
-    // Fade Width based on Intensity (0 = Sharp, 255 = ~2 Pixels / 65536
-    // steps)
-    // fadeWidth defined above for totalPos scaling
 
     uint8_t blendVal;
     if (dist <= 0) {
