@@ -160,6 +160,10 @@ void CFXAddressableLightEffect::start() {
   if (this->act_ == nullptr) {
     this->act_ = new CFXActivation();
   }
+  // Initialize/Reset tracking flags cleanly on every start
+  this->reset_milestones_();
+  this->act_->intro_suppresses_milestones = false;
+
   // Copy codegen-time fields into the activation context.
   this->act_->controller = this->controller_;
 
