@@ -1338,6 +1338,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           ? ((float)_elapsed / (float)act_->active_intro_duration_ms)
           : 1.0f;
       if (_progress > 1.0f) _progress = 1.0f;
+      ESP_LOGD("chimera_fx", "cfx_reach debug [intro branch] - Pct: %.2f", _progress * 100.0f);
       this->check_milestones_(_progress * 100.0f);
     }
 
@@ -5424,6 +5425,7 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
+  ESP_LOGI("chimera_fx", "DEBUG check_milestones - pct: %.2f, last: %d, next: %d", current_pct, act_->last_fired_milestone, next);
   while (current_pct >= next && next <= 100) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
