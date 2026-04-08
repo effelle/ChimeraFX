@@ -180,9 +180,8 @@ def _validate_segments(config):
 def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
-    No external yaml file needed — works for local and GitHub installs.
     User-defined effects with the same name take priority (overrides)."""
-    if not config.get(CONF_ALL_EFFECTS, False):
+    if not config.get(CONF_ALL_EFFECTS, True):
         return config
 
     from esphome.components.cfx_effect import CFX_EFFECTS
