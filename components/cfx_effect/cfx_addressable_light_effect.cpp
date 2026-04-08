@@ -1861,6 +1861,7 @@ std::string CFXAddressableLightEffect::get_intro_name_(uint8_t intro_id) {
   case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
   case INTRO_MODE_LITHOGRAPH: return "Lithograph";
   case INTRO_MODE_TIDAL_SURGE: return "Tidal Surge";
+  case INTRO_MODE_IMPACT_FLARE: return "Impact Flare";
   default: return "None";
   }
 }
@@ -1893,6 +1894,7 @@ std::string CFXAddressableLightEffect::get_outro_name_(uint8_t outro_id) {
   case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
   case INTRO_MODE_LITHOGRAPH: return "Lithograph";
   case INTRO_MODE_TIDAL_SURGE: return "Tidal Recede";
+  case OUTRO_MODE_CENTER_SQUEEZE: return "Center Squeeze";
   default: return "None";
   }
 }
@@ -4343,6 +4345,56 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
+  case INTRO_MODE_IMPACT_FLARE: {
+    // Phase 1: Meteor (0.0 -> 0.75 progress) — tracks milestones via leading pixel.
+    // Phase 2: Impact / Reverse Fill (0.75 -> 1.0 progress) — 3x speed flash-fill.
+    if (progress <= 0.75f) {
+      float p1 = progress / 0.75f;
+      float exact_lead = p1 * (float)seg_len;
+      int lead = (int)exact_lead;
+      if (lead >= seg_len)
+        lead = seg_len - 1;
+
+      // Track the head for milestones (0-100% strip)
+      if (chimera_fx::instance)
+        chimera_fx::instance->current_leading_pixel = lead;
+
+      // Meteor rendering: fading tail + full-bright head pixel
+      int meteor_size = std::max(2, seg_len / 10);
+      for (int i = 0; i < seg_len; i++) {
+        int idx = reverse ? (seg_len - 1 - i) : i;
+        int global_idx = seg_start + idx;
+
+        if (i > lead) {
+          it[global_idx] = Color::BLACK;
+        } else if (i > lead - meteor_size) {
+          float tail_p = (float)(i - (lead - meteor_size)) / (float)meteor_size;
+          it[global_idx] = Color((uint8_t)(c.r * tail_p), (uint8_t)(c.g * tail_p),
+                                 (uint8_t)(c.b * tail_p), (uint8_t)(c.w * tail_p));
+        } else {
+          it[global_idx] = Color::BLACK;
+        }
+      }
+    } else {
+      // Impact Phase: Reverse fill from end back to start (3x meteor speed)
+      float p2 = (progress - 0.75f) / 0.25f;
+      // fill_head sweeps from seg_len-1 down to 0
+      int fill_head = (int)((1.0f - p2) * (float)seg_len);
+      if (fill_head < 0) fill_head = 0;
+
+      // Milestone stays pegged at 100% during impact phase
+      if (chimera_fx::instance)
+        chimera_fx::instance->current_leading_pixel = seg_len - 1;
+
+      for (int i = 0; i < seg_len; i++) {
+        int idx = reverse ? (seg_len - 1 - i) : i;
+        int global_idx = seg_start + idx;
+        it[global_idx] = (i >= fill_head) ? c : Color::BLACK;
+      }
+    }
+    break;
+  }
+
   case INTRO_MODE_NONE:
   default:
     for (int i = 0; i < seg_len; i++) {
@@ -4442,54 +4494,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     it[global_idx] = Color(r, g, b, w);
-  }
-
-  case INTRO_MODE_IMPACT_FLARE: {
-    // Phase 1: Meteor (0.0 -> 0.75 progress)
-    // Phase 2: Reverse Fill (0.75 -> 1.0 progress)
-    if (progress <= 0.75f) {
-      float p1 = progress / 0.75f;
-      float exact_lead = p1 * (float)seg_len;
-      int lead = (int)exact_lead;
-      if (lead >= seg_len)
-        lead = seg_len - 1;
-
-      // Track the head for milestones (0-100% strip)
-      act_->current_leading_pixel = lead;
-
-      // Simple Meteor rendering
-      int meteor_size = 1 + seg_len / 10;
-      for (int i = 0; i < seg_len; i++) {
-        int idx = reverse ? (seg_len - 1 - i) : i;
-        int global_idx = seg_start + idx;
-
-        if (i > lead) {
-          it[global_idx] = Color::BLACK;
-        } else if (i <= lead && i > lead - meteor_size) {
-          float tail_p = (float)(i - (lead - meteor_size)) / (float)meteor_size;
-          Color base = c;
-          it[global_idx] = Color((uint8_t)(base.r * tail_p), (uint8_t)(base.g * tail_p),
-                                (uint8_t)(base.b * tail_p), (uint8_t)(base.w * tail_p));
-        } else {
-          it[global_idx] = Color::BLACK;
-        }
-      }
-    } else {
-      // Impact Phase: Reverse high-speed fill
-      float p2 = (progress - 0.75f) / 0.25f;
-      float exact_fill = (1.0f - p2) * (float)seg_len;
-      int fill_head = (int)exact_fill;
-
-      // Hold milestone head at end
-      act_->current_leading_pixel = seg_len - 1;
-
-      for (int i = 0; i < seg_len; i++) {
-        int idx = reverse ? (seg_len - 1 - i) : i;
-        int global_idx = seg_start + idx;
-        it[global_idx] = (i >= fill_head) ? c : Color::BLACK;
-      }
-    }
-    break;
   }
 
   // Restore the scaling factor so we don't permanently corrupt the
