@@ -225,6 +225,19 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
+  // CFX-036: Sequence Auto-Bind. Because light state changes defer effect
+  // instantiation until the next run loop, an immediate sequence start() often 
+  // fails to inject parameters (act_ is nullptr). Detect active sequences natively.
+#ifdef USE_CFX_SEQUENCE
+  for (auto *seq : chimera_fx::CFXSequence::instances) {
+    if (seq->is_running() && seq->owns_light(this->get_light_state())) {
+      this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
+                                seq->get_palette(), seq->get_iterations());
+      break;
+    }
+  }
+#endif
+
   // on_cfx_begin trigger (on-device YAML) fires unconditionally.
   // The HA cfx_begin *event* fires only when an actual intro is configured;
   // see end of start() below. (CFX-029)
