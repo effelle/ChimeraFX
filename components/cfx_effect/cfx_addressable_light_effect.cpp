@@ -686,6 +686,8 @@ void CFXAddressableLightEffect::start() {
           act_->active_intro_mode = INTRO_MODE_INTERFERENCE;
         else if (s == "Tidal Surge")
           act_->active_intro_mode = INTRO_MODE_TIDAL_SURGE;
+        else if (s == "Impact Flare")
+          act_->active_intro_mode = INTRO_MODE_IMPACT_FLARE;
       }
     }
 
@@ -772,7 +774,7 @@ void CFXAddressableLightEffect::start() {
   // Bare effects (active_sequence == nullptr) follow the same rule.
 #ifdef USE_CFX_EVENTS
   if (this->effect_id_ != 185 && !act_->strip_tag.empty() &&
-      act_->active_intro_mode != INTRO_NONE) {
+      act_->active_intro_mode != INTRO_MODE_NONE) {
 #ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence == nullptr) {
 #else
@@ -904,6 +906,8 @@ void CFXAddressableLightEffect::stop() {
             act_->active_outro_mode = INTRO_MODE_INTERFERENCE;
           else if (s == "Tidal Recede")
             act_->active_outro_mode = INTRO_MODE_TIDAL_SURGE;
+          else if (s == "Center Squeeze")
+            act_->active_outro_mode = OUTRO_MODE_CENTER_SQUEEZE;
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
         } else if (this->has_outro_preset_()) {
