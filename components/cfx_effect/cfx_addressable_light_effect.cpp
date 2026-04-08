@@ -4398,12 +4398,18 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         int idx = reverse ? (seg_len - 1 - i) : i;
         int global_idx = seg_start + idx;
 
-        if (cfx::hw_random8() <= decay_prob) {
-          Color cur = it[global_idx].get();
-          // Multiplicative decay (approx 210/255 = 82% retention)
-          it[global_idx] = Color(scale8(cur.r, 210), scale8(cur.g, 210),
-                                 scale8(cur.b, 210), scale8(cur.w, 210));
-        }
+      // --- 1. DECAY LOOP (Deterministic Meteor Trail) ---
+      // We decay the EXISTING buffer 'it' every frame for a naturally tapering tail.
+      // Retention: higher intensity = longer retention (approx 170..240)
+      uint8_t retention = 170 + ((uint16_t)act_->active_intro_intensity * 70 / 255);
+      for (int i = 0; i < seg_len; i++) {
+        int idx = reverse ? (seg_len - 1 - i) : i;
+        int global_idx = seg_start + idx;
+
+        Color cur = it[global_idx].get();
+        // Multiplicative decay every frame
+        it[global_idx] = Color(scale8(cur.r, retention), scale8(cur.g, retention),
+                               scale8(cur.b, retention), scale8(cur.w, retention));
       }
 
       // --- 2. DRAW METEOR HEAD (with Energy Boost) ---
@@ -5812,16 +5818,22 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   case OUTRO_MODE_CENTER_SQUEEZE: {
-    // Symmetrical wipe from center to edges
+    // Symmetrical wipe from edges to center (Compression)
     float threshold = progress * (seg_len / 2.0f);
     int mid = seg_len / 2;
 
     for (int i = 0; i < seg_len; i++) {
         float dist = std::abs((float)i - (float)mid);
-        if (dist < threshold) {
+        float remaining_half = (seg_len / 2.0f) - threshold;
+
+        if (dist >= remaining_half) {
             it[seg_start + i] = Color::BLACK;
+        } else if (progress > 0.85f) {
+            // Sharp white implosion boost
+            Color cur = it[seg_start + i].get();
+            it[seg_start + i] = Color(qadd8(cur.r, 100), qadd8(cur.g, 100),
+                                     qadd8(cur.b, 100), qadd8(cur.w, 100));
         }
-        // else keep what was already there (the main effect state)
     }
     break;
   }
