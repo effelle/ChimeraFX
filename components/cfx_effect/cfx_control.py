@@ -80,7 +80,8 @@ INTRO_OPTIONS = [
     "Gas Discharge",    # 22
     "Harmonic Settle",  # 23
     "Lithograph",       # 24
-    "Tidal Surge"       # 25
+    "Tidal Surge",      # 25
+    "Impact Flare"      # 26
 ]
 
 OUTRO_OPTIONS = [
@@ -109,7 +110,8 @@ OUTRO_OPTIONS = [
     "Gas Discharge",    # 22
     "Harmonic Settle",  # 23
     "Lithograph",       # 24
-    "Tidal Recede"      # 25
+    "Tidal Recede",     # 25
+    "Center Squeeze"    # 27
 ]
 
 CONF_LIGHT = "light_id"
