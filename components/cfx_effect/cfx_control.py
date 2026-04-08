@@ -24,9 +24,30 @@ CFXSelect = chimera_fx_ns.class_("CFXSelect", select.Select)
 CFXSwitch = chimera_fx_ns.class_("CFXSwitch", switch.Switch)
 
 PALETTE_OPTIONS = [
-    "Default", "Aurora", "Christmas", "Cyberpunk", "Fairy", "Fire", "Forest", "Halloween", 
-    "HeatColors", "Ice", "Matrix", "Ocean", "OrangeTeal", "Party", "Pastel", "Rainbow", 
-    "RedBlue", "Rivendell", "Sakura", "Smart Random", "Solid", "SunnyGold", "Sunset", "Twilight"
+    "Default",      # 0
+    "Aurora",       # 1
+    "Forest",       # 2
+    "Halloween",    # 3
+    "Rainbow",      # 4
+    "Fire",         # 5
+    "Sunset",       # 6
+    "Ice",          # 7
+    "Party",        # 8
+    "Twilight",     # 9
+    "Pastel",       # 10
+    "Ocean",        # 11
+    "HeatColors",   # 12
+    "Sakura",       # 13
+    "Rivendell",    # 14
+    "Cyberpunk",    # 15
+    "OrangeTeal",   # 16
+    "Christmas",    # 17
+    "RedBlue",      # 18
+    "Matrix",       # 19
+    "SunnyGold",    # 20
+    "Solid",        # 21
+    "Fairy",        # 22
+    "Smart Random"  # 23 (ID 254)
 ]
 
 COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Lithograph", "Morse Code", "Quadrant", "Tidal Surge", "Twin Pulse", "Wipe"]
@@ -34,17 +55,61 @@ INTRO_ONLY = ["Construct", "Crystallize", "Deep Breathe", "Dropping", "Inertia S
 OUTRO_ONLY = ["Close Blinds", "Drain", "Decelerate", "Dismantle", "Emptying", "Erode", "Exhale", "Interference Fade", "Moiré Fade", "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade"]
 
 INTRO_OPTIONS = [
-    "None", "Center", "Construct", "Crystallize", "Deep Breathe", "Dropping", "Eclipse", 
-    "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Inertia Sweep", "Interference", 
-    "Lithograph", "Moiré Shift", "Morse Code", "Pressurize", "Quadrant", "Resonance", 
-    "Sonar Reveal", "Stellar Dust", "Telemetry", "Tidal Surge", "Twin Pulse", "Venetian", "Wipe"
+    "None",             # 0
+    "Wipe",             # 1
+    "Fade",             # 2
+    "Center",           # 3
+    "Glitter",          # 4
+    "Twin Pulse",       # 5
+    "Morse Code",       # 6
+    "Quadrant",         # 7
+    "Pressurize",       # 8
+    "Dropping",         # 9
+    "Construct",        # 10
+    "Inertia Sweep",    # 11
+    "Sonar Reveal",     # 12
+    "Venetian",         # 13
+    "Crystallize",      # 14
+    "Deep Breathe",     # 15
+    "Moiré Shift",      # 16
+    "Resonance",        # 17
+    "Telemetry",        # 18
+    "Stellar Dust",     # 19
+    "Interference",     # 20
+    "Eclipse",          # 21
+    "Gas Discharge",    # 22
+    "Harmonic Settle",  # 23
+    "Lithograph",       # 24
+    "Tidal Surge"       # 25
 ]
 
 OUTRO_OPTIONS = [
-    "None", "Center", "Close Blinds", "Decelerate", "Dismantle", "Drain", "Eclipse", 
-    "Emptying", "Erode", "Exhale", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", 
-    "Interference Fade", "Lithograph", "Moiré Fade", "Morse Code", "Quadrant", 
-    "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade", "Tidal Surge", "Twin Pulse", "Wipe"
+    "None",             # 0
+    "Wipe",             # 1
+    "Fade",             # 2
+    "Center",           # 3
+    "Glitter",          # 4
+    "Twin Pulse",       # 5
+    "Morse Code",       # 6
+    "Quadrant",         # 7
+    "Drain",            # 8
+    "Emptying",         # 9
+    "Dismantle",        # 10
+    "Decelerate",       # 11
+    "Sonar Fade",       # 12
+    "Close Blinds",     # 13
+    "Erode",            # 14
+    "Exhale",           # 15
+    "Moiré Fade",       # 16
+    "Resonance Fade",   # 17
+    "Telemetry Fade",   # 18
+    "Stellar Fade",     # 19
+    "Interference Fade",# 20
+    "Eclipse",          # 21
+    "Gas Discharge",    # 22
+    "Harmonic Settle",  # 23
+    "Lithograph",       # 24
+    "Tidal Recede"      # 25
 ]
 
 CONF_LIGHT = "light_id"
