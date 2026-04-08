@@ -2652,6 +2652,9 @@ uint16_t mode_meteor(void) {
   int meteorPos = (counter * len) >> 16;
   meteorPos = meteorPos % len;
 
+  // Track the head for progressive events (cfx_10 to cfx_100 milestones)
+  instance->current_leading_pixel = meteorPos;
+
   // Meteor size (5% of strip)
   int meteorSize = 1 + len / 20;
 
