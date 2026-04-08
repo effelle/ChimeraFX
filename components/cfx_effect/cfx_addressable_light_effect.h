@@ -416,6 +416,7 @@ public:
 
   // controller_ is set at codegen time via set_controller(), before start()
   // is ever called. Copied into act_->controller on each start().
+  CFXControl *controller_{nullptr};
 
 
 
