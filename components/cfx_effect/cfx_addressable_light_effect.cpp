@@ -4391,12 +4391,17 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         chimera_fx::instance->current_leading_pixel = lead;
 
       // --- 1. DECAY LOOP (Deterministic Meteor Trail) ---
-      // We decay the EXISTING buffer 'it' every frame for a naturally tapering tail.
-      // Retention: higher intensity = longer retention (approx 170..240)
-      uint8_t retention = 170 + ((uint16_t)act_->active_intro_intensity * 70 / 255);
+      // Retention: shifted range (approx 140..210) for faster fade
+      uint8_t retention = 140 + ((uint16_t)act_->active_intro_intensity * 70 / 255);
       for (int i = 0; i < seg_len; i++) {
         int idx = reverse ? (seg_len - 1 - i) : i;
         int global_idx = seg_start + idx;
+
+        // Clear-Ahead: explicitly kill light ahead of the bead to prevent persistence
+        if (i > lead) {
+          it[global_idx] = Color::BLACK;
+          continue;
+        }
 
         Color cur = it[global_idx].get();
         // Multiplicative decay every frame
@@ -5815,17 +5820,26 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     int mid = seg_len / 2;
 
     for (int i = 0; i < seg_len; i++) {
-        float dist = std::abs((float)i - (float)mid);
-        float remaining_half = (seg_len / 2.0f) - threshold;
+      float dist = std::abs((float)i - (float)mid);
+      float remaining_half = (seg_len / 2.0f) - threshold;
 
-        if (dist >= remaining_half) {
-            it[seg_start + i] = Color::BLACK;
-        } else if (progress > 0.85f) {
-            // Sharp white implosion boost
-            Color cur = it[seg_start + i].get();
-            it[seg_start + i] = Color(qadd8(cur.r, 100), qadd8(cur.g, 100),
-                                     qadd8(cur.b, 100), qadd8(cur.w, 100));
+      if (dist >= remaining_half) {
+        it[seg_start + i] = Color::BLACK;
+      } else {
+        // Progressive White Compression Boost
+        // We inject white proportional to gravity/pressure of the squeeze.
+        uint8_t white_boost = 0;
+        if (progress > 0.85f) {
+          white_boost = 255; // Sharp white flash at the end point
+        } else {
+          // Gradual white injection (up to ~160)
+          white_boost = (uint8_t)(progress * 160.0f / 0.85f);
         }
+
+        Color cur = it[seg_start + i].get();
+        it[seg_start + i] = Color(qadd8(cur.r, white_boost), qadd8(cur.g, white_boost),
+                                 qadd8(cur.b, white_boost), qadd8(cur.w, white_boost));
+      }
     }
     break;
   }
