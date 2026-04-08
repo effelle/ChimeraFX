@@ -733,8 +733,10 @@ void CFXAddressableLightEffect::start() {
     }
     act_->active_intro_duration_ms = duration_ms;
 
-    // Cache Speed for Intro (since Morse needs it for unit_ms)
+    // Cache Speed and Intensity for Intro
     act_->active_intro_speed = 128; // fallback
+    act_->active_intro_intensity = 128; // fallback
+    
     number::Number *speed_num =
         (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
     if (speed_num != nullptr && speed_num->has_state()) {
@@ -745,11 +747,21 @@ void CFXAddressableLightEffect::start() {
       act_->active_intro_speed = this->get_default_speed_(this->effect_id_);
     }
 
+    number::Number *inten_num =
+        (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
+    if (inten_num != nullptr && inten_num->has_state()) {
+      act_->active_intro_intensity = (uint8_t)inten_num->state;
+    } else if (this->has_intensity_preset_()) {
+      act_->active_intro_intensity = this->intensity_preset_val_();
+    } else {
+      act_->active_intro_intensity = this->get_default_intensity_(this->effect_id_);
+    }
+
     // Cache for this run
     ensure_cfg_();
     cfg_->intro_effect = intro_sel;
 
-    if (act_->active_intro_mode == INTRO_NONE && !preset.is_active) {
+    if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active) {
       act_->intro_active = false;
     }
   }
@@ -4386,7 +4398,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         int idx = reverse ? (seg_len - 1 - i) : i;
         int global_idx = seg_start + idx;
 
-        if (hw_random8() <= decay_prob) {
+        if (cfx::hw_random8() <= decay_prob) {
           Color cur = it[global_idx].get();
           // Multiplicative decay (approx 210/255 = 82% retention)
           it[global_idx] = Color(scale8(cur.r, 210), scale8(cur.g, 210),
@@ -5811,8 +5823,6 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         }
         // else keep what was already there (the main effect state)
     }
-    break;
-  }
     break;
   }
 

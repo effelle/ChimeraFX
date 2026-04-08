@@ -78,6 +78,7 @@ public:
     bool intro_active{false};
     uint8_t active_intro_mode{0};
     uint8_t active_intro_speed{128};
+    uint8_t active_intro_intensity{128};
     uint64_t intro_start_time{0};
     uint32_t active_intro_duration_ms{1000};
 
