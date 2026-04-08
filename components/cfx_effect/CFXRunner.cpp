@@ -180,13 +180,15 @@ void Segment::setPixelColor(int n, uint32_t c) {
 
   // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
   // to bake their own brightness before returning the buffer.
-  if (instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
+  // We only do this if bake_brightness_ is enabled (Segments).
+  if (instance->bake_brightness_ && instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
     float bri = instance->global_brightness_;
     r = (uint8_t)(r * bri);
     g = (uint8_t)(g * bri);
     b = (uint8_t)(b * bri);
     w = (uint8_t)(w * bri);
   }
+
 
   esphome::Color esphome_color(r, g, b, w);
 
@@ -240,13 +242,15 @@ void Segment::fill(uint32_t c) {
 
   // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
   // to bake their own brightness before returning the buffer.
-  if (instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
+  // We only do this if bake_brightness_ is enabled (Segments).
+  if (instance->bake_brightness_ && instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
     float bri = instance->global_brightness_;
     r = (uint8_t)(r * bri);
     g = (uint8_t)(g * bri);
     b = (uint8_t)(b * bri);
     w = (uint8_t)(w * bri);
   }
+
 
   esphome::Color esphome_color(r, g, b, w);
 

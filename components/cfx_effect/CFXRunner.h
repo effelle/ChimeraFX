@@ -352,6 +352,8 @@ public:
   bool getMirror() const { return _segment.mirror; }
   void setColor(uint32_t c) { _segment.colors[0] = c; }
   void generateRandomPalette();
+  void setBakeBrightness(bool bake) { bake_brightness_ = bake; }
+
 
   void start() { _state = STATE_RUNNING; }
 
@@ -377,6 +379,8 @@ public:
   // audit 4.2: per-runner flag so each strip initialises its own pacifica
   // palette caches rather than relying on a shared file-scope static bool.
   bool pacifica_initialized_{false};
+  bool bake_brightness_ = false;
+
 
 private:
   RunnerState _state = STATE_RUNNING;

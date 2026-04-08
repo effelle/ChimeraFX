@@ -318,6 +318,7 @@ void CFXAddressableLightEffect::start() {
       if (!seg_defs.empty() && !act_->segments_initialized) {
         for (const auto &def : seg_defs) {
           auto *r = new CFXRunner(it);
+          r->setBakeBrightness(true); // Multi-segment mode: bake in engine
           r->_segment.start = def.start;
           r->_segment.stop = def.stop;
           r->_segment.mirror = def.mirror;
@@ -325,6 +326,7 @@ void CFXAddressableLightEffect::start() {
           r->setMode(this->effect_id_);
           r->diagnostics.set_target_interval_ms(this->update_interval_);
           act_->segment_runners.push_back(r);
+
         }
         act_->runner = act_->segment_runners[0];
         act_->segments_initialized = true;
@@ -333,11 +335,15 @@ void CFXAddressableLightEffect::start() {
       } else {
 #endif
         act_->runner = new CFXRunner(it);
+        // If this is a virtual segment entity, it must bake brightness.
+        // If it's a standard non-segmented master strip, let the hardware gate handle it.
+        act_->runner->setBakeBrightness(this->is_virtual_segment_);
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
             this->update_interval_);
-        ESP_LOGI("chimera_fx", "Single-segment mode runner created for %s",
-                 this->get_name());
+        ESP_LOGI("chimera_fx", "Single-segment mode runner created for %s (Bake: %d)",
+                 this->get_name(), this->is_virtual_segment_);
+
 #ifdef USE_ESP32
       }
 #endif
@@ -422,11 +428,14 @@ void CFXAddressableLightEffect::start() {
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
       r->force_white_active_ = fw_active;
+      r->setBakeBrightness(true); // Ensure re-synced
     }
   } else {
     act_->runner->force_white_active_ = fw_active;
+    act_->runner->setBakeBrightness(this->is_virtual_segment_); // Ensure re-synced
   }
   act_->active_force_white = fw_active;
+
 
   // 1. Speed (YAML Preset Override Only)
   number::Number *speed_num =
