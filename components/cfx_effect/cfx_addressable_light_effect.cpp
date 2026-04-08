@@ -113,6 +113,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_LITHOGRAPH, INTRO_MODE_LITHOGRAPH};
   case 186: // Tidal Surge
     return {true, INTRO_MODE_TIDAL_SURGE, INTRO_MODE_TIDAL_SURGE};
+  case 187: // Impact Flare
+    return {true, INTRO_MODE_IMPACT_FLARE, OUTRO_MODE_CENTER_SQUEEZE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -143,6 +145,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
   case 183: // Harmonic Settle
   case 184: // Lithograph
   case 186: // Tidal Surge
+  case 187: // Impact Flare
     return true;
   default:
     return false;
@@ -4441,6 +4444,54 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     it[global_idx] = Color(r, g, b, w);
   }
 
+  case INTRO_MODE_IMPACT_FLARE: {
+    // Phase 1: Meteor (0.0 -> 0.75 progress)
+    // Phase 2: Reverse Fill (0.75 -> 1.0 progress)
+    if (progress <= 0.75f) {
+      float p1 = progress / 0.75f;
+      float exact_lead = p1 * (float)seg_len;
+      int lead = (int)exact_lead;
+      if (lead >= seg_len)
+        lead = seg_len - 1;
+
+      // Track the head for milestones (0-100% strip)
+      act_->current_leading_pixel = lead;
+
+      // Simple Meteor rendering
+      int meteor_size = 1 + seg_len / 10;
+      for (int i = 0; i < seg_len; i++) {
+        int idx = reverse ? (seg_len - 1 - i) : i;
+        int global_idx = seg_start + idx;
+
+        if (i > lead) {
+          it[global_idx] = Color::BLACK;
+        } else if (i <= lead && i > lead - meteor_size) {
+          float tail_p = (float)(i - (lead - meteor_size)) / (float)meteor_size;
+          Color base = c;
+          it[global_idx] = Color((uint8_t)(base.r * tail_p), (uint8_t)(base.g * tail_p),
+                                (uint8_t)(base.b * tail_p), (uint8_t)(base.w * tail_p));
+        } else {
+          it[global_idx] = Color::BLACK;
+        }
+      }
+    } else {
+      // Impact Phase: Reverse high-speed fill
+      float p2 = (progress - 0.75f) / 0.25f;
+      float exact_fill = (1.0f - p2) * (float)seg_len;
+      int fill_head = (int)exact_fill;
+
+      // Hold milestone head at end
+      act_->current_leading_pixel = seg_len - 1;
+
+      for (int i = 0; i < seg_len; i++) {
+        int idx = reverse ? (seg_len - 1 - i) : i;
+        int global_idx = seg_start + idx;
+        it[global_idx] = (i >= fill_head) ? c : Color::BLACK;
+      }
+    }
+    break;
+  }
+
   // Restore the scaling factor so we don't permanently corrupt the
   // LightState
   if (ls != nullptr && !this->is_virtual_segment_) {
@@ -5710,6 +5761,85 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     // ─────────────────────────────────────────────
     if (remaining > 0)
       it[seg_start + remaining - 1] = boost(c, 80);
+    break;
+  }
+
+  case OUTRO_MODE_CENTER_SQUEEZE: {
+    // Symmetrical wipe from edges to center
+    float prog_erasing = 1.0f - progress;
+    float exact_lead = prog_erasing * (seg_len / 2.0f);
+    int lead = (int)exact_lead;
+
+    // Intensity defines blur radius
+    float blur_percent = (act_->active_outro_intensity / 255.0f) * 0.4f;
+    int blur_radius = (int)(seg_len * blur_percent);
+
+    for (int i = 0; i < seg_len / 2; i++) {
+      float alpha = 0.0f;
+      if (i <= lead - blur_radius) {
+        alpha = 1.0f;
+      } else if (i <= lead && blur_radius > 0) {
+        alpha = (exact_lead - i) / blur_radius;
+      }
+      alpha = std::clamp(alpha, 0.0f, 1.5f);
+
+      // Flare intensity boost near the end
+      if (progress > 0.85f && alpha > 0.1f) {
+        float flare = (progress - 0.85f) / 0.15f;
+        alpha += flare * 0.5f;
+      }
+
+      auto apply_alpha = [&](int idx) {
+        if (idx >= 0 && idx < seg_len) {
+          int global_idx = seg_start + idx;
+          if (alpha <= 0.0f) {
+            it[global_idx] = Color::BLACK;
+          } else {
+            Color cur = it[global_idx].get();
+            float r = cur.r * alpha;
+            float g = cur.g * alpha;
+            float b = cur.b * alpha;
+            float w = cur.w * alpha;
+            // Flare boost: shift toward white if alpha > 1.0
+            if (alpha > 1.0f) {
+              float boost = (alpha - 1.0f) * 128.0f;
+              r = std::min(255.0f, r + boost);
+              g = std::min(255.0f, g + boost);
+              b = std::min(255.0f, b + boost);
+              w = std::min(255.0f, w + boost);
+            }
+            it[global_idx] =
+                Color((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)w);
+          }
+        }
+      };
+
+      apply_alpha(i);
+      apply_alpha(seg_len - 1 - i);
+    }
+    // Handle odd center pixel
+    if (seg_len % 2 != 0) {
+      int mid = seg_len / 2;
+      float alpha = (0 <= lead) ? 1.0f : 0.0f;
+      if (progress > 0.85f && alpha > 0.1f)
+        alpha += (progress - 0.85f) / 0.15f;
+      alpha = std::clamp(alpha, 0.0f, 1.5f);
+
+      int global_idx = seg_start + mid;
+      Color cur = it[global_idx].get();
+      float r = cur.r * alpha;
+      float g = cur.g * alpha;
+      float b = cur.b * alpha;
+      float w = cur.w * alpha;
+      if (alpha > 1.0f) {
+        float boost = (alpha - 1.0f) * 128.0f;
+        r = std::min(255.0f, r + boost);
+        g = std::min(255.0f, g + boost);
+        b = std::min(255.0f, b + boost);
+        w = std::min(255.0f, w + boost);
+      }
+      it[global_idx] = Color((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)w);
+    }
     break;
   }
 

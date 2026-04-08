@@ -145,6 +145,7 @@ struct ColliderNode {
 #define FX_MODE_LITHOGRAPH 184
 #define FX_MODE_SEPARATOR				185
 #define FX_MODE_TIDAL_SURGE				186
+#define FX_MODE_IMPACT_FLARE			187
 
 #define INTRO_NONE 0
 #define INTRO_WIPE 1
@@ -163,6 +164,8 @@ struct ColliderNode {
 #define INTRO_CRYSTALLIZE 14
 #define INTRO_DEEP_BREATHE 15
 #define INTRO_TIDAL_SURGE  25
+#define INTRO_IMPACT_FLARE 26
+#define OUTRO_CENTER_SQUEEZE 27
 
 // CFX-008: Cover full 0–255 ID range (Ambient Roulette = 255)
 #define MODE_COUNT					188
