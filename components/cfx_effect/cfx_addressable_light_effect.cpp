@@ -1867,32 +1867,32 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
 std::string CFXAddressableLightEffect::get_intro_name_(uint8_t intro_id) {
   switch (intro_id) {
   case INTRO_MODE_NONE: return "None";
-  case INTRO_MODE_WIPE: return "Wipe";
-  case INTRO_MODE_FADE: return "Fade";
   case INTRO_MODE_CENTER: return "Center";
-  case INTRO_MODE_GLITTER: return "Glitter";
-  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
-  case INTRO_MODE_MORSE: return "Morse Code";
-  case INTRO_MODE_QUADRANT: return "Quadrant";
-  case INTRO_MODE_HYDRAULICS: return "Pressurize";
-  case INTRO_MODE_DROPPING: return "Dropping";
   case INTRO_MODE_ASSEMBLY: return "Construct";
-  case INTRO_MODE_INERTIA_SWEEP: return "Inertia Sweep";
-  case INTRO_MODE_SONAR_REVEAL: return "Sonar Reveal";
-  case INTRO_MODE_VENETIAN: return "Venetian";
   case INTRO_MODE_CRYSTALLIZE: return "Crystallize";
   case INTRO_MODE_DEEP_BREATHE: return "Deep Breathe";
-  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Shift";
-  case INTRO_MODE_RESONANCE_FILL: return "Resonance";
-  case INTRO_MODE_TELEMETRY: return "Telemetry";
-  case INTRO_MODE_STELLAR_DUST: return "Stellar Dust";
-  case INTRO_MODE_INTERFERENCE: return "Interference";
+  case INTRO_MODE_DROPPING: return "Dropping";
   case INTRO_MODE_ECLIPSE: return "Eclipse";
+  case INTRO_MODE_FADE: return "Fade";
   case INTRO_MODE_GAS_DISCHARGE: return "Gas Discharge";
+  case INTRO_MODE_GLITTER: return "Glitter";
   case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
-  case INTRO_MODE_LITHOGRAPH: return "Lithograph";
-  case INTRO_MODE_TIDAL_SURGE: return "Tidal Surge";
   case INTRO_MODE_IMPACT_FLARE: return "Impact Flare";
+  case INTRO_MODE_INERTIA_SWEEP: return "Inertia Sweep";
+  case INTRO_MODE_INTERFERENCE: return "Interference";
+  case INTRO_MODE_LITHOGRAPH: return "Lithograph";
+  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Shift";
+  case INTRO_MODE_MORSE: return "Morse Code";
+  case INTRO_MODE_HYDRAULICS: return "Pressurize";
+  case INTRO_MODE_QUADRANT: return "Quadrant";
+  case INTRO_MODE_RESONANCE_FILL: return "Resonance";
+  case INTRO_MODE_SONAR_REVEAL: return "Sonar Reveal";
+  case INTRO_MODE_STELLAR_DUST: return "Stellar Dust";
+  case INTRO_MODE_TELEMETRY: return "Telemetry";
+  case INTRO_MODE_TIDAL_SURGE: return "Tidal Surge";
+  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
+  case INTRO_MODE_VENETIAN: return "Venetian";
+  case INTRO_MODE_WIPE: return "Wipe";
   default: return "None";
   }
 }
@@ -1900,32 +1900,32 @@ std::string CFXAddressableLightEffect::get_intro_name_(uint8_t intro_id) {
 std::string CFXAddressableLightEffect::get_outro_name_(uint8_t outro_id) {
   switch (outro_id) {
   case INTRO_MODE_NONE: return "None";
-  case INTRO_MODE_WIPE: return "Wipe";
-  case INTRO_MODE_FADE: return "Fade";
   case INTRO_MODE_CENTER: return "Center";
-  case INTRO_MODE_GLITTER: return "Glitter";
-  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
-  case INTRO_MODE_MORSE: return "Morse Code";
-  case INTRO_MODE_QUADRANT: return "Quadrant";
-  case INTRO_MODE_HYDRAULICS: return "Drain";
-  case INTRO_MODE_DROPPING: return "Emptying";
-  case INTRO_MODE_ASSEMBLY: return "Dismantle";
-  case INTRO_MODE_INERTIA_SWEEP: return "Decelerate";
-  case INTRO_MODE_SONAR_REVEAL: return "Sonar Fade";
+  case OUTRO_MODE_CENTER_SQUEEZE: return "Center Squeeze";
   case INTRO_MODE_VENETIAN: return "Close Blinds";
+  case INTRO_MODE_INERTIA_SWEEP: return "Decelerate";
+  case INTRO_MODE_ASSEMBLY: return "Dismantle";
+  case INTRO_MODE_HYDRAULICS: return "Drain";
+  case INTRO_MODE_ECLIPSE: return "Eclipse";
+  case INTRO_MODE_DROPPING: return "Emptying";
   case INTRO_MODE_CRYSTALLIZE: return "Erode";
   case INTRO_MODE_DEEP_BREATHE: return "Exhale";
-  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Fade";
-  case INTRO_MODE_RESONANCE_FILL: return "Resonance Fade";
-  case INTRO_MODE_TELEMETRY: return "Telemetry Fade";
-  case INTRO_MODE_STELLAR_DUST: return "Stellar Fade";
-  case INTRO_MODE_INTERFERENCE: return "Interference Fade";
-  case INTRO_MODE_ECLIPSE: return "Eclipse";
+  case INTRO_MODE_FADE: return "Fade";
   case INTRO_MODE_GAS_DISCHARGE: return "Gas Discharge";
+  case INTRO_MODE_GLITTER: return "Glitter";
   case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
+  case INTRO_MODE_INTERFERENCE: return "Interference Fade";
   case INTRO_MODE_LITHOGRAPH: return "Lithograph";
+  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Fade";
+  case INTRO_MODE_MORSE: return "Morse Code";
+  case INTRO_MODE_QUADRANT: return "Quadrant";
+  case INTRO_MODE_RESONANCE_FILL: return "Resonance Fade";
+  case INTRO_MODE_SONAR_REVEAL: return "Sonar Fade";
+  case INTRO_MODE_STELLAR_DUST: return "Stellar Fade";
+  case INTRO_MODE_TELEMETRY: return "Telemetry Fade";
   case INTRO_MODE_TIDAL_SURGE: return "Tidal Recede";
-  case OUTRO_MODE_CENTER_SQUEEZE: return "Center Squeeze";
+  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
+  case INTRO_MODE_WIPE: return "Wipe";
   default: return "None";
   }
 }
@@ -4389,14 +4389,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       // Track the head for milestones (0-100% strip)
       if (chimera_fx::instance)
         chimera_fx::instance->current_leading_pixel = lead;
-
-      // --- 1. DECAY LOOP (Realistic Meteor Persistence) ---
-      // We decay the EXISTING buffer 'it' instead of clearing it.
-      // Probability check: higher intensity = fewer pixels decay per frame
-      uint8_t decay_prob = 255 - act_->active_intro_intensity;
-      for (int i = 0; i < seg_len; i++) {
-        int idx = reverse ? (seg_len - 1 - i) : i;
-        int global_idx = seg_start + idx;
 
       // --- 1. DECAY LOOP (Deterministic Meteor Trail) ---
       // We decay the EXISTING buffer 'it' every frame for a naturally tapering tail.
