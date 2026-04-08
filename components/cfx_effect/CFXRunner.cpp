@@ -178,6 +178,16 @@ void Segment::setPixelColor(int n, uint32_t c) {
     cfx::apply_force_white(r, g, b, w);
   }
 
+  // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
+  // to bake their own brightness before returning the buffer.
+  if (instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
+    float bri = instance->global_brightness_;
+    r = (uint8_t)(r * bri);
+    g = (uint8_t)(g * bri);
+    b = (uint8_t)(b * bri);
+    w = (uint8_t)(w * bri);
+  }
+
   esphome::Color esphome_color(r, g, b, w);
 
   int offset = (light_size == (int)physicalLength()) ? 0 : start;
@@ -226,6 +236,16 @@ void Segment::fill(uint32_t c) {
   // Apply native force_white BEFORE hitting the ESPHome gamma cache
   if (instance->force_white_active_) {
     cfx::apply_force_white(r, g, b, w);
+  }
+
+  // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
+  // to bake their own brightness before returning the buffer.
+  if (instance->global_brightness_ < 0.999f && instance->global_brightness_ >= 0.0f) {
+    float bri = instance->global_brightness_;
+    r = (uint8_t)(r * bri);
+    g = (uint8_t)(g * bri);
+    b = (uint8_t)(b * bri);
+    w = (uint8_t)(w * bri);
   }
 
   esphome::Color esphome_color(r, g, b, w);
