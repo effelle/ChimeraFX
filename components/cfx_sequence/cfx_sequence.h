@@ -9,6 +9,12 @@
 #include "esphome/core/preferences.h"
 #include "esphome/components/button/button.h"
 #ifdef USE_API
+#ifndef USE_API_USER_DEFINED_ACTIONS
+#define USE_API_USER_DEFINED_ACTIONS
+#endif
+#ifndef USE_API_CUSTOM_SERVICES
+#define USE_API_CUSTOM_SERVICES
+#endif
 #include "esphome/components/api/custom_api_device.h"
 #endif
 #include <atomic>
