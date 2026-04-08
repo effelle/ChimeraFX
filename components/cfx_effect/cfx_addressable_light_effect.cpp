@@ -1394,14 +1394,33 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // so this branch is skipped for them — their milestones come from their own
     // runner.
     if (!act_->intro_suppresses_milestones) {
-      uint64_t _elapsed = millis_64() - act_->intro_start_time;
-      float _progress =
-          (act_->active_intro_duration_ms > 0)
-              ? ((float)_elapsed / (float)act_->active_intro_duration_ms)
-              : 1.0f;
-      if (_progress > 1.0f)
-        _progress = 1.0f;
-      this->check_milestones_(_progress * 100.0f);
+      float milestone_pct = 0.0f;
+
+      // INTRO_MODE_IMPACT_FLARE: milestones must track the meteor head pixel,
+      // not wall-clock time. run_intro() has already written current_leading_pixel.
+      // During the impact (reverse fill) phase the head is pegged at seg_len-1
+      // so we hold at 100%.
+      if (act_->active_intro_mode == INTRO_MODE_IMPACT_FLARE) {
+        CFXRunner *r =
+            !act_->segment_runners.empty() ? act_->segment_runners[0] : act_->runner;
+        int32_t lp = (r != nullptr) ? r->current_leading_pixel : -1;
+        if (lp >= 0) {
+          uint16_t slen = (r != nullptr) ? r->_segment.length() : 1;
+          if (slen == 0) slen = 1;
+          milestone_pct = ((float)lp / (float)slen) * 100.0f;
+          if (milestone_pct > 100.0f) milestone_pct = 100.0f;
+        }
+      } else {
+        uint64_t _elapsed = millis_64() - act_->intro_start_time;
+        float _progress =
+            (act_->active_intro_duration_ms > 0)
+                ? ((float)_elapsed / (float)act_->active_intro_duration_ms)
+                : 1.0f;
+        if (_progress > 1.0f) _progress = 1.0f;
+        milestone_pct = _progress * 100.0f;
+      }
+
+      this->check_milestones_(milestone_pct);
     }
 
     if (millis_64() - act_->intro_start_time > act_->active_intro_duration_ms) {
