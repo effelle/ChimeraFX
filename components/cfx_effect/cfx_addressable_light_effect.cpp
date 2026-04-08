@@ -1373,8 +1373,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       main_lp = act_->segment_runners[0]->current_leading_pixel;
     else if (act_->runner)
       main_lp = act_->runner->current_leading_pixel;
-    if (main_lp >= 0)
+    if (main_lp >= 0 && act_->active_intro_mode != INTRO_MODE_IMPACT_FLARE &&
+        act_->active_intro_mode != INTRO_MODE_TIDAL_SURGE) {
       act_->intro_suppresses_milestones = true;
+    }
   }
 
   bool needs_autotune = (act_->autotune_active &&
