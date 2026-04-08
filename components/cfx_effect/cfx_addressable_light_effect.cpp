@@ -4365,8 +4365,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   case INTRO_MODE_IMPACT_FLARE: {
-    // Phase 1: Meteor (0.0 -> 0.75 progress) — tracks milestones via leading pixel.
-    // Phase 2: Impact / Reverse Fill (0.75 -> 1.0 progress) — 3x speed flash-fill.
+    // Phase 1: Realistic Meteor (0.0 -> 0.75 progress)
+    // Phase 2: Impact / Reverse Fill (0.75 -> 1.0 progress)
     if (progress <= 0.75f) {
       float p1 = progress / 0.75f;
       float exact_lead = p1 * (float)seg_len;
@@ -4378,28 +4378,40 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       if (chimera_fx::instance)
         chimera_fx::instance->current_leading_pixel = lead;
 
-      // Meteor rendering: fading tail + full-bright head pixel
-      int meteor_size = std::max(2, seg_len / 10);
+      // --- 1. DECAY LOOP (Realistic Meteor Persistence) ---
+      // We decay the EXISTING buffer 'it' instead of clearing it.
+      // Probability check: higher intensity = fewer pixels decay per frame
+      uint8_t decay_prob = 255 - act_->active_intro_intensity;
       for (int i = 0; i < seg_len; i++) {
         int idx = reverse ? (seg_len - 1 - i) : i;
         int global_idx = seg_start + idx;
 
-        if (i > lead) {
-          it[global_idx] = Color::BLACK;
-        } else if (i > lead - meteor_size) {
-          float tail_p = (float)(i - (lead - meteor_size)) / (float)meteor_size;
-          it[global_idx] = Color((uint8_t)(c.r * tail_p), (uint8_t)(c.g * tail_p),
-                                 (uint8_t)(c.b * tail_p), (uint8_t)(c.w * tail_p));
-        } else {
-          it[global_idx] = Color::BLACK;
+        if (hw_random8() <= decay_prob) {
+          Color cur = it[global_idx].get();
+          // Multiplicative decay (approx 210/255 = 82% retention)
+          it[global_idx] = Color(scale8(cur.r, 210), scale8(cur.g, 210),
+                                 scale8(cur.b, 210), scale8(cur.w, 210));
+        }
+      }
+
+      // --- 2. DRAW METEOR HEAD (with Energy Boost) ---
+      int meteor_size = 1 + seg_len / 40; // Small sharp head
+      for (int j = 0; j < meteor_size; j++) {
+        int i = lead + j;
+        if (i < seg_len) {
+          int idx = reverse ? (seg_len - 1 - i) : i;
+          int global_idx = seg_start + idx;
+          // Energy Boost: Add white to the primary monochromatic color
+          it[global_idx] = Color(qadd8(c.r, 80), qadd8(c.g, 80), qadd8(c.b, 80),
+                                 qadd8(c.w, 80));
         }
       }
     } else {
       // Impact Phase: Reverse fill from end back to start (3x meteor speed)
       float p2 = (progress - 0.75f) / 0.25f;
-      // fill_head sweeps from seg_len-1 down to 0
       int fill_head = (int)((1.0f - p2) * (float)seg_len);
-      if (fill_head < 0) fill_head = 0;
+      if (fill_head < 0)
+        fill_head = 0;
 
       // Milestone stays pegged at 100% during impact phase
       if (chimera_fx::instance)
@@ -5788,81 +5800,19 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   case OUTRO_MODE_CENTER_SQUEEZE: {
-    // Symmetrical wipe from edges to center
-    float prog_erasing = 1.0f - progress;
-    float exact_lead = prog_erasing * (seg_len / 2.0f);
-    int lead = (int)exact_lead;
+    // Symmetrical wipe from center to edges
+    float threshold = progress * (seg_len / 2.0f);
+    int mid = seg_len / 2;
 
-    // Intensity defines blur radius
-    float blur_percent = (act_->active_outro_intensity / 255.0f) * 0.4f;
-    int blur_radius = (int)(seg_len * blur_percent);
-
-    for (int i = 0; i < seg_len / 2; i++) {
-      float alpha = 0.0f;
-      if (i <= lead - blur_radius) {
-        alpha = 1.0f;
-      } else if (i <= lead && blur_radius > 0) {
-        alpha = (exact_lead - i) / blur_radius;
-      }
-      alpha = std::clamp(alpha, 0.0f, 1.5f);
-
-      // Flare intensity boost near the end
-      if (progress > 0.85f && alpha > 0.1f) {
-        float flare = (progress - 0.85f) / 0.15f;
-        alpha += flare * 0.5f;
-      }
-
-      auto apply_alpha = [&](int idx) {
-        if (idx >= 0 && idx < seg_len) {
-          int global_idx = seg_start + idx;
-          if (alpha <= 0.0f) {
-            it[global_idx] = Color::BLACK;
-          } else {
-            Color cur = it[global_idx].get();
-            float r = cur.r * alpha;
-            float g = cur.g * alpha;
-            float b = cur.b * alpha;
-            float w = cur.w * alpha;
-            // Flare boost: shift toward white if alpha > 1.0
-            if (alpha > 1.0f) {
-              float boost = (alpha - 1.0f) * 128.0f;
-              r = std::min(255.0f, r + boost);
-              g = std::min(255.0f, g + boost);
-              b = std::min(255.0f, b + boost);
-              w = std::min(255.0f, w + boost);
-            }
-            it[global_idx] =
-                Color((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)w);
-          }
+    for (int i = 0; i < seg_len; i++) {
+        float dist = std::abs((float)i - (float)mid);
+        if (dist < threshold) {
+            it[seg_start + i] = Color::BLACK;
         }
-      };
-
-      apply_alpha(i);
-      apply_alpha(seg_len - 1 - i);
+        // else keep what was already there (the main effect state)
     }
-    // Handle odd center pixel
-    if (seg_len % 2 != 0) {
-      int mid = seg_len / 2;
-      float alpha = (0 <= lead) ? 1.0f : 0.0f;
-      if (progress > 0.85f && alpha > 0.1f)
-        alpha += (progress - 0.85f) / 0.15f;
-      alpha = std::clamp(alpha, 0.0f, 1.5f);
-
-      int global_idx = seg_start + mid;
-      Color cur = it[global_idx].get();
-      float r = cur.r * alpha;
-      float g = cur.g * alpha;
-      float b = cur.b * alpha;
-      float w = cur.w * alpha;
-      if (alpha > 1.0f) {
-        float boost = (alpha - 1.0f) * 128.0f;
-        r = std::min(255.0f, r + boost);
-        g = std::min(255.0f, g + boost);
-        b = std::min(255.0f, b + boost);
-        w = std::min(255.0f, w + boost);
-      }
-      it[global_idx] = Color((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)w);
-    }
+    break;
+  }
     break;
   }
 
