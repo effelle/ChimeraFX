@@ -1254,9 +1254,24 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!skip_service) {
     if (!act_->segment_runners.empty()) {
-      for (auto *r : act_->segment_runners) {
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(this->get_light_state()->get_output());
+      for (size_t i = 0; i < act_->segment_runners.size(); i++) {
+        auto *r = act_->segment_runners[i];
         chimera_fx::InstanceGuard seg_guard(r); // CFX-004: scoped per-iteration
-        r->global_brightness_ = bri;
+        
+        float seg_bri = bri;
+        if (cfx_out != nullptr && i < cfx_out->get_segment_light_states().size()) {
+          auto *seg_state = cfx_out->get_segment_light_states()[i];
+          if (seg_state != nullptr) {
+            seg_bri *= seg_state->current_values.get_brightness();
+            if (act_->state == TRANSITION_NONE && !act_->intro_active &&
+                act_->state != OUTRO_RUNNING) {
+              seg_bri *= seg_state->current_values.get_state();
+            }
+          }
+        }
+        
+        r->global_brightness_ = seg_bri;
         r->service();
 #ifdef USE_CFX_SEQUENCE
         if (act_->active_sequence != nullptr) {
