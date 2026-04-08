@@ -265,7 +265,7 @@ void CFXAddressableLightEffect::start() {
   act_->outro_color_cache.clear();
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
-  act_->hydraulics_particles.clear();
+  act_->hydraulics_particle_count = 0;  // audit 3.3: fixed array, reset count
   act_->hydraulics_last_ms = 0;
 
   act_->last_triggered_pixel = -1;
@@ -343,6 +343,13 @@ void CFXAddressableLightEffect::start() {
 #endif
     }
   }
+
+  // Cache the light name once per start() so apply() never allocates a
+  // std::string every frame (audit 1.1).
+  if (auto *ls = this->get_light_state())
+    act_->cached_runner_name = ls->get_name().str();
+  else
+    act_->cached_runner_name.clear();
 
   // Force reset runner memory whenever an effect is selected/started
   // to ensure multi-segment sequences synchronize and start fresh.
@@ -539,8 +546,8 @@ void CFXAddressableLightEffect::start() {
     if (out != nullptr) {
       std::string pal_name = "";
       if (palette_sel && palette_sel->has_state()) {
-        std::string opt_s(palette_sel->current_option());
-        const char *opt = opt_s.c_str();
+        // audit 2.2: c_str() directly on the reference — no std::string copy
+        const char *opt = palette_sel->current_option().c_str();
         if (opt != nullptr)
           pal_name = opt;
       }
@@ -606,8 +613,8 @@ void CFXAddressableLightEffect::start() {
     } else {
       // 2. Fallback to UI Selectors / YAML Presets
       if (intro_sel != nullptr && intro_sel->has_state()) {
-        std::string opt_s(intro_sel->current_option());
-        const char *opt = opt_s.c_str();
+        // audit 2.2: c_str() directly on the reference — no std::string copy
+        const char *opt = intro_sel->current_option().c_str();
         std::string s = opt ? opt : "";
         if (s == "Wipe")
           act_->active_intro_mode = INTRO_MODE_WIPE;
@@ -767,9 +774,9 @@ void CFXAddressableLightEffect::stop() {
   }
   this->trigger_on_complete();
 
-  // Clear intro snapshot vector to reclaim RAM
+  // Clear intro snapshot — keep capacity for next start() to avoid realloc
+  // during the transition (audit 3.1).
   act_->intro_snapshot.clear();
-  act_->intro_snapshot.shrink_to_fit();
 
   // Restore default transition length zeroed in start() for virtual segments
   if (this->is_virtual_segment_ && act_->saved_transition_length > 0) {
@@ -1011,7 +1018,7 @@ void CFXAddressableLightEffect::stop() {
             act_->hydraulics_last_ms = act_->outro_start_time;
             if (act_->active_outro_mode == INTRO_MODE_HYDRAULICS) {
               act_->hydraulics_fluid_level = (float)it_light->size();
-              act_->hydraulics_particles.clear();
+              act_->hydraulics_particle_count = 0;  // audit 3.3
             }
           }
 
@@ -1142,9 +1149,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     act_->active_force_white = act_->controller->get_force_white()->state;
   }
 
-  std::string runner_name = this->get_light_state()
-                                ? this->get_light_state()->get_name().str()
-                                : std::string("");
+  // Use the name cached in start() — avoids heap allocation every frame (audit 1.1).
+  const std::string &runner_name = act_->cached_runner_name;
 
   // Sync color and settings to all runners
   auto *state_ptr = this->get_light_state();
@@ -1196,8 +1202,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   this->run_controls_();
 
   // === Dynamic Gamma Update ===
-  // Sync the Runner's gamma LUT with the light's current gamma setting
-  float current_gamma = this->get_light_state()->get_gamma_correct();
+  // Sync the Runner's gamma LUT with the light's current gamma setting.
+  // state_ptr is already fetched above (audit 1.2).
+  float current_gamma = state_ptr != nullptr ? state_ptr->get_gamma_correct() : 2.8f;
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
       if (abs(r->_gamma - current_gamma) > 0.01f) {
@@ -1214,7 +1221,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Sync Brightness to Runners (Master + Light Brightness)
   float bri = 1.0f;
-  auto *bri_state = this->get_light_state();
+  auto *bri_state = state_ptr;  // audit 1.2: reuse cached pointer
   if (bri_state != nullptr) {
     if (
 #ifdef USE_CFX_SEQUENCE
@@ -1277,7 +1284,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           // Standalone self-terminating effect (e.g. separator blink).
           // Simple turn_off — ESPHome resets the effect selector to None
           // automatically when the light turns off.
-          auto *ls = this->get_light_state();
+          auto *ls = state_ptr;  // audit 1.2: reuse cached pointer
           if (ls != nullptr) {
             auto call = ls->make_call();
             call.set_state(false);
@@ -1371,6 +1378,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
       if (trans_dur > 0.0f) {
         // Snapshot Intro End State
+        // Pre-allocate to strip size before capture — no realloc during
+        // transition (audit 3.1).
+        act_->intro_snapshot.reserve(it.size());
         act_->intro_snapshot.resize(it.size());
         for (int i = 0; i < it.size(); i++) {
           act_->intro_snapshot[i] = it[i].get();
@@ -1431,14 +1441,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         if (mix <= 0.0f) {
           it[i] = act_->intro_snapshot[i];
         } else {
-          // Blend Intro -> Main
-          Color buf = act_->intro_snapshot[i];
-          Color main = it[i].get();
-          uint8_t r = (uint8_t)(buf.r * (1.0f - mix) + main.r * mix);
-          uint8_t g = (uint8_t)(buf.g * (1.0f - mix) + main.g * mix);
-          uint8_t b = (uint8_t)(buf.b * (1.0f - mix) + main.b * mix);
-          uint8_t w = (uint8_t)(buf.w * (1.0f - mix) + main.w * mix);
-          it[i] = Color(r, g, b, w);
+        // Blend Intro -> Main using fixed-point (audit 1.3):
+        // multiply by 256 and shift right 8 — avoids 8 float muls per pixel.
+        Color buf = act_->intro_snapshot[i];
+        Color main = it[i].get();
+        uint16_t mix_fp  = (uint16_t)(mix * 256.0f);  // [0, 256]
+        uint16_t imix_fp = 256u - mix_fp;             // [256, 0]
+        uint8_t r = (uint8_t)((buf.r * imix_fp + main.r * mix_fp) >> 8);
+        uint8_t g = (uint8_t)((buf.g * imix_fp + main.g * mix_fp) >> 8);
+        uint8_t b = (uint8_t)((buf.b * imix_fp + main.b * mix_fp) >> 8);
+        uint8_t w = (uint8_t)((buf.w * imix_fp + main.w * mix_fp) >> 8);
+        it[i] = Color(r, g, b, w);
         }
       }
     }
@@ -1534,12 +1547,11 @@ uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {
   if (s == nullptr)
     return 0;
 
-  std::string option_s(s->current_option());
-  const char *option = option_s.c_str();
+  // audit 2.2: current_option() returns const std::string& — call c_str()
+  // directly instead of copying into a new std::string first.
+  const char *option = s->current_option().c_str();
   if (option == nullptr)
     return 0;
-
-  // Optimization: Use strcmp to avoid std::string allocation on every frame
   if (strcmp(option, "Aurora") == 0)
     return 1;
   if (strcmp(option, "Forest") == 0)
@@ -1959,8 +1971,8 @@ void CFXAddressableLightEffect::run_controls_() {
 
   // --- Visualizer: Dynamic Palette Sync ---
   if (!this->is_virtual_segment_ && palette_sel && palette_sel->has_state()) {
-    std::string opt_s(palette_sel->current_option());
-    const char *opt = opt_s.c_str();
+    // audit 2.2: c_str() directly on the reference — no std::string copy
+    const char *opt = palette_sel->current_option().c_str();
     std::string current_pal = opt ? opt : "";
     if (!current_pal.empty() && current_pal != act_->last_sent_palette) {
       auto *out = static_cast<cfx_light::CFXLightOutput *>(
@@ -1981,8 +1993,8 @@ void CFXAddressableLightEffect::run_controls_() {
       if (out != nullptr) {
         std::string pal_name = "";
         if (palette_sel && palette_sel->has_state()) {
-          std::string opt_s(palette_sel->current_option());
-          const char *opt = opt_s.c_str();
+          // audit 2.2: c_str() directly on the reference — no std::string copy
+          const char *opt = palette_sel->current_option().c_str();
           if (opt != nullptr)
             pal_name = opt;
         }
@@ -2005,13 +2017,10 @@ void CFXAddressableLightEffect::run_controls_() {
       auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
         if (!sel || !sel->has_state())
           return 0;
-        std::string opt_s(sel->current_option());
-        const char *opt = opt_s.c_str();
+        // audit 2.2: avoid copying current_option() into a new std::string
+        const char *opt = sel->current_option().c_str();
         if (!opt)
           return 0;
-
-        // Use strcmp instead of std::string to avoid heap allocation every
-        // frame
         if (strcmp(opt, "Aurora") == 0)
           return 1;
         if (strcmp(opt, "Forest") == 0)
@@ -2186,10 +2195,10 @@ void CFXAddressableLightEffect::run_controls_() {
                             r_mirror = seg_c->get_mirror()->state;
 
                         if (seg_c->get_palette() && seg_c->get_palette()->has_state()) {
-                            std::string opt_str(seg_c->get_palette()->current_option());
-                            const char *opt_ptr = opt_str.c_str();
-                            std::string opt = opt_ptr ? opt_ptr : "";
-                            if (opt.length() > 0) {
+                            // audit 2.2: check non-empty via c_str() directly —
+                            // no intermediate std::string copy needed.
+                            const char *opt_ptr = seg_c->get_palette()->current_option().c_str();
+                            if (opt_ptr && opt_ptr[0] != '\0') {
                                 r_palette = get_pal_idx(seg_c->get_palette());
                             }
                         }
@@ -2772,8 +2781,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       act_->hydraulics_last_ms = now_ms;
       act_->hydraulics_fluid_level = 0.0f;
       act_->hydraulics_fluid_velocity = 0.0f;
-      act_->hydraulics_particles.clear();
-      act_->hydraulics_particles.reserve(MAX_HYDRAULICS_PARTICLES);
+      act_->hydraulics_particle_count = 0;  // audit 3.3: fixed array, reset count
     }
     uint32_t dt_ms = (uint32_t)(now_ms - act_->hydraulics_last_ms);
     if (dt_ms == 0)
@@ -2804,12 +2812,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       if (act_->hydraulics_fluid_velocity > 15.0f) {
         int splash_count = (cfx::hw_random8(4)) + 3; // 3 to 6 drops — CFX-023
         for (int d = 0; d < splash_count; d++) {
-          if (act_->hydraulics_particles.size() < MAX_HYDRAULICS_PARTICLES) {
-            act_->hydraulics_particles.push_back(
+          if (act_->hydraulics_particle_count < MAX_HYDRAULICS_PARTICLES) {  // audit 3.3
+            act_->hydraulics_particles[act_->hydraulics_particle_count++] =
                 {target_l,
                  -act_->hydraulics_fluid_velocity *
                      (0.2f + (cfx::hw_random8(50)) / 100.0f), // CFX-023
-                 true});
+                 true};
           }
         }
       }
@@ -2823,12 +2831,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // --- Continuous Spray Spawning (While moving fast) ---
     if (act_->hydraulics_fluid_velocity > 8.0f &&
-        act_->hydraulics_particles.size() < MAX_HYDRAULICS_PARTICLES) {
+        act_->hydraulics_particle_count < MAX_HYDRAULICS_PARTICLES) {  // audit 3.3
       if (cfx::hw_random8(100) < 40) { // CFX-023
-        act_->hydraulics_particles.push_back(
+        act_->hydraulics_particles[act_->hydraulics_particle_count++] =
             {act_->hydraulics_fluid_level,
              act_->hydraulics_fluid_velocity * (1.1f + (cfx::hw_random8(40)) / 100.0f), // CFX-023
-             true});
+             true};
       }
     }
 
@@ -2881,7 +2889,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // 4. Droplets / Particles Rendering
     float gravity = 25.0f + (intensity_val * 20.0f);
-    for (auto &p : act_->hydraulics_particles) {
+    for (uint8_t _pi = 0; _pi < act_->hydraulics_particle_count; _pi++) {  // audit 3.3
+      auto &p = act_->hydraulics_particles[_pi];
       if (!p.active)
         continue;
       p.vel -= gravity * dt;
@@ -2902,11 +2911,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           it[seg_start + p_idx] = Color(255, 255, 255, 255);
       }
     }
-    act_->hydraulics_particles.erase(
-        std::remove_if(act_->hydraulics_particles.begin(),
-                       act_->hydraulics_particles.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        act_->hydraulics_particles.end());
+    // Compact inactive particles (audit 3.3: replaces erase/remove_if on vector)
+    { uint8_t w = 0;
+      for (uint8_t _pi = 0; _pi < act_->hydraulics_particle_count; _pi++)
+        if (act_->hydraulics_particles[_pi].active)
+          act_->hydraulics_particles[w++] = act_->hydraulics_particles[_pi];
+      act_->hydraulics_particle_count = w; }
     break;
   }
   case INTRO_MODE_MORSE: {
@@ -4497,9 +4507,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 
     // Drops cling more based on intensity
     if (act_->hydraulics_fluid_level < old_level &&
-        act_->hydraulics_particles.size() < MAX_HYDRAULICS_PARTICLES) {
+        act_->hydraulics_particle_count < MAX_HYDRAULICS_PARTICLES) {  // audit 3.3
       if ((cfx::hw_random8(100)) < (10 + (int)(intensity_val * 25))) { // CFX-023
-        act_->hydraulics_particles.push_back({old_level, 0.0f, true});
+        act_->hydraulics_particles[act_->hydraulics_particle_count++] = {old_level, 0.0f, true};
       }
     }
 
@@ -4535,7 +4545,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
 
     float gravity = 25.0f + (intensity_val * 20.0f);
-    for (auto &p : act_->hydraulics_particles) {
+    for (uint8_t _pi = 0; _pi < act_->hydraulics_particle_count; _pi++) {  // audit 3.3
+      auto &p = act_->hydraulics_particles[_pi];
       if (!p.active)
         continue;
       p.vel -= gravity * dt;
@@ -4556,14 +4567,15 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
           it[seg_start + p_idx] = Color::WHITE;
       }
     }
-    act_->hydraulics_particles.erase(
-        std::remove_if(act_->hydraulics_particles.begin(),
-                       act_->hydraulics_particles.end(),
-                       [](const HydraulicsParticle &p) { return !p.active; }),
-        act_->hydraulics_particles.end());
+    // Compact inactive particles (audit 3.3: replaces erase/remove_if on vector)
+    { uint8_t w = 0;
+      for (uint8_t _pi = 0; _pi < act_->hydraulics_particle_count; _pi++)
+        if (act_->hydraulics_particles[_pi].active)
+          act_->hydraulics_particles[w++] = act_->hydraulics_particles[_pi];
+      act_->hydraulics_particle_count = w; }
 
     if (act_->hydraulics_fluid_level <= 0.01f &&
-        act_->hydraulics_particles.empty()) {
+        act_->hydraulics_particle_count == 0) {  // audit 3.3
       for (int i = 0; i < seg_len; i++)
         it[seg_start + i] = Color::BLACK;
       return true;

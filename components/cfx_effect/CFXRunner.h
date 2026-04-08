@@ -197,6 +197,10 @@ public:
   uint16_t aux1;
   uint8_t *data;
   size_t _dataLen; // CFX-003: widened from uint16_t to avoid silent truncation vs allocateData(size_t)
+  // audit 4.2: per-segment timestamp for effects that track their own frame
+  // cadence (e.g. fire modes). Replaces function-scope static variables that
+  // were shared across all runners.
+  uint32_t frame_timestamp_ms;
 
   uint32_t colors[3];
 
@@ -204,7 +208,8 @@ public:
       : start(sStart), stop(sStop), offset(0), speed(DEFAULT_SPEED),
         intensity(DEFAULT_INTENSITY), palette(255), mode(DEFAULT_MODE),
         selected(true), on(true), mirror(false), freeze(false), reset(true),
-        step(0), call(0), aux0(0), aux1(0), data(nullptr), _dataLen(0) {
+        step(0), call(0), aux0(0), aux1(0), data(nullptr), _dataLen(0),
+        frame_timestamp_ms(0) {
     colors[0] = DEFAULT_COLOR;
     colors[1] = 0x0;
     colors[2] = 0x0;
@@ -369,6 +374,9 @@ public:
   bool force_white_active_ = false;
   float global_brightness_ = 1.0f;
   bool is_return_phase_{false};
+  // audit 4.2: per-runner flag so each strip initialises its own pacifica
+  // palette caches rather than relying on a shared file-scope static bool.
+  bool pacifica_initialized_{false};
 
 private:
   RunnerState _state = STATE_RUNNING;

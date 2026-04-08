@@ -52,7 +52,10 @@ esp32:
   board: your_board_here
   framework:
     type: esp-idf
+```
 
+Example config for 1-wire NRZ strips (WS2812X, SK6812, WS2811):
+```yaml
 light:
   - platform: cfx_light
     name: "LED Strip"
@@ -61,6 +64,20 @@ light:
     num_leds: 60            # Number of LEDs in your strip
     chipset: WS2812X        # WS2812X, SK6812, WS2811, etc.
     all_effects: true       # Magic! Automatically registers all ChimeraFX effects.
+```
+
+Example config for 2-wire SPI strips (APA102, SK9822):
+```yaml
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    data_pin: GPIO23       # Data pin required for SPI strips
+    clock_pin: GPIO18      # Clock pin required for SPI strips
+    spi_speed: 15MHz       # SPI speed for SPI strips
+    num_leds: 60           # Number of LEDs in your strip
+    chipset: SK9822        # APA102, SK9822
+    all_effects: true      # Magic! Automatically registers all ChimeraFX effects.
 ```
 
 For a full overview of the `cfx_light` platform, please refer to the [cfx_light documentation](cfx_light.md).

@@ -233,54 +233,40 @@ protected:
   std::vector<uint8_t> palette_mapping_;
 
 
-  uint8_t get_palette_index_(const std::string &name) {
-    if (name == "Aurora")
-      return 1;
-    if (name == "Forest")
-      return 2;
-    if (name == "Halloween")
-      return 3;
-    if (name == "Rainbow")
-      return 4;
-    if (name == "Fire")
-      return 5;
-    if (name == "Sunset")
-      return 6;
-    if (name == "Ice")
-      return 7;
-    if (name == "Party")
-      return 8;
-    if (name == "Pastel")
-      return 10;
-    if (name == "Ocean")
-      return 11;
-    if (name == "HeatColors")
-      return 12;
-    if (name == "Sakura")
-      return 13;
-    if (name == "Rivendell")
-      return 14;
-    if (name == "Cyberpunk")
-      return 15;
-    if (name == "OrangeTeal")
-      return 16;
-    if (name == "Christmas")
-      return 17;
-    if (name == "RedBlue")
-      return 18;
-    if (name == "Matrix")
-      return 19;
-    if (name == "SunnyGold")
-      return 20;
-    if (name == "Solid")
-      return 255;
-    if (name == "Fairy")
-      return 22;
-    if (name == "Twilight")
-      return 9;
-    if (name == "Smart Random")
-      return 254;  // CFX-019: routes to _currentRandomPaletteBuffer in getPaletteByIndex
+  // audit 2.1: accept const char* directly to avoid std::string comparisons.
+  // Callers that hold a std::string pass .c_str(); callers with a const char*
+  // pass it straight through.
+  uint8_t get_palette_index_(const char *name) {
+    if (!name) return 0;
+    if (strcmp(name, "Aurora") == 0)      return 1;
+    if (strcmp(name, "Forest") == 0)      return 2;
+    if (strcmp(name, "Halloween") == 0)   return 3;
+    if (strcmp(name, "Rainbow") == 0)     return 4;
+    if (strcmp(name, "Fire") == 0)        return 5;
+    if (strcmp(name, "Sunset") == 0)      return 6;
+    if (strcmp(name, "Ice") == 0)         return 7;
+    if (strcmp(name, "Party") == 0)       return 8;
+    if (strcmp(name, "Pastel") == 0)      return 10;
+    if (strcmp(name, "Ocean") == 0)       return 11;
+    if (strcmp(name, "HeatColors") == 0)  return 12;
+    if (strcmp(name, "Sakura") == 0)      return 13;
+    if (strcmp(name, "Rivendell") == 0)   return 14;
+    if (strcmp(name, "Cyberpunk") == 0)   return 15;
+    if (strcmp(name, "OrangeTeal") == 0)  return 16;
+    if (strcmp(name, "Christmas") == 0)   return 17;
+    if (strcmp(name, "RedBlue") == 0)     return 18;
+    if (strcmp(name, "Matrix") == 0)      return 19;
+    if (strcmp(name, "SunnyGold") == 0)   return 20;
+    if (strcmp(name, "Solid") == 0)       return 255;
+    if (strcmp(name, "Fairy") == 0)       return 22;
+    if (strcmp(name, "Twilight") == 0)    return 9;
+    if (strcmp(name, "Smart Random") == 0) return 254;  // CFX-019
     return 0;
+  }
+  // Overload for callers that already hold a std::string (avoids changing
+  // every call site while still eliminating the comparison overhead).
+  uint8_t get_palette_index_(const std::string &name) {
+    return get_palette_index_(name.c_str());
   }
 };
 

@@ -23,7 +23,7 @@ The documentation includes everything you need:
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
-* **Segment Runner Core** — High-performance parallel rendering for up to 8 independent segments.
+* **Segment Runner Core** — High-performance parallel rendering for up to 4 independent segments per light.
 * **ChimeraFX Orchestrator** — The event driven powerhouse logic layer for hardware-precise sequences and reactive Home Assistant automations.
 * **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
@@ -34,7 +34,7 @@ The documentation includes everything you need:
 
 ### Beyond WLED (The Philosophy)
 
-ChimeraFX stands as a distinct, high-performance lighting engine. It bridges the gap between hand-tuned open-source favorites and **exclusive original algorithms** designed specifically for architectural integration and fluid motion.
+ChimeraFX stands as a distinct, high-performance lighting engine and sequencer. It bridges the gap between hand-tuned open-source favorites and **exclusive original algorithms** designed specifically for architectural integration and fluid motion.
 
 #### Is this for me?
 This project is **not** a full WLED replacement. Choose the right tool for your hardware:

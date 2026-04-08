@@ -1110,12 +1110,11 @@ uint16_t mode_fire_2012(void) {
   }
   uint8_t *heat = instance->_segment.data;
 
-  // WLED-FAITHFUL TIMING using centralized helper
-  // NOTE: Static var is acceptable for single-strip. segment.aux0 is
-  // used by the fire iteration logic below, so it cannot be repurposed.
-  static uint32_t fire_last_millis = 0;
+  // audit 4.2: use per-segment frame_timestamp_ms instead of a function-scope
+  // static so that multiple strips running fire effects each track their own
+  // cadence independently.
   auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
+      cfx::calculate_frame_timing(instance->_segment.speed, instance->_segment.frame_timestamp_ms);
 
   const uint32_t it = timing.scaled_now >> 5; // div 32
 
@@ -1199,9 +1198,9 @@ uint16_t mode_fire_dual(void) {
   uint8_t *heat = instance->_segment.data;
 
   // === WLED-FAITHFUL TIMING using centralized helper ===
-  static uint32_t fire_last_millis = 0;
+  // audit 4.2: per-segment timestamp (see first fire mode for rationale).
   auto timing =
-      cfx::calculate_frame_timing(instance->_segment.speed, fire_last_millis);
+      cfx::calculate_frame_timing(instance->_segment.speed, instance->_segment.frame_timestamp_ms);
 
   const uint32_t it = timing.scaled_now >> 5; // div 32
   const uint8_t ignition = max(3, VIRTUAL_HEIGHT / 10);
@@ -1341,11 +1340,13 @@ uint16_t mode_fire_dual(void) {
 static CRGB pacifica_cache_1[256];
 static CRGB pacifica_cache_2[256];
 static CRGB pacifica_cache_3[256]; // WLED palette 3 (blue-purple)
-static bool pacifica_caches_initialized = false;
+// audit 4.2: removed file-scope pacifica_caches_initialized — each runner now
+// tracks its own flag via instance->pacifica_initialized_ so that multiple
+// strips do not share initialisation state.
 
-// Initialize palette caches once (called on first frame)
-static void pacifica_init_caches() {
-  if (pacifica_caches_initialized)
+// Initialize palette caches for the calling runner (idempotent per runner).
+static void pacifica_init_caches(CFXRunner *runner) {
+  if (runner->pacifica_initialized_)
     return;
 
   // Palette 1: Deep ocean blues transitioning to cyan-green (WLED
@@ -1376,7 +1377,7 @@ static void pacifica_init_caches() {
     pacifica_cache_3[i] = ColorFromPalette(pal3, i, 255, LINEARBLEND);
   }
 
-  pacifica_caches_initialized = true;
+  runner->pacifica_initialized_ = true;
 }
 
 // Helper: WLED-EXACT wave layer function
@@ -1528,8 +1529,8 @@ uint16_t mode_ocean() {
   if (!instance)
     return 350;
 
-  // Initialize palette caches on first call
-  pacifica_init_caches();
+  // Initialize palette caches on first call for this runner (audit 4.2)
+  pacifica_init_caches(instance);
 
   int len = instance->_segment.length();
   uint8_t speed = instance->_segment.speed;

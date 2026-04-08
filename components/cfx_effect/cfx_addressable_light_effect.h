@@ -58,6 +58,11 @@ public:
   // All members that are only meaningful while the effect is running live here.
   // Allocated in start(), deleted in stop(). At rest the object is ~100 bytes
   // instead of ~304 bytes, saving ~15 KB across 77 effect objects.
+  // Fixed capacity for hydraulics splash/drip particles.
+  // Must be declared before CFXActivation so the constant is available as an
+  // array bound inside the nested struct.
+  static constexpr uint8_t MAX_HYDRAULICS_PARTICLES = 8;
+
   struct CFXActivation {
     CFXRunner *runner{nullptr};
     std::vector<CFXRunner *> segment_runners{};
@@ -87,7 +92,10 @@ public:
 
     float hydraulics_fluid_level{0.0f};
     float hydraulics_fluid_velocity{0.0f};
-    std::vector<HydraulicsParticle> hydraulics_particles{};
+    // Fixed-size array (audit 3.3): avoids heap allocation during intro/outro.
+    // hydraulics_particle_count tracks how many slots [0..count) are active.
+    HydraulicsParticle hydraulics_particles[MAX_HYDRAULICS_PARTICLES]{};
+    uint8_t hydraulics_particle_count{0};
     uint64_t hydraulics_last_ms{0};
 
     CFXControl *controller{nullptr};
@@ -106,6 +114,9 @@ public:
     uint32_t saved_transition_length{0};
 
     std::string strip_tag{};
+    // Cached once in start() — avoids a heap-allocated std::string every frame
+    // in apply() (audit 1.1).
+    std::string cached_runner_name{};
     float last_triggered_percentage{-1.0f};
     int32_t last_triggered_pixel{-1};
     bool last_return_phase{false};
@@ -405,10 +416,6 @@ public:
 
   // controller_ is set at codegen time via set_controller(), before start()
   // is ever called. Copied into act_->controller on each start().
-  CFXControl *controller_{nullptr};
-
-  // MAX_HYDRAULICS_PARTICLES stays as a class constant (used in run_intro/outro).
-  static const uint8_t MAX_HYDRAULICS_PARTICLES = 8;
 
 
 

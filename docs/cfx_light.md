@@ -1,13 +1,13 @@
 # ChimeraFX Light Platform
 
 The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome light component specifically designed to be the ultimate companion for ChimeraFX. 
-`cfx_light` wraps the native ESP-IDF RMT driver with opinionated optimizations tailored for heavy lifting and seamless effect integration.
+`cfx_light` wraps native ESP-IDF drivers with opinionated optimizations tailored for heavy lifting and seamless effect integration.
 
 ## Why use `cfx_light`?
 
 1. **Auto-injection (`all_effects`)**: The biggest feature! By simply setting `all_effects: true`, `cfx_light` will automatically parse and inject all ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks.
-2. **Chipset-Aware Intelligence**: Native understanding of WS2812, WS2811, and SK6812 timing requirements.
-3. **Optimized Memory Allocation**: ESPHome's standard RMT driver occasionally struggles with symbol buffering on different chips (like S3 vs Classic). `cfx_light` automatically sets the optimal RMT memory boundaries for your exact silicon, eliminating the "flickering" or "data corruption" issues associated with large LED strips.
+2. **Chipset-Aware Intelligence**: Native understanding of the strip's timing requirements.
+3. **Optimized RMT Symbols Allocation**: ESPHome's standard RMT driver occasionally struggles with symbol buffering on different chips (like S3 vs Classic). `cfx_light` automatically sets the optimal RMT memory boundaries for your exact silicon, eliminating the "flickering" or "data corruption" issues associated with large LED strips.
 4. **Automatic RGBW Handling**: If you select `SK6812`, it automatically configures the 4-byte protocol and `GRBW` formatting without requiring manual overrides (although you can still override them if you have a weird LED strip variant).
 
 ---
@@ -93,7 +93,7 @@ With the above configuration, your ESP32 will compile with all 50+ effects, but 
 
 ## Segments (Multi-Zone Control)
 
-ChimeraFX supports dividing a single physical LED strip into up to **6 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+ChimeraFX supports dividing a single physical LED strip into up to **4 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
 
 ### Segment Configuration
 
@@ -138,8 +138,11 @@ light:
 ### Master vs. Segment Behavior
 
 When segments are defined:
+
 1.  The "Master" light entity (e.g., "Main TV Strip") acts as a global power and brightness control. It does **not** have its own effects. Turning off the Master turns off all segments.
+
 2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (if `all_effects: true` is set on the parent).
+
 3.  Segments can run different effects, speeds, and palettes independently.
 
 ---

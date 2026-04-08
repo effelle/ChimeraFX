@@ -19,18 +19,21 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 **Your mileage may vary.**
 Visual effects are computationally expensive.
 
-*   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices may function, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
+*   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices are not suggested, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
 
 *   **System Framerate & Performance Bottlenecks:**
-    Maintaining a fluid **60 FPS** (or even a stable **30 FPS**) requires balancing two distinct bottlenecks: the physical speed of the LED protocol and the computational "math" budget of the ESP32.
+    Maintaining a fluid **50-60 FPS** (or even a stable **30 FPS**) requires balancing two distinct bottlenecks: the physical speed of the LED protocol, and the computational "math" budget of the ESP32.
 
-    ### 1. The Physical Limit (Protocol Speed)
-    The WS281x protocol is strictly locked to an **800kHz** data rate. Data is sent serially, meaning your **pixel count per pin** dictates the minimum time required just to push data down the wire, regardless of how fast the CPU is.
+    ### 1. The Physical Limit (1-Wire Strips)
+    For **1-wire NRZ** (WS281x, SK6812, WS2811), the protocol is strictly locked to an **800kHz** data rate. Data is sent serially, meaning your **pixel count per pin** dictates the minimum time required just to push data down the wire, regardless of how fast your CPU is.
+
     *   **RGB (WS2812B/WS2811):** ~30µs per LED. Theoretical max for 30 FPS: **~1,000 LEDs.**
     *   **RGBW (SK6812):** ~40µs per LED. Theoretical max for 30 FPS: **~800 LEDs.**
 
-    **Protocol Support:** **1-wire NRZ** only (WS2812X, SK6812, WS2811)
-    2-wire SPI strips (APA102, WS2801, etc.) are **not yet supported**.
+    ### 2. The SPI Advantage (2-Wire Strips)
+    If you are using **2-wire SPI strips** (APA102, SK9822), the physical bottleneck practically disappears. Because they have a dedicated clock line, data can be pushed at much higher speeds (often 10MHz to 20MHz+). They are incredibly solid and won't bottleneck your framerate at the hardware level.
+    
+    *However*, using SPI strips simply shifts the bottleneck directly to the **ESP32's CPU**. Pushing data to 2,000 APA102 LEDs is incredibly fast, but asking the ESP32 to calculate complex ChimeraFX animations for 2,000 pixels 60 times a second will quickly max out your math budget and CPU availability. 
 
     ### 2. The Computational Limit (Processing Overhead)
     Because ChimeraFX operates as a modular component, it must share the ESP32’s CPU cycles with other tasks (such as Wi-Fi, Bluetooth, sensor polling, or web servers). 
@@ -42,9 +45,9 @@ Visual effects are computationally expensive.
     **Pro Tip:** To drive large arrays without sacrificing smoothness, distribute your LEDs across **multiple data pins**. This allows the hardware to take advantage of parallel driving, effectively multiplying your available bandwidth.
 
 
-*   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
+    *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
 
-*   **Optimization:** This library is optimized for both ESP-IDF and Arduino frameworks, but hardware resources are finite. Manage your load accordingly.
+    *   **Optimization:** This library is optimized for both ESP-IDF and Arduino frameworks, but hardware resources are finite. Manage your load accordingly.
 
 ---
 
