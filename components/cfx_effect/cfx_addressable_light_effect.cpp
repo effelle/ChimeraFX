@@ -4391,8 +4391,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         lead = seg_len - 1;
 
       // Track the head for milestones (0-100% strip)
-      if (chimera_fx::instance)
-        chimera_fx::instance->current_leading_pixel = lead;
+      if (act_->runner)
+        act_->runner->current_leading_pixel = lead;
 
       // --- 1. DECAY LOOP (Deterministic Meteor Trail) ---
       // Retention: shifted range (approx 140..210) for faster fade
@@ -4433,8 +4433,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         fill_head = 0;
 
       // Milestone stays pegged at 100% during impact phase
-      if (chimera_fx::instance)
-        chimera_fx::instance->current_leading_pixel = seg_len - 1;
+      if (act_->runner)
+        act_->runner->current_leading_pixel = seg_len - 1;
 
       for (int i = 0; i < seg_len; i++) {
         int idx = reverse ? (seg_len - 1 - i) : i;
@@ -5996,8 +5996,10 @@ void CFXAddressableLightEffect::check_positional_triggers(
       main_lp = act_->segment_runners[0]->current_leading_pixel;
     else if (act_->runner)
       main_lp = act_->runner->current_leading_pixel;
-    if (main_lp >= 0)
+    if (main_lp >= 0 && act_->active_intro_mode != INTRO_MODE_IMPACT_FLARE &&
+        act_->active_intro_mode != INTRO_MODE_TIDAL_SURGE) {
       act_->intro_suppresses_milestones = true;
+    }
   }
 
   // Suppress intro positional tracking only for progressive main effects.
