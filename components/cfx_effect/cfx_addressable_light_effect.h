@@ -431,6 +431,8 @@ public:
   uint8_t get_pal_idx(select::Select *s);
   uint8_t get_default_palette_id_(uint8_t effect_id);
   std::string get_palette_name_(uint8_t pal_id);
+  std::string get_intro_name_(uint8_t intro_id);
+  std::string get_outro_name_(uint8_t outro_id);
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 

@@ -5,9 +5,9 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 
 ## Why use `cfx_light`?
 
-1. **Auto-injection (`all_effects`)**: The biggest feature! By simply setting `all_effects: true`, `cfx_light` will automatically parse and inject all ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks.
+1. **Auto-injection (`all_effects`)**: The biggest feature! By default, `cfx_light` will automatically parse and inject all ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks. You can disable this feature by setting `all_effects: false`.
 2. **Chipset-Aware Intelligence**: Native understanding of the strip's timing requirements.
-3. **Optimized RMT Symbols Allocation**: ESPHome's standard RMT driver occasionally struggles with symbol buffering on different chips (like S3 vs Classic). `cfx_light` automatically sets the optimal RMT memory boundaries for your exact silicon, eliminating the "flickering" or "data corruption" issues associated with large LED strips.
+3. **Optimized RMT Symbols Allocation**: ESPHome's standard RMT driver occasionally struggles with symbol buffering on different chips (like S3 vs Classic). `cfx_light` automatically sets the optimal RMT memory boundaries for your exact silicon, eliminating the "flickering" or "data corruption" issues associated with large LED strips. Can be manually overridden with `rmt_symbols`.
 4. **Automatic RGBW Handling**: If you select `SK6812`, it automatically configures the 4-byte protocol and `GRBW` formatting without requiring manual overrides (although you can still override them if you have a weird LED strip variant).
 
 ---
@@ -47,17 +47,19 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 | **chipset** | `WS2812X` | Standard 3-pin RGB timing (Default) |
 | | `SK6812` | 4-byte RGBW timing (GRBW order) |
 | | `WS2811` | Optimized timing for WS2811 data rates |
+| | `APA102` | 2-wire SPI timing |
+| | `SK9822` | 2-wire SPI timing |
 
 ### Optional Parameters
-* **all_effects** (*boolean*, default: `false`): When set to `true`, the component will look at the `chimera_fx_effects.yaml` file in your project root and instantly register all effects.
+* **all_effects** (*boolean*, default: `true`): When set to `true`, the component will instantly register all effects. Set to `false` to manually register effects or custom presets.
 * **rgb_order** (*string*): The byte order of the colors. If omitted, `cfx_light` sets the standard default based on your `chipset` (e.g., `WS2812X` defaults to `GRB`). Options: `RGB`, `RBG`, `GRB`, `GBR`, `BGR`, `BRG`.
 * **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
-* **max_refresh_rate** (*Time*, default: `16ms`): Controls the ESPHome frame limit. `16ms` could achieve ~62 FPS.
+* **max_refresh_rate** (*Time*, default: `16ms`): Controls the ESPHome frame limit. ChimeraFX will automatically adjust the frame rate to match the slowest segment.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration.
-* **use_intro** (*int*, 0-6): Force a specific global Intro Animation for all effects.
-* **use_outro** (*int*, 0-6): Force a specific global Outro Animation for all effects.
+* **use_intro** (*int*): Force a specific global Intro Animation for all effects.
+* **use_outro** (*int*): Force a specific global Outro Animation for all effects.
 * **intro_dur** (*Time*): Sets the duration for both global intros and outros.
 
 ---
@@ -76,7 +78,6 @@ light:
     pin: GPIO16
     num_leds: 300
     chipset: WS2812X
-    all_effects: true
 
     # We want ALL effects, but we want to customize 'Aurora'
     effects:
@@ -107,7 +108,6 @@ light:
     pin: GPIO16
     num_leds: 120
     chipset: WS2812X
-    all_effects: true
     
     segments:
       - id: "tv_left"

@@ -474,7 +474,7 @@ void CFXAddressableLightEffect::start() {
       (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
   if (palette_sel != nullptr && this->has_palette_preset_()) {
     auto call = palette_sel->make_call();
-    call.set_index(this->palette_preset_val_());
+    call.set_option(this->get_palette_name_(this->palette_preset_val_()));
     call.perform();
   }
 
@@ -503,7 +503,7 @@ void CFXAddressableLightEffect::start() {
     const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = intro_sel->make_call();
-      call.set_index(this->intro_preset_val_());
+      call.set_option(this->get_intro_name_(this->intro_preset_val_()));
       call.perform();
     }
   }
@@ -533,7 +533,7 @@ void CFXAddressableLightEffect::start() {
     const char *cur = cur_str.c_str();
     if (cur == nullptr || strcmp(cur, "None") == 0) {
       auto call = outro_sel->make_call();
-      call.set_index(this->outro_preset_val_());
+      call.set_option(this->get_outro_name_(this->outro_preset_val_()));
       call.perform();
     }
   }
@@ -1827,6 +1827,70 @@ std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
     return "Solid";
   default:
     return "Default";
+  }
+}
+
+std::string CFXAddressableLightEffect::get_intro_name_(uint8_t intro_id) {
+  switch (intro_id) {
+  case INTRO_MODE_NONE: return "None";
+  case INTRO_MODE_WIPE: return "Wipe";
+  case INTRO_MODE_FADE: return "Fade";
+  case INTRO_MODE_CENTER: return "Center";
+  case INTRO_MODE_GLITTER: return "Glitter";
+  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
+  case INTRO_MODE_MORSE: return "Morse Code";
+  case INTRO_MODE_QUADRANT: return "Quadrant";
+  case INTRO_MODE_HYDRAULICS: return "Pressurize";
+  case INTRO_MODE_DROPPING: return "Dropping";
+  case INTRO_MODE_ASSEMBLY: return "Construct";
+  case INTRO_MODE_INERTIA_SWEEP: return "Inertia Sweep";
+  case INTRO_MODE_SONAR_REVEAL: return "Sonar Reveal";
+  case INTRO_MODE_VENETIAN: return "Venetian";
+  case INTRO_MODE_CRYSTALLIZE: return "Crystallize";
+  case INTRO_MODE_DEEP_BREATHE: return "Deep Breathe";
+  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Shift";
+  case INTRO_MODE_RESONANCE_FILL: return "Resonance";
+  case INTRO_MODE_TELEMETRY: return "Telemetry";
+  case INTRO_MODE_STELLAR_DUST: return "Stellar Dust";
+  case INTRO_MODE_INTERFERENCE: return "Interference";
+  case INTRO_MODE_ECLIPSE: return "Eclipse";
+  case INTRO_MODE_GAS_DISCHARGE: return "Gas Discharge";
+  case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
+  case INTRO_MODE_LITHOGRAPH: return "Lithograph";
+  case INTRO_MODE_TIDAL_SURGE: return "Tidal Surge";
+  default: return "None";
+  }
+}
+
+std::string CFXAddressableLightEffect::get_outro_name_(uint8_t outro_id) {
+  switch (outro_id) {
+  case INTRO_MODE_NONE: return "None";
+  case INTRO_MODE_WIPE: return "Wipe";
+  case INTRO_MODE_FADE: return "Fade";
+  case INTRO_MODE_CENTER: return "Center";
+  case INTRO_MODE_GLITTER: return "Glitter";
+  case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
+  case INTRO_MODE_MORSE: return "Morse Code";
+  case INTRO_MODE_QUADRANT: return "Quadrant";
+  case INTRO_MODE_HYDRAULICS: return "Drain";
+  case INTRO_MODE_DROPPING: return "Emptying";
+  case INTRO_MODE_ASSEMBLY: return "Dismantle";
+  case INTRO_MODE_INERTIA_SWEEP: return "Decelerate";
+  case INTRO_MODE_SONAR_REVEAL: return "Sonar Fade";
+  case INTRO_MODE_VENETIAN: return "Close Blinds";
+  case INTRO_MODE_CRYSTALLIZE: return "Erode";
+  case INTRO_MODE_DEEP_BREATHE: return "Exhale";
+  case INTRO_MODE_MOIRE_SHIFT: return "Moiré Fade";
+  case INTRO_MODE_RESONANCE_FILL: return "Resonance Fade";
+  case INTRO_MODE_TELEMETRY: return "Telemetry Fade";
+  case INTRO_MODE_STELLAR_DUST: return "Stellar Fade";
+  case INTRO_MODE_INTERFERENCE: return "Interference Fade";
+  case INTRO_MODE_ECLIPSE: return "Eclipse";
+  case INTRO_MODE_GAS_DISCHARGE: return "Gas Discharge";
+  case INTRO_MODE_HARMONIC_SETTLE: return "Harmonic Settle";
+  case INTRO_MODE_LITHOGRAPH: return "Lithograph";
+  case INTRO_MODE_TIDAL_SURGE: return "Tidal Recede";
+  default: return "None";
   }
 }
 

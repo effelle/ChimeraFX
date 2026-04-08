@@ -191,8 +191,9 @@ def _inject_all_effects(config):
     # Collect names already defined by the user (they take priority)
     user_names = set()
     for eff in user_effects:
-        if "addressable_cfx" in eff:
-            name = eff["addressable_cfx"].get(CONF_NAME, "")
+        eff_cfx = eff.get("addressable_cfx")
+        if isinstance(eff_cfx, dict):
+            name = eff_cfx.get(CONF_NAME, "")
             if name:
                 user_names.add(name)
 
