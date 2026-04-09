@@ -1354,13 +1354,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         r->global_brightness_ = seg_bri;
         r->service();
 #ifdef USE_CFX_SEQUENCE
-        if (act_->active_sequence != nullptr) {
-          if (r->effect_complete_) {
-            auto *completed_seq = act_->active_sequence;
-            act_->active_sequence = nullptr; // prevent re-entry
-            completed_seq->report_event_complete();
-            completed_seq->stop();
-          }
+        // CFX-044: Stack bypass. Do not perform heavy stop() synchronously in apply().
+        if (r->effect_complete_) {
+          act_->completion_pending = true;
         }
 #endif
         // CFX-043: Feed WDT after each heavy multi-segment service()
@@ -1372,24 +1368,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->runner->global_brightness_ = bri;
       act_->runner->service();
 #ifdef USE_CFX_SEQUENCE
+      // CFX-044: Stack bypass. Do not perform heavy stop() synchronously in apply().
       if (act_->runner->effect_complete_) {
-        if (act_->active_sequence != nullptr) {
-          auto *completed_seq = act_->active_sequence;
-          act_->active_sequence = nullptr; // prevent re-entry
-          completed_seq->report_event_complete();
-          completed_seq->stop();
-        } else {
-          // Standalone self-terminating effect (e.g. separator blink).
-          // Simple turn_off — ESPHome resets the effect selector to None
-          // automatically when the light turns off.
-          auto *ls = state_ptr; // audit 1.2: reuse cached pointer
-          if (ls != nullptr) {
-            auto call = ls->make_call();
-            call.set_state(false);
-            call.set_transition_length(0);
-            call.perform();
-          }
-        }
+        act_->completion_pending = true;
       }
 #endif
     }

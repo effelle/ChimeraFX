@@ -48,10 +48,16 @@ void CFXSequenceSelect::setup_worker_task() {
 void CFXSequenceSelect::worker_task_loop(void *pvParam) {
   while (true) {
     if (xSemaphoreTake(worker_wake_sem_, portMAX_DELAY) == pdTRUE) {
-      // Execute all pending heavy triggers using this 16KB stack
+      // 1. Execute all pending heavy sequence starts using this 16KB stack
       for (auto *seq : CFXSequence::instances) {
         seq->flush_pending_triggers();
       }
+      
+      // 2. Execute any deferred sequence/effect stops that require Heavy LightCall mutations
+      for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
+        eff->execute_completion();
+      }
+
       // Signal the waiting ESPHome loop that we are done so it can unblock
       xSemaphoreGive(worker_done_sem_);
     }
@@ -156,21 +162,30 @@ void CFXSequenceSelect::loop() {
     }
   }
 
-  // CFX-044: If there are triggers, suspend standard ESPHome 8KB execution and route to 16KB worker.
+  // Check for effects that finished exactly this frame and deferred termination
+  for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (eff->has_pending_completion()) {
+      has_pending = true;
+    }
+  }
+
+  // CFX-044: If there are triggers or stops, suspend standard ESPHome 8KB execution and route to 16KB worker.
   if (has_pending) {
 #ifdef USE_ESP32
     if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
       // Signal the 16KB worker task to wake up
       xSemaphoreGive(worker_wake_sem_);
-      // Suspend ESPHome natively (no race conditions) while worker allocates memory
+      // Suspend ESPHome natively (no race conditions) while worker acts
       xSemaphoreTake(worker_done_sem_, portMAX_DELAY);
     } else {
       // Fallback if OS primitive failed
       for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
+      for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) eff->execute_completion();
     }
 #else
     // ESP8266 simple execution
     for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
+    for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) eff->execute_completion();
 #endif
   }
 }

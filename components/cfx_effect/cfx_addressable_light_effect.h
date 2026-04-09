@@ -136,6 +136,7 @@ public:
     std::optional<uint8_t> sequence_palette{};
     uint32_t sequence_iterations{0};
 #endif
+    bool completion_pending{false};
   };
 
   // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──
@@ -194,9 +195,12 @@ public:
   void set_palette(select::Select *v) { ensure_cfg_(); cfg_->palette = v; }
   void set_mirror(switch_::Switch *v) { ensure_cfg_(); cfg_->mirror = v; }
   void set_autotune(switch_::Switch *v) { ensure_cfg_(); cfg_->autotune = v; }
-  void set_update_interval(uint32_t update_interval) {
-    this->update_interval_ = update_interval;
-  }
+  // CFX-044: Stack bypass evaluation
+  bool has_pending_completion() const { return this->act_ != nullptr && this->act_->completion_pending; }
+  void execute_completion();
+
+  uint32_t get_update_interval() const override { return update_interval_; }
+  void set_update_interval(uint32_t ms) { this->update_interval_ = ms; }
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
   void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
   void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }
