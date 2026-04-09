@@ -512,9 +512,12 @@ void CFXAddressableLightEffect::start() {
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
   if (palette_sel != nullptr && this->has_palette_preset_()) {
-    auto call = palette_sel->make_call();
-    call.set_option(this->get_palette_name_(this->palette_preset_val_()));
-    call.perform();
+    std::string target = this->get_palette_name_(this->palette_preset_val_());
+    if (palette_sel->current_option() != target) {
+      auto call = palette_sel->make_call();
+      call.set_option(target);
+      call.perform();
+    }
   }
 
   // 4. Mirror
@@ -538,11 +541,10 @@ void CFXAddressableLightEffect::start() {
   if (!act_->initial_preset_applied && intro_sel != nullptr &&
       this->has_intro_preset_()) {
     // Only apply if still at "None" factory default — preserve user choices
-    std::string cur_str(intro_sel->current_option());
-    const char *cur = cur_str.c_str();
-    if (cur == nullptr || strcmp(cur, "None") == 0) {
+    std::string target = this->get_intro_name_(this->intro_preset_val_());
+    if (intro_sel->current_option() != target) {
       auto call = intro_sel->make_call();
-      call.set_option(this->get_intro_name_(this->intro_preset_val_()));
+      call.set_option(target);
       call.perform();
     }
   }
@@ -568,11 +570,10 @@ void CFXAddressableLightEffect::start() {
   if (!act_->initial_preset_applied && outro_sel != nullptr &&
       this->has_outro_preset_()) {
     // Only apply if still at "None" factory default — preserve user choices
-    std::string cur_str(outro_sel->current_option());
-    const char *cur = cur_str.c_str();
-    if (cur == nullptr || strcmp(cur, "None") == 0) {
+    std::string target = this->get_outro_name_(this->outro_preset_val_());
+    if (outro_sel->current_option() != target) {
       auto call = outro_sel->make_call();
-      call.set_option(this->get_outro_name_(this->outro_preset_val_()));
+      call.set_option(target);
       call.perform();
     }
   }
@@ -6010,6 +6011,7 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     char buf[48];
     snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
              (unsigned)act_->last_fired_milestone);
+    ESP_LOGV("cfx_seq", "Firing: %s", buf);
     chimera_fx::CFXEventManager::get().fire_event(buf);
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;

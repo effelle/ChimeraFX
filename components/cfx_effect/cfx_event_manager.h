@@ -64,43 +64,45 @@ public:
     this->deferred_write_ = next;
   }
 
-  // Drain exactly one queued event per ESPHome loop() tick. (CFX-025)
+  // Drain up to 3 queued events per ESPHome loop() tick. (CFX-047)
+  // We burst events when the queue is full to prevent dropping, 
+  // but stay conservative to avoid saturating the API/WiFi.
   void flush_pending() {
     static uint32_t last_flush_ms = 0;
     uint32_t now = esphome::millis();
-    if (now == last_flush_ms)
+    if (now == last_flush_ms && this->deferred_read_ == this->deferred_write_)
       return;
 
-    if (this->deferred_read_ == this->deferred_write_)
-      return;
+    uint8_t flushed_this_loop = 0;
+    while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < 3) {
+      last_flush_ms = now;
+      const std::string evt = this->deferred_queue_[this->deferred_read_];
+      this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+      flushed_this_loop++;
 
-    last_flush_ms = now;
+      // CFX-028: route to the per-strip entity whose tag appears in the string.
+      esphome::event::Event *target_entity = this->event_entity_;
+      size_t first_colon = evt.find(':');
+      if (first_colon != std::string::npos) {
+        size_t second_colon = evt.find(':', first_colon + 1);
+        std::string tag = (second_colon != std::string::npos)
+                              ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
+                              : evt.substr(first_colon + 1);
 
-    const std::string evt = this->deferred_queue_[this->deferred_read_];
-    this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+        // CFX-040: per-tag opt-out
+        if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
+          continue;
+        }
 
-    // CFX-028: route to the per-strip entity whose tag appears in the string.
-    esphome::event::Event *target_entity = this->event_entity_;
-    size_t first_colon = evt.find(':');
-    if (first_colon != std::string::npos) {
-      size_t second_colon = evt.find(':', first_colon + 1);
-      std::string tag = (second_colon != std::string::npos)
-                            ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
-                            : evt.substr(first_colon + 1);
-
-      // CFX-040: per-tag opt-out
-      if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
-        return;
+        auto it = this->strip_entities_.find(tag);
+        if (it != this->strip_entities_.end() && it->second != nullptr) {
+          target_entity = it->second;
+        }
       }
 
-      auto it = this->strip_entities_.find(tag);
-      if (it != this->strip_entities_.end() && it->second != nullptr) {
-        target_entity = it->second;
+      if (target_entity != nullptr) {
+        target_entity->trigger(evt);
       }
-    }
-
-    if (target_entity != nullptr) {
-      target_entity->trigger(evt);
     }
   }
 

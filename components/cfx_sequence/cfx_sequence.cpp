@@ -861,7 +861,7 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
     }
 
     if (crossed) {
-      ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% queued",
+      ESP_LOGV(TAG, "Sequence '%s': on_reach %.2f%% queued",
                this->id_.c_str(), target * 100.0f);
       this->pending_reach_triggers_.push_back({t, current_percentage});
     }
