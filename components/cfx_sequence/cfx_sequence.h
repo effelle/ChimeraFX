@@ -206,7 +206,10 @@ protected:
   void check_milestones_(float current_pct) {
     this->milestone_fired_this_frame_ = false;
     uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
-    if (current_pct >= next && next <= 100) {
+    // Only fire milestone at 80% and 100% to prevent API overload
+    // with multiple parallel strips. Mid-sequence milestones (5-75%)
+    // are not needed for most automations.
+    if ((current_pct >= 80.0f && next == 80) || (current_pct >= 100.0f && next == 100)) {
       this->last_fired_milestone_ = next;
       this->milestone_fired_this_frame_ = true;
       char buf[48];

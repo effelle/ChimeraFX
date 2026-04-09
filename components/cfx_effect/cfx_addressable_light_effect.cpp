@@ -5901,8 +5901,9 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
-  // Fire at most ONE milestone per call - rest catch up in subsequent frames
-  if (current_pct >= next && next <= 100) {
+  // Only fire milestone at 80% and 100% to prevent API overload
+  // with multiple parallel strips.
+  if ((current_pct >= 80.0f && next == 80) || (current_pct >= 100.0f && next == 100)) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
 #ifdef USE_CFX_EVENTS
