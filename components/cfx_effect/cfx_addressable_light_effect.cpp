@@ -449,8 +449,8 @@ void CFXAddressableLightEffect::start() {
 
   // CFX-048: initialization overhead cleanup.
   // We sync the activation state flags once, then rely on run_controls_ for the rest.
+  CFXControl *c = act_->controller;
   {
-    CFXControl *c = act_->controller;
     bool autotune_enabled = true;
     switch_::Switch *autotune_sw = (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
     if (this->has_autotune_preset_()) autotune_enabled = this->autotune_preset_val_();
@@ -461,7 +461,6 @@ void CFXAddressableLightEffect::start() {
 
   // Pass force_white flag down to the underlying Native CFXRunners
   {
-    CFXControl *c = act_->controller;
     bool fw_active = (c && c->get_force_white()) ? c->get_force_white()->state : false;
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
@@ -486,6 +485,7 @@ void CFXAddressableLightEffect::start() {
         this->get_light_state()->get_output());
     if (out != nullptr) {
       std::string pal_name = "";
+      select::Select *palette_sel = (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
       if (palette_sel && palette_sel->has_state()) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = palette_sel->current_option().c_str();
@@ -535,6 +535,7 @@ void CFXAddressableLightEffect::start() {
 
   // Resolve Intro Mode (Now reflecting Presets!)
   act_->active_intro_mode = INTRO_NONE;
+  select::Select *intro_sel = (c && c->get_intro_effect()) ? c->get_intro_effect() : this->local_intro_effect_();
 
   if (act_->intro_active) {
     // Re-resolve in case preset changed it
