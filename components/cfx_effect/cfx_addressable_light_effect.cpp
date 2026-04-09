@@ -178,7 +178,7 @@ void CFXAddressableLightEffect::start() {
   }
 
   // CFX-043: Monitor heap health during start()
-  ESP_LOGD("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
+  ESP_LOGI("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
            this->get_name().c_str(),
            (uint32_t)heap_caps_get_free_size(MALLOC_CAP_8BIT),
            (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
@@ -6137,6 +6137,8 @@ void CFXAddressableLightEffect::check_positional_triggers(
                  this->get_name(), this, target * 100.0f);
         t->trigger(current_percentage);
       }
+      // Feed WDT in long positional loops (16+ strips)
+      esphome::App.feed_wdt();
     }
   }
 

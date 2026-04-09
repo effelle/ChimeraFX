@@ -36,10 +36,10 @@ void CFXSequenceSelect::setup_worker_task() {
     worker_wake_sem_ = xSemaphoreCreateBinary();
     worker_done_sem_ = xSemaphoreCreateBinary();
     if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
-      // Create a heavily isolated 16KB stack task. Pin to Core 1 (same as ESPHome loopTask)
-      // to guarantee thread safety and prevent cross-core races during `call.perform()`.
-      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 16384, nullptr, 5, nullptr, 1);
-      ESP_LOGD(TAG, "CFX-044: Permanent 16KB worker task successfully spawned (Pinned to Core 1).");
+      // Create a memory-safe 12KB stack task (RAM-friendly for 16+ strips).
+      // Pin to Core 1 (same as ESPHome loopTask) to guarantee thread safety.
+      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 12288, nullptr, 5, nullptr, 1);
+      ESP_LOGD(TAG, "CFX-045: Scalable 12KB worker task successfully spawned (Pinned to Core 1).");
     } else {
       ESP_LOGE(TAG, "CFX-044: Failed to construct worker task semaphores.");
     }
@@ -706,9 +706,15 @@ void CFXSequence::flush_pending_triggers() {
   this->pending_reach_triggers_.clear();
 
   for (const auto &t : to_fire) {
-    ESP_LOGD(TAG, "Sequence '%s': flushing deferred reach trigger %.0f%%",
-             this->id_.c_str(), t.trigger->get_target_position() * 100.0f);
-    t.trigger->trigger(t.value);
+    // CFX-045: Scalable Async Handover. Instead of executing the YAML trigger 
+    // synchronously on the worker's stack, we schedule it for the next loop.
+    // This allows each strip activation to start with a fresh 8KB stack frame.
+    esphome::App.scheduler.set_timeout(0, [t]() {
+      t.trigger->trigger(t.value);
+    });
+
+    // Support WDT while scheduling many tasks in a burst
+    esphome::App.feed_wdt();
   }
 }
 
@@ -730,17 +736,17 @@ void CFXSequence::check_duration() {
 void CFXSequence::report_event_start() {
   ESP_LOGV(TAG, "Sequence '%s': on_start triggers firing", this->id_.c_str());
   for (auto *t : this->on_start_triggers_) {
-    t->trigger();
+    esphome::App.scheduler.set_timeout(0, [t]() { t->trigger(); });
   }
   // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
   // unconditionally for all effects and all paths. Do NOT fire it here again.
 }
 
 void CFXSequence::report_event_begin() {
-  ESP_LOGD(TAG, "Sequence '%s': on_begin triggers firing", this->id_.c_str());
+  ESP_LOGV(TAG, "Sequence '%s': on_begin triggers firing", this->id_.c_str());
   // on_cfx_begin YAML trigger always fires (on-device automation).
   for (auto *t : this->on_begin_triggers_) {
-    t->trigger();
+    esphome::App.scheduler.set_timeout(0, [t]() { t->trigger(); });
   }
   // CFX-029: HA cfx_begin event only fires when the sequence has a real
   // intro configured (intro_ != 0). Without an intro, cfx_begin and
@@ -753,9 +759,9 @@ void CFXSequence::report_event_begin() {
 }
 
 void CFXSequence::report_event_stop() {
-  ESP_LOGD(TAG, "Sequence '%s': on_stop triggers firing", this->id_.c_str());
+  ESP_LOGV(TAG, "Sequence '%s': on_stop triggers firing", this->id_.c_str());
   for (auto *t : this->on_stop_triggers_) {
-    t->trigger();
+    esphome::App.scheduler.set_timeout(0, [t]() { t->trigger(); });
   }
   // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
   if (!this->strip_tag_.empty()) {
@@ -765,11 +771,14 @@ void CFXSequence::report_event_stop() {
 }
 
 void CFXSequence::report_event_complete() {
-  ESP_LOGD(TAG, "Sequence '%s': on_complete triggers firing",
-           this->id_.c_str());
+  ESP_LOGV(TAG, "Sequence '%s': on_complete triggers firing", this->id_.c_str());
   this->completion_reported_ = true;
   for (auto *t : this->on_complete_triggers_) {
-    t->trigger();
+    esphome::App.scheduler.set_timeout(0, [s = this, t]() {
+      // Small verification: only fire if the sequence didn't restart mid-deferral
+      if (s->completion_reported_)
+        t->trigger();
+    });
   }
   // Fire tagged cfx_complete using this sequence's own strip_tag_.
   // No global singleton state — each sequence instance fires for its own strip.
