@@ -688,8 +688,11 @@ void CFXSequence::report_event_start() {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t, 0, [t]() { t->trigger(); });
   }
-  // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
-  // unconditionally for all effects and all paths. Do NOT fire it here again.
+  // Fire cfx_start for sequence - effects now suppress it to prevent burst.
+  if (!this->strip_tag_.empty()) {
+    std::string evt = std::string("cfx_start:") + this->strip_tag_;
+    CFXEventManager::get().fire_event(evt.c_str());
+  }
 }
 
 void CFXSequence::report_event_begin() {
