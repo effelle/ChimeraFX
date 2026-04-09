@@ -140,8 +140,9 @@ void CFXSequenceSelect::loop() {
       // Defer to next tick - prevents synchronous burst when multiple effects
       // complete simultaneously. execute_completion() can call
       // complete_and_notify() which does blocking call.perform().
+      // Use 5ms delay to ensure API heartbeat between completion and restore.
       esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-        "fx_cmp", 0, [eff]() { eff->execute_completion(); });
+        "fx_cmp", 5, [eff]() { eff->execute_completion(); });
       return;
     }
   }
