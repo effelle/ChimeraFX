@@ -151,7 +151,7 @@ void CFXSequenceSelect::loop() {
   bool has_pending = false;
   for (auto *seq : CFXSequence::instances) {
     seq->check_duration();
-    if (!seq->pending_reach_triggers_.empty()) {
+    if (seq->has_pending_triggers()) {
       has_pending = true;
     }
   }
