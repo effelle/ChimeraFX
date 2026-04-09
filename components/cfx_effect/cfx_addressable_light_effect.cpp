@@ -6191,6 +6191,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
       act_->runner->sequence_owns_intensity_ = iten.has_value();
       act_->runner->sequence_owns_palette_ = pal.has_value();
     }
+  }
 }
 #endif
 
