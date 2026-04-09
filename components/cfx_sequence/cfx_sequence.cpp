@@ -137,7 +137,11 @@ void CFXSequenceSelect::loop() {
   for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
-      eff->execute_completion();
+      // Defer to next tick - prevents synchronous burst when multiple effects
+      // complete simultaneously. execute_completion() can call
+      // complete_and_notify() which does blocking call.perform().
+      esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
+        0, [eff]() { eff->execute_completion(); });
       return;
     }
   }
