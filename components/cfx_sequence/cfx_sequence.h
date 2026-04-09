@@ -65,6 +65,11 @@ public:
   void start();
   void stop();
   void force_reset();
+  // CFX-044: Called by execute_completion() when a runner signals effect_complete_.
+  // Performs the correctly-ordered teardown: clear binding → restore light →
+  // report_event_complete(). This guarantees that on_complete YAML automations
+  // (e.g. cfx_set starting step 2) are never overwritten by a subsequent stop().
+  void complete_and_notify();
 
   void add_light(light::LightState *state) { this->lights_.push_back(state); }
 

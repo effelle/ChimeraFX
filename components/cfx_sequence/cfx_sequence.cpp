@@ -226,11 +226,23 @@ void CFXSequence::start() {
     return;
   this->is_starting_ = true;
 
-  // Handover: Stop all other sequences first to prevent state restoration race
+  // CFX-044b: Conflict-aware handover — only stop sequences that share a
+  // target light with this one. Sequences on independent strips can run in
+  // parallel. Previously all sequences were stopped globally, destroying
+  // unrelated strips when a new sequence started on any strip.
   for (auto *seq : CFXSequence::instances) {
-    if (seq != this && seq->is_running_) {
-      seq->stop();
+    if (seq == this || !seq->is_running_)
+      continue;
+    // Check for light overlap
+    bool conflict = false;
+    for (auto *l : this->lights_) {
+      if (seq->owns_light(l)) {
+        conflict = true;
+        break;
+      }
     }
+    if (conflict)
+      seq->stop();
   }
 
   ESP_LOGD(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
@@ -505,6 +517,78 @@ void CFXSequence::stop() {
       CFXSequenceSelect::instance->publish_state_silent("None");
     }
   }
+}
+
+// CFX-044: Correctly-ordered completion path invoked by execute_completion().
+// stop() has this ordering problem:
+//   report_event_complete() → on_complete fires cfx_set → step 2 starts
+//   stop() → clear_active_binding() + call.perform() restore → KILLS step 2
+// This method fixes it:
+//   1. Stop teardown (binding clear + restore) FIRST
+//   2. report_event_complete() LAST — on_complete automations start on clean slate
+void CFXSequence::complete_and_notify() {
+  if (this->is_stopping_ || !this->is_running_)
+    return;
+  this->is_stopping_ = true;
+  this->is_running_  = false;
+  this->duration_complete_fired_ = false;
+
+  ESP_LOGD(TAG, "Sequence '%s': completing (effect done)...", this->name_.c_str());
+
+  this->report_event_stop();
+  this->clear_active_binding();
+
+  if (this->restore_state_) {
+    size_t idx = 0;
+    for (auto *l : this->lights_) {
+      if (idx < this->saved_states_.size()) {
+        auto &saved = this->saved_states_[idx];
+        auto call = l->make_call();
+        call.set_transition_length(0);
+        bool on = saved.values.is_on();
+        call.set_state(on);
+        if (saved.color_mode != light::ColorMode::UNKNOWN)
+          call.set_color_mode(saved.color_mode);
+        call.set_brightness(saved.values.get_brightness());
+        call.set_rgb(saved.values.get_red(), saved.values.get_green(),
+                     saved.values.get_blue());
+        if (l->get_traits().supports_color_mode(saved.color_mode) &&
+            (saved.color_mode == light::ColorMode::RGB_WHITE ||
+             saved.color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+             saved.color_mode == light::ColorMode::COLD_WARM_WHITE ||
+             saved.color_mode == light::ColorMode::WHITE)) {
+          call.set_white(saved.values.get_white());
+        }
+        if (on) call.set_effect(saved.effect);
+        call.perform();
+      }
+      idx++;
+    }
+  } else {
+    for (auto *l : this->lights_) {
+      auto clr = l->make_call();
+      clr.set_effect("None");
+      clr.set_transition_length(0);
+      clr.perform();
+      auto off = l->make_call();
+      off.set_state(false);
+      off.set_transition_length(0);
+      off.perform();
+    }
+  }
+
+  this->is_stopping_ = false;
+
+  if (CFXSequenceSelect::instance != nullptr &&
+      CFXSequenceSelect::instance->has_state()) {
+    const std::string &cur = CFXSequenceSelect::instance->current_option();
+    if (!cur.empty() && this->name_ == cur)
+      CFXSequenceSelect::instance->publish_state_silent("None");
+  }
+
+  // LAST: fire on_complete — any chained cfx_set now wins with no
+  // subsequent stop() able to undo the next step.
+  this->report_event_complete();
 }
 
 void CFXSequence::force_reset() {

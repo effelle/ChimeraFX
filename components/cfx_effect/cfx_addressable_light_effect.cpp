@@ -6197,18 +6197,22 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
 
 void CFXAddressableLightEffect::execute_completion() {
   if (this->act_ == nullptr || !this->act_->completion_pending) return;
-  
+
   // Clear the flag to prevent re-execution
   this->act_->completion_pending = false;
 
 #ifdef USE_CFX_SEQUENCE
   if (this->act_->active_sequence != nullptr) {
-    auto *completed_seq = this->act_->active_sequence;
+    auto *seq = this->act_->active_sequence;
     this->act_->active_sequence = nullptr; // prevent re-entry
-    completed_seq->report_event_complete();
-    completed_seq->stop();
+
+    // CFX-044 FIX: Delegate to complete_and_notify() which performs teardown
+    // in the correct order: stop + restore BEFORE on_complete fires, so any
+    // chained cfx_set in on_complete is never overwritten by a late stop().
+    seq->complete_and_notify();
+
   } else {
-    // Standalone self-terminating effect.
+    // Standalone self-terminating effect (no sequence bound).
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
       auto call = ls->make_call();
