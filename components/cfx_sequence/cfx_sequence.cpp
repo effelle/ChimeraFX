@@ -324,8 +324,11 @@ void CFXSequence::start() {
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
     
-    esphome::App.scheduler.set_timeout(this->id_ + "_start_" + std::to_string(i),
+    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
+                                      this->id_ + "_start_" + std::to_string(i),
                                       stagger_delay, [this, l, i, total_lights]() {
+      // Feed WDT immediately on entering the staggered task
+      esphome::App.feed_wdt();
       auto call = l->make_call();
       call.set_state(true);
       if (!this->effect_.empty()) {
