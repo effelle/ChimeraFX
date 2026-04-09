@@ -52,6 +52,11 @@ void CFXSequenceSelect::worker_task_loop(void *pvParam) {
       // 1. Execute all pending heavy sequence starts using this 16KB stack
       for (auto *seq : CFXSequence::instances) {
         seq->flush_pending_triggers();
+        
+        // 1b. Execute duration completions
+        if (seq->has_pending_duration_completion()) {
+          seq->complete_and_notify();
+        }
       }
       
       // 2. Execute any deferred sequence/effect stops that require Heavy LightCall mutations
@@ -158,7 +163,7 @@ void CFXSequenceSelect::loop() {
   bool has_pending = false;
   for (auto *seq : CFXSequence::instances) {
     seq->check_duration();
-    if (seq->has_pending_triggers()) {
+    if (seq->has_pending_triggers() || seq->has_pending_duration_completion()) {
       has_pending = true;
     }
   }
@@ -417,6 +422,7 @@ void CFXSequence::start() {
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
   this->completion_reported_ = false;
+  this->duration_completion_pending_ = false; // CFX-044c
   this->is_running_ = true;
   this->is_starting_ = false;
 
@@ -532,6 +538,7 @@ void CFXSequence::complete_and_notify() {
   this->is_stopping_ = true;
   this->is_running_  = false;
   this->duration_complete_fired_ = false;
+  this->duration_completion_pending_ = false; // CFX-044c: Reset after handling
 
   ESP_LOGD(TAG, "Sequence '%s': completing (effect done)...", this->name_.c_str());
 
@@ -710,14 +717,13 @@ void CFXSequence::check_duration() {
     return;
   if (this->duration_ms_ == 0)
     return;
-  if (this->duration_complete_fired_)
+  if (this->duration_complete_fired_ || this->duration_completion_pending_)
     return;
   if ((millis() - this->duration_start_ms_) >= this->duration_ms_) {
-    ESP_LOGD(TAG, "Sequence '%s': duration %u ms elapsed — completing",
+    ESP_LOGD(TAG, "Sequence '%s': duration %u ms elapsed — marking for worker completion",
              this->name_.c_str(), this->duration_ms_);
     this->duration_complete_fired_ = true;
-    this->report_event_complete();
-    this->stop();
+    this->duration_completion_pending_ = true; // CFX-044c: Defer to worker
   }
 }
 

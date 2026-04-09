@@ -231,6 +231,7 @@ protected:
   bool is_starting_{false};
   bool is_stopping_{false};
   bool is_running_{false};
+  bool duration_completion_pending_{false};  // CFX-044c: Defer duration timeout to worker
   // Set to true when report_event_complete() has been called for this run.
   // Used by clear_active_binding() to decide whether the outro should suppress
   // cfx_complete (prevent double-fire) or allow it (first completion signal).
