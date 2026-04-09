@@ -605,6 +605,12 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
+  static bool logged_triggers = false;
+  if (!logged_triggers) {
+    ESP_LOGD("cfx_seq_dbg", "SEQ [%s] on_reach triggers size = %u", this->id_.c_str(), this->on_reach_triggers_.size());
+    logged_triggers = true;
+  }
+
   // Reset stale tracking state at the start of a new forward pass.
   // The adapter (cfx_addressable_light_effect.cpp) suppresses calls to this
   // function during the erase/return phase via runner->is_return_phase_.
