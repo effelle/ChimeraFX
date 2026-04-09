@@ -36,9 +36,10 @@ void CFXSequenceSelect::setup_worker_task() {
     worker_wake_sem_ = xSemaphoreCreateBinary();
     worker_done_sem_ = xSemaphoreCreateBinary();
     if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
-      // Create a heavily isolated 16KB stack task. It blocks until `loop()` signals it.
-      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 16384, nullptr, 5, nullptr, tskNO_AFFINITY);
-      ESP_LOGD(TAG, "CFX-044: Permanent 16KB worker task successfully spawned.");
+      // Create a heavily isolated 16KB stack task. Pin to Core 1 (same as ESPHome loopTask)
+      // to guarantee thread safety and prevent cross-core races during `call.perform()`.
+      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 16384, nullptr, 5, nullptr, 1);
+      ESP_LOGD(TAG, "CFX-044: Permanent 16KB worker task successfully spawned (Pinned to Core 1).");
     } else {
       ESP_LOGE(TAG, "CFX-044: Failed to construct worker task semaphores.");
     }
