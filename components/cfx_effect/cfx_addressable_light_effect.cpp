@@ -6191,9 +6191,33 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
       act_->runner->sequence_owns_intensity_ = iten.has_value();
       act_->runner->sequence_owns_palette_ = pal.has_value();
     }
-  }
 }
 #endif
+
+void CFXAddressableLightEffect::execute_completion() {
+  if (this->act_ == nullptr || !this->act_->completion_pending) return;
+  
+  // Clear the flag to prevent re-execution
+  this->act_->completion_pending = false;
+
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    auto *completed_seq = this->act_->active_sequence;
+    this->act_->active_sequence = nullptr; // prevent re-entry
+    completed_seq->report_event_complete();
+    completed_seq->stop();
+  } else {
+    // Standalone self-terminating effect.
+    auto *ls = this->get_light_state();
+    if (ls != nullptr) {
+      auto call = ls->make_call();
+      call.set_state(false);
+      call.set_transition_length(0);
+      call.perform();
+    }
+  }
+#endif
+}
 
 } // namespace chimera_fx
 } // namespace esphome
