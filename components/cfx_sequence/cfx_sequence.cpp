@@ -711,7 +711,7 @@ void CFXSequence::flush_pending_triggers() {
     // synchronously on the worker's stack, we schedule it for the next loop.
     // This allows each strip activation to start with a fresh 8KB stack frame.
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      this->id_ + "_reach_" + std::to_string((uintptr_t)t.trigger), 0, [t]() {
+                                      (uint32_t)t.trigger, 0, [t]() {
       t.trigger->trigger(t.value);
     });
 
@@ -739,7 +739,7 @@ void CFXSequence::report_event_start() {
   ESP_LOGV(TAG, "Sequence '%s': on_start triggers firing", this->id_.c_str());
   for (auto *t : this->on_start_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      this->id_ + "_start_" + std::to_string((uintptr_t)t), 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [t]() { t->trigger(); });
   }
   // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
   // unconditionally for all effects and all paths. Do NOT fire it here again.
@@ -750,7 +750,7 @@ void CFXSequence::report_event_begin() {
   // on_cfx_begin YAML trigger always fires (on-device automation).
   for (auto *t : this->on_begin_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      this->id_ + "_begin_" + std::to_string((uintptr_t)t), 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [t]() { t->trigger(); });
   }
   // CFX-029: HA cfx_begin event only fires when the sequence has a real
   // intro configured (intro_ != 0). Without an intro, cfx_begin and
@@ -766,7 +766,7 @@ void CFXSequence::report_event_stop() {
   ESP_LOGV(TAG, "Sequence '%s': on_stop triggers firing", this->id_.c_str());
   for (auto *t : this->on_stop_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      this->id_ + "_stop_" + std::to_string((uintptr_t)t), 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [t]() { t->trigger(); });
   }
   // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
   if (!this->strip_tag_.empty()) {
@@ -780,7 +780,7 @@ void CFXSequence::report_event_complete() {
   this->completion_reported_ = true;
   for (auto *t : this->on_complete_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      this->id_ + "_complete_" + std::to_string((uintptr_t)t), 0, [s = this, t]() {
+                                      (uint32_t)t, 0, [s = this, t]() {
       // Small verification: only fire if the sequence didn't restart mid-deferral
       if (s->completion_reported_)
         t->trigger();
