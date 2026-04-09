@@ -27,50 +27,7 @@ std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
-#ifdef USE_ESP32
-// CFX-044: Permanent worker task primitives
-SemaphoreHandle_t CFXSequenceSelect::worker_wake_sem_ = nullptr;
-SemaphoreHandle_t CFXSequenceSelect::worker_done_sem_ = nullptr;
 
-void CFXSequenceSelect::setup_worker_task() {
-  if (worker_wake_sem_ == nullptr) {
-    worker_wake_sem_ = xSemaphoreCreateBinary();
-    worker_done_sem_ = xSemaphoreCreateBinary();
-    if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
-      // Create a memory-safe 12KB stack task (RAM-friendly for 16+ strips).
-      // Pin to Core 1 (same as ESPHome loopTask) to guarantee thread safety.
-      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 12288, nullptr, 5, nullptr, 1);
-      ESP_LOGD(TAG, "CFX-045: Scalable 12KB worker task successfully spawned (Pinned to Core 1).");
-    } else {
-      ESP_LOGE(TAG, "CFX-044: Failed to construct worker task semaphores.");
-    }
-  }
-}
-
-void CFXSequenceSelect::worker_task_loop(void *pvParam) {
-  while (true) {
-    if (xSemaphoreTake(worker_wake_sem_, portMAX_DELAY) == pdTRUE) {
-      // 1. Execute all pending heavy sequence starts using this 16KB stack
-      for (auto *seq : CFXSequence::instances) {
-        seq->flush_pending_triggers();
-        
-        // 1b. Execute duration completions
-        if (seq->has_pending_duration_completion()) {
-          seq->complete_and_notify();
-        }
-      }
-      
-      // 2. Execute any deferred sequence/effect stops that require Heavy LightCall mutations
-      for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
-        eff->execute_completion();
-      }
-
-      // Signal the waiting ESPHome loop that we are done so it can unblock
-      xSemaphoreGive(worker_done_sem_);
-    }
-  }
-}
-#endif
 
 void CfxSetActionBase::do_play_() {
   if (this->light_ == nullptr)
@@ -120,9 +77,6 @@ void CfxSetActionBase::do_play_() {
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
-#ifdef USE_ESP32
-  this->setup_worker_task();
-#endif
   // Phase E: Remind integrators to set api: batch_delay: 0ms for best event delivery.
   // This is a one-time boot advisory — it does not block operation.
   ESP_LOGW(TAG,
@@ -160,40 +114,32 @@ void CFXSequenceSelect::control(const std::string &value) {
 
 void CFXSequenceSelect::loop() {
   CFXEventManager::get().flush_pending();
-  
-  bool has_pending = false;
-  for (auto *seq : CFXSequence::instances) {
+
+  for (auto *seq : CFXSequence::instances)
     seq->check_duration();
-    if (seq->has_pending_triggers() || seq->has_pending_duration_completion()) {
-      has_pending = true;
+
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->has_pending_duration_completion()) {
+      esphome::App.feed_wdt();
+      seq->complete_and_notify();
+      return;
     }
   }
 
-  // Check for effects that finished exactly this frame and deferred termination
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->has_pending_triggers()) {
+      esphome::App.feed_wdt();
+      seq->flush_pending_triggers();
+      return;
+    }
+  }
+
   for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (eff->has_pending_completion()) {
-      has_pending = true;
+      esphome::App.feed_wdt();
+      eff->execute_completion();
+      return;
     }
-  }
-
-  // CFX-044: If there are triggers or stops, suspend standard ESPHome 8KB execution and route to 16KB worker.
-  if (has_pending) {
-#ifdef USE_ESP32
-    if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
-      // Signal the 16KB worker task to wake up
-      xSemaphoreGive(worker_wake_sem_);
-      // Suspend ESPHome natively (no race conditions) while worker acts
-      xSemaphoreTake(worker_done_sem_, portMAX_DELAY);
-    } else {
-      // Fallback if OS primitive failed
-      for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
-      for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) eff->execute_completion();
-    }
-#else
-    // ESP8266 simple execution
-    for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
-    for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) eff->execute_completion();
-#endif
   }
 }
 
