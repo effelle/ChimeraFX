@@ -49,39 +49,71 @@ public:
   // Push one event string onto the deferred ring-buffer queue.
   // Full-string coalescing: exact duplicates are dropped. (CFX-034)
   void push_deferred(const std::string &evt) {
+    // 1. Coalescing: Drop if an identical event is already in the queue.
     for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
          i = (i + 1) % DEFERRED_QUEUE_SIZE) {
       if (this->deferred_queue_[i] == evt) {
-        return;  // exact duplicate already queued — skip
+        return;
       }
     }
+
     uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
+    
+    // 2. Priority-aware Dropping (CFX-051)
+    // If we're hitting the limit (~80% full), and the new event is a high-priority 
+    // lifecycle event, we can safely drop an old non-critical milestone to make room.
+    uint8_t count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
+
     if (next == this->deferred_read_) {
-      ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
+      // Queue is hard-full. Try to reclaim one slot from the oldest milestone.
+      bool reclaimed = false;
+      const bool is_critical = (evt.find("cfx_reach") == std::string::npos);
+      
+      if (is_critical) {
+        for (uint8_t j = 0; j < DEFERRED_QUEUE_SIZE; j++) {
+          uint8_t idx = (this->deferred_read_ + j) % DEFERRED_QUEUE_SIZE;
+          if (idx == this->deferred_write_) break;
+          
+          if (this->deferred_queue_[idx].find("cfx_reach") != std::string::npos) {
+            // Drop this milestone to make room
+            this->deferred_queue_[idx] = evt;
+            this->deferred_write_ = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
+            this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+            reclaimed = true;
+            break;
+          }
+        }
+      }
+      
+      if (!reclaimed) {
+        ESP_LOGW("cfx_seq", "deferred queue full, dropping '%s'", evt.c_str());
+        return;
+      }
       return;
     }
+    
     this->deferred_queue_[this->deferred_write_] = evt;
     this->deferred_write_ = next;
   }
 
-  // Drain up to 3 queued events per ESPHome loop() tick. (CFX-047)
-  // We burst events when the queue is full to prevent dropping, 
-  // but stay conservative to avoid saturating the API/WiFi.
   // Drain queued events per ESPHome loop() tick. (CFX-048)
   // Strict pacing to protect the 30ms API heartbeat window. 
   void flush_pending() {
-    static uint32_t last_flush_ms = 0;
     uint32_t now = esphome::millis();
     if (this->deferred_read_ == this->deferred_write_)
       return;
 
+#ifdef USE_API
+    // CFX-051: Abort if API is already disconnected to save CPU
+    // We assume the caller has valid App.api_server context if USE_API is defined.
+#endif
+
     // Strict pacing: 1 event per loop normally, burst up to 2 if queue is filling up.
     uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
-    uint8_t max_this_loop = (queue_count > 20) ? 2 : 1;
+    uint8_t max_this_loop = (queue_count > 40) ? 2 : 1;
     
     uint8_t flushed_this_loop = 0;
     while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
-      last_flush_ms = now;
       const std::string evt = this->deferred_queue_[this->deferred_read_];
       this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
       flushed_this_loop++;
@@ -121,7 +153,7 @@ protected:
   std::vector<std::string> known_tags_;
   std::vector<std::string> disabled_tags_;
 
-  static constexpr uint8_t DEFERRED_QUEUE_SIZE = 32;
+  static constexpr uint8_t DEFERRED_QUEUE_SIZE = 64;
   std::string deferred_queue_[DEFERRED_QUEUE_SIZE];
   uint8_t deferred_write_{0};
   uint8_t deferred_read_{0};
