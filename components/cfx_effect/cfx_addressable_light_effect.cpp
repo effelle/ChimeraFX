@@ -5901,26 +5901,16 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     return;
   act_->milestone_fired_this_frame = false;
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
-  while (current_pct >= next && next <= 100) {
+  // Fire at most ONE milestone per call - rest catch up in subsequent frames
+  if (current_pct >= next && next <= 100) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
 #ifdef USE_CFX_EVENTS
-    // Build event string on the stack — no heap, no pre-computed array.
-    // Runs at most ~4x per 24ms frame at max speed. Negligible cost.
     char buf[48];
     snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
              (unsigned)act_->last_fired_milestone);
-    
-    // CFX-049: Gate event firing by compile-time log level to avoid 
-    // flooding the serial/web console at DEBUG level.
-#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
-    ESP_LOGV("cfx_seq", "Firing: %s", buf);
-    chimera_fx::CFXEventManager::get().fire_event(buf);
-#else
     chimera_fx::CFXEventManager::get().fire_event(buf);
 #endif
-#endif
-    next = act_->last_fired_milestone + MILESTONE_STEP;
   }
   if (current_pct < act_->last_fired_milestone) {
     if (act_->last_fired_milestone >= 100 || current_pct >= 100.0f)
