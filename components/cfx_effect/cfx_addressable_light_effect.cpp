@@ -5911,12 +5911,12 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
              (unsigned)act_->last_fired_milestone);
     
-    // CFX-049: Gate event firing by runtime log level to avoid flooding the
-    // serial/web console at DEBUG level. Milestones fire only at VERBOSE level.
-    if (esphome::esp_log_get_level() >= ESPHOME_LOG_LEVEL_VERBOSE) {
-      ESP_LOGV("cfx_seq", "Firing: %s", buf);
-      chimera_fx::CFXEventManager::get().fire_event(buf);
-    }
+    // CFX-049: Gate event firing by compile-time log level to avoid 
+    // flooding the serial/web console at DEBUG level.
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+    ESP_LOGV("cfx_seq", "Firing: %s", buf);
+    chimera_fx::CFXEventManager::get().fire_event(buf);
+#endif
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;
   }
