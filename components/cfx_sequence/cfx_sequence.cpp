@@ -270,7 +270,7 @@ void CFXSequence::start() {
   // CFX-049: Staggered start to eliminate 68ms API lag.
   // Each strip perform() cost ~15ms. We spread them across loop cycles.
   uint32_t stagger_delay = 0;
-  constexpr uint32_t STAGGER_MS = 25;  // 25ms stagger
+  constexpr uint32_t STAGGER_MS = 100;  // 100ms stagger
   size_t total_lights = this->lights_.size();
   
   for (size_t i = 0; i < total_lights; i++) {
@@ -279,8 +279,9 @@ void CFXSequence::start() {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       (this->id_ + "_start_" + std::to_string(i)).c_str(),
                                       stagger_delay, [this, l, i, total_lights]() {
-      // Feed WDT immediately on entering the staggered task
+      // Feed WDT and yield to allow WiFi heartbeat
       esphome::App.feed_wdt();
+      esphome::yield();
       auto call = l->make_call();
       call.set_state(true);
       if (!this->effect_.empty()) {
