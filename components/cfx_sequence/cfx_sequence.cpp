@@ -26,6 +26,39 @@ std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
+#ifdef USE_ESP32
+// CFX-044: Permanent worker task primitives
+SemaphoreHandle_t CFXSequenceSelect::worker_wake_sem_ = nullptr;
+SemaphoreHandle_t CFXSequenceSelect::worker_done_sem_ = nullptr;
+
+void CFXSequenceSelect::setup_worker_task() {
+  if (worker_wake_sem_ == nullptr) {
+    worker_wake_sem_ = xSemaphoreCreateBinary();
+    worker_done_sem_ = xSemaphoreCreateBinary();
+    if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
+      // Create a heavily isolated 16KB stack task. It blocks until `loop()` signals it.
+      xTaskCreatePinnedToCore(CFXSequenceSelect::worker_task_loop, "cfx_worker", 16384, nullptr, 5, nullptr, tskNO_AFFINITY);
+      ESP_LOGD(TAG, "CFX-044: Permanent 16KB worker task successfully spawned.");
+    } else {
+      ESP_LOGE(TAG, "CFX-044: Failed to construct worker task semaphores.");
+    }
+  }
+}
+
+void CFXSequenceSelect::worker_task_loop(void *pvParam) {
+  while (true) {
+    if (xSemaphoreTake(worker_wake_sem_, portMAX_DELAY) == pdTRUE) {
+      // Execute all pending heavy triggers using this 16KB stack
+      for (auto *seq : CFXSequence::instances) {
+        seq->flush_pending_triggers();
+      }
+      // Signal the waiting ESPHome loop that we are done so it can unblock
+      xSemaphoreGive(worker_done_sem_);
+    }
+  }
+}
+#endif
+
 void CfxSetActionBase::do_play_() {
   if (this->light_ == nullptr)
     return;
@@ -74,6 +107,9 @@ void CfxSetActionBase::do_play_() {
 
 void CFXSequenceSelect::setup() {
   CFXSequenceSelect::instance = this;
+#ifdef USE_ESP32
+  this->setup_worker_task();
+#endif
   // Phase E: Remind integrators to set api: batch_delay: 0ms for best event delivery.
   // This is a one-time boot advisory — it does not block operation.
   ESP_LOGW(TAG,
@@ -105,10 +141,38 @@ void CFXSequenceSelect::setup() {
   });
 }
 
-// void CFXSequenceSelect::loop() implementation moved to header for inlining
-
 void CFXSequenceSelect::control(const std::string &value) {
   this->publish_state(value);
+}
+
+void CFXSequenceSelect::loop() {
+  CFXEventManager::get().flush_pending();
+  
+  bool has_pending = false;
+  for (auto *seq : CFXSequence::instances) {
+    seq->check_duration();
+    if (!seq->pending_reach_triggers_.empty()) {
+      has_pending = true;
+    }
+  }
+
+  // CFX-044: If there are triggers, suspend standard ESPHome 8KB execution and route to 16KB worker.
+  if (has_pending) {
+#ifdef USE_ESP32
+    if (worker_wake_sem_ != nullptr && worker_done_sem_ != nullptr) {
+      // Signal the 16KB worker task to wake up
+      xSemaphoreGive(worker_wake_sem_);
+      // Suspend ESPHome natively (no race conditions) while worker allocates memory
+      xSemaphoreTake(worker_done_sem_, portMAX_DELAY);
+    } else {
+      // Fallback if OS primitive failed
+      for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
+    }
+#else
+    // ESP8266 simple execution
+    for (auto *seq : CFXSequence::instances) seq->flush_pending_triggers();
+#endif
+  }
 }
 
 void CFXSequenceSelect::publish_state_silent(const std::string &value) {

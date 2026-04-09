@@ -28,6 +28,12 @@
 
 #include "../cfx_effect/cfx_event_manager.h"
 
+#ifdef USE_ESP32
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#endif
+
 namespace esphome {
 namespace cfx_sequence {
 
@@ -303,15 +309,7 @@ class CFXSequenceSelect : public esphome::select::Select,
                           public esphome::Component {
 public:
   void setup() override;
-  void loop() override {
-    CFXEventManager::get().flush_pending();
-    for (auto *seq : CFXSequence::instances) {
-      seq->check_duration();
-      // CFX-043: Deep deferral. Fire positional triggers here, outside the
-      // light's apply() task, ensuring a flat stack and WDT safety.
-      seq->flush_pending_triggers();
-    }
-  }
+  void loop() override;
   void control(const std::string &value) override;
   void set_event_entity(esphome::event::Event *e) {
     CFXEventManager::get().set_event_entity(e);
@@ -331,6 +329,14 @@ public:
   // condition on multi-core ESP32 where a FreeRTOS task could read false before
   // publish_state_silent() sets it back, causing an unintended recursive start.
   static std::atomic<bool> suppress_callback_;
+
+#ifdef USE_ESP32
+  // CFX-044: Permanent worker task primitives for 16KB stack jump
+  static SemaphoreHandle_t worker_wake_sem_;
+  static SemaphoreHandle_t worker_done_sem_;
+  static void setup_worker_task();
+  static void worker_task_loop(void *pvParam);
+#endif
 };
 
 
