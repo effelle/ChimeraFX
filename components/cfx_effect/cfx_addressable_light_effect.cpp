@@ -261,14 +261,7 @@ void CFXAddressableLightEffect::start() {
     // Only fire cfx_start for PRIMARY light in multi-light sequence.
     // Secondary lights (bound triggers) don't fire their own events.
     if (!act_->strip_tag.empty() && act_->active_sequence != nullptr) {
-      bool is_primary = true;
-      for (size_t i = 1; i < act_->active_sequence->lights_.size() && i < 4; i++) {
-        if (act_->active_sequence->lights_[i] == this->get_light_state()) {
-          is_primary = false;
-          break;
-        }
-      }
-      if (is_primary) {
+      if (act_->active_sequence->is_light_primary(this->get_light_state())) {
         std::string evt = std::string("cfx_start:") + act_->strip_tag;
         chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
       }
@@ -709,16 +702,8 @@ void CFXAddressableLightEffect::start() {
   if (this->effect_id_ != 185 && !act_->strip_tag.empty() &&
       act_->active_intro_mode != INTRO_MODE_NONE) {
     // Only fire cfx_begin for PRIMARY light in multi-light sequence.
-    bool is_primary = true;
-    if (act_->active_sequence != nullptr) {
-      for (size_t i = 1; i < act_->active_sequence->lights_.size() && i < 4; i++) {
-        if (act_->active_sequence->lights_[i] == this->get_light_state()) {
-          is_primary = false;
-          break;
-        }
-      }
-    }
-    if (is_primary) {
+    if (act_->active_sequence == nullptr ||
+        act_->active_sequence->is_light_primary(this->get_light_state())) {
       std::string evt = std::string("cfx_begin:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
