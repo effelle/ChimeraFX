@@ -5916,6 +5916,8 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
 #if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
     ESP_LOGV("cfx_seq", "Firing: %s", buf);
     chimera_fx::CFXEventManager::get().fire_event(buf);
+#else
+    chimera_fx::CFXEventManager::get().fire_event(buf);
 #endif
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;
