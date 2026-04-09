@@ -69,6 +69,7 @@ public:
   bool is_light_primary(light::LightState *state) const {
     return this->lights_.empty() || this->lights_[0] == state;
   }
+  size_t light_count() const { return this->lights_.size(); }
 
   // Custom payload bindings
   void set_speed(uint8_t speed) { this->speed_ = speed; }
