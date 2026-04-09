@@ -5869,7 +5869,25 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
-  // Milestones disabled - cause API instability with multiple strips
+  if (act_->intro_active && act_->intro_suppresses_milestones)
+    return;
+  act_->milestone_fired_this_frame = false;
+  uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
+  while (current_pct >= next && next <= 100) {
+    act_->last_fired_milestone = next;
+    act_->milestone_fired_this_frame = true;
+#ifdef USE_CFX_EVENTS
+    char buf[48];
+    snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
+             (unsigned)act_->last_fired_milestone);
+    chimera_fx::CFXEventManager::get().fire_event(buf);
+#endif
+    next = act_->last_fired_milestone + MILESTONE_STEP;
+  }
+  if (current_pct < act_->last_fired_milestone) {
+    if (act_->last_fired_milestone >= 100 || current_pct >= 100.0f)
+      act_->last_fired_milestone = 0;
+  }
 }
 
 void CFXAddressableLightEffect::check_positional_triggers(
