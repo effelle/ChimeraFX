@@ -6198,12 +6198,35 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
 void CFXAddressableLightEffect::execute_completion() {
   if (this->act_ == nullptr || !this->act_->completion_pending) return;
 
-  // Clear the flag to prevent re-execution
-  this->act_->completion_pending = false;
-
 #ifdef USE_CFX_SEQUENCE
   if (this->act_->active_sequence != nullptr) {
     auto *seq = this->act_->active_sequence;
+
+    // CFX-044d: Transfer-race guard.
+    // flush_pending_triggers() runs BEFORE execute_completion() in the same
+    // worker cycle. A cfx_reach trigger at e.g. 75% may have called cfx_set,
+    // which calls set_active_sequence(seq) on a NEW effect instance. The
+    // sequence is therefore still running — this effect no longer owns it.
+    // If we call complete_and_notify() here, clear_active_binding() would
+    // iterate all effects, find the new owner, and NULL its active_sequence,
+    // killing the next step mid-start.
+    //
+    // Detection: scan all effects for another instance that now owns `seq`.
+    // If found, abort the completion — the sequence will complete naturally
+    // when the new effect's runner signals effect_complete_.
+    for (auto *other : CFXAddressableLightEffect::all_effects) {
+      if (other != this && other->get_active_sequence() == seq) {
+        // Sequence has been transferred — clear local state only.
+        ESP_LOGD("cfx_seq", "execute_completion: seq '%s' transferred to %p, deferring",
+                 seq->get_name().c_str(), other);
+        this->act_->completion_pending = false;
+        this->act_->active_sequence = nullptr;
+        return;
+      }
+    }
+
+    // Safe to complete: this effect is still the sole owner.
+    this->act_->completion_pending = false;
     this->act_->active_sequence = nullptr; // prevent re-entry
 
     // CFX-044 FIX: Delegate to complete_and_notify() which performs teardown
@@ -6213,6 +6236,7 @@ void CFXAddressableLightEffect::execute_completion() {
 
   } else {
     // Standalone self-terminating effect (no sequence bound).
+    this->act_->completion_pending = false;
     auto *ls = this->get_light_state();
     if (ls != nullptr) {
       auto call = ls->make_call();
