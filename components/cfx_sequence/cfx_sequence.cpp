@@ -347,11 +347,9 @@ void CFXSequence::start() {
     CFXSequenceSelect::instance->publish_state_silent(this->name_);
   }
 
-  // Reset duration timer
+// Reset duration timer
   this->duration_start_ms_ = millis();
   this->duration_complete_fired_ = false;
-
-  this->report_event_start();
 }
 
 void CFXSequence::handle_fallback_binding_() {
