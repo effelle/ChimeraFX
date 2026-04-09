@@ -1662,6 +1662,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   it.schedule_show();
   chimera_fx::instance = nullptr;
+
+#ifdef USE_CFX_SEQUENCE
+  // CFX-042: Flush deferred sequence triggers with a flat stack.
+  // Executing them here (after all effect math and DMA scheduling is complete)
+  // prevents the nested trigger->start()->new CFXRunner() stack overflow panic.
+  if (act_->active_sequence != nullptr) {
+    act_->active_sequence->flush_pending_triggers();
+  }
+#endif
 }
 
 uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {

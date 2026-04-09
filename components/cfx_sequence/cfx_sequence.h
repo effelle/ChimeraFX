@@ -111,6 +111,7 @@ public:
   void report_event_stop();
   void report_event_complete();
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
+  void flush_pending_triggers();
   void check_duration();
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();
@@ -159,6 +160,17 @@ protected:
   std::vector<CfxSeqOnStopTrigger *>    on_stop_triggers_;
   std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
   std::vector<CfxSeqOnReachTrigger *> on_reach_triggers_;
+
+  // CFX-042: Deferred trigger queue. Triggers crossed during apply() are
+  // collected here instead of fired synchronously. flush_pending_triggers()
+  // is called by the bound effect at the END of apply(), with a flat stack,
+  // preventing the nested start()->new CFXRunner() stack overflow.
+  struct PendingTrigger {
+    CfxSeqOnReachTrigger *trigger;
+    float value;
+  };
+  // Small fixed-bound vector: max 8 triggers per frame is more than enough.
+  std::vector<PendingTrigger> pending_reach_triggers_;
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};

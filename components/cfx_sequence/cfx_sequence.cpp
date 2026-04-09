@@ -523,6 +523,24 @@ void CFXSequence::clear_active_binding() {
   }
 }
 
+void CFXSequence::flush_pending_triggers() {
+  if (this->pending_reach_triggers_.empty())
+    return;
+
+  // Make a local copy then clear the queue BEFORE firing.
+  // Why? If a trigger executes a cfx_set action that starts a new effect sequence,
+  // that sequence might synchronously call check_positional_triggers as part of
+  // its start() routine, mutating the queue mid-iteration.
+  std::vector<PendingTrigger> to_fire = this->pending_reach_triggers_;
+  this->pending_reach_triggers_.clear();
+
+  for (const auto &t : to_fire) {
+    ESP_LOGD(TAG, "Sequence '%s': flushing deferred reach trigger %.0f%%",
+             this->id_.c_str(), t.trigger->get_target_position() * 100.0f);
+    t.trigger->trigger(t.value);
+  }
+}
+
 void CFXSequence::check_duration() {
   if (!this->is_running_)
     return;
@@ -605,9 +623,6 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
-  if (this->last_triggered_percentage_ == -1.0f) {
-    ESP_LOGD("cfx_seq_dbg", "SEQ [%s] STARTING SWEEP. on_reach triggers size = %u", this->id_.c_str(), this->on_reach_triggers_.size());
-  }
 
   // Reset stale tracking state at the start of a new forward pass.
   // The adapter (cfx_addressable_light_effect.cpp) suppresses calls to this
@@ -661,14 +676,9 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
     }
 
     if (crossed) {
-      ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
+      ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% queued",
                this->id_.c_str(), target * 100.0f);
-      t->trigger(current_percentage);
-    } else {
-      if (current_percentage >= target - 0.05f && current_percentage <= target + 0.05f) {
-         // Debug math locally around the crossing threshold
-         ESP_LOGD("cfx_seq_dbg", "Math skip - cur:%.3f, last:%.3f, target:%.3f", current_percentage, this->last_triggered_percentage_, target);
-      }
+      this->pending_reach_triggers_.push_back({t, current_percentage});
     }
   }
 
