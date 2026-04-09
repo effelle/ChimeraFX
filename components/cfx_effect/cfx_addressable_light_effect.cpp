@@ -5882,31 +5882,7 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
-  // CFX-035b: Suppress milestones during intro ONLY when the main effect is
-  // progressive (Wipe/Sweep/etc.) and will supply its own 0→100% tracking
-  // after the intro ends. For monochromatic effects (intro IS the effect) and
-  // non-progressive effects (Aurora, Ocean, …), the intro's wipe IS the source
-  // of cfx_reach events and must NOT be silenced.
-  if (act_->intro_active && act_->intro_suppresses_milestones)
-    return;
-  act_->milestone_fired_this_frame = false;
-  uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
-  // Only fire milestone at 80% and 100% to prevent API overload
-  // with multiple parallel strips.
-  if ((current_pct >= 80.0f && next == 80) || (current_pct >= 100.0f && next == 100)) {
-    act_->last_fired_milestone = next;
-    act_->milestone_fired_this_frame = true;
-#ifdef USE_CFX_EVENTS
-    char buf[48];
-    snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
-             (unsigned)act_->last_fired_milestone);
-    chimera_fx::CFXEventManager::get().fire_event(buf);
-#endif
-  }
-  if (current_pct < act_->last_fired_milestone) {
-    if (act_->last_fired_milestone >= 100 || current_pct >= 100.0f)
-      act_->last_fired_milestone = 0;
-  }
+  // Milestones disabled - cause API instability with multiple strips
 }
 
 void CFXAddressableLightEffect::check_positional_triggers(

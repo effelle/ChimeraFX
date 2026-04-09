@@ -209,24 +209,7 @@ protected:
   // so this sequence-side function is only reached during the main effect.
   void check_milestones_(float current_pct) {
     this->milestone_fired_this_frame_ = false;
-    uint8_t next = this->last_fired_milestone_ + MILESTONE_STEP;
-    // Only fire milestone at 80% and 100% to prevent API overload
-    // with multiple parallel strips. Mid-sequence milestones (5-75%)
-    // are not needed for most automations.
-    if ((current_pct >= 80.0f && next == 80) || (current_pct >= 100.0f && next == 100)) {
-      this->last_fired_milestone_ = next;
-      this->milestone_fired_this_frame_ = true;
-      char buf[48];
-      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u",
-               this->strip_tag_.c_str(), (unsigned)this->last_fired_milestone_);
-      CFXEventManager::get().fire_event(buf);
-    }
-    // Auto-reset when a new forward pass begins (pct wraps back to ~0)
-    if (current_pct < this->last_fired_milestone_) {
-      if (this->last_fired_milestone_ >= 100 || current_pct >= 100.0f)
-        this->last_fired_milestone_ = 0;
-    }
-  }
+  }  // Disabled: milestones cause API instability with multiple strips
 
   bool is_starting_{false};
   bool is_stopping_{false};
