@@ -689,8 +689,6 @@ void CFXAddressableLightEffect::start() {
   }
 
   // Suppress all cfx_begin events to prevent API crash with 4+ strips
-#ifdef USE_CFX_EVENTS
-#endif
 #endif
 }
 
