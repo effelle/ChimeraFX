@@ -659,9 +659,14 @@ void CFXSequence::flush_pending_triggers() {
     // This allows each strip activation to start with a fresh 8KB stack frame.
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t.trigger, 0, [t]() {
+      // Add yield before trigger to prevent blocking during cfx_set
+      esphome::yield();
+      esphome::App.feed_wdt();
       t.trigger->trigger(t.value);
     });
 
+    // CRITICAL: Yield between triggers to prevent cascade when multiple cfx_set fire
+    esphome::yield();
     // Support WDT while scheduling many tasks in a burst
     esphome::App.feed_wdt();
   }
