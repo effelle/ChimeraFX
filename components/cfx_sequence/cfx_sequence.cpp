@@ -178,10 +178,11 @@ void CFXSequence::start() {
     return;
   this->is_starting_ = true;
 
-  // CFX-052: SPI strips in multi-light cascade cause instability.
-  // Only RMT strips are stable in parallel cascade. SPI strips
-  // should be used alone or with <=2 lights.
-  // NOTE: The SPI driver needs investigation before multi-light use.
+  // CFX-052: SPI strips are UNSUPPORTED in multi-light sequences.
+  // SPI driver (APA102/SK9822) causes crashes when used with more than
+  // 2 lights or when >2 triggers fire per sequence (25%/50%/75%).
+  // Root cause: SPI initialization/timing conflicts with ESPHome API.
+  // Limitation: Use SPI strips alone or with max 2 RMT lights only.
 
   // CFX-044b: Conflict-aware handover — only stop sequences that share a
   // target light with this one. Sequences on independent strips can run in
