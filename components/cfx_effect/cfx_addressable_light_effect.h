@@ -199,8 +199,9 @@ public:
   bool has_pending_completion() const { return this->act_ != nullptr && this->act_->completion_pending; }
   void execute_completion();
 
-  uint32_t get_update_interval() const override { return update_interval_; }
-  void set_update_interval(uint32_t ms) { this->update_interval_ = ms; }
+  void set_update_interval(uint32_t update_interval) {
+    this->update_interval_ = update_interval;
+  }
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
   void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
   void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }
