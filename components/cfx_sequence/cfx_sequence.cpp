@@ -276,12 +276,15 @@ void CFXSequence::start() {
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
     
+    // Schedule light start with explicit yield to prevent blocking
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       (this->id_ + "_start_" + std::to_string(i)).c_str(),
                                       stagger_delay, [this, l, i, total_lights]() {
-      // Feed WDT and yield to allow WiFi heartbeat
       esphome::App.feed_wdt();
+      // CRITICAL: Yield to prevent component timeout
       esphome::yield();
+      esphome::App.feed_wdt();
+      
       auto call = l->make_call();
       call.set_state(true);
       if (!this->effect_.empty()) {
@@ -303,6 +306,9 @@ void CFXSequence::start() {
         call.set_brightness(this->brightness_.value());
       }
       call.perform();
+
+      // CRITICAL: Yield after perform to prevent blocking
+      esphome::yield();
 
       // Bind sequence to the correct CFXAddressableLightEffect instance.
       light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
