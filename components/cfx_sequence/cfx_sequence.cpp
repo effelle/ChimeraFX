@@ -316,114 +316,75 @@ void CFXSequence::start() {
   }
 
   // Activate effect on all target lights
-  for (auto *l : this->lights_) {
-    auto call = l->make_call();
-    call.set_state(true);
-    if (!this->effect_.empty()) {
-      call.set_effect(this->effect_);
-    }
-    auto valid_mode = l->remote_values.get_color_mode();
-    if (valid_mode == light::ColorMode::UNKNOWN) {
-      if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
-        valid_mode = light::ColorMode::RGB_WHITE;
-      } else if (l->get_traits().supports_color_mode(light::ColorMode::RGB)) {
-        valid_mode = light::ColorMode::RGB;
+  // CFX-049: Staggered start to eliminate 68ms API lag.
+  // Each strip perform() cost ~15ms. We spread them across loop cycles.
+  uint32_t stagger_delay = 0;
+  size_t total_lights = this->lights_.size();
+  
+  for (size_t i = 0; i < total_lights; i++) {
+    light::LightState *l = this->lights_[i];
+    
+    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
+                                      this->id_ + "_start_" + std::to_string(i),
+                                      stagger_delay, [this, l, i, total_lights]() {
+      auto call = l->make_call();
+      call.set_state(true);
+      if (!this->effect_.empty()) {
+        call.set_effect(this->effect_);
       }
-    }
-    call.set_color_mode(valid_mode);
-    if (this->effect_.empty()) {
-      call.set_transition_length(0);
-    }
-    if (this->brightness_.has_value()) {
-      call.set_brightness(this->brightness_.value());
-    }
-    call.perform();
-  }
-
-  // Bind sequence to the correct CFXAddressableLightEffect instance.
-  // Strategy: get the active effect from EACH target light and match it
-  // in all_effects to ensure all sequence-controlled segments are mapped.
-  bool bound = false;
-  for (auto *l : this->lights_) {
-    light::LightEffect *active =
-        chimera_fx::LightStateProxy::get_active_effect(l);
-    if (active == nullptr)
-      continue;
-
-    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-      if (inst == active) {
-        ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
-        inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                  this->palette_, this->iterations_);
-        inst->set_strip_tag(this->strip_tag_);
-        if (this->mirror_.has_value())
-          inst->set_mirror_preset(this->mirror_.value());
-        if (this->intro_.has_value())
-          inst->set_intro_preset(this->intro_.value());
-        if (this->outro_.has_value())
-          inst->set_outro_preset(this->outro_.value());
-        if (this->inout_duration_.has_value())
-          inst->set_inout_duration_preset(this->inout_duration_.value());
-        bound = true;
-        // Do not break! Match other lights as well.
+      auto valid_mode = l->remote_values.get_color_mode();
+      if (valid_mode == light::ColorMode::UNKNOWN) {
+        if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+          valid_mode = light::ColorMode::RGB_WHITE;
+        } else if (l->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+          valid_mode = light::ColorMode::RGB;
+        }
       }
-    }
-  }
-
-  // CFX-015 FIX: Fallback path now uses LOGW and names both the targeted lights
-  // and the effect it actually binds to, so misconfigured sequences are
-  // immediately visible in the serial log.
-  if (!bound && !chimera_fx::CFXAddressableLightEffect::all_effects.empty()) {
-    // CFX-030: only fall back to master_fx if its activation context is live.
-    // all_effects[0] may have act_==nullptr when the light is off or removed;
-    // calling set_active_sequence on it would dereference null and brownout.
-    auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
-    if (master_fx->get_act() == nullptr) {
-      std::string target_names;
-      for (auto *l : this->lights_) {
-        if (!target_names.empty()) target_names += ", ";
-        target_names += l->get_name();
+      call.set_color_mode(valid_mode);
+      if (this->effect_.empty()) {
+        call.set_transition_length(0);
       }
-      ESP_LOGW(TAG,
-               "Sequence '%s': target light(s) [%s] have no running CFX effect "
-               "and fallback effect is also not running. Sequence aborted. "
-               "Ensure the light is on and a CFX effect is active before triggering.",
-               this->name_.c_str(), target_names.c_str());
-    } else {
-      // Build a comma-separated list of target light names for the warning
-      std::string target_names;
-      for (auto *l : this->lights_) {
-        if (!target_names.empty()) target_names += ", ";
-        target_names += l->get_name();
+      if (this->brightness_.has_value()) {
+        call.set_brightness(this->brightness_.value());
       }
-      ESP_LOGW(TAG,
-               "Sequence '%s': no active CFX effect found for target light(s) [%s]. "
-               "Falling back to first registered effect %p. "
-               "Check that the correct CFX effect is active.",
-               this->name_.c_str(), target_names.c_str(), master_fx);
-      master_fx->set_active_sequence(this, this->speed_, this->intensity_,
-                                     this->palette_, this->iterations_);
-      master_fx->set_strip_tag(this->strip_tag_);
-      if (this->mirror_.has_value())
-        master_fx->set_mirror_preset(this->mirror_.value());
-      if (this->intro_.has_value())
-        master_fx->set_intro_preset(this->intro_.value());
-      if (this->outro_.has_value())
-        master_fx->set_outro_preset(this->outro_.value());
-      if (this->inout_duration_.has_value())
-        master_fx->set_inout_duration_preset(this->inout_duration_.value());
-      bound = true;
-    }
-  }
+      call.perform();
 
-  if (!bound) {
-    ESP_LOGW(TAG, "  FAILED to bind: no running CFX effect found");
+      // Bind sequence to the correct CFXAddressableLightEffect instance.
+      light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
+      bool effect_bound = false;
+      if (active != nullptr) {
+        for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+          if (inst == active) {
+            ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
+            inst->set_active_sequence(this, this->speed_, this->intensity_,
+                                      this->palette_, this->iterations_);
+            inst->set_strip_tag(this->strip_tag_);
+            if (this->mirror_.has_value())
+              inst->set_mirror_preset(this->mirror_.value());
+            if (this->intro_.has_value())
+              inst->set_intro_preset(this->intro_.value());
+            if (this->outro_.has_value())
+              inst->set_outro_preset(this->outro_.value());
+            if (this->inout_duration_.has_value())
+              inst->set_inout_duration_preset(this->inout_duration_.value());
+            effect_bound = true;
+          }
+        }
+      }
+
+      // Final light fallback check
+      if (i == total_lights - 1) {
+        // Re-check bindings globally if it was the last staggered light
+        this->handle_fallback_binding_();
+      }
+    });
+    stagger_delay += 20; // 20ms gap per strip start
   }
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
   this->completion_reported_ = false;
-  this->duration_completion_pending_ = false; // CFX-044c
+  this->duration_completion_pending_ = false; 
   this->is_running_ = true;
   this->is_starting_ = false;
 
@@ -437,6 +398,39 @@ void CFXSequence::start() {
   this->duration_complete_fired_ = false;
 
   this->report_event_start();
+}
+
+void CFXSequence::handle_fallback_binding_() {
+  // Check if ANY light is currently bound to this sequence
+  bool any_bound = false;
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst->get_active_sequence() == this) {
+      any_bound = true;
+      break;
+    }
+  }
+
+  if (any_bound || chimera_fx::CFXAddressableLightEffect::all_effects.empty())
+    return;
+
+  // Fallback path: All staggered starts failed to bind local instances.
+  // Bind to the first registered effect (Master FX) as a safety net.
+  auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
+  if (master_fx != nullptr) {
+    ESP_LOGW(TAG, "Sequence '%s': no active local CFX effects found. Falling back to %p.",
+             this->name_.c_str(), master_fx);
+    master_fx->set_active_sequence(this, this->speed_, this->intensity_,
+                                   this->palette_, this->iterations_);
+    master_fx->set_strip_tag(this->strip_tag_);
+    if (this->mirror_.has_value())
+      master_fx->set_mirror_preset(this->mirror_.value());
+    if (this->intro_.has_value())
+      master_fx->set_intro_preset(this->intro_.value());
+    if (this->outro_.has_value())
+      master_fx->set_outro_preset(this->outro_.value());
+    if (this->inout_duration_.has_value())
+      master_fx->set_inout_duration_preset(this->inout_duration_.value());
+  }
 }
 
 void CFXSequence::stop() {
