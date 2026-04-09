@@ -137,12 +137,7 @@ void CFXSequenceSelect::loop() {
   for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
-      // Defer to next tick - prevents synchronous burst when multiple effects
-      // complete simultaneously. execute_completion() can call
-      // complete_and_notify() which does blocking call.perform().
-      // Use 5ms delay to ensure API heartbeat between completion and restore.
-      esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-        "fx_cmp", 5, [eff]() { eff->execute_completion(); });
+      eff->execute_completion();
       return;
     }
   }
@@ -182,6 +177,11 @@ void CFXSequence::start() {
   if (this->is_starting_ || this->is_running_)
     return;
   this->is_starting_ = true;
+
+  // CFX-052: SPI strips in multi-light cascade cause instability.
+  // Only RMT strips are stable in parallel cascade. SPI strips
+  // should be used alone or with <=2 lights.
+  // NOTE: The SPI driver needs investigation before multi-light use.
 
   // CFX-044b: Conflict-aware handover — only stop sequences that share a
   // target light with this one. Sequences on independent strips can run in
@@ -270,21 +270,16 @@ void CFXSequence::start() {
   // CFX-049: Staggered start to eliminate 68ms API lag.
   // Each strip perform() cost ~15ms. We spread them across loop cycles.
   uint32_t stagger_delay = 0;
-  constexpr uint32_t STAGGER_MS = 100;  // 100ms stagger
   size_t total_lights = this->lights_.size();
   
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
     
-    // Schedule light start with explicit yield to prevent blocking
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       (this->id_ + "_start_" + std::to_string(i)).c_str(),
                                       stagger_delay, [this, l, i, total_lights]() {
+      // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
-      // CRITICAL: Yield to prevent component timeout
-      esphome::yield();
-      esphome::App.feed_wdt();
-      
       auto call = l->make_call();
       call.set_state(true);
       if (!this->effect_.empty()) {
@@ -306,9 +301,6 @@ void CFXSequence::start() {
         call.set_brightness(this->brightness_.value());
       }
       call.perform();
-
-      // CRITICAL: Yield after perform to prevent blocking
-      esphome::yield();
 
       // Bind sequence to the correct CFXAddressableLightEffect instance.
       light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
@@ -339,7 +331,7 @@ void CFXSequence::start() {
         this->handle_fallback_binding_();
       }
     });
-    stagger_delay += STAGGER_MS; // Use consistent stagger delay
+    stagger_delay += 20; // 20ms gap per strip start
   }
 
   this->last_triggered_percentage_ = -1.0f;
@@ -354,9 +346,11 @@ void CFXSequence::start() {
     CFXSequenceSelect::instance->publish_state_silent(this->name_);
   }
 
-// Reset duration timer
+  // Reset duration timer
   this->duration_start_ms_ = millis();
   this->duration_complete_fired_ = false;
+
+  this->report_event_start();
 }
 
 void CFXSequence::handle_fallback_binding_() {
@@ -694,7 +688,8 @@ void CFXSequence::report_event_start() {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t, 0, [t]() { t->trigger(); });
   }
-  // Suppress cfx_start event to prevent API crash with multiple strips
+  // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
+  // unconditionally for all effects and all paths. Do NOT fire it here again.
 }
 
 void CFXSequence::report_event_begin() {
