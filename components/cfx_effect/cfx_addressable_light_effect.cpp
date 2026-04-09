@@ -688,17 +688,9 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // CFX-029: cfx_begin HA event fires only when a real intro is playing.
-  // Suppress in cascade - sequence fires it centrally.
-  // Bare effects (active_sequence == nullptr) still fire normally.
+  // Suppress all cfx_begin events to prevent API crash with 4+ strips
 #ifdef USE_CFX_EVENTS
-  if (this->effect_id_ != 185 && !act_->strip_tag.empty() &&
-      act_->active_intro_mode != INTRO_MODE_NONE) {
-    if (act_->active_sequence == nullptr) {
-      std::string evt = std::string("cfx_begin:") + act_->strip_tag;
-      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
-    }
-  }
+#endif
 #endif
 }
 
