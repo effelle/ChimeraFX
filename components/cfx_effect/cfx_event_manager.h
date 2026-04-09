@@ -108,9 +108,9 @@ public:
     // We assume the caller has valid App.api_server context if USE_API is defined.
 #endif
 
-    // Strict pacing: 1 event per loop normally, burst up to 2 if queue is filling up.
+    // Strict pacing: 1 event per loop to prevent overwhelming API.
     uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
-    uint8_t max_this_loop = (queue_count > 40) ? 2 : 1;
+    uint8_t max_this_loop = 1;  // Always 1 per loop - prevent burst
     
     uint8_t flushed_this_loop = 0;
     while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
