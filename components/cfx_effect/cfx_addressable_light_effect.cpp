@@ -447,152 +447,36 @@ void CFXAddressableLightEffect::start() {
 
   this->run_controls_();
 
-  CFXControl *c = act_->controller;
-
-  // 0. Autotune Resolution
-  bool autotune_enabled = true; // Default to true if not found (Constraint)
-  switch_::Switch *autotune_sw =
-      (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
-
-  if (this->has_autotune_preset_()) {
-    autotune_enabled = this->autotune_preset_val_();
-  } else if (autotune_sw != nullptr) {
-    autotune_enabled = autotune_sw->state;
-  }
-
-  act_->autotune_active = autotune_enabled;
-
-  if (autotune_enabled) {
-    this->apply_autotune_defaults_();
+  // CFX-048: initialization overhead cleanup.
+  // We sync the activation state flags once, then rely on run_controls_ for the rest.
+  {
+    CFXControl *c = act_->controller;
+    bool autotune_enabled = true;
+    switch_::Switch *autotune_sw = (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
+    if (this->has_autotune_preset_()) autotune_enabled = this->autotune_preset_val_();
+    else if (autotune_sw != nullptr) autotune_enabled = autotune_sw->state;
+    act_->autotune_active = autotune_enabled;
+    if (autotune_enabled) this->apply_autotune_defaults_();
   }
 
   // Pass force_white flag down to the underlying Native CFXRunners
-  // so they can shift RGB->W natively, avoiding ESPColorView double-gamma crush
-  bool fw_active = false;
-  if (c && c->get_force_white()) {
-    fw_active = c->get_force_white()->state;
-  }
-  if (!act_->segment_runners.empty()) {
-    for (auto *r : act_->segment_runners) {
-      r->force_white_active_ = fw_active;
-      r->setBakeBrightness(true); // Ensure re-synced
-    }
-  } else {
-    act_->runner->force_white_active_ = fw_active;
-    act_->runner->setBakeBrightness(
-        this->is_virtual_segment_); // Ensure re-synced
-  }
-  act_->active_force_white = fw_active;
-
-  // 1. Speed (YAML Preset Override Only)
-  number::Number *speed_num =
-      (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
-  if (speed_num != nullptr && this->has_speed_preset_()) {
-    float target = (float)this->speed_preset_val_();
-    if (speed_num->state != target) {
-      auto call = speed_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-  }
-
-  // 2. Intensity (YAML Preset Override Only)
-  number::Number *intensity_num =
-      (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
-  if (intensity_num != nullptr && this->has_intensity_preset_()) {
-    float target = (float)this->intensity_preset_val_();
-    if (intensity_num->state != target) {
-      auto call = intensity_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-  }
-
-  // 3. Palette (YAML Preset Override Only)
-  select::Select *palette_sel =
-      (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
-  if (palette_sel != nullptr && this->has_palette_preset_()) {
-    std::string target = this->get_palette_name_(this->palette_preset_val_());
-    if (palette_sel->current_option() != target) {
-      auto call = palette_sel->make_call();
-      call.set_option(target);
-      call.perform();
-    }
-  }
-
-  // 4. Mirror
-  switch_::Switch *mirror_sw =
-      (c && c->get_mirror()) ? c->get_mirror() : this->local_mirror_();
-  if (mirror_sw != nullptr && this->has_mirror_preset_()) {
-    bool target = this->mirror_preset_val_();
-    if (mirror_sw->state != target) {
-      if (target) {
-        mirror_sw->turn_on();
-      } else {
-        mirror_sw->turn_off();
+  {
+    CFXControl *c = act_->controller;
+    bool fw_active = (c && c->get_force_white()) ? c->get_force_white()->state : false;
+    if (!act_->segment_runners.empty()) {
+      for (auto *r : act_->segment_runners) {
+        r->force_white_active_ = fw_active;
+        r->setBakeBrightness(true);
       }
+    } else if (act_->runner) {
+      act_->runner->force_white_active_ = fw_active;
+      act_->runner->setBakeBrightness(this->is_virtual_segment_);
     }
-  }
-
-  // 5. Intro Effect
-  select::Select *intro_sel = (c && c->get_intro_effect())
-                                  ? c->get_intro_effect()
-                                  : this->local_intro_effect_();
-  if (!act_->initial_preset_applied && intro_sel != nullptr &&
-      this->has_intro_preset_()) {
-    // Only apply if still at "None" factory default — preserve user choices
-    std::string target = this->get_intro_name_(this->intro_preset_val_());
-    if (intro_sel->current_option() != target) {
-      auto call = intro_sel->make_call();
-      call.set_option(target);
-      call.perform();
-    }
-  }
-
-  // 6. Intro Duration
-  number::Number *intro_dur_num = (c && c->get_intro_duration())
-                                      ? c->get_intro_duration()
-                                      : this->local_inout_duration_();
-  if (!act_->initial_preset_applied && intro_dur_num != nullptr &&
-      this->has_inout_duration_preset_()) {
-    float target = this->inout_duration_preset_val_();
-    if (intro_dur_num->state != target) {
-      auto call = intro_dur_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
-  }
-
-  // 9. Outro Effect
-  select::Select *outro_sel = (c && c->get_outro_effect())
-                                  ? c->get_outro_effect()
-                                  : this->local_outro_effect_();
-  if (!act_->initial_preset_applied && outro_sel != nullptr &&
-      this->has_outro_preset_()) {
-    // Only apply if still at "None" factory default — preserve user choices
-    std::string target = this->get_outro_name_(this->outro_preset_val_());
-    if (outro_sel->current_option() != target) {
-      auto call = outro_sel->make_call();
-      call.set_option(target);
-      call.perform();
-    }
-  }
-
-  // 10. Outro Duration
-  number::Number *outro_dur_num = (c && c->get_outro_duration())
-                                      ? c->get_outro_duration()
-                                      : this->local_inout_duration_();
-  if (!act_->initial_preset_applied && outro_dur_num != nullptr &&
-      this->has_inout_duration_preset_()) {
-    float target = this->inout_duration_preset_val_();
-    if (outro_dur_num->state != target) {
-      auto call = outro_dur_num->make_call();
-      call.set_value(target);
-      call.perform();
-    }
+    act_->active_force_white = fw_active;
   }
 
   act_->initial_preset_applied = true;
+  esphome::App.feed_wdt();
 
   // Visualizer: Notify metadata (only for non-virtual segments —
   // get_output() returns CFXVirtualSegmentLight for virtual segments,
@@ -1195,14 +1079,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // This prevents "strip bleeding" in multi-strip configurations.
   chimera_fx::InstanceGuard apply_guard(act_->runner);
 
-  // Use update_interval_ (default 24ms = 42 FPS, set via YAML or __init__.py)
-  // This provides CPU headroom while maintaining smooth animation
+  // CFX-048: Global Frame Budget Guard
+  // Protect the 30ms API heartbeat window. If other strips or components have 
+  // already consumed the loop budget, defer this frame to keep the connection alive.
+  static uint32_t last_frame_ms = 0;
+  static uint32_t current_frame_start = 0;
+  uint32_t now_ms = esphome::millis();
+  if (now_ms != last_frame_ms) {
+    current_frame_start = now_ms;
+    last_frame_ms = now_ms;
+  }
+  if (now_ms - current_frame_start > 22) {
+    ESP_LOGV("chimera_fx", "Frame Budget Exceeded (%ums), skipping render for '%s'", 
+             now_ms - current_frame_start, this->get_name().c_str());
+    return; 
+  }
 
   const uint64_t now = millis_64();
   if (now - act_->last_run < this->update_interval_) {
-    return; // Not time for update yet (apply_guard auto-restores instance)
+    return;
   }
   act_->last_run = now;
+  esphome::App.feed_wdt();
 
   // --- Ensure Runner(s) ---
   if (act_->runner == nullptr) {

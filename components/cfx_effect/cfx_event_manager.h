@@ -67,14 +67,20 @@ public:
   // Drain up to 3 queued events per ESPHome loop() tick. (CFX-047)
   // We burst events when the queue is full to prevent dropping, 
   // but stay conservative to avoid saturating the API/WiFi.
+  // Drain queued events per ESPHome loop() tick. (CFX-048)
+  // Strict pacing to protect the 30ms API heartbeat window. 
   void flush_pending() {
     static uint32_t last_flush_ms = 0;
     uint32_t now = esphome::millis();
-    if (now == last_flush_ms && this->deferred_read_ == this->deferred_write_)
+    if (this->deferred_read_ == this->deferred_write_)
       return;
 
+    // Strict pacing: 1 event per loop normally, burst up to 2 if queue is filling up.
+    uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
+    uint8_t max_this_loop = (queue_count > 20) ? 2 : 1;
+    
     uint8_t flushed_this_loop = 0;
-    while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < 3) {
+    while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
       last_flush_ms = now;
       const std::string evt = this->deferred_queue_[this->deferred_read_];
       this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
