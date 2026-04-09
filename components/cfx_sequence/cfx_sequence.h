@@ -267,6 +267,7 @@ public:
   bool is_starting() const { return this->is_starting_; }
   bool is_running() const { return this->is_running_; }
   bool has_pending_triggers() const { return !this->pending_reach_triggers_.empty(); }
+  bool has_pending_duration_completion() const { return this->duration_completion_pending_; }
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
     for (auto *l : this->lights_) {
