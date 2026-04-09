@@ -331,7 +331,7 @@ void CFXSequence::start() {
         this->handle_fallback_binding_();
       }
     });
-    stagger_delay += 20; // 20ms gap per strip start
+    stagger_delay += 50; // 50ms gap per strip start (CFX-052: longer for SPI compatibility)
   }
 
   this->last_triggered_percentage_ = -1.0f;
