@@ -270,7 +270,7 @@ void CFXSequence::start() {
   // CFX-049: Staggered start to eliminate 68ms API lag.
   // Each strip perform() cost ~15ms. We spread them across loop cycles.
   uint32_t stagger_delay = 0;
-  constexpr uint32_t STAGGER_MS = 100;  // 100ms per strip startup
+  constexpr uint32_t STAGGER_MS = 25;  // 25ms stagger
   size_t total_lights = this->lights_.size();
   
   for (size_t i = 0; i < total_lights; i++) {
