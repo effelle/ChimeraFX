@@ -171,7 +171,17 @@ void CFXAddressableLightEffect::start() {
   // reuse the existing object after resetting it cleanly.
   if (this->act_ == nullptr) {
     this->act_ = new CFXActivation();
+    if (this->act_ == nullptr) {
+      ESP_LOGE("chimera_fx", "FATAL: Failed to allocate CFXActivation! System near OOM.");
+      return;
+    }
   }
+
+  // CFX-043: Monitor heap health during start()
+  ESP_LOGD("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
+           this->get_name().c_str(),
+           (uint32_t)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+           (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
   // Initialize/Reset tracking flags cleanly on every start
   this->reset_milestones_();
   this->act_->intro_suppresses_milestones = false;
@@ -337,25 +347,38 @@ void CFXAddressableLightEffect::start() {
         seg_defs = cfx_out->get_segment_defs();
       }
 
-      if (!seg_defs.empty() && !act_->segments_initialized) {
-        for (const auto &def : seg_defs) {
-          auto *r = new CFXRunner(it);
-          r->setBakeBrightness(true); // Multi-segment mode: bake in engine
-          r->_segment.start = def.start;
-          r->_segment.stop = def.stop;
-          r->_segment.mirror = def.mirror;
-          r->set_segment_id(def.id);
-          r->setMode(this->effect_id_);
-          r->diagnostics.set_target_interval_ms(this->update_interval_);
-          act_->segment_runners.push_back(r);
-        }
-        act_->runner = act_->segment_runners[0];
-        act_->segments_initialized = true;
-        ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
-                 act_->segment_runners.size(), this->get_name());
-      } else {
+        if (!seg_defs.empty() && !act_->segments_initialized) {
+          for (const auto &def : seg_defs) {
+            auto *r = new CFXRunner(it);
+            if (r == nullptr) {
+               ESP_LOGE("chimera_fx", "CFX-043 FATAL: Segment runner allocation failed!");
+               break; 
+            }
+            r->setBakeBrightness(true); // Multi-segment mode: bake in engine
+            r->_segment.start = def.start;
+            r->_segment.stop = def.stop;
+            r->_segment.mirror = def.mirror;
+            r->set_segment_id(def.id);
+            r->setMode(this->effect_id_);
+            r->diagnostics.set_target_interval_ms(this->update_interval_);
+            act_->segment_runners.push_back(r);
+
+            // Feed WDT during potentially heavy allocation loop
+            esphome::App.feed_wdt();
+          }
+          if (!act_->segment_runners.empty()) {
+            act_->runner = act_->segment_runners[0];
+            act_->segments_initialized = true;
+          }
+          ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
+                   act_->segment_runners.size(), this->get_name());
+        } else {
 #endif
-        act_->runner = new CFXRunner(it);
+          act_->runner = new CFXRunner(it);
+          if (act_->runner == nullptr) {
+             ESP_LOGE("chimera_fx", "CFX-043 FATAL: Single runner allocation failed!");
+             return; 
+          }
         // If this is a virtual segment entity, it must bake brightness.
         // If it's a standard non-segmented master strip, let the hardware gate
         // handle it.
@@ -1340,6 +1363,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           }
         }
 #endif
+        // CFX-043: Feed WDT after each heavy multi-segment service()
+        esphome::App.feed_wdt();
       }
     } else if (act_->runner) {
       chimera_fx::InstanceGuard svc_guard(
@@ -1502,6 +1527,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->intro_snapshot.resize(it.size());
         for (int i = 0; i < it.size(); i++) {
           act_->intro_snapshot[i] = it[i].get();
+          if ((i & 0x1F) == 0) esphome::App.feed_wdt(); // Every 32 pixels
         }
         act_->state = TRANSITION_RUNNING; // Use RUNNING to signify Active Blend
         act_->transition_start_ms = millis_64();
@@ -1573,6 +1599,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           it[i] = Color(r, g, b, w);
         }
       }
+      if ((i & 0x1F) == 0) esphome::App.feed_wdt(); // Every 32 pixels
     }
 
     // End transition when fully complete
@@ -1649,6 +1676,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             it[p] = Color::BLACK;
           }
         }
+        // CFX-043: Feed WDT while scrubbing large strips with many segments
+        esphome::App.feed_wdt();
       }
     }
   }
@@ -1662,15 +1691,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   it.schedule_show();
   chimera_fx::instance = nullptr;
-
-#ifdef USE_CFX_SEQUENCE
-  // CFX-042: Flush deferred sequence triggers with a flat stack.
-  // Executing them here (after all effect math and DMA scheduling is complete)
-  // prevents the nested trigger->start()->new CFXRunner() stack overflow panic.
-  if (act_->active_sequence != nullptr) {
-    act_->active_sequence->flush_pending_triggers();
-  }
-#endif
 }
 
 uint8_t CFXAddressableLightEffect::get_pal_idx(select::Select *s) {

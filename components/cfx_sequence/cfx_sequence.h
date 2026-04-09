@@ -307,6 +307,9 @@ public:
     CFXEventManager::get().flush_pending();
     for (auto *seq : CFXSequence::instances) {
       seq->check_duration();
+      // CFX-043: Deep deferral. Fire positional triggers here, outside the
+      // light's apply() task, ensuring a flat stack and WDT safety.
+      seq->flush_pending_triggers();
     }
   }
   void control(const std::string &value) override;
