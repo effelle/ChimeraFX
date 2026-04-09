@@ -1450,12 +1450,26 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             milestone_pct = ((float)lp / (float)slen) * 100.0f;
             if (milestone_pct > 100.0f)
               milestone_pct = 100.0f;
-            this->check_milestones_(milestone_pct);
+#ifdef USE_CFX_SEQUENCE
+            if (act_->active_sequence != nullptr) {
+               act_->active_sequence->check_positional_triggers((int32_t)(milestone_pct * 10.0f), 1001);
+            } else
+#endif
+            {
+               this->check_milestones_(milestone_pct);
+            }
           }
         }
       } else {
         milestone_pct = _prog * 100.0f;
-        this->check_milestones_(milestone_pct);
+#ifdef USE_CFX_SEQUENCE
+        if (act_->active_sequence != nullptr) {
+           act_->active_sequence->check_positional_triggers((int32_t)(milestone_pct * 10.0f), 1001);
+        } else
+#endif
+        {
+           this->check_milestones_(milestone_pct);
+        }
       }
     }
 
@@ -6055,21 +6069,11 @@ void CFXAddressableLightEffect::check_positional_triggers(
   {
 #ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence != nullptr) {
-      static uint32_t last_rtg1 = 0;
-      if (millis() - last_rtg1 > 1000) {
-        ESP_LOGD("cfx_effect", "Routing triggers to SEQUENCE %p", act_->active_sequence);
-        last_rtg1 = millis();
-      }
       act_->active_sequence->check_positional_triggers(current_pixel,
                                                        total_pixels);
     } else
 #endif
     {
-      static uint32_t last_rtg2 = 0;
-      if (millis() - last_rtg2 > 1000) {
-        ESP_LOGD("cfx_effect", "Routing triggers to NATIVE (active_sequence is NULL)");
-        last_rtg2 = millis();
-      }
       float current_percentage =
           (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1)
                              : 1.0f;

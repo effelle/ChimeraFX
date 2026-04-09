@@ -619,16 +619,6 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
     this->last_triggered_percentage_ = -1.0f;
   }
 
-  static uint32_t last_dbg_run = 0;
-  if (millis() - last_dbg_run > 500) {
-    ESP_LOGD(TAG, "check_pos_triggers: %s, on_reach_size: %u, cur_pct: %.3f, last_pct: %.3f", 
-             this->id_.c_str(), this->on_reach_triggers_.size(), current_percentage, this->last_triggered_percentage_);
-    for (auto *t : this->on_reach_triggers_) {
-      ESP_LOGD(TAG, "  -- reach trigger target is: %.3f", t->get_target_position());
-    }
-    last_dbg_run = millis();
-  }
-
   // Evaluate on_reach (Percentage based)
   for (auto *t : this->on_reach_triggers_) {
     float target = t->get_target_position();
