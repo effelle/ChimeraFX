@@ -258,15 +258,8 @@ void CFXAddressableLightEffect::start() {
     this->trigger_on_start();
 
 #ifdef USE_CFX_EVENTS
-    // Only fire cfx_start for PRIMARY light in multi-light sequence.
-    // Secondary lights (bound triggers) don't fire their own events.
-    if (!act_->strip_tag.empty() && act_->active_sequence != nullptr) {
-      if (act_->active_sequence->light_count() <= 1 ||
-          act_->active_sequence->is_light_primary(this->get_light_state())) {
-        std::string evt = std::string("cfx_start:") + act_->strip_tag;
-        chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
-      }
-    }
+    // Suppress cfx_start in cascade - sequence fires it centrally.
+    // This prevents event burst when multiple lights start in sequence.
 #endif
   }
 
@@ -696,16 +689,12 @@ void CFXAddressableLightEffect::start() {
   }
 
   // CFX-029: cfx_begin HA event fires only when a real intro is playing.
-  // Without an intro, cfx_begin and cfx_start would fire at the same
-  // millisecond and carry identical information, which is confusing.
-  // Bare effects (active_sequence == nullptr) follow the same rule.
+  // Suppress in cascade - sequence fires it centrally.
+  // Bare effects (active_sequence == nullptr) still fire normally.
 #ifdef USE_CFX_EVENTS
   if (this->effect_id_ != 185 && !act_->strip_tag.empty() &&
       act_->active_intro_mode != INTRO_MODE_NONE) {
-    // Only fire cfx_begin for PRIMARY light in multi-light sequence.
-    if (act_->active_sequence == nullptr ||
-        act_->active_sequence->light_count() <= 1 ||
-        act_->active_sequence->is_light_primary(this->get_light_state())) {
+    if (act_->active_sequence == nullptr) {
       std::string evt = std::string("cfx_begin:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
