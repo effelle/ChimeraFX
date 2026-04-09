@@ -141,7 +141,7 @@ void CFXSequenceSelect::loop() {
       // complete simultaneously. execute_completion() can call
       // complete_and_notify() which does blocking call.perform().
       esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-        0, [eff]() { eff->execute_completion(); });
+        "fx_cmp", 0, [eff]() { eff->execute_completion(); });
       return;
     }
   }
