@@ -647,28 +647,29 @@ void CFXSequence::flush_pending_triggers() {
     return;
 
   // Make a local copy then clear the queue BEFORE firing.
-  // Why? If a trigger executes a cfx_set action that starts a new effect sequence,
-  // that sequence might synchronously call check_positional_triggers as part of
-  // its start() routine, mutating the queue mid-iteration.
   std::vector<PendingTrigger> to_fire = this->pending_reach_triggers_;
   this->pending_reach_triggers_.clear();
 
-  for (const auto &t : to_fire) {
-    // CFX-045: Scalable Async Handover. Instead of executing the YAML trigger 
-    // synchronously on the worker's stack, we schedule it for the next loop.
-    // This allows each strip activation to start with a fresh 8KB stack frame.
+  // CFX-052: Limit to max 2 triggers per loop to prevent SPI overload.
+  // More triggers queue and fire on subsequent ticks.
+  size_t max_fire = std::min(to_fire.size(), (size_t)2);
+  
+  for (size_t idx = 0; idx < max_fire; idx++) {
+    const auto &t = to_fire[idx];
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t.trigger, 0, [t]() {
-      // Add yield before trigger to prevent blocking during cfx_set
       esphome::yield();
       esphome::App.feed_wdt();
       t.trigger->trigger(t.value);
     });
 
-    // CRITICAL: Yield between triggers to prevent cascade when multiple cfx_set fire
     esphome::yield();
-    // Support WDT while scheduling many tasks in a burst
     esphome::App.feed_wdt();
+  }
+  
+  // Re-queue remaining triggers for next tick
+  for (size_t idx = max_fire; idx < to_fire.size(); idx++) {
+    this->pending_reach_triggers_.push_back(to_fire[idx]);
   }
 }
 
