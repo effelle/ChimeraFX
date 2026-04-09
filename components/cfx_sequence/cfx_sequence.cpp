@@ -15,6 +15,7 @@
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include "esphome/core/application.h"
 #include <cstring>
 
 namespace esphome {
