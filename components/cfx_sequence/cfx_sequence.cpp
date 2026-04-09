@@ -605,10 +605,8 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
-  static bool logged_triggers = false;
-  if (!logged_triggers) {
-    ESP_LOGD("cfx_seq_dbg", "SEQ [%s] on_reach triggers size = %u", this->id_.c_str(), this->on_reach_triggers_.size());
-    logged_triggers = true;
+  if (this->last_triggered_percentage_ == -1.0f) {
+    ESP_LOGD("cfx_seq_dbg", "SEQ [%s] STARTING SWEEP. on_reach triggers size = %u", this->id_.c_str(), this->on_reach_triggers_.size());
   }
 
   // Reset stale tracking state at the start of a new forward pass.
@@ -666,6 +664,11 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
       ESP_LOGD(TAG, "Sequence '%s': on_reach %.0f%% triggered",
                this->id_.c_str(), target * 100.0f);
       t->trigger(current_percentage);
+    } else {
+      if (current_percentage >= target - 0.05f && current_percentage <= target + 0.05f) {
+         // Debug math locally around the crossing threshold
+         ESP_LOGD("cfx_seq_dbg", "Math skip - cur:%.3f, last:%.3f, target:%.3f", current_percentage, this->last_triggered_percentage_, target);
+      }
     }
   }
 
