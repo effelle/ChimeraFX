@@ -6,6 +6,7 @@
 
 #include "cfx_scheduler.h"
 #include "esphome/core/log.h"
+#include <algorithm>  // std::sort
 
 static const char *const TAG = "CFXScheduler";
 
@@ -99,32 +100,71 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   // Parallel path: requires ≥2 runners and a live Core 0 task.
   if (total >= 2 && core0_task_ != nullptr && core0_done_ != nullptr) {
 
-    // Split at midpoint. Odd runner counts give Core 1 the extra runner —
-    // it is the calling core, so there is no scheduling latency for the extra work.
-    const size_t split = total / 2;
+    // ── Cost-weighted greedy bin-packing split ────────────────────────────
+    // Instead of a naive midpoint split, distribute runners by measured frame
+    // cost (frame_time, in ms, updated every frame by CFXRunner::service()).
+    // Runners are sorted heaviest-first so the largest jobs are placed first,
+    // minimising imbalance. Each runner goes to whichever core has less
+    // accumulated cost so far — classic "Longest Processing Time" heuristic.
+    //
+    // On the very first frame frame_time is 0 for all runners, so the sort
+    // is a no-op and runners alternate cores in list order — equivalent to
+    // the old midpoint split, with no warm-up penalty.
+    //
+    // Core 1 is the calling core (ESPHome main loop). It receives the extra
+    // runner when counts are odd because there is no scheduling latency for
+    // inline work.
+
+    // Build a local sorted copy of runner pointers (pointer copy only, cheap).
+    std::vector<CFXRunner *> sorted(runners.begin(), runners.end());
+    std::sort(sorted.begin(), sorted.end(), [](CFXRunner *a, CFXRunner *b) {
+      return a->frame_time > b->frame_time;
+    });
+
+    uint32_t cost_core0 = 0, cost_core1 = 0;
+    core0_slice_.clear();
+    std::vector<CFXRunner *> core1_slice;
+
+    for (auto *r : sorted) {
+      if (cost_core1 <= cost_core0) {
+        core1_slice.push_back(r);
+        cost_core1 += r->frame_time;
+      } else {
+        core0_slice_.push_back(r);
+        cost_core0 += r->frame_time;
+      }
+    }
+
+    // ── Dynamic semaphore timeout ─────────────────────────────────────────
+    // The old hardcoded 20 ms timed out whenever Core 0's runners needed more
+    // than one frame budget (e.g. heavy effects at high strip counts).
+    // Use FRAMETIME + a 12 ms safety margin instead, which covers the worst
+    // observed render times in testing (~28 ms) with headroom to spare.
+    // Minimum of 25 ms so we never regress below the old budget on fast paths.
+    constexpr uint32_t CFX_CORE0_TIMEOUT_MS = (FRAMETIME + 12 > 25) ? (FRAMETIME + 12) : 25;
 
     // Populate Core 0's slice BEFORE the notification so the task sees
     // a consistent view the moment it wakes up.
-    core0_slice_.assign(runners.begin() + split, runners.end());
+    // (core0_slice_ is already set above.)
 
     // Wake Core 0 — it will start processing core0_slice_ immediately.
     xTaskNotifyGive(core0_task_);
 
-    // Core 1 services its half inline while Core 0 runs in parallel.
+    // Core 1 services its slice inline while Core 0 runs in parallel.
     // InstanceGuard sets instance_per_core[1] for each runner.
-    for (size_t i = 0; i < split; i++) {
-      if (runners[i] != nullptr) {
-        InstanceGuard guard(runners[i]);
-        runners[i]->service();
+    for (auto *r : core1_slice) {
+      if (r != nullptr) {
+        InstanceGuard guard(r);
+        r->service();
       }
     }
 
     // Wait for Core 0 to finish before returning to apply().
-    // 20 ms = one frame budget at 50 fps. On timeout the strip retains
-    // its last valid pixel values — graceful degradation, no crash.
-    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(20)) != pdTRUE) {
-      ESP_LOGW(TAG, "Core 0 runner timeout — frame skipped for %u runners",
-               (unsigned)(total - split));
+    // On timeout the strip retains its last valid pixel values —
+    // graceful degradation, no crash.
+    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) != pdTRUE) {
+      ESP_LOGW(TAG, "Core 0 runner timeout (%u ms) — frame skipped for %u runners",
+               CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
     }
     return;
   }

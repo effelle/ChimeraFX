@@ -176,6 +176,30 @@ void CFXAddressableLightEffect::start() {
   // Initialise Core 0 dispatch task on first effect start (idempotent).
   CFXScheduler::get().setup();
 
+  // ── CFX-044: Heap floor guard ─────────────────────────────────────────────
+  // Refuse to start a new effect if free heap is below the safety floor.
+  // The ESP32 radio stack (WiFi / BT / LwIP) needs ~60 kB of contiguous heap
+  // to operate. We keep a 15 kB margin above that floor (75 kB total) to
+  // absorb small runtime allocations and segment data without risking a crash.
+  //
+  // When the guard fires the strip holds its last valid pixel state — the
+  // effect simply does not start. A LOGW is emitted so the condition is
+  // visible in the ESPHome log without stopping the device.
+  //
+  // The guard is skipped when act_ is already allocated (rapid start/stop
+  // cycle reusing the existing object) because no new heap is consumed.
+  constexpr uint32_t CFX_HEAP_FLOOR = 75000U; // 75 kB — 15 kB above radio stack minimum
+  if (this->act_ == nullptr) {
+    uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    if (free_heap < CFX_HEAP_FLOOR) {
+      ESP_LOGW("cfx_heap",
+               "[%s] Heap too low to start effect (%u B free, %u B floor) — "
+               "strip holds last state. Free RAM before adding more lights/segments.",
+               this->get_name().c_str(), free_heap, CFX_HEAP_FLOOR);
+      return;
+    }
+  }
+
   // Allocate per-activation state. If already allocated (rapid start/stop)
   // reuse the existing object after resetting it cleanly.
   if (this->act_ == nullptr) {
