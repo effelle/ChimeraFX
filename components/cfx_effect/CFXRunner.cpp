@@ -28,7 +28,7 @@ uint32_t get_millis() {
 namespace esphome {
 namespace chimera_fx {
 
-CFXRunner *instance = nullptr;
+CFXRunner *instance_per_core[2] = {nullptr, nullptr};
 
 // Forward declarations
 uint16_t mode_running_lights(void);

@@ -406,23 +406,36 @@ private:
   uint32_t _last_frame = 0;
 };
 
-extern CFXRunner *instance;
+// Per-core instance pointer array.
+// index 0 → Core 0 (or the only core on unicore ESP32 variants: C3, S2, H2)
+// index 1 → Core 1 (ESPHome main loop on dual-core ESP32/S3)
+extern CFXRunner *instance_per_core[2];
 
-// RAII guard to set/reset global instance pointer
+// Per-core instance macro — all existing `instance->` references in the
+// ~6,900-line effect body compile unchanged and automatically resolve to
+// the correct runner for whichever core is executing them.
+#define instance (instance_per_core[xPortGetCoreID()])
+
+  // RAII guard — sets the per-core slot on construction, restores the
+  // previous value on destruction. Thread-safe: Core 0 and Core 1 each
+  // write their own independent slot, so simultaneous service() calls
+  // on different cores cannot corrupt each other's pointer.
 class InstanceGuard {
-  CFXRunner* prev_;
+  uint8_t core_id_;
+  CFXRunner *prev_;
 public:
-  explicit InstanceGuard(CFXRunner* runner) {
-    prev_ = instance;
-    instance = runner;
+  explicit InstanceGuard(CFXRunner *runner) {
+    core_id_ = (uint8_t)xPortGetCoreID();
+    prev_ = instance_per_core[core_id_];
+    instance_per_core[core_id_] = runner;
   }
   ~InstanceGuard() {
-    instance = prev_;
+    instance_per_core[core_id_] = prev_;
   }
 
   // Non-copyable
-  InstanceGuard(const InstanceGuard&) = delete;
-  InstanceGuard& operator=(const InstanceGuard&) = delete;
+  InstanceGuard(const InstanceGuard &) = delete;
+  InstanceGuard &operator=(const InstanceGuard &) = delete;
 };
 
 } // namespace chimera_fx

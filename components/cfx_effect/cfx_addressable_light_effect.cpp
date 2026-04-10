@@ -18,6 +18,7 @@
 #include <span>
 
 #include "cfx_event_manager.h"
+#include "cfx_scheduler.h"
 #ifdef USE_CFX_SEQUENCE
 #include "../cfx_sequence/cfx_sequence.h"
 #endif
@@ -166,6 +167,9 @@ std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
 
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
+
+  // Initialise Core 0 dispatch task on first effect start (idempotent).
+  CFXScheduler::get().setup();
 
   // Allocate per-activation state. If already allocated (rapid start/stop)
   // reuse the existing object after resetting it cleanly.
@@ -1209,12 +1213,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!skip_service) {
     if (!act_->segment_runners.empty()) {
+      // ── Set per-runner brightness BEFORE dispatch ────────────────────────
+      // global_brightness_ must be written on Core 1 before service_runners()
+      // is called: the scheduler may hand runners to Core 0 immediately after
+      // xTaskNotifyGive(). Writing brightness inside the Core 0 task would race.
       auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(
           this->get_light_state()->get_output());
       for (size_t i = 0; i < act_->segment_runners.size(); i++) {
         auto *r = act_->segment_runners[i];
-        chimera_fx::InstanceGuard seg_guard(r); // CFX-004: scoped per-iteration
-
         float seg_bri = bri;
         if (cfx_out != nullptr &&
             i < cfx_out->get_segment_light_states().size()) {
@@ -1227,25 +1233,31 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             }
           }
         }
-
         r->global_brightness_ = seg_bri;
-        r->service();
-#ifdef USE_CFX_SEQUENCE
-        // CFX-044: Stack bypass. Do not perform heavy stop() synchronously in apply().
-        if (r->effect_complete_) {
-          act_->completion_pending = true;
-        }
-#endif
-        // CFX-043: Feed WDT after each heavy multi-segment service()
-        esphome::App.feed_wdt();
       }
-    } else if (act_->runner) {
-      chimera_fx::InstanceGuard svc_guard(
-          act_->runner); // CFX-004: scoped single-runner
-      act_->runner->global_brightness_ = bri;
-      act_->runner->service();
+
+      // ── Parallel dispatch — Core 0 handles second half on dual-core chips ─
+      // Falls through to sequential loop on single-core or when task not live.
+      CFXScheduler::get().service_runners(act_->segment_runners);
+
+      // ── Post-dispatch: completion flag + WDT ─────────────────────────────
+      // Semaphore barrier in service_runners() guarantees all runners are done.
 #ifdef USE_CFX_SEQUENCE
-      // CFX-044: Stack bypass. Do not perform heavy stop() synchronously in apply().
+      for (auto *r : act_->segment_runners) {
+        if (r->effect_complete_) {
+          // CFX-044: Stack bypass. Do not call stop() synchronously in apply().
+          act_->completion_pending = true;
+          break;
+        }
+      }
+#endif
+      // CFX-043: Feed WDT once after all multi-segment service() calls finish.
+      esphome::App.feed_wdt();
+    } else if (act_->runner) {
+      act_->runner->global_brightness_ = bri;
+      CFXScheduler::get().service_runner(act_->runner);
+#ifdef USE_CFX_SEQUENCE
+      // CFX-044: Stack bypass. Do not call stop() synchronously in apply().
       if (act_->runner->effect_complete_) {
         act_->completion_pending = true;
       }
