@@ -340,6 +340,8 @@ void CFXAddressableLightEffect::start() {
   act_->mono_dirty      = false;
   act_->mono_last_color = 0xFFFFFFFF;
   act_->mono_last_speed = 0xFF;
+  act_->idle_frame_count    = 0;
+  act_->idle_period_start_ms = 0;
 
   // Reset palette sync flag so we enforce the effect's default on the first
   // frame
@@ -1167,6 +1169,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   act_->last_run = now;
   esphome::App.feed_wdt();
 
+  // CFX-047: Increment apply()-level frame counter for idle FPS measurement.
+  // Counts every frame that reaches DMA regardless of runner suppression.
+  if (act_->mono_idle) {
+    if (act_->idle_period_start_ms == 0)
+      act_->idle_period_start_ms = (uint32_t)(now & 0xFFFFFFFF);
+    act_->idle_frame_count++;
+  }
+
   // --- Ensure Runner(s) ---
   if (act_->runner == nullptr) {
     ESP_LOGE(
@@ -1327,11 +1337,26 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       const char *idle_name = act_->cached_runner_name.empty()
                                   ? nullptr
                                   : act_->cached_runner_name.c_str();
+      bool did_log = false;
       if (!act_->segment_runners.empty()) {
-        for (auto *r : act_->segment_runners)
-          r->diagnostics.idle_log(idle_name);
+        for (auto *r : act_->segment_runners) {
+          r->diagnostics.idle_log(idle_name,
+                                  act_->idle_frame_count,
+                                  act_->idle_period_start_ms);
+          if (r->diagnostics.last_log_time > act_->idle_period_start_ms)
+            did_log = true;
+        }
       } else if (act_->runner) {
-        act_->runner->diagnostics.idle_log(idle_name);
+        act_->runner->diagnostics.idle_log(idle_name,
+                                           act_->idle_frame_count,
+                                           act_->idle_period_start_ms);
+        if (act_->runner->diagnostics.last_log_time > act_->idle_period_start_ms)
+          did_log = true;
+      }
+      // Reset counters after logging so next period starts fresh.
+      if (did_log) {
+        act_->idle_frame_count     = 0;
+        act_->idle_period_start_ms = 0;
       }
       skip_service = true;
     }
@@ -1523,15 +1548,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->mono_dirty = true;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
-
-        // Snapshot the last active frame stats so idle_log() can report
-        // meaningful FPS/jitter/heap while the runner is suppressed.
-        if (!act_->segment_runners.empty()) {
-          for (auto *r : act_->segment_runners)
-            r->diagnostics.capture_idle_stats();
-        } else if (act_->runner) {
-          act_->runner->diagnostics.capture_idle_stats();
-        }
+        act_->idle_frame_count    = 0;
+        act_->idle_period_start_ms = 0;
       }
 
       if (trans_dur > 0.0f) {

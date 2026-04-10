@@ -481,27 +481,10 @@ struct FrameDiagnostics {
     last_log_time = cfx_millis();
   }
 
-  // Called from apply() when the runner is idle (mono_idle suppression active).
-  // Reports the last known FPS/jitter/heap on the normal LOG_INTERVAL_MS cadence
-  // with an [IDLE] tag so the log stays populated without calling service().
-  // last_idle_fps/jitter are captured once when mono_idle is first set and
-  // held until the runner wakes — they represent the settled steady-state cost.
-  float idle_fps{0.0f};
-  float idle_jitter_pct{0.0f};
-  float idle_frame_ms{0.0f};
-
-  void capture_idle_stats() {
-    if (frame_count == 0) return;
-    idle_fps       = (1000000.0f * frame_count) / (float)total_frame_us;
-    idle_frame_ms  = (float)(total_frame_us / frame_count) / 1000.0f;
-    idle_jitter_pct = (100.0f * jitter_count) / (float)frame_count;
-  }
-
-  void idle_log(const char *effect_name) {
+  void idle_log(const char *effect_name, uint32_t frame_count_in, uint32_t period_start_ms) {
     if (!enabled) return;
     uint32_t now_ms = cfx_millis();
     if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
-    last_log_time = now_ms;
 
     uint32_t free_heap = 0;
 #ifdef ARDUINO
@@ -511,10 +494,16 @@ struct FrameDiagnostics {
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
 
+    float fps = 0.0f;
+    uint32_t elapsed_ms = (period_start_ms > 0) ? (now_ms - period_start_ms) : 0;
+    if (elapsed_ms > 0 && frame_count_in > 0)
+      fps = (1000.0f * frame_count_in) / (float)elapsed_ms;
+
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
-             effect_name ? effect_name : "?",
-             idle_fps, idle_frame_ms, idle_jitter_pct, free_heap_kb);
+             "[%s] FPS:%.1f | Heap: %ukB [IDLE]",
+             effect_name ? effect_name : "?", fps, free_heap_kb);
+
+    last_log_time = now_ms;
   }
 };
 

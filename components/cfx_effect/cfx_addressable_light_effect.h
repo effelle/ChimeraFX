@@ -155,6 +155,11 @@ public:
     bool mono_dirty{false};
     uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
     uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
+    // CFX-047: apply()-level frame counter for idle FPS reporting.
+    // Incremented every frame that passes the rate gate regardless of whether
+    // service() runs — gives true DMA throughput even when runners are suppressed.
+    uint32_t idle_frame_count{0};
+    uint32_t idle_period_start_ms{0};
   };
 
   // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──
