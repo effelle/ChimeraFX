@@ -935,7 +935,15 @@ void CFXAddressableLightEffect::stop() {
       if (mirror_sw != nullptr)
         act_->active_outro_mirror = mirror_sw->state;
 
-      // Capture ALL segment runners for the outro
+      // Capture runners for the outro.
+      // CFX-046: Virtual segment fix — when a virtual segment stops, only
+      // remove ITS OWN runner from act_->segment_runners. Sibling runners
+      // (other segments on the same physical strip) must remain intact so
+      // their apply() loops continue to render. Previously, stop() cleared
+      // ALL segment_runners unconditionally, darkening every other segment.
+      //
+      // For non-virtual (master) stops and single-runner lights the original
+      // behaviour is preserved: capture everything and clear.
       auto captured_runners = std::make_shared<std::vector<CFXRunner *>>();
       // Capture the sequence pointer now — clear_active_binding() in stop()
       // nulls active_sequence_ before the outro callback runs, so we must
@@ -947,24 +955,63 @@ void CFXAddressableLightEffect::stop() {
 #endif
 
       if (!act_->segment_runners.empty()) {
-        for (auto *r : act_->segment_runners) {
-          if (c)
-            c->unregister_runner(r);
-          captured_runners->push_back(r);
+        if (this->is_virtual_segment_) {
+          // Identify this segment's own runner by segment_id and remove only it.
+          std::string my_id;
+#ifdef USE_ESP32
+          auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+              this->get_addressable_());
+          if (vseg)
+            my_id = vseg->get_segment_id();
+#endif
+          auto &runners = act_->segment_runners;
+          for (auto it = runners.begin(); it != runners.end(); ++it) {
+            if ((*it)->get_segment_id() == my_id) {
+              if (c)
+                c->unregister_runner(*it);
+              captured_runners->push_back(*it);
+              runners.erase(it);
+              break; // Only one runner per segment id
+            }
+          }
+          // Keep act_->runner pointing at segment_runners[0] if any remain,
+          // so sibling apply() calls pass the null-runner guard at line 1124.
+          if (!runners.empty()) {
+            act_->runner = runners[0];
+          } else {
+            // Last segment stopped — full teardown below.
+            act_->runner = nullptr;
+            act_->segments_initialized = false;
+          }
+          // Wake mono idle so surviving siblings commit one fresh frame,
+          // ensuring DMA reflects the correct post-stop pixel state.
+          act_->mono_dirty = true;
+        } else {
+          // Non-virtual master stop: capture and clear all runners as before.
+          for (auto *r : act_->segment_runners) {
+            if (c)
+              c->unregister_runner(r);
+            captured_runners->push_back(r);
+          }
+          act_->segment_runners.clear();
+          act_->segments_initialized = false;
+          act_->runner = nullptr;
         }
-        act_->segment_runners.clear();
-        act_->segments_initialized = false;
       } else {
         if (c)
           c->unregister_runner(act_->runner);
         captured_runners->push_back(act_->runner);
+        act_->runner = nullptr; // Null here so start() creates a fresh one later
       }
-      act_->runner = nullptr; // Null here so start() creates a fresh one later
 
-      // Safely detach from effect runner system
-      act_->controller = nullptr;
-      act_->intro_active = false;
-      act_->outro_active = false;
+      // Safely detach from effect runner system only when fully torn down.
+      // For virtual segment partial stops, controller and intro state must
+      // remain valid for the surviving sibling runners.
+      if (act_->runner == nullptr) {
+        act_->controller = nullptr;
+        act_->intro_active = false;
+        act_->outro_active = false;
+      }
 
       auto *output = this->get_light_state()->get_output();
       auto *it_light = static_cast<light::AddressableLight *>(output);
@@ -1275,7 +1322,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->mono_dirty = false;
       skip_service = false;
     } else {
-      // Truly idle — skip service entirely.
+      // Truly idle — skip service entirely, but still emit diagnostic logs
+      // at the normal interval so the debug output stays populated.
+      const char *idle_name = act_->cached_runner_name.empty()
+                                  ? nullptr
+                                  : act_->cached_runner_name.c_str();
+      if (!act_->segment_runners.empty()) {
+        for (auto *r : act_->segment_runners)
+          r->diagnostics.idle_log(idle_name);
+      } else if (act_->runner) {
+        act_->runner->diagnostics.idle_log(idle_name);
+      }
       skip_service = true;
     }
   }
@@ -1466,6 +1523,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->mono_dirty = true;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
+
+        // Snapshot the last active frame stats so idle_log() can report
+        // meaningful FPS/jitter/heap while the runner is suppressed.
+        if (!act_->segment_runners.empty()) {
+          for (auto *r : act_->segment_runners)
+            r->diagnostics.capture_idle_stats();
+        } else if (act_->runner) {
+          act_->runner->diagnostics.capture_idle_stats();
+        }
       }
 
       if (trans_dur > 0.0f) {
