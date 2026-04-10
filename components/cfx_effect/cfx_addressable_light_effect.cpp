@@ -334,6 +334,13 @@ void CFXAddressableLightEffect::start() {
   act_->last_triggered_pixel = -1;
   act_->last_triggered_percentage = -1.0f;
 
+  // CFX-045: Reset mono idle state on every start() so a restarted effect
+  // always runs its intro and commits its first solid frame before going idle.
+  act_->mono_idle       = false;
+  act_->mono_dirty      = false;
+  act_->mono_last_color = 0xFFFFFFFF;
+  act_->mono_last_speed = 0xFF;
+
   // Reset palette sync flag so we enforce the effect's default on the first
   // frame
   act_->palette_synced = false;
@@ -1237,8 +1244,41 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // MUST RUN before intro/outro masks!
   bool is_mono_preset =
       this->get_monochromatic_preset_(this->effect_id_).is_active;
-  bool skip_service =
-      is_mono_preset && (act_->intro_active || act_->state == OUTRO_RUNNING);
+
+  // ── CFX-045: Monochromatic idle suppression ──────────────────────────────
+  // Phase 1 — intro/outro skip (existing behaviour, preserved as-is).
+  // Phase 2 — post-intro idle: once the effect has settled into solid color,
+  //   suppress service() every frame. Wake for exactly one frame when color
+  //   or speed changes so the new state is committed to the DMA buffer.
+  bool skip_service = is_mono_preset &&
+                      (act_->intro_active || act_->state == OUTRO_RUNNING);
+
+  if (is_mono_preset && act_->mono_idle &&
+      !act_->intro_active && act_->state != OUTRO_RUNNING) {
+
+    // Detect color change: compare the color already pushed to the runner(s)
+    // this frame (set unconditionally above at lines ~1176/1184) against the
+    // last committed color. Using the first runner as representative — all
+    // runners on a mono effect share the same color.
+    uint32_t current_color = act_->runner ? act_->runner->_segment.colors[0] : 0;
+    uint8_t  current_speed = act_->runner ? act_->runner->getSpeed() : 128;
+
+    if (current_color != act_->mono_last_color || current_speed != act_->mono_last_speed) {
+      // Parameter changed — wake for one frame.
+      act_->mono_dirty      = true;
+      act_->mono_last_color = current_color;
+      act_->mono_last_speed = current_speed;
+    }
+
+    if (act_->mono_dirty) {
+      // Service this frame, then go back to sleep.
+      act_->mono_dirty = false;
+      skip_service = false;
+    } else {
+      // Truly idle — skip service entirely.
+      skip_service = true;
+    }
+  }
 
   if (!skip_service) {
     if (!act_->segment_runners.empty()) {
@@ -1416,6 +1456,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
         trans_dur = 0.5f; // v4.1 Smooth Transition
+
+        // CFX-045: Intro complete — enter idle suppression.
+        // mono_dirty=true schedules one final service() call so the solid
+        // color is committed to the DMA buffer before runners go silent.
+        // mono_last_color/speed sentinels are reset so the first real frame
+        // always commits regardless of previous state.
+        act_->mono_idle  = true;
+        act_->mono_dirty = true;
+        act_->mono_last_color = 0xFFFFFFFF;
+        act_->mono_last_speed = 0xFF;
       }
 
       if (trans_dur > 0.0f) {

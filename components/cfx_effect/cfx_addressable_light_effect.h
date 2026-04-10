@@ -137,6 +137,24 @@ public:
     uint32_t sequence_iterations{0};
 #endif
     bool completion_pending{false};
+
+    // ── CFX-045: Monochromatic idle suppression ───────────────────────────────
+    // After a monochromatic preset completes its intro and settles into solid
+    // color, the runners have nothing left to compute. mono_idle is set true
+    // at that point, causing the scheduler to skip service() entirely.
+    //
+    // mono_dirty is a one-frame wake signal: set to true whenever a parameter
+    // that affects the rendered output changes (color, speed for outro). The
+    // scheduler services all runners for that single frame to commit the new
+    // state to the DMA buffer, then clears mono_dirty and returns to idle.
+    //
+    // Invariant: mono_idle is only meaningful while is_mono_preset is true and
+    // intro_active is false and state != OUTRO_RUNNING. Outside those conditions
+    // the normal skip_service path already governs dispatch.
+    bool mono_idle{false};
+    bool mono_dirty{false};
+    uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
+    uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
   };
 
   // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──
