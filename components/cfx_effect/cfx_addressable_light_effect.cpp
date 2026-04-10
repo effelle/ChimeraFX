@@ -23,6 +23,11 @@
 #include "../cfx_sequence/cfx_sequence.h"
 #endif
 
+// File-local macro: maps bare `instance` and `chimera_fx::instance` →
+// per-core slot. Fixes all intro/outro engine references without requiring
+// individual edits. Same rule as CFXRunner.cpp: no outer parens.
+#define instance instance_per_core[xPortGetCoreID()]
+
 namespace esphome {
 namespace chimera_fx {
 

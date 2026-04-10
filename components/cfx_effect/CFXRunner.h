@@ -411,15 +411,14 @@ private:
 // index 1 → Core 1 (ESPHome main loop on dual-core ESP32/S3)
 extern CFXRunner *instance_per_core[2];
 
-// Per-core instance macro — all existing `instance->` references in the
-// ~6,900-line effect body compile unchanged and automatically resolve to
-// the correct runner for whichever core is executing them.
-#define instance (instance_per_core[xPortGetCoreID()])
-
-  // RAII guard — sets the per-core slot on construction, restores the
-  // previous value on destruction. Thread-safe: Core 0 and Core 1 each
-  // write their own independent slot, so simultaneous service() calls
-  // on different cores cannot corrupt each other's pointer.
+// RAII guard — sets the per-core slot on construction, restores the
+// previous value on destruction. Thread-safe: Core 0 and Core 1 each
+// write their own independent slot, so simultaneous service() calls
+// on different cores cannot corrupt each other's pointer.
+// NOTE: the `instance` macro is NOT defined here. Putting it in a header
+// corrupts every TU that uses `instance` as a variable name (CFXEventManager,
+// CFXSequenceSelect, esphome logger, etc.). The macro is defined after the
+// #include block in CFXRunner.cpp and cfx_addressable_light_effect.cpp only.
 class InstanceGuard {
   uint8_t core_id_;
   CFXRunner *prev_;

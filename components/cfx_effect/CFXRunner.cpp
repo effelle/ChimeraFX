@@ -18,11 +18,18 @@
 #include <cstdint>
 #include <vector>
 
+// File-local macro: maps bare `instance` → per-core slot.
+// Defined here (not in CFXRunner.h) so it only affects this translation unit.
+// No outer parens — `esphome::chimera_fx::instance` expands to
+// `esphome::chimera_fx::instance_per_core[xPortGetCoreID()]` which is valid;
+// with outer parens it would expand to `esphome::chimera_fx::(...)` which is not.
+#define instance instance_per_core[xPortGetCoreID()]
+
 // Global time provider for FastLED timing functions.
 // Must be in global scope to match the extern declaration in FastLED_Stub.h.
 uint32_t get_millis() {
-  return esphome::chimera_fx::instance ? esphome::chimera_fx::instance->now
-                                       : cfx_millis();
+  auto *r = esphome::chimera_fx::instance_per_core[xPortGetCoreID()];
+  return r ? r->now : cfx_millis();
 }
 
 namespace esphome {
