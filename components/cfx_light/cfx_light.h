@@ -217,13 +217,21 @@ public:
   }
 
   // Visualizer setters
+  void set_visualizer_ip(const std::string &ip) {
 #ifdef CFX_VISUALIZER_ENABLED
-  void set_visualizer_ip(const std::string &ip) { this->visualizer_ip_ = ip; }
-  void set_visualizer_port(uint16_t port) { this->visualizer_port_ = port; }
-  void set_visualizer_enabled(bool enabled) {
-    this->visualizer_enabled_ = enabled;
+    this->visualizer_ip_ = ip;
+#endif
   }
-#endif  // CFX_VISUALIZER_ENABLED
+  void set_visualizer_port(uint16_t port) {
+#ifdef CFX_VISUALIZER_ENABLED
+    this->visualizer_port_ = port;
+#endif
+  }
+  void set_visualizer_enabled(bool enabled) {
+#ifdef CFX_VISUALIZER_ENABLED
+    this->visualizer_enabled_ = enabled;
+#endif
+  }
 
 protected:
   enum VisualizerPacketType : uint8_t {
