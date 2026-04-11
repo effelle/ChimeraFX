@@ -276,7 +276,8 @@ public:
   // so the slot returns to the pool automatically.
   bool is_pool_owned_{false};
 
-  friend class CFXRunPool; // allows release() to reset protected state
+  friend class CFXRunPool;      // allows release() to reset protected state
+  friend class CfxRunActionBase; // allows do_play_() to configure protected fields
 
 protected:
   void handle_fallback_binding_();
