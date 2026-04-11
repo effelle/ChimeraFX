@@ -1221,22 +1221,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     return;
   }
 
-  // CFX-046 Debug: Log idle runner state periodically to catch spontaneous
-  // darkening. Fires at LOG_INTERVAL_MS cadence only when mono_idle is active.
-  // Remove once the darkening bug is identified and fixed.
-  if (act_->mono_idle) {
-    if (now_ms - this->idle_debug_log_ms_ >= 2000) {
-      this->idle_debug_log_ms_ = now_ms;
-      ESP_LOGD("cfx_idle",
-               "[%s] idle_state: runner=%p seg_runners=%u mono_idle=%d mono_dirty=%d",
-               act_->cached_runner_name.c_str(),
-               (void *)act_->runner,
-               (unsigned)act_->segment_runners.size(),
-               (int)act_->mono_idle,
-               (int)act_->mono_dirty);
-    }
-  }
-
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
   bool debug_active =
       CFXControl::global_debug_enabled_; // Default to Master global state

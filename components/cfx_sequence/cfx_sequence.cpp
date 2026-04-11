@@ -29,6 +29,150 @@ std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 
 
 
+// ── CFXRunPool ────────────────────────────────────────────────────────────────
+
+CFXRunPool &CFXRunPool::get() {
+  static CFXRunPool inst;
+  return inst;
+}
+
+void CFXRunPool::ensure_initialized_() {
+  if (this->initialized_) return;
+  this->initialized_ = true;
+  for (uint8_t i = 0; i < POOL_SIZE; i++) {
+    // Heap-allocate each slot sequence once. They live for the firmware lifetime.
+    // Using a placeholder id/name/effect — overwritten on each claim().
+    std::string slot_id = "cfx_run_pool_" + std::to_string(i);
+    this->sequences_[i] = new CFXSequence(slot_id, slot_id, "", false);
+    // Remove from instances immediately — pool sequences self-manage registration.
+    auto &v = CFXSequence::instances;
+    v.erase(std::remove(v.begin(), v.end(), this->sequences_[i]), v.end());
+    this->slots_[i].sequence = this->sequences_[i];
+    this->slots_[i].in_use   = false;
+  }
+}
+
+CFXSequence *CFXRunPool::claim(uint8_t depth) {
+  ensure_initialized_();
+
+  if (depth >= CFX_RUN_MAX_DEPTH) {
+    ESP_LOGW("cfx_run", "Max nesting depth %u reached — cfx_run suppressed",
+             CFX_RUN_MAX_DEPTH);
+    return nullptr;
+  }
+
+  for (uint8_t i = 0; i < POOL_SIZE; i++) {
+    if (!this->slots_[i].in_use) {
+      this->slots_[i].in_use = true;
+      this->slots_[i].depth  = depth;
+      CFXSequence *seq = this->slots_[i].sequence;
+      seq->is_pool_owned_ = true;
+      // Register in the global instances list for the duration of this run.
+      CFXSequence::instances.push_back(seq);
+      ESP_LOGD("cfx_run", "Pool slot %u claimed (depth %u)", i, depth);
+      return seq;
+    }
+  }
+
+  ESP_LOGW("cfx_run", "Pool exhausted (%u slots in use) — cfx_run suppressed",
+           POOL_SIZE);
+  return nullptr;
+}
+
+void CFXRunPool::release(CFXSequence *seq) {
+  for (uint8_t i = 0; i < POOL_SIZE; i++) {
+    if (this->slots_[i].sequence == seq && this->slots_[i].in_use) {
+      this->slots_[i].in_use = false;
+      seq->is_pool_owned_ = false;
+      // Remove from global instances so it doesn't appear in stop_all() etc.
+      auto &v = CFXSequence::instances;
+      v.erase(std::remove(v.begin(), v.end(), seq), v.end());
+      // Reset sequence state for next claim.
+      seq->lights_.clear();
+      seq->on_reach_triggers_.clear();
+      seq->on_complete_triggers_.clear();
+      seq->on_stop_triggers_.clear();
+      seq->on_start_triggers_.clear();
+      seq->saved_states_.clear();
+      seq->pending_reach_triggers_.clear();
+      seq->strip_tag_ = "";
+      seq->effect_    = "";
+      seq->speed_     = {};
+      seq->intensity_ = {};
+      seq->palette_   = {};
+      seq->brightness_= {};
+      seq->mirror_    = {};
+      seq->intro_     = {};
+      seq->outro_     = {};
+      seq->inout_duration_ = {};
+      seq->iterations_ = 0;
+      seq->duration_ms_ = 0;
+      seq->is_running_  = false;
+      seq->is_starting_ = false;
+      seq->is_stopping_ = false;
+      seq->completion_reported_ = false;
+      seq->last_fired_milestone_ = 0;
+      seq->last_triggered_percentage_ = -1.0f;
+      seq->last_triggered_pixel_ = -1;
+      ESP_LOGD("cfx_run", "Pool slot %u released", i);
+      return;
+    }
+  }
+}
+
+bool CFXRunPool::is_pool_owned(CFXSequence *seq) const {
+  for (uint8_t i = 0; i < POOL_SIZE; i++) {
+    if (this->slots_[i].sequence == seq)
+      return this->slots_[i].in_use;
+  }
+  return false;
+}
+
+// ── CfxRunActionBase::do_play_() ─────────────────────────────────────────────
+
+void CfxRunActionBase::do_play_() {
+  if (this->light_ == nullptr || this->effect_.empty()) {
+    ESP_LOGW("cfx_run", "cfx_run: light or effect not set — skipped");
+    return;
+  }
+
+  // Claim a pool slot.
+  CFXSequence *seq = CFXRunPool::get().claim(this->nesting_depth_);
+  if (seq == nullptr)
+    return; // pool exhausted or depth exceeded — already logged
+
+  // Configure the claimed sequence.
+  seq->effect_    = this->effect_;
+  seq->strip_tag_ = this->strip_tag_;
+  seq->iterations_= this->iterations_;
+  if (this->speed_.has_value())        seq->set_speed(this->speed_.value());
+  if (this->intensity_.has_value())    seq->set_intensity(this->intensity_.value());
+  if (this->palette_.has_value())      seq->set_palette(this->palette_.value());
+  if (this->brightness_.has_value())   seq->set_brightness(this->brightness_.value());
+  if (this->mirror_.has_value())       seq->set_mirror(this->mirror_.value());
+  if (this->intro_.has_value())        seq->set_intro(this->intro_.value());
+  if (this->outro_.has_value())        seq->set_outro(this->outro_.value());
+  if (this->inout_duration_.has_value()) seq->set_inout_duration(this->inout_duration_.value());
+
+  // Transfer triggers. These are YAML-codegen objects — they live for the
+  // firmware lifetime and are safe to reference from the pooled sequence.
+  // The pool's release() clears the vectors so they don't accumulate.
+  for (auto *t : this->on_reach_triggers_)    seq->add_on_reach_trigger(t);
+  for (auto *t : this->on_complete_triggers_) seq->add_on_complete_trigger(t);
+  for (auto *t : this->on_stop_triggers_)     seq->add_on_stop_trigger(t);
+  for (auto *t : this->on_start_triggers_)    seq->add_on_start_trigger(t);
+
+  seq->add_light(this->light_);
+
+  ESP_LOGD("cfx_run", "Spawning '%s' on '%s' (depth %u, iter %u)",
+           this->effect_.c_str(),
+           this->light_->get_name().c_str(),
+           this->nesting_depth_,
+           this->iterations_);
+
+  seq->start();
+}
+
 void CfxSetActionBase::do_play_() {
   if (this->light_ == nullptr)
     return;
@@ -472,6 +616,10 @@ void CFXSequence::stop() {
       CFXSequenceSelect::instance->publish_state_silent("None");
     }
   }
+
+  // Pool self-release: return slot so it's available for the next cfx_run.
+  if (this->is_pool_owned_)
+    CFXRunPool::get().release(this);
 }
 
 // CFX-044: Correctly-ordered completion path invoked by execute_completion().
@@ -545,6 +693,12 @@ void CFXSequence::complete_and_notify() {
   // LAST: fire on_complete — any chained cfx_set now wins with no
   // subsequent stop() able to undo the next step.
   this->report_event_complete();
+
+  // Pool self-release: return slot after completion so it's available
+  // for the next cfx_run call. Must be last — report_event_complete()
+  // may fire on_complete triggers that spawn new cfx_run sequences.
+  if (this->is_pool_owned_)
+    CFXRunPool::get().release(this);
 }
 
 void CFXSequence::force_reset() {
@@ -651,23 +805,30 @@ void CFXSequence::flush_pending_triggers() {
   std::vector<PendingTrigger> to_fire = this->pending_reach_triggers_;
   this->pending_reach_triggers_.clear();
 
-  // CFX-052: Limit to max 2 triggers per loop to prevent SPI overload.
-  // More triggers queue and fire on subsequent ticks.
-  size_t max_fire = std::min(to_fire.size(), (size_t)2);
-  
-  for (size_t idx = 0; idx < max_fire; idx++) {
+  // Adaptive batch size mirrors the event manager's queue-depth logic so
+  // trigger flushing and event delivery share the loop budget proportionally
+  // rather than competing blindly.
+  size_t queue_depth = to_fire.size();
+  size_t max_fire;
+  if (queue_depth >= 8)
+    max_fire = 3;
+  else if (queue_depth >= 4)
+    max_fire = 2;
+  else
+    max_fire = 1;
+
+  for (size_t idx = 0; idx < max_fire && idx < to_fire.size(); idx++) {
     const auto &t = to_fire[idx];
-    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
+    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       (uint32_t)t.trigger, 0, [t]() {
       esphome::yield();
       esphome::App.feed_wdt();
       t.trigger->trigger(t.value);
     });
-
     esphome::yield();
     esphome::App.feed_wdt();
   }
-  
+
   // Re-queue remaining triggers for next tick
   for (size_t idx = max_fire; idx < to_fire.size(); idx++) {
     this->pending_reach_triggers_.push_back(to_fire[idx]);

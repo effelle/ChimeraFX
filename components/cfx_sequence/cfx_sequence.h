@@ -182,8 +182,8 @@ protected:
 
   // Per-instance milestone tracking — decoupled from CFXEventManager singleton
   // so concurrent strips each maintain their own counter. (multi-strip fix)
-  static constexpr uint8_t MILESTONE_STEP    = 5;
-  static constexpr uint8_t MAX_MILESTONES    = 20;  // 5..100 in steps of 5
+  static constexpr uint8_t MILESTONE_STEP    = 10;
+  static constexpr uint8_t MAX_MILESTONES    = 10;  // 10..100 in steps of 10
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
   // No suppress field — intro guard is handled at the effect layer (act_->intro_active).
@@ -270,6 +270,13 @@ public:
     }
     return false;
   }
+
+  // Pool ownership — set by CFXRunPool::claim(), cleared on release.
+  // When true, complete_and_notify() and stop() call CFXRunPool::release()
+  // so the slot returns to the pool automatically.
+  bool is_pool_owned_{false};
+
+  friend class CFXRunPool; // allows release() to reset protected state
 
 protected:
   void handle_fallback_binding_();
@@ -375,6 +382,123 @@ template <typename... Ts>
 class CfxSetAction : public CfxSetActionBase, public ::esphome::Action<Ts...> {
 public:
   void play(const Ts &...x) override { this->do_play_(); }
+};
+
+// ── cfx_run ──────────────────────────────────────────────────────────────────
+// Spawns a fully independent, pool-backed CFXSequence at runtime.
+// Each cfx_run claim allocates one slot from a fixed pool of 8 sequences.
+// The spawned sequence is autonomous — it has its own milestone tracking,
+// its own lifecycle events, and its own on_cfx_reach triggers. It is not
+// owned by the parent and continues running after the parent completes.
+//
+// Pool slots are returned automatically when the spawned sequence completes
+// or is stopped. If all 8 slots are in use, cfx_run is a no-op with a LOGW.
+//
+// Maximum nesting depth: CFX_RUN_MAX_DEPTH (default 4). Each cfx_run level
+// consumes one pool slot; the guard prevents stack exhaustion on deep chains.
+
+static constexpr uint8_t CFX_RUN_POOL_SIZE  = 8;
+static constexpr uint8_t CFX_RUN_MAX_DEPTH  = 4;
+
+// Forward declaration — pool lives in cfx_sequence.cpp
+class CFXRunPool;
+
+class CfxRunActionBase {
+public:
+  void set_light(light::LightState *light)     { this->light_     = light; }
+  void set_effect(const std::string &effect)   { this->effect_    = effect; }
+  void set_speed(uint8_t v)                    { this->speed_     = v; }
+  void set_intensity(uint8_t v)                { this->intensity_ = v; }
+  void set_palette(uint8_t v)                  { this->palette_   = v; }
+  void set_brightness(float v)                 { this->brightness_= v; }
+  void set_mirror(bool v)                      { this->mirror_    = v; }
+  void set_intro(uint8_t v)                    { this->intro_     = v; }
+  void set_outro(uint8_t v)                    { this->outro_     = v; }
+  void set_inout_duration(float v)             { this->inout_duration_ = v; }
+  void set_iterations(uint32_t v)              { this->iterations_ = v; }
+  void set_strip_tag(const std::string &tag)   { this->strip_tag_  = tag; }
+  void set_nesting_depth(uint8_t depth)        { this->nesting_depth_ = depth; }
+
+  // Trigger registration — called by codegen for on_cfx_reach blocks
+  // inside cfx_run. Stored and transferred to the spawned sequence at play time.
+  void add_on_reach_trigger(CfxSeqOnReachTrigger *t) {
+    this->on_reach_triggers_.push_back(t);
+  }
+  void add_on_complete_trigger(CfxSeqOnCompleteTrigger *t) {
+    this->on_complete_triggers_.push_back(t);
+  }
+  void add_on_stop_trigger(CfxSeqOnStopTrigger *t) {
+    this->on_stop_triggers_.push_back(t);
+  }
+  void add_on_start_trigger(CfxSeqOnStartTrigger *t) {
+    this->on_start_triggers_.push_back(t);
+  }
+
+protected:
+  void do_play_();
+
+  light::LightState *light_{nullptr};
+  std::string effect_{};
+  std::string strip_tag_{};
+  esphome::optional<uint8_t>  speed_{};
+  esphome::optional<uint8_t>  intensity_{};
+  esphome::optional<uint8_t>  palette_{};
+  esphome::optional<float>    brightness_{};
+  esphome::optional<bool>     mirror_{};
+  esphome::optional<uint8_t>  intro_{};
+  esphome::optional<uint8_t>  outro_{};
+  esphome::optional<float>    inout_duration_{};
+  uint32_t iterations_{1};
+  uint8_t  nesting_depth_{0};
+
+  std::vector<CfxSeqOnReachTrigger *>    on_reach_triggers_;
+  std::vector<CfxSeqOnCompleteTrigger *> on_complete_triggers_;
+  std::vector<CfxSeqOnStopTrigger *>     on_stop_triggers_;
+  std::vector<CfxSeqOnStartTrigger *>    on_start_triggers_;
+};
+
+template <typename... Ts>
+class CfxRunAction : public CfxRunActionBase, public ::esphome::Action<Ts...> {
+public:
+  void play(const Ts &...x) override { this->do_play_(); }
+};
+
+// Pool slot descriptor — wraps a CFXSequence stored in static storage.
+// Allocated once at startup; never heap-fragmented during operation.
+struct CFXRunSlot {
+  bool         in_use{false};
+  uint8_t      depth{0};           // nesting depth of this spawned sequence
+  CFXSequence *sequence{nullptr};  // points into the static pool array
+};
+
+class CFXRunPool {
+public:
+  static CFXRunPool &get();
+
+  // Claim a free slot and return the sequence pointer, or nullptr if full.
+  // depth: nesting level of the caller (0 = top-level cfx_run).
+  CFXSequence *claim(uint8_t depth);
+
+  // Release a slot by sequence pointer. Called from the sequence's
+  // complete_and_notify() and stop() when the sequence is pool-owned.
+  void release(CFXSequence *seq);
+
+  bool is_pool_owned(CFXSequence *seq) const;
+
+private:
+  CFXRunPool() = default;
+
+  // Fixed storage — 8 slots, allocated once, never freed.
+  // Each slot holds a CFXSequence constructed in-place via placement new.
+  static constexpr uint8_t POOL_SIZE = CFX_RUN_POOL_SIZE;
+
+  // Heap-allocated on first use (avoids static init order issues).
+  // Each pointer is valid for the lifetime of the firmware.
+  CFXSequence *sequences_[POOL_SIZE]{};
+  CFXRunSlot   slots_[POOL_SIZE]{};
+  bool         initialized_{false};
+
+  void ensure_initialized_();
 };
 
 class CFXStopAllButton : public ::esphome::button::Button,

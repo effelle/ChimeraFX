@@ -96,22 +96,32 @@ public:
     this->deferred_write_ = next;
   }
 
-  // Drain queued events per ESPHome loop() tick. (CFX-048)
-  // Strict pacing to protect the 30ms API heartbeat window. 
+  // Drain queued events per ESPHome loop() tick.
+  // Adaptive batching: delivers more events per loop when the queue is backed
+  // up, reducing the number of loop cycles needed to drain a large burst
+  // (e.g. 8 lights × 24 milestones = 192 events from a single effect run).
+  //
+  // Batch size scales with queue occupancy:
+  //   < 25% full  →  1 event  (light load, conservative)
+  //   25–50% full →  2 events (moderate backlog)
+  //   > 50% full  →  3 events (heavy backlog, drain faster)
+  //
+  // Three back-to-back trigger() calls are well within the 30ms API heartbeat
+  // window — each is a short string delivery costing a few microseconds.
   void flush_pending() {
-    uint32_t now = esphome::millis();
     if (this->deferred_read_ == this->deferred_write_)
       return;
 
-#ifdef USE_API
-    // CFX-051: Abort if API is already disconnected to save CPU
-    // We assume the caller has valid App.api_server context if USE_API is defined.
-#endif
-
-    // Strict pacing: 1 event per loop to prevent overwhelming API.
+    // Compute current queue occupancy and pick batch size.
     uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
-    uint8_t max_this_loop = 1;  // Always 1 per loop - prevent burst
-    
+    uint8_t max_this_loop;
+    if (queue_count >= DEFERRED_QUEUE_SIZE / 2)
+      max_this_loop = 3; // > 50% full — drain aggressively
+    else if (queue_count >= DEFERRED_QUEUE_SIZE / 4)
+      max_this_loop = 2; // 25–50% full — moderate pace
+    else
+      max_this_loop = 1; // < 25% full — conservative, API-safe
+
     uint8_t flushed_this_loop = 0;
     while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
       const std::string evt = this->deferred_queue_[this->deferred_read_];
