@@ -1060,6 +1060,13 @@ void CFXAddressableLightEffect::stop() {
           }
           chimera_fx::instance = nullptr;
 
+          // CFX-046b: While a segment outro is animating into the shared DMA
+          // buffer, its pixels may bleed into sibling segment ranges. Keep
+          // mono_dirty set on every outro frame so surviving idle siblings
+          // repaint their pixel ranges each frame and correct any contamination.
+          if (!done)
+            act_->mono_dirty = true;
+
           if (done) {
             ESP_LOGV("chimera_fx", "[T05] outro DONE: effect_id=%u is_mono=%d",
                      (unsigned)this->effect_id_,
@@ -1198,9 +1205,30 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (act_->runner == nullptr) {
     ESP_LOGE(
         "chimera_fx",
-        "Runner is null in apply()! This should be initialized in start().");
+        "[%s] Runner is null in apply()! mono_idle=%d seg_runners=%u",
+        act_->cached_runner_name.c_str(),
+        (int)act_->mono_idle,
+        (unsigned)act_->segment_runners.size());
     chimera_fx::instance = nullptr;
     return;
+  }
+
+  // CFX-046 Debug: Log idle runner state periodically to catch spontaneous
+  // darkening. Fires at LOG_INTERVAL_MS cadence only when mono_idle is active.
+  // Remove once the darkening bug is identified and fixed.
+  if (act_->mono_idle) {
+    static uint32_t last_idle_state_log = 0;
+    uint32_t now_ms2 = cfx_millis();
+    if (now_ms2 - last_idle_state_log >= 2000) {
+      last_idle_state_log = now_ms2;
+      ESP_LOGD("cfx_idle",
+               "[%s] idle_state: runner=%p seg_runners=%u mono_idle=%d mono_dirty=%d",
+               act_->cached_runner_name.c_str(),
+               (void *)act_->runner,
+               (unsigned)act_->segment_runners.size(),
+               (int)act_->mono_idle,
+               (int)act_->mono_dirty);
+    }
   }
 
   // Sync Debug State (must be AFTER runner creation to avoid null deref)
