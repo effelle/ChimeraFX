@@ -738,6 +738,7 @@ void CFXAddressableLightEffect::start() {
 
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
+  this->last_run_ = 0; // Reset per-instance rate gate for clean restart
 
   if (this->effect_id_ != 185) {
     this->trigger_on_stop();
@@ -1166,6 +1167,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // CFX-048: Global Frame Budget Guard
   // Protect the 30ms API heartbeat window. If other strips or components have 
   // already consumed the loop budget, defer this frame to keep the connection alive.
+  // IDLE segments (mono_idle) bypass this guard — they do no computation and
+  // skipping them causes pixel starvation on the DMA buffer (segments go dark).
   static uint32_t last_frame_ms = 0;
   static uint32_t current_frame_start = 0;
   uint32_t now_ms = esphome::millis();
@@ -1173,17 +1176,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     current_frame_start = now_ms;
     last_frame_ms = now_ms;
   }
-  if (now_ms - current_frame_start > 22) {
+  if (!act_->mono_idle && now_ms - current_frame_start > 22) {
     ESP_LOGV("chimera_fx", "Frame Budget Exceeded (%ums), skipping render for '%s'", 
              now_ms - current_frame_start, this->get_name().c_str());
     return; 
   }
 
   const uint64_t now = millis_64();
-  if (now - act_->last_run < this->update_interval_) {
+  if (now - this->last_run_ < this->update_interval_) {
     return;
   }
-  act_->last_run = now;
+  this->last_run_ = now;
   esphome::App.feed_wdt();
 
   // CFX-047: apply()-level frame timing for idle FPS/Time/Jitter measurement.
@@ -1222,10 +1225,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // darkening. Fires at LOG_INTERVAL_MS cadence only when mono_idle is active.
   // Remove once the darkening bug is identified and fixed.
   if (act_->mono_idle) {
-    static uint32_t last_idle_state_log = 0;
-    uint32_t now_ms2 = cfx_millis();
-    if (now_ms2 - last_idle_state_log >= 2000) {
-      last_idle_state_log = now_ms2;
+    if (now_ms - this->idle_debug_log_ms_ >= 2000) {
+      this->idle_debug_log_ms_ = now_ms;
       ESP_LOGD("cfx_idle",
                "[%s] idle_state: runner=%p seg_runners=%u mono_idle=%d mono_dirty=%d",
                act_->cached_runner_name.c_str(),

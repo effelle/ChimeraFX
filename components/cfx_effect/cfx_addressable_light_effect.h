@@ -68,7 +68,6 @@ public:
     std::vector<CFXRunner *> segment_runners{};
     bool segments_initialized{false};
     bool palette_synced{false};
-    uint64_t last_run{0};
 
     TransitionState state{TRANSITION_NONE};
     uint64_t transition_start_ms{0};
@@ -451,6 +450,8 @@ public:
   // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
   uint32_t update_interval_{16};
+  uint64_t last_run_{0};         // Per-instance rate gate — must NOT be in CFXActivation (shared across virtual segments)
+  uint32_t idle_debug_log_ms_{0}; // Per-instance idle debug log timer
 
   // controller_ is set at codegen time via set_controller(), before start()
   // is ever called. Copied into act_->controller on each start().
