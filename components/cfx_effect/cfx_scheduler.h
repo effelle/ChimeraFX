@@ -58,6 +58,12 @@ public:
   // Convenience wrapper for the single-runner (no-segment) code path.
   void service_runner(CFXRunner *r);
 
+  // Wait for Core 0 to finish its current frame slice before returning.
+  // Must be called from Core 1 before mutating segment_runners or deleting
+  // any CFXRunner that may still be referenced in core0_slice_.
+  // No-op on single-core builds or when Core 0 task is not live.
+  void drain_core0();
+
 private:
   CFXScheduler() = default;
 

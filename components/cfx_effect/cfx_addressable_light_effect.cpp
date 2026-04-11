@@ -963,6 +963,11 @@ void CFXAddressableLightEffect::stop() {
 
       if (!act_->segment_runners.empty()) {
         if (this->is_virtual_segment_) {
+          // CFX-046: Drain Core 0 before mutating segment_runners to prevent
+          // a race where Core 0 is iterating core0_slice_ (which holds runner
+          // pointers from segment_runners) while Core 1 erases and deletes.
+          CFXScheduler::get().drain_core0();
+
           // Identify this segment's own runner by segment_id and remove only it.
           std::string my_id;
 #ifdef USE_ESP32
@@ -1755,6 +1760,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // OFF segment's range here, after the effect has painted but before DMA.
   // Only applies to non-virtual-segment effects (virtual segments each own
   // their own strip and have no siblings to protect).
+  //
+  // CFX-045 guard: do NOT scrub a segment that has an active CFX effect,
+  // even if its light state briefly reads is_on()=false during a state sync.
+  // IDLE segments (mono_idle) hold valid pixel data that must not be zeroed —
+  // a false is_on() reading would permanently darken them since mono_dirty
+  // would not be set to trigger a repaint.
   if (!this->is_virtual_segment_) {
     auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(
         this->get_light_state()->get_output());
@@ -1763,7 +1774,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       const auto &seg_states = cfx_out->get_segment_light_states();
       for (size_t si = 0; si < seg_defs.size() && si < seg_states.size();
            si++) {
-        if (!seg_states[si]->remote_values.is_on()) {
+        auto *seg_ls = seg_states[si];
+        // Skip scrub if segment has an active effect — it owns its pixels.
+        bool effect_active = (seg_ls->get_effect_name() != "None");
+        if (!seg_ls->remote_values.is_on() && !effect_active) {
           const auto &def = seg_defs[si];
           for (int p = def.start; p < def.stop; p++) {
             it[p] = Color::BLACK;
