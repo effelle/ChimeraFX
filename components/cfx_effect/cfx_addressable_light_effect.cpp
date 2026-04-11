@@ -1460,6 +1460,24 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+#ifdef USE_CFX_SEQUENCE
+  // CFX-run: Check effect_complete_ regardless of skip_service so that
+  // IDLE monochromatic runners (skip_service=true) can still signal sequence
+  // completion. The flag is set at mono_idle entry when sequence_iterations > 0.
+  if (act_->completion_pending == false) {
+    if (!act_->segment_runners.empty()) {
+      for (auto *r : act_->segment_runners) {
+        if (r->effect_complete_) {
+          act_->completion_pending = true;
+          break;
+        }
+      }
+    } else if (act_->runner && act_->runner->effect_complete_) {
+      act_->completion_pending = true;
+    }
+  }
+#endif
+
   // === State Machine: Intro vs Main Effect ===
 
   // CFX-035b: Detect right here — after the service block — whether the main
