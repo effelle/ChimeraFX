@@ -160,6 +160,13 @@ public:
     // service() runs — gives true DMA throughput even when runners are suppressed.
     uint32_t idle_frame_count{0};
     uint32_t idle_period_start_ms{0};
+    // Per-frame interval tracking for Time and Jitter in idle log.
+    uint32_t idle_last_frame_us{0};   // timestamp of last apply() frame in µs
+    uint32_t idle_min_frame_us{UINT32_MAX};
+    uint32_t idle_max_frame_us{0};
+    uint64_t idle_total_frame_us{0};
+    uint32_t idle_jitter_count{0};
+    uint32_t idle_target_frame_us{16666}; // updated from update_interval_ on first frame
   };
 
   // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──

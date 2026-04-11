@@ -340,8 +340,13 @@ void CFXAddressableLightEffect::start() {
   act_->mono_dirty      = false;
   act_->mono_last_color = 0xFFFFFFFF;
   act_->mono_last_speed = 0xFF;
-  act_->idle_frame_count    = 0;
+  act_->idle_frame_count     = 0;
   act_->idle_period_start_ms = 0;
+  act_->idle_last_frame_us   = 0;
+  act_->idle_min_frame_us    = UINT32_MAX;
+  act_->idle_max_frame_us    = 0;
+  act_->idle_total_frame_us  = 0;
+  act_->idle_jitter_count    = 0;
 
   // Reset palette sync flag so we enforce the effect's default on the first
   // frame
@@ -1169,12 +1174,24 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   act_->last_run = now;
   esphome::App.feed_wdt();
 
-  // CFX-047: Increment apply()-level frame counter for idle FPS measurement.
-  // Counts every frame that reaches DMA regardless of runner suppression.
+  // CFX-047: apply()-level frame timing for idle FPS/Time/Jitter measurement.
+  // Mirrors FrameDiagnostics::frame_start() but driven by apply() timestamps
+  // so it captures true DMA throughput regardless of runner suppression.
   if (act_->mono_idle) {
+    uint32_t now_us = cfx_micros();
     if (act_->idle_period_start_ms == 0)
       act_->idle_period_start_ms = (uint32_t)(now & 0xFFFFFFFF);
-    act_->idle_frame_count++;
+    if (act_->idle_last_frame_us > 0) {
+      uint32_t delta_us = now_us - act_->idle_last_frame_us;
+      if (delta_us < act_->idle_min_frame_us) act_->idle_min_frame_us = delta_us;
+      if (delta_us > act_->idle_max_frame_us) act_->idle_max_frame_us = delta_us;
+      act_->idle_total_frame_us += delta_us;
+      act_->idle_frame_count++;
+      if (delta_us < act_->idle_target_frame_us / 2 ||
+          delta_us > act_->idle_target_frame_us * 3 / 2)
+        act_->idle_jitter_count++;
+    }
+    act_->idle_last_frame_us = now_us;
   }
 
   // --- Ensure Runner(s) ---
@@ -1342,21 +1359,30 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         for (auto *r : act_->segment_runners) {
           r->diagnostics.idle_log(idle_name,
                                   act_->idle_frame_count,
-                                  act_->idle_period_start_ms);
+                                  act_->idle_period_start_ms,
+                                  act_->idle_total_frame_us,
+                                  act_->idle_jitter_count);
           if (r->diagnostics.last_log_time > act_->idle_period_start_ms)
             did_log = true;
         }
       } else if (act_->runner) {
         act_->runner->diagnostics.idle_log(idle_name,
                                            act_->idle_frame_count,
-                                           act_->idle_period_start_ms);
+                                           act_->idle_period_start_ms,
+                                           act_->idle_total_frame_us,
+                                           act_->idle_jitter_count);
         if (act_->runner->diagnostics.last_log_time > act_->idle_period_start_ms)
           did_log = true;
       }
-      // Reset counters after logging so next period starts fresh.
+      // Reset all timing accumulators after logging so next period is clean.
       if (did_log) {
         act_->idle_frame_count     = 0;
         act_->idle_period_start_ms = 0;
+        act_->idle_last_frame_us   = 0;
+        act_->idle_min_frame_us    = UINT32_MAX;
+        act_->idle_max_frame_us    = 0;
+        act_->idle_total_frame_us  = 0;
+        act_->idle_jitter_count    = 0;
       }
       skip_service = true;
     }
@@ -1548,8 +1574,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->mono_dirty = true;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
-        act_->idle_frame_count    = 0;
+        act_->idle_frame_count     = 0;
         act_->idle_period_start_ms = 0;
+        act_->idle_last_frame_us   = 0;
+        act_->idle_min_frame_us    = UINT32_MAX;
+        act_->idle_max_frame_us    = 0;
+        act_->idle_total_frame_us  = 0;
+        act_->idle_jitter_count    = 0;
+        act_->idle_target_frame_us = this->update_interval_ * 1000;
       }
 
       if (trans_dur > 0.0f) {
