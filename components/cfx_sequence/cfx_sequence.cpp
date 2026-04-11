@@ -486,8 +486,9 @@ void CFXSequence::start() {
   this->is_running_ = true;
   this->is_starting_ = false;
 
-  // Update Select UI to reflect the active sequence
-  if (CFXSequenceSelect::instance != nullptr) {
+  // Update Select UI to reflect the active sequence.
+  // Pool-owned sequences (cfx_run) are not in the select option list — skip.
+  if (CFXSequenceSelect::instance != nullptr && !this->is_pool_owned_) {
     CFXSequenceSelect::instance->publish_state_silent(this->name_);
   }
 
@@ -608,8 +609,10 @@ void CFXSequence::stop() {
 
   this->is_stopping_ = false;
 
-  // Update Select UI to reflect the stopped sequence
-  if (CFXSequenceSelect::instance != nullptr &&
+  // Update Select UI to reflect the stopped sequence.
+  // Pool-owned sequences are not in the select option list — skip.
+  if (!this->is_pool_owned_ &&
+      CFXSequenceSelect::instance != nullptr &&
       CFXSequenceSelect::instance->has_state()) {
     const std::string &current = CFXSequenceSelect::instance->current_option();
     if (!current.empty() && this->name_ == current) {
@@ -683,7 +686,8 @@ void CFXSequence::complete_and_notify() {
 
   this->is_stopping_ = false;
 
-  if (CFXSequenceSelect::instance != nullptr &&
+  if (!this->is_pool_owned_ &&
+      CFXSequenceSelect::instance != nullptr &&
       CFXSequenceSelect::instance->has_state()) {
     const std::string &cur = CFXSequenceSelect::instance->current_option();
     if (!cur.empty() && this->name_ == cur)

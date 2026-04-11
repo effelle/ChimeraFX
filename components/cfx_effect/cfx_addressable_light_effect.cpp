@@ -1600,6 +1600,24 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_total_frame_us  = 0;
         act_->idle_jitter_count    = 0;
         act_->idle_target_frame_us = this->update_interval_ * 1000;
+
+        // CFX-run: Monochromatic presets complete when the sweep reaches 100%
+        // (i.e. the intro finishes and the effect goes idle). The runner never
+        // calls service() again so effect_complete_ would never be set otherwise.
+        // Signal completion here when the sequence has a finite iteration count.
+        if (act_->active_sequence != nullptr && act_->sequence_iterations > 0) {
+          if (!act_->segment_runners.empty()) {
+            for (auto *r : act_->segment_runners) {
+              r->iteration_count_++;
+              if (r->iteration_count_ >= act_->sequence_iterations)
+                r->effect_complete_ = true;
+            }
+          } else if (act_->runner != nullptr) {
+            act_->runner->iteration_count_++;
+            if (act_->runner->iteration_count_ >= act_->sequence_iterations)
+              act_->runner->effect_complete_ = true;
+          }
+        }
       }
 
       if (trans_dur > 0.0f) {
