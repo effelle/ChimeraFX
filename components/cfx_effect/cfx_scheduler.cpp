@@ -188,25 +188,10 @@ void CFXScheduler::service_runner(CFXRunner *r) {
 
 void CFXScheduler::drain_core0() {
 #if CFX_DUAL_CORE
-  // If Core 0 task is live and may be processing runners, take the semaphore
-  // to ensure it has finished its current frame slice before we return.
-  // This is safe to call even when Core 0 is idle — xSemaphoreTake with a
-  // zero timeout returns immediately if the semaphore is not available,
-  // meaning Core 0 is not mid-frame and the runner list is safe to mutate.
-  //
-  // We use a zero timeout here rather than CFX_CORE0_TIMEOUT_MS because
-  // drain_core0() is called from stop(), which runs on Core 1 between frames.
-  // If Core 0 is currently processing, we wait; if it's idle, we return
-  // immediately. Either way we don't block for a full frame budget.
   if (core0_task_ != nullptr && core0_done_ != nullptr) {
-    // Peek: if semaphore is available Core 0 already signalled done — consume
-    // it and immediately give it back so the normal service_runners() handshake
-    // still works on the next frame.
-    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) == pdTRUE) {
+    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(FRAMETIME + 12)) == pdTRUE) {
       xSemaphoreGive(core0_done_);
     }
-    // Whether we got the semaphore or timed out, Core 0 is no longer running
-    // the frame that referenced the old runner list. Safe to mutate.
   }
 #endif
 }
