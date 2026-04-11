@@ -28,6 +28,7 @@ CFXSequenceServiceHandler = cfx_sequence_ns.class_(
 StartAction  = cfx_sequence_ns.class_("StartAction",  automation.Action)
 StopAction   = cfx_sequence_ns.class_("StopAction",   automation.Action)
 CfxSetAction = cfx_sequence_ns.class_("CfxSetAction", automation.Action)
+CfxRunAction = cfx_sequence_ns.class_("CfxRunAction", automation.Action)
 
 # Trigger classes
 CfxSeqOnStartTrigger = cfx_sequence_ns.class_("CfxSeqOnStartTrigger", automation.Trigger.template())
@@ -431,4 +432,119 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
         cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
+    return var
+
+
+# ── cfx_run ───────────────────────────────────────────────────────────────────
+# Spawns an independent pool-backed sequence at runtime.
+# Supports the same parameters as cfx_set plus iterations and nested triggers.
+# Nesting depth is injected automatically by the codegen based on how deeply
+# the cfx_run is nested inside other cfx_run on_cfx_reach/on_cfx_complete blocks.
+
+def _cfx_run_schema():
+    """Build the cfx_run schema. Defined as a function to allow forward
+    reference to the trigger schemas which reference on_cfx_reach recursively."""
+    return cv.Schema(
+        {
+            cv.Required(CONF_ID):                    cv.use_id(light.LightState),
+            cv.Required("effect"):                   cv.string,
+            cv.Optional(CONF_SET_SPEED):             cv.int_range(0, 255),
+            cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
+            cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
+            cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
+            cv.Optional(CONF_SET_MIRROR):            cv.boolean,
+            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
+            cv.Optional(CONF_ITERATIONS, default=1): cv.int_range(min=1),
+            # Lifecycle triggers on the spawned sequence
+            cv.Optional(CONF_ON_START): automation.validate_automation(
+                {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnStartTrigger)}
+            ),
+            cv.Optional(CONF_ON_STOP): automation.validate_automation(
+                {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnStopTrigger)}
+            ),
+            cv.Optional(CONF_ON_COMPLETE): automation.validate_automation(
+                {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnCompleteTrigger)}
+            ),
+            cv.Optional(CONF_ON_REACH): automation.validate_automation(
+                {
+                    cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxSeqOnReachTrigger),
+                    cv.Required(CONF_POSITION): cv.percentage,
+                }
+            ),
+        }
+    )
+
+
+@automation.register_action(
+    "cfx_run",
+    CfxRunAction,
+    _cfx_run_schema(),
+    synchronous=True,
+)
+async def cfx_run_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+
+    light_var = await cg.get_variable(config[CONF_ID])
+    cg.add(var.set_light(light_var))
+    cg.add(var.set_effect(config["effect"]))
+
+    # Derive strip tag from the light's name for milestone event routing
+    import esphome.core as _core
+    light_name_map = {}
+    for lconf in _core.CORE.config.get("light", []):
+        lid_obj = lconf.get("id")
+        lname = lconf.get("name", "")
+        if lid_obj is not None and lname:
+            light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
+    strip_tag = light_name_map.get(config[CONF_ID].id, config[CONF_ID].id)
+    cg.add(var.set_strip_tag(strip_tag))
+
+    if CONF_SET_SPEED in config:
+        cg.add(var.set_speed(config[CONF_SET_SPEED]))
+    if CONF_SET_INTENSITY in config:
+        cg.add(var.set_intensity(config[CONF_SET_INTENSITY]))
+    if CONF_SET_PALETTE in config:
+        cg.add(var.set_palette(config[CONF_SET_PALETTE]))
+    if CONF_SET_BRIGHTNESS in config:
+        cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
+    if CONF_SET_MIRROR in config:
+        cg.add(var.set_mirror(config[CONF_SET_MIRROR]))
+    if CONF_SET_INTRO in config:
+        cg.add(var.set_intro(config[CONF_SET_INTRO]))
+    if CONF_SET_OUTRO in config:
+        cg.add(var.set_outro(config[CONF_SET_OUTRO]))
+    if CONF_SET_INOUT_DURATION in config:
+        cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
+    if CONF_ITERATIONS in config:
+        cg.add(var.set_iterations(config[CONF_ITERATIONS]))
+
+    # Nesting depth: count how many cfx_run levels deep this action is.
+    # ESPHome passes the parent action chain in args — we walk up counting
+    # cfx_run ancestors. Defaults to 0 if not determinable at codegen time.
+    # The runtime guard in CFXRunPool::claim() enforces CFX_RUN_MAX_DEPTH.
+    cg.add(var.set_nesting_depth(0))
+
+    # Register lifecycle triggers on the spawned sequence
+    for trigger_conf in config.get(CONF_ON_START, []):
+        trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID])
+        cg.add(var.add_on_start_trigger(trigger))
+        await automation.build_automation(trigger, [], trigger_conf)
+
+    for trigger_conf in config.get(CONF_ON_STOP, []):
+        trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID])
+        cg.add(var.add_on_stop_trigger(trigger))
+        await automation.build_automation(trigger, [], trigger_conf)
+
+    for trigger_conf in config.get(CONF_ON_COMPLETE, []):
+        trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID])
+        cg.add(var.add_on_complete_trigger(trigger))
+        await automation.build_automation(trigger, [], trigger_conf)
+
+    for trigger_conf in config.get(CONF_ON_REACH, []):
+        trigger = cg.new_Pvariable(trigger_conf[CONF_TRIGGER_ID], trigger_conf[CONF_POSITION])
+        cg.add(var.add_on_reach_trigger(trigger))
+        await automation.build_automation(trigger, [(cg.float_, "position")], trigger_conf)
+
     return var
