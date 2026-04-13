@@ -2425,30 +2425,49 @@ void CFXAddressableLightEffect::run_controls_() {
     // When a controller IS present, these are managed by PUSH callbacks
     // in cfx_control.h which respect the Target Segment filter.
     if (!c) {
-      // 2. Speed (standalone mode)
+      // 2. Speed (standalone mode) — sequence value takes priority over UI entity
       uint8_t current_speed = this->get_default_speed_(this->effect_id_);
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_speed.has_value())
+        current_speed = act_->sequence_speed.value();
+      else
+#endif
       if (this->local_speed_()) {
         current_speed = (uint8_t)this->local_speed_()->state;
       }
 
-      // 3. Intensity (standalone mode)
+      // 3. Intensity (standalone mode) — sequence value takes priority
       uint8_t current_intensity =
           this->get_default_intensity_(this->effect_id_);
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_intensity.has_value())
+        current_intensity = act_->sequence_intensity.value();
+      else
+#endif
       if (this->local_intensity_()) {
         current_intensity = (uint8_t)this->local_intensity_()->state;
       }
 
-      // 4. Palette (standalone mode)
+      // 4. Palette (standalone mode) — sequence value takes priority
       uint8_t current_palette = this->get_default_palette_id_(this->effect_id_);
       if (this->is_monochromatic_(this->effect_id_)) {
         current_palette = 255;
-      } else if (this->local_palette_()) {
-        current_palette = get_pal_idx(this->local_palette_());
+      } else {
+#ifdef USE_CFX_SEQUENCE
+        if (act_->sequence_palette.has_value())
+          current_palette = act_->sequence_palette.value();
+        else
+#endif
+        if (this->local_palette_()) {
+          current_palette = get_pal_idx(this->local_palette_());
+        }
       }
 
-      // 5. Mirror (standalone mode)
+      // 5. Mirror (standalone mode) — sequence mirror_preset takes priority
       bool current_mirror = false;
-      if (this->local_mirror_()) {
+      if (this->has_mirror_preset_()) {
+        current_mirror = this->mirror_preset_val_();
+      } else if (this->local_mirror_()) {
         current_mirror = this->local_mirror_()->state;
       }
 

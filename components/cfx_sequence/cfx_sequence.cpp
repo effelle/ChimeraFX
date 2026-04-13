@@ -67,6 +67,7 @@ CFXSequence *CFXRunPool::claim(uint8_t depth) {
       this->slots_[i].depth  = depth;
       CFXSequence *seq = this->slots_[i].sequence;
       seq->is_pool_owned_ = true;
+      seq->completion_reported_ = false; // reset here, not in release() — avoids race with deferred callbacks
       // Register in the global instances list for the duration of this run.
       CFXSequence::instances.push_back(seq);
       ESP_LOGD("cfx_run", "Pool slot %u claimed (depth %u)", i, depth);
@@ -110,7 +111,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->is_running_  = false;
       seq->is_starting_ = false;
       seq->is_stopping_ = false;
-      seq->completion_reported_ = false;
+      seq->completion_reported_ = true; // keep true — deferred callbacks check this guard
       seq->last_fired_milestone_ = 0;
       seq->last_triggered_percentage_ = -1.0f;
       seq->last_triggered_pixel_ = -1;
