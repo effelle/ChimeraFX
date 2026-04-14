@@ -503,7 +503,13 @@ void CFXSequence::start() {
       // physical light's effect instance via the segment's parent pointer.
       if (!bound) {
         auto *output = l->get_output();
-        auto *vseg = dynamic_cast<cfx_light::CFXVirtualSegmentLight *>(output);
+        cfx_light::CFXVirtualSegmentLight *vseg = nullptr;
+        for (auto *s : cfx_light::CFXVirtualSegmentLight::all_segments) {
+          if (s == output) {
+            vseg = s;
+            break;
+          }
+        }
         if (vseg != nullptr) {
           auto *parent = vseg->get_parent();
           auto *master_ls = parent->get_master_light_state();

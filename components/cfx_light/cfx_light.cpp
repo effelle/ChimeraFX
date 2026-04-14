@@ -35,6 +35,8 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
+std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
+
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 
 // Query the RMT default clock source frequency (varies by chip variant)

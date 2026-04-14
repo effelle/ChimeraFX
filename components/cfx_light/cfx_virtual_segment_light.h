@@ -22,9 +22,19 @@ namespace cfx_light {
 
 class CFXVirtualSegmentLight : public light::AddressableLight {
 public:
+  static std::vector<CFXVirtualSegmentLight *> all_segments;
+
   CFXVirtualSegmentLight(CFXLightOutput *parent, uint16_t start, uint16_t stop,
                          const std::string &seg_id)
-      : parent_(parent), start_(start), stop_(stop), seg_id_(seg_id) {}
+      : parent_(parent), start_(start), stop_(stop), seg_id_(seg_id) {
+    all_segments.push_back(this);
+  }
+
+  ~CFXVirtualSegmentLight() {
+    all_segments.erase(
+        std::remove(all_segments.begin(), all_segments.end(), this),
+        all_segments.end());
+  }
 
   // --- AddressableLight interface ---
 
