@@ -8,6 +8,7 @@
  */
 
 #include "cfx_light.h"
+#include "cfx_virtual_segment_light.h"
 #include "../cfx_effect/cfx_control.h"
 
 #ifdef USE_WIFI
