@@ -1333,10 +1333,23 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       if (bri_state->current_values.get_state() < 1.0f) {
         chimera_fx::LightStateProxy::stop_state_transformer(bri_state);
       }
-      bri = bri_state->current_values.get_brightness() *
-            bri_state->current_values.get_state();
+      
+      float state_bri = bri_state->current_values.get_brightness();
+      // CFX-066: Virtual Segment Default Brightness Restoration
+      // When sequence/cfx_set turns ON a light without specifying a brightness,
+      // ESPHome uses the last saved state. If no state was ever saved (e.g. fresh boot), 
+      // the brightness remains 0.0f. This causes the segment to multiply by 0 and go dark.
+      if (state_bri == 0.0f && bri_state->remote_values.is_on()) {
+        state_bri = 1.0f;
+      }
+      
+      bri = state_bri * bri_state->current_values.get_state();
     } else {
-      bri = bri_state->current_values.get_brightness();
+      float state_bri = bri_state->current_values.get_brightness();
+      if (state_bri == 0.0f && bri_state->remote_values.is_on()) {
+        state_bri = 1.0f;
+      }
+      bri = state_bri;
       if (act_->state == TRANSITION_NONE && !act_->intro_active &&
           act_->state != OUTRO_RUNNING) {
         bri *= bri_state->current_values.get_state();
@@ -1433,7 +1446,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             i < cfx_out->get_segment_light_states().size()) {
           auto *seg_state = cfx_out->get_segment_light_states()[i];
           if (seg_state != nullptr) {
-            seg_bri *= seg_state->current_values.get_brightness();
+            float inner_state_bri = seg_state->current_values.get_brightness();
+            // CFX-066 Fallback
+            if (inner_state_bri == 0.0f && seg_state->remote_values.is_on()) {
+              inner_state_bri = 1.0f;
+            }
+            seg_bri *= inner_state_bri;
+            
             if (act_->state == TRANSITION_NONE && !act_->intro_active &&
                 act_->state != OUTRO_RUNNING) {
               seg_bri *= seg_state->current_values.get_state();
