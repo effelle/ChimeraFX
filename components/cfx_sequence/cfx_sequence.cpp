@@ -417,36 +417,62 @@ void CFXSequence::start() {
   // CFX-049: Staggered start to eliminate 68ms API lag.
   // Each strip perform() cost ~15ms. We spread them across loop cycles.
   uint32_t stagger_delay = 0;
+  this->stagger_tasks_pending_ = 0;
   size_t total_lights = this->lights_.size();
-  ESP_LOGD(TAG, "  Total target lights configured: %u, Effect: '%s'", (unsigned)total_lights, this->effect_.c_str());
   
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
     auto task_name = this->id_ + "_start_" + std::to_string(i);
-    ESP_LOGD(TAG, "  Scheduling stagger task '%s' for light '%s' at %ums", 
-             task_name.c_str(), l->get_name().c_str(), (unsigned)stagger_delay);
+    this->stagger_tasks_pending_++;
              
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-                                      task_name.c_str(),
+                                      task_name,
                                       stagger_delay, [this, l, task_name]() {
+      this->stagger_tasks_pending_--;
+      if (!this->is_running_) return;
+
       // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
-      ESP_LOGD(TAG, "  Executing stagger task '%s' for light '%s'", 
-               task_name.c_str(), l->get_name().c_str());
 
       // CFX-053: Apply presets to the effect instance BEFORE call.perform()
-      // so the runner picks up mirror/intro/outro on its very first frame.
+      // Resolve target effect instance (handle segments resolving to parents)
+      chimera_fx::CFXAddressableLightEffect *target_inst = nullptr;
       for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
         if (inst->get_light_state() == l) {
-          if (this->mirror_.has_value())
-            inst->set_mirror_preset(this->mirror_.value());
-          if (this->intro_.has_value())
-            inst->set_intro_preset(this->intro_.value());
-          if (this->outro_.has_value())
-            inst->set_outro_preset(this->outro_.value());
-          if (this->inout_duration_.has_value())
-            inst->set_inout_duration_preset(this->inout_duration_.value());
+          target_inst = inst;
+          break;
         }
+      }
+      if (target_inst == nullptr) {
+        auto *output = l->get_output();
+        for (auto *s : cfx_light::CFXVirtualSegmentLight::all_segments) {
+          if (s == output) {
+            auto *parent = s->get_parent();
+            auto *master_ls = parent->get_master_light_state();
+            if (master_ls != nullptr) {
+              light::LightEffect *master_active =
+                  chimera_fx::LightStateProxy::get_active_effect(master_ls);
+              for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+                if (inst == master_active) {
+                  target_inst = inst;
+                  break;
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      if (target_inst != nullptr) {
+        if (this->mirror_.has_value())
+          target_inst->set_mirror_preset(this->mirror_.value());
+        if (this->intro_.has_value())
+          target_inst->set_intro_preset(this->intro_.value());
+        if (this->outro_.has_value())
+          target_inst->set_outro_preset(this->outro_.value());
+        if (this->inout_duration_.has_value())
+          target_inst->set_inout_duration_preset(this->inout_duration_.value());
       }
 
       auto call = l->make_call();
@@ -1076,7 +1102,8 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
-  if (this->parent_ != nullptr && this->parent_->is_running() && !this->light_->remote_values.is_on()) {
+  if (this->parent_ != nullptr && this->parent_->is_running() && 
+      this->parent_->is_stagger_complete() && !this->light_->remote_values.is_on()) {
     ESP_LOGV("cfx_sequence",
              "Sequence '%s' stopping because light '%s' turned off",
              this->parent_->get_name().c_str(), this->light_->get_name().c_str());

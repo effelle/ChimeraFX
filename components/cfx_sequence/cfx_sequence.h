@@ -137,7 +137,10 @@ public:
     CFXEventManager::get().add_known_tag(tag);
   }
 
+  bool is_stagger_complete() const { return this->stagger_tasks_pending_ == 0; }
+
 protected:
+  std::atomic<uint32_t> stagger_tasks_pending_{0};
   std::string id_;
   std::string name_;
   std::string effect_;
@@ -225,6 +228,7 @@ protected:
   bool is_starting_{false};
   bool is_stopping_{false};
   bool is_running_{false};
+  // bool is_stagger_complete_{true}; // Replaced by stagger_tasks_pending_ atomic
   bool duration_completion_pending_{false};  // CFX-044c: Defer duration timeout to worker
   // Set to true when report_event_complete() has been called for this run.
   // Used by clear_active_binding() to decide whether the outro should suppress
