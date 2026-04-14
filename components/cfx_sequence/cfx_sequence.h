@@ -115,7 +115,7 @@ public:
   void report_event_begin();
   void report_event_stop();
   void report_event_complete();
-  void check_positional_triggers(int32_t current_pixel, int32_t total_pixels);
+  void check_positional_triggers(int32_t current_pixel, int32_t total_pixels, bool is_return_phase = false);
   void flush_pending_triggers();
   void check_duration();
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }

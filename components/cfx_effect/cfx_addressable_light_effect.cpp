@@ -6239,7 +6239,8 @@ void CFXAddressableLightEffect::check_positional_triggers(
 #ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence != nullptr) {
       act_->active_sequence->check_positional_triggers(current_pixel,
-                                                       total_pixels);
+                                                       total_pixels,
+                                                       is_return_phase);
     } else
 #endif
     {

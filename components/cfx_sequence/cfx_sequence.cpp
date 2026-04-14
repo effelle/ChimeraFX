@@ -915,7 +915,8 @@ void CFXSequence::report_event_complete() {
 }
 
 void CFXSequence::check_positional_triggers(int32_t current_pixel,
-                                            int32_t total_pixels) {
+                                            int32_t total_pixels,
+                                            bool is_return_phase) {
   if (total_pixels <= 0)
     return;
 
@@ -928,70 +929,69 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
   // total_pixels - 1 ensures that the last pixel maps to 100%
   float current_percentage = (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1) : 1.0f;
 
+  // During the return/erase phase (e.g. Wipe erasing back), suppress
+  // on_cfx_reach positional triggers entirely. The leading pixel sweeps
+  // 0→100% again during the erase, which would double-fire every trigger.
+  // Milestones (cfx_reach HA events) are still allowed — the effect layer
+  // controls those separately via check_milestones_() and the milestone
+  // reset at the phase boundary.
+  if (!is_return_phase) {
+    // Reset stale tracking state at the start of a new forward pass.
+    if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
+      this->last_triggered_percentage_ = -1.0f;
+    }
 
-  // Reset stale tracking state at the start of a new forward pass.
-  // The adapter (cfx_addressable_light_effect.cpp) suppresses calls to this
-  // function during the erase/return phase via runner->is_return_phase_.
-  // This means last_triggered_percentage_ retains its end-of-forward-pass
-  // value (~0.98) when the new forward pass begins at pixel=0.
-  // Without this reset, the backward-crossing condition fires all mid-cycle
-  // targets simultaneously at pixel=0 because:
-  //   current(0.0) <= target(0.25/0.50/0.75) AND last(0.98) > target → crossed
-  // Resetting to -1.0f here causes the initial first-run path to handle
-  // pixel=0 correctly: 0.0 >= 0.25 is false, so nothing fires at the start.
-  if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
-    this->last_triggered_percentage_ = -1.0f;
-  }
+    // Evaluate on_reach (Percentage based)
+    for (auto *t : this->on_reach_triggers_) {
+      float target = t->get_target_position();
+      bool crossed = false;
 
-  // Evaluate on_reach (Percentage based)
-  for (auto *t : this->on_reach_triggers_) {
-    float target = t->get_target_position();
-    bool crossed = false;
-
-    if (this->last_triggered_percentage_ == -1.0f) {
-      if (current_percentage >= target)
-        crossed = true;
-    } else {
-      // Forward crossing
-      if (current_percentage >= target &&
-          this->last_triggered_percentage_ < target) {
-        crossed = true;
-      }
-      // Backward crossing
-      else if (current_percentage <= target &&
-               this->last_triggered_percentage_ > target) {
-        crossed = true;
-      }
-      // Wrap-around forward (e.g. 0.95 -> 0.05)
-      else if (this->last_triggered_percentage_ > 0.8f &&
-               current_percentage < 0.2f) {
-        if (target > this->last_triggered_percentage_ ||
-            target <= current_percentage) {
+      if (this->last_triggered_percentage_ == -1.0f) {
+        if (current_percentage >= target)
+          crossed = true;
+      } else {
+        // Forward crossing
+        if (current_percentage >= target &&
+            this->last_triggered_percentage_ < target) {
           crossed = true;
         }
-      }
-      // Wrap-around backward (e.g. 0.05 -> 0.95)
-      else if (this->last_triggered_percentage_ < 0.2f &&
-               current_percentage > 0.8f) {
-        if (target < this->last_triggered_percentage_ ||
-            target >= current_percentage) {
+        // Backward crossing
+        else if (current_percentage <= target &&
+                 this->last_triggered_percentage_ > target) {
           crossed = true;
         }
+        // Wrap-around forward (e.g. 0.95 -> 0.05)
+        else if (this->last_triggered_percentage_ > 0.8f &&
+                 current_percentage < 0.2f) {
+          if (target > this->last_triggered_percentage_ ||
+              target <= current_percentage) {
+            crossed = true;
+          }
+        }
+        // Wrap-around backward (e.g. 0.05 -> 0.95)
+        else if (this->last_triggered_percentage_ < 0.2f &&
+                 current_percentage > 0.8f) {
+          if (target < this->last_triggered_percentage_ ||
+              target >= current_percentage) {
+            crossed = true;
+          }
+        }
+      }
+
+      if (crossed) {
+        ESP_LOGV(TAG, "Sequence '%s': on_reach %.2f%% queued",
+                 this->id_.c_str(), target * 100.0f);
+        this->pending_reach_triggers_.push_back({t, current_percentage});
       }
     }
 
-    if (crossed) {
-      ESP_LOGV(TAG, "Sequence '%s': on_reach %.2f%% queued",
-               this->id_.c_str(), target * 100.0f);
-      this->pending_reach_triggers_.push_back({t, current_percentage});
-    }
+    this->last_triggered_percentage_ = current_percentage;
   }
 
-  this->last_triggered_percentage_ = current_percentage;
   this->last_triggered_pixel_ = current_pixel;
 
-  // Check runtime milestones (cfx_reach) using per-instance state.
-  // No singleton — each sequence tracks its own progress independently.
+  // Check runtime milestones (cfx_reach HA events) — fire on both passes
+  // as documented. Each pass generates its own 10%..100% sequence.
   this->check_milestones_(current_percentage * 100.0f);
 }
 
