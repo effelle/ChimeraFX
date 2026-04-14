@@ -438,11 +438,20 @@ void CFXSequence::start() {
       // Resolve target effect instance (handle segments resolving to parents)
       chimera_fx::CFXAddressableLightEffect *target_inst = nullptr;
       for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-        if (inst->get_light_state() == l) {
+        if (inst->get_light_state() == l && (this->effect_.empty() || inst->get_name() == this->effect_)) {
           target_inst = inst;
           break;
         }
       }
+      if (target_inst == nullptr) {
+        for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+          if (inst->get_light_state() == l && (this->effect_.empty() || inst->get_name() == this->effect_)) {
+            target_inst = inst;
+            break;
+          }
+        }
+      }
+
       if (target_inst == nullptr) {
         auto *output = l->get_output();
         for (auto *s : cfx_light::CFXVirtualSegmentLight::all_segments) {
@@ -529,6 +538,27 @@ void CFXSequence::start() {
             break;
           }
         }
+        if (!bound) {
+          // CFX-054: Virtual segments effects are tracked separately, check them too!
+          for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+            if (inst == active) {
+              ESP_LOGD(TAG, "  Binding Sequence to Effect %p (segment active match)", inst);
+              inst->set_active_sequence(this, this->speed_, this->intensity_,
+                                        this->palette_, this->iterations_);
+              inst->set_strip_tag(this->strip_tag_);
+              if (this->mirror_.has_value())
+                inst->set_mirror_preset(this->mirror_.value());
+              if (this->intro_.has_value())
+                inst->set_intro_preset(this->intro_.value());
+              if (this->outro_.has_value())
+                inst->set_outro_preset(this->outro_.value());
+              if (this->inout_duration_.has_value())
+                inst->set_inout_duration_preset(this->inout_duration_.value());
+              bound = true;
+              break;
+            }
+          }
+        }
       }
       // CFX-053: Segment-to-parent resolution.
       // Virtual segment lights are not in all_effects. Resolve the parent
@@ -603,6 +633,14 @@ void CFXSequence::handle_fallback_binding_() {
     if (inst->get_active_sequence() == this) {
       any_bound = true;
       break;
+    }
+  }
+  if (!any_bound) {
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+      if (inst->get_active_sequence() == this) {
+        any_bound = true;
+        break;
+      }
     }
   }
 

@@ -34,6 +34,7 @@ namespace chimera_fx {
 bool CFXControl::global_debug_enabled_ = false;
 
 std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_effects;
+std::vector<CFXAddressableLightEffect *> CFXAddressableLightEffect::all_segment_effects;
 uint8_t CFXAddressableLightEffect::last_roulette_id_ = 0;
 
 // Static empty vectors for trigger accessors when cfg_ is null (virtual

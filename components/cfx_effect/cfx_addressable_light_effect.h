@@ -209,6 +209,8 @@ public:
   virtual ~CFXAddressableLightEffect();
 
   static std::vector<CFXAddressableLightEffect *> all_effects;
+  static std::vector<CFXAddressableLightEffect *> all_segment_effects;
+
 
   void start() override;
   void stop() override;
@@ -292,7 +294,10 @@ public:
     this->is_virtual_segment_ = virtual_segment;
     if (virtual_segment) {
       auto it = std::find(all_effects.begin(), all_effects.end(), this);
-      if (it != all_effects.end()) all_effects.erase(it);
+      if (it != all_effects.end()) {
+        all_segment_effects.push_back(*it);
+        all_effects.erase(it);
+      }
     }
   }
 
