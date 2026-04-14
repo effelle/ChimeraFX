@@ -212,6 +212,16 @@ void CfxSetActionBase::do_play_() {
     auto call = this->light_->make_call();
     call.set_state(true);
     call.set_effect(this->effect_);
+    // CFX-057: Set color mode to prevent virtual segments defaulting to White.
+    auto valid_mode = this->light_->remote_values.get_color_mode();
+    if (valid_mode == light::ColorMode::UNKNOWN) {
+      if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+        valid_mode = light::ColorMode::RGB_WHITE;
+      } else if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+        valid_mode = light::ColorMode::RGB;
+      }
+    }
+    call.set_color_mode(valid_mode);
     if (this->brightness_.has_value())
       call.set_brightness(this->brightness_.value());
     call.perform();

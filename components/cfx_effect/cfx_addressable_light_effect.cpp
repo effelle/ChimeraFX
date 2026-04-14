@@ -2533,7 +2533,11 @@ void CFXAddressableLightEffect::run_controls_() {
         current_palette = get_pal_idx(c->get_palette());
 
       bool current_mirror = false;
-      if (c->get_mirror()) {
+      // CFX-056: Sequence mirror_preset takes priority over controller's UI switch,
+      // matching the priority chain used for speed/intensity/palette.
+      if (this->has_mirror_preset_()) {
+        current_mirror = this->mirror_preset_val_();
+      } else if (c->get_mirror()) {
         current_mirror = c->get_mirror()->state;
       }
 
