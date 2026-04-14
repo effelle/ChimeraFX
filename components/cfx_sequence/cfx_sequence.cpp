@@ -668,7 +668,7 @@ bool CFXSequence::try_bind_effects_() {
         for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
           if (inst->get_light_state() == l && inst->get_act() != nullptr) {
             ESP_LOGW(TAG, "Sequence '%s': fallback binding to '%s' on '%s'",
-                     this->name_.c_str(), inst->get_name(), l->get_name().c_str());
+                     this->name_.c_str(), inst->get_name().c_str(), l->get_name().c_str());
             this->apply_binding_to_effect_(inst);
             return;
           }
