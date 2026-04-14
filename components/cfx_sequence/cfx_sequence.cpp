@@ -418,15 +418,21 @@ void CFXSequence::start() {
   // Each strip perform() cost ~15ms. We spread them across loop cycles.
   uint32_t stagger_delay = 0;
   size_t total_lights = this->lights_.size();
+  ESP_LOGD(TAG, "  Total target lights configured: %u, Effect: '%s'", (unsigned)total_lights, this->effect_.c_str());
   
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
-    
+    auto task_name = this->id_ + "_start_" + std::to_string(i);
+    ESP_LOGD(TAG, "  Scheduling stagger task '%s' for light '%s' at %ums", 
+             task_name.c_str(), l->get_name().c_str(), (unsigned)stagger_delay);
+             
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-                                      (this->id_ + "_start_" + std::to_string(i)).c_str(),
-                                      stagger_delay, [this, l]() {
+                                      task_name.c_str(),
+                                      stagger_delay, [this, l, task_name]() {
       // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
+      ESP_LOGD(TAG, "  Executing stagger task '%s' for light '%s'", 
+               task_name.c_str(), l->get_name().c_str());
 
       // CFX-053: Apply presets to the effect instance BEFORE call.perform()
       // so the runner picks up mirror/intro/outro on its very first frame.
