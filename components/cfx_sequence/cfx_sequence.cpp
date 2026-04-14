@@ -423,10 +423,11 @@ void CFXSequence::start() {
   for (size_t i = 0; i < total_lights; i++) {
     light::LightState *l = this->lights_[i];
     auto task_name = this->id_ + "_start_" + std::to_string(i);
+    uint32_t task_hash = esphome::fnv1_hash(task_name);
     this->stagger_tasks_pending_++;
              
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-                                      task_name,
+                                      task_hash,
                                       stagger_delay, [this, l, task_name]() {
       this->stagger_tasks_pending_--;
       if (!this->is_running_) return;
@@ -513,8 +514,9 @@ void CFXSequence::start() {
   // This ensures every effect's act_ is initialized before we try to bind.
   // Also handles segment-to-parent resolution for virtual segment lights.
   uint32_t bind_delay = stagger_delay + 100;
+  uint32_t bind_hash = esphome::fnv1_hash(this->id_ + "_bind_all");
   esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-      (this->id_ + "_bind_all").c_str(), bind_delay, [this]() {
+      bind_hash, bind_delay, [this]() {
     esphome::App.feed_wdt();
     for (auto *l : this->lights_) {
       light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
