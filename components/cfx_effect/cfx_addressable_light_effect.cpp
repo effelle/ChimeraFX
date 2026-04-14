@@ -690,16 +690,22 @@ void CFXAddressableLightEffect::start() {
       MonochromaticPreset preset =
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
-        number::Number *speed_num = this->local_speed_();
-        if (speed_num == nullptr && act_->controller != nullptr)
-          speed_num = act_->controller->get_speed();
-
-        if (speed_num != nullptr && speed_num->has_state()) {
-          // Map Speed (0-255) to Duration (500ms up to 10000ms)
-          float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        if (this->effect_id_ == 182) { // Gas Discharge
+          duration_ms = 2200;
+        } else if (this->effect_id_ == 183) { // Fluorescent Start
+          duration_ms = 800;
         } else {
-          duration_ms = 1000; // Standard 1s default
+          number::Number *speed_num = this->local_speed_();
+          if (speed_num == nullptr && act_->controller != nullptr)
+            speed_num = act_->controller->get_speed();
+
+          if (speed_num != nullptr && speed_num->has_state()) {
+            // Map Speed (0-255) to Duration (500ms up to 10000ms)
+            float speed_val = speed_num->state;
+            duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          } else {
+            duration_ms = 1000; // Standard 1s default
+          }
         }
       }
     }
