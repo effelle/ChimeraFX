@@ -10,6 +10,7 @@
 
 #include "cfx_sequence.h"
 #include "../cfx_effect/cfx_addressable_light_effect.h"
+#include "../cfx_light/cfx_virtual_segment_light.h"
 #include "esphome/components/light/light_effect.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/event/event.h"
@@ -423,9 +424,25 @@ void CFXSequence::start() {
     
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       (this->id_ + "_start_" + std::to_string(i)).c_str(),
-                                      stagger_delay, [this, l, i, total_lights]() {
+                                      stagger_delay, [this, l]() {
       // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
+
+      // CFX-053: Apply presets to the effect instance BEFORE call.perform()
+      // so the runner picks up mirror/intro/outro on its very first frame.
+      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+        if (inst->get_light_state() == l) {
+          if (this->mirror_.has_value())
+            inst->set_mirror_preset(this->mirror_.value());
+          if (this->intro_.has_value())
+            inst->set_intro_preset(this->intro_.value());
+          if (this->outro_.has_value())
+            inst->set_outro_preset(this->outro_.value());
+          if (this->inout_duration_.has_value())
+            inst->set_inout_duration_preset(this->inout_duration_.value());
+        }
+      }
+
       auto call = l->make_call();
       call.set_state(true);
       if (!this->effect_.empty()) {
@@ -447,10 +464,20 @@ void CFXSequence::start() {
         call.set_brightness(this->brightness_.value());
       }
       call.perform();
+    });
+    stagger_delay += 50; // 50ms gap per strip start (CFX-052: longer for SPI compatibility)
+  }
 
-      // Bind sequence to the correct CFXAddressableLightEffect instance.
+  // CFX-053: Deferred binding — runs AFTER all staggered starts have fired.
+  // This ensures every effect's act_ is initialized before we try to bind.
+  // Also handles segment-to-parent resolution for virtual segment lights.
+  uint32_t bind_delay = stagger_delay + 100;
+  esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
+      (this->id_ + "_bind_all").c_str(), bind_delay, [this]() {
+    esphome::App.feed_wdt();
+    for (auto *l : this->lights_) {
       light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
-      bool effect_bound = false;
+      bool bound = false;
       if (active != nullptr) {
         for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
           if (inst == active) {
@@ -466,19 +493,50 @@ void CFXSequence::start() {
               inst->set_outro_preset(this->outro_.value());
             if (this->inout_duration_.has_value())
               inst->set_inout_duration_preset(this->inout_duration_.value());
-            effect_bound = true;
+            bound = true;
+            break;
           }
         }
       }
-
-      // Final light fallback check
-      if (i == total_lights - 1) {
-        // Re-check bindings globally if it was the last staggered light
-        this->handle_fallback_binding_();
+      // CFX-053: Segment-to-parent resolution.
+      // Virtual segment lights are not in all_effects. Resolve the parent
+      // physical light's effect instance via the segment's parent pointer.
+      if (!bound) {
+        auto *output = l->get_output();
+        auto *vseg = dynamic_cast<cfx_light::CFXVirtualSegmentLight *>(output);
+        if (vseg != nullptr) {
+          auto *parent = vseg->get_parent();
+          auto *master_ls = parent->get_master_light_state();
+          if (master_ls != nullptr) {
+            light::LightEffect *master_active =
+                chimera_fx::LightStateProxy::get_active_effect(master_ls);
+            if (master_active != nullptr) {
+              for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+                if (inst == master_active) {
+                  ESP_LOGD(TAG, "  Binding Sequence to parent Effect %p (segment '%s')",
+                           inst, vseg->get_segment_id().c_str());
+                  inst->set_active_sequence(this, this->speed_, this->intensity_,
+                                            this->palette_, this->iterations_);
+                  inst->set_strip_tag(this->strip_tag_);
+                  if (this->mirror_.has_value())
+                    inst->set_mirror_preset(this->mirror_.value());
+                  if (this->intro_.has_value())
+                    inst->set_intro_preset(this->intro_.value());
+                  if (this->outro_.has_value())
+                    inst->set_outro_preset(this->outro_.value());
+                  if (this->inout_duration_.has_value())
+                    inst->set_inout_duration_preset(this->inout_duration_.value());
+                  bound = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
       }
-    });
-    stagger_delay += 50; // 50ms gap per strip start (CFX-052: longer for SPI compatibility)
-  }
+    }
+    this->handle_fallback_binding_();
+  });
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
@@ -642,6 +700,12 @@ void CFXSequence::complete_and_notify() {
   this->duration_completion_pending_ = false; // CFX-044c: Reset after handling
 
   ESP_LOGD(TAG, "Sequence '%s': completing (effect done)...", this->name_.c_str());
+
+  // CFX-053: Drain any last-frame on_cfx_reach triggers BEFORE teardown.
+  // Without this, triggers queued in the same frame as effect_complete_ are
+  // lost because clear_active_binding() nulls act_->active_sequence before
+  // flush_pending_triggers() has a chance to fire them.
+  this->flush_pending_triggers();
 
   this->report_event_stop();
   this->clear_active_binding();
@@ -990,9 +1054,13 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 
   this->last_triggered_pixel_ = current_pixel;
 
-  // Check runtime milestones (cfx_reach HA events) — fire on both passes
-  // as documented. Each pass generates its own 10%..100% sequence.
-  this->check_milestones_(current_percentage * 100.0f);
+  // CFX-053: Milestones (cfx_reach HA events) fire ONLY on the forward pass.
+  // The erase/return pass of bidirectional effects (e.g. Wipe) sweeps 0→100%
+  // again, which would double-fire every milestone. The forward pass is
+  // "the only one that counts" — erase pass milestones are suppressed.
+  if (!is_return_phase) {
+    this->check_milestones_(current_percentage * 100.0f);
+  }
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {

@@ -171,6 +171,19 @@ async def to_code(config):
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
+        # CFX-053: Also map segment IDs to their slugified names.
+        # Without this, sequences targeting segments (e.g. s2_Strip1) fall
+        # through to the raw ID fallback, producing a strip_tag that doesn't
+        # match the event entity registered in light.py.
+        for seg in lconf.get("segments", []):
+            seg_lid = seg.get("id")
+            seg_name = seg.get("name", "")
+            if seg_lid is not None and seg_name:
+                seg_tag = _cfx_slugify(str(seg_name))
+                light_name_map[seg_lid.id] = seg_tag
+                if seg_tag not in seen_tags:
+                    seen_tags.append(seg_tag)
+
 
     # 2. Progress Sensor
     prog_id = core.ID("cfx_progress", is_declaration=True, type=sensor.Sensor)
