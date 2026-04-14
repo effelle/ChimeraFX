@@ -275,6 +275,8 @@ void CFXAddressableLightEffect::start() {
 #ifdef USE_CFX_SEQUENCE
   for (auto *seq : chimera_fx::CFXSequence::instances) {
     if (seq->is_running() && seq->owns_light(this->get_light_state())) {
+      ESP_LOGD("chimera_fx", "CFX-036 auto-bind: effect '%s' -> sequence '%s'",
+               this->get_name(), seq->get_name().c_str());
       this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
                                 seq->get_palette(), seq->get_iterations());
       break;

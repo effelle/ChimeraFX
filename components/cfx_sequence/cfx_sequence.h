@@ -29,6 +29,9 @@
 #include "../cfx_effect/cfx_event_manager.h"
 
 namespace esphome {
+namespace chimera_fx {
+class CFXAddressableLightEffect;  // Forward declaration for binding helpers
+}
 namespace cfx_sequence {
 
 class CfxSeqOnStartTrigger : public ::esphome::Trigger<> {};
@@ -120,6 +123,8 @@ public:
   void check_duration();
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();
+  bool try_bind_effects_();
+  void apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect *inst);
   void force_stop_all();
   static void stop_all();
 
@@ -284,7 +289,6 @@ public:
   friend class CfxRunActionBase; // allows do_play_() to configure protected fields
 
 protected:
-  void handle_fallback_binding_();
 };
 
 template <typename... Ts> class StartAction : public ::esphome::Action<Ts...> {

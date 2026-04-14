@@ -429,11 +429,21 @@ void CFXSequence::start() {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
                                       task_hash,
                                       stagger_delay, [this, l, task_name]() {
-      this->stagger_tasks_pending_--;
-      if (!this->is_running_) return;
+      // CFX-055: Do NOT decrement stagger_tasks_pending_ until AFTER
+      // call.perform() completes. Decrementing early opens the listener
+      // gate (is_stagger_complete() == true) during the effect stop→start
+      // transition inside perform(), which can momentarily detect
+      // is_on()==false and trigger a premature sequence stop().
+      if (!this->is_running_) {
+        this->stagger_tasks_pending_--;
+        return;
+      }
 
       // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
+
+      ESP_LOGD(TAG, "  Executing stagger task '%s' for light '%s'",
+               task_name.c_str(), l->get_name().c_str());
 
       // CFX-053: Apply presets to the effect instance BEFORE call.perform()
       // Resolve target effect instance (handle segments resolving to parents)
@@ -506,106 +516,26 @@ void CFXSequence::start() {
         call.set_brightness(this->brightness_.value());
       }
       call.perform();
+
+      // CFX-055: NOW it's safe to decrement — perform() has completed,
+      // the effect is started and bound, light is ON.
+      this->stagger_tasks_pending_--;
     });
     stagger_delay += 50; // 50ms gap per strip start (CFX-052: longer for SPI compatibility)
   }
 
-  // CFX-053: Deferred binding — runs AFTER all staggered starts have fired.
-  // This ensures every effect's act_ is initialized before we try to bind.
-  // Also handles segment-to-parent resolution for virtual segment lights.
+  // CFX-055: Deferred binding — verification & retry.
+  // The primary binding now happens via CFX-036 auto-bind inside the effect's
+  // start() method (synchronous, reliable). This deferred callback serves as
+  // a VERIFICATION pass: if auto-bind succeeded, it's a no-op. If it missed
+  // (e.g. effect not yet initialized), we retry the binding here.
   uint32_t bind_delay = stagger_delay + 100;
   uint32_t bind_hash = esphome::fnv1_hash(this->id_ + "_bind_all");
   esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
       bind_hash, bind_delay, [this]() {
+    if (!this->is_running_) return;
     esphome::App.feed_wdt();
-    for (auto *l : this->lights_) {
-      light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
-      bool bound = false;
-      if (active != nullptr) {
-        for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-          if (inst == active) {
-            ESP_LOGD(TAG, "  Binding Sequence to Effect %p (active match)", inst);
-            inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                      this->palette_, this->iterations_);
-            inst->set_strip_tag(this->strip_tag_);
-            if (this->mirror_.has_value())
-              inst->set_mirror_preset(this->mirror_.value());
-            if (this->intro_.has_value())
-              inst->set_intro_preset(this->intro_.value());
-            if (this->outro_.has_value())
-              inst->set_outro_preset(this->outro_.value());
-            if (this->inout_duration_.has_value())
-              inst->set_inout_duration_preset(this->inout_duration_.value());
-            bound = true;
-            break;
-          }
-        }
-        if (!bound) {
-          // CFX-054: Virtual segments effects are tracked separately, check them too!
-          for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
-            if (inst == active) {
-              ESP_LOGD(TAG, "  Binding Sequence to Effect %p (segment active match)", inst);
-              inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                        this->palette_, this->iterations_);
-              inst->set_strip_tag(this->strip_tag_);
-              if (this->mirror_.has_value())
-                inst->set_mirror_preset(this->mirror_.value());
-              if (this->intro_.has_value())
-                inst->set_intro_preset(this->intro_.value());
-              if (this->outro_.has_value())
-                inst->set_outro_preset(this->outro_.value());
-              if (this->inout_duration_.has_value())
-                inst->set_inout_duration_preset(this->inout_duration_.value());
-              bound = true;
-              break;
-            }
-          }
-        }
-      }
-      // CFX-053: Segment-to-parent resolution.
-      // Virtual segment lights are not in all_effects. Resolve the parent
-      // physical light's effect instance via the segment's parent pointer.
-      if (!bound) {
-        auto *output = l->get_output();
-        cfx_light::CFXVirtualSegmentLight *vseg = nullptr;
-        for (auto *s : cfx_light::CFXVirtualSegmentLight::all_segments) {
-          if (s == output) {
-            vseg = s;
-            break;
-          }
-        }
-        if (vseg != nullptr) {
-          auto *parent = vseg->get_parent();
-          auto *master_ls = parent->get_master_light_state();
-          if (master_ls != nullptr) {
-            light::LightEffect *master_active =
-                chimera_fx::LightStateProxy::get_active_effect(master_ls);
-            if (master_active != nullptr) {
-              for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-                if (inst == master_active) {
-                  ESP_LOGD(TAG, "  Binding Sequence to parent Effect %p (segment '%s')",
-                           inst, vseg->get_segment_id().c_str());
-                  inst->set_active_sequence(this, this->speed_, this->intensity_,
-                                            this->palette_, this->iterations_);
-                  inst->set_strip_tag(this->strip_tag_);
-                  if (this->mirror_.has_value())
-                    inst->set_mirror_preset(this->mirror_.value());
-                  if (this->intro_.has_value())
-                    inst->set_intro_preset(this->intro_.value());
-                  if (this->outro_.has_value())
-                    inst->set_outro_preset(this->outro_.value());
-                  if (this->inout_duration_.has_value())
-                    inst->set_inout_duration_preset(this->inout_duration_.value());
-                  bound = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    this->handle_fallback_binding_();
+    this->try_bind_effects_();
   });
 
   this->last_triggered_percentage_ = -1.0f;
@@ -628,9 +558,13 @@ void CFXSequence::start() {
   this->report_event_start();
 }
 
-void CFXSequence::handle_fallback_binding_() {
-  // Check if ANY light is currently bound to this sequence
+// CFX-055: Unified bind helper — used by both the deferred bind_all and retry.
+// Iterates the sequence's own lights, finds the active effect on each, and
+// binds the sequence to it. Returns true if at least one binding was made.
+bool CFXSequence::try_bind_effects_() {
   bool any_bound = false;
+
+  // First, check if the auto-bind (CFX-036) already succeeded.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_active_sequence() == this) {
       any_bound = true;
@@ -646,27 +580,120 @@ void CFXSequence::handle_fallback_binding_() {
     }
   }
 
-  if (any_bound || chimera_fx::CFXAddressableLightEffect::all_effects.empty())
-    return;
-
-  // Fallback path: All staggered starts failed to bind local instances.
-  // Bind to the first registered effect (Master FX) as a safety net.
-  auto *master_fx = chimera_fx::CFXAddressableLightEffect::all_effects[0];
-  if (master_fx != nullptr) {
-    ESP_LOGW(TAG, "Sequence '%s': no active local CFX effects found. Falling back to %p.",
-             this->name_.c_str(), master_fx);
-    master_fx->set_active_sequence(this, this->speed_, this->intensity_,
-                                   this->palette_, this->iterations_);
-    master_fx->set_strip_tag(this->strip_tag_);
-    if (this->mirror_.has_value())
-      master_fx->set_mirror_preset(this->mirror_.value());
-    if (this->intro_.has_value())
-      master_fx->set_intro_preset(this->intro_.value());
-    if (this->outro_.has_value())
-      master_fx->set_outro_preset(this->outro_.value());
-    if (this->inout_duration_.has_value())
-      master_fx->set_inout_duration_preset(this->inout_duration_.value());
+  if (any_bound) {
+    ESP_LOGD(TAG, "Sequence '%s': binding verified (auto-bind succeeded)", this->name_.c_str());
+    return true;
   }
+
+  // Auto-bind missed — try manual binding via active effect on each light.
+  ESP_LOGD(TAG, "Sequence '%s': auto-bind missed, attempting manual bind...", this->name_.c_str());
+  for (auto *l : this->lights_) {
+    light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
+    if (active == nullptr) {
+      ESP_LOGD(TAG, "  Light '%s': no active effect", l->get_name().c_str());
+      continue;
+    }
+
+    // Search all_effects
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+      if (inst == active) {
+        ESP_LOGD(TAG, "  Binding to Effect %p on '%s' (manual)", inst, l->get_name().c_str());
+        this->apply_binding_to_effect_(inst);
+        any_bound = true;
+        break;
+      }
+    }
+    if (any_bound) continue;
+
+    // Search all_segment_effects
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+      if (inst == active) {
+        ESP_LOGD(TAG, "  Binding to segment Effect %p on '%s' (manual)", inst, l->get_name().c_str());
+        this->apply_binding_to_effect_(inst);
+        any_bound = true;
+        break;
+      }
+    }
+    if (any_bound) continue;
+
+    // Segment-to-parent resolution
+    auto *output = l->get_output();
+    for (auto *s : cfx_light::CFXVirtualSegmentLight::all_segments) {
+      if (s == output) {
+        auto *parent = s->get_parent();
+        auto *master_ls = parent->get_master_light_state();
+        if (master_ls != nullptr) {
+          light::LightEffect *master_active =
+              chimera_fx::LightStateProxy::get_active_effect(master_ls);
+          for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+            if (inst == master_active) {
+              ESP_LOGD(TAG, "  Binding to parent Effect %p (segment '%s', manual)",
+                       inst, s->get_segment_id().c_str());
+              this->apply_binding_to_effect_(inst);
+              any_bound = true;
+              break;
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  if (!any_bound) {
+    // CFX-055: Schedule ONE retry 150ms later instead of blind fallback.
+    // The effect's start() may not have fired yet (deferred by ESPHome).
+    uint32_t retry_hash = esphome::fnv1_hash(this->id_ + "_bind_retry");
+    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
+        retry_hash, 150, [this]() {
+      if (!this->is_running_) return;
+
+      // Check once more
+      bool found = false;
+      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+        if (inst->get_active_sequence() == this) { found = true; break; }
+      }
+      if (!found) {
+        for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+          if (inst->get_active_sequence() == this) { found = true; break; }
+        }
+      }
+      if (found) {
+        ESP_LOGD(TAG, "Sequence '%s': binding verified on retry", this->name_.c_str());
+        return;
+      }
+
+      // Last resort: find any effect on the sequence's own lights
+      for (auto *l : this->lights_) {
+        for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+          if (inst->get_light_state() == l && inst->get_act() != nullptr) {
+            ESP_LOGW(TAG, "Sequence '%s': fallback binding to '%s' on '%s'",
+                     this->name_.c_str(), inst->get_name(), l->get_name().c_str());
+            this->apply_binding_to_effect_(inst);
+            return;
+          }
+        }
+      }
+      ESP_LOGW(TAG, "Sequence '%s': binding FAILED after retry — no active effects on target lights",
+               this->name_.c_str());
+    });
+  }
+
+  return any_bound;
+}
+
+void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect *inst) {
+  inst->set_active_sequence(this, this->speed_, this->intensity_,
+                            this->palette_, this->iterations_);
+  inst->set_strip_tag(this->strip_tag_);
+  if (this->mirror_.has_value())
+    inst->set_mirror_preset(this->mirror_.value());
+  if (this->intro_.has_value())
+    inst->set_intro_preset(this->intro_.value());
+  if (this->outro_.has_value())
+    inst->set_outro_preset(this->outro_.value());
+  if (this->inout_duration_.has_value())
+    inst->set_inout_duration_preset(this->inout_duration_.value());
 }
 
 void CFXSequence::stop() {
