@@ -1261,6 +1261,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             (uint32_t(roundf(r * 255.0f)) << 16) |
             (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
 
+    // CFX-065: Virtual Segment Default Color Restoration
+    // When sequence/cfx_set turns ON a light without specifying a color, ESPHome 
+    // uses the last saved state. If no state was ever saved (e.g. fresh boot), the color 
+    // channels remain 0. This causes monochromatic effects to play invisible (if dim) 
+    // or go dark in mono_idle. Fallback to White if ON but color is missing.
+    if (color == 0 && state_ptr->remote_values.is_on()) {
+      color = 0xFFFFFFFF; // 100% White
+    }
+
   } else {
     static uint64_t null_state_log = 0;
     if (millis_64() - null_state_log > 5000) {
