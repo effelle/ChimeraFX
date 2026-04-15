@@ -512,6 +512,14 @@ public:
   static void stop_state_transformer(light::LightState *state) {
     static_cast<LightStateProxy *>(state)->transformer_.reset();
   }
+  // Fix 2: detect whether the Master Light's transition engine is active.
+  // When true, ESPHome's transformer is writing a solid colour into the shared
+  // DMA buffer every frame, silently overwriting any idling segment data.
+  // Checking transformer_ != nullptr is the lightest possible probe — no pixel
+  // reads, no heap allocation, no side effects.
+  static bool has_active_transformer(light::LightState *state) {
+    return static_cast<LightStateProxy *>(state)->transformer_ != nullptr;
+  }
 };
 
 template <typename... Ts> class PlayEffectAction : public Action<Ts...> {

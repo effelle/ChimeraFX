@@ -225,6 +225,36 @@ void CfxSetActionBase::do_play_() {
     if (this->brightness_.has_value())
       call.set_brightness(this->brightness_.value());
     call.perform();
+
+    // Fix 3 — Re-entrancy: force a fresh start() when cfx_set targets an
+    // effect that is already active on this light.
+    //
+    // ESPHome's LightState::make_call().set_effect(name).perform() is a no-op
+    // when the light is already ON and the named effect is already the active
+    // one — it recognises "nothing changed" and skips the effect engine's
+    // start() entirely.  The consequence is that mono_idle is never cleared,
+    // intro_active is never re-armed, and Hydro Pulse (and similar) sticks ON
+    // silently without replaying its intro.
+    //
+    // Fix: after perform(), iterate all_effects (typed CFXAddressableLightEffect*
+    // — no reinterpret_cast required) and call start() directly on any instance
+    // whose light matches AND whose effect name equals the requested name AND
+    // which is currently active (act_ != nullptr, meaning start() was not
+    // already invoked by perform() above).  The name comparison uses ESPHome's
+    // own get_name() so it is identical to the string perform() would use.
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+      if (inst->get_light_state() == this->light_ &&
+          inst->get_name() == this->effect_ &&
+          inst->get_act() != nullptr) {
+        // start() is idempotent: it resets all per-activation state cleanly,
+        // including mono_idle=false, intro_active=true, and milestone counters.
+        ESP_LOGD("chimera_fx",
+                 "cfx_set re-entry: forcing start() on '%s' (was already active).",
+                 this->effect_.c_str());
+        inst->start();
+        break;
+      }
+    }
   }
 }
 

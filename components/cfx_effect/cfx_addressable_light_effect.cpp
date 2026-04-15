@@ -709,6 +709,21 @@ void CFXAddressableLightEffect::start() {
         }
       }
     }
+    // Fix 1 — Gas Discharge / Fluorescent minimum duration clamp.
+    // The priority chain above (A→D) lets YAML presets and UI sliders set any
+    // value, but Gas Discharge (182) and Fluorescent (183) have hard physical
+    // minimums below which the strobe effect is truncated mid-cycle.
+    // We clamp *upward* only: a deliberate override above the minimum is kept,
+    // but any value below it (including the 1000 ms YAML default) is raised.
+    if (act_->active_intro_mode == INTRO_MODE_GAS_DISCHARGE ||
+        this->effect_id_ == 182) {
+      if (duration_ms < 2200)
+        duration_ms = 2200;
+    } else if (this->effect_id_ == 183) { // Fluorescent Start
+      if (duration_ms < 800)
+        duration_ms = 800;
+    }
+
     act_->active_intro_duration_ms = duration_ms;
 
     // Cache Speed and Intensity for Intro
@@ -1433,6 +1448,26 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_total_frame_us  = 0;
         act_->idle_jitter_count    = 0;
       }
+
+      // Fix 2 — DMA scrub detection.
+      // If the Master Light has an active ESPHome transformer (e.g. a colour
+      // transition triggered by a state change), it is writing a solid colour
+      // into the shared DMA buffer every frame, silently overwriting the pixel
+      // data our idling runners last committed.  mono_dirty is already the
+      // correct "wake for one frame" signal — set it here so the next iteration
+      // re-services all runners and repaints the correct colour.  Cost when
+      // truly idle and no transformer is active: one pointer dereference per
+      // frame — negligible compared to CFX-045 savings.
+      auto *master_ls = this->get_light_state();
+      if (master_ls != nullptr &&
+          chimera_fx::LightStateProxy::has_active_transformer(master_ls)) {
+        act_->mono_dirty = true;
+        ESP_LOGV("chimera_fx",
+                 "[%s] mono_idle: Master Light transformer active — "
+                 "scheduling repaint to shield DMA buffer.",
+                 act_->cached_runner_name.c_str());
+      }
+
       skip_service = true;
     }
   }
