@@ -138,7 +138,21 @@ void CfxRunActionBase::do_play_() {
     return;
   }
 
-  // Claim a pool slot.
+  // Deduplication guard: if any active pool sequence is already running this
+  // exact light+effect combination, skip. This prevents on_cfx_reach (which
+  // fires every sweep cycle after the trigger position is crossed) from
+  // spawning a new instance every frame, killing the running one, and looping.
+  CFXRunPool &pool = CFXRunPool::get();
+  for (auto *seq : CFXSequence::instances) {
+    if (pool.is_pool_owned(seq) && seq->is_running() &&
+        seq->owns_light(this->light_) &&
+        seq->effect_ == this->effect_) {
+      ESP_LOGV("cfx_run",
+               "cfx_run: '%s' on '%s' already running — skipped duplicate.",
+               this->effect_.c_str(), this->light_->get_name().c_str());
+      return;
+    }
+  }
   CFXSequence *seq = CFXRunPool::get().claim(this->nesting_depth_);
   if (seq == nullptr)
     return; // pool exhausted or depth exceeded — already logged
@@ -209,6 +223,19 @@ void CfxSetActionBase::do_play_() {
 
   // Optionally turn the light on with the specified effect.
   if (!this->effect_.empty()) {
+    // Fix 3 — Re-entrancy: snapshot act_ BEFORE perform() so we can detect
+    // whether ESPHome treated the call as a no-op (same effect already active).
+    chimera_fx::CFXAddressableLightEffect *target_inst = nullptr;
+    chimera_fx::CFXAddressableLightEffect::CFXActivation *act_before = nullptr;
+    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+      if (inst->get_light_state() == this->light_ &&
+          inst->get_name() == this->effect_) {
+        target_inst = inst;
+        act_before  = inst->get_act();
+        break;
+      }
+    }
+
     auto call = this->light_->make_call();
     call.set_state(true);
     call.set_effect(this->effect_);
@@ -226,34 +253,41 @@ void CfxSetActionBase::do_play_() {
       call.set_brightness(this->brightness_.value());
     call.perform();
 
-    // Fix 3 — Re-entrancy: force a fresh start() when cfx_set targets an
-    // effect that is already active on this light.
-    //
-    // ESPHome's LightState::make_call().set_effect(name).perform() is a no-op
-    // when the light is already ON and the named effect is already the active
-    // one — it recognises "nothing changed" and skips the effect engine's
-    // start() entirely.  The consequence is that mono_idle is never cleared,
-    // intro_active is never re-armed, and Hydro Pulse (and similar) sticks ON
-    // silently without replaying its intro.
-    //
-    // Fix: after perform(), iterate all_effects (typed CFXAddressableLightEffect*
-    // — no reinterpret_cast required) and call start() directly on any instance
-    // whose light matches AND whose effect name equals the requested name AND
-    // which is currently active (act_ != nullptr, meaning start() was not
-    // already invoked by perform() above).  The name comparison uses ESPHome's
-    // own get_name() so it is identical to the string perform() would use.
-    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-      if (inst->get_light_state() == this->light_ &&
-          inst->get_name() == this->effect_ &&
-          inst->get_act() != nullptr) {
-        // start() is idempotent: it resets all per-activation state cleanly,
-        // including mono_idle=false, intro_active=true, and milestone counters.
-        ESP_LOGD("chimera_fx",
-                 "cfx_set re-entry: forcing start() on '%s' (was already active).",
-                 this->effect_.c_str());
-        inst->start();
-        break;
-      }
+    // Fix 3 — If act_ is unchanged after perform(), ESPHome was a no-op
+    // (light already ON with same effect). Force a clean restart so the intro
+    // replays and mono_idle is cleared.
+    if (target_inst != nullptr &&
+        act_before  != nullptr &&
+        target_inst->get_act() == act_before) {
+      ESP_LOGD("chimera_fx",
+               "cfx_set re-entry: forcing start() on '%s' (perform() was no-op).",
+               this->effect_.c_str());
+      target_inst->start();
+    }
+  }
+
+  // Bug C fix — adopt_light(): register this light with the currently running
+  // parent sequence so that sequence stop() cleans it up properly.
+  //
+  // When cfx_set activates a light that is NOT in the sequence's lights[] list
+  // (e.g. Strip2 triggered via on_cfx_reach), that light is an orphan: the
+  // sequence never calls turn_off on it, so its outro never plays and HA keeps
+  // it marked as ON even after the sequence ends. The only way to fix it was to
+  // manually toggle the switch.
+  //
+  // Fix: find the currently running non-pool sequence and call adopt_light() on
+  // it. adopt_light() adds the light to lights_[], saves its state as OFF
+  // (pre-sequence baseline), and registers a listener — making stop() treat it
+  // identically to any other sequence light.
+  //
+  // We identify the parent sequence as: running, not pool-owned, and either
+  // already owning this->light_ (cfx_set on a sequence light — no-op inside
+  // adopt_light) or owning the light that fired the on_cfx_reach trigger. We
+  // simply adopt into ALL currently running non-pool sequences; adopt_light()
+  // is idempotent so double-adoption is harmless.
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->is_running() && !CFXRunPool::get().is_pool_owned(seq)) {
+      seq->adopt_light(this->light_);
     }
   }
 }
@@ -1011,6 +1045,57 @@ void CFXSequence::clear_active_binding() {
   }
 }
 
+void CFXSequence::adopt_light(light::LightState *state) {
+  if (state == nullptr || !this->is_running_)
+    return;
+
+  // Idempotent: if the light is already owned, do nothing.
+  if (this->owns_light(state))
+    return;
+
+  // 1. Add to lights_ so stop() iterates it.
+  this->lights_.push_back(state);
+
+  // 2. Save current state so the restore path in stop() has a valid baseline.
+  //    The light was just turned ON by cfx_set, so we save it as OFF — that is
+  //    the pre-sequence state we want to restore to when the sequence ends.
+  SavedState s;
+  s.values = state->remote_values;
+  s.values.set_state(false);            // restore to OFF when sequence stops
+  light::ColorMode cm = state->remote_values.get_color_mode();
+  if (cm == light::ColorMode::UNKNOWN) {
+    if (state->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE))
+      cm = light::ColorMode::RGB_WHITE;
+    else if (state->get_traits().supports_color_mode(light::ColorMode::RGB))
+      cm = light::ColorMode::RGB;
+    else if (state->get_traits().supports_color_mode(light::ColorMode::WHITE))
+      cm = light::ColorMode::WHITE;
+    else
+      cm = light::ColorMode::ON_OFF;
+  }
+  s.color_mode = cm;
+  s.effect = "None";
+  this->saved_states_.push_back(s);
+
+  // 3. Register a remote-values listener so the sequence detects when this
+  //    light is turned off manually (same pattern as start()-time registration).
+  auto it = std::find_if(
+      this->monitored_lights_.begin(), this->monitored_lights_.end(),
+      [state](const MonitoredLight &m) { return m.light == state; });
+
+  if (it != this->monitored_lights_.end()) {
+    it->listener->reinstate(this);
+  } else {
+    auto *listener = new CFXSequenceListener(this, state);
+    state->add_remote_values_listener(listener);
+    this->monitored_lights_.push_back({state, listener});
+  }
+
+  ESP_LOGD("cfx_sequence",
+           "Sequence '%s': adopted cfx_set light '%s' — will stop with sequence.",
+           this->name_.c_str(), state->get_name().c_str());
+}
+
 void CFXSequence::flush_pending_triggers() {
   if (this->pending_reach_triggers_.empty())
     return;
@@ -1209,13 +1294,28 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
-  if (this->parent_ != nullptr && this->parent_->is_running() && 
-      this->parent_->is_stagger_complete() && !this->light_->remote_values.is_on()) {
-    ESP_LOGV("cfx_sequence",
-             "Sequence '%s' stopping because light '%s' turned off",
-             this->parent_->get_name().c_str(), this->light_->get_name().c_str());
-    this->parent_->stop();
+  if (this->parent_ == nullptr || !this->parent_->is_running() ||
+      !this->parent_->is_stagger_complete())
+    return;
+
+  // Only stop the sequence when ALL of its lights are off, not just this one.
+  // Previous behaviour (any single light off -> stop()) caused a cascade: in a
+  // 2-light sequence, turning off Strip1 immediately restored Strip3 to its
+  // pre-sequence state, even though the user only intended to control Strip1.
+  // Each sequence light must be independently controllable; the sequence stops
+  // only when every light it owns has turned off.
+  if (this->light_->remote_values.is_on())
+    return; // this light is still on — nothing to do
+
+  for (auto *l : this->parent_->lights_) {
+    if (l->remote_values.is_on())
+      return; // at least one other sequence light still on — keep running
   }
+
+  ESP_LOGV("cfx_sequence",
+           "Sequence '%s' stopping: all lights are now off",
+           this->parent_->get_name().c_str());
+  this->parent_->stop();
 }
 
 // ----------------------------------------------------

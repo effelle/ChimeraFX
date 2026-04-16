@@ -70,6 +70,13 @@ public:
 
   void add_light(light::LightState *state) { this->lights_.push_back(state); }
 
+  // adopt_light(): register a light that was activated mid-sequence via cfx_set.
+  // Unlike add_light() (which is only safe to call before start()), this method
+  // is called while the sequence is already running. It adds the light to lights_,
+  // saves its current state for restore, and registers a listener so stop() will
+  // include it in cleanup — ensuring its outro plays and HA state is correct.
+  void adopt_light(light::LightState *state);
+
   // Custom payload bindings
   void set_speed(uint8_t speed) { this->speed_ = speed; }
   void set_intensity(uint8_t intensity) { this->intensity_ = intensity; }
