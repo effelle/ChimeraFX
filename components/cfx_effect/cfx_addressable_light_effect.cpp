@@ -1630,26 +1630,24 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             milestone_pct = ((float)lp / (float)slen) * 100.0f;
             if (milestone_pct > 100.0f)
               milestone_pct = 100.0f;
+            // Always fire per-light milestones with own tag; also call sequence
+            // for on_cfx_reach YAML triggers (same split as check_positional_triggers).
+            this->check_milestones_(milestone_pct);
 #ifdef USE_CFX_SEQUENCE
-            if (act_->active_sequence != nullptr) {
+            if (act_->active_sequence != nullptr)
                act_->active_sequence->check_positional_triggers((int32_t)(milestone_pct * 10.0f), 1001);
-            } else
 #endif
-            {
-               this->check_milestones_(milestone_pct);
-            }
           }
         }
       } else {
         milestone_pct = _prog * 100.0f;
+        // Always fire per-light milestones with own tag; also call sequence
+        // for on_cfx_reach YAML triggers (same split as check_positional_triggers).
+        this->check_milestones_(milestone_pct);
 #ifdef USE_CFX_SEQUENCE
-        if (act_->active_sequence != nullptr) {
+        if (act_->active_sequence != nullptr)
            act_->active_sequence->check_positional_triggers((int32_t)(milestone_pct * 10.0f), 1001);
-        } else
 #endif
-        {
-           this->check_milestones_(milestone_pct);
-        }
       }
     }
 
@@ -6312,19 +6310,32 @@ void CFXAddressableLightEffect::check_positional_triggers(
   act_->last_return_phase = is_return_phase;
 
   {
+    // Always fire per-light milestones (cfx_reach HA events) using this
+    // effect's own act_->strip_tag, regardless of whether a sequence is
+    // active. Previously, when a sequence was bound, ALL milestone events were
+    // delegated to seq->check_positional_triggers() which used seq->strip_tag_
+    // ('led_strip1') for every light in the sequence — silencing Strip2, Strip3
+    // and any other non-primary light entirely.
+    //
+    // The sequence's check_positional_triggers() serves TWO purposes:
+    //   1. Fire cfx_reach HA milestone events (tagged with seq->strip_tag_)
+    //   2. Evaluate on_cfx_reach YAML automation triggers
+    //
+    // Purpose 1 is now handled here by the effect using its own tag.
+    // Purpose 2 still needs the sequence — call it separately so YAML
+    // on_cfx_reach automations continue to work.
+    float current_percentage =
+        (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1)
+                           : 1.0f;
+    this->check_milestones_(current_percentage * 100.0f);
+
 #ifdef USE_CFX_SEQUENCE
     if (act_->active_sequence != nullptr) {
       act_->active_sequence->check_positional_triggers(current_pixel,
                                                        total_pixels,
                                                        is_return_phase);
-    } else
-#endif
-    {
-      float current_percentage =
-          (total_pixels > 1) ? (float)current_pixel / (float)(total_pixels - 1)
-                             : 1.0f;
-      this->check_milestones_(current_percentage * 100.0f);
     }
+#endif
   }
 #endif
 

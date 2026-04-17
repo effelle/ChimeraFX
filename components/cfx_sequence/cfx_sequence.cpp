@@ -1295,13 +1295,13 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
 
   this->last_triggered_pixel_ = current_pixel;
 
-  // CFX-053: Milestones (cfx_reach HA events) fire ONLY on the forward pass.
-  // The erase/return pass of bidirectional effects (e.g. Wipe) sweeps 0→100%
-  // again, which would double-fire every milestone. The forward pass is
-  // "the only one that counts" — erase pass milestones are suppressed.
-  if (!is_return_phase) {
-    this->check_milestones_(current_percentage * 100.0f);
-  }
+  // Milestone HA events (cfx_reach) are no longer fired here.
+  // Each CFXAddressableLightEffect fires its own check_milestones_() using
+  // act_->strip_tag — the per-light tag set in start() from get_object_id_to().
+  // This function is now responsible only for on_cfx_reach YAML automation
+  // triggers (pending_reach_triggers_), which require sequence-level state
+  // (last_triggered_percentage_, on_reach_triggers_) and are correctly owned
+  // by the sequence object.
 }
 
 void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
