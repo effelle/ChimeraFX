@@ -557,9 +557,27 @@ void CFXLightOutput::loop() {
     this->write_state(nullptr);
 
     if (this->outro_cbs_.empty()) {
-      // Outro finished. Reset local brightness and physically black out strip.
-      for (int i = 0; i < this->size(); i++) {
-        (*this)[i] = Color::BLACK;
+      // Outro finished. Black out only the pixels that belong to segments
+      // that are now OFF. In a segmented strip, other segments may still be
+      // running their own effects — zeroing the entire DMA buffer would
+      // make them go dark even though they are still ON.
+      //
+      // Without segments, fall back to blacking the whole strip (original
+      // behaviour) so non-segmented setups are unaffected.
+      if (this->has_segments()) {
+        const auto &defs   = this->get_segment_defs();
+        const auto &states = this->get_segment_light_states();
+        for (size_t si = 0; si < defs.size() && si < states.size(); si++) {
+          if (!states[si]->remote_values.is_on()) {
+            for (int p = defs[si].start; p < defs[si].stop; p++) {
+              (*this)[p] = Color::BLACK;
+            }
+          }
+        }
+      } else {
+        for (int i = 0; i < this->size(); i++) {
+          (*this)[i] = Color::BLACK;
+        }
       }
       this->write_state(nullptr);
     }
