@@ -759,7 +759,29 @@ bool CFXSequence::try_bind_effects_() {
 void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect *inst) {
   inst->set_active_sequence(this, this->speed_, this->intensity_,
                             this->palette_, this->iterations_);
-  inst->set_strip_tag(this->strip_tag_);
+
+  // Only stamp the sequence's strip_tag_ onto the effect if the effect's own
+  // light matches the sequence's primary light (same object ID).
+  // Effects that were adopted mid-sequence via cfx_set belong to a DIFFERENT
+  // light — their act_->strip_tag was already set correctly by start() from
+  // get_object_id_to(). Overwriting it with the sequence's primary tag
+  // ('led_strip1') causes all cfx_reach/cfx_stop/cfx_complete events fired
+  // by that effect to be tagged and routed as if they came from led_strip1,
+  // even after the sequence ends and the effect runs standalone again.
+  {
+    auto *ls = inst->get_light_state();
+    bool tag_matches = false;
+    if (ls != nullptr) {
+      char id_buf[128] = {};
+      ls->get_object_id_to(std::span(id_buf));
+      std::string own_tag(id_buf, strnlen(id_buf, sizeof(id_buf)));
+      tag_matches = (own_tag == this->strip_tag_);
+    }
+    if (tag_matches || ls == nullptr)
+      inst->set_strip_tag(this->strip_tag_);
+    // else: effect is an adopted light — keep its own tag from start()
+  }
+
   if (this->mirror_.has_value())
     inst->set_mirror_preset(this->mirror_.value());
   if (this->intro_.has_value())
