@@ -361,6 +361,13 @@ void CFXSequenceSelect::loop() {
       return;
     }
   }
+  for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+    if (eff->has_pending_completion()) {
+      esphome::App.feed_wdt();
+      eff->execute_completion();
+      return;
+    }
+  }
 }
 
 void CFXSequenceSelect::publish_state_silent(const std::string &value) {
@@ -1048,7 +1055,20 @@ void CFXSequence::clear_active_binding() {
   // completion, while still allowing cfx_complete to fire when the sequence
   // is interrupted externally (e.g. light turned off by user) without having
   // previously completed.
+  //
+  // Both all_effects (master-light effects) AND all_segment_effects (virtual
+  // segment effects) must be cleared. Previously only all_effects was
+  // iterated, leaving segment effects (Strip2, Strip3 etc.) with a stale
+  // non-null active_sequence. The cfx_stop gate in effect stop() requires
+  // active_sequence == nullptr — so those segments silently dropped their
+  // cfx_stop and cfx_complete events on sequence stop.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst->get_active_sequence() == this) {
+      inst->set_is_sequence_outro(this->completion_reported_);
+      inst->set_active_sequence(nullptr, {}, {}, {}, 0);
+    }
+  }
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_active_sequence(nullptr, {}, {}, {}, 0);
