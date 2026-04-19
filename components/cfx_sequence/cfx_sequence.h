@@ -83,6 +83,22 @@ public:
   void set_palette(uint8_t palette) { this->palette_ = palette; }
   void set_iterations(uint32_t iterations) { this->iterations_ = iterations; }
   void set_brightness(float brightness) { this->brightness_ = brightness; }
+  void set_color_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = 0;
+    this->color_has_white_ = false;
+  }
+  void set_color_rgbw(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = w;
+    this->color_has_white_ = true;
+  }
   void set_mirror(bool mirror) { this->mirror_ = mirror; }
   void set_intro(uint8_t intro) { this->intro_ = intro; }
   void set_outro(uint8_t outro) { this->outro_ = outro; }
@@ -173,6 +189,12 @@ protected:
   esphome::optional<uint8_t> intensity_;
   esphome::optional<uint8_t> palette_;
   esphome::optional<float> brightness_;
+  bool has_color_{false};
+  uint8_t color_r_{0};
+  uint8_t color_g_{0};
+  uint8_t color_b_{0};
+  uint8_t color_w_{0};
+  bool color_has_white_{false};
   esphome::optional<bool>    mirror_;
   esphome::optional<uint8_t> intro_;
   esphome::optional<uint8_t> outro_;
@@ -390,6 +412,22 @@ public:
   void set_intensity(uint8_t v)  { this->intensity_  = v; }
   void set_palette(uint8_t v)    { this->palette_    = v; }
   void set_brightness(float v)   { this->brightness_ = v; }
+  void set_color_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = 0;
+    this->color_has_white_ = false;
+  }
+  void set_color_rgbw(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = w;
+    this->color_has_white_ = true;
+  }
   void set_mirror(bool v)        { this->mirror_     = v; }
   void set_intro(uint8_t v)      { this->intro_      = v; }
   void set_outro(uint8_t v)      { this->outro_      = v; }
@@ -404,6 +442,12 @@ protected:
   esphome::optional<uint8_t> intensity_{};
   esphome::optional<uint8_t> palette_{};
   esphome::optional<float>   brightness_{};
+  bool has_color_{false};
+  uint8_t color_r_{0};
+  uint8_t color_g_{0};
+  uint8_t color_b_{0};
+  uint8_t color_w_{0};
+  bool color_has_white_{false};
   esphome::optional<bool>    mirror_{};
   esphome::optional<uint8_t> intro_{};
   esphome::optional<uint8_t> outro_{};
@@ -443,6 +487,22 @@ public:
   void set_intensity(uint8_t v)                { this->intensity_ = v; }
   void set_palette(uint8_t v)                  { this->palette_   = v; }
   void set_brightness(float v)                 { this->brightness_= v; }
+  void set_color_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = 0;
+    this->color_has_white_ = false;
+  }
+  void set_color_rgbw(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+    this->has_color_ = true;
+    this->color_r_ = r;
+    this->color_g_ = g;
+    this->color_b_ = b;
+    this->color_w_ = w;
+    this->color_has_white_ = true;
+  }
   void set_mirror(bool v)                      { this->mirror_    = v; }
   void set_intro(uint8_t v)                    { this->intro_     = v; }
   void set_outro(uint8_t v)                    { this->outro_     = v; }
@@ -476,6 +536,12 @@ protected:
   esphome::optional<uint8_t>  intensity_{};
   esphome::optional<uint8_t>  palette_{};
   esphome::optional<float>    brightness_{};
+  bool has_color_{false};
+  uint8_t color_r_{0};
+  uint8_t color_g_{0};
+  uint8_t color_b_{0};
+  uint8_t color_w_{0};
+  bool color_has_white_{false};
   esphome::optional<bool>     mirror_{};
   esphome::optional<uint8_t>  intro_{};
   esphome::optional<uint8_t>  outro_{};

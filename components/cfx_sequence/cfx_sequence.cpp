@@ -12,6 +12,7 @@
 #include "../cfx_effect/cfx_addressable_light_effect.h"
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "esphome/components/light/light_effect.h"
+#include "esphome/components/light/light_call.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
@@ -27,6 +28,58 @@ static const char *const TAG = "cfx_sequence";
 std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
+
+static light::ColorMode resolve_cfx_call_color_mode(light::LightState *light,
+                                                    bool prefer_white) {
+  if (prefer_white &&
+      light->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    return light::ColorMode::RGB_WHITE;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+    return light::ColorMode::RGB;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    return light::ColorMode::RGB_WHITE;
+  }
+  if (prefer_white &&
+      light->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+    return light::ColorMode::WHITE;
+  }
+
+  auto valid_mode = light->remote_values.get_color_mode();
+  if (valid_mode != light::ColorMode::UNKNOWN) {
+    return valid_mode;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+    return light::ColorMode::WHITE;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::BRIGHTNESS)) {
+    return light::ColorMode::BRIGHTNESS;
+  }
+  return light::ColorMode::ON_OFF;
+}
+
+static void apply_cfx_user_color(light::LightState *light, light::LightCall &call,
+                                 bool has_color, uint8_t r, uint8_t g,
+                                 uint8_t b, uint8_t w,
+                                 bool color_has_white) {
+  if (!has_color)
+    return;
+
+  auto mode = resolve_cfx_call_color_mode(light, color_has_white);
+  call.set_color_mode(mode);
+
+  if (mode == light::ColorMode::RGB || mode == light::ColorMode::RGB_WHITE) {
+    call.set_rgb(r / 255.0f, g / 255.0f, b / 255.0f);
+  }
+  if (color_has_white &&
+      (mode == light::ColorMode::RGB_WHITE ||
+       mode == light::ColorMode::WHITE ||
+       mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+       mode == light::ColorMode::COLD_WARM_WHITE)) {
+    call.set_white(w / 255.0f);
+  }
+}
 
 
 
@@ -103,6 +156,12 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->intensity_ = {};
       seq->palette_   = {};
       seq->brightness_= {};
+      seq->has_color_ = false;
+      seq->color_r_   = 0;
+      seq->color_g_   = 0;
+      seq->color_b_   = 0;
+      seq->color_w_   = 0;
+      seq->color_has_white_ = false;
       seq->mirror_    = {};
       seq->intro_     = {};
       seq->outro_     = {};
@@ -165,6 +224,13 @@ void CfxRunActionBase::do_play_() {
   if (this->intensity_.has_value())    seq->set_intensity(this->intensity_.value());
   if (this->palette_.has_value())      seq->set_palette(this->palette_.value());
   if (this->brightness_.has_value())   seq->set_brightness(this->brightness_.value());
+  if (this->has_color_) {
+    if (this->color_has_white_)
+      seq->set_color_rgbw(this->color_r_, this->color_g_, this->color_b_,
+                          this->color_w_);
+    else
+      seq->set_color_rgb(this->color_r_, this->color_g_, this->color_b_);
+  }
   if (this->mirror_.has_value())       seq->set_mirror(this->mirror_.value());
   if (this->intro_.has_value())        seq->set_intro(this->intro_.value());
   if (this->outro_.has_value())        seq->set_outro(this->outro_.value());
@@ -220,9 +286,36 @@ void CfxSetActionBase::do_play_() {
         inst->set_inout_duration_preset(this->inout_duration_.value());
     }
   }
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+    if (inst->get_light_state() == this->light_) {
+      if (this->speed_.has_value()) {
+        inst->set_sequence_speed(this->speed_.value());
+        inst->set_runner_owns_speed(true);
+      }
+      if (this->intensity_.has_value()) {
+        inst->set_sequence_intensity(this->intensity_.value());
+        inst->set_runner_owns_intensity(true);
+      }
+      if (this->palette_.has_value()) {
+        inst->set_sequence_palette(this->palette_.value());
+        inst->set_runner_owns_palette(true);
+      }
+      if (this->mirror_.has_value())
+        inst->set_mirror_preset(this->mirror_.value());
+      if (this->intro_.has_value())
+        inst->set_intro_preset(this->intro_.value());
+      if (this->outro_.has_value())
+        inst->set_outro_preset(this->outro_.value());
+      if (this->inout_duration_.has_value())
+        inst->set_inout_duration_preset(this->inout_duration_.value());
+    }
+  }
 
-  // Optionally turn the light on with the specified effect.
-  if (!this->effect_.empty()) {
+  const bool needs_light_call =
+      !this->effect_.empty() || this->brightness_.has_value() || this->has_color_;
+
+  // Optionally turn the light on and/or update its live visible state.
+  if (needs_light_call) {
     // Fix 3 — Re-entrancy: snapshot act_ BEFORE perform() so we can detect
     // whether ESPHome treated the call as a no-op (same effect already active).
     chimera_fx::CFXAddressableLightEffect *target_inst = nullptr;
@@ -235,20 +328,38 @@ void CfxSetActionBase::do_play_() {
         break;
       }
     }
+    if (target_inst == nullptr) {
+      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+        if (inst->get_light_state() == this->light_ &&
+            inst->get_name() == this->effect_) {
+          target_inst = inst;
+          act_before  = inst->get_act();
+          break;
+        }
+      }
+    }
 
     auto call = this->light_->make_call();
     call.set_state(true);
-    call.set_effect(this->effect_);
-    // CFX-057: Set color mode to prevent virtual segments defaulting to White.
-    auto valid_mode = this->light_->remote_values.get_color_mode();
-    if (valid_mode == light::ColorMode::UNKNOWN) {
-      if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
-        valid_mode = light::ColorMode::RGB_WHITE;
-      } else if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB)) {
-        valid_mode = light::ColorMode::RGB;
-      }
+    if (!this->effect_.empty()) {
+      call.set_effect(this->effect_);
     }
-    call.set_color_mode(valid_mode);
+    if (this->has_color_) {
+      apply_cfx_user_color(this->light_, call, this->has_color_, this->color_r_,
+                           this->color_g_, this->color_b_, this->color_w_,
+                           this->color_has_white_);
+    } else {
+      // CFX-057: Set color mode to prevent virtual segments defaulting to White.
+      auto valid_mode = this->light_->remote_values.get_color_mode();
+      if (valid_mode == light::ColorMode::UNKNOWN) {
+        if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+          valid_mode = light::ColorMode::RGB_WHITE;
+        } else if (this->light_->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+          valid_mode = light::ColorMode::RGB;
+        }
+      }
+      call.set_color_mode(valid_mode);
+    }
     if (this->brightness_.has_value())
       call.set_brightness(this->brightness_.value());
     call.perform();
@@ -256,7 +367,8 @@ void CfxSetActionBase::do_play_() {
     // Fix 3 — If act_ is unchanged after perform(), ESPHome was a no-op
     // (light already ON with same effect). Force a clean restart so the intro
     // replays and mono_idle is cleared.
-    if (target_inst != nullptr &&
+    if (!this->effect_.empty() &&
+        target_inst != nullptr &&
         act_before  != nullptr &&
         target_inst->get_act() == act_before) {
       ESP_LOGD("chimera_fx",
@@ -593,15 +705,21 @@ void CFXSequence::start() {
       if (!this->effect_.empty()) {
         call.set_effect(this->effect_);
       }
-      auto valid_mode = l->remote_values.get_color_mode();
-      if (valid_mode == light::ColorMode::UNKNOWN) {
-        if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
-          valid_mode = light::ColorMode::RGB_WHITE;
-        } else if (l->get_traits().supports_color_mode(light::ColorMode::RGB)) {
-          valid_mode = light::ColorMode::RGB;
+      if (this->has_color_) {
+        apply_cfx_user_color(l, call, this->has_color_, this->color_r_,
+                             this->color_g_, this->color_b_, this->color_w_,
+                             this->color_has_white_);
+      } else {
+        auto valid_mode = l->remote_values.get_color_mode();
+        if (valid_mode == light::ColorMode::UNKNOWN) {
+          if (l->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+            valid_mode = light::ColorMode::RGB_WHITE;
+          } else if (l->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+            valid_mode = light::ColorMode::RGB;
+          }
         }
+        call.set_color_mode(valid_mode);
       }
-      call.set_color_mode(valid_mode);
       if (this->effect_.empty()) {
         call.set_transition_length(0);
       }

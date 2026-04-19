@@ -43,6 +43,7 @@ CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
 CONF_SET_BRIGHTNESS = "set_brightness"
+CONF_SET_COLOR = "set_color"
 CONF_SET_MIRROR = "set_mirror"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
@@ -59,6 +60,11 @@ CONF_ON_COMPLETE = "on_cfx_complete"
 CONF_ON_REACH = "on_cfx_reach"
 CONF_POSITION = "position"
 
+SET_COLOR_SCHEMA = cv.All(
+    cv.ensure_list(cv.int_range(min=0, max=255)),
+    cv.Length(min=3, max=4),
+)
+
 
 SEQUENCE_SCHEMA = cv.Schema(
     {
@@ -70,9 +76,10 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
         cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
+        cv.Optional(CONF_SET_COLOR): SET_COLOR_SCHEMA,
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
-        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=24),
-        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=24),
+        cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=27),
+        cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=27),
         cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
@@ -183,6 +190,17 @@ def _resolve_light_tag(light_id, light_name_map):
     return light_name_map.get(light_id.id, light_id.id)
 
 
+def _emit_set_color(var, config):
+    if CONF_SET_COLOR not in config:
+        return
+
+    color = config[CONF_SET_COLOR]
+    if len(color) == 3:
+        cg.add(var.set_color_rgb(color[0], color[1], color[2]))
+    else:
+        cg.add(var.set_color_rgbw(color[0], color[1], color[2], color[3]))
+
+
 async def to_code(config):
     cg.add_define("USE_CFX_SEQUENCE")
     import esphome.core as core
@@ -255,6 +273,7 @@ async def to_code(config):
             cg.add(var.set_palette(seq_conf[CONF_SET_PALETTE]))
         if CONF_SET_BRIGHTNESS in seq_conf:
             cg.add(var.set_brightness(seq_conf[CONF_SET_BRIGHTNESS]))
+        _emit_set_color(var, seq_conf)
         if CONF_SET_MIRROR in seq_conf:
             cg.add(var.set_mirror(seq_conf[CONF_SET_MIRROR]))
         if CONF_SET_INTRO in seq_conf:
@@ -422,9 +441,10 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
             cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
             cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
             cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
+            cv.Optional(CONF_SET_COLOR):             SET_COLOR_SCHEMA,
             cv.Optional(CONF_SET_MIRROR):            cv.boolean,
-            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=24),
-            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=27),
+            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
         }
     ),
@@ -452,6 +472,7 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
         cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
+    _emit_set_color(var, config)
     return var
 
 
@@ -472,9 +493,10 @@ def _cfx_run_schema():
             cv.Optional(CONF_SET_INTENSITY):         cv.int_range(0, 255),
             cv.Optional(CONF_SET_PALETTE):           cv.int_range(0, 255),
             cv.Optional(CONF_SET_BRIGHTNESS):        cv.percentage,
+            cv.Optional(CONF_SET_COLOR):             SET_COLOR_SCHEMA,
             cv.Optional(CONF_SET_MIRROR):            cv.boolean,
-            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=24),
-            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=24),
+            cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=27),
+            cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
             cv.Optional(CONF_ITERATIONS, default=1): cv.int_range(min=1),
             # Lifecycle triggers on the spawned sequence
@@ -523,6 +545,7 @@ async def cfx_run_to_code(config, action_id, template_arg, args):
         cg.add(var.set_palette(config[CONF_SET_PALETTE]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
+    _emit_set_color(var, config)
     if CONF_SET_MIRROR in config:
         cg.add(var.set_mirror(config[CONF_SET_MIRROR]))
     if CONF_SET_INTRO in config:
