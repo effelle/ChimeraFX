@@ -848,12 +848,14 @@ void CFXSequence::stop() {
     // Two separate calls are required: ESPHome rejects set_effect("None")
     // when combined with set_state(false) in the same call, producing:
     //   [W] 'RGB Light': cannot start effect when turning off
+    // Also avoid set_transition_length(0) on the effect-clear call itself:
+    // ESPHome treats any effect+transition combination as invalid, even when
+    // the transition length is zero.
     // If the effect is not cleared before turning off, ESPHome remembers it
     // and re-applies it the next time the light turns on.
     for (auto *l : this->lights_) {
       auto clear_call = l->make_call();
       clear_call.set_effect("None");
-      clear_call.set_transition_length(0);
       clear_call.perform();
 
       auto off_call = l->make_call();
@@ -937,7 +939,6 @@ void CFXSequence::complete_and_notify() {
     for (auto *l : this->lights_) {
       auto clr = l->make_call();
       clr.set_effect("None");
-      clr.set_transition_length(0);
       clr.perform();
       auto off = l->make_call();
       off.set_state(false);
@@ -983,7 +984,6 @@ void CFXSequence::force_reset() {
     //   [W] 'X': cannot start effect when turning off
     auto clear_call = l->make_call();
     clear_call.set_effect("None");
-    clear_call.set_transition_length(0);
     clear_call.perform();
 
     auto off_call = l->make_call();
@@ -1008,7 +1008,6 @@ void CFXSequence::force_stop_all() {
   for (auto *l : this->lights_) {
     auto clear_call = l->make_call();
     clear_call.set_effect("None");
-    clear_call.set_transition_length(0);
     clear_call.perform();
 
     auto off_call = l->make_call();
@@ -1037,7 +1036,6 @@ void CFXSequence::stop_all() {
   for (auto *l : unique_lights) {
     auto clear_call = l->make_call();
     clear_call.set_effect("None");
-    clear_call.set_transition_length(0);
     clear_call.perform();
 
     auto off_call = l->make_call();
