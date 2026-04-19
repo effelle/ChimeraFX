@@ -130,12 +130,16 @@ public:
 
       // CFX-028: route to the per-strip entity whose tag appears in the string.
       esphome::event::Event *target_entity = this->event_entity_;
+      bool parsed_tag = false;
+      bool resolved_tag = false;
+      std::string tag;
       size_t first_colon = evt.find(':');
       if (first_colon != std::string::npos) {
         size_t second_colon = evt.find(':', first_colon + 1);
-        std::string tag = (second_colon != std::string::npos)
-                              ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
-                              : evt.substr(first_colon + 1);
+        tag = (second_colon != std::string::npos)
+                  ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
+                  : evt.substr(first_colon + 1);
+        parsed_tag = true;
 
         // CFX-040: per-tag opt-out
         if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
@@ -145,7 +149,17 @@ public:
         auto it = this->strip_entities_.find(tag);
         if (it != this->strip_entities_.end() && it->second != nullptr) {
           target_entity = it->second;
+          resolved_tag = true;
         }
+      }
+
+      // Unknown tagged events should not fall through to an unrelated default
+      // entity; that produces misleading "invalid event type" errors on the
+      // wrong strip and hides the real tag mismatch.
+      if (parsed_tag && !resolved_tag) {
+        ESP_LOGW("cfx_seq", "dropping event with unknown tag '%s': %s",
+                 tag.c_str(), evt.c_str());
+        continue;
       }
 
       if (target_entity != nullptr) {

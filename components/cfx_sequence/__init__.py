@@ -152,37 +152,44 @@ def _cfx_slugify(name: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
 
 
-async def to_code(config):
-    cg.add_define("USE_CFX_SEQUENCE")
+def _build_light_tag_map():
     import esphome.core as core
 
     light_name_map = {}
-    strip_event_vars = {}
-    event_var = None
     seen_tags = []
 
-    # Collect unique light object_ids for mapping
     for lconf in core.CORE.config.get("light", []):
         lid_obj = lconf.get("id")
         lname = lconf.get("name", "")
-        if lid_obj is not None and lname:
-            tag = _cfx_slugify(str(lname))
+        if lid_obj is not None:
+            tag = _cfx_slugify(str(lname)) if lname else lid_obj.id
             light_name_map[lid_obj.id] = tag
             if tag not in seen_tags:
                 seen_tags.append(tag)
 
-        # CFX-053: Also map segment IDs to their slugified names.
-        # Without this, sequences targeting segments (e.g. s2_Strip1) fall
-        # through to the raw ID fallback, producing a strip_tag that doesn't
-        # match the event entity registered in light.py.
         for seg in lconf.get("segments", []):
             seg_lid = seg.get("id")
             seg_name = seg.get("name", "")
-            if seg_lid is not None and seg_name:
-                seg_tag = _cfx_slugify(str(seg_name))
+            if seg_lid is not None:
+                seg_tag = _cfx_slugify(str(seg_name)) if seg_name else seg_lid.id
                 light_name_map[seg_lid.id] = seg_tag
                 if seg_tag not in seen_tags:
                     seen_tags.append(seg_tag)
+
+    return light_name_map, seen_tags
+
+
+def _resolve_light_tag(light_id, light_name_map):
+    return light_name_map.get(light_id.id, light_id.id)
+
+
+async def to_code(config):
+    cg.add_define("USE_CFX_SEQUENCE")
+    import esphome.core as core
+
+    light_name_map, seen_tags = _build_light_tag_map()
+    strip_event_vars = {}
+    event_var = None
 
 
     # 2. Progress Sensor
@@ -230,7 +237,7 @@ async def to_code(config):
         # Bind this sequence to its strip's dedicated event entity (CFX-028).
         lights_list = seq_conf.get(CONF_LIGHTS, [])
         if lights_list:
-            strip_tag = light_name_map.get(lights_list[0].id, lights_list[0].id)
+            strip_tag = _resolve_light_tag(lights_list[0], light_name_map)
             cg.add(var.set_strip_tag(strip_tag))
             seq_event_var = strip_event_vars.get(strip_tag, event_var)
         else:
@@ -503,15 +510,9 @@ async def cfx_run_to_code(config, action_id, template_arg, args):
     cg.add(var.set_light(light_var))
     cg.add(var.set_effect(config["effect"]))
 
-    # Derive strip tag from the light's name for milestone event routing
-    import esphome.core as _core
-    light_name_map = {}
-    for lconf in _core.CORE.config.get("light", []):
-        lid_obj = lconf.get("id")
-        lname = lconf.get("name", "")
-        if lid_obj is not None and lname:
-            light_name_map[lid_obj.id] = _cfx_slugify(str(lname))
-    strip_tag = light_name_map.get(config[CONF_ID].id, config[CONF_ID].id)
+    # Reuse the same canonical light/segment tag resolution as cfx_sequence.
+    light_name_map, _ = _build_light_tag_map()
+    strip_tag = _resolve_light_tag(config[CONF_ID], light_name_map)
     cg.add(var.set_strip_tag(strip_tag))
 
     if CONF_SET_SPEED in config:
