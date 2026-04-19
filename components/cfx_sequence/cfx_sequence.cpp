@@ -310,8 +310,12 @@ void CFXSequenceSelect::setup() {
     if (value == "None") {
       ESP_LOGD(TAG, "Active Sequence Select: 'None'");
       for (auto *seq : CFXSequence::instances) {
-        seq->stop();
-        seq->force_reset();
+        if (seq->is_running() || seq->is_starting()) {
+          seq->stop();
+          seq->force_reset();
+        } else {
+          seq->force_reset();
+        }
       }
     } else {
       for (auto *seq : CFXSequence::instances) {
@@ -334,6 +338,14 @@ void CFXSequenceSelect::control(const std::string &value) {
 
 void CFXSequenceSelect::loop() {
   CFXEventManager::get().flush_pending();
+
+  for (auto *seq : CFXSequence::instances) {
+    if (seq->has_pending_teardown()) {
+      esphome::App.feed_wdt();
+      seq->process_pending_teardown();
+      return;
+    }
+  }
 
   for (auto *seq : CFXSequence::instances)
     seq->check_duration();
@@ -788,6 +800,109 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
     inst->set_inout_duration_preset(this->inout_duration_.value());
 }
 
+void CFXSequence::begin_teardown_(TeardownMode mode) {
+  this->teardown_mode_ = mode;
+  this->teardown_light_index_ = 0;
+  this->teardown_clear_phase_ = true;
+}
+
+void CFXSequence::finalize_teardown_() {
+  TeardownMode completed_mode = this->teardown_mode_;
+  this->teardown_mode_ = TeardownMode::NONE;
+  this->teardown_light_index_ = 0;
+  this->teardown_clear_phase_ = true;
+  this->is_stopping_ = false;
+
+  if (!this->is_pool_owned_ &&
+      CFXSequenceSelect::instance != nullptr &&
+      CFXSequenceSelect::instance->has_state()) {
+    const std::string &current = CFXSequenceSelect::instance->current_option();
+    if (!current.empty() && this->name_ == current) {
+      CFXSequenceSelect::instance->publish_state_silent("None");
+    }
+  }
+
+  if (completed_mode == TeardownMode::COMPLETE_RESTORE) {
+    // LAST: fire on_complete — any chained cfx_set now wins with no
+    // subsequent stop() able to undo the next step.
+    this->report_event_complete();
+  }
+
+  if (this->is_pool_owned_ &&
+      (completed_mode == TeardownMode::STOP_RESTORE ||
+       completed_mode == TeardownMode::STOP_FORCE_OFF ||
+       completed_mode == TeardownMode::COMPLETE_RESTORE)) {
+    CFXRunPool::get().release(this);
+  }
+}
+
+void CFXSequence::process_pending_teardown() {
+  if (this->teardown_mode_ == TeardownMode::NONE)
+    return;
+
+  const bool restore_saved_state =
+      (this->teardown_mode_ != TeardownMode::FORCE_OFF) &&
+      (this->teardown_mode_ != TeardownMode::STOP_FORCE_OFF) &&
+      this->restore_state_;
+
+  while (this->teardown_light_index_ < this->lights_.size()) {
+    auto *l = this->lights_[this->teardown_light_index_];
+
+    if (restore_saved_state) {
+      if (this->teardown_light_index_ >= this->saved_states_.size()) {
+        this->teardown_light_index_++;
+        continue;
+      }
+
+      auto saved = this->saved_states_[this->teardown_light_index_];
+      auto call = l->make_call();
+      call.set_transition_length(0);
+
+      bool turning_on = saved.values.is_on();
+      call.set_state(turning_on);
+
+      if (saved.color_mode != light::ColorMode::UNKNOWN)
+        call.set_color_mode(saved.color_mode);
+      call.set_brightness(saved.values.get_brightness());
+      call.set_rgb(saved.values.get_red(), saved.values.get_green(),
+                   saved.values.get_blue());
+
+      if (l->get_traits().supports_color_mode(saved.color_mode) &&
+          (saved.color_mode == light::ColorMode::RGB_WHITE ||
+           saved.color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+           saved.color_mode == light::ColorMode::COLD_WARM_WHITE ||
+           saved.color_mode == light::ColorMode::WHITE)) {
+        call.set_white(saved.values.get_white());
+      }
+
+      if (turning_on)
+        call.set_effect(saved.effect);
+
+      call.perform();
+      this->teardown_light_index_++;
+      return;
+    }
+
+    if (this->teardown_clear_phase_) {
+      auto clear_call = l->make_call();
+      clear_call.set_effect("None");
+      clear_call.perform();
+      this->teardown_clear_phase_ = false;
+      return;
+    }
+
+    auto off_call = l->make_call();
+    off_call.set_state(false);
+    off_call.set_transition_length(0);
+    off_call.perform();
+    this->teardown_clear_phase_ = true;
+    this->teardown_light_index_++;
+    return;
+  }
+
+  this->finalize_teardown_();
+}
+
 void CFXSequence::stop() {
   if (this->is_stopping_ || !this->is_running_)
     return;
@@ -799,88 +914,10 @@ void CFXSequence::stop() {
 
   this->report_event_stop();
   this->clear_active_binding();
+  this->begin_teardown_(TeardownMode::STOP_RESTORE);
 
-  // Restore States: Only if explicitly requested
-  if (this->restore_state_) {
-    size_t light_idx = 0;
-    for (auto *l : this->lights_) {
-      if (light_idx < this->saved_states_.size()) {
-        auto saved = this->saved_states_[light_idx];
-        auto call = l->make_call();
-
-        // Restore transition first
-        call.set_transition_length(0);
-
-        // Restore state
-        bool turning_on = saved.values.is_on();
-        call.set_state(turning_on);
-
-        // Restore mode and brightness.
-        // Guard: never pass UNKNOWN to set_color_mode — ESPHome logs a warning.
-        // The save-time resolution above should prevent this, but be defensive.
-        if (saved.color_mode != light::ColorMode::UNKNOWN)
-          call.set_color_mode(saved.color_mode);
-        call.set_brightness(saved.values.get_brightness());
-        call.set_rgb(saved.values.get_red(), saved.values.get_green(),
-                     saved.values.get_blue());
-
-        // Only set white if the strip supports it in this mode
-        if (l->get_traits().supports_color_mode(saved.color_mode) &&
-            (saved.color_mode == light::ColorMode::RGB_WHITE ||
-             saved.color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
-             saved.color_mode == light::ColorMode::COLD_WARM_WHITE ||
-             saved.color_mode == light::ColorMode::WHITE)) {
-          call.set_white(saved.values.get_white());
-        }
-
-        // Only restore effect if the light is on
-        // Setting an effect (even "None") while turning off triggers warnings.
-        if (turning_on) {
-          call.set_effect(saved.effect);
-        }
-
-        call.perform();
-      }
-      light_idx++;
-    }
-  } else {
-    // restore: false — clear the effect first, then turn lights off.
-    // Two separate calls are required: ESPHome rejects set_effect("None")
-    // when combined with set_state(false) in the same call, producing:
-    //   [W] 'RGB Light': cannot start effect when turning off
-    // Also avoid set_transition_length(0) on the effect-clear call itself:
-    // ESPHome treats any effect+transition combination as invalid, even when
-    // the transition length is zero.
-    // If the effect is not cleared before turning off, ESPHome remembers it
-    // and re-applies it the next time the light turns on.
-    for (auto *l : this->lights_) {
-      auto clear_call = l->make_call();
-      clear_call.set_effect("None");
-      clear_call.perform();
-
-      auto off_call = l->make_call();
-      off_call.set_state(false);
-      off_call.set_transition_length(0);
-      off_call.perform();
-    }
-  }
-
-  this->is_stopping_ = false;
-
-  // Update Select UI to reflect the stopped sequence.
-  // Pool-owned sequences are not in the select option list — skip.
-  if (!this->is_pool_owned_ &&
-      CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->has_state()) {
-    const std::string &current = CFXSequenceSelect::instance->current_option();
-    if (!current.empty() && this->name_ == current) {
-      CFXSequenceSelect::instance->publish_state_silent("None");
-    }
-  }
-
-  // Pool self-release: return slot so it's available for the next cfx_run.
-  if (this->is_pool_owned_)
-    CFXRunPool::get().release(this);
+  if (this->lights_.empty())
+    this->finalize_teardown_();
 }
 
 // CFX-044: Correctly-ordered completion path invoked by execute_completion().
@@ -908,64 +945,10 @@ void CFXSequence::complete_and_notify() {
 
   this->report_event_stop();
   this->clear_active_binding();
+  this->begin_teardown_(TeardownMode::COMPLETE_RESTORE);
 
-  if (this->restore_state_) {
-    size_t idx = 0;
-    for (auto *l : this->lights_) {
-      if (idx < this->saved_states_.size()) {
-        auto &saved = this->saved_states_[idx];
-        auto call = l->make_call();
-        call.set_transition_length(0);
-        bool on = saved.values.is_on();
-        call.set_state(on);
-        if (saved.color_mode != light::ColorMode::UNKNOWN)
-          call.set_color_mode(saved.color_mode);
-        call.set_brightness(saved.values.get_brightness());
-        call.set_rgb(saved.values.get_red(), saved.values.get_green(),
-                     saved.values.get_blue());
-        if (l->get_traits().supports_color_mode(saved.color_mode) &&
-            (saved.color_mode == light::ColorMode::RGB_WHITE ||
-             saved.color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
-             saved.color_mode == light::ColorMode::COLD_WARM_WHITE ||
-             saved.color_mode == light::ColorMode::WHITE)) {
-          call.set_white(saved.values.get_white());
-        }
-        if (on) call.set_effect(saved.effect);
-        call.perform();
-      }
-      idx++;
-    }
-  } else {
-    for (auto *l : this->lights_) {
-      auto clr = l->make_call();
-      clr.set_effect("None");
-      clr.perform();
-      auto off = l->make_call();
-      off.set_state(false);
-      off.set_transition_length(0);
-      off.perform();
-    }
-  }
-
-  this->is_stopping_ = false;
-
-  if (!this->is_pool_owned_ &&
-      CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->has_state()) {
-    const std::string &cur = CFXSequenceSelect::instance->current_option();
-    if (!cur.empty() && this->name_ == cur)
-      CFXSequenceSelect::instance->publish_state_silent("None");
-  }
-
-  // LAST: fire on_complete — any chained cfx_set now wins with no
-  // subsequent stop() able to undo the next step.
-  this->report_event_complete();
-
-  // Pool self-release: return slot after completion so it's available
-  // for the next cfx_run call. Must be last — report_event_complete()
-  // may fire on_complete triggers that spawn new cfx_run sequences.
-  if (this->is_pool_owned_)
-    CFXRunPool::get().release(this);
+  if (this->lights_.empty())
+    this->finalize_teardown_();
 }
 
 void CFXSequence::force_reset() {
@@ -974,23 +957,29 @@ void CFXSequence::force_reset() {
   // the sequence has already completed and on_complete overrode state.
   // Guard: skip sequences that were never started — firing light calls on
   // non-running sequences produces ESPHome warnings on unrelated lights.
-  if (!this->is_running_ && !this->completion_reported_)
+  if (!this->is_running_ && !this->completion_reported_ &&
+      !this->is_starting_ &&
+      this->teardown_mode_ == TeardownMode::NONE)
     return;
 
-  for (auto *l : this->lights_) {
-    // Two-call pattern required: ESPHome rejects set_effect("None") combined
-    // with set_state(false) in a single call, producing:
-    //   [W] 'X': effect cannot be used with transition/flash
-    //   [W] 'X': cannot start effect when turning off
-    auto clear_call = l->make_call();
-    clear_call.set_effect("None");
-    clear_call.perform();
+  if (this->is_stopping_) {
+    if (this->teardown_mode_ == TeardownMode::STOP_RESTORE) {
+      this->begin_teardown_(TeardownMode::STOP_FORCE_OFF);
+    } else if (this->teardown_mode_ == TeardownMode::NONE) {
+      this->begin_teardown_(TeardownMode::FORCE_OFF);
+    }
 
-    auto off_call = l->make_call();
-    off_call.set_state(false);
-    off_call.set_transition_length(0);
-    off_call.perform();
+    if (this->lights_.empty())
+      this->finalize_teardown_();
+    return;
   }
+
+  this->is_starting_ = false;
+  this->is_stopping_ = true;
+  this->begin_teardown_(TeardownMode::FORCE_OFF);
+
+  if (this->lights_.empty())
+    this->finalize_teardown_();
 }
 
 void CFXSequence::force_stop_all() {

@@ -128,6 +128,7 @@ public:
   void check_positional_triggers(int32_t current_pixel, int32_t total_pixels, bool is_return_phase = false);
   void flush_pending_triggers();
   void check_duration();
+  void process_pending_teardown();
   bool get_duration_complete_fired() const { return this->duration_complete_fired_; }
   void clear_active_binding();
   bool try_bind_effects_();
@@ -152,6 +153,17 @@ public:
   bool is_stagger_complete() const { return this->stagger_tasks_pending_ == 0; }
 
 protected:
+  enum class TeardownMode : uint8_t {
+    NONE = 0,
+    STOP_RESTORE,
+    STOP_FORCE_OFF,
+    COMPLETE_RESTORE,
+    FORCE_OFF,
+  };
+
+  void begin_teardown_(TeardownMode mode);
+  void finalize_teardown_();
+
   std::atomic<uint32_t> stagger_tasks_pending_{0};
   std::string id_;
   std::string name_;
@@ -240,6 +252,9 @@ protected:
   bool is_starting_{false};
   bool is_stopping_{false};
   bool is_running_{false};
+  TeardownMode teardown_mode_{TeardownMode::NONE};
+  size_t teardown_light_index_{0};
+  bool teardown_clear_phase_{true};
   // bool is_stagger_complete_{true}; // Replaced by stagger_tasks_pending_ atomic
   bool duration_completion_pending_{false};  // CFX-044c: Defer duration timeout to worker
   // Set to true when report_event_complete() has been called for this run.
@@ -276,6 +291,7 @@ protected:
 public:
   bool is_starting() const { return this->is_starting_; }
   bool is_running() const { return this->is_running_; }
+  bool has_pending_teardown() const { return this->teardown_mode_ != TeardownMode::NONE; }
   bool has_pending_triggers() const { return !this->pending_reach_triggers_.empty(); }
   bool has_pending_duration_completion() const { return this->duration_completion_pending_; }
   static std::vector<CFXSequence *> instances;
