@@ -166,6 +166,8 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->intro_     = {};
       seq->outro_     = {};
       seq->inout_duration_ = {};
+      seq->force_white_ = {};
+      seq->autotune_ = {};
       seq->iterations_ = 0;
       seq->duration_ms_ = 0;
       seq->is_running_  = false;
@@ -235,6 +237,8 @@ void CfxRunActionBase::do_play_() {
   if (this->intro_.has_value())        seq->set_intro(this->intro_.value());
   if (this->outro_.has_value())        seq->set_outro(this->outro_.value());
   if (this->inout_duration_.has_value()) seq->set_inout_duration(this->inout_duration_.value());
+  if (this->force_white_.has_value())  seq->set_force_white(this->force_white_.value());
+  if (this->autotune_.has_value())     seq->set_autotune(this->autotune_.value());
 
   // Transfer triggers. These are YAML-codegen objects — they live for the
   // firmware lifetime and are safe to reference from the pooled sequence.
@@ -284,6 +288,10 @@ void CfxSetActionBase::do_play_() {
         inst->set_outro_preset(this->outro_.value());
       if (this->inout_duration_.has_value())
         inst->set_inout_duration_preset(this->inout_duration_.value());
+      if (this->force_white_.has_value())
+        inst->set_force_white_preset(this->force_white_.value());
+      if (this->autotune_.has_value())
+        inst->set_autotune_preset(this->autotune_.value());
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
@@ -308,6 +316,10 @@ void CfxSetActionBase::do_play_() {
         inst->set_outro_preset(this->outro_.value());
       if (this->inout_duration_.has_value())
         inst->set_inout_duration_preset(this->inout_duration_.value());
+      if (this->force_white_.has_value())
+        inst->set_force_white_preset(this->force_white_.value());
+      if (this->autotune_.has_value())
+        inst->set_autotune_preset(this->autotune_.value());
     }
   }
 
@@ -424,7 +436,6 @@ void CFXSequenceSelect::setup() {
       for (auto *seq : CFXSequence::instances) {
         if (seq->is_running() || seq->is_starting()) {
           seq->stop();
-          seq->force_reset();
         } else {
           seq->force_reset();
         }
@@ -698,6 +709,10 @@ void CFXSequence::start() {
           target_inst->set_outro_preset(this->outro_.value());
         if (this->inout_duration_.has_value())
           target_inst->set_inout_duration_preset(this->inout_duration_.value());
+        if (this->force_white_.has_value())
+          target_inst->set_force_white_preset(this->force_white_.value());
+        if (this->autotune_.has_value())
+          target_inst->set_autotune_preset(this->autotune_.value());
       }
 
       auto call = l->make_call();
@@ -916,6 +931,10 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
     inst->set_outro_preset(this->outro_.value());
   if (this->inout_duration_.has_value())
     inst->set_inout_duration_preset(this->inout_duration_.value());
+  if (this->force_white_.has_value())
+    inst->set_force_white_preset(this->force_white_.value());
+  if (this->autotune_.has_value())
+    inst->set_autotune_preset(this->autotune_.value());
 }
 
 void CFXSequence::begin_teardown_(TeardownMode mode) {

@@ -223,6 +223,16 @@ void CFXAddressableLightEffect::start() {
   // Copy codegen-time fields into the activation context.
   this->act_->controller = this->controller_;
 
+#ifdef USE_CFX_SEQUENCE
+  // start() may reuse an existing activation during rapid restart/no-op paths.
+  // Clear last-run transient sequence values first; cfx_set cold-start
+  // overrides are re-applied below after runner setup.
+  act_->sequence_speed.reset();
+  act_->sequence_intensity.reset();
+  act_->sequence_palette.reset();
+  act_->sequence_iterations = 0;
+#endif
+
   // --- Ambient Roulette (Randomizer) ---
   if (this->configured_effect_id_ == 255) {
     this->effect_id_ = 255; // Reset to roulette base
@@ -461,6 +471,38 @@ void CFXAddressableLightEffect::start() {
     act_->runner->reset();
   }
 
+#ifdef USE_CFX_SEQUENCE
+  if (cfg_ != nullptr) {
+    if (cfg_->pending_sequence_speed.has_value()) {
+      act_->sequence_speed = cfg_->pending_sequence_speed;
+      cfg_->pending_sequence_speed.reset();
+    }
+    if (cfg_->pending_sequence_intensity.has_value()) {
+      act_->sequence_intensity = cfg_->pending_sequence_intensity;
+      cfg_->pending_sequence_intensity.reset();
+    }
+    if (cfg_->pending_sequence_palette.has_value()) {
+      act_->sequence_palette = cfg_->pending_sequence_palette;
+      cfg_->pending_sequence_palette.reset();
+    }
+  }
+
+  const bool owns_speed = act_->sequence_speed.has_value();
+  const bool owns_intensity = act_->sequence_intensity.has_value();
+  const bool owns_palette = act_->sequence_palette.has_value();
+  if (!act_->segment_runners.empty()) {
+    for (auto *r : act_->segment_runners) {
+      r->sequence_owns_speed_ = owns_speed;
+      r->sequence_owns_intensity_ = owns_intensity;
+      r->sequence_owns_palette_ = owns_palette;
+    }
+  } else if (act_->runner != nullptr) {
+    act_->runner->sequence_owns_speed_ = owns_speed;
+    act_->runner->sequence_owns_intensity_ = owns_intensity;
+    act_->runner->sequence_owns_palette_ = owns_palette;
+  }
+#endif
+
   // Pre-seed the UI with this effect's default palette — only when autotune is
   // active. When autotune is OFF, the user's last palette selection is
   // preserved.
@@ -509,7 +551,12 @@ void CFXAddressableLightEffect::start() {
 
   // Pass force_white flag down to the underlying Native CFXRunners
   {
-    bool fw_active = (c && c->get_force_white()) ? c->get_force_white()->state : false;
+    bool fw_active = false;
+    if (this->has_force_white_preset_()) {
+      fw_active = this->force_white_preset_val_();
+    } else if (c && c->get_force_white()) {
+      fw_active = c->get_force_white()->state;
+    }
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         r->force_white_active_ = fw_active;
@@ -967,6 +1014,13 @@ void CFXAddressableLightEffect::stop() {
       if (mirror_sw != nullptr)
         act_->active_outro_mirror = mirror_sw->state;
 
+      act_->active_outro_force_white = false;
+      if (this->has_force_white_preset_()) {
+        act_->active_outro_force_white = this->force_white_preset_val_();
+      } else if (c != nullptr && c->get_force_white() != nullptr) {
+        act_->active_outro_force_white = c->get_force_white()->state;
+      }
+
       // Capture runners for the outro.
       // CFX-046: Virtual segment fix — when a virtual segment stops, only
       // remove ITS OWN runner from act_->segment_runners. Sibling runners
@@ -1254,7 +1308,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
 
-  if (act_->controller && act_->controller->get_force_white()) {
+  if (this->has_force_white_preset_()) {
+    act_->active_force_white = this->force_white_preset_val_();
+  } else if (act_->controller && act_->controller->get_force_white()) {
     act_->active_force_white = act_->controller->get_force_white()->state;
   }
 
@@ -2323,7 +2379,9 @@ void CFXAddressableLightEffect::run_controls_() {
   // QoL FIX: Live force_white sync — re-read the switch every frame so
   // toggling it mid-effect takes effect immediately (not just at start()).
   bool fw_active = false;
-  if (c && c->get_force_white()) {
+  if (this->has_force_white_preset_()) {
+    fw_active = this->force_white_preset_val_();
+  } else if (c && c->get_force_white()) {
     fw_active = c->get_force_white()->state;
   }
   if (!act_->segment_runners.empty()) {
@@ -2333,6 +2391,7 @@ void CFXAddressableLightEffect::run_controls_() {
   } else if (act_->runner) {
     act_->runner->force_white_active_ = fw_active;
   }
+  act_->active_force_white = fw_active;
 
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
@@ -4821,9 +4880,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
 
     // BUG 13 FIX: Apply force_white to Outro transitions
-    if (act_->controller != nullptr &&
-        act_->controller->get_force_white() != nullptr &&
-        act_->controller->get_force_white()->state) {
+    if (act_->active_outro_force_white) {
       cfx::apply_force_white(r, g, b, w);
     }
 

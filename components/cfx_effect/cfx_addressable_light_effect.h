@@ -197,6 +197,12 @@ public:
     std::optional<float> inout_duration_preset{};
     std::optional<uint8_t> outro_preset{};
 
+    // One-shot overrides injected by cfx_set before an effect has allocated
+    // act_. start() consumes and clears them so they affect only the next run.
+    std::optional<uint8_t> pending_sequence_speed{};
+    std::optional<uint8_t> pending_sequence_intensity{};
+    std::optional<uint8_t> pending_sequence_palette{};
+
     // 5 trigger vectors (60 bytes) — always empty for virtual segments
     std::vector<CfxOnStartTrigger *> on_start_triggers;
     std::vector<CfxOnBeginTrigger *> on_begin_triggers;
@@ -411,9 +417,21 @@ public:
 
   // cfx_set action setters — override sequence params on the active effect.
   // Persist until the next start() call resets them via set_active_sequence().
-  void set_sequence_speed(uint8_t v)     { if (act_) act_->sequence_speed     = v; }
-  void set_sequence_intensity(uint8_t v) { if (act_) act_->sequence_intensity = v; }
-  void set_sequence_palette(uint8_t v)   { if (act_) act_->sequence_palette   = v; }
+  void set_sequence_speed(uint8_t v) {
+    ensure_cfg_();
+    cfg_->pending_sequence_speed = v;
+    if (act_) act_->sequence_speed = v;
+  }
+  void set_sequence_intensity(uint8_t v) {
+    ensure_cfg_();
+    cfg_->pending_sequence_intensity = v;
+    if (act_) act_->sequence_intensity = v;
+  }
+  void set_sequence_palette(uint8_t v) {
+    ensure_cfg_();
+    cfg_->pending_sequence_palette = v;
+    if (act_) act_->sequence_palette = v;
+  }
 
   // Propagate ownership flags to all runners so CFXControl push callbacks
   // don't overwrite cfx_set values via UI slider on_state_callback.

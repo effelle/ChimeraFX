@@ -103,6 +103,8 @@ public:
   void set_intro(uint8_t intro) { this->intro_ = intro; }
   void set_outro(uint8_t outro) { this->outro_ = outro; }
   void set_inout_duration(float dur) { this->inout_duration_ = dur; }
+  void set_force_white(bool force_white) { this->force_white_ = force_white; }
+  void set_autotune(bool autotune) { this->autotune_ = autotune; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
@@ -199,6 +201,8 @@ protected:
   esphome::optional<uint8_t> intro_;
   esphome::optional<uint8_t> outro_;
   esphome::optional<float>   inout_duration_;
+  esphome::optional<bool>    force_white_;
+  esphome::optional<bool>    autotune_;
   uint32_t iterations_{0};
   bool restore_state_{true};
   uint32_t duration_ms_{0};
@@ -432,6 +436,8 @@ public:
   void set_intro(uint8_t v)      { this->intro_      = v; }
   void set_outro(uint8_t v)      { this->outro_      = v; }
   void set_inout_duration(float v) { this->inout_duration_ = v; }
+  void set_force_white(bool v)   { this->force_white_ = v; }
+  void set_autotune(bool v)      { this->autotune_ = v; }
 
 protected:
   void do_play_();
@@ -452,6 +458,8 @@ protected:
   esphome::optional<uint8_t> intro_{};
   esphome::optional<uint8_t> outro_{};
   esphome::optional<float>   inout_duration_{};
+  esphome::optional<bool>    force_white_{};
+  esphome::optional<bool>    autotune_{};
 };
 
 template <typename... Ts>
@@ -507,6 +515,8 @@ public:
   void set_intro(uint8_t v)                    { this->intro_     = v; }
   void set_outro(uint8_t v)                    { this->outro_     = v; }
   void set_inout_duration(float v)             { this->inout_duration_ = v; }
+  void set_force_white(bool v)                 { this->force_white_ = v; }
+  void set_autotune(bool v)                    { this->autotune_ = v; }
   void set_iterations(uint32_t v)              { this->iterations_ = v; }
   void set_strip_tag(const std::string &tag)   { this->strip_tag_  = tag; }
   void set_nesting_depth(uint8_t depth)        { this->nesting_depth_ = depth; }
@@ -546,6 +556,8 @@ protected:
   esphome::optional<uint8_t>  intro_{};
   esphome::optional<uint8_t>  outro_{};
   esphome::optional<float>    inout_duration_{};
+  esphome::optional<bool>     force_white_{};
+  esphome::optional<bool>     autotune_{};
   uint32_t iterations_{1};
   uint8_t  nesting_depth_{0};
 

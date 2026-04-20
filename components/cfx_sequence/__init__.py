@@ -48,6 +48,8 @@ CONF_SET_MIRROR = "set_mirror"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DURATION = "set_inout_dur"
+CONF_SET_FORCE_WHITE = "set_force_white"
+CONF_SET_AUTOTUNE = "set_autotune"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_DURATION = "duration"
@@ -81,6 +83,8 @@ SEQUENCE_SCHEMA = cv.Schema(
         cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=27),
         cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=27),
         cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
+        cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
+        cv.Optional(CONF_SET_AUTOTUNE): cv.boolean,
         cv.Optional(CONF_ITERATIONS, default=0): cv.int_range(min=0),
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_DURATION): cv.positive_time_period_milliseconds,
@@ -282,6 +286,10 @@ async def to_code(config):
             cg.add(var.set_outro(seq_conf[CONF_SET_OUTRO]))
         if CONF_SET_INOUT_DURATION in seq_conf:
             cg.add(var.set_inout_duration(seq_conf[CONF_SET_INOUT_DURATION]))
+        if CONF_SET_FORCE_WHITE in seq_conf:
+            cg.add(var.set_force_white(seq_conf[CONF_SET_FORCE_WHITE]))
+        if CONF_SET_AUTOTUNE in seq_conf:
+            cg.add(var.set_autotune(seq_conf[CONF_SET_AUTOTUNE]))
         if CONF_ITERATIONS in seq_conf:
             cg.add(var.set_iterations(seq_conf[CONF_ITERATIONS]))
         if CONF_DURATION in seq_conf:
@@ -446,6 +454,8 @@ async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
             cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
+            cv.Optional(CONF_SET_FORCE_WHITE):       cv.boolean,
+            cv.Optional(CONF_SET_AUTOTUNE):          cv.boolean,
         }
     ),
     synchronous=True,
@@ -470,6 +480,10 @@ async def cfx_set_to_code(config, action_id, template_arg, args):
         cg.add(var.set_outro(config[CONF_SET_OUTRO]))
     if CONF_SET_INOUT_DURATION in config:
         cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
+    if CONF_SET_FORCE_WHITE in config:
+        cg.add(var.set_force_white(config[CONF_SET_FORCE_WHITE]))
+    if CONF_SET_AUTOTUNE in config:
+        cg.add(var.set_autotune(config[CONF_SET_AUTOTUNE]))
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_brightness(config[CONF_SET_BRIGHTNESS]))
     _emit_set_color(var, config)
@@ -498,6 +512,8 @@ def _cfx_run_schema():
             cv.Optional(CONF_SET_INTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_OUTRO):             cv.int_range(min=0, max=27),
             cv.Optional(CONF_SET_INOUT_DURATION):    cv.float_range(min=0.0),
+            cv.Optional(CONF_SET_FORCE_WHITE):       cv.boolean,
+            cv.Optional(CONF_SET_AUTOTUNE):          cv.boolean,
             cv.Optional(CONF_ITERATIONS, default=1): cv.int_range(min=1),
             # Lifecycle triggers on the spawned sequence
             cv.Optional(CONF_ON_START): automation.validate_automation(
@@ -554,6 +570,10 @@ async def cfx_run_to_code(config, action_id, template_arg, args):
         cg.add(var.set_outro(config[CONF_SET_OUTRO]))
     if CONF_SET_INOUT_DURATION in config:
         cg.add(var.set_inout_duration(config[CONF_SET_INOUT_DURATION]))
+    if CONF_SET_FORCE_WHITE in config:
+        cg.add(var.set_force_white(config[CONF_SET_FORCE_WHITE]))
+    if CONF_SET_AUTOTUNE in config:
+        cg.add(var.set_autotune(config[CONF_SET_AUTOTUNE]))
     if CONF_ITERATIONS in config:
         cg.add(var.set_iterations(config[CONF_ITERATIONS]))
 
