@@ -34,7 +34,322 @@ I turned to ESPHome to handle the LEDs. While powerful, let's be honest: its nat
 
 I tried using `addressable_lambda` to recreate WLED's magic, but it got messy fast. Recreating just *one* of my daughter’s favorite effects ("Aurora") took **341 lines of lambda code!** 
 
-Imagine adding three or four effects—you’re looking at a config file with over 1,000 lines just for pretty lights. As a developer who values clean code, I couldn't live with that maintenance nightmare.
+??? abstract "See for yourself!"
+    ```yaml
+      - addressable_lambda:
+          name: "Aurora"
+          update_interval: 16ms
+          lambda: |-
+            // --- Configuration ---
+            static const int MAX_WAVES = 40;
+            
+            // --- Struct Definition ---
+            struct AuroraWave {
+              float center;
+              float speed;
+              float width;
+              int age;
+              int ttl;
+              Color color;
+              bool alive;
+
+              void init(int num_leds, Color c) {
+                // WLED uses W_WIDTH_FACTOR 6, so max width is roughly num_leds / 6
+                // We ensure a minimum width of num_leds / 20 to prevent thin lines
+                int max_width = num_leds / 6;
+                int min_width = num_leds / 20;
+                if (min_width < 2) min_width = 2;
+                if (max_width < min_width) max_width = min_width;
+                
+                width = (float)random(min_width, max_width + 1); 
+                
+                // Random start position (can be outside strip)
+                center = (float)random(0, num_leds); 
+                
+                // Random speed and direction
+                float base_speed = (float)random(5, 30) / 100.0f;
+                
+                // Apply speed factor from number component
+                // Assumes 'effect_speed' number component exists
+                int speed_setting = (int)id(effect_speed).state;
+                
+                switch (speed_setting) {
+                    case 1: base_speed *= 0.25f; break; // Very Slow
+                    case 2: base_speed *= 0.5f;  break; // Slow
+                    case 3: base_speed *= 1.0f;  break; // Normal
+                    case 4: base_speed *= 1.5f;  break; // Fast
+                    case 5: base_speed *= 2.0f;  break; // Very Fast
+                    case 6: base_speed *= 3.0f;  break; // Turbo
+                    default: base_speed *= 1.0f; break;
+                }
+                
+                speed = base_speed;
+                if (random(0, 2) == 0) speed = -speed;
+                
+                age = 0;
+                ttl = random(1500, 3500); // Increased TTL for longer trails
+                color = c;
+                alive = true;
+              }
+
+              void update(int num_leds) {
+                center += speed;
+                age++;
+                if (age >= ttl) alive = false;
+                
+                // Recycle if off-screen
+                if (center - width > num_leds || center + width < 0) {
+                  alive = false;
+                }
+              }
+
+              Color get_color(int led_index) {
+                if (!alive) return Color::BLACK;
+                
+                float dist = abs((float)led_index - center);
+                float offset_factor = dist / width;
+                
+                if (offset_factor > 1.0f) return Color::BLACK;
+                
+                float brightness = 1.0f - offset_factor;
+                
+                // Triangle Fade: Fade IN for first half, Fade OUT for second half
+                float age_factor = 0.0f;
+                int half_ttl = ttl / 2;
+                if (age < half_ttl) {
+                  age_factor = (float)age / (float)half_ttl;
+                } else {
+                  age_factor = (float)(ttl - age) / (float)half_ttl;
+                }
+                
+                // Clamp
+                if (age_factor > 1.0f) age_factor = 1.0f;
+                if (age_factor < 0.0f) age_factor = 0.0f;
+                
+                brightness *= age_factor;
+                
+                return Color(
+                  (uint8_t)(color.r * brightness),
+                  (uint8_t)(color.g * brightness),
+                  (uint8_t)(color.b * brightness),
+                  (uint8_t)(color.w * brightness)
+                );
+              }
+            };
+
+            static std::vector<AuroraWave> waves;
+            static bool initialized = false;
+
+            // --- Palette Helper ---
+            // Inline definition to avoid scope issues
+            struct PaletteEntry {
+              uint8_t pos;
+              uint8_t r;
+              uint8_t g;
+              uint8_t b;
+            };
+
+            auto interpolate_color = [](const PaletteEntry& c1, const PaletteEntry& c2, uint8_t pos) -> Color {
+              if (pos <= c1.pos) return Color(c1.r, c1.g, c1.b);
+              if (pos >= c2.pos) return Color(c2.r, c2.g, c2.b);
+
+              float t = (float)(pos - c1.pos) / (float)(c2.pos - c1.pos);
+              
+              return Color(
+                (uint8_t)(c1.r + (c2.r - c1.r) * t),
+                (uint8_t)(c1.g + (c2.g - c1.g) * t),
+                (uint8_t)(c1.b + (c2.b - c1.b) * t)
+              );
+            };
+
+            auto ColorFromPalette = [&](const std::vector<PaletteEntry>& palette, uint8_t pos) -> Color {
+              if (palette.empty()) return Color::BLACK;
+
+              // Handle wrap-around for smooth looping if needed, but for now strict interpolation
+              // Find the two entries surrounding 'pos'
+              for (size_t i = 0; i < palette.size() - 1; i++) {
+                if (pos >= palette[i].pos && pos <= palette[i+1].pos) {
+                  return interpolate_color(palette[i], palette[i+1], pos);
+                }
+              }
+              
+              // If pos is before first entry (shouldn't happen if starts at 0)
+              if (pos < palette[0].pos) return Color(palette[0].r, palette[0].g, palette[0].b);
+              
+              // If pos is after last entry (shouldn't happen if ends at 255)
+              return Color(palette.back().r, palette.back().g, palette.back().b);
+            };
+
+            // Dynamic Palette based on current light color
+            auto get_aurora_color = [&](uint8_t pos) -> Color {
+              
+              // 1. Get current target color from the light state
+              // Use current_color passed to the lambda
+              float current_r = current_color.r / 255.0f;
+              float current_g = current_color.g / 255.0f;
+              float current_b = current_color.b / 255.0f;
+
+              // 2. Convert to HSV
+              float h, s, v;
+              float min_val = std::min(std::min(current_r, current_g), current_b);
+              float max_val = std::max(std::max(current_r, current_g), current_b);
+              float delta = max_val - min_val;
+
+              v = max_val;
+
+              if (delta < 0.00001f) {
+                s = 0;
+                h = 0; // Undefined, really
+              } else {
+                s = delta / max_val;
+                if (current_r >= max_val) {
+                  h = (current_g - current_b) / delta;
+                } else if (current_g >= max_val) {
+                  h = 2.0f + (current_b - current_r) / delta;
+                } else {
+                  h = 4.0f + (current_r - current_g) / delta;
+                }
+                h *= 60.0f;
+                if (h < 0.0f) h += 360.0f;
+              }
+
+              // 3. Generate Palette based on Saturation
+              std::vector<PaletteEntry> current_palette;
+              
+              if (s < 0.15f) {
+                // Low Saturation (White/Grey) -> Subtle Aurora Tints
+                // Mix White with Pale Green and Pale Blue to avoid "plain white"
+                
+                // Helper to create a pale color from Hue
+                auto make_pale = [&](float hue) -> PaletteEntry {
+                    float r, g, b;
+                    float s_pale = 0.3f; // 30% saturation
+                    float v_pale = 1.0f; // Full brightness
+                    
+                    int i = (int)(hue / 60.0f) % 6;
+                    float f = (hue / 60.0f) - i;
+                    float p = v_pale * (1.0f - s_pale);
+                    float q = v_pale * (1.0f - f * s_pale);
+                    float t = v_pale * (1.0f - (1.0f - f) * s_pale);
+                    
+                    switch (i) {
+                        case 0: r = v_pale; g = t; b = p; break;
+                        case 1: r = q; g = v_pale; b = p; break;
+                        case 2: r = p; g = v_pale; b = t; break;
+                        case 3: r = p; g = q; b = v_pale; break;
+                        case 4: r = t; g = p; b = v_pale; break;
+                        case 5: r = v_pale; g = p; b = q; break;
+                        default: r = v_pale; g = p; b = q; break;
+                    }
+                    return {(uint8_t)0, (uint8_t)(r*255), (uint8_t)(g*255), (uint8_t)(b*255)};
+                };
+
+                PaletteEntry white = {0, (uint8_t)(current_r*255), (uint8_t)(current_g*255), (uint8_t)(current_b*255)};
+                PaletteEntry pale_green = make_pale(120.0f); // Green
+                PaletteEntry pale_blue = make_pale(240.0f);  // Blue
+                
+                // Palette: White -> Pale Green -> White -> Pale Blue -> White
+                current_palette = {
+                    {0,   white.r, white.g, white.b},
+                    {64,  pale_green.r, pale_green.g, pale_green.b},
+                    {128, white.r, white.g, white.b},
+                    {192, pale_blue.r, pale_blue.g, pale_blue.b},
+                    {255, white.r, white.g, white.b}
+                };
+
+              } else {
+                // High Saturation -> Analogous Colors
+                // Base +/- 25 degrees
+                
+                auto make_hsv = [&](float hue, float sat, float val) -> PaletteEntry {
+                    while (hue >= 360.0f) hue -= 360.0f;
+                    while (hue < 0.0f) hue += 360.0f;
+                    
+                    float r, g, b;
+                    int i = (int)(hue / 60.0f) % 6;
+                    float f = (hue / 60.0f) - i;
+                    float p = val * (1.0f - sat);
+                    float q = val * (1.0f - f * sat);
+                    float t = val * (1.0f - (1.0f - f) * sat);
+                    
+                    switch (i) {
+                        case 0: r = val; g = t; b = p; break;
+                        case 1: r = q; g = val; b = p; break;
+                        case 2: r = p; g = val; b = t; break;
+                        case 3: r = p; g = q; b = val; break;
+                        case 4: r = t; g = p; b = val; break;
+                        case 5: r = val; g = p; b = q; break;
+                        default: r = val; g = p; b = q; break;
+                    }
+                    return {(uint8_t)0, (uint8_t)(r*255), (uint8_t)(g*255), (uint8_t)(b*255)};
+                };
+
+                PaletteEntry base = make_hsv(h, s, v);
+                PaletteEntry neighbor_1 = make_hsv(h + 25.0f, s, v);
+                PaletteEntry neighbor_2 = make_hsv(h - 25.0f, s, v);
+                
+                // Palette: Base -> Neighbor 1 -> Base -> Neighbor 2 -> Base
+                current_palette = {
+                    {0,   base.r, base.g, base.b},
+                    {64,  neighbor_1.r, neighbor_1.g, neighbor_1.b},
+                    {128, base.r, base.g, base.b},
+                    {192, neighbor_2.r, neighbor_2.g, neighbor_2.b},
+                    {255, base.r, base.g, base.b}
+                };
+              }
+
+              return ColorFromPalette(current_palette, pos);
+            };
+
+            // --- Initialization ---
+            if (!initialized) {
+              waves.resize(MAX_WAVES);
+              for (int i = 0; i < MAX_WAVES; i++) {
+                waves[i].alive = false;
+              }
+              initialized = true;
+            }
+
+            // --- Main Loop ---
+            
+            // 1. Update Waves & Spawn
+            for (auto &wave : waves) {
+              if (wave.alive) {
+                wave.update(it.size());
+              } else {
+                // Immediate respawn for dense effect
+                wave.init(it.size(), get_aurora_color(random(0, 255)));
+              }
+            }
+
+            // 2. Render to LEDs
+            for (int i = 0; i < it.size(); i++) {
+              int r = 0, g = 0, b = 0, w = 0;
+              
+              // Background color (Black for better contrast)
+              r = 0; g = 0; b = 0; 
+
+              for (auto &wave : waves) {
+                if (wave.alive) {
+                  Color c = wave.get_color(i);
+                  r += c.r;
+                  g += c.g;
+                  b += c.b;
+                  w += c.w;
+                }
+              }
+              
+              // Clamp values
+              if (r > 255) r = 255;
+              if (g > 255) g = 255;
+              if (b > 255) b = 255;
+              if (w > 255) w = 255;
+
+              it[i] = Color(r, g, b, w);
+            }
+    ```
+
+Imagine adding three or four effects: you’re looking at a config file with over 1,000 lines just for pretty lights. As a developer who values clean code, I couldn't live with that maintenance nightmare.
 
 ### Enter: ChimeraFX
 

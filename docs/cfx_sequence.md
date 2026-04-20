@@ -69,9 +69,9 @@ These let you lock in specific values for the duration of the sequence, overridi
 
 | Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Range | Description |
 |--------|---|-------------|
-| `set_speed` | 0-255 | Overrides the Speed slider. |
-| `set_intensity` | 0-255 | Overrides the Intensity slider. |
-| `set_palette` | 0-255 | Overrides the Palette selector (by index). |
+| `set_speed` | 0-255 | Runtime-only Speed override for the active run. Does not persist to the HA slider. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
+| `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
 | `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
@@ -404,9 +404,9 @@ on_cfx_reach:
 |---|---|---|
 | `id` | light ID | Target light (required). |
 | `effect` | string | Effect name. If set, calls light.turn_on with this effect. Omit to only change parameters without touching the current effect. |
-| `set_speed` | 0-255 | Overrides the Speed slider. |
-| `set_intensity` | 0-255 | Overrides the Intensity slider. |
-| `set_palette` | 0-255 | Overrides the Palette selector (by index). |
+| `set_speed` | 0-255 | Runtime-only Speed override for the active run. Does not persist to the HA slider. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
+| `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
 | `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
@@ -435,9 +435,9 @@ on_cfx_reach:
 |---|---|---|
 | `id` | light ID | Target light (required). |
 | `effect` | string | Effect name to spawn (required). |
-| `set_speed` | 0-255 | Speed override. |
-| `set_intensity` | 0-255 | Intensity override. |
-| `set_palette` | 0-255 | Palette override (index). |
+| `set_speed` | 0-255 | Runtime-only Speed override for the spawned run. Does not persist to the HA slider. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override for the spawned run. Does not persist to the HA slider. |
+| `set_palette` | 0-255 | Runtime-only Palette override (index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Brightness override. |
 | `set_color` | [r,g,b] or [r,g,b,w] | Color override. |
 | `set_mirror` | true / false | Mirror override. |
