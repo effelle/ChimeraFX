@@ -231,6 +231,7 @@ void CFXAddressableLightEffect::start() {
   act_->sequence_intensity.reset();
   act_->sequence_palette.reset();
   act_->sequence_mirror.reset();
+  act_->sequence_autotune.reset();
   act_->sequence_iterations = 0;
 #endif
 
@@ -290,7 +291,7 @@ void CFXAddressableLightEffect::start() {
                this->get_name().c_str(), seq->get_name().c_str());
       this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
                                 seq->get_palette(), seq->get_mirror(),
-                                seq->get_iterations());
+                                seq->get_autotune(), seq->get_iterations());
       break;
     }
   }
@@ -491,6 +492,10 @@ void CFXAddressableLightEffect::start() {
       act_->sequence_mirror = cfg_->pending_sequence_mirror;
       cfg_->pending_sequence_mirror.reset();
     }
+    if (cfg_->pending_sequence_autotune.has_value()) {
+      act_->sequence_autotune = cfg_->pending_sequence_autotune;
+      cfg_->pending_sequence_autotune.reset();
+    }
   }
 
   const bool owns_speed = act_->sequence_speed.has_value();
@@ -521,7 +526,9 @@ void CFXAddressableLightEffect::start() {
         (act_->controller && act_->controller->get_autotune())
             ? act_->controller->get_autotune()
             : this->local_autotune_();
-    if (this->has_autotune_preset_())
+    if (act_->sequence_autotune.has_value())
+      autotune_will_run = act_->sequence_autotune.value();
+    else if (this->has_autotune_preset_())
       autotune_will_run = this->autotune_preset_val_();
     else if (at_sw != nullptr)
       autotune_will_run = at_sw->state;
@@ -552,7 +559,8 @@ void CFXAddressableLightEffect::start() {
   {
     bool autotune_enabled = true;
     switch_::Switch *autotune_sw = (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
-    if (this->has_autotune_preset_()) autotune_enabled = this->autotune_preset_val_();
+    if (act_->sequence_autotune.has_value()) autotune_enabled = act_->sequence_autotune.value();
+    else if (this->has_autotune_preset_()) autotune_enabled = this->autotune_preset_val_();
     else if (autotune_sw != nullptr) autotune_enabled = autotune_sw->state;
     act_->autotune_active = autotune_enabled;
     if (autotune_enabled) this->apply_autotune_defaults_();
@@ -2418,7 +2426,9 @@ void CFXAddressableLightEffect::run_controls_() {
       true; // Constraint: No switch = always respect defaults
   switch_::Switch *autotune_sw =
       (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
-  if (autotune_sw != nullptr) {
+  if (act_->sequence_autotune.has_value()) {
+    current_autotune_state = act_->sequence_autotune.value();
+  } else if (autotune_sw != nullptr) {
     current_autotune_state = autotune_sw->state;
   }
 
@@ -2433,6 +2443,7 @@ void CFXAddressableLightEffect::run_controls_() {
   }
   // Handle expected ON state, but detecting manual UI overrides
   else if (current_autotune_state && act_->autotune_active &&
+           !act_->sequence_autotune.has_value() &&
            autotune_sw != nullptr) {
     bool manual_override = false;
     // In 1:1 mode, this segment IS always the target.
@@ -6504,6 +6515,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
                                                     std::optional<uint8_t> iten,
                                                     std::optional<uint8_t> pal,
                                                     std::optional<bool> mir,
+                                                    std::optional<bool> autotune,
                                                     uint32_t itr) {
   // CFX-030: act_ is null when the effect is not running (light off or
   // removed). Bail out silently rather than dereferencing null.
@@ -6518,6 +6530,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
   act_->sequence_intensity = iten;
   act_->sequence_palette = pal;
   act_->sequence_mirror = mir;
+  act_->sequence_autotune = autotune;
   act_->sequence_iterations = itr;
 
   if (!act_->segment_runners.empty()) {

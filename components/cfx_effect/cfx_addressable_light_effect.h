@@ -134,6 +134,7 @@ public:
     std::optional<uint8_t> sequence_intensity{};
     std::optional<uint8_t> sequence_palette{};
     std::optional<bool> sequence_mirror{};
+    std::optional<bool> sequence_autotune{};
     uint32_t sequence_iterations{0};
 #endif
     bool completion_pending{false};
@@ -204,6 +205,7 @@ public:
     std::optional<uint8_t> pending_sequence_intensity{};
     std::optional<uint8_t> pending_sequence_palette{};
     std::optional<bool> pending_sequence_mirror{};
+    std::optional<bool> pending_sequence_autotune{};
 
     // 5 trigger vectors (60 bytes) — always empty for virtual segments
     std::vector<CfxOnStartTrigger *> on_start_triggers;
@@ -412,7 +414,8 @@ public:
   void set_active_sequence(CFXSequence *seq, std::optional<uint8_t> spd,
                            std::optional<uint8_t> iten,
                            std::optional<uint8_t> pal,
-                           std::optional<bool> mir, uint32_t itr);
+                           std::optional<bool> mir,
+                           std::optional<bool> autotune, uint32_t itr);
   CFXSequence *get_active_sequence() const { return act_ ? act_->active_sequence : nullptr; }
   // CFX-030: allows callers to check whether the effect is currently running
   // before calling set_active_sequence() (act_==nullptr means effect is stopped).
@@ -439,6 +442,11 @@ public:
     ensure_cfg_();
     cfg_->pending_sequence_mirror = v;
     if (act_) act_->sequence_mirror = v;
+  }
+  void set_sequence_autotune(bool v) {
+    ensure_cfg_();
+    cfg_->pending_sequence_autotune = v;
+    if (act_) act_->sequence_autotune = v;
   }
 
   // Propagate ownership flags to all runners so CFXControl push callbacks

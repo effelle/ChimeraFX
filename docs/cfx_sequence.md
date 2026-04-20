@@ -75,6 +75,7 @@ These let you lock in specific values for the duration of the sequence, overridi
 | `set_brightness` | 0-100% | Overrides the light brightness. |
 | `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
+| `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
 | `set_intro` | 0-27 | Overrides the Intro animation by index. |
 | `set_outro` | 0-27 | Overrides the Outro animation by index. |
@@ -107,6 +108,7 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
         set_brightness:  80%
         set_color:       [255, 180, 80]
         set_mirror:      true
+        set_autotune:    false
         set_force_white: true
         set_intro:       12
         set_outro:       22
@@ -407,6 +409,7 @@ on_cfx_reach:
 | set_brightness | 0-100% | Brightness override. |
 | set_color | [r,g,b] or [r,g,b,w] | Color override. |
 | set_mirror | true / false | Mirror override. |
+| set_autotune | true / false | Autotune override. |
 | set_force_white | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
 | set_intro | 0-27 | Intro override. |
 | set_outro | 0-27 | Outro override. |
@@ -435,6 +438,7 @@ on_cfx_reach:
 | set_brightness | 0-100% | Brightness override. |
 | set_color | [r,g,b] or [r,g,b,w] | Color override. |
 | set_mirror | true / false | Mirror override. |
+| set_autotune | true / false | Autotune override. |
 | set_force_white | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
 | set_intro | 0-27 | Intro override. |
 | set_outro | 0-27 | Outro override. |

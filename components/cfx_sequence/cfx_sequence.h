@@ -120,6 +120,7 @@ public:
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
   esphome::optional<uint8_t> get_palette() const { return this->palette_; }
   esphome::optional<bool> get_mirror() const { return this->mirror_; }
+  esphome::optional<bool> get_autotune() const { return this->autotune_; }
   esphome::optional<float> get_brightness() const { return this->brightness_; }
   uint32_t get_iterations() const { return this->iterations_; }
   void set_duration_ms(uint32_t ms) { this->duration_ms_ = ms; }

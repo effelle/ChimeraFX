@@ -286,6 +286,8 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_mirror(this->mirror_.value());
         inst->set_runner_owns_mirror(true);
       }
+      if (this->autotune_.has_value())
+        inst->set_sequence_autotune(this->autotune_.value());
       if (this->intro_.has_value())
         inst->set_intro_preset(this->intro_.value());
       if (this->outro_.has_value())
@@ -294,8 +296,6 @@ void CfxSetActionBase::do_play_() {
         inst->set_inout_duration_preset(this->inout_duration_.value());
       if (this->force_white_.has_value())
         inst->set_force_white_preset(this->force_white_.value());
-      if (this->autotune_.has_value())
-        inst->set_autotune_preset(this->autotune_.value());
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
@@ -316,6 +316,8 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_mirror(this->mirror_.value());
         inst->set_runner_owns_mirror(true);
       }
+      if (this->autotune_.has_value())
+        inst->set_sequence_autotune(this->autotune_.value());
       if (this->intro_.has_value())
         inst->set_intro_preset(this->intro_.value());
       if (this->outro_.has_value())
@@ -324,8 +326,6 @@ void CfxSetActionBase::do_play_() {
         inst->set_inout_duration_preset(this->inout_duration_.value());
       if (this->force_white_.has_value())
         inst->set_force_white_preset(this->force_white_.value());
-      if (this->autotune_.has_value())
-        inst->set_autotune_preset(this->autotune_.value());
     }
   }
 
@@ -709,6 +709,8 @@ void CFXSequence::start() {
       if (target_inst != nullptr) {
         if (this->mirror_.has_value())
           target_inst->set_sequence_mirror(this->mirror_.value());
+        if (this->autotune_.has_value())
+          target_inst->set_sequence_autotune(this->autotune_.value());
         if (this->intro_.has_value())
           target_inst->set_intro_preset(this->intro_.value());
         if (this->outro_.has_value())
@@ -717,8 +719,6 @@ void CFXSequence::start() {
           target_inst->set_inout_duration_preset(this->inout_duration_.value());
         if (this->force_white_.has_value())
           target_inst->set_force_white_preset(this->force_white_.value());
-        if (this->autotune_.has_value())
-          target_inst->set_autotune_preset(this->autotune_.value());
       }
 
       auto call = l->make_call();
@@ -917,7 +917,7 @@ bool CFXSequence::try_bind_effects_() {
 
 void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect *inst) {
   inst->set_active_sequence(this, this->speed_, this->intensity_,
-                            this->palette_, this->mirror_,
+                            this->palette_, this->mirror_, this->autotune_,
                             this->iterations_);
 
   // strip_tag is intentionally NOT stamped from the sequence here.
@@ -939,8 +939,6 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
     inst->set_inout_duration_preset(this->inout_duration_.value());
   if (this->force_white_.has_value())
     inst->set_force_white_preset(this->force_white_.value());
-  if (this->autotune_.has_value())
-    inst->set_autotune_preset(this->autotune_.value());
 }
 
 void CFXSequence::begin_teardown_(TeardownMode mode) {
@@ -1213,13 +1211,13 @@ void CFXSequence::clear_active_binding() {
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
-      inst->set_active_sequence(nullptr, {}, {}, {}, {}, 0);
+      inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
-      inst->set_active_sequence(nullptr, {}, {}, {}, {}, 0);
+      inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
 }
