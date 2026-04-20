@@ -129,12 +129,21 @@ public:
 
       this->palette_->add_on_state_callback(
           [this](size_t index) {
-            if (index < this->palette_mapping_.size()) {
-              uint8_t r_pal_idx = this->palette_mapping_[index];
-              for (auto *r : this->runners_) {
-                if (!r->sequence_owns_palette_)
-                  r->setPalette(r_pal_idx);
-              }
+            if (index >= this->palette_mapping_.size())
+              return;
+
+            const char *opt_ptr = this->palette_->current_option().c_str();
+            if (opt_ptr != nullptr && strcmp(opt_ptr, "Default") == 0) {
+              // "Default" is effect-specific. Let the effect resolve and push
+              // its own natural palette on the next control pass instead of
+              // forcing a generic control-layer palette index here.
+              return;
+            }
+
+            uint8_t r_pal_idx = this->palette_mapping_[index];
+            for (auto *r : this->runners_) {
+              if (!r->sequence_owns_palette_)
+                r->setPalette(r_pal_idx);
             }
           });
     }
@@ -186,11 +195,11 @@ public:
       runner->setDebug(debug_->state);
     else
       runner->setDebug(global_debug_enabled_);
-    if (palette_ && palette_->has_state()) {
+    if (palette_ && palette_->has_state() && !runner->sequence_owns_palette_) {
       std::string opt_str(palette_->current_option());
       const char *opt_ptr = opt_str.c_str();
       std::string opt = opt_ptr ? opt_ptr : "";
-      if (opt.length() > 0) {
+      if (!opt.empty() && opt != "Default") {
         uint8_t pal_idx = get_palette_index_(opt);
         runner->setPalette(pal_idx);
       }
