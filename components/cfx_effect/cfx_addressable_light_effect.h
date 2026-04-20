@@ -133,6 +133,7 @@ public:
     std::optional<uint8_t> sequence_speed{};
     std::optional<uint8_t> sequence_intensity{};
     std::optional<uint8_t> sequence_palette{};
+    std::optional<bool> sequence_mirror{};
     uint32_t sequence_iterations{0};
 #endif
     bool completion_pending{false};
@@ -202,6 +203,7 @@ public:
     std::optional<uint8_t> pending_sequence_speed{};
     std::optional<uint8_t> pending_sequence_intensity{};
     std::optional<uint8_t> pending_sequence_palette{};
+    std::optional<bool> pending_sequence_mirror{};
 
     // 5 trigger vectors (60 bytes) — always empty for virtual segments
     std::vector<CfxOnStartTrigger *> on_start_triggers;
@@ -408,8 +410,9 @@ protected:
 public:
 #ifdef USE_CFX_SEQUENCE
   void set_active_sequence(CFXSequence *seq, std::optional<uint8_t> spd,
-                           std::optional<uint8_t> iten, std::optional<uint8_t> pal,
-                           uint32_t itr);
+                           std::optional<uint8_t> iten,
+                           std::optional<uint8_t> pal,
+                           std::optional<bool> mir, uint32_t itr);
   CFXSequence *get_active_sequence() const { return act_ ? act_->active_sequence : nullptr; }
   // CFX-030: allows callers to check whether the effect is currently running
   // before calling set_active_sequence() (act_==nullptr means effect is stopped).
@@ -432,6 +435,11 @@ public:
     cfg_->pending_sequence_palette = v;
     if (act_) act_->sequence_palette = v;
   }
+  void set_sequence_mirror(bool v) {
+    ensure_cfg_();
+    cfg_->pending_sequence_mirror = v;
+    if (act_) act_->sequence_mirror = v;
+  }
 
   // Propagate ownership flags to all runners so CFXControl push callbacks
   // don't overwrite cfx_set values via UI slider on_state_callback.
@@ -449,6 +457,11 @@ public:
     if (!act_) return;
     if (act_->runner) act_->runner->sequence_owns_palette_ = v;
     for (auto *r : act_->segment_runners) r->sequence_owns_palette_ = v;
+  }
+  void set_runner_owns_mirror(bool v) {
+    if (!act_) return;
+    if (act_->runner) act_->runner->sequence_owns_mirror_ = v;
+    for (auto *r : act_->segment_runners) r->sequence_owns_mirror_ = v;
   }
 #endif
 

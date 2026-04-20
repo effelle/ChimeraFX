@@ -282,8 +282,10 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_palette(this->palette_.value());
         inst->set_runner_owns_palette(true);
       }
-      if (this->mirror_.has_value())
-        inst->set_mirror_preset(this->mirror_.value());
+      if (this->mirror_.has_value()) {
+        inst->set_sequence_mirror(this->mirror_.value());
+        inst->set_runner_owns_mirror(true);
+      }
       if (this->intro_.has_value())
         inst->set_intro_preset(this->intro_.value());
       if (this->outro_.has_value())
@@ -310,8 +312,10 @@ void CfxSetActionBase::do_play_() {
         inst->set_sequence_palette(this->palette_.value());
         inst->set_runner_owns_palette(true);
       }
-      if (this->mirror_.has_value())
-        inst->set_mirror_preset(this->mirror_.value());
+      if (this->mirror_.has_value()) {
+        inst->set_sequence_mirror(this->mirror_.value());
+        inst->set_runner_owns_mirror(true);
+      }
       if (this->intro_.has_value())
         inst->set_intro_preset(this->intro_.value());
       if (this->outro_.has_value())
@@ -704,7 +708,7 @@ void CFXSequence::start() {
 
       if (target_inst != nullptr) {
         if (this->mirror_.has_value())
-          target_inst->set_mirror_preset(this->mirror_.value());
+          target_inst->set_sequence_mirror(this->mirror_.value());
         if (this->intro_.has_value())
           target_inst->set_intro_preset(this->intro_.value());
         if (this->outro_.has_value())
@@ -913,7 +917,8 @@ bool CFXSequence::try_bind_effects_() {
 
 void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect *inst) {
   inst->set_active_sequence(this, this->speed_, this->intensity_,
-                            this->palette_, this->iterations_);
+                            this->palette_, this->mirror_,
+                            this->iterations_);
 
   // strip_tag is intentionally NOT stamped from the sequence here.
   // Every effect's act_->strip_tag is already set correctly in start() via
@@ -926,8 +931,6 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
   // (see report_event_stop / report_event_complete) — it does not need to
   // propagate its tag into individual effect instances.
 
-  if (this->mirror_.has_value())
-    inst->set_mirror_preset(this->mirror_.value());
   if (this->intro_.has_value())
     inst->set_intro_preset(this->intro_.value());
   if (this->outro_.has_value())
@@ -1210,13 +1213,13 @@ void CFXSequence::clear_active_binding() {
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
-      inst->set_active_sequence(nullptr, {}, {}, {}, 0);
+      inst->set_active_sequence(nullptr, {}, {}, {}, {}, 0);
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
-      inst->set_active_sequence(nullptr, {}, {}, {}, 0);
+      inst->set_active_sequence(nullptr, {}, {}, {}, {}, 0);
     }
   }
 }

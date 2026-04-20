@@ -281,6 +281,7 @@ public:
   bool sequence_owns_speed_{false};
   bool sequence_owns_intensity_{false};
   bool sequence_owns_palette_{false};
+  bool sequence_owns_mirror_{false};
 
   void setGamma(float g);
   inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }

@@ -6137,6 +6137,7 @@ void CFXRunner::reset() {
   sequence_owns_speed_     = false;
   sequence_owns_intensity_ = false;
   sequence_owns_palette_   = false;
+  sequence_owns_mirror_    = false;
 }
 
 // --- Heartbeat Center Effect (ID 154) ---

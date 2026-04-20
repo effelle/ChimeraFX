@@ -230,6 +230,7 @@ void CFXAddressableLightEffect::start() {
   act_->sequence_speed.reset();
   act_->sequence_intensity.reset();
   act_->sequence_palette.reset();
+  act_->sequence_mirror.reset();
   act_->sequence_iterations = 0;
 #endif
 
@@ -288,7 +289,8 @@ void CFXAddressableLightEffect::start() {
       ESP_LOGD("chimera_fx", "CFX-036 auto-bind: effect '%s' -> sequence '%s'",
                this->get_name().c_str(), seq->get_name().c_str());
       this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
-                                seq->get_palette(), seq->get_iterations());
+                                seq->get_palette(), seq->get_mirror(),
+                                seq->get_iterations());
       break;
     }
   }
@@ -485,21 +487,28 @@ void CFXAddressableLightEffect::start() {
       act_->sequence_palette = cfg_->pending_sequence_palette;
       cfg_->pending_sequence_palette.reset();
     }
+    if (cfg_->pending_sequence_mirror.has_value()) {
+      act_->sequence_mirror = cfg_->pending_sequence_mirror;
+      cfg_->pending_sequence_mirror.reset();
+    }
   }
 
   const bool owns_speed = act_->sequence_speed.has_value();
   const bool owns_intensity = act_->sequence_intensity.has_value();
   const bool owns_palette = act_->sequence_palette.has_value();
+  const bool owns_mirror = act_->sequence_mirror.has_value();
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
       r->sequence_owns_speed_ = owns_speed;
       r->sequence_owns_intensity_ = owns_intensity;
       r->sequence_owns_palette_ = owns_palette;
+      r->sequence_owns_mirror_ = owns_mirror;
     }
   } else if (act_->runner != nullptr) {
     act_->runner->sequence_owns_speed_ = owns_speed;
     act_->runner->sequence_owns_intensity_ = owns_intensity;
     act_->runner->sequence_owns_palette_ = owns_palette;
+    act_->runner->sequence_owns_mirror_ = owns_mirror;
   }
 #endif
 
@@ -1008,11 +1017,19 @@ void CFXAddressableLightEffect::stop() {
 
       // Cache Mirror for Outro
       act_->active_outro_mirror = false;
-      switch_::Switch *mirror_sw = this->local_mirror_();
-      if (mirror_sw == nullptr && c != nullptr)
-        mirror_sw = c->get_mirror();
-      if (mirror_sw != nullptr)
-        act_->active_outro_mirror = mirror_sw->state;
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_mirror.has_value()) {
+        act_->active_outro_mirror = act_->sequence_mirror.value();
+      } else {
+#endif
+        switch_::Switch *mirror_sw = this->local_mirror_();
+        if (mirror_sw == nullptr && c != nullptr)
+          mirror_sw = c->get_mirror();
+        if (mirror_sw != nullptr)
+          act_->active_outro_mirror = mirror_sw->state;
+#ifdef USE_CFX_SEQUENCE
+      }
+#endif
 
       act_->active_outro_force_white = false;
       if (this->has_force_white_preset_()) {
@@ -2592,9 +2609,15 @@ void CFXAddressableLightEffect::run_controls_() {
         }
       }
 
-      // 5. Mirror (standalone mode) — sequence mirror_preset takes priority
+      // 5. Mirror (standalone mode) — sequence override takes priority
       bool current_mirror = false;
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_mirror.has_value()) {
+        current_mirror = act_->sequence_mirror.value();
+      } else if (this->has_mirror_preset_()) {
+#else
       if (this->has_mirror_preset_()) {
+#endif
         current_mirror = this->mirror_preset_val_();
       } else if (this->local_mirror_()) {
         current_mirror = this->local_mirror_()->state;
@@ -2659,9 +2682,15 @@ void CFXAddressableLightEffect::run_controls_() {
         current_palette = get_pal_idx(c->get_palette());
 
       bool current_mirror = false;
-      // CFX-056: Sequence mirror_preset takes priority over controller's UI switch,
-      // matching the priority chain used for speed/intensity/palette.
+      // CFX-056: Sequence mirror override takes priority over controller's UI
+      // switch, matching the priority chain used for speed/intensity/palette.
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_mirror.has_value()) {
+        current_mirror = act_->sequence_mirror.value();
+      } else if (this->has_mirror_preset_()) {
+#else
       if (this->has_mirror_preset_()) {
+#endif
         current_mirror = this->mirror_preset_val_();
       } else if (c->get_mirror()) {
         current_mirror = c->get_mirror()->state;
@@ -3025,13 +3054,20 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
 
   // Control State
-  switch_::Switch *mirror_sw = this->local_mirror_();
-  if (mirror_sw == nullptr && act_->controller != nullptr)
-    mirror_sw = act_->controller->get_mirror();
-
   bool reverse = false;
-  if (mirror_sw != nullptr && mirror_sw->state)
-    reverse = true;
+#ifdef USE_CFX_SEQUENCE
+  if (act_->sequence_mirror.has_value()) {
+    reverse = act_->sequence_mirror.value();
+  } else {
+#endif
+    switch_::Switch *mirror_sw = this->local_mirror_();
+    if (mirror_sw == nullptr && act_->controller != nullptr)
+      mirror_sw = act_->controller->get_mirror();
+    if (mirror_sw != nullptr && mirror_sw->state)
+      reverse = true;
+#ifdef USE_CFX_SEQUENCE
+  }
+#endif
 
   bool symmetry = false;
   bool quadrant = false;
@@ -3699,7 +3735,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 2. Mirroring
     // ──────────────────────────────────────────────────────────
-    bool reverse = (mirror_sw != nullptr && mirror_sw->state);
+    bool reverse = false;
+#ifdef USE_CFX_SEQUENCE
+    if (act_->sequence_mirror.has_value()) {
+      reverse = act_->sequence_mirror.value();
+    } else {
+#endif
+      switch_::Switch *mirror_sw = this->local_mirror_();
+      if (mirror_sw == nullptr && act_->controller != nullptr)
+        mirror_sw = act_->controller->get_mirror();
+      reverse = (mirror_sw != nullptr && mirror_sw->state);
+#ifdef USE_CFX_SEQUENCE
+    }
+#endif
 
     // ── 3. Knuth multiplicative hash for deterministic block sizes
     // ────────────
@@ -6455,6 +6503,7 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
                                                     std::optional<uint8_t> spd,
                                                     std::optional<uint8_t> iten,
                                                     std::optional<uint8_t> pal,
+                                                    std::optional<bool> mir,
                                                     uint32_t itr) {
   // CFX-030: act_ is null when the effect is not running (light off or
   // removed). Bail out silently rather than dereferencing null.
@@ -6468,7 +6517,22 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
   act_->sequence_speed = spd;
   act_->sequence_intensity = iten;
   act_->sequence_palette = pal;
+  act_->sequence_mirror = mir;
   act_->sequence_iterations = itr;
+
+  if (!act_->segment_runners.empty()) {
+    for (auto *r : act_->segment_runners) {
+      r->sequence_owns_speed_ = spd.has_value();
+      r->sequence_owns_intensity_ = iten.has_value();
+      r->sequence_owns_palette_ = pal.has_value();
+      r->sequence_owns_mirror_ = mir.has_value();
+    }
+  } else if (act_->runner) {
+    act_->runner->sequence_owns_speed_ = spd.has_value();
+    act_->runner->sequence_owns_intensity_ = iten.has_value();
+    act_->runner->sequence_owns_palette_ = pal.has_value();
+    act_->runner->sequence_owns_mirror_ = mir.has_value();
+  }
 
   // Reset trackers when a new sequence is bound
   if (seq != nullptr) {
@@ -6486,16 +6550,10 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
       for (auto *r : act_->segment_runners) {
         r->reset();
         r->target_iterations_ = itr;
-        r->sequence_owns_speed_ = spd.has_value();
-        r->sequence_owns_intensity_ = iten.has_value();
-        r->sequence_owns_palette_ = pal.has_value();
       }
     } else if (act_->runner) {
       act_->runner->reset();
       act_->runner->target_iterations_ = itr;
-      act_->runner->sequence_owns_speed_ = spd.has_value();
-      act_->runner->sequence_owns_intensity_ = iten.has_value();
-      act_->runner->sequence_owns_palette_ = pal.has_value();
     }
   }
 }

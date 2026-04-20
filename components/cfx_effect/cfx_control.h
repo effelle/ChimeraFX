@@ -106,7 +106,8 @@ public:
     if (this->mirror_) {
       this->mirror_->add_on_state_callback([this](bool value) {
         for (auto *r : this->runners_)
-          r->setMirror(value);
+          if (!r->sequence_owns_mirror_)
+            r->setMirror(value);
       });
     }
 
@@ -179,7 +180,7 @@ public:
       runner->setSpeed((uint8_t)speed_->state);
     if (intensity_ && intensity_->has_state())
       runner->setIntensity((uint8_t)intensity_->state);
-    if (mirror_ && mirror_->has_state())
+    if (mirror_ && mirror_->has_state() && !runner->sequence_owns_mirror_)
       runner->setMirror(mirror_->state);
     if (debug_ && debug_->has_state())
       runner->setDebug(debug_->state);
