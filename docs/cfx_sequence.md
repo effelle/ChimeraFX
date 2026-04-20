@@ -89,7 +89,14 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 |---|---|---|---|
 | `iterations` | integer | `0` | Stop after N complete animation cycles. `0` = loop forever. |
 | `duration` | time | `null` | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
-| `restore` | boolean | `true` | Restore the strip's previous state (effect, brightness, colour) when the sequence stops. |
+| `restore` | boolean | `true` | Restore the strip's pre-sequence light state when the sequence stops. This includes ON/OFF state, effect, brightness, colour, and colour mode snapshot. Runtime-only overrides such as `set_speed`, `set_intensity`, `set_palette`, `set_mirror`, and `set_autotune` are not persisted back to HA controls. |
+
+`restore` is intentionally light-state oriented, not control-state oriented.
+
+- If the light was already ON before the sequence started, `restore: true` returns it to that previous effect/colour/brightness snapshot.
+- If the light was OFF before the sequence started, `restore: true` returns it to OFF.
+- If a child light is adopted mid-sequence via `cfx_set`, its restore baseline is treated as OFF unless explicitly designed otherwise, so stopping the parent sequence cleans the adopted child up without leaving it running.
+- `restore: false` skips the saved-state return and the teardown path forces the sequence lights OFF.
 
 ??? abstract "Full annotated example"
 

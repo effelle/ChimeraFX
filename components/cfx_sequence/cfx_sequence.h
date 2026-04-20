@@ -318,6 +318,10 @@ protected:
     light::LightState *light_;
   };
 
+  // Snapshot captured at sequence start (or adopt_light() time) and used only
+  // for light-state restore on teardown. Sequence/cfx_set runtime overrides
+  // such as speed/intensity/palette/mirror/autotune are intentionally NOT
+  // persisted here; they are transient run-scoped controls.
   struct SavedState {
     light::LightColorValues values;
     light::ColorMode color_mode;
