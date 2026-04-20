@@ -1190,14 +1190,16 @@ void CFXSequence::clear_active_binding() {
   // active_sequence == nullptr — so those segments silently dropped their
   // cfx_stop and cfx_complete events on sequence stop.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-    if (inst->get_active_sequence() == this) {
+    if (inst->get_active_sequence() == this ||
+        this->owns_light(inst->get_light_state())) {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
-    if (inst->get_active_sequence() == this) {
+    if (inst->get_active_sequence() == this ||
+        this->owns_light(inst->get_light_state())) {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
