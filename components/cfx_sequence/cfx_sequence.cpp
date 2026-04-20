@@ -265,67 +265,47 @@ void CfxSetActionBase::do_play_() {
   if (this->light_ == nullptr)
     return;
 
+  auto apply_overrides_to_inst =
+      [this](chimera_fx::CFXAddressableLightEffect *inst) {
+        if (this->speed_.has_value()) {
+          inst->set_sequence_speed(this->speed_.value());
+          inst->set_runner_owns_speed(true);
+        }
+        if (this->intensity_.has_value()) {
+          inst->set_sequence_intensity(this->intensity_.value());
+          inst->set_runner_owns_intensity(true);
+        }
+        if (this->palette_.has_value()) {
+          inst->set_sequence_palette(this->palette_.value());
+          inst->set_runner_owns_palette(true);
+        }
+        if (this->mirror_.has_value()) {
+          inst->set_sequence_mirror(this->mirror_.value());
+          inst->set_runner_owns_mirror(true);
+        }
+        if (this->autotune_.has_value())
+          inst->set_sequence_autotune(this->autotune_.value());
+        if (this->intro_.has_value())
+          inst->set_intro_preset(this->intro_.value());
+        if (this->outro_.has_value())
+          inst->set_outro_preset(this->outro_.value());
+        if (this->inout_duration_.has_value())
+          inst->set_inout_duration_preset(this->inout_duration_.value());
+        if (this->force_white_.has_value())
+          inst->set_force_white_preset(this->force_white_.value());
+      };
+
   // Apply params to all CFX effect instances registered for this light.
   // Also set runner ownership flags so CFXControl push callbacks don't
   // stomp the cfx_set values via UI slider on_state callbacks.
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_light_state() == this->light_) {
-      if (this->speed_.has_value()) {
-        inst->set_sequence_speed(this->speed_.value());
-        inst->set_runner_owns_speed(true);
-      }
-      if (this->intensity_.has_value()) {
-        inst->set_sequence_intensity(this->intensity_.value());
-        inst->set_runner_owns_intensity(true);
-      }
-      if (this->palette_.has_value()) {
-        inst->set_sequence_palette(this->palette_.value());
-        inst->set_runner_owns_palette(true);
-      }
-      if (this->mirror_.has_value()) {
-        inst->set_sequence_mirror(this->mirror_.value());
-        inst->set_runner_owns_mirror(true);
-      }
-      if (this->autotune_.has_value())
-        inst->set_sequence_autotune(this->autotune_.value());
-      if (this->intro_.has_value())
-        inst->set_intro_preset(this->intro_.value());
-      if (this->outro_.has_value())
-        inst->set_outro_preset(this->outro_.value());
-      if (this->inout_duration_.has_value())
-        inst->set_inout_duration_preset(this->inout_duration_.value());
-      if (this->force_white_.has_value())
-        inst->set_force_white_preset(this->force_white_.value());
+      apply_overrides_to_inst(inst);
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     if (inst->get_light_state() == this->light_) {
-      if (this->speed_.has_value()) {
-        inst->set_sequence_speed(this->speed_.value());
-        inst->set_runner_owns_speed(true);
-      }
-      if (this->intensity_.has_value()) {
-        inst->set_sequence_intensity(this->intensity_.value());
-        inst->set_runner_owns_intensity(true);
-      }
-      if (this->palette_.has_value()) {
-        inst->set_sequence_palette(this->palette_.value());
-        inst->set_runner_owns_palette(true);
-      }
-      if (this->mirror_.has_value()) {
-        inst->set_sequence_mirror(this->mirror_.value());
-        inst->set_runner_owns_mirror(true);
-      }
-      if (this->autotune_.has_value())
-        inst->set_sequence_autotune(this->autotune_.value());
-      if (this->intro_.has_value())
-        inst->set_intro_preset(this->intro_.value());
-      if (this->outro_.has_value())
-        inst->set_outro_preset(this->outro_.value());
-      if (this->inout_duration_.has_value())
-        inst->set_inout_duration_preset(this->inout_duration_.value());
-      if (this->force_white_.has_value())
-        inst->set_force_white_preset(this->force_white_.value());
+      apply_overrides_to_inst(inst);
     }
   }
 
@@ -393,6 +373,7 @@ void CfxSetActionBase::do_play_() {
                "cfx_set re-entry: forcing start() on '%s' (perform() was no-op).",
                this->effect_.c_str());
       target_inst->start();
+      apply_overrides_to_inst(target_inst);
     }
   }
 
