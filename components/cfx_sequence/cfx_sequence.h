@@ -297,7 +297,6 @@ protected:
   bool is_running_{false};
   TeardownMode teardown_mode_{TeardownMode::NONE};
   size_t teardown_light_index_{0};
-  bool teardown_clear_phase_{true};
   // bool is_stagger_complete_{true}; // Replaced by stagger_tasks_pending_ atomic
   bool duration_completion_pending_{false};  // CFX-044c: Defer duration timeout to worker
   // Set to true when report_event_complete() has been called for this run.

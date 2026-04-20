@@ -925,14 +925,12 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
 void CFXSequence::begin_teardown_(TeardownMode mode) {
   this->teardown_mode_ = mode;
   this->teardown_light_index_ = 0;
-  this->teardown_clear_phase_ = true;
 }
 
 void CFXSequence::finalize_teardown_() {
   TeardownMode completed_mode = this->teardown_mode_;
   this->teardown_mode_ = TeardownMode::NONE;
   this->teardown_light_index_ = 0;
-  this->teardown_clear_phase_ = true;
   this->is_stopping_ = false;
 
   // cfx_set adoptions are runtime-only: once the sequence has finished
@@ -1023,19 +1021,10 @@ void CFXSequence::process_pending_teardown() {
       return;
     }
 
-    if (this->teardown_clear_phase_) {
-      auto clear_call = l->make_call();
-      clear_call.set_effect("None");
-      clear_call.perform();
-      this->teardown_clear_phase_ = false;
-      return;
-    }
-
     auto off_call = l->make_call();
     off_call.set_state(false);
     off_call.set_transition_length(0);
     off_call.perform();
-    this->teardown_clear_phase_ = true;
     this->teardown_light_index_++;
     return;
   }

@@ -535,7 +535,14 @@ void CFXAddressableLightEffect::start() {
     else if (at_sw != nullptr)
       autotune_will_run = at_sw->state;
   }
-  if (autotune_will_run && act_->controller) {
+  const bool transient_autotune_context =
+#ifdef USE_CFX_SEQUENCE
+      (act_->active_sequence != nullptr || act_->sequence_autotune.has_value());
+#else
+      false;
+#endif
+
+  if (autotune_will_run && act_->controller && !transient_autotune_context) {
     select::Select *palette_sel_init = act_->controller->get_palette()
                                            ? act_->controller->get_palette()
                                            : this->local_palette_();
@@ -2586,13 +2593,19 @@ void CFXAddressableLightEffect::run_controls_() {
     // in cfx_control.h which respect the Target Segment filter.
     if (!c) {
       // 2. Speed (standalone mode) — sequence value takes priority over UI entity
+      const bool transient_autotune_context = current_autotune_state &&
+#ifdef USE_CFX_SEQUENCE
+          (act_->active_sequence != nullptr || act_->sequence_autotune.has_value());
+#else
+          false;
+#endif
       uint8_t current_speed = this->get_default_speed_(this->effect_id_);
 #ifdef USE_CFX_SEQUENCE
       if (act_->sequence_speed.has_value())
         current_speed = act_->sequence_speed.value();
       else
 #endif
-      if (this->local_speed_()) {
+      if (!transient_autotune_context && this->local_speed_()) {
         current_speed = (uint8_t)this->local_speed_()->state;
       }
 
@@ -2604,7 +2617,7 @@ void CFXAddressableLightEffect::run_controls_() {
         current_intensity = act_->sequence_intensity.value();
       else
 #endif
-      if (this->local_intensity_()) {
+      if (!transient_autotune_context && this->local_intensity_()) {
         current_intensity = (uint8_t)this->local_intensity_()->state;
       }
 
@@ -2618,7 +2631,7 @@ void CFXAddressableLightEffect::run_controls_() {
           current_palette = act_->sequence_palette.value();
         else
 #endif
-        if (this->local_palette_()) {
+        if (!transient_autotune_context && this->local_palette_()) {
           current_palette = get_pal_idx(this->local_palette_());
         }
       }
@@ -2660,7 +2673,13 @@ void CFXAddressableLightEffect::run_controls_() {
       // sliders. sequence_speed_/intensity_/palette_ are set by cfx_sequence or
       // cfx_set and override the controller number entities for the duration of
       // the run.
-      uint8_t current_speed = 128;
+      const bool transient_autotune_context = current_autotune_state &&
+#ifdef USE_CFX_SEQUENCE
+          (act_->active_sequence != nullptr || act_->sequence_autotune.has_value());
+#else
+          false;
+#endif
+      uint8_t current_speed = this->get_default_speed_(this->effect_id_);
       bool has_seq_speed = false;
       bool has_seq_intensity = false;
       bool has_seq_palette = false;
@@ -2670,16 +2689,16 @@ void CFXAddressableLightEffect::run_controls_() {
       has_seq_palette = act_->sequence_palette.has_value();
       if (has_seq_speed)
         current_speed = act_->sequence_speed.value();
-      else
+      else if (!transient_autotune_context)
 #endif
           if (c->get_speed())
         current_speed = (uint8_t)c->get_speed()->state;
 
-      uint8_t current_intensity = 128;
+      uint8_t current_intensity = this->get_default_intensity_(this->effect_id_);
 #ifdef USE_CFX_SEQUENCE
       if (has_seq_intensity)
         current_intensity = act_->sequence_intensity.value();
-      else
+      else if (!transient_autotune_context)
 #endif
           if (c->get_intensity())
         current_intensity = (uint8_t)c->get_intensity()->state;
@@ -2692,7 +2711,7 @@ void CFXAddressableLightEffect::run_controls_() {
       else if (has_seq_palette)
         current_palette = act_->sequence_palette.value();
 #endif
-      else if (c->get_palette())
+      else if (!transient_autotune_context && c->get_palette())
         current_palette = get_pal_idx(c->get_palette());
 
       bool current_mirror = false;
@@ -2711,7 +2730,8 @@ void CFXAddressableLightEffect::run_controls_() {
       }
 
       bool sequence_override_active =
-          (has_seq_speed || has_seq_intensity || has_seq_palette);
+          (has_seq_speed || has_seq_intensity || has_seq_palette ||
+           transient_autotune_context);
 
       // Apply UI/sequence overrides to ALL physical segment runners.
       // segment_runners is only non-empty for master (non-virtual) effects, so
@@ -6271,13 +6291,19 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
 // --- Autotune Auto-Disable Implementation ---
 void CFXAddressableLightEffect::apply_autotune_defaults_() {
   CFXControl *c = act_->controller;
+  const bool transient_autotune_context =
+#ifdef USE_CFX_SEQUENCE
+      (act_->active_sequence != nullptr || act_->sequence_autotune.has_value());
+#else
+      false;
+#endif
 
   // 1. Speed
   number::Number *speed_num =
       (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
   if (speed_num != nullptr && !this->has_speed_preset_()) {
     float target = (float)this->get_default_speed_(this->effect_id_);
-    if (speed_num->state != target) {
+    if (!transient_autotune_context && speed_num->state != target) {
       auto call = speed_num->make_call();
       call.set_value(target);
       call.perform();
@@ -6292,7 +6318,7 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
       (c && c->get_intensity()) ? c->get_intensity() : this->local_intensity_();
   if (intensity_num != nullptr && !this->has_intensity_preset_()) {
     float target = (float)this->get_default_intensity_(this->effect_id_);
-    if (intensity_num->state != target) {
+    if (!transient_autotune_context && intensity_num->state != target) {
       auto call = intensity_num->make_call();
       call.set_value(target);
       call.perform();
@@ -6314,7 +6340,8 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
       pal_name = "Solid";
     }
 
-    if (palette_sel->current_option() != pal_name) {
+    if (!transient_autotune_context &&
+        palette_sel->current_option() != pal_name) {
       auto call = palette_sel->make_call();
       call.set_option(pal_name);
       call.perform();
