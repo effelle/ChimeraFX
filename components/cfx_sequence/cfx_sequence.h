@@ -240,6 +240,10 @@ protected:
   };
   // Small fixed-bound vector: max 8 triggers per frame is more than enough.
   std::vector<PendingTrigger> pending_reach_triggers_;
+  // Sequence-level on_cfx_reach dedupe for the current forward pass.
+  // This prevents multi-light sequences from firing the same YAML trigger once
+  // per participating light when multiple strips cross the same threshold.
+  std::vector<CfxSeqOnReachTrigger *> fired_reach_triggers_;
 
   float last_triggered_percentage_{-1.0f};
   int32_t last_triggered_pixel_{-1};

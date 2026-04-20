@@ -151,6 +151,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->on_start_triggers_.clear();
       seq->saved_states_.clear();
       seq->pending_reach_triggers_.clear();
+      seq->fired_reach_triggers_.clear();
       seq->strip_tag_ = "";
       seq->effect_    = "";
       seq->speed_     = {};
@@ -767,6 +768,7 @@ void CFXSequence::start() {
 
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
+  this->fired_reach_triggers_.clear();
   this->completion_reported_ = false;
   this->duration_completion_pending_ = false; 
   this->is_running_ = true;
@@ -1407,6 +1409,7 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
     // Reset stale tracking state at the start of a new forward pass.
     if (this->last_triggered_percentage_ > 0.8f && current_percentage < 0.2f) {
       this->last_triggered_percentage_ = -1.0f;
+      this->fired_reach_triggers_.clear();
     }
 
     // Evaluate on_reach (Percentage based)
@@ -1447,9 +1450,15 @@ void CFXSequence::check_positional_triggers(int32_t current_pixel,
       }
 
       if (crossed) {
+        if (std::find(this->fired_reach_triggers_.begin(),
+                      this->fired_reach_triggers_.end(),
+                      t) != this->fired_reach_triggers_.end()) {
+          continue;
+        }
         ESP_LOGV(TAG, "Sequence '%s': on_reach %.2f%% queued",
                  this->id_.c_str(), target * 100.0f);
         this->pending_reach_triggers_.push_back({t, current_percentage});
+        this->fired_reach_triggers_.push_back(t);
       }
     }
 
