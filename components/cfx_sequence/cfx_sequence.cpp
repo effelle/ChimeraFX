@@ -1196,6 +1196,7 @@ void CFXSequence::clear_active_binding() {
     if (is_bound_to_sequence || is_active_owned_light) {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
+      inst->set_suppress_stop_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
@@ -1206,6 +1207,7 @@ void CFXSequence::clear_active_binding() {
     if (is_bound_to_sequence || is_active_owned_light) {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
+      inst->set_suppress_stop_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }

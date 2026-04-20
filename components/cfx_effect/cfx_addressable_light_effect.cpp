@@ -342,6 +342,7 @@ void CFXAddressableLightEffect::start() {
   act_->outro_start_time = 0;
   act_->is_sequence_outro = false;
   act_->suppress_positional_events = false;
+  act_->suppress_stop_event = false;
   act_->outro_color_cache.clear();
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
@@ -833,7 +834,8 @@ void CFXAddressableLightEffect::stop() {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
 #ifdef USE_CFX_SEQUENCE
-    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
+    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr &&
+        !act_->suppress_stop_event) {
 #else
     if (!act_->strip_tag.empty()) {
 #endif

@@ -100,7 +100,7 @@ Controls the starting point of an effect start-to-finish or finish-to-start. Use
 A group of three controls: Intro and Outro Style, and In/Out Duration (0.5 - 10.0 seconds). The Intro use the average color of the effect that will follow, the latter always inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
 
 ### ID 6: Home Assistant Events
-Let the user leverage Home Assistant as the Orchestrator for complex animation, using special event triggers (`cfx_start`, `cfx_idle`, `cfx_reach` and `cfx_complete`) or anything else you want to use.
+Let the user leverage Home Assistant as the Orchestrator for complex animation, using special event triggers (`cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop` and `cfx_complete`). More details can be found in the [Sequencer](cfx_sequence.md) section.
 
 ### ID 7: Autotune
 Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the recommended defaults immediately upon being selected.

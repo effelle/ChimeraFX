@@ -1,4 +1,4 @@
-# Sequences (`cfx_sequence`)
+# Sequencer (`cfx_sequence`)
 
 A **sequence** is the way you script LED behaviour in ChimeraFX. You pick an effect, point it at one or more strips, and optionally tell it what to do at specific moments â€” when the animation starts, when it reaches a certain point, when it stops.
 
@@ -23,7 +23,7 @@ Every sequence goes through five stages. Understanding these is the key to wirin
 | **Stop** | `on_cfx_stop` | The outro animation begins (triggered by `cfx_sequence.stop` or `light.turn_off`). |
 | **Complete** | `on_cfx_complete` | The outro finishes and the strip is fully dark. |
 
-> **`on_cfx_stop` vs `on_cfx_complete`** â€” Stop fires when the fade-out *starts*. Complete fires when the strip goes fully dark. Use `on_cfx_stop` to stagger other strips in sync; use `on_cfx_complete` to know when everything is done.
+> **`on_cfx_stop` vs `on_cfx_complete`** - Stop fires when the fade-out *starts*. Complete fires when the strip goes fully dark. Use `on_cfx_stop` to stagger other strips in sync; use `on_cfx_complete` to know when everything is done.
 
 ---
 
@@ -58,17 +58,17 @@ That's it. The effect runs indefinitely until you call `cfx_sequence.stop` or tu
 
 | Key | Required | Type | Description |
 |---|---|---|---|
-| `id` | âœ… | ID | Unique identifier. Used by `cfx_sequence.start` / `.stop`. |
-| `name` | âœ… | string | Display name shown in the Home Assistant dropdown. |
-| `lights` | âœ… | list | One or more target light IDs (must be registered under `cfx_light`). |
-| `effect` | â€” | string | CFX effect name. Leave empty to keep whatever effect is already running. |
+| `id` | Yes | ID | Unique identifier. Used by `cfx_sequence.start` / `.stop`. |
+| `name` | Yes | string | Display name shown in the Home Assistant dropdown. |
+| `lights` | Yes | list | One or more target light IDs (must be registered under `cfx_light`). |
+| `effect` | Yes | string | CFX effect name. |
 
 ### Parameter overrides
 
 These let you lock in specific values for the duration of the sequence, overriding the HA UI sliders.
 
-| Key | Range | Description |
-|-----|-------|-------------|
+| Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Range | Description |
+|--------|---|-------------|
 | `set_speed` | 0-255 | Overrides the Speed slider. |
 | `set_intensity` | 0-255 | Overrides the Intensity slider. |
 | `set_palette` | 0-255 | Overrides the Palette selector (by index). |
@@ -88,7 +88,7 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 | Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Type | Default | Description |
 |---|---|---|---|
 | `iterations` | integer | `0` | Stop after N complete animation cycles. `0` = loop forever. |
-| `duration` | time | â€” | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
+| `duration` | time | `null` | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
 | `restore` | boolean | `true` | Restore the strip's previous state (effect, brightness, colour) when the sequence stops. |
 
 ??? abstract "Full annotated example"
@@ -286,12 +286,12 @@ Fires when the animation's leading pixel crosses a percentage threshold. You can
           mode: single
       ```
 
-> **Looping effects** â€” For continuous effects like Wipe or Chase, `on_cfx_reach` fires on *every* cycle. If you need a one-shot reaction, set `iterations: 1` or use a flag in your HA automation.
+> **Looping effects** - For continuous effects like Wipe or Chase, `on_cfx_reach` fires on *every* cycle. If you need a one-shot reaction, set `iterations: 1` or use a flag in your HA automation.
 
-> **Ambient effects** â€” Effects without a sweep direction (Aurora, Fire, Ocean, Plasma) never fire `on_cfx_reach`. See [Effect types](#effect-types-and-cfx_reach) below.
+> **Ambient effects** - Effects without a sweep direction (Aurora, Fire, Ocean, Plasma) never fire `on_cfx_reach`. See [Effect types](#effect-types-and-cfx_reach) below.
 
 ### `on_cfx_stop`
-Fires the instant the outro animation begins. This is the best trigger to coordinate multiple strips â€” start their outros here so everything fades in sync (or staggered with a `delay`).
+Fires the instant the outro animation begins. This is the best trigger to coordinate multiple strips - start their outros here so everything fades in sync (or staggered with a `delay`).
 
 === "On-Device YAML"
       ```yaml
@@ -382,7 +382,7 @@ Fires when the outro finishes and the strip is completely dark.
         mode: single
       ```
 
-> **Heads up** â€” `on_cfx_complete` only fires when a real outro runs: when `duration:` expires or a monochromatic effect finishes fading. It does **not** fire on a plain `light.turn_off`. If your automation needs a "done" signal for all cases, listen to the `light.turn_off` entity state in HA instead.
+> **Heads up** - `on_cfx_complete` only fires when a real outro runs: when `duration:` expires or a monochromatic effect finishes fading. It does **not** fire on a plain `light.turn_off`. If your automation needs a "done" signal for all cases, listen to the `light.turn_off` entity state in HA instead.
 
 ---
 
@@ -399,21 +399,23 @@ on_cfx_reach:
           set_intensity: 128
           set_palette: 4
 ```
-| Key | Type | Description |
+
+| Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Type &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Description |
 |---|---|---|
-| id | light ID | Target light (required). |
-| effect | string | Effect name. If set, calls light.turn_on with this effect. Omit to only change parameters without touching the current effect. |
-| set_speed | 0-255 | Speed override. |
-| set_intensity | 0-255 | Intensity override. |
-| set_palette | 0-255 | Palette override (index). |
-| set_brightness | 0-100% | Brightness override. |
-| set_color | [r,g,b] or [r,g,b,w] | Color override. |
-| set_mirror | true / false | Mirror override. |
-| set_autotune | true / false | Autotune override. |
-| set_force_white | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
-| set_intro | 0-27 | Intro override. |
-| set_outro | 0-27 | Outro override. |
-| set_inout_dur | float >= 0.0 | Intro/outro duration override in seconds. |
+| `id` | light ID | Target light (required). |
+| `effect` | string | Effect name. If set, calls light.turn_on with this effect. Omit to only change parameters without touching the current effect. |
+| `set_speed` | 0-255 | Overrides the Speed slider. |
+| `set_intensity` | 0-255 | Overrides the Intensity slider. |
+| `set_palette` | 0-255 | Overrides the Palette selector (by index). |
+| `set_brightness` | 0-100% | Overrides the light brightness. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
+| `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
+| `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
+| `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
+| `set_intro` | 0-27 | Overrides the Intro animation by index. |
+| `set_outro` | 0-27 | Overrides the Outro animation by index. |
+| `set_inout_dur` | float `>= 0.0` | Overrides intro/outro duration in seconds. |
+
 ---
 ## cfx_run - Spawn a Runtime Sequence
 cfx_run starts a self-contained, pool-backed sequence at runtime. It supports the same set_* overrides as cfx_set, plus iterations and lifecycle triggers on the spawned run.
@@ -428,26 +430,28 @@ on_cfx_reach:
           set_force_white: true
           iterations: 1
 ```
-| Key | Type | Description |
+
+| Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Type &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Description |
 |---|---|---|
-| id | light ID | Target light (required). |
-| effect | string | Effect name to spawn (required). |
-| set_speed | 0-255 | Speed override. |
-| set_intensity | 0-255 | Intensity override. |
-| set_palette | 0-255 | Palette override (index). |
-| set_brightness | 0-100% | Brightness override. |
-| set_color | [r,g,b] or [r,g,b,w] | Color override. |
-| set_mirror | true / false | Mirror override. |
-| set_autotune | true / false | Autotune override. |
-| set_force_white | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
-| set_intro | 0-27 | Intro override. |
-| set_outro | 0-27 | Outro override. |
-| set_inout_dur | float >= 0.0 | Intro/outro duration override in seconds. |
-| iterations | integer | Number of cycles to run. Default is 1. |
-| on_cfx_start | automation | Fires when the spawned effect starts rendering. |
-| on_cfx_stop | automation | Fires when the spawned outro begins. |
-| on_cfx_complete | automation | Fires when the spawned outro finishes. |
-| on_cfx_reach | automation list | Positional triggers for the spawned run. |
+| `id` | light ID | Target light (required). |
+| `effect` | string | Effect name to spawn (required). |
+| `set_speed` | 0-255 | Speed override. |
+| `set_intensity` | 0-255 | Intensity override. |
+| `set_palette` | 0-255 | Palette override (index). |
+| `set_brightness` | 0-100% | Brightness override. |
+| `set_color` | [r,g,b] or [r,g,b,w] | Color override. |
+| `set_mirror` | true / false | Mirror override. |
+| `set_autotune` | true / false | Autotune override. |
+| `set_force_white` | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
+| `set_intro` | 0-27 | Intro override. |
+| `set_outro` | 0-27 | Outro override. |
+| `set_inout_dur` | float >= 0.0 | Intro/outro duration override in seconds. |
+| `iterations` | integer | Number of cycles to run. Default is 1. |
+| `on_cfx_start` | automation | Fires when the spawned effect starts rendering. |
+| `on_cfx_stop` | automation | Fires when the spawned outro begins. |
+| `on_cfx_complete` | automation | Fires when the spawned outro finishes. |
+| `on_cfx_reach` | automation | Positional triggers for the spawned run. |
+
 ---
 ## Home Assistant Integration
 
@@ -461,17 +465,17 @@ Events use the strip's slug as a tag. A light named `RGB Light` becomes the tag 
 |---|---|
 | `cfx_begin:<tag>` | The instant a sequence or a single effet is called. |
 | `cfx_start:<tag>` | Effect begins rendering. |
-| `cfx_reach:<tag>:<pct>` | Milestone crossed â€” fires at **fixed 5% steps** (5, 10, 15 â€¦ 100). |
+| `cfx_reach:<tag>:<pct>` | Milestone crossed - fires at **fixed 10% steps** (10, 20, 30 ... 100). |
 | `cfx_stop:<tag>` | Outro begins. |
 | `cfx_complete:<tag>` | Duration expired or monochromatic outro finished. |
 
 ### On-device vs HA precision
 
-Triggers written directly in ESPHome YAML (`on_cfx_reach`) are evaluated every frame and fire at *any* threshold you define â€” including fractional ones like `33.5%`.
+Triggers written directly in ESPHome YAML (`on_cfx_reach`) are evaluated every frame and fire at *any* threshold you define, including sub-10% ones like `33%`.
 
-HA events are intentionally quantized to 5% steps to avoid flooding the event queue at high animation speeds. If you need sub-5% precision, use on-device triggers.
+HA events are intentionally quantized to 10% steps to avoid flooding the event queue at high animation speeds. If you need sub-10% precision, use on-device triggers.
 
-> âš ï¸ **Don't set `batch_delay: 0ms`** in your `api:` block. It will cause `cfx_reach` events to drop at high effect speeds, regardless of `max_send_queue`. The default `batch_delay: 200ms` is the safe value.
+> **Don't set `batch_delay: 0ms`** in your `api:` block. It will cause `cfx_reach` events to drop at high effect speeds, regardless of `max_send_queue`. The default `batch_delay: 200ms` is the safe value.
 
 ### Effect types and `cfx_reach`
 
@@ -479,9 +483,9 @@ Not every effect sweeps in a direction, so `cfx_reach` doesn't behave the same f
 
 | Type | Examples | `cfx_reach` behaviour |
 |---|---|---|
-| **Progressive** | Scanner, Chase, Sunrise, Dissolve | Sweeps 0â†’100% and loops. Milestones fire reliably every cycle. |
-| **Wipe-type** | Wipe, Color Sweep | Has a *fill* pass (0â†’100%) and an *erase* pass (0â†’100%). Milestones fire on **both** passes. Use `mode: single` in HA if you only want to react to the fill. |
-| **Ambient** | Aurora, Fire, Ocean, Plasma | No directional sweep. `cfx_reach` **never fires** for these effects. |
+| **Progressive** | Scanner, Chase, Sunrise, Dissolve... | Sweeps 0-100% and loops. Milestones fire reliably every cycle. |
+| **Wipe-type** | Wipe, Color Sweep... | Has a *fill* pass (0-100%) and an *erase* pass (0-100%). Milestones fire on **both** passes. Use `mode: single` in HA if you only want to react to the fill. |
+| **Ambient** | Aurora, Fire, Ocean, Plasma... | No directional sweep. `cfx_reach` **never fires** for these effects. |
 
 ### Stop All
 
@@ -497,7 +501,7 @@ Three strips start one after another as the primary strip sweeps forward. When t
 
 ??? abstract "Cascade with staggered stop"
 
-    === "ðŸŽ¬ Preview"
+    === "Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Cascade.webm" type="video/webm">
         </video>
@@ -607,7 +611,7 @@ Two strips start together, and when they reach 90% the third strip starts buldin
 
 ??? abstract "Gas Discarge under the Curtains"
 
-    === "ðŸŽ¬ Preview"
+    === "Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Gas_curtains.webm" type="video/webm">
         </video>
