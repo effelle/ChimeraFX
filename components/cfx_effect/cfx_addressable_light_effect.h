@@ -123,6 +123,7 @@ public:
     int32_t last_leading_pixel{-1};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
+    bool suppress_positional_events{false};
     // CFX-035: true only when the MAIN effect is progressive (pixel-marching,
     // e.g. Wipe/Sweep). Intro milestones are suppressed only in that case so
     // that monochromatic and non-progressive intros still fire cfx_reach. (CFX-035b)
@@ -485,6 +486,9 @@ public:
   void set_strip_tag(const std::string &tag) { if (act_) act_->strip_tag = tag; }
 
   void set_is_sequence_outro(bool v) { if (act_) act_->is_sequence_outro = v; }
+  void set_suppress_positional_events(bool v) {
+    if (act_) act_->suppress_positional_events = v;
+  }
 
   // ── Activation pointer — null when effect is not running ─────────────────
   // All per-run state lives in CFXActivation, allocated in start(), freed in

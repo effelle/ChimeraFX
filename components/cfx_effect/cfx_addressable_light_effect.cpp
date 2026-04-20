@@ -341,6 +341,7 @@ void CFXAddressableLightEffect::start() {
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   act_->outro_start_time = 0;
   act_->is_sequence_outro = false;
+  act_->suppress_positional_events = false;
   act_->outro_color_cache.clear();
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
@@ -6348,6 +6349,8 @@ void CFXAddressableLightEffect::trigger_on_complete() {
 }
 
 void CFXAddressableLightEffect::check_milestones_(float current_pct) {
+  if (act_ == nullptr || act_->suppress_positional_events)
+    return;
   if (act_->intro_active && act_->intro_suppresses_milestones)
     return;
   act_->milestone_fired_this_frame = false;
@@ -6371,6 +6374,8 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
 
 void CFXAddressableLightEffect::check_positional_triggers(
     int32_t current_pixel, int32_t total_pixels) {
+  if (act_ == nullptr || act_->suppress_positional_events)
+    return;
   // Separator is a UI divider — suppress all positional events.
   if (this->effect_id_ == 185)
     return;

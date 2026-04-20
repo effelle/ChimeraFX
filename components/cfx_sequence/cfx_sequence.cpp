@@ -1192,12 +1192,14 @@ void CFXSequence::clear_active_binding() {
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
+      inst->set_suppress_positional_events(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     if (inst->get_active_sequence() == this) {
       inst->set_is_sequence_outro(this->completion_reported_);
+      inst->set_suppress_positional_events(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
