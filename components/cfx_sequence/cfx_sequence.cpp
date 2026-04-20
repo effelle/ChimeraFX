@@ -143,6 +143,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       auto &v = CFXSequence::instances;
       v.erase(std::remove(v.begin(), v.end(), seq), v.end());
       // Reset sequence state for next claim.
+      seq->configured_light_count_ = 0;
       seq->lights_.clear();
       seq->on_reach_triggers_.clear();
       seq->on_complete_triggers_.clear();
@@ -949,6 +950,24 @@ void CFXSequence::finalize_teardown_() {
   this->teardown_light_index_ = 0;
   this->teardown_clear_phase_ = true;
   this->is_stopping_ = false;
+
+  // cfx_set adoptions are runtime-only: once the sequence has finished
+  // cleaning up, drop back to the original configured light set so a later
+  // restart does not replay the sequence on previously adopted lights.
+  if (!this->is_pool_owned_) {
+    if (this->lights_.size() > this->configured_light_count_) {
+      this->lights_.resize(this->configured_light_count_);
+    }
+
+    // Keep listener allocations, but disarm runtime-only adopted lights until
+    // they are explicitly adopted again on a future run.
+    for (auto &m : this->monitored_lights_) {
+      if (std::find(this->lights_.begin(), this->lights_.end(), m.light) ==
+          this->lights_.end()) {
+        m.listener->nullify();
+      }
+    }
+  }
 
   if (!this->is_pool_owned_ &&
       CFXSequenceSelect::instance != nullptr &&

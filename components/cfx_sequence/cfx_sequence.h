@@ -68,7 +68,17 @@ public:
   // (e.g. cfx_set starting step 2) are never overwritten by a subsequent stop().
   void complete_and_notify();
 
-  void add_light(light::LightState *state) { this->lights_.push_back(state); }
+  void add_light(light::LightState *state) {
+    if (state == nullptr)
+      return;
+    if (std::find(this->lights_.begin(), this->lights_.end(), state) ==
+        this->lights_.end()) {
+      this->lights_.push_back(state);
+      if (!this->is_running_ && !this->is_starting_) {
+        this->configured_light_count_ = this->lights_.size();
+      }
+    }
+  }
 
   // adopt_light(): register a light that was activated mid-sequence via cfx_set.
   // Unlike add_light() (which is only safe to call before start()), this method
@@ -210,6 +220,7 @@ protected:
   uint32_t duration_start_ms_{0};
   bool duration_complete_fired_{false};
 
+  size_t configured_light_count_{0};
   std::vector<light::LightState *> lights_;
   // Runtime-configurable entities
 
