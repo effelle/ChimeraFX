@@ -54,6 +54,7 @@ CONF_HA_EVENTS = "ha_events"
 CONF_ITERATIONS = "iterations"
 CONF_RESTORE = "restore"
 CONF_DURATION = "duration"
+CONF_MODE = "mode"
 
 # Inherited constants
 CONF_ON_START = "on_cfx_start"
@@ -433,6 +434,25 @@ def _sequence_action_schema(value):
         value = {CONF_ID: value}
     return cv.Schema({cv.Required(CONF_ID): cv.string})(value)
 
+
+def _sequence_stop_action_schema(value):
+    """Accept both shorthand string and dict form:
+      cfx_sequence.stop: my_id
+      cfx_sequence.stop:
+        id: my_id
+        mode: tree
+    """
+    if isinstance(value, str):
+        value = {CONF_ID: value}
+    return cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.string,
+            cv.Optional(CONF_MODE, default="self"): cv.one_of(
+                "self", "tree", lower=True
+            ),
+        }
+    )(value)
+
 @automation.register_action(
     "cfx_sequence.start",
     StartAction,
@@ -446,11 +466,20 @@ async def cfx_sequence_start_to_code(config, action_id, template_arg, args):
 @automation.register_action(
     "cfx_sequence.stop",
     StopAction,
-    _sequence_action_schema,
+    _sequence_stop_action_schema,
     synchronous=True,
 )
 async def cfx_sequence_stop_to_code(config, action_id, template_arg, args):
-    return cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, config[CONF_ID])
+    mode = "TREE" if config[CONF_MODE] == "tree" else "SELF"
+    cg.add(
+        var.set_mode(
+            cg.RawExpression(
+                f"esphome::cfx_sequence::CFXSequence::StopMode::{mode}"
+            )
+        )
+    )
+    return var
 
 
 @automation.register_action(

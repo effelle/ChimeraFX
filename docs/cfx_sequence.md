@@ -402,6 +402,201 @@ Fires when the outro finishes and the strip is completely dark.
 > **Heads up** - `on_cfx_complete` only fires when a real outro runs: when `duration:` expires or a monochromatic effect finishes fading. It does **not** fire on a plain `light.turn_off`. If your automation needs a "done" signal for all cases, listen to the `light.turn_off` entity state in HA instead.
 
 ---
+## Starting and Stopping Sequences
+
+`cfx_sequence.start` and `cfx_sequence.stop` exist because sequences are meant to
+be orchestration primitives, not just effect presets.
+
+They give you a clean way to:
+
+- start a named sequence from on-device YAML with no HA round-trip,
+- stop that sequence while preserving normal outro / restore semantics,
+- stop an entire runtime branch when that sequence has spawned children via
+  `cfx_run`,
+- bind sequence control to real hardware and local automation sources such as
+  buttons, switches, PIR sensors, mmWave presence sensors, intervals, scripts,
+  template logic, and other ESPHome triggers,
+- and still expose a simple control surface to Home Assistant for dashboards and
+  automations.
+
+There are three practical ways to control sequences:
+
+1. On-device ESPHome actions, for low-latency orchestration and full sequence semantics.
+2. Home Assistant entities, for manual control and simple automations.
+3. Home Assistant API calls, for direct scripted control from HA.
+
+### On-device ESPHome Actions
+
+This is the native sequence control path. Use it when your logic lives in the
+ESPHome node and you want intros, outros, restore, and trigger timing to remain
+fully local.
+
+This is also what makes sequences especially powerful: `cfx_sequence.start` and
+`cfx_sequence.stop` are ordinary ESPHome actions, so they can be attached to
+almost any trigger source the node supports.
+
+In practice, that means a sequence can be started or stopped by:
+
+- a hardware button or touch input,
+- a template switch,
+- a PIR or presence sensor,
+- a reed switch, door contact, or limit switch,
+- a timer, interval, sunrise/sunset rule, or script,
+- or a Home Assistant automation when you do want remote orchestration.
+
+So while Home Assistant integration is important, the sequence engine is not
+dependent on Home Assistant. It can operate as a fully local choreography layer
+inside the ESP node itself.
+
+Starting uses the sequence `id`:
+
+```yaml
+- cfx_sequence.start: my_sequence
+```
+
+Stopping also uses the sequence `id` and supports two modes:
+
+```yaml
+- cfx_sequence.stop: my_sequence
+```
+
+This is shorthand for:
+
+```yaml
+- cfx_sequence.stop:
+    id: my_sequence
+    mode: self
+```
+
+`mode: self` stops only the addressed sequence.
+
+If that sequence spawned runtime children via `cfx_run`, you can stop the whole
+runtime branch gracefully:
+
+```yaml
+- cfx_sequence.stop:
+    id: my_sequence
+    mode: tree
+```
+
+`mode: tree` walks the `cfx_run` ancestry created by that sequence, stopping
+descendants first and then the addressed parent. This is a **graceful**
+sequence-aware stop, not a panic kill:
+
+- Each sequence in the tree keeps its own outro behaviour.
+- Each sequence in the tree keeps its own `restore` handling.
+- Tree membership is based on runtime parent/child spawn ancestry, not on which
+  lights happen to overlap.
+
+This makes `mode: tree` useful for cascade-style orchestrations where one
+sequence launches other sequences internally and you want one stop command to
+unwind the whole branch cleanly.
+
+Use `mode: self` for normal targeted stops.
+Use `mode: tree` when the addressed sequence has launched child runs that should
+be unwound with it.
+
+Simple hardware-bound examples:
+
+```yaml
+binary_sensor:
+  - platform: gpio
+    pin: GPIO0
+    name: "Start Button"
+    on_press:
+      then:
+        - cfx_sequence.start: my_sequence
+
+  - platform: gpio
+    pin: GPIO4
+    name: "Stop Button"
+    on_press:
+      then:
+        - cfx_sequence.stop:
+            id: my_sequence
+            mode: self
+
+  - platform: gpio
+    pin: GPIO12
+    name: "Hall PIR"
+    device_class: motion
+    on_press:
+      then:
+        - cfx_sequence.start: hallway_alert
+    on_release:
+      then:
+        - cfx_sequence.stop:
+            id: hallway_alert
+            mode: tree
+```
+
+### Home Assistant Entities
+
+When at least one `cfx_sequence` is defined, ChimeraFX creates two HA-facing
+control entities automatically:
+
+- **Internal Sequences**: a select dropdown that starts a sequence when you pick
+  its name.
+- **Stop All**: a panic-stop button that force-stops all known sequences and
+  forces their lights off.
+
+The dropdown is the friendliest way to operate sequences from dashboards:
+
+- choose a sequence name to start it,
+- choose `None` to stop the currently selected sequence.
+
+This path is intentionally simple and human-friendly. It is a good fit for UI
+control, quick testing, and HA automations that just need “start this” or
+“stop the active one”.
+
+### Home Assistant Direct API Calls
+
+If the node has `api:` enabled, the component also registers two custom ESPHome
+API services:
+
+- `cfx_sequence_start`
+- `cfx_sequence_stop`
+
+These are meant for Home Assistant scripts and automations that want to call a
+sequence directly instead of driving the dropdown.
+
+Important differences from the on-device actions:
+
+- The API calls match by sequence `name`, not by sequence `id`.
+- `cfx_sequence_start` starts the first sequence whose **name** matches the
+  provided string.
+- `cfx_sequence_stop` currently performs a normal sequence stop equivalent to
+  `mode: self`.
+- `mode: tree` is currently available in the on-device ESPHome action path, not
+  in the HA API service path.
+
+In Home Assistant, the exact service/action name exposed by ESPHome depends on
+your device slug. The easiest way to find it is to open **Developer Tools ->
+Actions** and search for:
+
+- `cfx_sequence_start`
+- `cfx_sequence_stop`
+
+A typical call looks like this:
+
+```yaml
+action: esphome.your_device_cfx_sequence_start
+data:
+  sequence: "My Sequence"
+```
+
+And the corresponding stop call:
+
+```yaml
+action: esphome.your_device_cfx_sequence_stop
+data:
+  sequence: "My Sequence"
+```
+
+Use the direct API path when you want HA to target a sequence by name without
+manipulating the dropdown state first.
+
+---
 
 ## cfx_set - Quick Parameter Injection
 cfx_set is a lightweight action for applying parameters to a light *without* declaring a full sequence. It's designed to be used inside on_cfx_reach to kick off secondary strips on cue.
@@ -509,6 +704,12 @@ Not every effect sweeps in a direction, so `cfx_reach` doesn't behave the same f
 ### Stop All
 
 A **Stop All** button entity is created automatically in HA whenever sequences are defined. Useful for dashboards or emergency "kill everything" automations.
+
+Use **Stop All** for a hard, global panic stop.
+Use `cfx_sequence.stop` with `mode: self` or `mode: tree` when you want a
+targeted, sequence-aware shutdown that still respects normal sequence teardown.
+Use the HA API start/stop calls when Home Assistant needs to target a specific
+sequence directly by name.
 
 ---
 ### Examples

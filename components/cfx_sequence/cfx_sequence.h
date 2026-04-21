@@ -52,6 +52,11 @@ using CFXEventManager = chimera_fx::CFXEventManager;
 
 class CFXSequence {
 public:
+  enum class StopMode : uint8_t {
+    SELF = 0,
+    TREE = 1,
+  };
+
   CFXSequence(const std::string &id, const std::string &name,
               const std::string &effect, bool restore = true);
   // CFX-011: Destructor removes this from the static instances vector to
@@ -61,6 +66,7 @@ public:
   // Sequence runtime controllers
   void start();
   void stop();
+  void stop_tree();
   void force_reset();
   // CFX-044: Called by execute_completion() when a runner signals effect_complete_.
   // Performs the correctly-ordered teardown: clear binding → restore light →
@@ -183,6 +189,12 @@ public:
   }
 
   bool is_stagger_complete() const { return this->stagger_tasks_pending_ == 0; }
+  static CFXSequence *get_current_trigger_sequence() {
+    return current_trigger_sequence_;
+  }
+  static void set_current_trigger_sequence(CFXSequence *seq) {
+    current_trigger_sequence_ = seq;
+  }
 
 protected:
   enum class TeardownMode : uint8_t {
@@ -195,6 +207,10 @@ protected:
 
   void begin_teardown_(TeardownMode mode);
   void finalize_teardown_();
+  void stop_tree_(std::set<CFXSequence *> &visited);
+  void attach_child_sequence_(CFXSequence *child);
+  void detach_child_sequence_(CFXSequence *child);
+  void detach_runtime_parent_();
 
   std::atomic<uint32_t> stagger_tasks_pending_{0};
   std::string id_;
@@ -227,6 +243,8 @@ protected:
 
   size_t configured_light_count_{0};
   std::vector<light::LightState *> lights_;
+  CFXSequence *runtime_parent_{nullptr};
+  std::vector<CFXSequence *> runtime_children_{};
   // Runtime-configurable entities
 
   std::vector<CfxSeqOnStartTrigger *> on_start_triggers_;
@@ -259,6 +277,7 @@ protected:
   static constexpr uint8_t MAX_MILESTONES    = 10;  // 10..100 in steps of 10
   uint8_t  last_fired_milestone_{0};
   bool     milestone_fired_this_frame_{false};
+  static CFXSequence *current_trigger_sequence_;
   // No suppress field — intro guard is handled at the effect layer (act_->intro_active).
   // CFXSequence::check_milestones_() is only called from check_positional_triggers(),
   // which is only called from apply() after the intro_active guard below.
@@ -384,11 +403,15 @@ protected:
 template <typename... Ts> class StopAction : public ::esphome::Action<Ts...> {
 public:
   StopAction(const std::string &target_id) : target_id_(target_id) {}
+  void set_mode(CFXSequence::StopMode mode) { this->mode_ = mode; }
 
   void play(const Ts &...x) override {
     for (auto *seq : CFXSequence::instances) {
       if (seq->get_id() == this->target_id_) {
-        seq->stop();
+        if (this->mode_ == CFXSequence::StopMode::TREE)
+          seq->stop_tree();
+        else
+          seq->stop();
         return;
       }
     }
@@ -396,6 +419,7 @@ public:
 
 protected:
   std::string target_id_;
+  CFXSequence::StopMode mode_{CFXSequence::StopMode::SELF};
 };
 
 class CFXSequenceSelect : public esphome::select::Select,

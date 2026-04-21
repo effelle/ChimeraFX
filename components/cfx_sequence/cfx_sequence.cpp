@@ -28,6 +28,24 @@ static const char *const TAG = "cfx_sequence";
 std::vector<CFXSequence *> CFXSequence::instances;
 CFXSequenceSelect *CFXSequenceSelect::instance = nullptr;
 std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
+CFXSequence *CFXSequence::current_trigger_sequence_ = nullptr;
+
+namespace {
+class SequenceTriggerContextGuard {
+public:
+  explicit SequenceTriggerContextGuard(CFXSequence *seq)
+      : previous_(CFXSequence::get_current_trigger_sequence()) {
+    CFXSequence::set_current_trigger_sequence(seq);
+  }
+
+  ~SequenceTriggerContextGuard() {
+    CFXSequence::set_current_trigger_sequence(previous_);
+  }
+
+private:
+  CFXSequence *previous_;
+};
+}  // namespace
 
 static light::ColorMode resolve_cfx_call_color_mode(light::LightState *light,
                                                     bool prefer_white) {
@@ -138,6 +156,14 @@ void CFXRunPool::release(CFXSequence *seq) {
   for (uint8_t i = 0; i < POOL_SIZE; i++) {
     if (this->slots_[i].sequence == seq && this->slots_[i].in_use) {
       this->slots_[i].in_use = false;
+      seq->detach_runtime_parent_();
+      std::vector<CFXSequence *> orphaned_children = seq->runtime_children_;
+      for (auto *child : orphaned_children) {
+        if (child != nullptr) {
+          child->runtime_parent_ = nullptr;
+        }
+      }
+      seq->runtime_children_.clear();
       seq->is_pool_owned_ = false;
       // Remove from global instances so it doesn't appear in stop_all() etc.
       auto &v = CFXSequence::instances;
@@ -172,6 +198,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->autotune_ = {};
       seq->iterations_ = 0;
       seq->duration_ms_ = 0;
+      seq->runtime_parent_ = nullptr;
       seq->is_running_  = false;
       seq->is_starting_ = false;
       seq->is_stopping_ = false;
@@ -216,9 +243,19 @@ void CfxRunActionBase::do_play_() {
       return;
     }
   }
-  CFXSequence *seq = CFXRunPool::get().claim(this->nesting_depth_);
+  CFXSequence *parent_seq = CFXSequence::get_current_trigger_sequence();
+  uint8_t effective_depth = this->nesting_depth_;
+  if (parent_seq != nullptr) {
+    effective_depth = parent_seq->nesting_depth_ + 1;
+  }
+  CFXSequence *seq = CFXRunPool::get().claim(effective_depth);
   if (seq == nullptr)
     return; // pool exhausted or depth exceeded — already logged
+
+  seq->detach_runtime_parent_();
+  if (parent_seq != nullptr && parent_seq != seq) {
+    parent_seq->attach_child_sequence_(seq);
+  }
 
   // Configure the claimed sequence.
   seq->effect_    = this->effect_;
@@ -256,7 +293,7 @@ void CfxRunActionBase::do_play_() {
   ESP_LOGD("cfx_run", "Spawning '%s' on '%s' (depth %u, iter %u)",
            this->effect_.c_str(),
            this->light_->get_name().c_str(),
-           this->nesting_depth_,
+           effective_depth,
            this->iterations_);
 
   seq->start();
@@ -536,6 +573,15 @@ CFXSequence::CFXSequence(const std::string &id, const std::string &name,
 // Without this, destroying a CFXSequence leaves a dangling pointer in the
 // vector, causing undefined behaviour in stop(), force_reset(), and start().
 CFXSequence::~CFXSequence() {
+  this->detach_runtime_parent_();
+  std::vector<CFXSequence *> orphaned_children = this->runtime_children_;
+  for (auto *child : orphaned_children) {
+    if (child != nullptr) {
+      child->runtime_parent_ = nullptr;
+    }
+  }
+  this->runtime_children_.clear();
+
   // Clear any listeners
   for (auto &m : this->monitored_lights_) {
     m.listener->nullify();
@@ -1005,6 +1051,58 @@ void CFXSequence::finalize_teardown_() {
   }
 }
 
+void CFXSequence::attach_child_sequence_(CFXSequence *child) {
+  if (child == nullptr || child == this)
+    return;
+
+  child->detach_runtime_parent_();
+  child->runtime_parent_ = this;
+
+  if (std::find(this->runtime_children_.begin(), this->runtime_children_.end(),
+                child) == this->runtime_children_.end()) {
+    this->runtime_children_.push_back(child);
+  }
+}
+
+void CFXSequence::detach_child_sequence_(CFXSequence *child) {
+  if (child == nullptr)
+    return;
+
+  auto it = std::remove(this->runtime_children_.begin(),
+                        this->runtime_children_.end(), child);
+  if (it != this->runtime_children_.end()) {
+    this->runtime_children_.erase(it, this->runtime_children_.end());
+  }
+}
+
+void CFXSequence::detach_runtime_parent_() {
+  if (this->runtime_parent_ != nullptr) {
+    this->runtime_parent_->detach_child_sequence_(this);
+    this->runtime_parent_ = nullptr;
+  }
+}
+
+void CFXSequence::stop_tree_(std::set<CFXSequence *> &visited) {
+  if (!visited.insert(this).second)
+    return;
+
+  std::vector<CFXSequence *> children = this->runtime_children_;
+  for (auto *child : children) {
+    if (child != nullptr) {
+      child->stop_tree_(visited);
+    }
+  }
+
+  if (this->is_running_) {
+    this->stop();
+  }
+}
+
+void CFXSequence::stop_tree() {
+  std::set<CFXSequence *> visited;
+  this->stop_tree_(visited);
+}
+
 void CFXSequence::process_pending_teardown() {
   if (this->teardown_mode_ == TeardownMode::NONE)
     return;
@@ -1309,7 +1407,8 @@ void CFXSequence::flush_pending_triggers() {
   for (size_t idx = 0; idx < max_fire && idx < to_fire.size(); idx++) {
     const auto &t = to_fire[idx];
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance,
-                                      (uint32_t)t.trigger, 0, [t]() {
+                                      (uint32_t)t.trigger, 0, [s = this, t]() {
+      SequenceTriggerContextGuard guard(s);
       esphome::yield();
       esphome::App.feed_wdt();
       t.trigger->trigger(t.value);
@@ -1343,7 +1442,10 @@ void CFXSequence::report_event_start() {
   ESP_LOGV(TAG, "Sequence '%s': on_start triggers firing", this->id_.c_str());
   for (auto *t : this->on_start_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      (uint32_t)t, 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [s = this, t]() {
+      SequenceTriggerContextGuard guard(s);
+      t->trigger();
+    });
   }
   // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
   // unconditionally for all effects and all paths. Do NOT fire it here again.
@@ -1354,7 +1456,10 @@ void CFXSequence::report_event_begin() {
   // on_cfx_begin YAML trigger always fires (on-device automation).
   for (auto *t : this->on_begin_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      (uint32_t)t, 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [s = this, t]() {
+      SequenceTriggerContextGuard guard(s);
+      t->trigger();
+    });
   }
   // CFX-029: HA cfx_begin event only fires when the sequence has a real
   // intro configured (intro_ != 0). Without an intro, cfx_begin and
@@ -1371,7 +1476,10 @@ void CFXSequence::report_event_stop() {
   ESP_LOGV(TAG, "Sequence '%s': on_stop triggers firing", this->id_.c_str());
   for (auto *t : this->on_stop_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
-                                      (uint32_t)t, 0, [t]() { t->trigger(); });
+                                      (uint32_t)t, 0, [s = this, t]() {
+      SequenceTriggerContextGuard guard(s);
+      t->trigger();
+    });
   }
   // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
   if (this->ha_events_ && !this->strip_tag_.empty()) {
@@ -1386,6 +1494,7 @@ void CFXSequence::report_event_complete() {
   for (auto *t : this->on_complete_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t, 0, [s = this, t]() {
+      SequenceTriggerContextGuard guard(s);
       // Small verification: only fire if the sequence didn't restart mid-deferral
       if (s->completion_reported_)
         t->trigger();
