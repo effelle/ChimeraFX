@@ -295,47 +295,58 @@ void CfxSetActionBase::do_play_() {
           inst->set_force_white_preset(this->force_white_.value());
       };
 
-  // Apply params to all CFX effect instances registered for this light.
-  // Also set runner ownership flags so CFXControl push callbacks don't
-  // stomp the cfx_set values via UI slider on_state callbacks.
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-    if (inst->get_light_state() == this->light_) {
-      apply_overrides_to_inst(inst);
-    }
-  }
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
-    if (inst->get_light_state() == this->light_) {
-      apply_overrides_to_inst(inst);
-    }
-  }
+  auto resolve_target_inst =
+      [this]() -> chimera_fx::CFXAddressableLightEffect * {
+        auto find_inst =
+            [this](const std::vector<chimera_fx::CFXAddressableLightEffect *> &effects,
+                   bool require_active) -> chimera_fx::CFXAddressableLightEffect * {
+              for (auto *inst : effects) {
+                if (inst->get_light_state() != this->light_)
+                  continue;
+                if (!this->effect_.empty() && inst->get_name() != this->effect_)
+                  continue;
+                if (require_active && inst->get_act() == nullptr)
+                  continue;
+                return inst;
+              }
+              return nullptr;
+            };
+
+        // When an explicit effect is requested, seed only that effect instance.
+        if (!this->effect_.empty()) {
+          if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_effects, false))
+            return inst;
+          if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_segment_effects, false))
+            return inst;
+        }
+
+        // Otherwise target only the currently active effect on this light.
+        if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_effects, true))
+          return inst;
+        if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_segment_effects, true))
+          return inst;
+
+        return nullptr;
+      };
 
   const bool needs_light_call =
       !this->effect_.empty() || this->brightness_.has_value() || this->has_color_;
+  chimera_fx::CFXAddressableLightEffect *target_inst = resolve_target_inst();
+
+  // Seed only the intended effect instance. Broadcasting pending overrides to
+  // every effect object on a light makes future unrelated effects inherit
+  // stale speed/intensity/palette/autotune settings.
+  if (target_inst != nullptr) {
+    apply_overrides_to_inst(target_inst);
+  }
 
   // Optionally turn the light on and/or update its live visible state.
   if (needs_light_call) {
     // Fix 3 — Re-entrancy: snapshot act_ BEFORE perform() so we can detect
     // whether ESPHome treated the call as a no-op (same effect already active).
-    chimera_fx::CFXAddressableLightEffect *target_inst = nullptr;
     chimera_fx::CFXAddressableLightEffect::CFXActivation *act_before = nullptr;
-    for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-      if (inst->get_light_state() == this->light_ &&
-          inst->get_name() == this->effect_) {
-        target_inst = inst;
-        act_before  = inst->get_act();
-        break;
-      }
-    }
-    if (target_inst == nullptr) {
-      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
-        if (inst->get_light_state() == this->light_ &&
-            inst->get_name() == this->effect_) {
-          target_inst = inst;
-          act_before  = inst->get_act();
-          break;
-        }
-      }
-    }
+    if (target_inst != nullptr)
+      act_before = target_inst->get_act();
 
     auto call = this->light_->make_call();
     call.set_state(true);
@@ -361,6 +372,10 @@ void CfxSetActionBase::do_play_() {
     if (this->brightness_.has_value())
       call.set_brightness(this->brightness_.value());
     call.perform();
+
+    if (target_inst == nullptr) {
+      target_inst = resolve_target_inst();
+    }
 
     // Fix 3 — If act_ is unchanged after perform(), ESPHome was a no-op
     // (light already ON with same effect). Force a clean restart so the intro
