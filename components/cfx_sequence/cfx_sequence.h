@@ -115,6 +115,8 @@ public:
   void set_inout_duration(float dur) { this->inout_duration_ = dur; }
   void set_force_white(bool force_white) { this->force_white_ = force_white; }
   void set_autotune(bool autotune) { this->autotune_ = autotune; }
+  void set_ha_events(bool enabled) { this->ha_events_ = enabled; }
+  bool get_ha_events() const { return this->ha_events_; }
 
   esphome::optional<uint8_t> get_speed() const { return this->speed_; }
   esphome::optional<uint8_t> get_intensity() const { return this->intensity_; }
@@ -217,6 +219,7 @@ protected:
   esphome::optional<bool>    autotune_;
   uint32_t iterations_{0};
   bool restore_state_{true};
+  bool ha_events_{true};
   uint32_t duration_ms_{0};
   std::string strip_tag_{};      // CFX-024: YAML id of first target light
   uint32_t duration_start_ms_{0};
@@ -458,6 +461,7 @@ public:
   void set_inout_duration(float v) { this->inout_duration_ = v; }
   void set_force_white(bool v)   { this->force_white_ = v; }
   void set_autotune(bool v)      { this->autotune_ = v; }
+  void set_ha_events(bool v)     { this->ha_events_ = v; }
 
 protected:
   void do_play_();
@@ -480,6 +484,7 @@ protected:
   esphome::optional<float>   inout_duration_{};
   esphome::optional<bool>    force_white_{};
   esphome::optional<bool>    autotune_{};
+  bool ha_events_{false};
 };
 
 template <typename... Ts>
@@ -540,6 +545,7 @@ public:
   void set_iterations(uint32_t v)              { this->iterations_ = v; }
   void set_strip_tag(const std::string &tag)   { this->strip_tag_  = tag; }
   void set_nesting_depth(uint8_t depth)        { this->nesting_depth_ = depth; }
+  void set_ha_events(bool v)                   { this->ha_events_ = v; }
 
   // Trigger registration — called by codegen for on_cfx_reach blocks
   // inside cfx_run. Stored and transferred to the spawned sequence at play time.
@@ -578,6 +584,7 @@ protected:
   esphome::optional<float>    inout_duration_{};
   esphome::optional<bool>     force_white_{};
   esphome::optional<bool>     autotune_{};
+  bool ha_events_{false};
   uint32_t iterations_{1};
   uint8_t  nesting_depth_{0};
 

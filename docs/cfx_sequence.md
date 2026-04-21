@@ -76,6 +76,7 @@ These let you lock in specific values for the duration of the sequence, overridi
 | `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
+| `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for this sequence. `auto` is the default and behaves like `true` on root `cfx_sequence` entries. |
 | `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
 | `set_intro` | 0-27 | Overrides the Intro animation by index. |
 | `set_outro` | 0-27 | Overrides the Outro animation by index. |
@@ -97,6 +98,8 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 - If the light was OFF before the sequence started, `restore: true` returns it to OFF.
 - If a child light is adopted mid-sequence via `cfx_set`, its restore baseline is treated as OFF unless explicitly designed otherwise, so stopping the parent sequence cleans the adopted child up without leaving it running.
 - `restore: false` skips the saved-state return and the teardown path forces the sequence lights OFF.
+
+`ha_events` only affects Home Assistant event emission. It does not disable on-device YAML triggers such as `on_cfx_reach`.
 
 ??? abstract "Full annotated example"
 
@@ -418,6 +421,7 @@ on_cfx_reach:
 | `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
+| `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the injected child effect. `auto` is the default and resolves to `false` for `cfx_set`. |
 | `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
 | `set_intro` | 0-27 | Overrides the Intro animation by index. |
 | `set_outro` | 0-27 | Overrides the Outro animation by index. |
@@ -449,6 +453,7 @@ on_cfx_reach:
 | `set_color` | [r,g,b] or [r,g,b,w] | Color override. |
 | `set_mirror` | true / false | Mirror override. |
 | `set_autotune` | true / false | Autotune override. |
+| `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the spawned run. `auto` is the default and resolves to `false` for `cfx_run`. |
 | `set_force_white` | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
 | `set_intro` | 0-27 | Intro override. |
 | `set_outro` | 0-27 | Outro override. |

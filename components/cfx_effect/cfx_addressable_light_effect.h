@@ -123,8 +123,10 @@ public:
     int32_t last_leading_pixel{-1};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
+    bool suppress_reach_event{false};
     bool suppress_positional_events{false};
     bool suppress_stop_event{false};
+    bool suppress_complete_event{false};
     // CFX-035: true only when the MAIN effect is progressive (pixel-marching,
     // e.g. Wipe/Sweep). Intro milestones are suppressed only in that case so
     // that monochromatic and non-progressive intros still fire cfx_reach. (CFX-035b)
@@ -490,8 +492,14 @@ public:
   void set_suppress_positional_events(bool v) {
     if (act_) act_->suppress_positional_events = v;
   }
+  void set_suppress_reach_event(bool v) {
+    if (act_) act_->suppress_reach_event = v;
+  }
   void set_suppress_stop_event(bool v) {
     if (act_) act_->suppress_stop_event = v;
+  }
+  void set_suppress_complete_event(bool v) {
+    if (act_) act_->suppress_complete_event = v;
   }
 
   // ── Activation pointer — null when effect is not running ─────────────────

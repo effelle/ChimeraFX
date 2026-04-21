@@ -341,8 +341,10 @@ void CFXAddressableLightEffect::start() {
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   act_->outro_start_time = 0;
   act_->is_sequence_outro = false;
+  act_->suppress_reach_event = false;
   act_->suppress_positional_events = false;
   act_->suppress_stop_event = false;
+  act_->suppress_complete_event = false;
   act_->outro_color_cache.clear();
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
@@ -1200,7 +1202,8 @@ void CFXAddressableLightEffect::stop() {
             // preset or user-configured outro selector. INTRO_MODE_NONE is the
             // default fade-to-black on every light-off — not a meaningful
             // outro, must not fire cfx_complete.
-            if (!act_->is_sequence_outro &&
+            if (!act_->suppress_complete_event &&
+                !act_->is_sequence_outro &&
                 act_->active_outro_mode != INTRO_MODE_NONE) {
 #ifdef USE_CFX_SEQUENCE
               if (captured_sequence != nullptr) {
@@ -6391,7 +6394,9 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     char buf[48];
     snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
              (unsigned)act_->last_fired_milestone);
-    chimera_fx::CFXEventManager::get().fire_event(buf);
+    if (!act_->suppress_reach_event) {
+      chimera_fx::CFXEventManager::get().fire_event(buf);
+    }
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;
   }

@@ -241,6 +241,7 @@ void CfxRunActionBase::do_play_() {
   if (this->inout_duration_.has_value()) seq->set_inout_duration(this->inout_duration_.value());
   if (this->force_white_.has_value())  seq->set_force_white(this->force_white_.value());
   if (this->autotune_.has_value())     seq->set_autotune(this->autotune_.value());
+  seq->set_ha_events(this->ha_events_);
 
   // Transfer triggers. These are YAML-codegen objects — they live for the
   // firmware lifetime and are safe to reference from the pooled sequence.
@@ -264,6 +265,14 @@ void CfxRunActionBase::do_play_() {
 void CfxSetActionBase::do_play_() {
   if (this->light_ == nullptr)
     return;
+
+  auto apply_ha_event_policy_to_inst =
+      [this](chimera_fx::CFXAddressableLightEffect *inst) {
+        const bool suppress = !this->ha_events_;
+        inst->set_suppress_reach_event(suppress);
+        inst->set_suppress_stop_event(suppress);
+        inst->set_suppress_complete_event(suppress);
+      };
 
   auto apply_overrides_to_inst =
       [this](chimera_fx::CFXAddressableLightEffect *inst) {
@@ -338,6 +347,7 @@ void CfxSetActionBase::do_play_() {
   // stale speed/intensity/palette/autotune settings.
   if (target_inst != nullptr) {
     apply_overrides_to_inst(target_inst);
+    apply_ha_event_policy_to_inst(target_inst);
   }
 
   // Optionally turn the light on and/or update its live visible state.
@@ -389,6 +399,9 @@ void CfxSetActionBase::do_play_() {
                this->effect_.c_str());
       target_inst->start();
       apply_overrides_to_inst(target_inst);
+      apply_ha_event_policy_to_inst(target_inst);
+    } else if (target_inst != nullptr) {
+      apply_ha_event_policy_to_inst(target_inst);
     }
   }
 
@@ -915,6 +928,9 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
   inst->set_active_sequence(this, this->speed_, this->intensity_,
                             this->palette_, this->mirror_, this->autotune_,
                             this->iterations_);
+  inst->set_suppress_reach_event(!this->ha_events_);
+  inst->set_suppress_stop_event(!this->ha_events_);
+  inst->set_suppress_complete_event(!this->ha_events_);
 
   // strip_tag is intentionally NOT stamped from the sequence here.
   // Every effect's act_->strip_tag is already set correctly in start() via
@@ -1201,6 +1217,7 @@ void CFXSequence::clear_active_binding() {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
       inst->set_suppress_stop_event(true);
+      inst->set_suppress_complete_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
@@ -1212,6 +1229,7 @@ void CFXSequence::clear_active_binding() {
       inst->set_is_sequence_outro(this->completion_reported_);
       inst->set_suppress_positional_events(true);
       inst->set_suppress_stop_event(true);
+      inst->set_suppress_complete_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
   }
@@ -1342,6 +1360,7 @@ void CFXSequence::report_event_begin() {
   // intro configured (intro_ != 0). Without an intro, cfx_begin and
   // cfx_start fire at the same millisecond and are redundant.
   if (!this->strip_tag_.empty()
+      && this->ha_events_
       && this->intro_.has_value() && this->intro_.value() != 0) {
     std::string evt = std::string("cfx_begin:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
@@ -1355,7 +1374,7 @@ void CFXSequence::report_event_stop() {
                                       (uint32_t)t, 0, [t]() { t->trigger(); });
   }
   // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
-  if (!this->strip_tag_.empty()) {
+  if (this->ha_events_ && !this->strip_tag_.empty()) {
     std::string evt = std::string("cfx_stop:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
   }
@@ -1374,7 +1393,7 @@ void CFXSequence::report_event_complete() {
   }
   // Fire tagged cfx_complete using this sequence's own strip_tag_.
   // No global singleton state — each sequence instance fires for its own strip.
-  if (!this->strip_tag_.empty()) {
+  if (this->ha_events_ && !this->strip_tag_.empty()) {
     std::string evt = std::string("cfx_complete:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
   }
