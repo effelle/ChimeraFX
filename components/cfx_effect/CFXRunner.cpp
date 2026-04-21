@@ -6126,6 +6126,14 @@ void CFXRunner::reset() {
   _virtual_now = 0.0f;
   _accum_ms = 0;
   _segment.call = 0;
+  // Reset mutable runtime controls to neutral defaults so a reused runner
+  // never carries sequence/cfx_set leftovers into the next effect start.
+  // The owning effect/control layer will immediately re-apply any active UI
+  // values, sequence overrides, or effect-specific defaults after reset().
+  _segment.speed = DEFAULT_SPEED;
+  _segment.intensity = DEFAULT_INTENSITY;
+  _segment.palette = 0;   // "Default" / effect-resolved palette
+  _segment.mirror = false;
   iteration_count_ = 0;
   effect_complete_ = false;
   _segment.reset = true;
