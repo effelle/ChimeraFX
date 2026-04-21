@@ -750,12 +750,11 @@ void CFXAddressableLightEffect::start() {
       }
       uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
       duration_ms = 35 * unit_ms; // ~ "HELLO"
-    } else if (dur_num != nullptr && dur_num->has_state()) {
-      // B. High Priority: UI Slider
-      duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-    } else if (this->has_inout_duration_preset_()) {
-      // C. Medium Priority: YAML Preset
-      duration_ms = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
+    } else if (auto duration_override =
+                   this->resolve_inout_duration_override_ms_(dur_num);
+               duration_override.has_value()) {
+      // B. Runtime override: sequence/YAML preset beats the live UI slider.
+      duration_ms = duration_override.value();
     } else {
       // D. Monochromatic Preset Fallback: Speed Slider
       MonochromaticPreset preset =
@@ -978,12 +977,11 @@ void CFXAddressableLightEffect::stop() {
         }
         uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
         duration_ms = 35 * unit_ms;
-      } else if (dur_num != nullptr && dur_num->has_state()) {
-        // B. High: UI Slider
-        duration_ms = (uint32_t)(dur_num->state * 1000.0f);
-      } else if (this->has_inout_duration_preset_()) {
-        // C. Medium: YAML Preset
-        duration_ms = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
+      } else if (auto duration_override =
+                     this->resolve_inout_duration_override_ms_(dur_num);
+                 duration_override.has_value()) {
+        // B. Runtime override: sequence/YAML preset beats the live UI slider.
+        duration_ms = duration_override.value();
       } else if (preset.is_active) {
         // D. Fallback: Monochromatic Mode Speed Slider
         number::Number *speed_num = this->local_speed_();
@@ -2826,12 +2824,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   MonochromaticPreset preset =
       this->get_monochromatic_preset_(this->effect_id_);
 
-  if (dur_num != nullptr && dur_num->has_state()) {
-    // High Priority: UI Slider
-    duration = (uint32_t)(dur_num->state * 1000.0f);
-  } else if (this->has_inout_duration_preset_()) {
-    // Medium Priority: YAML Preset
-    duration = (uint32_t)(this->inout_duration_preset_val_() * 1000.0f);
+  if (auto duration_override =
+          this->resolve_inout_duration_override_ms_(dur_num);
+      duration_override.has_value()) {
+    duration = duration_override.value();
   } else if (preset.is_active) {
     // Monochromatic Preset Fallback: Speed Slider
     number::Number *speed_num = this->local_speed_();

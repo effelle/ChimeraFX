@@ -411,6 +411,18 @@ protected:
   uint8_t intro_preset_val_() const { return cfg_->intro_preset.value(); }
   float inout_duration_preset_val_() const { return cfg_->inout_duration_preset.value(); }
   uint8_t outro_preset_val_() const { return cfg_->outro_preset.value(); }
+  std::optional<uint32_t> resolve_inout_duration_override_ms_(
+      number::Number *dur_num) const {
+    // Runtime presets (including sequence-applied overrides) are expected to
+    // lock the value for the active run, so they must beat the live UI slider.
+    if (this->has_inout_duration_preset_()) {
+      return static_cast<uint32_t>(this->inout_duration_preset_val_() * 1000.0f);
+    }
+    if (dur_num != nullptr && dur_num->has_state()) {
+      return static_cast<uint32_t>(dur_num->state * 1000.0f);
+    }
+    return std::nullopt;
+  }
 
 
 public:
