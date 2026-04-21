@@ -281,20 +281,6 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
-  // CFX-036: Sequence Auto-Bind. Because light state changes defer effect
-  // instantiation until the next run loop, an immediate sequence start() often 
-  // fails to inject parameters (act_ is nullptr). Detect active sequences natively.
-#ifdef USE_CFX_SEQUENCE
-  for (auto *seq : chimera_fx::CFXSequence::instances) {
-    if (seq->is_running() && seq->owns_light(this->get_light_state())) {
-      // Route auto-bind through the sequence helper so effect ownership,
-      // HA-event policy, and intro/outro/inout presets stay in sync.
-      seq->apply_binding_to_effect_(this);
-      break;
-    }
-  }
-#endif
-
   // on_cfx_begin trigger (on-device YAML) fires unconditionally.
   // The HA cfx_begin *event* fires only when an actual intro is configured;
   // see end of start() below. (CFX-029)
@@ -477,6 +463,18 @@ void CFXAddressableLightEffect::start() {
   }
 
 #ifdef USE_CFX_SEQUENCE
+  // CFX-036: Sequence Auto-Bind must happen after activation and runner reset.
+  // Earlier binding gets clobbered by the defensive start() initialization
+  // above, which clears intro state and HA-event suppression flags. Binding
+  // here makes the sequence-owned policy the final startup state while still
+  // landing before control resolution and intro-mode selection.
+  for (auto *seq : chimera_fx::CFXSequence::instances) {
+    if (seq->is_running() && seq->owns_light(this->get_light_state())) {
+      seq->apply_binding_to_effect_(this);
+      break;
+    }
+  }
+
   if (cfg_ != nullptr) {
     if (cfg_->pending_sequence_speed.has_value()) {
       act_->sequence_speed = cfg_->pending_sequence_speed;
