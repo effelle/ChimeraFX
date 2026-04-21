@@ -287,11 +287,9 @@ void CFXAddressableLightEffect::start() {
 #ifdef USE_CFX_SEQUENCE
   for (auto *seq : chimera_fx::CFXSequence::instances) {
     if (seq->is_running() && seq->owns_light(this->get_light_state())) {
-      ESP_LOGD("chimera_fx", "CFX-036 auto-bind: effect '%s' -> sequence '%s'",
-               this->get_name().c_str(), seq->get_name().c_str());
-      this->set_active_sequence(seq, seq->get_speed(), seq->get_intensity(),
-                                seq->get_palette(), seq->get_mirror(),
-                                seq->get_autotune(), seq->get_iterations());
+      // Route auto-bind through the sequence helper so effect ownership,
+      // HA-event policy, and intro/outro/inout presets stay in sync.
+      seq->apply_binding_to_effect_(this);
       break;
     }
   }
@@ -6588,6 +6586,11 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
 
   // Reset trackers when a new sequence is bound
   if (seq != nullptr) {
+    const bool suppress_ha_events = !seq->get_ha_events();
+    act_->suppress_reach_event = suppress_ha_events;
+    act_->suppress_stop_event = suppress_ha_events;
+    act_->suppress_complete_event = suppress_ha_events;
+
     // Disable built-in intro/transitions to prevent blackout/conflict
     // EXCEPT for Monochromatic Presets, which functionally ARE intros.
     if (!this->get_monochromatic_preset_(this->effect_id_).is_active) {

@@ -86,7 +86,7 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 
 ### Completion control
 
-| Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Type | Default | Description |
+| Key &nbsp; &nbsp; &nbsp;  &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | Type | Default | Description |
 |---|---|---|---|
 | `iterations` | integer | `0` | Stop after N complete animation cycles. `0` = loop forever. |
 | `duration` | time | `null` | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
@@ -99,7 +99,14 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 - If a child light is adopted mid-sequence via `cfx_set`, its restore baseline is treated as OFF unless explicitly designed otherwise, so stopping the parent sequence cleans the adopted child up without leaving it running.
 - `restore: false` skips the saved-state return and the teardown path forces the sequence lights OFF.
 
-`ha_events` only affects Home Assistant event emission. It does not disable on-device YAML triggers such as `on_cfx_reach`.
+`ha_events` only affects Home Assistant event emission. It does not disable on-device YAML triggers such as `on_cfx_reach` and it exists to keep Home Assistant event traffic useful and scalable.
+In multi-strip sequences, child effects can emit large bursts of `cfx_reach`,
+`cfx_stop`, and `cfx_complete` events when several strips are active at once.
+That traffic is often redundant because the parent sequence is the real
+orchestration unit. For that reason, root `cfx_sequence` entries default to HA
+events enabled, while child `cfx_set` and `cfx_run` actions default to HA
+events disabled. If a child effect is intentionally being used as a public
+event source, set `ha_events: true` to opt back in.
 
 ??? abstract "Full annotated example"
 
