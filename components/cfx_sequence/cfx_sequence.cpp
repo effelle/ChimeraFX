@@ -138,6 +138,7 @@ CFXSequence *CFXRunPool::claim(uint8_t depth) {
       this->slots_[i].in_use = true;
       this->slots_[i].depth  = depth;
       CFXSequence *seq = this->slots_[i].sequence;
+      seq->runtime_depth_ = depth;
       seq->is_pool_owned_ = true;
       seq->completion_reported_ = false; // reset here, not in release() — avoids race with deferred callbacks
       // Register in the global instances list for the duration of this run.
@@ -198,6 +199,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->autotune_ = {};
       seq->iterations_ = 0;
       seq->duration_ms_ = 0;
+      seq->runtime_depth_ = 0;
       seq->runtime_parent_ = nullptr;
       seq->is_running_  = false;
       seq->is_starting_ = false;
@@ -246,7 +248,7 @@ void CfxRunActionBase::do_play_() {
   CFXSequence *parent_seq = CFXSequence::get_current_trigger_sequence();
   uint8_t effective_depth = this->nesting_depth_;
   if (parent_seq != nullptr) {
-    effective_depth = parent_seq->nesting_depth_ + 1;
+    effective_depth = parent_seq->runtime_depth_ + 1;
   }
   CFXSequence *seq = CFXRunPool::get().claim(effective_depth);
   if (seq == nullptr)

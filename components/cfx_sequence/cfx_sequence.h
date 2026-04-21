@@ -243,6 +243,7 @@ protected:
 
   size_t configured_light_count_{0};
   std::vector<light::LightState *> lights_;
+  uint8_t runtime_depth_{0};
   CFXSequence *runtime_parent_{nullptr};
   std::vector<CFXSequence *> runtime_children_{};
   // Runtime-configurable entities
