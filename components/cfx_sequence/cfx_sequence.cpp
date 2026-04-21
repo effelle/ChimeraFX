@@ -1265,11 +1265,17 @@ void CFXSequence::force_stop_all() {
     off_call.perform();
   }
 
+  if (this->is_pool_owned_) {
+    CFXRunPool::get().release(this);
+    return;
+  }
+
   this->is_stopping_ = false;
 }
 
 void CFXSequence::stop_all() {
   std::set<light::LightState *> unique_lights;
+  std::vector<CFXSequence *> pooled_to_release;
   for (auto *seq : CFXSequence::instances) {
     for (auto *l : seq->lights_) {
       unique_lights.insert(l);
@@ -1278,6 +1284,9 @@ void CFXSequence::stop_all() {
       seq->is_running_ = false;
       seq->clear_active_binding();
       seq->duration_complete_fired_ = false;
+    }
+    if (seq->is_pool_owned_) {
+      pooled_to_release.push_back(seq);
     }
   }
 
@@ -1291,6 +1300,12 @@ void CFXSequence::stop_all() {
     off_call.set_state(false);
     off_call.set_transition_length(0);
     off_call.perform();
+  }
+
+  for (auto *seq : pooled_to_release) {
+    if (seq != nullptr && seq->is_pool_owned_) {
+      CFXRunPool::get().release(seq);
+    }
   }
 }
 
