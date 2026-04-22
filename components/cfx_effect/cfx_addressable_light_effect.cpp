@@ -1278,6 +1278,39 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->act_ == nullptr)
     return;
 
+  cfx_light::CFXLightOutput *diag_out = nullptr;
+  if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+        this->get_addressable_());
+    if (vseg != nullptr)
+      diag_out = vseg->get_parent();
+#endif
+  } else {
+    diag_out = static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+  }
+
+  if (diag_out != nullptr && diag_out->is_spi_transport() &&
+      this->act_->spi_diag_apply_logs < 6) {
+#ifdef USE_CFX_SEQUENCE
+    const char *seq_name =
+        (this->act_->active_sequence != nullptr)
+            ? this->act_->active_sequence->get_name().c_str()
+            : "-";
+#else
+    const char *seq_name = "-";
+#endif
+    ESP_LOGW("chimera_fx",
+             "SPI diag apply[%u]: runner=%s tag=%s seq=%s mono_idle=%d "
+             "intro=%d outro=%d completion=%d",
+             static_cast<unsigned>(this->act_->spi_diag_apply_logs),
+             this->act_->cached_runner_name.c_str(),
+             this->act_->strip_tag.c_str(), seq_name, this->act_->mono_idle,
+             this->act_->intro_active, this->act_->outro_active,
+             this->act_->completion_pending);
+    this->act_->spi_diag_apply_logs++;
+  }
+
   // CFX-004: Use RAII InstanceGuard so the global pointer is always restored
   // on every return path, including the throttle early-exit below.
   // This prevents "strip bleeding" in multi-strip configurations.

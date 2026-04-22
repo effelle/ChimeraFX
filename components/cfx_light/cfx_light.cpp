@@ -481,6 +481,9 @@ void CFXLightOutput::setup_spi_() {
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
   ESP_LOGI(TAG,
+           "SPI diag build marker: %s %s",
+           __DATE__, __TIME__);
+  ESP_LOGI(TAG,
            "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
            " ms, blocking_tx=yes, scheduler_sequential=yes",
            static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
@@ -768,6 +771,21 @@ void CFXLightOutput::write_state(light::LightState *state) {
     }
   }
 
+  if (this->is_spi_transport() && this->spi_diag_write_logs_ < 6) {
+    const char *light_name =
+        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                         : "<spi>";
+    ESP_LOGW(TAG,
+             "SPI diag write_state[%u]: light=%s state_ptr=%p effect_active=%d "
+             "outro=%u segs=%u in_flight=%d",
+             static_cast<unsigned>(this->spi_diag_write_logs_), light_name,
+             state, this->is_effect_active(),
+             static_cast<unsigned>(this->outro_cbs_.size()),
+             static_cast<unsigned>(this->segment_light_states_.size()),
+             this->spi_tx_in_flight_);
+    this->spi_diag_write_logs_++;
+  }
+
   this->status_clear_warning();
 
   // Protect from refreshing too often
@@ -883,6 +901,18 @@ void CFXLightOutput::flush_rmt_() {
 
 void CFXLightOutput::flush_spi_() {
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
+  if (this->spi_diag_flush_logs_ < 6) {
+    const char *light_name =
+        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                         : "<spi>";
+    ESP_LOGW(TAG,
+             "SPI diag flush[%u]: light=%s frame=%u timeout=%" PRIu32
+             " in_flight=%d bri=%u",
+             static_cast<unsigned>(this->spi_diag_flush_logs_), light_name,
+             static_cast<unsigned>(this->get_spi_frame_size_()), timeout_ms,
+             this->spi_tx_in_flight_, static_cast<unsigned>(this->tracked_brightness_));
+    this->spi_diag_flush_logs_++;
+  }
   if (!this->wait_for_spi_tx_(timeout_ms, "flush")) {
     return;
   }
