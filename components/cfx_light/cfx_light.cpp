@@ -110,7 +110,7 @@ static uint32_t count_active_cfx_effects() {
 // heavy RMT load (7+ channels) causes a hardware reset. The software is proven
 // stable (skip-transmit test survived 18+ seconds at depth 8). This gate freezes
 // the SPI strip on its last valid frame during peak load.
-static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 7;
+static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 5;
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
@@ -973,6 +973,19 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
+    // CFX-057: Early depth gate — suppress SPI flush when too many
+    // effects are active to avoid electrical crash.
+    const uint32_t pre_flush_active = count_active_cfx_effects();
+    if (pre_flush_active >= CFX_SPI_MAX_ACTIVE_EFFECTS) {
+      static uint8_t ws_gate_log = 0;
+      if (ws_gate_log < 4) {
+        ESP_LOGD(TAG, "SPI write_state depth-gate: active=%u >= %u, skip flush",
+                 (unsigned)pre_flush_active, (unsigned)CFX_SPI_MAX_ACTIVE_EFFECTS);
+        ws_gate_log++;
+      }
+      this->spi_last_flush_ms_ = esphome::millis();
+      return;
+    }
     esphome::App.feed_wdt(); // CFX-057: before blocking SPI transmit
     this->flush_spi_();
   } else {
