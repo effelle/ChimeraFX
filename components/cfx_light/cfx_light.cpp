@@ -26,9 +26,6 @@
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_system.h>
-#include <esp_task_wdt.h>
-#include <esp_ota_ops.h>
-#include <soc/rtc_cntl_reg.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -42,18 +39,6 @@ namespace esphome {
 namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
-
-// CFX-057: RTC crash counter — persists across soft resets (watchdog, panic,
-// brownout) but clears on power cycle. Zero UART overhead during operation.
-// Checked once in setup_spi_() and reset after logging.
-static RTC_NOINIT_ATTR uint32_t cfx_rtc_crash_magic_;
-static RTC_NOINIT_ATTR uint16_t cfx_rtc_crash_count_;
-static constexpr uint32_t CFX_RTC_MAGIC = 0xCF570057; // "CFX-057"
-
-// CFX-057: Deferred telemetry — captured at boot, logged on first write_state()
-// so the API logger is guaranteed to be connected.
-static esp_reset_reason_t cfx_boot_reset_reason_ = ESP_RST_UNKNOWN;
-static bool cfx_deferred_telemetry_logged_ = false;
 
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
@@ -95,20 +80,6 @@ resolve_active_cfx_effect(light::LightState *state) {
 
   return nullptr;
 }
-
-// CFX-057: Count active MAIN effects only (not segments).
-// Each physical strip has exactly one main effect. Segments are virtual
-// subdivisions and don't represent additional strip load.
-static uint32_t count_active_main_effects() {
-  uint32_t active_count = 0;
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-    if (inst != nullptr && inst->get_act() != nullptr) {
-      active_count++;
-    }
-  }
-  return active_count;
-}
-
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
@@ -537,19 +508,6 @@ void CFXLightOutput::setup_spi_() {
     return;
   }
 
-  // CFX-057: Cap SPI clock speed for level shifter compatibility.
-  // Common MOSFET-based level shifters (BSS138) max out at ~4-5 MHz.
-  // Under heavy RMT EMI load (7+ channels), even marginal signal degradation
-  // at high SPI clock speeds causes hardware resets. 2 MHz is safe and
-  // only adds ~0.6ms to the transfer (1.1ms vs 0.5ms at 10 MHz).
-  static constexpr uint32_t CFX_SPI_MAX_CLOCK_HZ = 2000000;  // 2 MHz
-  if (this->spi_speed_hz_ > CFX_SPI_MAX_CLOCK_HZ) {
-    ESP_LOGW(TAG, "SPI clock capped: %u Hz -> %u Hz (level shifter safe)",
-             static_cast<unsigned>(this->spi_speed_hz_),
-             static_cast<unsigned>(CFX_SPI_MAX_CLOCK_HZ));
-    this->spi_speed_hz_ = CFX_SPI_MAX_CLOCK_HZ;
-  }
-
   spi_device_interface_config_t dev_cfg = {};
   dev_cfg.clock_speed_hz = this->spi_speed_hz_;
   dev_cfg.mode = 0;             // CPOL=0, CPHA=0
@@ -566,71 +524,13 @@ void CFXLightOutput::setup_spi_() {
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
-  // CFX-057 CRITICAL: Force-mark this OTA partition as valid IMMEDIATELY.
-  // Without this, the crash happens before ESPHome's 10-second safe_mode
-  // window, causing rollback to old firmware (without diagnostics).
-  // REMOVE AFTER DIAGNOSIS.
-  esp_ota_mark_app_valid_cancel_rollback();
-
-  // CFX-057 DIAGNOSTIC: Disable brownout detector AND watchdog timers.
-  // Brownout already disproved — still crashes with brownout disabled.
-  // Now testing WDT: if crash stops, it's a watchdog timeout from
-  // combined RMT ISR load + SPI blocking transmit.
-  // REMOVE AFTER DIAGNOSIS.
-  CLEAR_PERI_REG_MASK(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_RST_ENA);
-
-  // Disable Task watchdog for current task
-  esp_task_wdt_deinit();
-
-  ESP_LOGW(TAG, "CFX-057 DIAG: Brownout + Task WDT DISABLED for crash diagnosis");
-
-  // CFX-057: RTC crash counter — check for previous silent resets.
-  if (cfx_rtc_crash_magic_ == CFX_RTC_MAGIC && cfx_rtc_crash_count_ > 0) {
-    ESP_LOGW(TAG,
-             "CFX-057: Detected %u silent reset(s) since last power cycle. "
-             "Previous crash likely during SPI sequence operation.",
-             static_cast<unsigned>(cfx_rtc_crash_count_));
-  }
-
-  // CFX-057: Capture reset reason for deferred telemetry (logged in write_state
-  // after API connects, since setup_spi_ runs before API is ready).
-  cfx_boot_reset_reason_ = esp_reset_reason();
-
-  // CFX-057: Log the EXACT reset reason — this tells us brownout vs WDT vs panic
-  const char *rst_reason = "UNKNOWN";
-  switch (cfx_boot_reset_reason_) {
-    case ESP_RST_POWERON:  rst_reason = "POWER_ON"; break;
-    case ESP_RST_SW:       rst_reason = "SOFTWARE"; break;
-    case ESP_RST_PANIC:    rst_reason = "PANIC"; break;
-    case ESP_RST_INT_WDT:  rst_reason = "INT_WDT"; break;
-    case ESP_RST_TASK_WDT: rst_reason = "TASK_WDT"; break;
-    case ESP_RST_WDT:      rst_reason = "OTHER_WDT"; break;
-    case ESP_RST_BROWNOUT: rst_reason = "BROWNOUT"; break;
-    case ESP_RST_SDIO:     rst_reason = "SDIO"; break;
-    default:               rst_reason = "UNKNOWN"; break;
-  }
-  ESP_LOGW(TAG, "CFX-057: Last reset reason: %s (code=%d)",
-           rst_reason, static_cast<int>(esp_reset_reason()));
-
-  // Arm for next potential crash: increment now, clear in loop once stable.
-  if (cfx_rtc_crash_magic_ != CFX_RTC_MAGIC) {
-    cfx_rtc_crash_magic_ = CFX_RTC_MAGIC;
-    cfx_rtc_crash_count_ = 0;
-  }
-  cfx_rtc_crash_count_++;
-
-  // Stack high-water mark — detects if main task is close to stack overflow
-  ESP_LOGW(TAG, "CFX-057: Main task stack HWM: %u bytes free",
-           static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
-
   ESP_LOGI(TAG,
            "SPI diag build marker: %s %s",
            __DATE__, __TIME__);
   ESP_LOGI(TAG,
            "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
-           " ms, blocking_tx=yes, scheduler_sequential=yes, crash_count=%u",
-           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_(),
-           static_cast<unsigned>(cfx_rtc_crash_count_));
+           " ms, blocking_tx=yes, scheduler_sequential=yes",
+           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
 }
 
 // --- Dynamic State Synchronization ---
@@ -1006,29 +906,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
-    // CFX-057: Deferred telemetry — log reset reason AFTER API connects.
-    // wait 15+ seconds after boot so the API logger is ready to capture it.
-    if (!cfx_deferred_telemetry_logged_ && esphome::millis() > 15000) {
-      cfx_deferred_telemetry_logged_ = true;
-      const char *rst = "UNKNOWN";
-      switch (cfx_boot_reset_reason_) {
-        case ESP_RST_POWERON:  rst = "POWER_ON"; break;
-        case ESP_RST_SW:       rst = "SOFTWARE"; break;
-        case ESP_RST_PANIC:    rst = "PANIC"; break;
-        case ESP_RST_INT_WDT:  rst = "INT_WDT"; break;
-        case ESP_RST_TASK_WDT: rst = "TASK_WDT"; break;
-        case ESP_RST_WDT:      rst = "OTHER_WDT"; break;
-        case ESP_RST_BROWNOUT:  rst = "BROWNOUT"; break;
-        default: break;
-      }
-      ESP_LOGW(TAG,
-               "CFX-057 DEFERRED TELEMETRY: Last reset reason = %s (code=%d), "
-               "crash_count=%u, stack_hwm=%u",
-               rst, (int)cfx_boot_reset_reason_,
-               (unsigned)cfx_rtc_crash_count_,
-               (unsigned)uxTaskGetStackHighWaterMark(nullptr));
-    }
-    esphome::App.feed_wdt(); // CFX-057: before blocking SPI transmit
+    esphome::App.feed_wdt();
     this->flush_spi_();
   } else {
     this->flush_rmt_();
