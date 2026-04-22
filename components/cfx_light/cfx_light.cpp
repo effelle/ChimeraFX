@@ -65,6 +65,9 @@ CFXLightOutput::~CFXLightOutput() {
     this->socket_fd_ = -1;
   }
   // SPI teardown
+  if (this->spi_tx_in_flight_ && this->spi_device_ != nullptr) {
+    this->wait_for_spi_tx_(50, "destructor");
+  }
   if (this->spi_device_ != nullptr) {
     spi_bus_remove_device(this->spi_device_);
     this->spi_device_ = nullptr;
@@ -380,6 +383,56 @@ size_t CFXLightOutput::get_spi_frame_size_() const {
   return (raw + 3) & ~3;
 }
 
+uint32_t CFXLightOutput::get_spi_frame_timeout_ms_() const {
+  const size_t frame_bits = this->get_spi_frame_size_() * 8;
+  uint32_t tx_ms = 0;
+
+  if (this->spi_speed_hz_ > 0) {
+    tx_ms = static_cast<uint32_t>(
+        (frame_bits * 1000ULL + this->spi_speed_hz_ - 1) / this->spi_speed_hz_);
+  }
+
+  tx_ms += 10; // scheduler / RTOS margin for diagnostic runs
+  if (tx_ms < 20)
+    tx_ms = 20;
+  return tx_ms;
+}
+
+bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) {
+  if (!this->spi_tx_in_flight_ || this->spi_device_ == nullptr) {
+    return true;
+  }
+
+  spi_transaction_t *ret_trans = nullptr;
+  esp_err_t err = spi_device_get_trans_result(
+      this->spi_device_, &ret_trans, pdMS_TO_TICKS(timeout_ms));
+
+  if (err == ESP_OK) {
+    this->spi_tx_in_flight_ = false;
+    this->spi_wait_count_++;
+    if (ret_trans != &this->spi_trans_) {
+      ESP_LOGW(TAG,
+               "SPI TX completion mismatch during %s (expected=%p got=%p)",
+               context, &this->spi_trans_, ret_trans);
+    }
+    return true;
+  }
+
+  if (err == ESP_ERR_TIMEOUT) {
+    this->spi_wait_timeout_count_++;
+    ESP_LOGW(TAG,
+             "SPI TX wait timeout during %s (%" PRIu32 " ms, waits=%" PRIu32
+             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
+             context, timeout_ms, this->spi_wait_count_,
+             this->spi_wait_timeout_count_, this->spi_queue_error_count_);
+  } else {
+    ESP_LOGW(TAG, "SPI TX wait failed during %s (err=%d)", context, err);
+  }
+
+  this->status_set_warning();
+  return false;
+}
+
 void CFXLightOutput::setup_spi_() {
   size_t frame_size = this->get_spi_frame_size_();
 
@@ -423,6 +476,11 @@ void CFXLightOutput::setup_spi_() {
     this->mark_failed();
     return;
   }
+
+  ESP_LOGI(TAG,
+           "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
+           " ms",
+           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
 }
 
 // --- Dynamic State Synchronization ---
@@ -821,7 +879,11 @@ void CFXLightOutput::flush_rmt_() {
 // --- SPI Transport Flush ---
 
 void CFXLightOutput::flush_spi_() {
-  // Wait for previous transaction to complete
+  const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
+  if (!this->wait_for_spi_tx_(timeout_ms, "flush")) {
+    return;
+  }
+
   memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
   this->spi_trans_.length = this->get_spi_frame_size_() * 8; // length in bits
   this->spi_trans_.tx_buffer = this->spi_frame_buf_;
@@ -856,11 +918,19 @@ void CFXLightOutput::flush_spi_() {
   }
 
   // Fire-and-forget DMA SPI transmit
-  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, pdMS_TO_TICKS(10));
+  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_,
+                                         pdMS_TO_TICKS(timeout_ms));
   if (err != ESP_OK) {
-    ESP_LOGW(TAG, "SPI TX error / queue full (err=%d)", err);
+    this->spi_queue_error_count_++;
+    ESP_LOGW(TAG,
+             "SPI TX queue failed (err=%d, frame=%u bytes, waits=%" PRIu32
+             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
+             err, static_cast<unsigned>(this->get_spi_frame_size_()),
+             this->spi_wait_count_, this->spi_wait_timeout_count_,
+             this->spi_queue_error_count_);
     this->status_set_warning();
   } else {
+    this->spi_tx_in_flight_ = true;
     this->status_clear_warning();
   }
 }
@@ -1000,11 +1070,16 @@ void CFXLightOutput::dump_config() {
                   "  Data Pin: GPIO%u\n"
                   "  Clock Pin: GPIO%u\n"
                   "  Speed: %" PRIu32 " Hz\n"
+                  "  Frame Size: %u bytes\n"
+                  "  TX Timeout: %" PRIu32 " ms\n"
                   "  Chipset: %s\n"
                   "  LEDs: %u\n"
                   "  RGB Order: %s",
-                  this->spi_data_pin_, this->spi_clock_pin_, this->spi_speed_hz_,
-                  chipset_str, this->num_leds_, order_str);
+                  this->spi_data_pin_, this->spi_clock_pin_,
+                  this->spi_speed_hz_,
+                  static_cast<unsigned>(this->get_spi_frame_size_()),
+                  this->get_spi_frame_timeout_ms_(), chipset_str,
+                  this->num_leds_, order_str);
   } else {
     ESP_LOGCONFIG(TAG,
                   "CFXLight (RMT):\n"

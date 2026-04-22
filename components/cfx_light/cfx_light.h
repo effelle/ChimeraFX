@@ -254,6 +254,8 @@ protected:
   void setup_spi_();
   void flush_rmt_();
   void flush_spi_();
+  bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
+  uint32_t get_spi_frame_timeout_ms_() const;
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;
@@ -314,6 +316,10 @@ protected:
   spi_device_handle_t spi_device_{nullptr};
   uint8_t *spi_frame_buf_{nullptr};
   spi_transaction_t spi_trans_{};
+  bool spi_tx_in_flight_{false};
+  uint32_t spi_wait_count_{0};
+  uint32_t spi_wait_timeout_count_{0};
+  uint32_t spi_queue_error_count_{0};
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};
