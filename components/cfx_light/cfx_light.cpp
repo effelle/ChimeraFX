@@ -26,6 +26,7 @@
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_system.h>
+#include <soc/rtc_cntl_reg.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -557,6 +558,14 @@ void CFXLightOutput::setup_spi_() {
   }
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
+
+  // CFX-057 DIAGNOSTIC: Disable brownout detector.
+  // If the crash is caused by voltage dip from 7+ RMT + SPI current draw,
+  // disabling brownout detection will prevent the reset.
+  // REMOVE AFTER DIAGNOSIS — running without brownout protection is not safe
+  // for production.
+  CLEAR_PERI_REG_MASK(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_RST_ENA);
+  ESP_LOGW(TAG, "CFX-057 DIAG: Brownout detector DISABLED for crash diagnosis");
 
   // CFX-057: RTC crash counter — check for previous silent resets.
   if (cfx_rtc_crash_magic_ == CFX_RTC_MAGIC && cfx_rtc_crash_count_ > 0) {
