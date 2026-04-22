@@ -60,7 +60,13 @@ public:
 
   // Diagnostic override used when mixed-transport runs need the safest
   // possible scheduler behavior.
-  void set_force_sequential(bool enabled) { force_sequential_ = enabled; }
+  void set_force_sequential(bool enabled) {
+    if (force_sequential_ == enabled)
+      return;
+    force_sequential_ = enabled;
+    if (enabled)
+      sequential_diag_logged_ = false;
+  }
   bool is_force_sequential() const { return force_sequential_; }
 
   // Wait for Core 0 to finish its current frame slice before returning.

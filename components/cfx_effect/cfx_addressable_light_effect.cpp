@@ -103,6 +103,10 @@ static SPIDiagCensus collect_spi_diag_census() {
   collect_group(CFXAddressableLightEffect::all_segment_effects, true);
   return census;
 }
+
+static bool should_force_spi_sequential_dispatch() {
+  return collect_spi_diag_census().active_spi_effects > 0;
+}
 }  // namespace
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
@@ -1715,6 +1719,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   if (!skip_service) {
+    CFXScheduler::get().set_force_sequential(
+        should_force_spi_sequential_dispatch());
+
     if (!act_->segment_runners.empty()) {
       // ── Set per-runner brightness BEFORE dispatch ────────────────────────
       // global_brightness_ must be written on Core 1 before service_runners()
