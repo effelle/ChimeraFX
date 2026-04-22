@@ -26,6 +26,7 @@
 #include <cmath>
 #include <driver/gpio.h>
 #include <soc/gpio_struct.h>
+#include <esp_system.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -549,12 +550,33 @@ void CFXLightOutput::setup_spi_() {
              "Previous crash likely during SPI sequence operation.",
              static_cast<unsigned>(cfx_rtc_crash_count_));
   }
+
+  // CFX-057: Log the EXACT reset reason — this tells us brownout vs WDT vs panic
+  const char *rst_reason = "UNKNOWN";
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  rst_reason = "POWER_ON"; break;
+    case ESP_RST_SW:       rst_reason = "SOFTWARE"; break;
+    case ESP_RST_PANIC:    rst_reason = "PANIC"; break;
+    case ESP_RST_INT_WDT:  rst_reason = "INT_WDT"; break;
+    case ESP_RST_TASK_WDT: rst_reason = "TASK_WDT"; break;
+    case ESP_RST_WDT:      rst_reason = "OTHER_WDT"; break;
+    case ESP_RST_BROWNOUT: rst_reason = "BROWNOUT"; break;
+    case ESP_RST_SDIO:     rst_reason = "SDIO"; break;
+    default:               rst_reason = "UNKNOWN"; break;
+  }
+  ESP_LOGW(TAG, "CFX-057: Last reset reason: %s (code=%d)",
+           rst_reason, static_cast<int>(esp_reset_reason()));
+
   // Arm for next potential crash: increment now, clear in loop once stable.
   if (cfx_rtc_crash_magic_ != CFX_RTC_MAGIC) {
     cfx_rtc_crash_magic_ = CFX_RTC_MAGIC;
     cfx_rtc_crash_count_ = 0;
   }
   cfx_rtc_crash_count_++;
+
+  // Stack high-water mark — detects if main task is close to stack overflow
+  ESP_LOGW(TAG, "CFX-057: Main task stack HWM: %u bytes free",
+           static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 
   ESP_LOGI(TAG,
            "SPI diag build marker: %s %s",
