@@ -21,6 +21,7 @@
 #ifdef USE_ESP32
 
 #include "esphome/components/light/light_state.h"
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include <cmath>
 
