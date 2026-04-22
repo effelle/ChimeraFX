@@ -50,7 +50,7 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
   - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
 - **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811), **2-wire SPI** (APA102, SK9822) are working but still in **BETA** and under heavy development.
 
-> **⚠️ SPI Strip Power Warning:** APA102/SK9822 strips can draw significantly higher inrush current than NRZ strips (up to 3× per LED during initial latch). When running SPI strips alongside multiple NRZ strips, ensure your power supply has adequate headroom. See the [SPI Power Planning](docs/cfx_light.md#spi-power-planning) section in the cfx_light docs.
+> **⚠️ SPI Strip Power Warning:** APA102/SK9822 strips can draw significantly higher inrush current than NRZ strips (up to 3× per LED during initial latch). When running SPI strips alongside multiple NRZ strips, ensure your power supply has adequate headroom. See the [SPI Power Planning](docs/Troubleshooting.md#spi-power-planning) section in the Troubleshooting docs.
 
 > **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.
 

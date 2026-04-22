@@ -61,3 +61,47 @@ light:
 ```
 
 On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). However, with multiple strips, this total must be divided among them. On an ESP32-S3, the RMT architecture is different: it has dedicated memory for transmission, but the total buffer is smaller. The S3 provides 192 symbols total for all transmit channels. This means if you use 4 strips, you are limited to 48 symbols per strip.
+
+---
+
+## SPI Power Planning
+
+> **⚠️ Important:** APA102 and SK9822 strips have fundamentally different power characteristics than 1-wire NRZ strips (WS2812B, SK6812). Failure to account for this can cause system instability, especially in multi-strip setups.
+
+### The Inrush Current Problem
+
+When an SPI strip latches new pixel data, **all LEDs update simultaneously** (triggered by the end-of-frame clock sequence). This creates a transient current spike that can be **2–3× higher** than the strip's steady-state draw. In contrast, NRZ strips update LEDs sequentially as data propagates down the chain, spreading the current draw over time.
+
+| Characteristic | 1-wire NRZ (WS2812B) | 2-wire SPI (APA102/SK9822) |
+|:---|:---|:---|
+| **Update behavior** | Sequential (LED by LED) | Simultaneous (all LEDs at once) |
+| **Steady-state per LED** | ~50–60 mA (full white) | ~50–60 mA (full white) |
+| **Inrush per LED** | ~60 mA (same as steady) | Up to **150–180 mA** for 0.3–0.5s |
+| **64-LED strip peak** | ~3.8 A | Up to **11.5 A** (brief) |
+
+> **Note:** Inrush values vary significantly across SK9822 clone batches. Genuine APA102 strips tend to have lower inrush, but cheap SK9822 clones can exhibit the worst-case values above.
+
+### Symptoms of Insufficient Power Budget
+
+When the SPI inrush current exceeds your power supply's headroom:
+
+- **ESP32 hard reset** (appears as `ESP_RST_POWERON` — the voltage drops below the ESP32's ~2.0V power-on-reset threshold)
+- **API disconnects** followed by immediate reconnection
+- **Intermittent crashes** that only occur when multiple strips run effects simultaneously
+- System works fine with the SPI strip alone, but crashes when combined with 5+ NRZ strips
+
+These symptoms are **not software bugs** — they are hardware power-rail collapses.
+
+### Best Practices for Mixed SPI + NRZ Installations
+
+1. **Budget for inrush, not steady-state.** A 64-LED SPI strip at full white draws ~3.8A steady but can spike to 11A+ at latch. Size your PSU for the peak, not the average.
+
+2. **Separate power injection.** If possible, power SPI strips from a dedicated rail or separate PSU output. Never daisy-chain SPI strip power through NRZ strips.
+
+3. **Add bulk decoupling.** Place a 100–470µF electrolytic capacitor at the SPI strip's power input, close to the first LED. This buffers the inrush spike.
+
+4. **Add local decoupling near the ESP32.** A 100nF ceramic capacitor on the ESP32's 3.3V rail prevents brief voltage dips from propagating to the microcontroller.
+
+5. **Test with all strips at max brightness.** The worst case is all strips set to full white simultaneously. If your setup survives that, it will handle any effect sequence.
+
+6. **Consider the PSU's current rating.** A 10A / 5V PSU (50W) can be insufficient for a setup with multiple NRZ strips + one SPI strip. A 20A / 5V PSU (100W) provides the necessary headroom.
