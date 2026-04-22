@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <span>
 #include <string>
 #include <vector>
 #include <cstdlib>
@@ -120,6 +121,16 @@ static void ensure_sequence_registry_capacity_(size_t extra_slots,
            static_cast<unsigned>(registry.size()),
            static_cast<unsigned>(registry.capacity()),
            static_cast<unsigned>(target));
+}
+
+static std::string resolve_light_tag_(light::LightState *state) {
+  if (state == nullptr) {
+    return {};
+  }
+
+  char id_buf[128] = {};
+  state->get_object_id_to(std::span(id_buf));
+  return std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
 }
 }  // namespace
 
@@ -1143,9 +1154,10 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
   // including Strip3, Strip2, and any adopted light — to fire cfx_reach /
   // cfx_stop / cfx_complete events tagged as 'led_strip1', making them
   // invisible or misrouted in HA. Each light must report under its own tag.
-  // The sequence fires its own cfx_stop/cfx_complete using strip_tag_ directly
-  // (see report_event_stop / report_event_complete) — it does not need to
-  // propagate its tag into individual effect instances.
+  // The sequence handles cfx_stop centrally using its owned light tags and
+  // cfx_complete using strip_tag_ directly (see report_event_stop /
+  // report_event_complete) — it does not need to propagate its tag into
+  // individual effect instances.
 
   if (this->intro_.has_value())
     inst->set_intro_preset(this->intro_.value());
@@ -1669,10 +1681,29 @@ void CFXSequence::report_event_stop() {
       t->trigger();
     });
   }
-  // Fire cfx_stop HA event — outro is beginning (or sequence is stopping).
-  if (this->ha_events_ && !this->strip_tag_.empty()) {
-    std::string evt = std::string("cfx_stop:") + this->strip_tag_;
-    CFXEventManager::get().fire_event(evt.c_str());
+  // Fire cfx_stop HA events for every light currently owned by this sequence.
+  // This keeps stop semantics aligned with cfx_reach, which is already per
+  // light, and covers adopted cfx_set lights as well.
+  if (this->ha_events_) {
+    std::vector<std::string> stop_tags;
+    auto add_unique_tag = [&stop_tags](const std::string &tag) {
+      if (tag.empty()) {
+        return;
+      }
+      if (std::find(stop_tags.begin(), stop_tags.end(), tag) == stop_tags.end()) {
+        stop_tags.push_back(tag);
+      }
+    };
+
+    add_unique_tag(this->strip_tag_);
+    for (auto *light : this->lights_) {
+      add_unique_tag(resolve_light_tag_(light));
+    }
+
+    for (const auto &tag : stop_tags) {
+      std::string evt = std::string("cfx_stop:") + tag;
+      CFXEventManager::get().fire_event(evt.c_str());
+    }
   }
 }
 
