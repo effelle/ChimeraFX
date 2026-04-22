@@ -65,7 +65,17 @@ static cfx_light::CFXLightOutput *resolve_cfx_output_(light::LightState *state) 
   return static_cast<cfx_light::CFXLightOutput *>(output);
 }
 
+// CFX-057: Cached SPI presence check — avoid scanning 656+ effects on every
+// do_play_() call. SPI transport presence doesn't change within 500ms.
+static bool cached_has_spi_{false};
+static uint32_t cached_has_spi_ms_{0};
+
 static bool has_active_spi_effect_() {
+  const uint32_t now = esphome::millis();
+  if (cached_has_spi_ms_ != 0 && (now - cached_has_spi_ms_) < 500) {
+    return cached_has_spi_;
+  }
+
   auto has_active_spi_in_group =
       [](const std::vector<chimera_fx::CFXAddressableLightEffect *> &group) {
         for (auto *inst : group) {
@@ -80,8 +90,11 @@ static bool has_active_spi_effect_() {
         return false;
       };
 
-  return has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_effects) ||
-         has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_segment_effects);
+  cached_has_spi_ =
+      has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_effects) ||
+      has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_segment_effects);
+  cached_has_spi_ms_ = now;
+  return cached_has_spi_;
 }
 
 static bool should_defer_pool_sequence_start_(light::LightState *target_light) {

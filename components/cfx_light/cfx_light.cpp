@@ -38,6 +38,13 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
+// CFX-057: RTC crash counter — persists across soft resets (watchdog, panic,
+// brownout) but clears on power cycle. Zero UART overhead during operation.
+// Checked once in setup_spi_() and reset after logging.
+static RTC_NOINIT_ATTR uint32_t cfx_rtc_crash_magic_;
+static RTC_NOINIT_ATTR uint16_t cfx_rtc_crash_count_;
+static constexpr uint32_t CFX_RTC_MAGIC = 0xCF570057; // "CFX-057"
+
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
@@ -539,13 +546,28 @@ void CFXLightOutput::setup_spi_() {
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
+  // CFX-057: RTC crash counter — check for previous silent resets.
+  if (cfx_rtc_crash_magic_ == CFX_RTC_MAGIC && cfx_rtc_crash_count_ > 0) {
+    ESP_LOGW(TAG,
+             "CFX-057: Detected %u silent reset(s) since last power cycle. "
+             "Previous crash likely during SPI sequence operation.",
+             static_cast<unsigned>(cfx_rtc_crash_count_));
+  }
+  // Arm for next potential crash: increment now, clear in loop once stable.
+  if (cfx_rtc_crash_magic_ != CFX_RTC_MAGIC) {
+    cfx_rtc_crash_magic_ = CFX_RTC_MAGIC;
+    cfx_rtc_crash_count_ = 0;
+  }
+  cfx_rtc_crash_count_++;
+
   ESP_LOGI(TAG,
            "SPI diag build marker: %s %s",
            __DATE__, __TIME__);
   ESP_LOGI(TAG,
            "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
-           " ms, blocking_tx=yes, scheduler_sequential=yes",
-           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
+           " ms, blocking_tx=yes, scheduler_sequential=yes, crash_count=%u",
+           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_(),
+           static_cast<unsigned>(cfx_rtc_crash_count_));
 }
 
 // --- Dynamic State Synchronization ---
@@ -837,7 +859,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGW(TAG,
+    ESP_LOGD(TAG,
              "SPI diag write_state[%u]: light=%s state_ptr=%p effect_active=%d "
              "outro=%u segs=%u in_flight=%d",
              static_cast<unsigned>(this->spi_diag_write_logs_), light_name,
@@ -867,7 +889,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
           const char *light_name =
               (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                                : "<spi>";
-          ESP_LOGW(TAG,
+          ESP_LOGD(TAG,
                    "SPI diag throttle[%u]: light=%s seq=%p active_fx=%u "
                    "wait=%" PRIu32 "ms since_last=%" PRIu32 "ms state_ptr=%p",
                    static_cast<unsigned>(this->spi_diag_throttle_logs_),
@@ -1004,7 +1026,7 @@ void CFXLightOutput::flush_spi_() {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGW(TAG,
+    ESP_LOGD(TAG,
              "SPI diag flush[%u]: light=%s frame=%u timeout=%" PRIu32
              " in_flight=%d bri=%u",
              static_cast<unsigned>(this->spi_diag_flush_logs_), light_name,
@@ -1064,7 +1086,7 @@ void CFXLightOutput::flush_spi_() {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGW(TAG,
+    ESP_LOGD(TAG,
              "SPI diag timing[%u]: light=%s build=%" PRIu32 "us tx=%" PRIu32
              "us total=%" PRIu32 "us frame=%u err=%d",
              static_cast<unsigned>(this->spi_diag_timing_logs_), light_name,
