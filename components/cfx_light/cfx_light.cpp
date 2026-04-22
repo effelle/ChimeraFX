@@ -24,6 +24,8 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include <cmath>
+#include <driver/gpio.h>
+#include <soc/gpio_struct.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -550,6 +552,15 @@ void CFXLightOutput::setup_spi_() {
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
+  // CFX-057: Reconfigure SPI pins as GPIO outputs for software bit-bang.
+  // The SPI peripheral (with or without DMA) causes crashes when 7+ RMT
+  // channels are active. We keep the SPI device handle for wait_for_spi_tx_
+  // compatibility but route the actual pins through GPIO for direct control.
+  gpio_set_direction(static_cast<gpio_num_t>(this->spi_data_pin_),
+                     GPIO_MODE_OUTPUT);
+  gpio_set_direction(static_cast<gpio_num_t>(this->spi_clock_pin_),
+                     GPIO_MODE_OUTPUT);
+
   // CFX-057: RTC crash counter — check for previous silent resets.
   if (cfx_rtc_crash_magic_ == CFX_RTC_MAGIC && cfx_rtc_crash_count_ > 0) {
     ESP_LOGW(TAG,
@@ -1075,30 +1086,39 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 FIX: Chunked polling transmit without DMA.
-  // The SPI bus is initialized with SPI_DMA_DISABLED to prevent bus contention
-  // with RMT DMA channels. Without DMA, the SPI FIFO is limited to 64 bytes
-  // per transaction. We split the frame into 64-byte chunks — APA102/SK9822
-  // treats the clock+data stream as continuous, so chunk boundaries are invisible.
+  // CFX-057 FIX: Software SPI (bit-bang) — bypass the SPI peripheral entirely.
+  // The ESP32 SPI peripheral (with or without DMA) causes unrecoverable hardware
+  // resets when 7+ RMT channels are active. Software SPI uses only GPIO register
+  // writes — no peripheral, no DMA, no ISR, no bus contention.
+  // APA102/SK9822 is a simple clock+data protocol; bit-banging is robust.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
-  static constexpr size_t SPI_FIFO_CHUNK = 64;
+  const uint32_t clk_mask = (1UL << this->spi_clock_pin_);
+  const uint32_t dat_mask = (1UL << this->spi_data_pin_);
   const size_t total_bytes = this->get_spi_frame_size_();
-  esp_err_t err = ESP_OK;
-  size_t offset = 0;
+  const uint8_t *data = this->spi_frame_buf_;
 
-  while (offset < total_bytes && err == ESP_OK) {
-    size_t chunk = total_bytes - offset;
-    if (chunk > SPI_FIFO_CHUNK) chunk = SPI_FIFO_CHUNK;
-
-    spi_transaction_t t = {};
-    t.length = chunk * 8;  // bits
-    t.tx_buffer = this->spi_frame_buf_ + offset;
-    err = spi_device_polling_transmit(this->spi_device_, &t);
-    offset += chunk;
+  // Transmit each byte MSB-first via direct GPIO register writes.
+  // GPIO.out_w1ts sets bits high, GPIO.out_w1tc clears bits low.
+  // Each bit: set data → clock high → clock low.
+  for (size_t b = 0; b < total_bytes; b++) {
+    uint8_t byte = data[b];
+    for (int bit = 7; bit >= 0; bit--) {
+      // Set MOSI
+      if (byte & (1 << bit)) {
+        GPIO.out_w1ts = dat_mask;
+      } else {
+        GPIO.out_w1tc = dat_mask;
+      }
+      // Clock high
+      GPIO.out_w1ts = clk_mask;
+      // Clock low
+      GPIO.out_w1tc = clk_mask;
+    }
   }
 
+  esp_err_t err = ESP_OK;  // Software SPI always succeeds
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
