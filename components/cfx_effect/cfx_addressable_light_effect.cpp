@@ -1411,12 +1411,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // already consumed the loop budget, defer this frame to keep the connection alive.
   // IDLE segments (mono_idle) bypass this guard — they do no computation and
   // skipping them causes pixel starvation on the DMA buffer (segments go dark).
-  static uint32_t last_frame_ms = 0;
-  static uint32_t current_frame_start = 0;
+  static uint32_t frame_budget_window_start_ms = 0;
+  static uint8_t spi_budget_skip_logs = 0;
   uint32_t now_ms = esphome::millis();
-  if (now_ms != last_frame_ms) {
-    current_frame_start = now_ms;
-    last_frame_ms = now_ms;
+  if (frame_budget_window_start_ms == 0 ||
+      (now_ms - frame_budget_window_start_ms) >= 30) {
+    frame_budget_window_start_ms = now_ms;
   }
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
     uint32_t delta_ms = 0;
@@ -1444,10 +1444,30 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->act_->spi_diag_heartbeat_logs++;
     }
   }
-  if (!act_->mono_idle && now_ms - current_frame_start > 22) {
-    ESP_LOGV("chimera_fx", "Frame Budget Exceeded (%ums), skipping render for '%s'", 
-             now_ms - current_frame_start, this->get_name().c_str());
-    return; 
+  uint32_t budget_elapsed_ms = now_ms - frame_budget_window_start_ms;
+  if (!act_->mono_idle && budget_elapsed_ms > 22) {
+    if (spi_budget_skip_logs < 8) {
+      SPIDiagCensus diag_census = collect_spi_diag_census();
+      if (diag_census.active_spi_effects > 0) {
+        ESP_LOGW("cfx_seq",
+                 "SPI diag budget-skip[%u]: effect=%s tag=%s elapsed=%ums "
+                 "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
+                 static_cast<unsigned>(spi_budget_skip_logs),
+                 this->act_->cached_runner_name.c_str(),
+                 this->act_->strip_tag.c_str(),
+                 budget_elapsed_ms,
+                 static_cast<unsigned>(diag_census.active_effects),
+                 static_cast<unsigned>(diag_census.active_segment_effects),
+                 static_cast<unsigned>(diag_census.active_spi_effects),
+                 static_cast<unsigned>(diag_census.bound_sequences),
+                 static_cast<unsigned>(diag_census.runner_count));
+        spi_budget_skip_logs++;
+      }
+    }
+    ESP_LOGV("chimera_fx",
+             "Frame Budget Exceeded (%ums), skipping render for '%s'",
+             budget_elapsed_ms, this->get_name().c_str());
+    return;
   }
 
   const uint64_t now = millis_64();
