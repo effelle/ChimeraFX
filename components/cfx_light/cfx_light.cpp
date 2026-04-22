@@ -514,41 +514,22 @@ void CFXLightOutput::setup_spi_() {
   }
   memset(this->spi_frame_buf_, 0, frame_size);
 
-  spi_host_device_t host = resolve_spi_host_(this->spi_host_);
+  // CFX-057 ELIMINATION TEST C: Skip SPI driver entirely.
+  // No spi_bus_initialize (ISR, peripheral), no spi_bus_add_device.
+  // Just configure GPIO pins as outputs and use bit-bang transmit.
+  // If this crashes → purely electrical (pin toggling / LED current).
+  // If stable → the SPI driver's ISR or peripheral state is the issue.
+  // REMOVE AFTER DIAGNOSIS.
+  gpio_reset_pin(static_cast<gpio_num_t>(this->spi_data_pin_));
+  gpio_set_direction(static_cast<gpio_num_t>(this->spi_data_pin_),
+                     GPIO_MODE_OUTPUT);
+  gpio_set_level(static_cast<gpio_num_t>(this->spi_data_pin_), 0);
+  gpio_reset_pin(static_cast<gpio_num_t>(this->spi_clock_pin_));
+  gpio_set_direction(static_cast<gpio_num_t>(this->spi_clock_pin_),
+                     GPIO_MODE_OUTPUT);
+  gpio_set_level(static_cast<gpio_num_t>(this->spi_clock_pin_), 0);
 
-  spi_bus_config_t bus_cfg = {};
-  bus_cfg.mosi_io_num = this->spi_data_pin_;
-  bus_cfg.miso_io_num = -1;   // not needed
-  bus_cfg.sclk_io_num = this->spi_clock_pin_;
-  bus_cfg.quadwp_io_num = -1;
-  bus_cfg.quadhd_io_num = -1;
-  bus_cfg.max_transfer_sz = frame_size;
-
-  // CFX-057: Disable DMA to prevent bus contention with RMT DMA channels.
-  // spi_device_polling_transmit() STILL uses DMA if a DMA channel was allocated.
-  // Only SPI_DMA_DISABLED truly forces CPU-only data transfer via the SPI FIFO.
-  // Trade-off: max 64 bytes per transaction (we chunk the frame manually).
-  esp_err_t err = spi_bus_initialize(host, &bus_cfg, SPI_DMA_DISABLED);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "SPI bus init failed (err=%d, data=GPIO%u clock=GPIO%u)",
-             err, this->spi_data_pin_, this->spi_clock_pin_);
-    this->mark_failed();
-    return;
-  }
-
-  spi_device_interface_config_t dev_cfg = {};
-  dev_cfg.clock_speed_hz = this->spi_speed_hz_;
-  dev_cfg.mode = 0;             // CPOL=0, CPHA=0
-  dev_cfg.spics_io_num = -1;    // APA102/SK9822 have no CS line
-  dev_cfg.queue_size = 1;
-  dev_cfg.flags = SPI_DEVICE_NO_DUMMY;  // required for long strips
-
-  err = spi_bus_add_device(host, &dev_cfg, &this->spi_device_);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "SPI device add failed (err=%d)", err);
-    this->mark_failed();
-    return;
-  }
+  // spi_device_ remains nullptr — wait_for_spi_tx_() handles this (returns true).
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
@@ -1086,17 +1067,27 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 ELIMINATION TEST B: Pure CPU busy-wait, NO GPIO toggling.
-  // Tests whether the crash is caused by:
-  //   A) ~500µs of CPU starvation at depth 7+ → this test will CRASH
-  //   B) The physical GPIO/SPI activity on the pins → this test will be STABLE
-  // REMOVE AFTER DIAGNOSIS.
+  // CFX-057 ELIMINATION TEST C: Bit-bang transmit without ANY SPI driver.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
-  // Busy-wait for approximately the same duration as a 276-byte SPI transfer
-  // (~500µs) without touching any GPIO pins.
-  delayMicroseconds(500);
+  const uint32_t clk_mask = (1UL << this->spi_clock_pin_);
+  const uint32_t dat_mask = (1UL << this->spi_data_pin_);
+  const size_t total_bytes = this->get_spi_frame_size_();
+  const uint8_t *data = this->spi_frame_buf_;
+
+  for (size_t b = 0; b < total_bytes; b++) {
+    uint8_t byte = data[b];
+    for (int bit = 7; bit >= 0; bit--) {
+      if (byte & (1 << bit)) {
+        GPIO.out_w1ts = dat_mask;
+      } else {
+        GPIO.out_w1tc = dat_mask;
+      }
+      GPIO.out_w1ts = clk_mask;
+      GPIO.out_w1tc = clk_mask;
+    }
+  }
 
   esp_err_t err = ESP_OK;
   const uint32_t tx_end_us = micros();
