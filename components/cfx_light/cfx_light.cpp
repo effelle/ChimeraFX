@@ -1071,20 +1071,15 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 ELIMINATION TEST: Skip actual SPI DMA to isolate hardware vs software.
-  // If crash STOPS with this enabled → root cause is SPI DMA / bus contention.
-  // If crash PERSISTS → root cause is pure software (concurrency, memory, scheduling).
-  // REMOVE THIS AFTER DIAGNOSIS.
-#define CFX_057_SKIP_SPI_TRANSMIT 1  // Set to 0 to re-enable SPI transmit
-
+  // CFX-057 FIX: Use polling transmit instead of DMA-based transmit.
+  // Root cause: spi_device_transmit() uses DMA which contends with RMT DMA
+  // channels on the ESP32's shared memory bus. At 7+ active RMT strips, the bus
+  // bandwidth saturates and triggers an unrecoverable hardware reset.
+  // spi_device_polling_transmit() uses CPU polling instead — no DMA, no bus
+  // contention. The ~450µs CPU cost is negligible vs the 30ms frame budget.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
-#if CFX_057_SKIP_SPI_TRANSMIT
-  esp_err_t err = ESP_OK;  // Simulate success — all buffer logic ran, just no DMA
-  (void)this->spi_trans_;  // Suppress unused warning
-#else
-  esp_err_t err = spi_device_transmit(this->spi_device_, &this->spi_trans_);
-#endif
+  esp_err_t err = spi_device_polling_transmit(this->spi_device_, &this->spi_trans_);
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
