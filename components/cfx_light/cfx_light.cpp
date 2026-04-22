@@ -815,6 +815,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
   if (!this->outro_cbs_.empty()) {
     // Outro is rendering — let it own the buffer, no scrub.
   } else if (!this->segment_light_states_.empty()) {
+    // CFX-057: Feed WDT before segment scrub — at 8+ active runners the
+    // scrub + SPI transmit chain can stall for 15ms+ per frame.
+    esphome::App.feed_wdt();
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
       // CFX-032: scrub on remote_values only; current_values may lag
@@ -918,6 +921,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
+    esphome::App.feed_wdt(); // CFX-057: before blocking SPI transmit
     this->flush_spi_();
   } else {
     this->flush_rmt_();

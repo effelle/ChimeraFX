@@ -70,13 +70,27 @@ static cfx_light::CFXLightOutput *resolve_diag_output(
   return effect->get_diag_output();
 }
 
+// CFX-057: Cached census — avoid scanning 656+ effect instances every frame.
+// The census is recomputed at most once every 250ms. Callers that run on the
+// hot render path (apply(), check_milestones_) now get O(1) reads instead of
+// O(N) scans where N can reach 656 in a fully-loaded system.
+static SPIDiagCensus cached_census_;
+static uint32_t cached_census_ms_{0};
+static constexpr uint32_t CENSUS_TTL_MS = 250;
+
 static SPIDiagCensus collect_spi_diag_census() {
+  const uint32_t now = esphome::millis();
+  if (cached_census_ms_ != 0 && (now - cached_census_ms_) < CENSUS_TTL_MS) {
+    return cached_census_;
+  }
+
   SPIDiagCensus census;
   census.total_effects = CFXAddressableLightEffect::all_effects.size();
   census.total_segment_effects =
       CFXAddressableLightEffect::all_segment_effects.size();
 
-  auto collect_group = [&census](const std::vector<CFXAddressableLightEffect *> &group,
+  uint16_t wdt_counter = 0;
+  auto collect_group = [&census, &wdt_counter](const std::vector<CFXAddressableLightEffect *> &group,
                                  bool is_segment_group) {
     for (auto *inst : group) {
       if (inst == nullptr)
@@ -96,11 +110,18 @@ static SPIDiagCensus collect_spi_diag_census() {
       if (inst->get_active_sequence() != nullptr)
         census.bound_sequences++;
       census.runner_count += inst->get_runner_count();
+
+      // CFX-057: Feed WDT every 64 iterations to prevent stall
+      if (++wdt_counter % 64 == 0)
+        esphome::App.feed_wdt();
     }
   };
 
   collect_group(CFXAddressableLightEffect::all_effects, false);
   collect_group(CFXAddressableLightEffect::all_segment_effects, true);
+
+  cached_census_ = census;
+  cached_census_ms_ = now;
   return census;
 }
 

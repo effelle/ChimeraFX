@@ -226,6 +226,10 @@ void CFXRunPool::release(CFXSequence *seq) {
   for (uint8_t i = 0; i < POOL_SIZE; i++) {
     if (this->slots_[i].sequence == seq && this->slots_[i].in_use) {
       this->slots_[i].in_use = false;
+      // CFX-057: Feed WDT — release() runs inside finalize_teardown_() which
+      // follows clear_active_binding() (656+ iterations). The total time from
+      // stop() → release() can exceed 100ms at depth 7.
+      esphome::App.feed_wdt();
       seq->detach_runtime_parent_();
       std::vector<CFXSequence *> orphaned_children = seq->runtime_children_;
       for (auto *child : orphaned_children) {
@@ -600,8 +604,14 @@ void CFXSequenceSelect::control(const std::string &value) {
 }
 
 void CFXSequenceSelect::loop() {
+  const uint32_t loop_start_ms = esphome::millis();
+
+  esphome::App.feed_wdt();
   CFXEventManager::get().flush_pending();
 
+  // CFX-057: Feed WDT before each snapshot copy — these allocate and copy
+  // up to 21 registry entries + 656 effect pointers.
+  esphome::App.feed_wdt();
   const std::vector<CFXSequence *> sequence_snapshot(CFXSequence::instances.begin(),
                                                      CFXSequence::instances.end());
 
@@ -613,6 +623,7 @@ void CFXSequenceSelect::loop() {
     }
   }
 
+  esphome::App.feed_wdt();
   for (auto *seq : sequence_snapshot)
     seq->check_duration();
 
@@ -624,6 +635,7 @@ void CFXSequenceSelect::loop() {
     }
   }
 
+  esphome::App.feed_wdt();
   for (auto *seq : sequence_snapshot) {
     if (seq->has_pending_triggers()) {
       esphome::App.feed_wdt();
@@ -632,6 +644,7 @@ void CFXSequenceSelect::loop() {
     }
   }
 
+  esphome::App.feed_wdt();
   const std::vector<chimera_fx::CFXAddressableLightEffect *> effects_snapshot(
       chimera_fx::CFXAddressableLightEffect::all_effects.begin(),
       chimera_fx::CFXAddressableLightEffect::all_effects.end());
@@ -642,6 +655,7 @@ void CFXSequenceSelect::loop() {
       return;
     }
   }
+  esphome::App.feed_wdt();
   const std::vector<chimera_fx::CFXAddressableLightEffect *> segment_effects_snapshot(
       chimera_fx::CFXAddressableLightEffect::all_segment_effects.begin(),
       chimera_fx::CFXAddressableLightEffect::all_segment_effects.end());
@@ -650,6 +664,21 @@ void CFXSequenceSelect::loop() {
       esphome::App.feed_wdt();
       eff->execute_completion();
       return;
+    }
+  }
+
+  // CFX-057: Loop duration diagnostic — warn if this loop tick exceeded budget.
+  const uint32_t loop_elapsed = esphome::millis() - loop_start_ms;
+  if (loop_elapsed > 80) {
+    static uint8_t loop_warn_count = 0;
+    if (loop_warn_count < 20) {
+      ESP_LOGW(TAG,
+               "CFX-057 loop budget exceeded: %" PRIu32 " ms (seqs=%u effects=%u+%u)",
+               loop_elapsed,
+               static_cast<unsigned>(CFXSequence::instances.size()),
+               static_cast<unsigned>(chimera_fx::CFXAddressableLightEffect::all_effects.size()),
+               static_cast<unsigned>(chimera_fx::CFXAddressableLightEffect::all_segment_effects.size()));
+      loop_warn_count++;
     }
   }
 }
@@ -708,6 +737,12 @@ void CFXSequence::start() {
   // target light with this one. Sequences on independent strips can run in
   // parallel. Previously all sequences were stopped globally, destroying
   // unrelated strips when a new sequence started on any strip.
+  //
+  // CFX-057: Feed WDT before and after the conflict loop. At depth 7 with
+  // 21 registry entries, stop() → clear_active_binding() iterates 656+
+  // effect instances synchronously. Without WDT feeds, the main loop can
+  // stall for 100ms+, triggering a silent ESP32 reset.
+  esphome::App.feed_wdt();
   for (auto *seq : CFXSequence::instances) {
     if (seq == this || !seq->is_running_)
       continue;
@@ -719,9 +754,12 @@ void CFXSequence::start() {
         break;
       }
     }
-    if (conflict)
+    if (conflict) {
+      esphome::App.feed_wdt();
       seq->stop();
+    }
   }
+  esphome::App.feed_wdt();
 
   ESP_LOGD(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
            this->id_.c_str());
@@ -1267,8 +1305,10 @@ void CFXSequence::stop() {
 
   ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
+  esphome::App.feed_wdt(); // CFX-057: before event + binding clear
   this->report_event_stop();
   this->clear_active_binding();
+  esphome::App.feed_wdt(); // CFX-057: after binding clear, before teardown
   this->begin_teardown_(TeardownMode::STOP_RESTORE);
 
   if (this->lights_.empty())
@@ -1296,10 +1336,13 @@ void CFXSequence::complete_and_notify() {
   // Without this, triggers queued in the same frame as effect_complete_ are
   // lost because clear_active_binding() nulls act_->active_sequence before
   // flush_pending_triggers() has a chance to fire them.
+  esphome::App.feed_wdt(); // CFX-057
   this->flush_pending_triggers();
 
+  esphome::App.feed_wdt(); // CFX-057
   this->report_event_stop();
   this->clear_active_binding();
+  esphome::App.feed_wdt(); // CFX-057: after binding clear
   this->begin_teardown_(TeardownMode::COMPLETE_RESTORE);
 
   if (this->lights_.empty())
@@ -1419,6 +1462,10 @@ void CFXSequence::clear_active_binding() {
   // non-null active_sequence. The cfx_stop gate in effect stop() requires
   // active_sequence == nullptr — so those segments silently dropped their
   // cfx_stop and cfx_complete events on sequence stop.
+  //
+  // CFX-057: This iterates ALL effect instances (totals can reach 656+).
+  // Feed WDT periodically to prevent main-loop stall during deep sequences.
+  uint16_t wdt_counter = 0;
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     const bool is_bound_to_sequence = inst->get_active_sequence() == this;
     const bool is_active_owned_light =
@@ -1430,6 +1477,8 @@ void CFXSequence::clear_active_binding() {
       inst->set_suppress_complete_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
+    if (++wdt_counter % 64 == 0)
+      esphome::App.feed_wdt();
   }
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
     const bool is_bound_to_sequence = inst->get_active_sequence() == this;
@@ -1442,6 +1491,8 @@ void CFXSequence::clear_active_binding() {
       inst->set_suppress_complete_event(true);
       inst->set_active_sequence(nullptr, {}, {}, {}, {}, {}, 0);
     }
+    if (++wdt_counter % 64 == 0)
+      esphome::App.feed_wdt();
   }
 }
 
