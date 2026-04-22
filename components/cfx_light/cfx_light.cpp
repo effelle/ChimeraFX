@@ -49,6 +49,11 @@ static RTC_NOINIT_ATTR uint32_t cfx_rtc_crash_magic_;
 static RTC_NOINIT_ATTR uint16_t cfx_rtc_crash_count_;
 static constexpr uint32_t CFX_RTC_MAGIC = 0xCF570057; // "CFX-057"
 
+// CFX-057: Deferred telemetry — captured at boot, logged on first write_state()
+// so the API logger is guaranteed to be connected.
+static esp_reset_reason_t cfx_boot_reset_reason_ = ESP_RST_UNKNOWN;
+static bool cfx_deferred_telemetry_logged_ = false;
+
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
@@ -580,9 +585,13 @@ void CFXLightOutput::setup_spi_() {
              static_cast<unsigned>(cfx_rtc_crash_count_));
   }
 
+  // CFX-057: Capture reset reason for deferred telemetry (logged in write_state
+  // after API connects, since setup_spi_ runs before API is ready).
+  cfx_boot_reset_reason_ = esp_reset_reason();
+
   // CFX-057: Log the EXACT reset reason — this tells us brownout vs WDT vs panic
   const char *rst_reason = "UNKNOWN";
-  switch (esp_reset_reason()) {
+  switch (cfx_boot_reset_reason_) {
     case ESP_RST_POWERON:  rst_reason = "POWER_ON"; break;
     case ESP_RST_SW:       rst_reason = "SOFTWARE"; break;
     case ESP_RST_PANIC:    rst_reason = "PANIC"; break;
@@ -990,6 +999,28 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
+    // CFX-057: Deferred telemetry — log reset reason on first SPI write_state
+    // so user sees it via API (setup_spi_ runs before API connects).
+    if (!cfx_deferred_telemetry_logged_) {
+      cfx_deferred_telemetry_logged_ = true;
+      const char *rst = "UNKNOWN";
+      switch (cfx_boot_reset_reason_) {
+        case ESP_RST_POWERON:  rst = "POWER_ON"; break;
+        case ESP_RST_SW:       rst = "SOFTWARE"; break;
+        case ESP_RST_PANIC:    rst = "PANIC"; break;
+        case ESP_RST_INT_WDT:  rst = "INT_WDT"; break;
+        case ESP_RST_TASK_WDT: rst = "TASK_WDT"; break;
+        case ESP_RST_WDT:      rst = "OTHER_WDT"; break;
+        case ESP_RST_BROWNOUT:  rst = "BROWNOUT"; break;
+        default: break;
+      }
+      ESP_LOGW(TAG,
+               "CFX-057 DEFERRED TELEMETRY: Last reset reason = %s (code=%d), "
+               "crash_count=%u, stack_hwm=%u",
+               rst, (int)cfx_boot_reset_reason_,
+               (unsigned)cfx_rtc_crash_count_,
+               (unsigned)uxTaskGetStackHighWaterMark(nullptr));
+    }
     esphome::App.feed_wdt(); // CFX-057: before blocking SPI transmit
     this->flush_spi_();
   } else {
