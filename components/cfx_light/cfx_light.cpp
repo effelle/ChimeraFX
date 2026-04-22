@@ -25,7 +25,6 @@
 #include "esphome/core/log.h"
 #include <cmath>
 #include <driver/gpio.h>
-#include <soc/gpio_struct.h>
 #include <esp_system.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
@@ -105,6 +104,13 @@ static uint32_t count_active_cfx_effects() {
 
   return active_count;
 }
+
+// CFX-057: Maximum active effects before SPI flush is suppressed.
+// Root cause: electrical interaction between the SPI strip and the ESP32 under
+// heavy RMT load (7+ channels) causes a hardware reset. The software is proven
+// stable (skip-transmit test survived 18+ seconds at depth 8). This gate freezes
+// the SPI strip on its last valid frame during peak load.
+static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 7;
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
@@ -515,29 +521,40 @@ void CFXLightOutput::setup_spi_() {
   }
   memset(this->spi_frame_buf_, 0, frame_size);
 
-  // CFX-057 ELIMINATION TEST C: Skip SPI driver entirely.
-  // No spi_bus_initialize (ISR, peripheral), no spi_bus_add_device.
-  // Just configure GPIO pins as outputs and use bit-bang transmit.
-  // If this crashes → purely electrical (pin toggling / LED current).
-  // If stable → the SPI driver's ISR or peripheral state is the issue.
-  // REMOVE AFTER DIAGNOSIS.
-  gpio_reset_pin(static_cast<gpio_num_t>(this->spi_data_pin_));
-  gpio_set_direction(static_cast<gpio_num_t>(this->spi_data_pin_),
-                     GPIO_MODE_OUTPUT);
-  gpio_set_level(static_cast<gpio_num_t>(this->spi_data_pin_), 0);
-  gpio_reset_pin(static_cast<gpio_num_t>(this->spi_clock_pin_));
-  gpio_set_direction(static_cast<gpio_num_t>(this->spi_clock_pin_),
-                     GPIO_MODE_OUTPUT);
-  gpio_set_level(static_cast<gpio_num_t>(this->spi_clock_pin_), 0);
+  spi_host_device_t host = resolve_spi_host_(this->spi_host_);
 
-  // spi_device_ remains nullptr — wait_for_spi_tx_() handles this (returns true).
+  spi_bus_config_t bus_cfg = {};
+  bus_cfg.mosi_io_num = this->spi_data_pin_;
+  bus_cfg.miso_io_num = -1;   // not needed
+  bus_cfg.sclk_io_num = this->spi_clock_pin_;
+  bus_cfg.quadwp_io_num = -1;
+  bus_cfg.quadhd_io_num = -1;
+  bus_cfg.max_transfer_sz = frame_size;
+
+  esp_err_t err = spi_bus_initialize(host, &bus_cfg, SPI_DMA_CH_AUTO);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "SPI bus init failed (err=%d, data=GPIO%u clock=GPIO%u)",
+             err, this->spi_data_pin_, this->spi_clock_pin_);
+    this->mark_failed();
+    return;
+  }
+
+  spi_device_interface_config_t dev_cfg = {};
+  dev_cfg.clock_speed_hz = this->spi_speed_hz_;
+  dev_cfg.mode = 0;             // CPOL=0, CPHA=0
+  dev_cfg.spics_io_num = -1;    // APA102/SK9822 have no CS line
+  dev_cfg.queue_size = 1;
+  dev_cfg.flags = SPI_DEVICE_NO_DUMMY;  // required for long strips
+
+  err = spi_bus_add_device(host, &dev_cfg, &this->spi_device_);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "SPI device add failed (err=%d)", err);
+    this->mark_failed();
+    return;
+  }
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
-  // CFX-057: Reconfigure SPI pins as GPIO outputs for software bit-bang.
-  // The SPI peripheral (with or without DMA) causes crashes when 7+ RMT
-  // channels are active. We keep the SPI device handle for wait_for_spi_tx_
-  // compatibility but route the actual pins through GPIO for direct control.
   gpio_set_direction(static_cast<gpio_num_t>(this->spi_data_pin_),
                      GPIO_MODE_OUTPUT);
   gpio_set_direction(static_cast<gpio_num_t>(this->spi_clock_pin_),
@@ -1078,9 +1095,6 @@ void CFXLightOutput::flush_spi_() {
     return;
   }
 
-  memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
-  this->spi_trans_.length = this->get_spi_frame_size_() * 8; // length in bits
-  this->spi_trans_.tx_buffer = this->spi_frame_buf_;
 
   uint8_t *ptr = this->spi_frame_buf_;
 
@@ -1111,29 +1125,37 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 ELIMINATION TEST C: Bit-bang transmit without ANY SPI driver.
+  // CFX-057 FIX: Depth gate — suppress SPI transmit when too many effects active.
+  // Root cause: electrical interaction between SPI strip and ESP32 under heavy
+  // RMT load causes hardware reset. Skip-transmit is proven stable at depth 8+.
+  // The SPI strip freezes on its last valid frame during peak load.
+  const uint32_t active_now = count_active_cfx_effects();
+  if (active_now >= CFX_SPI_MAX_ACTIVE_EFFECTS) {
+    esp_err_t err = ESP_OK;
+    const uint32_t tx_end_us = micros();
+    const uint32_t build_us = tx_end_us - flush_start_us;
+    static uint8_t gate_log_count = 0;
+    if (gate_log_count < 8) {
+      ESP_LOGD(TAG, "SPI depth-gate: active=%u >= %u, skipping transmit (build=%luus)",
+               (unsigned)active_now, (unsigned)CFX_SPI_MAX_ACTIVE_EFFECTS,
+               (unsigned long)build_us);
+      gate_log_count++;
+    }
+    // Update timestamp so throttle logic stays consistent
+    this->spi_tx_in_flight_ = false;
+    this->spi_last_flush_ms_ = esphome::millis();
+    return;
+  }
+
+  // Normal SPI transmit — safe because active effects < threshold
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
-  const uint32_t clk_mask = (1UL << this->spi_clock_pin_);
-  const uint32_t dat_mask = (1UL << this->spi_data_pin_);
-  const size_t total_bytes = this->get_spi_frame_size_();
-  const uint8_t *data = this->spi_frame_buf_;
+  memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
+  this->spi_trans_.length = this->get_spi_frame_size_() * 8;
+  this->spi_trans_.tx_buffer = this->spi_frame_buf_;
+  esp_err_t err = spi_device_polling_transmit(this->spi_device_, &this->spi_trans_);
 
-  for (size_t b = 0; b < total_bytes; b++) {
-    uint8_t byte = data[b];
-    for (int bit = 7; bit >= 0; bit--) {
-      if (byte & (1 << bit)) {
-        GPIO.out_w1ts = dat_mask;
-      } else {
-        GPIO.out_w1tc = dat_mask;
-      }
-      GPIO.out_w1ts = clk_mask;
-      GPIO.out_w1tc = clk_mask;
-    }
-  }
-
-  esp_err_t err = ESP_OK;
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
