@@ -1071,11 +1071,20 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // Diagnostic mode: block until the SPI frame has fully completed so the
-  // DMA buffer/transaction lifetime is unquestionably correct.
+  // CFX-057 ELIMINATION TEST: Skip actual SPI DMA to isolate hardware vs software.
+  // If crash STOPS with this enabled → root cause is SPI DMA / bus contention.
+  // If crash PERSISTS → root cause is pure software (concurrency, memory, scheduling).
+  // REMOVE THIS AFTER DIAGNOSIS.
+#define CFX_057_SKIP_SPI_TRANSMIT 1  // Set to 0 to re-enable SPI transmit
+
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
+#if CFX_057_SKIP_SPI_TRANSMIT
+  esp_err_t err = ESP_OK;  // Simulate success — all buffer logic ran, just no DMA
+  (void)this->spi_trans_;  // Suppress unused warning
+#else
   esp_err_t err = spi_device_transmit(this->spi_device_, &this->spi_trans_);
+#endif
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
