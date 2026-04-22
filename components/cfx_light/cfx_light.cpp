@@ -1038,6 +1038,28 @@ void CFXLightOutput::flush_rmt_() {
 // --- SPI Transport Flush ---
 
 void CFXLightOutput::flush_spi_() {
+  // CFX-057: One-shot crash telemetry — logs reset reason on first flush call.
+  // Must be here (not setup) because API isn't connected during setup.
+  static bool telemetry_logged = false;
+  if (!telemetry_logged) {
+    telemetry_logged = true;
+    const char *rst = "?";
+    switch (esp_reset_reason()) {
+      case ESP_RST_POWERON:  rst = "POWER_ON"; break;
+      case ESP_RST_SW:       rst = "SW"; break;
+      case ESP_RST_PANIC:    rst = "PANIC"; break;
+      case ESP_RST_INT_WDT:  rst = "INT_WDT"; break;
+      case ESP_RST_TASK_WDT: rst = "TASK_WDT"; break;
+      case ESP_RST_WDT:      rst = "WDT"; break;
+      case ESP_RST_BROWNOUT: rst = "BROWNOUT"; break;
+      default: break;
+    }
+    ESP_LOGW(TAG, "CFX-057 TELEMETRY: reset_reason=%s(%d) stack_hwm=%u heap=%u",
+             rst, (int)esp_reset_reason(),
+             (unsigned)uxTaskGetStackHighWaterMark(nullptr),
+             (unsigned)esp_get_free_heap_size());
+  }
+
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
   if (this->spi_diag_flush_logs_ < 6) {
