@@ -45,6 +45,23 @@ public:
 private:
   CFXSequence *previous_;
 };
+
+static void ensure_sequence_registry_capacity_(size_t extra_slots,
+                                               const char *reason) {
+  auto &registry = CFXSequence::instances;
+  const size_t needed = registry.size() + extra_slots;
+  if (registry.capacity() >= needed)
+    return;
+
+  size_t target = needed + 8;
+  registry.reserve(target);
+  ESP_LOGW("cfx_run",
+           "Sequence registry reserve[%s]: size=%u capacity=%u target=%u",
+           reason != nullptr ? reason : "?",
+           static_cast<unsigned>(registry.size()),
+           static_cast<unsigned>(registry.capacity()),
+           static_cast<unsigned>(target));
+}
 }  // namespace
 
 static light::ColorMode resolve_cfx_call_color_mode(light::LightState *light,
@@ -111,6 +128,7 @@ CFXRunPool &CFXRunPool::get() {
 void CFXRunPool::ensure_initialized_() {
   if (this->initialized_) return;
   this->initialized_ = true;
+  ensure_sequence_registry_capacity_(POOL_SIZE + 8, "pool-init");
   for (uint8_t i = 0; i < POOL_SIZE; i++) {
     // Heap-allocate each slot sequence once. They live for the firmware lifetime.
     // Using a placeholder id/name/effect — overwritten on each claim().
@@ -126,6 +144,7 @@ void CFXRunPool::ensure_initialized_() {
 
 CFXSequence *CFXRunPool::claim(uint8_t depth) {
   ensure_initialized_();
+  ensure_sequence_registry_capacity_(1, "claim");
 
   if (depth >= CFX_RUN_MAX_DEPTH) {
     ESP_LOGW("cfx_run", "Max nesting depth %u reached — cfx_run suppressed",
@@ -143,7 +162,11 @@ CFXSequence *CFXRunPool::claim(uint8_t depth) {
       seq->completion_reported_ = false; // reset here, not in release() — avoids race with deferred callbacks
       // Register in the global instances list for the duration of this run.
       CFXSequence::instances.push_back(seq);
-      ESP_LOGD("cfx_run", "Pool slot %u claimed (depth %u)", i, depth);
+      ESP_LOGD("cfx_run",
+               "Pool slot %u claimed (depth %u, registry size=%u cap=%u)",
+               i, depth,
+               static_cast<unsigned>(CFXSequence::instances.size()),
+               static_cast<unsigned>(CFXSequence::instances.capacity()));
       return seq;
     }
   }
@@ -208,7 +231,9 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->last_fired_milestone_ = 0;
       seq->last_triggered_percentage_ = -1.0f;
       seq->last_triggered_pixel_ = -1;
-      ESP_LOGD("cfx_run", "Pool slot %u released", i);
+      ESP_LOGD("cfx_run", "Pool slot %u released (registry size=%u cap=%u)", i,
+               static_cast<unsigned>(CFXSequence::instances.size()),
+               static_cast<unsigned>(CFXSequence::instances.capacity()));
       return;
     }
   }
