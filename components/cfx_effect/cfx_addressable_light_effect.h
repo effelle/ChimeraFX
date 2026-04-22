@@ -115,6 +115,7 @@ public:
 
     std::string strip_tag{};
     uint8_t spi_diag_apply_logs{0};
+    uint8_t spi_diag_bind_logs{0};
     // Cached once in start() — avoids a heap-allocated std::string every frame
     // in apply() (audit 1.1).
     std::string cached_runner_name{};

@@ -1292,20 +1292,19 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (diag_out != nullptr && diag_out->is_spi_transport() &&
       this->act_->spi_diag_apply_logs < 6) {
+    std::string seq_name_storage = "-";
 #ifdef USE_CFX_SEQUENCE
-    const char *seq_name =
-        (this->act_->active_sequence != nullptr)
-            ? this->act_->active_sequence->get_name().c_str()
-            : "-";
-#else
-    const char *seq_name = "-";
+    if (this->act_->active_sequence != nullptr) {
+      seq_name_storage = this->act_->active_sequence->get_name();
+    }
 #endif
     ESP_LOGW("chimera_fx",
-             "SPI diag apply[%u]: runner=%s tag=%s seq=%s mono_idle=%d "
-             "intro=%d outro=%d completion=%d",
+             "SPI diag apply[%u]: runner=%s tag=%s seq=%s seq_ptr=%p act=%p "
+             "mono_idle=%d intro=%d outro=%d completion=%d",
              static_cast<unsigned>(this->act_->spi_diag_apply_logs),
              this->act_->cached_runner_name.c_str(),
-             this->act_->strip_tag.c_str(), seq_name, this->act_->mono_idle,
+             this->act_->strip_tag.c_str(), seq_name_storage.c_str(),
+             this->act_->active_sequence, this->act_, this->act_->mono_idle,
              this->act_->intro_active, this->act_->outro_active,
              this->act_->completion_pending);
     this->act_->spi_diag_apply_logs++;
@@ -6598,6 +6597,34 @@ void CFXAddressableLightEffect::set_active_sequence(CFXSequence *seq,
         "set_active_sequence: act_ is null (effect not running), skipping");
     return;
   }
+
+  cfx_light::CFXLightOutput *diag_out = nullptr;
+  if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+        this->get_addressable_());
+    if (vseg != nullptr)
+      diag_out = vseg->get_parent();
+#endif
+  } else {
+    diag_out = static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+  }
+
+  if (diag_out != nullptr && diag_out->is_spi_transport() &&
+      this->act_->spi_diag_bind_logs < 10) {
+    std::string seq_name_storage = (seq != nullptr) ? seq->get_name() : "-";
+    std::string seq_id_storage = (seq != nullptr) ? seq->get_id() : "-";
+    ESP_LOGW("cfx_seq",
+             "SPI diag bind[%u]: effect=%s tag=%s seq=%s id=%s seq_ptr=%p "
+             "act=%p runner=%p iter=%" PRIu32 " spd=%d int=%d pal=%d mir=%d auto=%d",
+             static_cast<unsigned>(this->act_->spi_diag_bind_logs),
+             this->act_->cached_runner_name.c_str(), this->act_->strip_tag.c_str(),
+             seq_name_storage.c_str(), seq_id_storage.c_str(), seq, this->act_,
+             this->act_->runner, itr, spd.has_value(), iten.has_value(),
+             pal.has_value(), mir.has_value(), autotune.has_value());
+    this->act_->spi_diag_bind_logs++;
+  }
+
   act_->active_sequence = seq;
   act_->sequence_speed = spd;
   act_->sequence_intensity = iten;
