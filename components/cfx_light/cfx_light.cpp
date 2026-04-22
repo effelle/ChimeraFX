@@ -101,12 +101,6 @@ static uint32_t count_active_main_effects() {
   return active_count;
 }
 
-// CFX-057: Maximum active effects before SPI flush is suppressed.
-// Root cause: electrical interaction between the SPI strip and the ESP32 under
-// heavy RMT load (7+ channels) causes a hardware reset. The software is proven
-// stable (skip-transmit test survived 18+ seconds at depth 8). This gate freezes
-// the SPI strip on its last valid frame during peak load.
-static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 6;
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
@@ -533,6 +527,19 @@ void CFXLightOutput::setup_spi_() {
              err, this->spi_data_pin_, this->spi_clock_pin_);
     this->mark_failed();
     return;
+  }
+
+  // CFX-057: Cap SPI clock speed for level shifter compatibility.
+  // Common MOSFET-based level shifters (BSS138) max out at ~4-5 MHz.
+  // Under heavy RMT EMI load (7+ channels), even marginal signal degradation
+  // at high SPI clock speeds causes hardware resets. 2 MHz is safe and
+  // only adds ~0.6ms to the transfer (1.1ms vs 0.5ms at 10 MHz).
+  static constexpr uint32_t CFX_SPI_MAX_CLOCK_HZ = 2000000;  // 2 MHz
+  if (this->spi_speed_hz_ > CFX_SPI_MAX_CLOCK_HZ) {
+    ESP_LOGW(TAG, "SPI clock capped: %u Hz -> %u Hz (level shifter safe)",
+             static_cast<unsigned>(this->spi_speed_hz_),
+             static_cast<unsigned>(CFX_SPI_MAX_CLOCK_HZ));
+    this->spi_speed_hz_ = CFX_SPI_MAX_CLOCK_HZ;
   }
 
   spi_device_interface_config_t dev_cfg = {};
@@ -1116,27 +1123,6 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 FIX: Depth gate — suppress SPI transmit when too many effects active.
-  // Root cause: electrical interaction between SPI strip and ESP32 under heavy
-  // RMT load causes hardware reset. Skip-transmit is proven stable at depth 8+.
-  // The SPI strip freezes on its last valid frame during peak load.
-  const uint32_t active_now = count_active_main_effects();
-  if (active_now >= CFX_SPI_MAX_ACTIVE_EFFECTS) {
-    esp_err_t err = ESP_OK;
-    const uint32_t tx_end_us = micros();
-    const uint32_t build_us = tx_end_us - flush_start_us;
-    static uint8_t gate_log_count = 0;
-    if (gate_log_count < 8) {
-      ESP_LOGD(TAG, "SPI depth-gate: active=%u >= %u, skipping transmit (build=%luus)",
-               (unsigned)active_now, (unsigned)CFX_SPI_MAX_ACTIVE_EFFECTS,
-               (unsigned long)build_us);
-      gate_log_count++;
-    }
-    // Update timestamp so throttle logic stays consistent
-    this->spi_tx_in_flight_ = false;
-    this->spi_last_flush_ms_ = esphome::millis();
-    return;
-  }
 
   // Normal SPI transmit — safe because active effects < threshold
   const uint32_t tx_start_us = micros();
