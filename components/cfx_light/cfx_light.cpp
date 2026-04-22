@@ -27,6 +27,7 @@
 #include <driver/gpio.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
+#include <esp_ota_ops.h>
 #include <soc/rtc_cntl_reg.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
@@ -564,6 +565,12 @@ void CFXLightOutput::setup_spi_() {
   }
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
+
+  // CFX-057 CRITICAL: Force-mark this OTA partition as valid IMMEDIATELY.
+  // Without this, the crash happens before ESPHome's 10-second safe_mode
+  // window, causing rollback to old firmware (without diagnostics).
+  // REMOVE AFTER DIAGNOSIS.
+  esp_ota_mark_app_valid_cancel_rollback();
 
   // CFX-057 DIAGNOSTIC: Disable brownout detector AND watchdog timers.
   // Brownout already disproved — still crashes with brownout disabled.
