@@ -841,7 +841,11 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #ifdef USE_CFX_SEQUENCE
     if (active_cfx_effect != nullptr &&
         active_cfx_effect->get_active_sequence() != nullptr) {
-      const uint32_t active_effects = count_active_main_effects();
+      uint32_t active_effects = 0;
+      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+        if (inst != nullptr && inst->get_act() != nullptr)
+          active_effects++;
+      }
       const uint32_t throttle_ms =
           compute_spi_sequence_throttle_ms(active_effects);
       const uint32_t now_ms = esphome::millis();
