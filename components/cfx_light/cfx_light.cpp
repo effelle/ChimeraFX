@@ -541,7 +541,7 @@ void CFXLightOutput::on_master_update() {
     return;
   }
 
-  ESP_LOGD(
+  ESP_LOGV(
       "cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
       this->is_syncing_, (int)this->master_light_state_->remote_values.is_on(),
       (int)this->prev_master_state_);
@@ -580,7 +580,7 @@ void CFXLightOutput::on_master_update() {
       if (bright_changed)
         call.set_brightness(master_brightness);
 
-      ESP_LOGD("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
+      ESP_LOGV("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
                seg_state->get_name().c_str(), master_on);
       call.perform();
     }
@@ -610,7 +610,7 @@ void CFXLightOutput::on_segment_update() {
     }
   }
 
-  ESP_LOGD("cfx_dbg",
+  ESP_LOGV("cfx_dbg",
            "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
            master_on, is_any_segment_on,
            (int)this->segment_light_states_.size() > 0
@@ -634,7 +634,7 @@ void CFXLightOutput::on_segment_update() {
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
     call.set_transition_length(0);
-    ESP_LOGD("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
+    ESP_LOGV("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
              is_any_segment_on);
     call.perform();
   }

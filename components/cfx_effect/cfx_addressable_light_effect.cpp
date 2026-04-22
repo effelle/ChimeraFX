@@ -304,7 +304,7 @@ void CFXAddressableLightEffect::start() {
   }
 
   // CFX-043: Monitor heap health during start()
-  ESP_LOGI("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
+  ESP_LOGD("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
            this->get_name().c_str(),
            (uint32_t)heap_caps_get_free_size(MALLOC_CAP_8BIT),
            (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
@@ -511,7 +511,7 @@ void CFXAddressableLightEffect::start() {
             act_->runner = act_->segment_runners[0];
             act_->segments_initialized = true;
           }
-          ESP_LOGI("chimera_fx", "Multi-segment mode: %u runners created for %s",
+          ESP_LOGD("chimera_fx", "Multi-segment mode: %u runners created for %s",
                    act_->segment_runners.size(), this->get_name());
         } else {
 #endif
@@ -527,7 +527,7 @@ void CFXAddressableLightEffect::start() {
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
             this->update_interval_);
-        ESP_LOGI("chimera_fx",
+        ESP_LOGD("chimera_fx",
                  "Single-segment mode runner created for %s (Bake: %d)",
                  this->get_name(), this->is_virtual_segment_);
 
@@ -6754,7 +6754,7 @@ void CFXAddressableLightEffect::check_positional_triggers(
       }
 
       if (crossed) {
-        ESP_LOGD(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
+        ESP_LOGV(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
                  this->get_name(), this, target * 100.0f);
         t->trigger(current_percentage);
       }

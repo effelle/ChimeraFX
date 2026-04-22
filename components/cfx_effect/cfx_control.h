@@ -192,7 +192,7 @@ public:
       if (r == runner)
         return;
     }
-    ESP_LOGD("chimera_fx",
+    ESP_LOGV("chimera_fx",
              "Registering runner %p to control center %p. Initial debug: %d",
              runner, this, global_debug_enabled_);
     this->runners_.push_back(runner);

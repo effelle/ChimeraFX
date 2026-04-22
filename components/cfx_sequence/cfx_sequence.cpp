@@ -221,7 +221,7 @@ CFXSequence *CFXRunPool::claim(uint8_t depth) {
       seq->completion_reported_ = false; // reset here, not in release() — avoids race with deferred callbacks
       // Register in the global instances list for the duration of this run.
       CFXSequence::instances.push_back(seq);
-      ESP_LOGD("cfx_run",
+      ESP_LOGV("cfx_run",
                "Pool slot %u claimed (depth %u, registry size=%u cap=%u)",
                i, depth,
                static_cast<unsigned>(CFXSequence::instances.size()),
@@ -294,7 +294,7 @@ void CFXRunPool::release(CFXSequence *seq) {
       seq->last_fired_milestone_ = 0;
       seq->last_triggered_percentage_ = -1.0f;
       seq->last_triggered_pixel_ = -1;
-      ESP_LOGD("cfx_run", "Pool slot %u released (registry size=%u cap=%u)", i,
+      ESP_LOGV("cfx_run", "Pool slot %u released (registry size=%u cap=%u)", i,
                static_cast<unsigned>(CFXSequence::instances.size()),
                static_cast<unsigned>(CFXSequence::instances.capacity()));
       return;
@@ -380,7 +380,7 @@ void CfxRunActionBase::do_play_() {
 
   seq->add_light(this->light_);
 
-  ESP_LOGD("cfx_run", "Spawning '%s' on '%s' (depth %u, iter %u)",
+  ESP_LOGV("cfx_run", "Spawning '%s' on '%s' (depth %u, iter %u)",
            this->effect_.c_str(),
            this->light_->get_name().c_str(),
            effective_depth,
@@ -389,7 +389,7 @@ void CfxRunActionBase::do_play_() {
   if (CFXSequenceSelect::instance != nullptr &&
       should_defer_pool_sequence_start_(this->light_)) {
     uint32_t start_hash = esphome::fnv1_hash(seq->get_id() + "_deferred_start");
-    ESP_LOGD("cfx_run", "Deferring start of '%s' on '%s' to next scheduler tick",
+    ESP_LOGV("cfx_run", "Deferring start of '%s' on '%s' to next scheduler tick",
              this->effect_.c_str(), this->light_->get_name().c_str());
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, start_hash, 0,
                                        [seq]() {
@@ -589,7 +589,7 @@ void CFXSequenceSelect::setup() {
       return;
 
     if (value == "None") {
-      ESP_LOGD(TAG, "Active Sequence Select: 'None'");
+      ESP_LOGV(TAG, "Active Sequence Select: 'None'");
       for (auto *seq : CFXSequence::instances) {
         if (seq->is_running() || seq->is_starting()) {
           seq->stop();
@@ -601,7 +601,7 @@ void CFXSequenceSelect::setup() {
       for (auto *seq : CFXSequence::instances) {
         if (seq->get_name() == value) {
           if (!seq->is_starting()) {
-            ESP_LOGD(TAG, "Active Sequence Select: '%s' (ID: %s)",
+            ESP_LOGV(TAG, "Active Sequence Select: '%s' (ID: %s)",
                      value.c_str(), seq->get_id().c_str());
             seq->start();
           }
@@ -774,7 +774,7 @@ void CFXSequence::start() {
   }
   esphome::App.feed_wdt();
 
-  ESP_LOGD(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
+  ESP_LOGV(TAG, "Starting CFX Sequence '%s' (%s)...", this->name_.c_str(),
            this->id_.c_str());
 
   this->report_event_begin();
@@ -833,7 +833,8 @@ void CFXSequence::start() {
   // Rebuild per-instance milestone event strings now that strip_tag_ is known.
   // Each CFXSequence instance maintains its own strings — no singleton shared state.
   if (!this->strip_tag_.empty()) {
-    ESP_LOGD(TAG, "  Strip tag '%s': building per-instance milestone strings", this->strip_tag_.c_str());
+    ESP_LOGV(TAG, "  Strip tag '%s': building per-instance milestone strings",
+             this->strip_tag_.c_str());
     this->rebuild_milestone_strings_();
     this->reset_milestones_();
   }
@@ -867,7 +868,7 @@ void CFXSequence::start() {
       // Feed WDT immediately on entering the staggered task
       esphome::App.feed_wdt();
 
-      ESP_LOGD(TAG, "  Executing stagger task '%s' for light '%s'",
+      ESP_LOGV(TAG, "  Executing stagger task '%s' for light '%s'",
                task_name.c_str(), l->get_name().c_str());
 
       // CFX-053: Apply presets to the effect instance BEFORE call.perform()
@@ -1017,23 +1018,26 @@ bool CFXSequence::try_bind_effects_() {
   }
 
   if (any_bound) {
-    ESP_LOGD(TAG, "Sequence '%s': binding verified (auto-bind succeeded)", this->name_.c_str());
+    ESP_LOGV(TAG, "Sequence '%s': binding verified (auto-bind succeeded)",
+             this->name_.c_str());
     return true;
   }
 
   // Auto-bind missed — try manual binding via active effect on each light.
-  ESP_LOGD(TAG, "Sequence '%s': auto-bind missed, attempting manual bind...", this->name_.c_str());
+  ESP_LOGV(TAG, "Sequence '%s': auto-bind missed, attempting manual bind...",
+           this->name_.c_str());
   for (auto *l : this->lights_) {
     light::LightEffect *active = chimera_fx::LightStateProxy::get_active_effect(l);
     if (active == nullptr) {
-      ESP_LOGD(TAG, "  Light '%s': no active effect", l->get_name().c_str());
+      ESP_LOGV(TAG, "  Light '%s': no active effect", l->get_name().c_str());
       continue;
     }
 
     // Search all_effects
     for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
       if (inst == active) {
-        ESP_LOGD(TAG, "  Binding to Effect %p on '%s' (manual)", inst, l->get_name().c_str());
+        ESP_LOGV(TAG, "  Binding to Effect %p on '%s' (manual)", inst,
+                 l->get_name().c_str());
         this->apply_binding_to_effect_(inst);
         any_bound = true;
         break;
@@ -1044,7 +1048,8 @@ bool CFXSequence::try_bind_effects_() {
     // Search all_segment_effects
     for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
       if (inst == active) {
-        ESP_LOGD(TAG, "  Binding to segment Effect %p on '%s' (manual)", inst, l->get_name().c_str());
+        ESP_LOGV(TAG, "  Binding to segment Effect %p on '%s' (manual)", inst,
+                 l->get_name().c_str());
         this->apply_binding_to_effect_(inst);
         any_bound = true;
         break;
@@ -1063,7 +1068,8 @@ bool CFXSequence::try_bind_effects_() {
               chimera_fx::LightStateProxy::get_active_effect(master_ls);
           for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
             if (inst == master_active) {
-              ESP_LOGD(TAG, "  Binding to parent Effect %p (segment '%s', manual)",
+              ESP_LOGV(TAG,
+                       "  Binding to parent Effect %p (segment '%s', manual)",
                        inst, s->get_segment_id().c_str());
               this->apply_binding_to_effect_(inst);
               any_bound = true;
@@ -1095,7 +1101,8 @@ bool CFXSequence::try_bind_effects_() {
         }
       }
       if (found) {
-        ESP_LOGD(TAG, "Sequence '%s': binding verified on retry", this->name_.c_str());
+        ESP_LOGV(TAG, "Sequence '%s': binding verified on retry",
+                 this->name_.c_str());
         return;
       }
 
@@ -1316,7 +1323,7 @@ void CFXSequence::stop() {
   this->is_running_ = false;
   this->duration_complete_fired_ = false;
 
-  ESP_LOGD(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
+  ESP_LOGV(TAG, "Stopping CFX Sequence '%s'...", this->name_.c_str());
 
   esphome::App.feed_wdt(); // CFX-057: before event + binding clear
   this->report_event_stop();
@@ -1343,7 +1350,8 @@ void CFXSequence::complete_and_notify() {
   this->duration_complete_fired_ = false;
   this->duration_completion_pending_ = false; // CFX-044c: Reset after handling
 
-  ESP_LOGD(TAG, "Sequence '%s': completing (effect done)...", this->name_.c_str());
+  ESP_LOGV(TAG, "Sequence '%s': completing (effect done)...",
+           this->name_.c_str());
 
   // CFX-053: Drain any last-frame on_cfx_reach triggers BEFORE teardown.
   // Without this, triggers queued in the same frame as effect_complete_ are
@@ -1607,7 +1615,8 @@ void CFXSequence::check_duration() {
   if (this->duration_complete_fired_ || this->duration_completion_pending_)
     return;
   if ((millis() - this->duration_start_ms_) >= this->duration_ms_) {
-    ESP_LOGD(TAG, "Sequence '%s': duration %u ms elapsed — marking for worker completion",
+    ESP_LOGV(TAG,
+             "Sequence '%s': duration %u ms elapsed — marking for worker completion",
              this->name_.c_str(), this->duration_ms_);
     this->duration_complete_fired_ = true;
     this->duration_completion_pending_ = true; // CFX-044c: Defer to worker
