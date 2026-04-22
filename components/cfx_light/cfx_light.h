@@ -325,6 +325,9 @@ protected:
   uint32_t spi_queue_error_count_{0};
   uint8_t spi_diag_write_logs_{0};
   uint8_t spi_diag_flush_logs_{0};
+  uint8_t spi_diag_timing_logs_{0};
+  uint8_t spi_diag_throttle_logs_{0};
+  uint32_t spi_last_flush_ms_{0};
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};

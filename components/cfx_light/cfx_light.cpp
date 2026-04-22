@@ -53,6 +53,64 @@ static uint32_t rmt_resolution_hz() {
   return freq;
 }
 
+static chimera_fx::CFXAddressableLightEffect *
+resolve_active_cfx_effect(light::LightState *state) {
+  if (state == nullptr) {
+    return nullptr;
+  }
+
+  light::LightEffect *effect = chimera_fx::LightStateProxy::get_active_effect(state);
+  if (effect == nullptr) {
+    return nullptr;
+  }
+
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst == effect) {
+      return inst;
+    }
+  }
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+    if (inst == effect) {
+      return inst;
+    }
+  }
+
+  return nullptr;
+}
+
+static uint32_t count_active_cfx_effects() {
+  uint32_t active_count = 0;
+
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
+    if (inst != nullptr && inst->get_act() != nullptr) {
+      active_count++;
+    }
+  }
+  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+    if (inst != nullptr && inst->get_act() != nullptr) {
+      active_count++;
+    }
+  }
+
+  return active_count;
+}
+
+static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
+  if (active_effects >= 8) {
+    return 75;
+  }
+  if (active_effects >= 6) {
+    return 60;
+  }
+  if (active_effects >= 4) {
+    return 45;
+  }
+  if (active_effects >= 2) {
+    return 35;
+  }
+  return 0;
+}
+
 // --- Core Control Loop & Initialization ---
 
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
@@ -788,6 +846,41 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   this->status_clear_warning();
 
+  chimera_fx::CFXAddressableLightEffect *active_cfx_effect = nullptr;
+  if (this->is_spi_transport() && this->outro_cbs_.empty()) {
+    active_cfx_effect = resolve_active_cfx_effect(this->state_parent_);
+#ifdef USE_CFX_SEQUENCE
+    if (active_cfx_effect != nullptr &&
+        active_cfx_effect->get_active_sequence() != nullptr) {
+      const uint32_t active_effects = count_active_cfx_effects();
+      const uint32_t throttle_ms =
+          compute_spi_sequence_throttle_ms(active_effects);
+      const uint32_t now_ms = esphome::millis();
+
+      if (throttle_ms > 0 && this->spi_last_flush_ms_ != 0 &&
+          (now_ms - this->spi_last_flush_ms_) < throttle_ms) {
+        if (this->spi_diag_throttle_logs_ < 12) {
+          const char *light_name =
+              (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                               : "<spi>";
+          ESP_LOGW(TAG,
+                   "SPI diag throttle[%u]: light=%s seq=%p active_fx=%u "
+                   "wait=%" PRIu32 "ms since_last=%" PRIu32 "ms state_ptr=%p",
+                   static_cast<unsigned>(this->spi_diag_throttle_logs_),
+                   light_name, active_cfx_effect->get_active_sequence(),
+                   static_cast<unsigned>(active_effects), throttle_ms,
+                   now_ms - this->spi_last_flush_ms_, state);
+          this->spi_diag_throttle_logs_++;
+        }
+        if (state != nullptr) {
+          this->schedule_show();
+        }
+        return;
+      }
+    }
+#endif
+  }
+
   // Protect from refreshing too often
   uint32_t now = micros();
   if (*this->max_refresh_rate_ != 0 &&
@@ -901,6 +994,7 @@ void CFXLightOutput::flush_rmt_() {
 
 void CFXLightOutput::flush_spi_() {
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
+  const uint32_t flush_start_us = micros();
   if (this->spi_diag_flush_logs_ < 6) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
@@ -952,7 +1046,30 @@ void CFXLightOutput::flush_spi_() {
 
   // Diagnostic mode: block until the SPI frame has fully completed so the
   // DMA buffer/transaction lifetime is unquestionably correct.
+  const uint32_t tx_start_us = micros();
+  esphome::App.feed_wdt();
   esp_err_t err = spi_device_transmit(this->spi_device_, &this->spi_trans_);
+  const uint32_t tx_end_us = micros();
+  esphome::App.feed_wdt();
+
+  const uint32_t build_us = tx_start_us - flush_start_us;
+  const uint32_t tx_us = tx_end_us - tx_start_us;
+  const uint32_t total_us = tx_end_us - flush_start_us;
+  if (this->spi_diag_timing_logs_ < 12 || tx_us > 2000 || total_us > 4000) {
+    const char *light_name =
+        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                         : "<spi>";
+    ESP_LOGW(TAG,
+             "SPI diag timing[%u]: light=%s build=%" PRIu32 "us tx=%" PRIu32
+             "us total=%" PRIu32 "us frame=%u err=%d",
+             static_cast<unsigned>(this->spi_diag_timing_logs_), light_name,
+             build_us, tx_us, total_us,
+             static_cast<unsigned>(this->get_spi_frame_size_()), err);
+    if (this->spi_diag_timing_logs_ < 255) {
+      this->spi_diag_timing_logs_++;
+    }
+  }
+
   if (err != ESP_OK) {
     this->spi_queue_error_count_++;
     ESP_LOGW(TAG,
@@ -964,6 +1081,7 @@ void CFXLightOutput::flush_spi_() {
     this->status_set_warning();
   } else {
     this->spi_tx_in_flight_ = false;
+    this->spi_last_flush_ms_ = esphome::millis();
     this->status_clear_warning();
   }
 }
