@@ -834,6 +834,15 @@ void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
   this->last_run_ = 0; // Reset per-instance rate gate for clean restart
 
+  // Diagnostic hardening: stop() can be re-entered by ESPHome teardown paths
+  // after a prior stop() already released the activation struct. In that case
+  // the correct behavior is a no-op, not a crash while touching act_->strip_tag.
+  if (this->act_ == nullptr) {
+    ESP_LOGW(TAG, "stop() called with null activation for '%s' — skipping",
+             this->get_name().c_str());
+    return;
+  }
+
   if (this->effect_id_ != 185) {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
