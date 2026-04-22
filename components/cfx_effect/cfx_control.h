@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "../cfx_light/cfx_light.h"
+#include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_addressable_light_effect.h"
 #ifdef USE_CFX_EVENTS
 #include "cfx_event_manager.h"
@@ -64,9 +65,20 @@ public:
       if (output == nullptr)
         continue;
 
-      // Only cast when we know the output is a CFXLightOutput with segments.
-      // Virtual segment lights share the same base type but are NOT castable.
-      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+      // Segment controls can point either at the physical strip output or at a
+      // zero-copy virtual segment wrapper. Resolve wrappers back to the parent
+      // strip before touching CFXLightOutput-only APIs.
+      cfx_light::CFXLightOutput *cfx_out = nullptr;
+#ifdef USE_ESP32
+      for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+        if (seg_out == output) {
+          cfx_out = seg_out->get_parent();
+          break;
+        }
+      }
+#endif
+      if (cfx_out == nullptr)
+        cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
       if (!cfx_out->has_segments())
         continue;
       for (auto *seg_state : cfx_out->get_segment_light_states()) {
