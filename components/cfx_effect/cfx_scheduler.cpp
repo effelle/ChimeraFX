@@ -51,11 +51,11 @@ void CFXScheduler::setup() {
     ESP_LOGE(TAG, "Task create failed (err=%d) — falling back to sequential dispatch", (int)ret);
     core0_task_ = nullptr;
   } else {
-    ESP_LOGI(TAG, "Core 0 task created — dual-core LED dispatch enabled");
+    ESP_LOGV(TAG, "Core 0 task created — dual-core LED dispatch enabled");
   }
 
 #else
-  ESP_LOGI(TAG, "Single-core ESP32 — sequential dispatch active");
+  ESP_LOGV(TAG, "Single-core ESP32 — sequential dispatch active");
 #endif
 }
 

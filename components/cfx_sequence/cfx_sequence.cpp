@@ -536,7 +536,7 @@ void CfxSetActionBase::do_play_() {
         target_inst != nullptr &&
         act_before  != nullptr &&
         target_inst->get_act() == act_before) {
-      ESP_LOGD("chimera_fx",
+      ESP_LOGV("chimera_fx",
                "cfx_set re-entry: forcing start() on '%s' (perform() was no-op).",
                this->effect_.c_str());
       target_inst->start();
@@ -1566,7 +1566,7 @@ void CFXSequence::adopt_light(light::LightState *state) {
     this->monitored_lights_.push_back({state, listener});
   }
 
-  ESP_LOGD("cfx_sequence",
+  ESP_LOGV("cfx_sequence",
            "Sequence '%s': adopted cfx_set light '%s' — will stop with sequence.",
            this->name_.c_str(), state->get_name().c_str());
 }

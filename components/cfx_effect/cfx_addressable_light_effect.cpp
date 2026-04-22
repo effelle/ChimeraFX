@@ -511,7 +511,7 @@ void CFXAddressableLightEffect::start() {
             act_->runner = act_->segment_runners[0];
             act_->segments_initialized = true;
           }
-          ESP_LOGD("chimera_fx", "Multi-segment mode: %u runners created for %s",
+          ESP_LOGV("chimera_fx", "Multi-segment mode: %u runners created for %s",
                    act_->segment_runners.size(), this->get_name());
         } else {
 #endif
@@ -527,7 +527,7 @@ void CFXAddressableLightEffect::start() {
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
             this->update_interval_);
-        ESP_LOGD("chimera_fx",
+        ESP_LOGV("chimera_fx",
                  "Single-segment mode runner created for %s (Bake: %d)",
                  this->get_name(), this->is_virtual_segment_);
 
