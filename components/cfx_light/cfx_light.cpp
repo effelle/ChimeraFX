@@ -10,6 +10,7 @@
 #include "cfx_light.h"
 #include "cfx_virtual_segment_light.h"
 #include "../cfx_effect/cfx_control.h"
+#include "../cfx_effect/cfx_scheduler.h"
 
 #ifdef USE_WIFI
 #include <lwip/inet.h>
@@ -477,9 +478,11 @@ void CFXLightOutput::setup_spi_() {
     return;
   }
 
+  chimera_fx::CFXScheduler::get().set_force_sequential(true);
+
   ESP_LOGI(TAG,
            "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
-           " ms",
+           " ms, blocking_tx=yes, scheduler_sequential=yes",
            static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
 }
 
@@ -917,20 +920,20 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // Fire-and-forget DMA SPI transmit
-  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_,
-                                         pdMS_TO_TICKS(timeout_ms));
+  // Diagnostic mode: block until the SPI frame has fully completed so the
+  // DMA buffer/transaction lifetime is unquestionably correct.
+  esp_err_t err = spi_device_transmit(this->spi_device_, &this->spi_trans_);
   if (err != ESP_OK) {
     this->spi_queue_error_count_++;
     ESP_LOGW(TAG,
-             "SPI TX queue failed (err=%d, frame=%u bytes, waits=%" PRIu32
+             "SPI TX blocking transmit failed (err=%d, frame=%u bytes, waits=%" PRIu32
              ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
              err, static_cast<unsigned>(this->get_spi_frame_size_()),
              this->spi_wait_count_, this->spi_wait_timeout_count_,
              this->spi_queue_error_count_);
     this->status_set_warning();
   } else {
-    this->spi_tx_in_flight_ = true;
+    this->spi_tx_in_flight_ = false;
     this->status_clear_warning();
   }
 }
@@ -1072,6 +1075,7 @@ void CFXLightOutput::dump_config() {
                   "  Speed: %" PRIu32 " Hz\n"
                   "  Frame Size: %u bytes\n"
                   "  TX Timeout: %" PRIu32 " ms\n"
+                  "  Blocking TX Diag: yes\n"
                   "  Chipset: %s\n"
                   "  LEDs: %u\n"
                   "  RGB Order: %s",

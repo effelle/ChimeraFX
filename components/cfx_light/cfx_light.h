@@ -160,6 +160,8 @@ public:
 
   // SPI transport setters
   void set_transport(CFXTransport t) { this->transport_ = t; }
+  CFXTransport get_transport() const { return this->transport_; }
+  bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
@@ -256,6 +258,7 @@ protected:
   void flush_spi_();
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
+  bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;

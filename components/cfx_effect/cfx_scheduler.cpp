@@ -96,6 +96,22 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   const size_t total = runners.size();
   if (total == 0) return;
 
+  if (force_sequential_) {
+    if (!sequential_diag_logged_) {
+      ESP_LOGW(TAG,
+               "Sequential diagnostic mode enabled — dual-core dispatch bypassed");
+      sequential_diag_logged_ = true;
+    }
+
+    for (auto *r : runners) {
+      if (r != nullptr) {
+        InstanceGuard guard(r);
+        r->service();
+      }
+    }
+    return;
+  }
+
 #if CFX_DUAL_CORE
   // Parallel path: requires ≥2 runners and a live Core 0 task.
   if (total >= 2 && core0_task_ != nullptr && core0_done_ != nullptr) {

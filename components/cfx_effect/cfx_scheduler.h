@@ -58,6 +58,11 @@ public:
   // Convenience wrapper for the single-runner (no-segment) code path.
   void service_runner(CFXRunner *r);
 
+  // Diagnostic override used when mixed-transport runs need the safest
+  // possible scheduler behavior.
+  void set_force_sequential(bool enabled) { force_sequential_ = enabled; }
+  bool is_force_sequential() const { return force_sequential_; }
+
   // Wait for Core 0 to finish its current frame slice before returning.
   // Must be called from Core 1 before mutating segment_runners or deleting
   // any CFXRunner that may still be referenced in core0_slice_.
@@ -68,6 +73,8 @@ private:
   CFXScheduler() = default;
 
   bool setup_done_{false};
+  bool force_sequential_{false};
+  bool sequential_diag_logged_{false};
 
 #if CFX_DUAL_CORE
   static void core0_task_fn(void *arg);
