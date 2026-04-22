@@ -25,6 +25,10 @@ namespace esphome {
 namespace cfx_sequence {
 class CFXSequence;
 }
+namespace cfx_light {
+class CFXLightOutput;
+class CFXVirtualSegmentLight;
+}
 namespace chimera_fx {
 using cfx_sequence::CFXSequence;
 
@@ -116,6 +120,9 @@ public:
     std::string strip_tag{};
     uint8_t spi_diag_apply_logs{0};
     uint8_t spi_diag_bind_logs{0};
+    uint8_t spi_diag_census_logs{0};
+    uint8_t spi_diag_heartbeat_logs{0};
+    uint32_t spi_diag_last_apply_ms{0};
     // Cached once in start() — avoids a heap-allocated std::string every frame
     // in apply() (audit 1.1).
     std::string cached_runner_name{};
@@ -320,6 +327,8 @@ public:
   void set_controller(CFXControl *controller) {
     this->controller_ = controller;  // stored flat; copied into act_ on start()
   }
+  bool is_virtual_segment() const { return this->is_virtual_segment_; }
+  cfx_light::CFXLightOutput *get_diag_output() const;
 
   // ── Trigger adders — lazily allocate cfg_ ─────────────────────────────────
   void add_on_start_trigger(CfxOnStartTrigger *t) {
@@ -438,6 +447,11 @@ public:
   // CFX-030: allows callers to check whether the effect is currently running
   // before calling set_active_sequence() (act_==nullptr means effect is stopped).
   CFXActivation *get_act() const { return act_; }
+  size_t get_runner_count() const {
+    if (!act_) return 0;
+    if (!act_->segment_runners.empty()) return act_->segment_runners.size();
+    return act_->runner ? 1U : 0U;
+  }
 
   // cfx_set action setters — override sequence params on the active effect.
   // Persist until the next start() call resets them via set_active_sequence().

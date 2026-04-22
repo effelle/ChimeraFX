@@ -52,6 +52,59 @@ const std::vector<CfxOnReachTrigger *>
 
 static const char *const TAG = "chimera_fx";
 
+namespace {
+struct SPIDiagCensus {
+  size_t total_effects{0};
+  size_t total_segment_effects{0};
+  size_t active_effects{0};
+  size_t active_segment_effects{0};
+  size_t active_spi_effects{0};
+  size_t bound_sequences{0};
+  size_t runner_count{0};
+};
+
+static cfx_light::CFXLightOutput *resolve_diag_output(
+    CFXAddressableLightEffect *effect) {
+  if (effect == nullptr)
+    return nullptr;
+  return effect->get_diag_output();
+}
+
+static SPIDiagCensus collect_spi_diag_census() {
+  SPIDiagCensus census;
+  census.total_effects = CFXAddressableLightEffect::all_effects.size();
+  census.total_segment_effects =
+      CFXAddressableLightEffect::all_segment_effects.size();
+
+  auto collect_group = [&census](const std::vector<CFXAddressableLightEffect *> &group,
+                                 bool is_segment_group) {
+    for (auto *inst : group) {
+      if (inst == nullptr)
+        continue;
+      auto *act = inst->get_act();
+      if (act == nullptr)
+        continue;
+
+      if (is_segment_group)
+        census.active_segment_effects++;
+      else
+        census.active_effects++;
+
+      auto *out = resolve_diag_output(inst);
+      if (out != nullptr && out->is_spi_transport())
+        census.active_spi_effects++;
+      if (inst->get_active_sequence() != nullptr)
+        census.bound_sequences++;
+      census.runner_count += inst->get_runner_count();
+    }
+  };
+
+  collect_group(CFXAddressableLightEffect::all_effects, false);
+  collect_group(CFXAddressableLightEffect::all_segment_effects, true);
+  return census;
+}
+}  // namespace
+
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
     : light::AddressableLightEffect(name) {
   CFXAddressableLightEffect::all_effects.push_back(this);
@@ -67,6 +120,20 @@ CFXAddressableLightEffect::~CFXAddressableLightEffect() {
   this->act_ = nullptr;
   delete this->cfg_;
   this->cfg_ = nullptr;
+}
+
+cfx_light::CFXLightOutput *CFXAddressableLightEffect::get_diag_output() const {
+  if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+        this->get_addressable_());
+    if (vseg != nullptr)
+      return vseg->get_parent();
+#endif
+    return nullptr;
+  }
+
+  return static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
 }
 
 CFXAddressableLightEffect::MonochromaticPreset
@@ -451,6 +518,36 @@ void CFXAddressableLightEffect::start() {
     act_->cached_runner_name = ls->get_name().str();
   else
     act_->cached_runner_name.clear();
+
+  auto *diag_out = resolve_diag_output(this);
+  SPIDiagCensus diag_census = collect_spi_diag_census();
+  if (diag_out != nullptr && diag_out->is_spi_transport()) {
+    ESP_LOGW("cfx_seq",
+             "SPI diag census[start]: effect=%s tag=%s act=%p totals(e=%u,se=%u) "
+             "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
+             act_->cached_runner_name.c_str(), act_->strip_tag.c_str(), act_,
+             static_cast<unsigned>(diag_census.total_effects),
+             static_cast<unsigned>(diag_census.total_segment_effects),
+             static_cast<unsigned>(diag_census.active_effects),
+             static_cast<unsigned>(diag_census.active_segment_effects),
+             static_cast<unsigned>(diag_census.active_spi_effects),
+             static_cast<unsigned>(diag_census.bound_sequences),
+             static_cast<unsigned>(diag_census.runner_count));
+  } else if (diag_census.active_spi_effects > 0 && act_->spi_diag_census_logs < 2) {
+    ESP_LOGW("cfx_seq",
+             "SPI diag census[start-neighbor][%u]: effect=%s act=%p totals(e=%u,se=%u) "
+             "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
+             static_cast<unsigned>(act_->spi_diag_census_logs),
+             act_->cached_runner_name.c_str(), act_,
+             static_cast<unsigned>(diag_census.total_effects),
+             static_cast<unsigned>(diag_census.total_segment_effects),
+             static_cast<unsigned>(diag_census.active_effects),
+             static_cast<unsigned>(diag_census.active_segment_effects),
+             static_cast<unsigned>(diag_census.active_spi_effects),
+             static_cast<unsigned>(diag_census.bound_sequences),
+             static_cast<unsigned>(diag_census.runner_count));
+    act_->spi_diag_census_logs++;
+  }
 
   // Force reset runner memory whenever an effect is selected/started
   // to ensure multi-segment sequences synchronize and start fresh.
@@ -1278,17 +1375,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->act_ == nullptr)
     return;
 
-  cfx_light::CFXLightOutput *diag_out = nullptr;
-  if (this->is_virtual_segment_) {
-#ifdef USE_ESP32
-    auto *vseg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
-        this->get_addressable_());
-    if (vseg != nullptr)
-      diag_out = vseg->get_parent();
-#endif
-  } else {
-    diag_out = static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
-  }
+  cfx_light::CFXLightOutput *diag_out = resolve_diag_output(this);
 
   if (diag_out != nullptr && diag_out->is_spi_transport() &&
       this->act_->spi_diag_apply_logs < 6) {
@@ -1326,6 +1413,32 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (now_ms != last_frame_ms) {
     current_frame_start = now_ms;
     last_frame_ms = now_ms;
+  }
+  if (diag_out != nullptr && diag_out->is_spi_transport()) {
+    uint32_t delta_ms = 0;
+    if (this->act_->spi_diag_last_apply_ms != 0) {
+      delta_ms = now_ms - this->act_->spi_diag_last_apply_ms;
+    }
+    this->act_->spi_diag_last_apply_ms = now_ms;
+
+    if (this->act_->spi_diag_heartbeat_logs < 8 &&
+        (this->act_->spi_diag_heartbeat_logs == 0 || delta_ms > 25 ||
+         this->act_->spi_diag_apply_logs == 6)) {
+      SPIDiagCensus diag_census = collect_spi_diag_census();
+      ESP_LOGW("cfx_seq",
+               "SPI diag heartbeat[%u]: effect=%s act=%p dt=%ums totals(e=%u,se=%u) "
+               "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
+               static_cast<unsigned>(this->act_->spi_diag_heartbeat_logs),
+               this->act_->cached_runner_name.c_str(), this->act_, delta_ms,
+               static_cast<unsigned>(diag_census.total_effects),
+               static_cast<unsigned>(diag_census.total_segment_effects),
+               static_cast<unsigned>(diag_census.active_effects),
+               static_cast<unsigned>(diag_census.active_segment_effects),
+               static_cast<unsigned>(diag_census.active_spi_effects),
+               static_cast<unsigned>(diag_census.bound_sequences),
+               static_cast<unsigned>(diag_census.runner_count));
+      this->act_->spi_diag_heartbeat_logs++;
+    }
   }
   if (!act_->mono_idle && now_ms - current_frame_start > 22) {
     ESP_LOGV("chimera_fx", "Frame Budget Exceeded (%ums), skipping render for '%s'", 
