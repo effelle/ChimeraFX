@@ -602,7 +602,10 @@ void CFXSequenceSelect::control(const std::string &value) {
 void CFXSequenceSelect::loop() {
   CFXEventManager::get().flush_pending();
 
-  for (auto *seq : CFXSequence::instances) {
+  const std::vector<CFXSequence *> sequence_snapshot(CFXSequence::instances.begin(),
+                                                     CFXSequence::instances.end());
+
+  for (auto *seq : sequence_snapshot) {
     if (seq->has_pending_teardown()) {
       esphome::App.feed_wdt();
       seq->process_pending_teardown();
@@ -610,10 +613,10 @@ void CFXSequenceSelect::loop() {
     }
   }
 
-  for (auto *seq : CFXSequence::instances)
+  for (auto *seq : sequence_snapshot)
     seq->check_duration();
 
-  for (auto *seq : CFXSequence::instances) {
+  for (auto *seq : sequence_snapshot) {
     if (seq->has_pending_duration_completion()) {
       esphome::App.feed_wdt();
       seq->complete_and_notify();
@@ -621,7 +624,7 @@ void CFXSequenceSelect::loop() {
     }
   }
 
-  for (auto *seq : CFXSequence::instances) {
+  for (auto *seq : sequence_snapshot) {
     if (seq->has_pending_triggers()) {
       esphome::App.feed_wdt();
       seq->flush_pending_triggers();
@@ -629,14 +632,20 @@ void CFXSequenceSelect::loop() {
     }
   }
 
-  for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_effects) {
+  const std::vector<chimera_fx::CFXAddressableLightEffect *> effects_snapshot(
+      chimera_fx::CFXAddressableLightEffect::all_effects.begin(),
+      chimera_fx::CFXAddressableLightEffect::all_effects.end());
+  for (auto *eff : effects_snapshot) {
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
       eff->execute_completion();
       return;
     }
   }
-  for (auto *eff : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
+  const std::vector<chimera_fx::CFXAddressableLightEffect *> segment_effects_snapshot(
+      chimera_fx::CFXAddressableLightEffect::all_segment_effects.begin(),
+      chimera_fx::CFXAddressableLightEffect::all_segment_effects.end());
+  for (auto *eff : segment_effects_snapshot) {
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
       eff->execute_completion();
