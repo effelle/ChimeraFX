@@ -46,6 +46,52 @@ private:
   CFXSequence *previous_;
 };
 
+static cfx_light::CFXLightOutput *resolve_cfx_output_(light::LightState *state) {
+  if (state == nullptr) {
+    return nullptr;
+  }
+
+  auto *output = state->get_output();
+  if (output == nullptr) {
+    return nullptr;
+  }
+
+  for (auto *seg : cfx_light::CFXVirtualSegmentLight::all_segments) {
+    if (seg == output) {
+      return seg->get_parent();
+    }
+  }
+
+  return static_cast<cfx_light::CFXLightOutput *>(output);
+}
+
+static bool has_active_spi_effect_() {
+  auto has_active_spi_in_group =
+      [](const std::vector<chimera_fx::CFXAddressableLightEffect *> &group) {
+        for (auto *inst : group) {
+          if (inst == nullptr || inst->get_act() == nullptr) {
+            continue;
+          }
+          auto *diag_out = inst->get_diag_output();
+          if (diag_out != nullptr && diag_out->is_spi_transport()) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+  return has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_effects) ||
+         has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_segment_effects);
+}
+
+static bool should_defer_pool_sequence_start_(light::LightState *target_light) {
+  auto *target_out = resolve_cfx_output_(target_light);
+  if (target_out != nullptr && target_out->is_spi_transport()) {
+    return true;
+  }
+  return has_active_spi_effect_();
+}
+
 static void ensure_sequence_registry_capacity_(size_t extra_slots,
                                                const char *reason) {
   auto &registry = CFXSequence::instances;
@@ -322,6 +368,21 @@ void CfxRunActionBase::do_play_() {
            this->light_->get_name().c_str(),
            effective_depth,
            this->iterations_);
+
+  if (CFXSequenceSelect::instance != nullptr &&
+      should_defer_pool_sequence_start_(this->light_)) {
+    uint32_t start_hash = esphome::fnv1_hash(seq->get_id() + "_deferred_start");
+    ESP_LOGD("cfx_run", "Deferring start of '%s' on '%s' to next scheduler tick",
+             this->effect_.c_str(), this->light_->get_name().c_str());
+    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, start_hash, 0,
+                                       [seq]() {
+                                         if (seq != nullptr && !seq->is_running() &&
+                                             !seq->is_starting()) {
+                                           seq->start();
+                                         }
+                                       });
+    return;
+  }
 
   seq->start();
 }
