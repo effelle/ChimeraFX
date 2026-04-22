@@ -555,11 +555,6 @@ void CFXLightOutput::setup_spi_() {
 
   chimera_fx::CFXScheduler::get().set_force_sequential(true);
 
-  gpio_set_direction(static_cast<gpio_num_t>(this->spi_data_pin_),
-                     GPIO_MODE_OUTPUT);
-  gpio_set_direction(static_cast<gpio_num_t>(this->spi_clock_pin_),
-                     GPIO_MODE_OUTPUT);
-
   // CFX-057: RTC crash counter — check for previous silent resets.
   if (cfx_rtc_crash_magic_ == CFX_RTC_MAGIC && cfx_rtc_crash_count_ > 0) {
     ESP_LOGW(TAG,
