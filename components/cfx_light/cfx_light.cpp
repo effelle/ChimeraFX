@@ -88,20 +88,16 @@ resolve_active_cfx_effect(light::LightState *state) {
   return nullptr;
 }
 
-static uint32_t count_active_cfx_effects() {
+// CFX-057: Count active MAIN effects only (not segments).
+// Each physical strip has exactly one main effect. Segments are virtual
+// subdivisions and don't represent additional strip load.
+static uint32_t count_active_main_effects() {
   uint32_t active_count = 0;
-
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst != nullptr && inst->get_act() != nullptr) {
       active_count++;
     }
   }
-  for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_segment_effects) {
-    if (inst != nullptr && inst->get_act() != nullptr) {
-      active_count++;
-    }
-  }
-
   return active_count;
 }
 
@@ -110,7 +106,7 @@ static uint32_t count_active_cfx_effects() {
 // heavy RMT load (7+ channels) causes a hardware reset. The software is proven
 // stable (skip-transmit test survived 18+ seconds at depth 8). This gate freezes
 // the SPI strip on its last valid frame during peak load.
-static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 5;
+static constexpr uint32_t CFX_SPI_MAX_ACTIVE_EFFECTS = 6;
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
@@ -908,7 +904,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #ifdef USE_CFX_SEQUENCE
     if (active_cfx_effect != nullptr &&
         active_cfx_effect->get_active_sequence() != nullptr) {
-      const uint32_t active_effects = count_active_cfx_effects();
+      const uint32_t active_effects = count_active_main_effects();
       const uint32_t throttle_ms =
           compute_spi_sequence_throttle_ms(active_effects);
       const uint32_t now_ms = esphome::millis();
@@ -973,19 +969,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
-    // CFX-057: Early depth gate — suppress SPI flush when too many
-    // effects are active to avoid electrical crash.
-    const uint32_t pre_flush_active = count_active_cfx_effects();
-    if (pre_flush_active >= CFX_SPI_MAX_ACTIVE_EFFECTS) {
-      static uint8_t ws_gate_log = 0;
-      if (ws_gate_log < 4) {
-        ESP_LOGD(TAG, "SPI write_state depth-gate: active=%u >= %u, skip flush",
-                 (unsigned)pre_flush_active, (unsigned)CFX_SPI_MAX_ACTIVE_EFFECTS);
-        ws_gate_log++;
-      }
-      this->spi_last_flush_ms_ = esphome::millis();
-      return;
-    }
     esphome::App.feed_wdt(); // CFX-057: before blocking SPI transmit
     this->flush_spi_();
   } else {
@@ -1137,7 +1120,7 @@ void CFXLightOutput::flush_spi_() {
   // Root cause: electrical interaction between SPI strip and ESP32 under heavy
   // RMT load causes hardware reset. Skip-transmit is proven stable at depth 8+.
   // The SPI strip freezes on its last valid frame during peak load.
-  const uint32_t active_now = count_active_cfx_effects();
+  const uint32_t active_now = count_active_main_effects();
   if (active_now >= CFX_SPI_MAX_ACTIVE_EFFECTS) {
     esp_err_t err = ESP_OK;
     const uint32_t tx_end_us = micros();
