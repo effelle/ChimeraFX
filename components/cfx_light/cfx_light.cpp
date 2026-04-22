@@ -1006,9 +1006,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
-    // CFX-057: Deferred telemetry — log reset reason on first SPI write_state
-    // so user sees it via API (setup_spi_ runs before API connects).
-    if (!cfx_deferred_telemetry_logged_) {
+    // CFX-057: Deferred telemetry — log reset reason AFTER API connects.
+    // wait 15+ seconds after boot so the API logger is ready to capture it.
+    if (!cfx_deferred_telemetry_logged_ && esphome::millis() > 15000) {
       cfx_deferred_telemetry_logged_ = true;
       const char *rst = "UNKNOWN";
       switch (cfx_boot_reset_reason_) {
