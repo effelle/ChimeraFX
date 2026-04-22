@@ -522,7 +522,11 @@ void CFXLightOutput::setup_spi_() {
   bus_cfg.quadhd_io_num = -1;
   bus_cfg.max_transfer_sz = frame_size;
 
-  esp_err_t err = spi_bus_initialize(host, &bus_cfg, SPI_DMA_CH_AUTO);
+  // CFX-057: Disable DMA to prevent bus contention with RMT DMA channels.
+  // spi_device_polling_transmit() STILL uses DMA if a DMA channel was allocated.
+  // Only SPI_DMA_DISABLED truly forces CPU-only data transfer via the SPI FIFO.
+  // Trade-off: max 64 bytes per transaction (we chunk the frame manually).
+  esp_err_t err = spi_bus_initialize(host, &bus_cfg, SPI_DMA_DISABLED);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "SPI bus init failed (err=%d, data=GPIO%u clock=GPIO%u)",
              err, this->spi_data_pin_, this->spi_clock_pin_);
@@ -1071,15 +1075,30 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 FIX: Use polling transmit instead of DMA-based transmit.
-  // Root cause: spi_device_transmit() uses DMA which contends with RMT DMA
-  // channels on the ESP32's shared memory bus. At 7+ active RMT strips, the bus
-  // bandwidth saturates and triggers an unrecoverable hardware reset.
-  // spi_device_polling_transmit() uses CPU polling instead — no DMA, no bus
-  // contention. The ~450µs CPU cost is negligible vs the 30ms frame budget.
+  // CFX-057 FIX: Chunked polling transmit without DMA.
+  // The SPI bus is initialized with SPI_DMA_DISABLED to prevent bus contention
+  // with RMT DMA channels. Without DMA, the SPI FIFO is limited to 64 bytes
+  // per transaction. We split the frame into 64-byte chunks — APA102/SK9822
+  // treats the clock+data stream as continuous, so chunk boundaries are invisible.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
-  esp_err_t err = spi_device_polling_transmit(this->spi_device_, &this->spi_trans_);
+
+  static constexpr size_t SPI_FIFO_CHUNK = 64;
+  const size_t total_bytes = this->get_spi_frame_size_();
+  esp_err_t err = ESP_OK;
+  size_t offset = 0;
+
+  while (offset < total_bytes && err == ESP_OK) {
+    size_t chunk = total_bytes - offset;
+    if (chunk > SPI_FIFO_CHUNK) chunk = SPI_FIFO_CHUNK;
+
+    spi_transaction_t t = {};
+    t.length = chunk * 8;  // bits
+    t.tx_buffer = this->spi_frame_buf_ + offset;
+    err = spi_device_polling_transmit(this->spi_device_, &t);
+    offset += chunk;
+  }
+
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
