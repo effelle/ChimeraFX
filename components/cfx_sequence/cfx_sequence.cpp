@@ -114,7 +114,7 @@ static void ensure_sequence_registry_capacity_(size_t extra_slots,
 
   size_t target = needed + 8;
   registry.reserve(target);
-  ESP_LOGW("cfx_run",
+  ESP_LOGV("cfx_run",
            "Sequence registry reserve[%s]: size=%u capacity=%u target=%u",
            reason != nullptr ? reason : "?",
            static_cast<unsigned>(registry.size()),
@@ -985,7 +985,10 @@ void CFXSequence::start() {
   // Update Select UI to reflect the active sequence.
   // Pool-owned sequences (cfx_run) are not in the select option list — skip.
   if (CFXSequenceSelect::instance != nullptr && !this->is_pool_owned_) {
-    CFXSequenceSelect::instance->publish_state_silent(this->name_);
+    if (!CFXSequenceSelect::instance->has_state() ||
+        CFXSequenceSelect::instance->current_option() != this->name_) {
+      CFXSequenceSelect::instance->publish_state_silent(this->name_);
+    }
   }
 
   // Reset duration timer
