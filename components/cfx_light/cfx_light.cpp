@@ -1086,39 +1086,19 @@ void CFXLightOutput::flush_spi_() {
     *ptr++ = end_byte;
   }
 
-  // CFX-057 FIX: Software SPI (bit-bang) — bypass the SPI peripheral entirely.
-  // The ESP32 SPI peripheral (with or without DMA) causes unrecoverable hardware
-  // resets when 7+ RMT channels are active. Software SPI uses only GPIO register
-  // writes — no peripheral, no DMA, no ISR, no bus contention.
-  // APA102/SK9822 is a simple clock+data protocol; bit-banging is robust.
+  // CFX-057 ELIMINATION TEST B: Pure CPU busy-wait, NO GPIO toggling.
+  // Tests whether the crash is caused by:
+  //   A) ~500µs of CPU starvation at depth 7+ → this test will CRASH
+  //   B) The physical GPIO/SPI activity on the pins → this test will be STABLE
+  // REMOVE AFTER DIAGNOSIS.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
-  const uint32_t clk_mask = (1UL << this->spi_clock_pin_);
-  const uint32_t dat_mask = (1UL << this->spi_data_pin_);
-  const size_t total_bytes = this->get_spi_frame_size_();
-  const uint8_t *data = this->spi_frame_buf_;
+  // Busy-wait for approximately the same duration as a 276-byte SPI transfer
+  // (~500µs) without touching any GPIO pins.
+  delayMicroseconds(500);
 
-  // Transmit each byte MSB-first via direct GPIO register writes.
-  // GPIO.out_w1ts sets bits high, GPIO.out_w1tc clears bits low.
-  // Each bit: set data → clock high → clock low.
-  for (size_t b = 0; b < total_bytes; b++) {
-    uint8_t byte = data[b];
-    for (int bit = 7; bit >= 0; bit--) {
-      // Set MOSI
-      if (byte & (1 << bit)) {
-        GPIO.out_w1ts = dat_mask;
-      } else {
-        GPIO.out_w1tc = dat_mask;
-      }
-      // Clock high
-      GPIO.out_w1ts = clk_mask;
-      // Clock low
-      GPIO.out_w1tc = clk_mask;
-    }
-  }
-
-  esp_err_t err = ESP_OK;  // Software SPI always succeeds
+  esp_err_t err = ESP_OK;
   const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
