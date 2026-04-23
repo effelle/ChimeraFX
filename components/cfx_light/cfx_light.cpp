@@ -707,6 +707,13 @@ void CFXLightOutput::loop() {
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
 #endif
+
+  // Preserve ESPHome's native transition engine for plain solid-color mode.
+  // CFX effect playback, outro rendering, and segmented ownership all bypass
+  // the parent AddressableLight loop on purpose.
+  if (!this->has_segments() && !this->has_outro() && !this->is_effect_active()) {
+    light::AddressableLight::loop();
+  }
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -748,10 +755,15 @@ void CFXLightOutput::update_state(light::LightState *state) {
     return;
   }
 
-  // Solid-color rendering for non-segmented lights. When ESPHome's
-  // transformer is active, current_values already contain the in-progress
-  // fade step; we must paint that frame into the pixel buffer or a non-zero
-  // default_transition_length turns into a delay-then-snap.
+  // Let ESPHome's native transformer own solid-color transitions. The parent
+  // loop delegates to AddressableLight::loop() in plain solid mode, which
+  // advances the fade and writes the intermediate frames.
+  if (state->is_transformer_active()) {
+    return;
+  }
+
+  // Solid-color rendering for non-segmented lights when no transition is
+  // active.
   Color c = light::color_from_light_color_values(val);
 
   // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer
