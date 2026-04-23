@@ -110,6 +110,7 @@ public:
              this->light_ != nullptr ? this->light_->get_name().c_str()
                                      : "<null>",
              this->force_white_);
+    this->bind_force_white_callback_();
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
 
@@ -146,21 +147,6 @@ public:
         for (auto *r : this->runners_)
           r->setDebug(value);
       });
-    }
-
-    if (this->force_white_) {
-      ESP_LOGI("chimera_fw",
-               "register force_white callback ctrl=%p light=%p sw=%p name=%s",
-               this, this->light_, this->force_white_,
-               this->force_white_->get_name().c_str());
-      this->force_white_->add_on_state_callback(
-          [this](bool value) {
-            ESP_LOGI("chimera_fw",
-                     "force_white toggle ctrl=%p light=%p sw=%p state=%d",
-                     this, this->light_, this->force_white_, value);
-            this->repaint_force_white_segment_();
-            this->schedule_force_white_sync_(25, true);
-          });
     }
 
     if (this->palette_) {
@@ -216,6 +202,7 @@ public:
              this->light_, this->force_white_,
              this->force_white_ != nullptr ? this->force_white_->get_name().c_str()
                                            : "<null>");
+    this->bind_force_white_callback_();
     this->sync_force_white_output_();
   }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
@@ -283,6 +270,27 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  void bind_force_white_callback_() {
+    if (this->force_white_ == nullptr)
+      return;
+    if (this->force_white_cb_switch_ == this->force_white_)
+      return;
+
+    this->force_white_cb_switch_ = this->force_white_;
+    ESP_LOGI("chimera_fw",
+             "register force_white callback ctrl=%p light=%p sw=%p name=%s",
+             this, this->light_, this->force_white_,
+             this->force_white_->get_name().c_str());
+    this->force_white_->add_on_state_callback(
+        [this](bool value) {
+          ESP_LOGI("chimera_fw",
+                   "force_white toggle ctrl=%p light=%p sw=%p state=%d",
+                   this, this->light_, this->force_white_, value);
+          this->repaint_force_white_segment_();
+          this->schedule_force_white_sync_(25, true);
+        });
+  }
+
   void schedule_force_white_sync_(uint32_t delay_ms, bool repaint_after) {
     uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
                     (repaint_after ? 0xF0A5u : 0x0F5Au) ^ delay_ms;
@@ -400,6 +408,7 @@ protected:
   esphome::switch_::Switch *mirror_{nullptr};
   esphome::switch_::Switch *autotune_{nullptr};
   esphome::switch_::Switch *force_white_{nullptr};
+  esphome::switch_::Switch *force_white_cb_switch_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *inout_duration_{nullptr};
