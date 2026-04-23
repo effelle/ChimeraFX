@@ -99,6 +99,8 @@ public:
   CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
+    this->sync_force_white_output_();
+
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
         for (auto *r : this->runners_)
@@ -250,6 +252,8 @@ public:
 
 protected:
   void repaint_force_white_segment_() {
+    this->sync_force_white_output_();
+
     if (this->light_ == nullptr)
       return;
 
