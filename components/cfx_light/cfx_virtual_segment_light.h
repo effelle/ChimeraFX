@@ -61,6 +61,14 @@ public:
     // active. This causes transition spikes (Bug 11) on segments if CFX is
     // running.
     if (effect_active || parent_->has_outro()) {
+      this->last_solid_color_valid_ = false;
+      return;
+    }
+
+    // White-channel segments need custom solid repainting so live force_white
+    // toggles are respected continuously, not only on turn-on.
+    if (parent_->has_white_channel() && st != nullptr) {
+      this->repaint_force_white_current_state();
       return;
     }
 
@@ -77,13 +85,16 @@ public:
 
     if (parent_->get_master_light_state() != nullptr &&
         parent_->get_master_light_state()->get_effect_name() != "None") {
+      this->last_solid_color_valid_ = false;
       return;
     }
 
     auto val = state->current_values;
 
-    if (this->is_effect_active())
+    if (this->is_effect_active()) {
+      this->last_solid_color_valid_ = false;
       return;
+    }
 
     // CFX-032: correction_ is held at 255; bake brightness into channels.
     // For a real fade (bri > 0 and transformer active), let ESPHome drive
@@ -105,6 +116,10 @@ public:
     }
 
     this->all() = c;
+    this->last_solid_color_ =
+        ((uint32_t)c.r << 24) | ((uint32_t)c.g << 16) | ((uint32_t)c.b << 8) |
+        (uint32_t)c.w;
+    this->last_solid_color_valid_ = true;
     // Do NOT call schedule_show() here. ESPHome will call write_state()
     // as part of its normal output pipeline. Calling schedule_show() causes
     // write_state to fire twice per update, making pending=2 instead of 1
@@ -145,7 +160,16 @@ public:
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 
+    uint32_t packed =
+        ((uint32_t)c.r << 24) | ((uint32_t)c.g << 16) | ((uint32_t)c.b << 8) |
+        (uint32_t)c.w;
+    if (this->last_solid_color_valid_ && this->last_solid_color_ == packed) {
+      return;
+    }
+
     this->all() = c;
+    this->last_solid_color_ = packed;
+    this->last_solid_color_valid_ = true;
     parent_->request_segment_flush();
   }
 
@@ -193,6 +217,8 @@ protected:
   uint16_t start_;
   uint16_t stop_;
   std::string seg_id_;
+  uint32_t last_solid_color_{0};
+  bool last_solid_color_valid_{false};
 };
 
 } // namespace cfx_light
