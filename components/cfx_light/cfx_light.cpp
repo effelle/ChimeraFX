@@ -728,8 +728,18 @@ void CFXLightOutput::update_state(light::LightState *state) {
   // ALWAYS update the hardware brightness gate. If we don't, and an effect
   // starts while the light is OFF, the gate stays at 0 and the strip stays
   // black.
-  auto max_brightness =
-      light::to_uint8_scale(val.get_brightness() * val.get_state());
+  uint8_t max_brightness = 0;
+  if (this->is_effect_active()) {
+    auto remote = state->remote_values;
+    max_brightness =
+        light::to_uint8_scale(remote.get_brightness() * remote.get_state());
+    if (max_brightness == 0 && remote.is_on()) {
+      max_brightness = 255;
+    }
+  } else {
+    max_brightness =
+        light::to_uint8_scale(val.get_brightness() * val.get_state());
+  }
   this->tracked_brightness_ = max_brightness;
   this->correction_.set_local_brightness(max_brightness);
 
@@ -738,15 +748,10 @@ void CFXLightOutput::update_state(light::LightState *state) {
     return;
   }
 
-  // QoL FIX: If a transition (fade-in/out) is running, let ESPHome's
-  // AddressableLightTransformer handle the per-pixel fade.
-  // Painting solid color or overriding the transformer's local_brightness
-  // would break the native visual transition (acting as a delay or jump).
-  if (state->is_transformer_active()) {
-    return;
-  }
-
-  // Solid color logic for non-segmented lights (no transition, no effect)
+  // Solid-color rendering for non-segmented lights. When ESPHome's
+  // transformer is active, current_values already contain the in-progress
+  // fade step; we must paint that frame into the pixel buffer or a non-zero
+  // default_transition_length turns into a delay-then-snap.
   Color c = light::color_from_light_color_values(val);
 
   // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer

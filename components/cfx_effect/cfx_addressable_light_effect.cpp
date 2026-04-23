@@ -803,8 +803,10 @@ void CFXAddressableLightEffect::start() {
       act_->intro_active = true;
       act_->active_intro_mode = preset.intro_mode;
     } else {
-      // 2. Fallback to UI selectors / YAML presets
-      if (intro_sel != nullptr && intro_sel->has_state()) {
+      // 2. YAML/runtime presets override the live UI selectors.
+      if (this->has_intro_preset_()) {
+        act_->active_intro_mode = this->intro_preset_val_();
+      } else if (intro_sel != nullptr && intro_sel->has_state()) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = intro_sel->current_option().c_str();
         std::string s = opt ? opt : "";
@@ -860,8 +862,6 @@ void CFXAddressableLightEffect::start() {
           act_->active_intro_mode = INTRO_MODE_TIDAL_SURGE;
         else if (s == "Impact Flare")
           act_->active_intro_mode = INTRO_MODE_IMPACT_FLARE;
-      } else if (this->has_intro_preset_()) {
-        act_->active_intro_mode = this->intro_preset_val_();
       }
     }
 
@@ -1036,8 +1036,10 @@ void CFXAddressableLightEffect::stop() {
       if (preset.is_active) {
         act_->active_outro_mode = preset.outro_mode;
       } else {
-        // 2. Fallback to UI Selectors / YAML Presets
-        if (out_eff != nullptr && out_eff->has_state()) {
+        // 2. YAML/runtime presets override the live UI selectors.
+        if (this->has_outro_preset_()) {
+          act_->active_outro_mode = this->outro_preset_val_();
+        } else if (out_eff != nullptr && out_eff->has_state()) {
           std::string raw_opt_s(out_eff->current_option());
           const char *raw_opt = raw_opt_s.c_str();
           std::string s = raw_opt ? raw_opt : "";
@@ -1095,8 +1097,6 @@ void CFXAddressableLightEffect::stop() {
             act_->active_outro_mode = OUTRO_MODE_CENTER_SQUEEZE;
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
-        } else if (this->has_outro_preset_()) {
-          act_->active_outro_mode = this->outro_preset_val_();
         } else {
           act_->active_outro_mode = act_->active_intro_mode;
         }
