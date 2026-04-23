@@ -256,7 +256,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
             # Auto-controls (cfx_control entities generated from cfx_light)
             cv.Optional("controls", default=True): cv.boolean,
-            cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
+            cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
             # Segment definitions (Phase 1)
             cv.Optional(CONF_SEGMENTS): cv.ensure_list(SEGMENT_SCHEMA),
         }

@@ -121,12 +121,11 @@ EXCLUDE_SPEED = 1
 EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
 EXCLUDE_MIRROR = 4
-EXCLUDE_INTRO = 5
-EXCLUDE_HA_EVENTS = 6   # CFX-026: replaces Timer — exclude to disable HA event firing
+EXCLUDE_INTRO = 5       # excludes: Intro select + Outro select + In/Out Duration slider
+EXCLUDE_HA_EVENTS = 6  # CFX-026: replaces Timer — exclude to disable HA event firing
 EXCLUDE_AUTOTUNE = 7
 EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
-EXCLUDE_OUTRO = 10
 
 # CONFIG_SCHEMA removed — cfx_control is now internal-only.
 # Controls are auto-generated from cfx_light entries via __init__.py.
@@ -291,7 +290,8 @@ async def to_code(config):
             cg.add(intensity.publish_state(128))
             cg.add(var.set_intensity(intensity))
 
-        # 7. Intro & Intro Duration
+        # 7. Intro/Outro suite (intro select + outro select + shared duration)
+        #    ctrl_exclude: [5] removes all three at once.
         if is_effect_target and is_included(EXCLUDE_INTRO):
             conf = {
                 **base_entity_conf,
@@ -307,6 +307,18 @@ async def to_code(config):
 
             conf = {
                 **base_entity_conf,
+                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
+                CONF_NAME: f"{t_name} Outro",
+                CONF_ICON: "mdi:animation-play-outline",
+                "optimistic": True,
+            }
+            outro = cg.new_Pvariable(conf[CONF_ID])
+            await select.register_select(outro, conf, options=OUTRO_OPTIONS)
+            cg.add(outro.publish_state("None"))
+            cg.add(var.set_outro_effect(outro))
+
+            conf = {
+                **base_entity_conf,
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_inout_dur"),
                 CONF_NAME: f"{t_name} In/Out Duration",
                 CONF_ICON: "mdi:timer-outline",
@@ -318,20 +330,6 @@ async def to_code(config):
             await number.register_number(inout_dur, conf, min_value=0.5, max_value=10.0, step=0.1)
             cg.add(inout_dur.publish_state(1.0))
             cg.add(var.set_inout_duration(inout_dur))
-
-        # 8. Outro (no separate duration — shares In/Out Duration slider)
-        if is_effect_target and is_included(EXCLUDE_OUTRO):
-            conf = {
-                **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_outro"),
-                CONF_NAME: f"{t_name} Outro",
-                CONF_ICON: "mdi:animation-play-outline",
-                "optimistic": True,
-            }
-            outro = cg.new_Pvariable(conf[CONF_ID])
-            await select.register_select(outro, conf, options=OUTRO_OPTIONS)
-            cg.add(outro.publish_state("None"))
-            cg.add(var.set_outro_effect(outro))
 
         # 10. HA Events (CFX-026: replaces Timer)
         # When ID 6 is included (default), HA event firing is enabled.
