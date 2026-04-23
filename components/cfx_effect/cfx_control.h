@@ -286,9 +286,7 @@ protected:
 #ifdef USE_ESP32
     for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
       if (seg_out == output) {
-        // Virtual segments resolve force_white from their own CFXControl during
-        // active effects. The parent output stores a single master-level switch
-        // pointer, so binding segment-local switches here would cause cross-talk.
+        seg_out->set_force_white_switch(this->force_white_);
         return;
       }
     }

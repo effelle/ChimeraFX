@@ -13,6 +13,7 @@
 #include "../cfx_effect/cfx_utils.h"
 #include "cfx_light.h"
 #include "esphome/components/light/addressable_light.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
 
 #include <string>
@@ -109,9 +110,9 @@ public:
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    // Resolve force_white from this segment's own control first, then fall back
-    // to the parent strip-level switch when no segment-local override exists.
-    if (parent_->is_force_white_active_for(state)) {
+    // Resolve force_white from this segment's own switch first, then fall back
+    // to the parent strip-level switch when no segment-local switch exists.
+    if (this->is_force_white_active_()) {
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 
@@ -133,6 +134,9 @@ public:
       return;
     parent_->request_segment_flush();
   }
+
+  void set_force_white_switch(switch_::Switch *sw) { force_white_sw_ = sw; }
+  switch_::Switch *get_force_white_switch() const { return force_white_sw_; }
 
   void repaint_force_white_current_state() {
     if (parent_->has_outro())
@@ -156,7 +160,7 @@ public:
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    if (parent_->is_force_white_active_for(state)) {
+    if (this->is_force_white_active_()) {
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 
@@ -213,10 +217,22 @@ public:
   CFXLightOutput *get_parent() const { return parent_; }
 
 protected:
+  bool is_force_white_active_() const {
+    if (!parent_->has_white_channel())
+      return false;
+
+    if (force_white_sw_ != nullptr)
+      return force_white_sw_->state;
+
+    return parent_->get_force_white_switch() != nullptr &&
+           parent_->get_force_white_switch()->state;
+  }
+
   CFXLightOutput *parent_;
   uint16_t start_;
   uint16_t stop_;
   std::string seg_id_;
+  switch_::Switch *force_white_sw_{nullptr};
   uint32_t last_solid_color_{0};
   bool last_solid_color_valid_{false};
 };
