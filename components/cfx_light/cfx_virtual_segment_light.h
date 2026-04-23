@@ -119,6 +119,36 @@ public:
     parent_->request_segment_flush();
   }
 
+  void repaint_force_white_current_state() {
+    if (parent_->has_outro())
+      return;
+
+    if (parent_->get_master_light_state() != nullptr &&
+        parent_->get_master_light_state()->get_effect_name() != "None") {
+      return;
+    }
+
+    auto *state = this->state_parent_;
+    if (state == nullptr || this->is_effect_active())
+      return;
+
+    auto val = state->current_values;
+    float bri = val.get_brightness() * val.get_state();
+
+    Color c = light::color_from_light_color_values(val);
+    c.r = (uint8_t)(c.r * bri);
+    c.g = (uint8_t)(c.g * bri);
+    c.b = (uint8_t)(c.b * bri);
+    c.w = (uint8_t)(c.w * bri);
+
+    if (parent_->is_force_white_active_for(state)) {
+      cfx::apply_force_white(c.r, c.g, c.b, c.w);
+    }
+
+    this->all() = c;
+    parent_->request_segment_flush();
+  }
+
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
     // Inherit the physical capabilities of the strip (restore RGB segment

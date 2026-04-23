@@ -269,8 +269,7 @@ protected:
       if (master != nullptr && master->get_effect_name() != "None")
         return;
 
-      seg_out->update_state(this->light_);
-      seg_out->write_state(this->light_);
+      seg_out->repaint_force_white_current_state();
       return;
     }
 #endif
