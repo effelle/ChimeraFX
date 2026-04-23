@@ -388,18 +388,24 @@ void CFXAddressableLightEffect::start() {
 #endif
   }
 
-  // Zero the default transition length for virtual segment lights while an
-  // effect is running. ESPHome's transition engine (default 1s) repeatedly
-  // writes the ON-state color (white) to the buffer and flushes DMA for the
-  // full transition period — causing a prolonged white flash before the effect
-  // renders. Setting it to 0 makes the ON instant; the intro animation handles
-  // the visual ramp instead. Restored in stop() for normal ON/OFF behavior.
+  // Zero the light's default transition length while a CFX effect is running.
+  // ESPHome's transition engine can delay effect-visible turn-on or paint the
+  // ON-state color into the shared buffer before the effect owns rendering.
+  // Keeping the configured value only for solid-color mode preserves normal
+  // fades there while making effect startup immediate. Restored in stop().
 
   // State Machine Init: Check if we are turning ON from OFF BEFORE modifying
   // state
   bool is_fresh_turn_on = false;
   if (auto *state = this->get_light_state()) {
     is_fresh_turn_on = !state->current_values.is_on();
+    uint32_t default_transition_ms = state->get_default_transition_length();
+    if (default_transition_ms > 0) {
+      if (act_->saved_transition_length == 0) {
+        act_->saved_transition_length = default_transition_ms;
+      }
+      state->set_default_transition_length(0);
+    }
   }
 
   // Monochromatic presets functionally ARE intros. They must unconditionally
@@ -985,8 +991,9 @@ void CFXAddressableLightEffect::stop() {
   // during the transition (audit 3.1).
   act_->intro_snapshot.clear();
 
-  // Restore default transition length zeroed in start() for virtual segments
-  if (this->is_virtual_segment_ && act_->saved_transition_length > 0) {
+  // Restore the light default transition length that was suppressed in start()
+  // so solid-color ON/OFF behavior works again after the effect stops.
+  if (act_->saved_transition_length > 0) {
     auto *ls = this->get_light_state();
     if (ls != nullptr)
       ls->set_default_transition_length(act_->saved_transition_length);

@@ -1,29 +1,14 @@
 # Controls Guide
 
-Now that your effects are up and running, you’ll likely want to customize them. `ChimeraFX` can expose various control entities—such as sliders, dropdowns, and switches—allowing you to fine-tune each effect to your preference.
-While the `cfx_control` component is optional, it is **highly recommended** if you want to manage effects directly from Home Assistant. Without it, effects will run using their default parameters.
+`ChimeraFX` exposes various control entities, such as sliders, dropdowns, and switches, allowing you to fine-tune each effect to your preference. While the controls are optional, they are **highly recommended** if you want to manage effects from Home Assistant. Without them, effects will run using their default parameters.
 
 ## Controller Logic
 
-The `addressable_cfx` effect listens to specific global variables (numbers, selects and switches) to adjust its behavior in real-time.
-To generate controls automatically, use the `cfx_control` component. You need to declare it under the `cfx_effect` component, and it will create all the necessary entities (Speed, Intensity, Palette, Mirror, Intro Effects and Timer) for you, using core `number`, `select` and `switch` components, and link them to your light automatically.
-
-```yaml
-cfx_effect:
-  cfx_control:
-    - id: my_cfx_controller   # The ID of the controller. Customizable
-      name: "LED Strip"       # The prefix name of the controller. Customizable
-      light_id: led_strip     # The ID of the light you want to manage 
-    
-
-      # Optional: Exclude controls you don't need
-      # exclude: [5, 6] # This example will exclude Intro Effects and HA Events
-```
-
-**Note:** The `light_id` parameter is the magic sauce that links the controller to a specific light. This is necessary because the `addressable_cfx` effect needs to know which light it is controlling.
+The effects always listen to specific global variables, such as numbers, selects, and switches, to adjust their behavior in real time.
+A `cfx_light` entity generates all the controls for you automatically. You do not need to declare anything else for that: it creates the necessary entities, such as Speed, Intensity, Palette, Mirror, Intro, Outro, and more, using core `number`, `select`, and `switch` components and links them to your light automatically.
 
 ### Generated Controls
-The component creates the following entities based on your controller name (e.g., `LED Strip`):
+The component creates the following entities based on your light's name (for example, `LED Strip`):
 
 - `LED Strip Speed` (Number)
 - `LED Strip Intensity` (Number)
@@ -32,12 +17,45 @@ The component creates the following entities based on your controller name (e.g.
 - `LED Strip Intro` (Select)
 - `LED Strip Outro` (Select)
 - `LED Strip In/Out Duration` (Number)
-- `LED Strip Debug` (Switch)
+- `LED Strip Force White` (Switch, RGBW/WRGB only)
 - `LED Strip Autotune` (Switch)
+- `LED Strip Debug` (Switch)
 
 ### Exclusion Options
-If you want to keep your dashboard clean, you can exclude specific controls by adding their IDs to the `exclude` list (e.g., `exclude: [5, 6]`).
+Not every user wants every control. If you want to keep things minimal, you can exclude individual controls or disable the whole control set.
+You can achieve that in two ways under your `cfx_light` entity:
 
+- Remove specific controls with the `ctrl_exclude` option by listing the IDs you want to exclude:
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    ctrl_exclude: [3,4,5,6,7,8,9] # Keeping only Speed and Intensity controls
+```
+
+- Or use `controls: false` to disable all controls at once.
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    controls: false # Disable all controls
+```
+
+---
+
+## Overview of Controls
+
+### Controls IDs List
 | ID | Control |
 |:---|:---|
 | 1 | Speed |
@@ -47,68 +65,37 @@ If you want to keep your dashboard clean, you can exclude specific controls by a
 | 5 | Intro Effects (Intro, Outro and Duration) |
 | 6 | HA Events |
 | 7 | Autotune |
+| 8 | Force White |
 | 9 | Debug (Diagnostic) |
 
-That’s it! The effects will automatically detect this controller and respect **any** exclusions you have configured.
-
----
-
-## Advanced: Multiple Strips
-
-### Option 1: Separate Controls (Independent)
-If you want independent control for each strip (e.g., Roof vs Desk), create separate controllers:
-
-```yaml
-cfx_effect:
-  cfx_control:
-    - id: my_cfx_controller  # The ID of the first controller. Customizable
-      name: "LED Strip"      # The prefix name of the first control set. Customizable
-      light_id: led_strip    # The ID of the first light you want to manage
-
-    - id: desk_controller    # The ID of the second controller. Customizable
-      name: "Desk Lights"    # The prefix name of the second control set. Customizable
-      light_id: led_strip_2  # The ID of the second light you want to manage
-```
-
-### Option 2: Unified Control (Grouped)
-If you want a **single set of controls** to operate multiple lights simultaneously (e.g., "Global Control"), you can pass a list of light IDs:
-
-```yaml
-cfx_effect:
-  cfx_control:
-    - id: global_controller   # The ID of the controller. Customizable
-      name: "Global"          # The prefix name of the controller. Customizable
-      light_id: [led_strip_1, led_strip_2] # IDs of the lights in a list format
-```
-This generates only one set of entities (e.g. `Global Speed`) that updates all listed lights at once.
-
-## Overview of Controls
-
 ### ID 1: Speed
-Control slider to manage the speed of the effect. The higher the value, the faster the effect will run. Range (0-255)
+Controls the speed of the effect. The higher the value, the faster the effect will run. Range: `0-255`.
 
 ### ID 2: Intensity
-Control slider to manage the intensity of the effect. Depending on the effect, the slider can manage different parameters like saturation, pattern length, etc. Range (0-255)
+Controls the intensity of the effect. Depending on the effect, this slider may influence parameters such as saturation, pattern length, and more. Range: `0-255`.
 
 ### ID 3: Palette
-Controls the palette used by the effect. A palette is a set of colors that are used by the effect, and every effect has its default palette that can be overridden by this control. Some effects like Fire, Fire Dual and Ocean doesn't allow to change the palette this was a deliberate choice by me to make them more realistic. List of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
+Controls the palette used by the effect. A palette is the set of colors the effect draws from, and each effect has a default palette that this control can override. Some effects, such as Fire, Fire Dual, and Ocean, do not allow palette changes; this is intentional to preserve their visual character. The list of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
 
 ### ID 4: Mirror
-Controls the starting point of an effect start-to-finish or finish-to-start. Useful if you can't physically invert the strip. Affects Intro and Outro Animations too.
+Controls the direction of an effect, from start-to-finish or finish-to-start. This is useful if you cannot physically invert the strip. It also affects Intro and Outro animations.
 
 ### ID 5: Intro and Outro Animation
-A group of three controls: Intro and Outro Style, and In/Out Duration (0.5 - 10.0 seconds). The Intro use the average color of the effect that will follow, the latter always inherit the colors of the active effect palette rather than using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
+A group of three controls: Intro style, Outro style, and In/Out Duration (`0.5-10.0` seconds). The Intro uses the average color of the effect that will follow, while the Outro inherits colors from the active effect palette instead of using a default solid color. More details can be found in the [Intro and Outro Animations](Effects-Library.md#intro-and-outro-animations) section.
 
 ### ID 6: Home Assistant Events
-Let the user leverage Home Assistant as the Orchestrator for complex animation, using special event triggers (`cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop` and `cfx_complete`). More details can be found in the [Sequencer](cfx_sequence.md) section.
+Lets you use Home Assistant as the orchestrator for more complex animation flows through special event triggers (`cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, and `cfx_complete`). More details can be found in the [Sequencer](cfx_sequence.md) section.
 
 ### ID 7: Autotune
 Enables or disables **Intelligent Autotune**. When enabled, the effect will automatically snap its Speed, Intensity, and Palette to the recommended defaults immediately upon being selected.
 
 - **Intelligent Yield:** If you manually adjust a slider or pick a different palette while Autotune is active, the system detects your intervention and automatically toggles Autotune **OFF**, giving you full manual control instantly.
-- **Default Behavior:** If the `cfx_control` component is not used (or Autotune is excluded), the engine defaults to Autotune **ON** to ensure every effect looks its best without manual setup.
-- **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults. 
-- **Presets:** Autotune can be overridden by explicit values stored in [Effect Presets](Effect-Presets.md).
+
+- **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults.
+
+### ID 8: Force White
+Available only on RGBW/WRGB lights with a dedicated white channel. When enabled, ChimeraFX moves the shared part of the current RGB color into the white LED channel instead of reproducing that portion with red, green, and blue together.
+This produces cleaner whites and pastel tones, usually improves efficiency, and reduces the "washed RGB" look on compatible strips. On plain RGB strips, this control is not created.
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead. See [Troubleshooting](Troubleshooting.md) for more details.

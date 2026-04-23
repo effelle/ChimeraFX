@@ -537,8 +537,9 @@ async def to_code(config):
         cg.add(var.set_default_outro_mode(config["use_outro"]))
     if "inout_dur" in config:
         intro_dur_ms = config["inout_dur"]
-        cg.add(var.set_default_intro_dur(float(intro_dur_ms) / 1000.0))
-        cg.add(var.set_default_outro_dur(float(intro_dur_ms) / 1000.0))
+        intro_dur_s = float(intro_dur_ms.total_milliseconds) / 1000.0
+        cg.add(var.set_default_intro_dur(intro_dur_s))
+        cg.add(var.set_default_outro_dur(intro_dur_s))
 
     # --- Segment codegen ---
     for seg in segments:
@@ -552,7 +553,9 @@ async def to_code(config):
 
         seg_intro_dur = 0.0
         if CONF_SEGMENT_INTRO_DUR in seg:
-            seg_intro_dur = float(seg[CONF_SEGMENT_INTRO_DUR]) / 1000.0
+            seg_intro_dur = (
+                float(seg[CONF_SEGMENT_INTRO_DUR].total_milliseconds) / 1000.0
+            )
 
         # Register segment definition on parent (for C++ access)
         cg.add(

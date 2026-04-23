@@ -12,7 +12,7 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 
 ---
 
-## Configuration Variables
+## CFX Light Configuration
 
 ```yaml
 # Example config for 1-wire NRZ strips (WS2812X, SK6812, WS2811):
@@ -23,6 +23,7 @@ light:
     pin: GPIO16
     num_leds: 120
     chipset: WS2812X
+
 # Example config for 2-wire SPI strips (APA102, SK9822):
 light:
   - platform: cfx_light
@@ -54,9 +55,9 @@ light:
 `cfx_light` supports both **1-wire (NRZ)** and **2-wire (SPI)** chipsets. It utilizes native hardware peripherals (RMT and SPI Master) to generate precise timings:
 
 * **1-wire NRZ**: WS2812, WS2812B, WS2813, WS2815, SK6812 (RGBW), WS2811.
-* **2-wire SPI**: APA102, SK9822.
+* **2-wire SPI**: APA102, SK9822 (beta driver).
 
-### Configuration Variables
+### Chipset Identification and Configuration
 To use a specific chipset, use the `chipset` variable in your YAML:
 
 | Parameter | Chipset Option | Description |
@@ -73,11 +74,10 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
-* **max_refresh_rate** (*Time*, default: `16ms`): Controls the ESPHome frame limit. ChimeraFX will automatically adjust the frame rate to match the slowest segment.
-* **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration.
+* **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration for **solid color** light **when no effect is selected**.
 * **use_intro** (*int*): Force a specific global Intro Animation for all effects.
 * **use_outro** (*int*): Force a specific global Outro Animation for all effects.
-* **intro_dur** (*Time*): Sets the duration for both global intros and outros.
+* **inout_dur** (*Time*): Sets the duration for both global intros and outros.
 
 ---
 
