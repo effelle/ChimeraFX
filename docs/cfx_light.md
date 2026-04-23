@@ -3,6 +3,8 @@
 The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome light component specifically designed to be the ultimate companion for ChimeraFX. 
 `cfx_light` wraps native ESP-IDF drivers with opinionated optimizations tailored for heavy lifting and seamless effect integration.
 
+> **Limits:** ChimeraFX currently supports up to **4** `cfx_light` instances per node, in any mix of RMT and SPI lights. Each `cfx_light` can define up to **3** segments.
+
 ## Why use `cfx_light`?
 
 1. **Auto-injection (`all_effects`)**: The biggest feature! By default, `cfx_light` will automatically parse and inject all ChimeraFX effects into your device at compile time. No more `!include` macros, and no more bloated YAML files with hundreds of lines of effect blocks. You can disable this feature by setting `all_effects: false`.
@@ -79,10 +81,10 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **set_intro** (*int*, Optional): Force a specific global Intro Animation for all effects.
 * **set_outro** (*int*, Optional): Force a specific global Outro Animation for all effects.
 * **set_inout_dur** (*Time*, Optional): Sets the duration for both global intros and outros.
-* **set_color** (*list[int]*, Optional): Sets the default base color for the light as `[r, g, b]` or `[r, g, b, w]` (`w` requires a white-channel strip). This seeds solid-color mode and any effect that derives its tone from the current light color. It does not force palette-driven multicolor effects to a single color.
+* **set_color** (*list[int]*, Optional): Sets the default base color for the light as `[r, g, b]` or `[r, g, b, w]` (`w` requires a white-channel strip). This seeds solid-color mode and also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
-* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities.
+* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`.
 
 ---
 

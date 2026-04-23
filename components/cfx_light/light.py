@@ -13,6 +13,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 import esphome.codegen as cg
 from esphome.components import light, event
 import esphome.config_validation as cv
+from esphome.final_validate import full_config
 from esphome import pins
 from esphome.const import (
     CONF_BLUE,
@@ -152,7 +153,8 @@ SEGMENT_SCHEMA = cv.Schema(
     }
 )
 
-MAX_CFX_SEGMENTS = 4
+MAX_CFX_SEGMENTS = 3
+MAX_CFX_LIGHTS = 4
 
 
 def _coalesce_alias(config, canonical_key, alias_keys, *, scope):
@@ -276,6 +278,19 @@ def _validate_segments(config):
                 f"and '{curr_id}' ({curr_start}-{curr_stop}) overlap"
             )
 
+    return config
+
+
+def _final_validate(config):
+    fconf = full_config.get()
+    all_lights = fconf.get_config_for_path(["light"])
+    cfx_lights = [
+        lconf for lconf in all_lights if lconf.get("platform", "") == "cfx_light"
+    ]
+    if len(cfx_lights) > MAX_CFX_LIGHTS:
+        raise cv.Invalid(
+            f"Too many cfx_light entries: {len(cfx_lights)} (max {MAX_CFX_LIGHTS} per node)"
+        )
     return config
 
 
@@ -484,6 +499,7 @@ def _validate_transport(config):
     return config
 
 CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, _validate_transport)
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 # RMT hardware budget per ESP32 variant.
