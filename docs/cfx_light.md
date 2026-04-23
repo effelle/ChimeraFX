@@ -75,9 +75,9 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration for **solid color** light **when no effect is selected**.
-* **use_intro** (*int*): Force a specific global Intro Animation for all effects.
-* **use_outro** (*int*): Force a specific global Outro Animation for all effects.
-* **inout_dur** (*Time*): Sets the duration for both global intros and outros.
+* **set_intro** (*int*): Force a specific global Intro Animation for all effects.
+* **set_outro** (*int*): Force a specific global Outro Animation for all effects.
+* **set_inout_dur** (*Time*): Sets the duration for both global intros and outros.
 
 ---
 

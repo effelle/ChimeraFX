@@ -46,6 +46,9 @@ CONF_SEGMENT_MIRROR = "mirror"
 CONF_SEGMENT_USE_INTRO = "use_intro"
 CONF_SEGMENT_USE_OUTRO = "use_outro"
 CONF_SEGMENT_INTRO_DUR = "inout_dur"
+CONF_SEGMENT_SET_INTRO = "set_intro"
+CONF_SEGMENT_SET_OUTRO = "set_outro"
+CONF_SEGMENT_SET_INOUT_DUR = "set_inout_dur"
 CONF_SEGMENT_OUTPUT_ID = "output_id"
 CONF_SEGMENT_LIGHT_ID = "light_id"
 
@@ -121,12 +124,95 @@ SEGMENT_SCHEMA = cv.Schema(
         cv.Required(CONF_SEGMENT_STOP): cv.uint16_t,
         cv.Optional(CONF_SEGMENT_MIRROR, default=False): cv.boolean,
         cv.Optional(CONF_SEGMENT_USE_INTRO): cv.uint8_t,
+        cv.Optional(CONF_SEGMENT_SET_INTRO): cv.uint8_t,
         cv.Optional(CONF_SEGMENT_USE_OUTRO): cv.uint8_t,
+        cv.Optional(CONF_SEGMENT_SET_OUTRO): cv.uint8_t,
         cv.Optional(CONF_SEGMENT_INTRO_DUR): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_SEGMENT_SET_INOUT_DUR): cv.positive_time_period_milliseconds,
     }
 )
 
 MAX_CFX_SEGMENTS = 4
+
+CONF_SET_INTRO = "set_intro"
+CONF_SET_OUTRO = "set_outro"
+CONF_SET_INOUT_DUR = "set_inout_dur"
+
+
+def _coalesce_alias(config, canonical_key, alias_keys, *, scope):
+    present = [key for key in [canonical_key, *alias_keys] if key in config]
+    if not present:
+        return None
+
+    values = [config[key] for key in present]
+    first = values[0]
+    if any(value != first for value in values[1:]):
+        joined = ", ".join(present)
+        raise cv.Invalid(
+            f"Conflicting values for {scope}: {joined}. Use only one spelling."
+        )
+
+    return first
+
+
+def _normalize_control_aliases(config):
+    config = dict(config)
+
+    intro_val = _coalesce_alias(
+        config, "use_intro", [CONF_SET_INTRO], scope="cfx_light intro default"
+    )
+    if intro_val is not None:
+        config["use_intro"] = intro_val
+
+    outro_val = _coalesce_alias(
+        config, "use_outro", [CONF_SET_OUTRO], scope="cfx_light outro default"
+    )
+    if outro_val is not None:
+        config["use_outro"] = outro_val
+
+    dur_val = _coalesce_alias(
+        config, "inout_dur", [CONF_SET_INOUT_DUR], scope="cfx_light in/out duration default"
+    )
+    if dur_val is not None:
+        config["inout_dur"] = dur_val
+
+    if CONF_SEGMENTS in config:
+        normalized_segments = []
+        for seg in config[CONF_SEGMENTS]:
+            seg = dict(seg)
+
+            seg_intro_val = _coalesce_alias(
+                seg,
+                CONF_SEGMENT_USE_INTRO,
+                [CONF_SEGMENT_SET_INTRO],
+                scope=f"segment '{seg.get(CONF_SEGMENT_NAME, seg[CONF_SEGMENT_ID])}' intro default",
+            )
+            if seg_intro_val is not None:
+                seg[CONF_SEGMENT_USE_INTRO] = seg_intro_val
+
+            seg_outro_val = _coalesce_alias(
+                seg,
+                CONF_SEGMENT_USE_OUTRO,
+                [CONF_SEGMENT_SET_OUTRO],
+                scope=f"segment '{seg.get(CONF_SEGMENT_NAME, seg[CONF_SEGMENT_ID])}' outro default",
+            )
+            if seg_outro_val is not None:
+                seg[CONF_SEGMENT_USE_OUTRO] = seg_outro_val
+
+            seg_dur_val = _coalesce_alias(
+                seg,
+                CONF_SEGMENT_INTRO_DUR,
+                [CONF_SEGMENT_SET_INOUT_DUR],
+                scope=f"segment '{seg.get(CONF_SEGMENT_NAME, seg[CONF_SEGMENT_ID])}' in/out duration default",
+            )
+            if seg_dur_val is not None:
+                seg[CONF_SEGMENT_INTRO_DUR] = seg_dur_val
+
+            normalized_segments.append(seg)
+
+        config[CONF_SEGMENTS] = normalized_segments
+
+    return config
 
 
 def _validate_segments(config):
@@ -226,6 +312,7 @@ def _inject_all_effects(config):
     return config
 
 CONFIG_SCHEMA = cv.All(
+    _normalize_control_aliases,
     _inject_all_effects,
     light.ADDRESSABLE_LIGHT_SCHEMA.extend(
         {
@@ -245,8 +332,11 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_IS_WRGB, default=False): cv.boolean,
             cv.Optional(CONF_ALL_EFFECTS, default=True): cv.boolean,
             cv.Optional("use_intro"): cv.uint8_t,
+            cv.Optional(CONF_SET_INTRO): cv.uint8_t,
             cv.Optional("use_outro"): cv.uint8_t,
+            cv.Optional(CONF_SET_OUTRO): cv.uint8_t,
             cv.Optional("inout_dur"): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_SET_INOUT_DUR): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
                 cv.positive_time_period_milliseconds
             ),
