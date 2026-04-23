@@ -5,6 +5,7 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
+#include "esphome/core/application.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
@@ -100,6 +101,8 @@ public:
 
   void setup() override {
     this->sync_force_white_output_();
+    this->schedule_force_white_sync_(0, false);
+    this->schedule_force_white_sync_(50, false);
 
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
@@ -138,7 +141,10 @@ public:
 
     if (this->force_white_) {
       this->force_white_->add_on_state_callback(
-          [this](bool /*value*/) { this->repaint_force_white_segment_(); });
+          [this](bool /*value*/) {
+            this->repaint_force_white_segment_();
+            this->schedule_force_white_sync_(25, true);
+          });
     }
 
     if (this->palette_) {
@@ -251,9 +257,23 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  void schedule_force_white_sync_(uint32_t delay_ms, bool repaint_after) {
+    uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
+                    (repaint_after ? 0xF0A5u : 0x0F5Au) ^ delay_ms;
+    esphome::App.scheduler.set_timeout(
+        this, hash, delay_ms, [this, repaint_after]() {
+          this->sync_force_white_output_();
+          if (repaint_after)
+            this->repaint_force_white_segment_now_();
+        });
+  }
+
   void repaint_force_white_segment_() {
     this->sync_force_white_output_();
+    this->repaint_force_white_segment_now_();
+  }
 
+  void repaint_force_white_segment_now_() {
     if (this->light_ == nullptr)
       return;
 
