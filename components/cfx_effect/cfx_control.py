@@ -186,7 +186,12 @@ async def to_code(config):
         if idx > 0:
             import esphome.core as _core
             _core.CORE.component_ids.add(str(var_id))
-        await cg.register_component(var, config if idx == 0 else {})
+        # Synthetic per-segment controls still need a real component config
+        # carrying their generated ID, otherwise their setup() path may never
+        # be registered consistently. That breaks live switch callbacks while
+        # still leaving the setter-wired initial state in place.
+        component_conf = config if idx == 0 else {CONF_ID: var_id}
+        await cg.register_component(var, component_conf)
         cg.add(var.set_light(target["state"]))
         
         t_name = target["name"]
