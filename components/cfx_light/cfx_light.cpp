@@ -106,7 +106,7 @@ static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
 // lwip/sockets.h.
 CFXLightOutput::~CFXLightOutput() {
   if (this->socket_fd_ >= 0) {
-    close(this->socket_fd_);
+    ::close(this->socket_fd_);
     this->socket_fd_ = -1;
   }
   // SPI teardown
@@ -890,21 +890,21 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // Internal dev tool only -- not compiled unless CFX_VISUALIZER_ENABLED.
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
     if (this->socket_fd_ < 0)
-      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+      this->socket_fd_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (this->socket_fd_ >= 0) {
       struct sockaddr_in dest_addr;
-      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
+      dest_addr.sin_addr.s_addr = ::inet_addr(this->visualizer_ip_.c_str());
       dest_addr.sin_family = AF_INET;
-      dest_addr.sin_port = htons(this->visualizer_port_);
+      dest_addr.sin_port = ::htons(this->visualizer_port_);
       size_t buf_len = this->get_buffer_size_();
       this->visualizer_pkt_.clear();
       this->visualizer_pkt_.reserve(buf_len + 1);
       this->visualizer_pkt_.push_back(VISUALIZER_TYPE_PIXELS);
       this->visualizer_pkt_.insert(this->visualizer_pkt_.end(), this->buf_,
                                    this->buf_ + buf_len);
-      sendto(this->socket_fd_, this->visualizer_pkt_.data(),
-             this->visualizer_pkt_.size(), 0, (struct sockaddr *)&dest_addr,
-             sizeof(dest_addr));
+      ::sendto(this->socket_fd_, this->visualizer_pkt_.data(),
+               this->visualizer_pkt_.size(), 0,
+               (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     }
   }
 #endif // CFX_VISUALIZER_ENABLED
@@ -1109,13 +1109,13 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name,
 #if defined(CFX_VISUALIZER_ENABLED) && defined(USE_WIFI)
   if (this->visualizer_enabled_ && !this->visualizer_ip_.empty()) {
     if (this->socket_fd_ < 0) {
-      this->socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+      this->socket_fd_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     }
     if (this->socket_fd_ >= 0) {
       struct sockaddr_in dest_addr;
-      dest_addr.sin_addr.s_addr = inet_addr(this->visualizer_ip_.c_str());
+      dest_addr.sin_addr.s_addr = ::inet_addr(this->visualizer_ip_.c_str());
       dest_addr.sin_family = AF_INET;
-      dest_addr.sin_port = htons(this->visualizer_port_);
+      dest_addr.sin_port = ::htons(this->visualizer_port_);
 
       std::vector<uint8_t> pkt;
       pkt.push_back(VISUALIZER_TYPE_METADATA);
@@ -1128,8 +1128,8 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name,
         pkt.insert(pkt.end(), palette.begin(), palette.end());
       }
 
-      sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
-             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+      ::sendto(this->socket_fd_, pkt.data(), pkt.size(), 0,
+               (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     }
   }
 #endif // CFX_VISUALIZER_ENABLED

@@ -8,11 +8,28 @@ Unlike the old `addressable_lambda` method, this implementation runs as a proper
 
 ### Getting Started
 
-**[Read the Official Documentation](https://effelle.github.io/ChimeraFX/)**
+#### Quick Configuration
+
+```yaml
+external_components:
+  - source: github://effelle/ChimeraFX@main
+
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16             # GPIO pin where the LED strip is connected
+    num_leds: 120           # Number of LEDs in the strip
+    chipset: WS2812X        # Type of LED strip (WS2812X, SK6812, WS2811, etc.)
+```
+
+That’s it! You already have everything you need to run ChimeraFX!
+
+**[Or read the Official Documentation to unlock the full potential of ChimeraFX.](https://effelle.github.io/ChimeraFX/)**
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
-- [The Orchestrator Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
+- [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---
@@ -38,12 +55,14 @@ ChimeraFX stands as a distinct, high-performance lighting engine and sequencer. 
 
 #### Is this for me?
 This project is **not** a full WLED replacement. Choose the right tool for your hardware:
-* **Install [WLED](https://kno.wled.ge/) if:** You want the full lighting-only experience (E1.31, 150+ effects, sound reactivity).
+* **Install [WLED](https://kno.wled.ge/) if:** You want the full lighting-only experience (E1.31, 150+ effects, sound reactivity, 2D matrix support, etc.).
 * **Use ChimeraFX if:** You want to consolidate! You need a single ESP32 to handle sensors, relays, or switches **AND** run smooth, high-quality lighting effects simultaneously.
 
 ---
 
 ### Platform Compatibility
+
+> ⚠️**[IMPORTANT]** Minimum Requirement: ChimeraFX requires ESPHome **2026.3.0 or later** to leverage the latest C++ performance optimizations and core event loop improvements.
 
 - **Framework:** **ESP-IDF** and **Arduino**
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
