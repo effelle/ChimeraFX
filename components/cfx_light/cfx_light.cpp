@@ -21,6 +21,7 @@
 #ifdef USE_ESP32
 
 #include "esphome/components/light/light_state.h"
+#include "esphome/components/light/transformers.h"
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include <cmath>
@@ -43,6 +44,15 @@ static const char *const TAG = "cfx_light";
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
+
+std::unique_ptr<light::LightTransformer>
+CFXLightOutput::create_default_transition() {
+  // For CFXLight, default_transition_length is only meant for plain
+  // solid-color mode. Using the generic LightTransitionTransformer gives a
+  // true LightColorValues brightness ramp instead of relying on ESPHome's
+  // addressable buffer-decay transition path.
+  return make_unique<light::LightTransitionTransformer>();
+}
 
 // Query the RMT default clock source frequency (varies by chip variant)
 static uint32_t rmt_resolution_hz() {
@@ -707,13 +717,6 @@ void CFXLightOutput::loop() {
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
 #endif
-
-  // Preserve ESPHome's native transition engine for plain solid-color mode.
-  // CFX effect playback, outro rendering, and segmented ownership all bypass
-  // the parent AddressableLight loop on purpose.
-  if (!this->has_segments() && !this->has_outro() && !this->is_effect_active()) {
-    light::AddressableLight::loop();
-  }
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -755,15 +758,10 @@ void CFXLightOutput::update_state(light::LightState *state) {
     return;
   }
 
-  // Let ESPHome's native transformer own solid-color transitions. The parent
-  // loop delegates to AddressableLight::loop() in plain solid mode, which
-  // advances the fade and writes the intermediate frames.
-  if (state->is_transformer_active()) {
-    return;
-  }
-
-  // Solid-color rendering for non-segmented lights when no transition is
-  // active.
+  // Solid-color rendering for non-segmented lights. For default transitions
+  // we use the generic LightTransitionTransformer, so current_values already
+  // contain the in-progress brightness/color step and should be painted
+  // directly into the buffer.
   Color c = light::color_from_light_color_values(val);
 
   // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer

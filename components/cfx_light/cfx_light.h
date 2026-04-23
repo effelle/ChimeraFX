@@ -11,6 +11,7 @@
 
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/light/light_output.h"
+#include "esphome/components/light/light_transformer.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
@@ -97,6 +98,7 @@ public:
                                 const std::string &palette = "");
   float get_setup_priority() const override;
   int32_t size() const override { return this->num_leds_; }
+  std::unique_ptr<light::LightTransformer> create_default_transition() override;
 
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
   bool has_outro() const { return !this->outro_cbs_.empty(); }

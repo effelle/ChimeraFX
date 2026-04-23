@@ -105,13 +105,13 @@ light:
           set_speed: 100   # Make it much faster
 ```
 
-With the above configuration, your ESP32 will compile with all 50+ effects, but `Aurora` will use your tailored speed and palette settings out of the box. More on effect presets in the [Effect Presets](Effect-Presets.md) page.
+With the above configuration, your ESP32 will compile with all the effects, but `Aurora` will use your tailored speed and palette settings out of the box. More on effect presets in the [Effect Presets](Effect-Presets.md) page.
 
 ---
 
 ## Segments (Multi-Zone Control)
 
-ChimeraFX supports dividing a single physical LED strip into up to **4 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+ChimeraFX supports dividing a single physical LED strip into up to **3 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
 
 ### Segment Configuration
 
