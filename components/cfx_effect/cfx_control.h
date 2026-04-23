@@ -38,7 +38,11 @@ public:
 
 class CFXSwitch : public switch_::Switch {
 public:
-  void write_state(bool state) override { this->publish_state(state); }
+  void write_state(bool state) override {
+    ESP_LOGI("chimera_fw", "switch write self=%p name=%s state=%d", this,
+             this->get_name().c_str(), state);
+    this->publish_state(state);
+  }
 };
 
 class CFXControl : public Component {
@@ -101,6 +105,11 @@ public:
   CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
+    ESP_LOGI("chimera_fw", "control setup ctrl=%p light=%p light_name=%s fw=%p",
+             this, this->light_,
+             this->light_ != nullptr ? this->light_->get_name().c_str()
+                                     : "<null>",
+             this->force_white_);
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
 
@@ -140,9 +149,13 @@ public:
     }
 
     if (this->force_white_) {
+      ESP_LOGI("chimera_fw",
+               "register force_white callback ctrl=%p light=%p sw=%p name=%s",
+               this, this->light_, this->force_white_,
+               this->force_white_->get_name().c_str());
       this->force_white_->add_on_state_callback(
           [this](bool value) {
-            ESP_LOGD("chimera_fw",
+            ESP_LOGI("chimera_fw",
                      "force_white toggle ctrl=%p light=%p sw=%p state=%d",
                      this, this->light_, this->force_white_, value);
             this->repaint_force_white_segment_();
@@ -198,6 +211,11 @@ public:
   void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
   void set_force_white(esphome::switch_::Switch *s) {
     force_white_ = s;
+    ESP_LOGI("chimera_fw",
+             "set force_white ctrl=%p light=%p sw=%p name=%s", this,
+             this->light_, this->force_white_,
+             this->force_white_ != nullptr ? this->force_white_->get_name().c_str()
+                                           : "<null>");
     this->sync_force_white_output_();
   }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
@@ -206,6 +224,11 @@ public:
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_light(esphome::light::LightState *light) {
     light_ = light;
+    ESP_LOGI("chimera_fw", "set light ctrl=%p light=%p name=%s fw=%p", this,
+             this->light_,
+             this->light_ != nullptr ? this->light_->get_name().c_str()
+                                     : "<null>",
+             this->force_white_);
     this->sync_force_white_output_();
   }
 
@@ -317,7 +340,7 @@ protected:
         return;
       }
 
-      ESP_LOGD("chimera_fw",
+      ESP_LOGI("chimera_fw",
                "segment repaint now ctrl=%p seg=%p id=%s seg_sw=%p seg_sw_state=%d ctrl_sw=%p ctrl_sw_state=%d",
                this, seg_out, seg_out->get_segment_id().c_str(),
                seg_out->get_force_white_switch(),
@@ -354,7 +377,7 @@ protected:
 #ifdef USE_ESP32
     for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
       if (seg_out == output) {
-        ESP_LOGD("chimera_fw",
+        ESP_LOGI("chimera_fw",
                  "bind segment force_white ctrl=%p seg=%p id=%s sw=%p state=%d",
                  this, seg_out, seg_out->get_segment_id().c_str(),
                  this->force_white_, this->force_white_->state);
@@ -365,7 +388,7 @@ protected:
 #endif
 
     auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
-    ESP_LOGD("chimera_fw",
+    ESP_LOGI("chimera_fw",
              "bind master force_white ctrl=%p out=%p sw=%p state=%d",
              this, cfx_out, this->force_white_, this->force_white_->state);
     cfx_out->set_force_white_switch(this->force_white_);

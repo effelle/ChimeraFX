@@ -124,7 +124,7 @@ public:
 
   void set_force_white_switch(switch_::Switch *sw) {
     force_white_sw_ = sw;
-    ESP_LOGD("chimera_fw",
+    ESP_LOGI("chimera_fw",
              "segment stored force_white switch seg=%p id=%s sw=%p state=%d",
              this, seg_id_.c_str(), force_white_sw_,
              force_white_sw_ != nullptr ? force_white_sw_->state : -1);
@@ -157,7 +157,7 @@ public:
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 
-    ESP_LOGD("chimera_fw",
+    ESP_LOGI("chimera_fw",
              "segment repaint apply seg=%p id=%s seg_sw=%p seg_sw_state=%d parent_sw=%p parent_sw_state=%d rgba=(%u,%u,%u,%u)",
              this, seg_id_.c_str(), force_white_sw_,
              force_white_sw_ != nullptr ? force_white_sw_->state : -1,
