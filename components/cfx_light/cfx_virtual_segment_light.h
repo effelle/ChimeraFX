@@ -15,6 +15,7 @@
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
+#include "esphome/core/log.h"
 
 #include <string>
 
@@ -121,7 +122,13 @@ public:
     parent_->request_segment_flush();
   }
 
-  void set_force_white_switch(switch_::Switch *sw) { force_white_sw_ = sw; }
+  void set_force_white_switch(switch_::Switch *sw) {
+    force_white_sw_ = sw;
+    ESP_LOGD("chimera_fw",
+             "segment stored force_white switch seg=%p id=%s sw=%p state=%d",
+             this, seg_id_.c_str(), force_white_sw_,
+             force_white_sw_ != nullptr ? force_white_sw_->state : -1);
+  }
   switch_::Switch *get_force_white_switch() const { return force_white_sw_; }
 
   void repaint_force_white_current_state() {
@@ -150,6 +157,15 @@ public:
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 
+    ESP_LOGD("chimera_fw",
+             "segment repaint apply seg=%p id=%s seg_sw=%p seg_sw_state=%d parent_sw=%p parent_sw_state=%d rgba=(%u,%u,%u,%u)",
+             this, seg_id_.c_str(), force_white_sw_,
+             force_white_sw_ != nullptr ? force_white_sw_->state : -1,
+             parent_->get_force_white_switch(),
+             parent_->get_force_white_switch() != nullptr
+                 ? parent_->get_force_white_switch()->state
+                 : -1,
+             c.r, c.g, c.b, c.w);
     this->all() = c;
     parent_->request_segment_flush();
   }

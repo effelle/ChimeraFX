@@ -9,6 +9,7 @@
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 #include <algorithm>
 #include <cstring>
 #include <map>
@@ -101,8 +102,7 @@ public:
 
   void setup() override {
     this->sync_force_white_output_();
-    this->schedule_force_white_sync_(0, false);
-    this->schedule_force_white_sync_(50, false);
+    this->schedule_force_white_sync_(25, false);
 
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
@@ -141,7 +141,10 @@ public:
 
     if (this->force_white_) {
       this->force_white_->add_on_state_callback(
-          [this](bool /*value*/) {
+          [this](bool value) {
+            ESP_LOGD("chimera_fw",
+                     "force_white toggle ctrl=%p light=%p sw=%p state=%d",
+                     this, this->light_, this->force_white_, value);
             this->repaint_force_white_segment_();
             this->schedule_force_white_sync_(25, true);
           });
@@ -260,8 +263,14 @@ protected:
   void schedule_force_white_sync_(uint32_t delay_ms, bool repaint_after) {
     uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
                     (repaint_after ? 0xF0A5u : 0x0F5Au) ^ delay_ms;
+    ESP_LOGD("chimera_fw",
+             "schedule force_white sync ctrl=%p delay=%u repaint=%d light=%p sw=%p",
+             this, delay_ms, repaint_after, this->light_, this->force_white_);
     esphome::App.scheduler.set_timeout(
         this, hash, delay_ms, [this, repaint_after]() {
+          ESP_LOGD("chimera_fw",
+                   "run force_white sync ctrl=%p repaint=%d light=%p sw=%p",
+                   this, repaint_after, this->light_, this->force_white_);
           this->sync_force_white_output_();
           if (repaint_after)
             this->repaint_force_white_segment_now_();
@@ -274,42 +283,81 @@ protected:
   }
 
   void repaint_force_white_segment_now_() {
-    if (this->light_ == nullptr)
+    if (this->light_ == nullptr) {
+      ESP_LOGD("chimera_fw", "segment repaint skipped: null light ctrl=%p",
+               this);
       return;
+    }
 
     auto *output = this->light_->get_output();
-    if (output == nullptr)
+    if (output == nullptr) {
+      ESP_LOGD("chimera_fw", "segment repaint skipped: null output ctrl=%p light=%p",
+               this, this->light_);
       return;
+    }
 
 #ifdef USE_ESP32
     for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
       if (seg_out != output)
         continue;
 
-      if (seg_out->is_effect_active() || seg_out->get_parent()->has_outro())
+      if (seg_out->is_effect_active() || seg_out->get_parent()->has_outro()) {
+        ESP_LOGD("chimera_fw",
+                 "segment repaint skipped: effect/outro ctrl=%p seg=%p id=%s",
+                 this, seg_out, seg_out->get_segment_id().c_str());
         return;
+      }
 
       auto *master = seg_out->get_parent()->get_master_light_state();
-      if (master != nullptr && master->get_effect_name() != "None")
+      if (master != nullptr && master->get_effect_name() != "None") {
+        ESP_LOGD("chimera_fw",
+                 "segment repaint skipped: master effect active ctrl=%p seg=%p id=%s master=%p effect=%s",
+                 this, seg_out, seg_out->get_segment_id().c_str(), master,
+                 master->get_effect_name().c_str());
         return;
+      }
 
+      ESP_LOGD("chimera_fw",
+               "segment repaint now ctrl=%p seg=%p id=%s seg_sw=%p seg_sw_state=%d ctrl_sw=%p ctrl_sw_state=%d",
+               this, seg_out, seg_out->get_segment_id().c_str(),
+               seg_out->get_force_white_switch(),
+               seg_out->get_force_white_switch() != nullptr
+                   ? seg_out->get_force_white_switch()->state
+                   : -1,
+               this->force_white_,
+               this->force_white_ != nullptr ? this->force_white_->state : -1);
       seg_out->repaint_force_white_current_state();
       return;
     }
 #endif
+    ESP_LOGD("chimera_fw",
+             "segment repaint fell through: output %p is not a virtual segment for ctrl=%p",
+             output, this);
   }
 
   void sync_force_white_output_() {
-    if (this->light_ == nullptr || this->force_white_ == nullptr)
+    if (this->light_ == nullptr || this->force_white_ == nullptr) {
+      ESP_LOGD("chimera_fw",
+               "sync skipped ctrl=%p light=%p sw=%p", this, this->light_,
+               this->force_white_);
       return;
+    }
 
     auto *output = this->light_->get_output();
-    if (output == nullptr)
+    if (output == nullptr) {
+      ESP_LOGD("chimera_fw",
+               "sync skipped: null output ctrl=%p light=%p sw=%p",
+               this, this->light_, this->force_white_);
       return;
+    }
 
 #ifdef USE_ESP32
     for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
       if (seg_out == output) {
+        ESP_LOGD("chimera_fw",
+                 "bind segment force_white ctrl=%p seg=%p id=%s sw=%p state=%d",
+                 this, seg_out, seg_out->get_segment_id().c_str(),
+                 this->force_white_, this->force_white_->state);
         seg_out->set_force_white_switch(this->force_white_);
         return;
       }
@@ -317,6 +365,9 @@ protected:
 #endif
 
     auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+    ESP_LOGD("chimera_fw",
+             "bind master force_white ctrl=%p out=%p sw=%p state=%d",
+             this, cfx_out, this->force_white_, this->force_white_->state);
     cfx_out->set_force_white_switch(this->force_white_);
   }
 
