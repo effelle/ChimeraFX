@@ -803,7 +803,7 @@ void CFXAddressableLightEffect::start() {
       act_->intro_active = true;
       act_->active_intro_mode = preset.intro_mode;
     } else {
-      // 2. Fallback to UI Selectors / YAML Presets
+      // 2. Fallback to UI selectors / YAML presets
       if (intro_sel != nullptr && intro_sel->has_state()) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = intro_sel->current_option().c_str();
@@ -860,6 +860,8 @@ void CFXAddressableLightEffect::start() {
           act_->active_intro_mode = INTRO_MODE_TIDAL_SURGE;
         else if (s == "Impact Flare")
           act_->active_intro_mode = INTRO_MODE_IMPACT_FLARE;
+      } else if (this->has_intro_preset_()) {
+        act_->active_intro_mode = this->intro_preset_val_();
       }
     }
 
@@ -1564,6 +1566,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   uint32_t color = 0;
 
   if (state_ptr != nullptr) {
+    // While a CFX effect is active, ESPHome's transition transformer must not
+    // keep ownership of the state progression. Otherwise a non-zero
+    // default_transition_length can behave like a delayed effect start.
+    if (chimera_fx::LightStateProxy::has_active_transformer(state_ptr)) {
+      state_ptr->current_values = state_ptr->remote_values;
+      chimera_fx::LightStateProxy::stop_state_transformer(state_ptr);
+    }
+
     // We use remote_values (the target) instead of current_values (the
     // transitioning color) to ensure the runner has the "full" color
     // immediately. This solves the "black strip on first run" issue. Also, we
