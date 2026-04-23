@@ -128,12 +128,9 @@ EXCLUDE_FORCE_WHITE = 8
 EXCLUDE_DEBUG = 9
 EXCLUDE_OUTRO = 10
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(CFXControl),
-    cv.Required(CONF_NAME): cv.string,
-    cv.Required(CONF_LIGHT): cv.ensure_list(cv.use_id(light.LightState)),
-    cv.Optional(CONF_EXCLUDE, default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
-})
+# CONFIG_SCHEMA removed — cfx_control is now internal-only.
+# Controls are auto-generated from cfx_light entries via __init__.py.
+# The to_code() function below is called with synthetic configs.
 
 async def to_code(config):
     import esphome.core as core

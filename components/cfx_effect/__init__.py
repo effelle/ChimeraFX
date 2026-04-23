@@ -27,17 +27,44 @@ CFXAddressableLightEffect = chimera_fx_ns.class_(
 
 from . import cfx_control
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.Optional("cfx_control"): cv.ensure_list(cfx_control.CONFIG_SCHEMA),
-    }
-)
+CONFIG_SCHEMA = cv.Schema({})
 
-def to_code(config):
+async def to_code(config):
+    import esphome.core as core
+
     cg.add_define("USE_CFX_EVENTS")
-    if "cfx_control" in config:
-        for conf in config["cfx_control"]:
-            yield cfx_control.to_code(conf)
+
+    # Auto-generate controls from cfx_light entries
+    for lconf in core.CORE.config.get("light", []):
+        if lconf.get("platform", "") != "cfx_light":
+            continue
+
+        lconf_id = lconf.get(CONF_ID)
+        if lconf_id is None:
+            continue
+
+        if not lconf.get("controls", True):
+            continue
+
+        light_id_str = lconf_id.id
+        light_name = str(lconf.get(CONF_NAME, light_id_str))
+        auto_id = f"cfx_auto_ctrl_{light_id_str}"
+
+        synthetic_conf = {
+            "id": core.ID(
+                auto_id,
+                is_declaration=True,
+                type=cfx_control.CFXControl,
+            ),
+            "name": light_name,
+            "light_id": [lconf_id],
+            "exclude": lconf.get("ctrl_exclude", []),
+        }
+
+        core.CORE.component_ids.add(auto_id)
+
+        await cfx_control.to_code(synthetic_conf)
+
 
 # Configuration keys
 CONF_EFFECT_ID = "effect_id"

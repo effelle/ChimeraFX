@@ -2,7 +2,7 @@
 
 # ChimeraFX: Advanced LED Effects Engine for ESPHome
 
-*A high-performance C++ rendering engine bringing premium fluid simulations, architectural transitions, and optimized WLED classics natively into your ESPHome and Home Assistant ecosystem.*
+*A high-performance C++ rendering engine featuring a powerful event-driven sequencer to deliver premium fluid simulations, architectural transitions, and optimized WLED classics natively within the ESPHome ecosystem.*
 
 Unlike the old `addressable_lambda` method, this implementation runs as a proper native component optimized for both ESP-IDF and Arduino frameworks, freeing up your YAML and maximizing frame rates.
 

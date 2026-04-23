@@ -55,7 +55,7 @@ Visual effects are computationally expensive.
 
 *   **Native Performance**: Optimized for ESP-IDF and dual-core ESP32s.
 *   **ChimeraFX Light Platform**: A custom ESPHome light platform that support segments, allows you to run parallel complex RGB LED effects on ESP32 devices.
-*   **ChimeraFX Orchestrator**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
+*   **ChimeraFX Sequencer**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
 *   **Zero-Lambda Config**: Uses a clean `external_components` setup.
 *   **Rich Effect Library**: Ports of complex effects that were previously impossible or slow in pure YAML using `addressable_lambda`.
 *   **Custom Palettes**: A curated selection of palettes to choose from.

@@ -15,23 +15,40 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 ## Configuration Variables
 
 ```yaml
+# Example config for 1-wire NRZ strips (WS2812X, SK6812, WS2811):
 light:
   - platform: cfx_light
-    name: "Living Room Light"
-    id: led_strip
+    name: "LED Strip RMT"
+    id: led_strip_rmt
     pin: GPIO16
-    num_leds: 300
+    num_leds: 120
     chipset: WS2812X
-    all_effects: true
-    use_intro: 1         # Global Wipe intro
-    use_outro: 2         # Global Fade outro
-    intro_dur: 1000ms    # 1s duration
+# Example config for 2-wire SPI strips (APA102, SK9822):
+light:
+  - platform: cfx_light
+    name: "LED Strip SPI"
+    id: led_strip_spi
+    data_pin: GPIO23       # Data pin required for SPI strips
+    clock_pin: GPIO18      # Clock pin required for SPI strips
+    spi_speed: 10MHz       # SPI speed for SPI strips
+    num_leds: 120          
+    chipset: SK9822
 ```
 
 ### Required Parameters
+#### For 1-wire NRZ chipsets:
 * **name** (*string*): The name of the light in Home Assistant.
 * **id** (*ID*): The ID of the light component.
 * **pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
+* **chipset** (*string*): The type of LED strip you are using.
+* **num_leds** (*int*): The total number of LEDs in your strip.
+#### For 2-wire SPI chipsets:
+* **name** (*string*): The name of the light in Home Assistant.
+* **id** (*ID*): The ID of the light component.
+* **data_pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
+* **clock_pin** (*Pin*): The GPIO pin the clock line of your LED strip is connected to.
+* **spi_speed** (*Time*): The speed of the SPI clock.
+* **chipset** (*string*): The type of LED strip you are using.
 * **num_leds** (*int*): The total number of LEDs in your strip.
 ### Supported Chipsets
 `cfx_light` supports both **1-wire (NRZ)** and **2-wire (SPI)** chipsets. It utilizes native hardware peripherals (RMT and SPI Master) to generate precise timings:
@@ -47,8 +64,8 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 | **chipset** | `WS2812X` | Standard 3-pin RGB timing (Default) |
 | | `SK6812` | 4-byte RGBW timing (GRBW order) |
 | | `WS2811` | Optimized timing for WS2811 data rates |
-| | `APA102` | 2-wire SPI timing |
-| | `SK9822` | 2-wire SPI timing |
+| | `APA102` | 2-wire SPI timing (beta driver) |
+| | `SK9822` | 2-wire SPI timing (beta driver) |
 
 ### Optional Parameters
 * **all_effects** (*boolean*, default: `true`): When set to `true`, the component will instantly register all effects. Set to `false` to manually register effects or custom presets.
@@ -141,7 +158,7 @@ When segments are defined:
 
 1.  The "Master" light entity (e.g., "Main TV Strip") acts as a global power and brightness control. It does **not** have its own effects. Turning off the Master turns off all segments.
 
-2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (if `all_effects: true` is set on the parent).
+2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (unless `all_effects: false` is set on the parent).
 
 3.  Segments can run different effects, speeds, and palettes independently.
 

@@ -51,7 +51,7 @@ CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
-AUTO_LOAD = ["event"]
+AUTO_LOAD = ["event", "cfx_effect"]
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
@@ -254,6 +254,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
+            # Auto-controls (cfx_control entities generated from cfx_light)
+            cv.Optional("controls", default=True): cv.boolean,
+            cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=10)),
             # Segment definitions (Phase 1)
             cv.Optional(CONF_SEGMENTS): cv.ensure_list(SEGMENT_SCHEMA),
         }

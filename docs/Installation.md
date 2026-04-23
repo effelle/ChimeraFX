@@ -9,7 +9,7 @@
       *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues. Up to 2 strips.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
-*   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported!
+*   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
 
 ---
 

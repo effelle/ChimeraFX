@@ -42,11 +42,12 @@ nav:
   - Guide:
     - Installation: Installation.md
     - ChimeraFX light: cfx_light.md
-    - Light Controls: Controls.md
-    - The Sequencer: cfx_sequence.md
-    - Effect Presets: Effect-Presets.md
-    - Troubleshooting: Troubleshooting.md
+    - Controls: Controls.md
     - Effect Library: Effects-Library.md
+    - Effect Presets: Effect-Presets.md
+    - The Sequencer: cfx_sequence.md
+    - Troubleshooting: Troubleshooting.md
+  - About:
     - The Story: The-Story.md
     - Buy Me a Coffee!: https://www.buymeacoffee.com/effelle
 extra:
