@@ -418,6 +418,9 @@ void CFXAddressableLightEffect::start() {
   // Force bypass transition to avoid the 1s darkness bug on initial render
   if (auto *ls = this->get_light_state()) {
     ls->current_values = ls->remote_values;
+    if (chimera_fx::LightStateProxy::has_active_transformer(ls)) {
+      chimera_fx::LightStateProxy::stop_state_transformer(ls);
+    }
   }
 
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
