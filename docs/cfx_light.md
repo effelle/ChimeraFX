@@ -48,7 +48,6 @@ light:
 * **id** (*ID*): The ID of the light component.
 * **data_pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
 * **clock_pin** (*Pin*): The GPIO pin the clock line of your LED strip is connected to.
-* **spi_speed** (*Time*): The speed of the SPI clock.
 * **chipset** (*string*): The type of LED strip you are using.
 * **num_leds** (*int*): The total number of LEDs in your strip.
 ### Supported Chipsets
@@ -74,10 +73,16 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
+* **spi_speed** (*Frequency*, Optional): The SPI clock speed for `APA102` and `SK9822` strips. If omitted, `cfx_light` uses a sensible default.
+* **spi_host** (*string*, Optional): Selects the ESP-IDF SPI host to use for SPI strips. Options: `SPI2_HOST`, `SPI3_HOST`.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration for **solid color** light **when no effect is selected**.
-* **set_intro** (*int*): Force a specific global Intro Animation for all effects.
-* **set_outro** (*int*): Force a specific global Outro Animation for all effects.
-* **set_inout_dur** (*Time*): Sets the duration for both global intros and outros.
+* **set_intro** (*int*, Optional): Force a specific global Intro Animation for all effects.
+* **set_outro** (*int*, Optional): Force a specific global Outro Animation for all effects.
+* **set_inout_dur** (*Time*, Optional): Sets the duration for both global intros and outros.
+* **set_color** (*list[int]*, Optional): Sets the default base color for the light as `[r, g, b]` or `[r, g, b, w]` (`w` requires a white-channel strip). This seeds solid-color mode and any effect that derives its tone from the current light color. It does not force palette-driven multicolor effects to a single color.
+* **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
+* **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
+* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities.
 
 ---
 
@@ -144,13 +149,15 @@ light:
 
 ### Segment Parameters
 
-* **id** (*string*, Required): A unique ID for the segment.
+* **id** (*ID*, Required): A unique ESPHome `id` for the segment light entity.
 * **name** (*string*, Optional): The name of the light entity in Home Assistant. If omitted, the `id` is used.
 * **start** (*int*, Required): The starting pixel index (inclusive).
 * **stop** (*int*, Required): The stopping pixel index (exclusive).
 * **mirror** (*boolean*, default: `false`): If true, calculations are reversed for this segment (useful for symmetrical setups).
-* **use_intro** / **use_outro** (*int*, Optional): Override the global intro/outro modes for this specific segment.
-* **intro_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
+* **set_intro** (*int*, Optional): Override the global intro mode for this specific segment.
+* **set_outro** (*int*, Optional): Override the global outro mode for this specific segment.
+* **set_inout_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
+* **set_color** (*list[int]*, Optional): Override the segment's default base color as `[r, g, b]` or `[r, g, b, w]` (`w` requires a white-channel strip). Like the parent light, this affects solid-color mode and single-tone effects that use the light state's color.
 
 ### Master vs. Segment Behavior
 
