@@ -45,6 +45,39 @@ std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 
+void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
+  if (this->force_white_sw_ == sw && this->force_white_cb_bound_)
+    return;
+
+  this->force_white_sw_ = sw;
+  this->force_white_cb_bound_ = false;
+  this->bind_force_white_switch_();
+}
+
+void CFXLightOutput::bind_force_white_switch_() {
+  if (this->force_white_sw_ == nullptr || this->force_white_cb_bound_)
+    return;
+
+  this->force_white_sw_->add_on_state_callback(
+      [this](bool state) { this->repaint_force_white_solid_(state); });
+  this->force_white_cb_bound_ = true;
+}
+
+void CFXLightOutput::repaint_force_white_solid_(bool state) {
+  if (this->is_effect_active() || this->has_segments())
+    return;
+
+  if (this->state_parent_ != nullptr) {
+    auto val = this->state_parent_->current_values;
+    Color c = light::color_from_light_color_values(val);
+    if (state && this->has_white_channel()) {
+      cfx::apply_force_white(c.r, c.g, c.b, c.w);
+    }
+    this->all() = c;
+    this->schedule_show();
+  }
+}
+
 std::unique_ptr<light::LightTransformer>
 CFXLightOutput::create_default_transition() {
   // For CFXLight, default_transition_length is only meant for plain
@@ -276,25 +309,10 @@ void CFXLightOutput::setup() {
     }
   }
 
-  // QoL FIX: Live force_white reactivity for solid colors
-  // If no effect is active, toggling the switch must immediately repaint
-  // the current solid color with/without the RGB->W conversion.
-  if (this->force_white_sw_ != nullptr) {
-    this->force_white_sw_->add_on_state_callback([this](bool state) {
-      if (this->is_effect_active() || this->has_segments())
-        return;
-
-      if (this->state_parent_ != nullptr) {
-        auto val = this->state_parent_->current_values;
-        Color c = light::color_from_light_color_values(val);
-        if (state && this->has_white_channel()) {
-          cfx::apply_force_white(c.r, c.g, c.b, c.w);
-        }
-        this->all() = c;
-        this->schedule_show();
-      }
-    });
-  }
+  // QoL FIX: Live force_white reactivity for solid colors.
+  // The switch may be attached either before or after setup(), so bind here
+  // and also on late attachment from CFXControl.
+  this->bind_force_white_switch_();
 
   if (this->transport_ == TRANSPORT_SPI) {
     ESP_LOGI(TAG, "CFXLight ready: %u LEDs on SPI (data=GPIO%u clock=GPIO%u speed=%" PRIu32 " Hz)",

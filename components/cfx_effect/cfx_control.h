@@ -180,12 +180,18 @@ public:
   void set_palette(select::Select *s) { palette_ = s; }
   void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
   void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
-  void set_force_white(esphome::switch_::Switch *s) { force_white_ = s; }
+  void set_force_white(esphome::switch_::Switch *s) {
+    force_white_ = s;
+    this->sync_force_white_output_();
+  }
   void set_debug(esphome::switch_::Switch *s) { debug_ = s; }
   void set_intro_effect(select::Select *s) { intro_effect_ = s; }
   void set_inout_duration(number::Number *n) { inout_duration_ = n; }
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
-  void set_light(esphome::light::LightState *light) { light_ = light; }
+  void set_light(esphome::light::LightState *light) {
+    light_ = light;
+    this->sync_force_white_output_();
+  }
 
   void register_runner(CFXRunner *runner) {
     for (auto *r : this->runners_) {
@@ -238,6 +244,29 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  void sync_force_white_output_() {
+    if (this->light_ == nullptr || this->force_white_ == nullptr)
+      return;
+
+    auto *output = this->light_->get_output();
+    if (output == nullptr)
+      return;
+
+#ifdef USE_ESP32
+    for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+      if (seg_out == output) {
+        // Virtual segments resolve force_white from their own CFXControl during
+        // active effects. The parent output stores a single master-level switch
+        // pointer, so binding segment-local switches here would cause cross-talk.
+        return;
+      }
+    }
+#endif
+
+    auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+    cfx_out->set_force_white_switch(this->force_white_);
+  }
+
   number::Number *speed_{nullptr};
   number::Number *intensity_{nullptr};
   select::Select *palette_{nullptr};

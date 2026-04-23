@@ -149,9 +149,7 @@ public:
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
-  void set_force_white_switch(switch_::Switch *sw) {
-    this->force_white_sw_ = sw;
-  }
+  void set_force_white_switch(switch_::Switch *sw);
   switch_::Switch *get_force_white_switch() const {
     return this->force_white_sw_;
   }
@@ -258,6 +256,8 @@ protected:
   void setup_spi_();
   void flush_rmt_();
   void flush_spi_();
+  void bind_force_white_switch_();
+  void repaint_force_white_solid_(bool state);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
@@ -310,6 +310,7 @@ protected:
   bool is_rgbw_{false};
   bool is_wrgb_{false};
   switch_::Switch *force_white_sw_{nullptr};
+  bool force_white_cb_bound_{false};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
 
   // SPI transport fields (idle harmlessly for RMT instances)
