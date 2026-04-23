@@ -153,6 +153,7 @@ public:
   switch_::Switch *get_force_white_switch() const {
     return this->force_white_sw_;
   }
+  bool is_force_white_active_for(light::LightState *state) const;
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;

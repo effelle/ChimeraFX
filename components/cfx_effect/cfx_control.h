@@ -134,6 +134,11 @@ public:
       });
     }
 
+    if (this->force_white_) {
+      this->force_white_->add_on_state_callback(
+          [this](bool /*value*/) { this->repaint_force_white_segment_(); });
+    }
+
     if (this->palette_) {
       for (auto &opt : this->palette_->traits.get_options()) {
         this->palette_mapping_.push_back(this->get_palette_index_(opt));
@@ -244,6 +249,33 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  void repaint_force_white_segment_() {
+    if (this->light_ == nullptr)
+      return;
+
+    auto *output = this->light_->get_output();
+    if (output == nullptr)
+      return;
+
+#ifdef USE_ESP32
+    for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+      if (seg_out != output)
+        continue;
+
+      if (seg_out->is_effect_active() || seg_out->get_parent()->has_outro())
+        return;
+
+      auto *master = seg_out->get_parent()->get_master_light_state();
+      if (master != nullptr && master->get_effect_name() != "None")
+        return;
+
+      seg_out->update_state(this->light_);
+      seg_out->write_state(this->light_);
+      return;
+    }
+#endif
+  }
+
   void sync_force_white_output_() {
     if (this->light_ == nullptr || this->force_white_ == nullptr)
       return;

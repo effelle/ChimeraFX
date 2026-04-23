@@ -98,10 +98,9 @@ public:
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    // BUG 13 FIX: Apply force_white to solid segment colors
-    if (parent_->get_force_white_switch() != nullptr &&
-        parent_->get_force_white_switch()->state &&
-        parent_->has_white_channel()) {
+    // Resolve force_white from this segment's own control first, then fall back
+    // to the parent strip-level switch when no segment-local override exists.
+    if (parent_->is_force_white_active_for(state)) {
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
     }
 

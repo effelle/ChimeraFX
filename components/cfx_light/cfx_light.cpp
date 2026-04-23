@@ -63,6 +63,19 @@ void CFXLightOutput::bind_force_white_switch_() {
   this->force_white_cb_bound_ = true;
 }
 
+bool CFXLightOutput::is_force_white_active_for(light::LightState *state) const {
+  if (!this->has_white_channel())
+    return false;
+
+  if (state != nullptr) {
+    auto *ctrl = chimera_fx::CFXControl::find(state);
+    if (ctrl != nullptr && ctrl->get_force_white() != nullptr)
+      return ctrl->get_force_white()->state;
+  }
+
+  return this->force_white_sw_ != nullptr && this->force_white_sw_->state;
+}
+
 void CFXLightOutput::repaint_force_white_solid_(bool state) {
   if (this->is_effect_active() || this->has_segments())
     return;
