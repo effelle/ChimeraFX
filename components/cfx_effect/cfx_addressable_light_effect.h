@@ -75,6 +75,7 @@ public:
 
     TransitionState state{TRANSITION_NONE};
     uint64_t transition_start_ms{0};
+    uint32_t active_transition_duration_ms{0};
     std::vector<Color> intro_snapshot{};
     bool is_sequence_outro{false};
 
@@ -560,6 +561,8 @@ public:
   std::string get_palette_name_(uint8_t pal_id);
   std::string get_intro_name_(uint8_t intro_id);
   std::string get_outro_name_(uint8_t outro_id);
+  uint32_t get_intro_mode_min_duration_ms_(uint8_t intro_mode) const;
+  uint32_t get_outro_mode_min_duration_ms_(uint8_t outro_mode) const;
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 

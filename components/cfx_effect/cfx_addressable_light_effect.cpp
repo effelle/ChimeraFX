@@ -431,6 +431,7 @@ void CFXAddressableLightEffect::start() {
 
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   act_->outro_start_time = 0;
+  act_->active_transition_duration_ms = 0;
   act_->is_sequence_outro = false;
   act_->suppress_reach_event = false;
   act_->suppress_positional_events = false;
@@ -924,19 +925,13 @@ void CFXAddressableLightEffect::start() {
         }
       }
     }
-    // Fix 1 — Gas Discharge / Fluorescent minimum duration clamp.
-    // The priority chain above (A→D) lets YAML presets and UI sliders set any
-    // value, but Gas Discharge (182) and Fluorescent (183) have hard physical
-    // minimums below which the strobe effect is truncated mid-cycle.
-    // We clamp *upward* only: a deliberate override above the minimum is kept,
-    // but any value below it (including the 1000 ms YAML default) is raised.
-    if (act_->active_intro_mode == INTRO_MODE_GAS_DISCHARGE ||
-        this->effect_id_ == 182) {
-      if (duration_ms < 2200)
-        duration_ms = 2200;
-    } else if (this->effect_id_ == 183) { // Fluorescent Start
-      if (duration_ms < 800)
-        duration_ms = 800;
+    // Clamp upward to each mode's minimum stable runtime so the state machine
+    // never terminates a long-form architectural intro before its own shader
+    // logic reaches a natural full frame.
+    uint32_t intro_mode_min =
+        this->get_intro_mode_min_duration_ms_(act_->active_intro_mode);
+    if (intro_mode_min > 0 && duration_ms < intro_mode_min) {
+      duration_ms = intro_mode_min;
     }
 
     act_->active_intro_duration_ms = duration_ms;
@@ -1110,7 +1105,8 @@ void CFXAddressableLightEffect::stop() {
           else
             act_->active_outro_mode = INTRO_MODE_NONE;
         } else {
-          act_->active_outro_mode = act_->active_intro_mode;
+          // No explicit outro selected means no outro.
+          act_->active_outro_mode = INTRO_MODE_NONE;
         }
       }
 
@@ -1154,6 +1150,11 @@ void CFXAddressableLightEffect::stop() {
             current_state->get_default_transition_length() > 0) {
           duration_ms = current_state->get_default_transition_length();
         }
+      }
+      uint32_t outro_mode_min =
+          this->get_outro_mode_min_duration_ms_(act_->active_outro_mode);
+      if (outro_mode_min > 0 && duration_ms < outro_mode_min) {
+        duration_ms = outro_mode_min;
       }
       act_->active_outro_duration_ms = duration_ms;
 
@@ -1301,93 +1302,100 @@ void CFXAddressableLightEffect::stop() {
       // `out` is already correctly set above (via vseg->get_parent() for
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
-        out->add_outro_callback([this, it_light, captured_runners,
-                                 captured_sequence]() -> bool {
-          auto *current_state = this->get_light_state();
+        if (act_->active_outro_mode == INTRO_MODE_NONE) {
+          for (auto *r : *captured_runners)
+            delete r;
+          captured_runners->clear();
+          act_->outro_start_time = 0;
+        } else {
+          out->add_outro_callback([this, it_light, captured_runners,
+                                   captured_sequence]() -> bool {
+            auto *current_state = this->get_light_state();
 
-          if (current_state != nullptr &&
-              current_state->remote_values.is_on()) {
-            // Effect was completely changed or light remained ON.
-            // Abort the outro and delete all captured runners cleanly.
+            if (current_state != nullptr &&
+                current_state->remote_values.is_on()) {
+              // Effect was completely changed or light remained ON.
+              // Abort the outro and delete all captured runners cleanly.
 
-            for (auto *r : *captured_runners)
-              delete r;
-            captured_runners->clear();
-            act_->outro_start_time = 0; // Reset for the NEXT outro
-            return true;
-          }
-
-          // Initialize outro start time on the very first allowed frame
-          if (act_->outro_start_time == 0) {
-            act_->outro_start_time = millis_64();
-            act_->hydraulics_last_ms = act_->outro_start_time;
-            if (act_->active_outro_mode == INTRO_MODE_HYDRAULICS) {
-              act_->hydraulics_fluid_level = (float)it_light->size();
-              act_->hydraulics_particle_count = 0; // audit 3.3
+              for (auto *r : *captured_runners)
+                delete r;
+              captured_runners->clear();
+              act_->outro_start_time = 0; // Reset for the NEXT outro
+              return true;
             }
-          }
 
-          // Run outro frame on ALL captured segment runners
-          bool done = false;
-          for (auto *r : *captured_runners) {
-            chimera_fx::instance = r;
-            done = this->run_outro_frame(*it_light, r);
-          }
-          chimera_fx::instance = nullptr;
-
-          // CFX-046b: While a segment outro is animating into the shared DMA
-          // buffer, its pixels may bleed into sibling segment ranges. Keep
-          // mono_dirty set on every outro frame so surviving idle siblings
-          // repaint their pixel ranges each frame and correct any contamination.
-          if (!done)
-            act_->mono_dirty = true;
-
-          if (done) {
-            ESP_LOGV("chimera_fx", "[T05] outro DONE: effect_id=%u is_mono=%d",
-                     (unsigned)this->effect_id_,
-                     (int)this->get_monochromatic_preset_(this->effect_id_)
-                         .is_active);
-#ifdef USE_CFX_EVENTS
-            // Fire cfx_complete when the outro animation finishes.
-            // If is_sequence_outro_ is true, the sequence already fired
-            // completion (report_event_complete was called before stop()),
-            // so we skip here to avoid double-firing.
-            // cfx_complete fires when a real outro completes: architectural
-            // preset or user-configured outro selector. INTRO_MODE_NONE is the
-            // default fade-to-black on every light-off — not a meaningful
-            // outro, must not fire cfx_complete.
-            if (!act_->suppress_complete_event &&
-                !act_->is_sequence_outro &&
-                act_->active_outro_mode != INTRO_MODE_NONE) {
-#ifdef USE_CFX_SEQUENCE
-              if (captured_sequence != nullptr) {
-                // Sequence-driven path: route through report_event_complete()
-                // so that on_cfx_complete YAML automations fire in addition
-                // to the HA cfx_complete event. Without this, only the HA
-                // event fires and on-device triggers are silently skipped.
-                captured_sequence->report_event_complete();
-              } else
-#endif
-              {
-                // Standalone (no sequence bound): fire HA event directly.
-                // Use instance act_->strip_tag — no singleton dependency.
-                if (!act_->strip_tag.empty()) {
-                  std::string evt =
-                      std::string("cfx_complete:") + act_->strip_tag;
-                  chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
-                }
+            // Initialize outro start time on the very first allowed frame
+            if (act_->outro_start_time == 0) {
+              act_->outro_start_time = millis_64();
+              act_->hydraulics_last_ms = act_->outro_start_time;
+              if (act_->active_outro_mode == INTRO_MODE_HYDRAULICS) {
+                act_->hydraulics_fluid_level = (float)it_light->size();
+                act_->hydraulics_particle_count = 0; // audit 3.3
               }
             }
-#endif
-            for (auto *r : *captured_runners)
-              delete r;
-            captured_runners->clear();
-            act_->outro_start_time = 0; // Reset for the NEXT outro
-          }
-          return done;
-        });
 
-        return;
+            // Run outro frame on ALL captured segment runners
+            bool done = false;
+            for (auto *r : *captured_runners) {
+              chimera_fx::instance = r;
+              done = this->run_outro_frame(*it_light, r);
+            }
+            chimera_fx::instance = nullptr;
+
+            // CFX-046b: While a segment outro is animating into the shared DMA
+            // buffer, its pixels may bleed into sibling segment ranges. Keep
+            // mono_dirty set on every outro frame so surviving idle siblings
+            // repaint their pixel ranges each frame and correct any contamination.
+            if (!done)
+              act_->mono_dirty = true;
+
+            if (done) {
+              ESP_LOGV("chimera_fx", "[T05] outro DONE: effect_id=%u is_mono=%d",
+                       (unsigned)this->effect_id_,
+                       (int)this->get_monochromatic_preset_(this->effect_id_)
+                           .is_active);
+#ifdef USE_CFX_EVENTS
+              // Fire cfx_complete when the outro animation finishes.
+              // If is_sequence_outro_ is true, the sequence already fired
+              // completion (report_event_complete was called before stop()),
+              // so we skip here to avoid double-firing.
+              // cfx_complete fires when a real outro completes: architectural
+              // preset or user-configured outro selector. INTRO_MODE_NONE is the
+              // default fade-to-black on every light-off — not a meaningful
+              // outro, must not fire cfx_complete.
+              if (!act_->suppress_complete_event &&
+                  !act_->is_sequence_outro &&
+                  act_->active_outro_mode != INTRO_MODE_NONE) {
+#ifdef USE_CFX_SEQUENCE
+                if (captured_sequence != nullptr) {
+                  // Sequence-driven path: route through report_event_complete()
+                  // so that on_cfx_complete YAML automations fire in addition
+                  // to the HA cfx_complete event. Without this, only the HA
+                  // event fires and on-device triggers are silently skipped.
+                  captured_sequence->report_event_complete();
+                } else
+#endif
+                {
+                  // Standalone (no sequence bound): fire HA event directly.
+                  // Use instance act_->strip_tag — no singleton dependency.
+                  if (!act_->strip_tag.empty()) {
+                    std::string evt =
+                        std::string("cfx_complete:") + act_->strip_tag;
+                    chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+                  }
+                }
+              }
+#endif
+              for (auto *r : *captured_runners)
+                delete r;
+              captured_runners->clear();
+              act_->outro_start_time = 0; // Reset for the NEXT outro
+            }
+            return done;
+          });
+
+          return;
+        }
       }
 #endif
     }
@@ -2059,8 +2067,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         }
         act_->state = TRANSITION_RUNNING; // Use RUNNING to signify Active Blend
         act_->transition_start_ms = millis_64();
+        act_->active_transition_duration_ms =
+            (uint32_t)(trans_dur * 1000.0f);
       } else {
         act_->state = TRANSITION_NONE;
+        act_->active_transition_duration_ms = 0;
       }
 
       // CFX-035: Reset the runner so we clear the stale current_leading_pixel
@@ -2079,9 +2090,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     uint32_t trans_elapsed =
         (uint32_t)(millis_64() - act_->transition_start_ms);
     float trans_dur_ms =
-        (this->local_transition_duration_()
-             ? this->local_transition_duration_()->state * 1000.0f
-             : 1500.0f);
+        (act_->active_transition_duration_ms > 0)
+            ? (float) act_->active_transition_duration_ms
+            : ((this->local_transition_duration_()
+                    ? this->local_transition_duration_()->state * 1000.0f
+                    : 1500.0f));
 
     // Soft Dissolve (Fairy Dust with Crossfade) Logic
     const float softness = 0.2f; // Configurable softness
@@ -2544,6 +2557,60 @@ std::string CFXAddressableLightEffect::get_outro_name_(uint8_t outro_id) {
   case INTRO_MODE_TWIN_PULSE: return "Twin Pulse";
   case INTRO_MODE_WIPE: return "Wipe";
   default: return "None";
+  }
+}
+
+uint32_t
+CFXAddressableLightEffect::get_intro_mode_min_duration_ms_(uint8_t intro_mode) const {
+  switch (intro_mode) {
+  case INTRO_MODE_SONAR_REVEAL:
+    return 2000;
+  case INTRO_MODE_VENETIAN:
+    return 1200;
+  case INTRO_MODE_CRYSTALLIZE:
+    return 1500;
+  case INTRO_MODE_DEEP_BREATHE:
+    return 1800;
+  case INTRO_MODE_MOIRE_SHIFT:
+    return 1200;
+  case INTRO_MODE_RESONANCE_FILL:
+    return 1400;
+  case INTRO_MODE_TELEMETRY:
+    return 1200;
+  case INTRO_MODE_STELLAR_DUST:
+    return 2000;
+  case INTRO_MODE_INTERFERENCE:
+    return 1500;
+  case INTRO_MODE_ECLIPSE:
+    return 1500;
+  case INTRO_MODE_GAS_DISCHARGE:
+    return 2200;
+  case INTRO_MODE_HARMONIC_SETTLE:
+    return 1600;
+  case INTRO_MODE_LITHOGRAPH:
+    return 1100;
+  default:
+    return 0;
+  }
+}
+
+uint32_t
+CFXAddressableLightEffect::get_outro_mode_min_duration_ms_(uint8_t outro_mode) const {
+  switch (outro_mode) {
+  case INTRO_MODE_MOIRE_SHIFT:
+    return 1200;
+  case INTRO_MODE_INTERFERENCE:
+    return 1500;
+  case INTRO_MODE_ECLIPSE:
+    return 1500;
+  case INTRO_MODE_GAS_DISCHARGE:
+    return 1800;
+  case INTRO_MODE_HARMONIC_SETTLE:
+    return 1600;
+  case INTRO_MODE_LITHOGRAPH:
+    return 1100;
+  default:
+    return this->get_intro_mode_min_duration_ms_(outro_mode);
   }
 }
 
