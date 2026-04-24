@@ -348,7 +348,32 @@ inline uint8_t gamma8inv(uint8_t v) { return v; }
  * FORCE WHITE: Centralized math to shift the common RGB component to the White
  * channel. Applied BEFORE gamma correction to maintain linear physics.
  */
+inline bool should_apply_force_white(uint8_t r, uint8_t g, uint8_t b) {
+  const uint8_t max_rgb = std::max({r, g, b});
+  const uint8_t min_rgb = std::min({r, g, b});
+  const uint8_t chroma = max_rgb - min_rgb;
+
+  if (min_rgb == 0)
+    return false;
+
+  // Ignore dim chroma noise. Very dim near-neutral colors are left on RGB so
+  // animated effects do not pick up tiny white-channel artifacts.
+  if (max_rgb < 32)
+    return false;
+
+  // True/near whites should always use the native white emitter.
+  if (chroma <= 24)
+    return true;
+
+  // Pastels contain a strong shared white component plus a moderate tint. More
+  // saturated RGB pixels are intentionally left untouched.
+  return min_rgb >= 48 && chroma <= (max_rgb / 2);
+}
+
 inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
+  if (!should_apply_force_white(r, g, b))
+    return;
+
   uint8_t min_rgb = std::min({r, g, b});
   if (min_rgb > 0) {
     r -= min_rgb;
@@ -361,13 +386,12 @@ inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
 
 inline bool should_auto_disable_force_white(uint8_t r, uint8_t g, uint8_t b) {
   const uint8_t max_rgb = std::max({r, g, b});
-  const uint8_t min_rgb = std::min({r, g, b});
   // QoL auto-yield for Force White:
-  // keep true/near whites intact, but release the switch once the solid color
-  // is clearly tinted. The brightness floor avoids dim-channel noise.
+  // keep true whites and pastel tints intact, but release the switch once the
+  // solid color is clearly saturated. The brightness floor avoids dim noise.
   if (max_rgb < 32)
     return false;
-  return (max_rgb - min_rgb) > 24;
+  return !should_apply_force_white(r, g, b);
 }
 
 // ============================================================================
@@ -485,7 +509,7 @@ struct FrameDiagnostics {
     uint32_t free_heap_kb = free_heap / 1024;
 
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB",
+             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              fps, avg_frame_ms, jitter_pct, free_heap_kb);
 

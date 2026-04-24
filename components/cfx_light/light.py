@@ -59,6 +59,7 @@ CONF_SEGMENT_INTRO_DUR = "inout_dur"
 CONF_SEGMENT_SET_INTRO = "set_intro"
 CONF_SEGMENT_SET_OUTRO = "set_outro"
 CONF_SEGMENT_SET_INOUT_DUR = "set_inout_dur"
+CONF_SEGMENT_SET_BRIGHTNESS = "set_brightness"
 CONF_SEGMENT_SET_COLOR = "set_color"
 CONF_SEGMENT_OUTPUT_ID = "output_id"
 CONF_SEGMENT_LIGHT_ID = "light_id"
@@ -126,10 +127,11 @@ CONF_SPI_HOST = "spi_host"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DUR = "set_inout_dur"
+CONF_SET_BRIGHTNESS = "set_brightness"
 CONF_SET_COLOR = "set_color"
 
 SET_COLOR_SCHEMA = cv.All(
-    cv.ensure_list(cv.int_range(min=0, max=255)),
+    cv.ensure_list(cv.int_range(min=0, max=100)),
     cv.Length(min=3, max=4),
 )
 
@@ -149,6 +151,7 @@ SEGMENT_SCHEMA = cv.Schema(
         cv.Optional(CONF_SEGMENT_SET_OUTRO): cv.uint8_t,
         cv.Optional(CONF_SEGMENT_INTRO_DUR): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_SEGMENT_SET_INOUT_DUR): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_SEGMENT_SET_BRIGHTNESS): cv.percentage,
         cv.Optional(CONF_SEGMENT_SET_COLOR): SET_COLOR_SCHEMA,
     }
 )
@@ -329,6 +332,12 @@ def _validate_set_color(config):
                 f"cfx_light cannot use both {CONF_SET_COLOR} and initial_state keys: {joined}"
             )
 
+    if initial_state is not None and CONF_SET_BRIGHTNESS in config:
+        if CONF_BRIGHTNESS in initial_state:
+            raise cv.Invalid(
+                f"cfx_light cannot use both {CONF_SET_BRIGHTNESS} and initial_state key: {CONF_BRIGHTNESS}"
+            )
+
     for seg in config.get(CONF_SEGMENTS, []):
         seg_color = seg.get(CONF_SEGMENT_SET_COLOR)
         if seg_color is not None:
@@ -345,10 +354,10 @@ def _build_initial_state_from_set_color(config, set_color):
     initial_state[CONF_COLOR_MODE] = (
         light.ColorMode.RGB_WHITE if len(set_color) == 4 else light.ColorMode.RGB
     )
-    initial_state[CONF_RED] = set_color[0] / 255.0
-    initial_state[CONF_GREEN] = set_color[1] / 255.0
-    initial_state[CONF_BLUE] = set_color[2] / 255.0
-    initial_state[CONF_WHITE] = set_color[3] / 255.0 if len(set_color) == 4 else 0.0
+    initial_state[CONF_RED] = set_color[0] / 100.0
+    initial_state[CONF_GREEN] = set_color[1] / 100.0
+    initial_state[CONF_BLUE] = set_color[2] / 100.0
+    initial_state[CONF_WHITE] = set_color[3] / 100.0 if len(set_color) == 4 else 0.0
 
     # Keep startup power behavior user-controlled, but ensure a deterministic base color.
     initial_state.setdefault(CONF_STATE, False)
@@ -360,6 +369,15 @@ def _build_initial_state_from_set_color(config, set_color):
 def _apply_set_color_initial_state(config, set_color):
     config = dict(config)
     config[CONF_INITIAL_STATE] = _build_initial_state_from_set_color(config, set_color)
+    return config
+
+
+def _apply_set_brightness_initial_state(config, brightness):
+    config = dict(config)
+    initial_state = dict(config.get(CONF_INITIAL_STATE, {}))
+    initial_state[CONF_BRIGHTNESS] = brightness
+    initial_state.setdefault(CONF_STATE, False)
+    config[CONF_INITIAL_STATE] = initial_state
     return config
 
 
@@ -437,6 +455,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SET_OUTRO): cv.uint8_t,
             cv.Optional("inout_dur"): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_SET_INOUT_DUR): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
             cv.Optional(CONF_SET_COLOR): SET_COLOR_SCHEMA,
             cv.Optional(CONF_DEFAULT_TRANSITION_LENGTH, default="0ms"): (
                 cv.positive_time_period_milliseconds
@@ -591,6 +610,10 @@ async def to_code(config):
     light_config = config
     if CONF_SET_COLOR in config:
         light_config = _apply_set_color_initial_state(config, config[CONF_SET_COLOR])
+    if CONF_SET_BRIGHTNESS in config:
+        light_config = _apply_set_brightness_initial_state(
+            light_config, config[CONF_SET_BRIGHTNESS]
+        )
 
     if segments:
         # --- Phase 2: Per-segment light entities ---
@@ -782,6 +805,10 @@ async def to_code(config):
         if CONF_SEGMENT_SET_COLOR in seg:
             seg_light_config = _apply_set_color_initial_state(
                 seg_light_config, seg[CONF_SEGMENT_SET_COLOR]
+            )
+        if CONF_SEGMENT_SET_BRIGHTNESS in seg:
+            seg_light_config = _apply_set_brightness_initial_state(
+                seg_light_config, seg[CONF_SEGMENT_SET_BRIGHTNESS]
             )
 
         # Register the LightState (without effects)

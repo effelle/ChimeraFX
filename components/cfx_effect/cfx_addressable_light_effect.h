@@ -158,7 +158,7 @@ public:
     // at that point, causing the scheduler to skip service() entirely.
     //
     // mono_dirty is a one-frame wake signal: set to true whenever a parameter
-    // that affects the rendered output changes (color, speed for outro). The
+    // that affects the rendered output changes (color, speed, force-white). The
     // scheduler services all runners for that single frame to commit the new
     // state to the DMA buffer, then clears mono_dirty and returns to idle.
     //
@@ -169,6 +169,7 @@ public:
     bool mono_dirty{false};
     uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
     uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
+    bool mono_last_force_white{false};
     // CFX-047: apply()-level frame counter for idle FPS reporting.
     // Incremented every frame that passes the rate gate regardless of whether
     // service() runs — gives true DMA throughput even when runners are suppressed.

@@ -94,7 +94,7 @@ Enables or disables **Intelligent Autotune**. When enabled, the effect will auto
 - **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults.
 
 ### ID 8: Force White
-Available only on RGBW/WRGB lights with a dedicated white channel. When enabled, ChimeraFX moves the shared part of the current RGB color into the white LED channel, so neutral whites use the native white emitter instead of mixing only RGB.
+Available only on RGBW/WRGB lights with a dedicated white channel. When enabled, ChimeraFX moves the shared part of eligible white and pastel RGB colors into the white LED channel, so neutral whites use the native white emitter without injecting white into saturated RGB effects.
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead. See [Troubleshooting](Troubleshooting.md) for more details.

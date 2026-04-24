@@ -65,7 +65,7 @@ CONF_ON_REACH = "on_cfx_reach"
 CONF_POSITION = "position"
 
 SET_COLOR_SCHEMA = cv.All(
-    cv.ensure_list(cv.int_range(min=0, max=255)),
+    cv.ensure_list(cv.int_range(min=0, max=100)),
     cv.Length(min=3, max=4),
 )
 
@@ -204,10 +204,11 @@ def _emit_set_color(var, config):
         return
 
     color = config[CONF_SET_COLOR]
+    scaled = [int(round(channel * 255 / 100)) for channel in color]
     if len(color) == 3:
-        cg.add(var.set_color_rgb(color[0], color[1], color[2]))
+        cg.add(var.set_color_rgb(scaled[0], scaled[1], scaled[2]))
     else:
-        cg.add(var.set_color_rgbw(color[0], color[1], color[2], color[3]))
+        cg.add(var.set_color_rgbw(scaled[0], scaled[1], scaled[2], scaled[3]))
 
 
 def _resolve_ha_events(value, *, default_enabled: bool) -> bool:

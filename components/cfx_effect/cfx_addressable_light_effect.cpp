@@ -445,6 +445,7 @@ void CFXAddressableLightEffect::start() {
   act_->mono_dirty      = false;
   act_->mono_last_color = 0xFFFFFFFF;
   act_->mono_last_speed = 0xFF;
+  act_->mono_last_force_white = false;
   act_->idle_frame_count     = 0;
   act_->idle_period_start_ms = 0;
   act_->idle_last_frame_us   = 0;
@@ -1706,12 +1707,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // runners on a mono effect share the same color.
     uint32_t current_color = act_->runner ? act_->runner->_segment.colors[0] : 0;
     uint8_t  current_speed = act_->runner ? act_->runner->getSpeed() : 128;
+    bool current_force_white = act_->active_force_white;
 
-    if (current_color != act_->mono_last_color || current_speed != act_->mono_last_speed) {
+    if (current_color != act_->mono_last_color ||
+        current_speed != act_->mono_last_speed ||
+        current_force_white != act_->mono_last_force_white) {
       // Parameter changed — wake for one frame.
-      act_->mono_dirty      = true;
-      act_->mono_last_color = current_color;
-      act_->mono_last_speed = current_speed;
+      act_->mono_dirty            = true;
+      act_->mono_last_color       = current_color;
+      act_->mono_last_speed       = current_speed;
+      act_->mono_last_force_white = current_force_white;
     }
 
     if (act_->mono_dirty) {
@@ -1989,6 +1994,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->mono_dirty = true;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
+        act_->mono_last_force_white = act_->active_force_white;
         act_->idle_frame_count     = 0;
         act_->idle_period_start_ms = 0;
         act_->idle_last_frame_us   = 0;

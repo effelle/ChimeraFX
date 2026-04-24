@@ -73,7 +73,7 @@ These let you lock in specific values for the duration of the sequence, overridi
 | `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
 | `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
-| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. Values match ESPHome's logged color percentages. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for this sequence. `auto` is the default and behaves like `true` on root `cfx_sequence` entries. |
@@ -123,7 +123,7 @@ event source, set `ha_events: true` to opt back in.
         set_intensity:   128
         set_palette:     4
         set_brightness:  80%
-        set_color:       [255, 180, 80]
+        set_color:       [100, 70, 31]
         set_mirror:      true
         set_autotune:    false
         set_force_white: true
@@ -620,7 +620,7 @@ on_cfx_reach:
 | `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
 | `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
-| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. Values match ESPHome's logged color percentages. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the injected child effect. `auto` is the default and resolves to `false` for `cfx_set`. |
@@ -652,7 +652,7 @@ on_cfx_reach:
 | `set_intensity` | 0-255 | Runtime-only Intensity override for the spawned run. Does not persist to the HA slider. |
 | `set_palette` | 0-255 | Runtime-only Palette override (index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
 | `set_brightness` | 0-100% | Brightness override. |
-| `set_color` | [r,g,b] or [r,g,b,w] | Color override. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Color override. Values match ESPHome's logged color percentages. |
 | `set_mirror` | true / false | Mirror override. |
 | `set_autotune` | true / false | Autotune override. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the spawned run. `auto` is the default and resolves to `false` for `cfx_run`. |
