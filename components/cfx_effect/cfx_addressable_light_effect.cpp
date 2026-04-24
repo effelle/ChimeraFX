@@ -872,7 +872,7 @@ void CFXAddressableLightEffect::start() {
     }
 
     // 10. Intro Duration Priority Chain (Calculated ONCE during start)
-    uint32_t duration_ms = 1000; // Final Default: 1.0s
+    uint32_t duration_ms = 2000; // Final Default: 2.0s
     number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
@@ -913,7 +913,7 @@ void CFXAddressableLightEffect::start() {
             float speed_val = speed_num->state;
             duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
           } else {
-            duration_ms = 1000; // Standard 1s default
+            duration_ms = 2000; // Standard 2s default
           }
         }
       }
@@ -1105,7 +1105,7 @@ void CFXAddressableLightEffect::stop() {
       }
 
       // 10. Outro Duration Priority Chain
-      uint32_t duration_ms = 1000; // Hard Default
+      uint32_t duration_ms = 2000; // Hard Default
 
       number::Number *dur_num = this->local_inout_duration_();
       if (dur_num == nullptr && c != nullptr)
@@ -2672,6 +2672,46 @@ CFXAddressableLightEffect::get_outro_mode_min_duration_ms_(uint8_t outro_mode) c
   }
 }
 
+std::optional<float>
+CFXAddressableLightEffect::get_default_inout_duration_s_(uint8_t effect_id) const {
+  switch (effect_id) {
+  case 168: // Hydro-Pulse
+    return 2.0f;
+  case 172: // Sonar Reveal
+    return 2.0f;
+  case 173: // Venetian
+    return 1.2f;
+  case 174: // Crystallize
+    return 1.5f;
+  case 175: // Deep Breathe
+    return 1.8f;
+  case 176: // Moiré Shift
+    return 5.0f;
+  case 177: // Resonance Fill
+    return 1.4f;
+  case 178: // Telemetry
+    return 1.2f;
+  case 179: // Stellar Dust
+    return 5.0f;
+  case 181: // Eclipse
+    return 1.5f;
+  case 182: // Gas Discharge
+    return 2.2f;
+  case 183: // Harmonic Settle
+    return 1.6f;
+  case 184: // Lithograph
+    return 1.1f;
+  case 186: // Tidal Surge
+    return 2.0f;
+  case 187: // Impact Flare
+    return 1.5f;
+  case 188: // Monolith
+    return 1.0f;
+  default:
+    return std::nullopt;
+  }
+}
+
 uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 #ifdef USE_CFX_SEQUENCE
   if (act_->sequence_speed.has_value()) {
@@ -3209,7 +3249,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     return;
   }
 
-  uint32_t duration = 1000; // Initial Default: 1.0s
+  uint32_t duration = 2000; // Initial Default: 2.0s
   number::Number *dur_num = this->local_inout_duration_();
   if (dur_num == nullptr && act_->controller != nullptr)
     dur_num = act_->controller->get_intro_duration();
@@ -3911,7 +3951,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   }
   case INTRO_MODE_DROPPING: {
     // ── 1. Duration fetch ───────────────────────────────────────────────────
-    uint32_t duration = 1000;
+    uint32_t duration = 2000;
     number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
@@ -4030,7 +4070,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_ASSEMBLY: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 1000;
+    uint32_t duration = 2000;
     number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
@@ -4142,7 +4182,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_INERTIA_SWEEP: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 1000;
+    uint32_t duration = 2000;
     number::Number *dur_num = this->local_inout_duration_();
     if (dur_num == nullptr && act_->controller != nullptr)
       dur_num = act_->controller->get_intro_duration();
@@ -6588,7 +6628,22 @@ void CFXAddressableLightEffect::apply_autotune_defaults_() {
     act_->autotune_expected_intensity = intensity_num->state;
   }
 
-  // 3. Palette — set selector to "Default" so the runner resolves its own
+  // 3. Intro/Outro Duration
+  number::Number *inout_num =
+      (c && c->get_intro_duration()) ? c->get_intro_duration()
+                                     : this->local_inout_duration_();
+  if (inout_num != nullptr && !this->has_inout_duration_preset_()) {
+    if (auto target = this->get_default_inout_duration_s_(this->effect_id_);
+        target.has_value()) {
+      if (!transient_autotune_context && inout_num->state != target.value()) {
+        auto call = inout_num->make_call();
+        call.set_value(target.value());
+        call.perform();
+      }
+    }
+  }
+
+  // 4. Palette — set selector to "Default" so the runner resolves its own
   //    built-in palette for this effect. Don't resolve to a concrete name
   //    (e.g. "Aurora") — that would prevent the runner from using its native
   //    default and would confuse the auto-disable override detection.

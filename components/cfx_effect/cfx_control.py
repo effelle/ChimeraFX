@@ -327,7 +327,7 @@ async def to_code(config):
                 CONF_ID: cv.declare_id(CFXNumber)(f"{t_id}_inout_dur"),
                 CONF_NAME: f"{t_name} In/Out Duration",
                 CONF_ICON: "mdi:timer-outline",
-                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 1.0,
+                "min_value": 0.5, "max_value": 10.0, "step": 0.1, "initial_value": 2.0,
                 "optimistic": True,
                 CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
             }

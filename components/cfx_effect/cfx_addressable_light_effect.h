@@ -85,11 +85,11 @@ public:
     uint8_t active_intro_speed{128};
     uint8_t active_intro_intensity{128};
     uint64_t intro_start_time{0};
-    uint32_t active_intro_duration_ms{1000};
+    uint32_t active_intro_duration_ms{2000};
 
     bool outro_active{false};
     uint8_t active_outro_mode{0};
-    uint32_t active_outro_duration_ms{1000};
+    uint32_t active_outro_duration_ms{2000};
     uint8_t active_outro_speed{128};
     uint8_t active_outro_intensity{128};
     float active_outro_brightness{1.0f};
@@ -565,6 +565,7 @@ public:
   std::string get_outro_name_(uint8_t outro_id);
   uint32_t get_intro_mode_min_duration_ms_(uint8_t intro_mode) const;
   uint32_t get_outro_mode_min_duration_ms_(uint8_t outro_mode) const;
+  std::optional<float> get_default_inout_duration_s_(uint8_t effect_id) const;
   uint8_t get_default_speed_(uint8_t effect_id);
   uint8_t get_default_intensity_(uint8_t effect_id);
 
