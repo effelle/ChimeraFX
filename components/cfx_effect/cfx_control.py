@@ -50,6 +50,12 @@ PALETTE_OPTIONS = [
     "Smart Random"  # 23 (ID 254)
 ]
 
+WHITE_MODE_OPTIONS = [
+    "Off",
+    "Smart",
+    "Force",
+]
+
 COMMON_TRANSITIONS = ["None", "Center", "Eclipse", "Fade", "Gas Discharge", "Glitter", "Harmonic Settle", "Lithograph", "Morse Code", "Quadrant", "Tidal Surge", "Twin Pulse", "Wipe"]
 INTRO_ONLY = ["Construct", "Crystallize", "Deep Breathe", "Dropping", "Inertia Sweep", "Interference", "Moiré Shift", "Pressurize", "Resonance", "Sonar Reveal", "Stellar Dust", "Telemetry", "Venetian"]
 OUTRO_ONLY = ["Close Blinds", "Drain", "Decelerate", "Dismantle", "Emptying", "Erode", "Exhale", "Interference Fade", "Moiré Fade", "Resonance Fade", "Sonar Fade", "Stellar Fade", "Telemetry Fade"]
@@ -188,7 +194,7 @@ async def to_code(config):
             _core.CORE.component_ids.add(str(var_id))
         # Synthetic per-segment controls still need a real component config
         # carrying their generated ID, otherwise their setup() path may never
-        # be registered consistently. That breaks live switch callbacks while
+        # be registered consistently. That breaks live control callbacks while
         # still leaving the setter-wired initial state in place.
         component_conf = config if idx == 0 else {CONF_ID: var_id}
         await cg.register_component(var, component_conf)
@@ -219,19 +225,18 @@ async def to_code(config):
             cg.add(autotune.write_state(False))
             cg.add(var.set_autotune(autotune))
 
-        # 2. Force White
+        # 2. White Mode
         if is_effect_target and is_included(EXCLUDE_FORCE_WHITE) and has_white_channel:
             conf = {
                 **base_entity_conf,
-                CONF_ID: cv.declare_id(CFXSwitch)(f"{t_id}_force_white"),
-                CONF_NAME: f"{t_name} Force White",
+                CONF_ID: cv.declare_id(CFXSelect)(f"{t_id}_white_mode"),
+                CONF_NAME: f"{t_name} White Mode",
                 CONF_ICON: "mdi:white-balance-sunny",
                 "optimistic": True,
-                CONF_RESTORE_MODE: cg.RawExpression("switch_::SWITCH_RESTORE_DEFAULT_OFF"),
             }
             force_white = cg.new_Pvariable(conf[CONF_ID])
-            await switch.register_switch(force_white, conf)
-            cg.add(force_white.publish_state(False))
+            await select.register_select(force_white, conf, options=WHITE_MODE_OPTIONS)
+            cg.add(force_white.publish_state("Off"))
             cg.add(var.set_force_white(force_white))
 
         # 3. Mirror

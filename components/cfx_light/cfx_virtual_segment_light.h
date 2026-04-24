@@ -13,7 +13,7 @@
 #include "../cfx_effect/cfx_utils.h"
 #include "cfx_light.h"
 #include "esphome/components/light/addressable_light.h"
-#include "esphome/components/switch/switch.h"
+#include "esphome/components/select/select.h"
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
 
@@ -101,11 +101,9 @@ public:
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    // Resolve force_white from this segment's own switch first, then fall back
-    // to the parent strip-level switch when no segment-local switch exists.
-    if (this->is_force_white_active_()) {
-      cfx::apply_force_white(c.r, c.g, c.b, c.w);
-    }
+    // Resolve white mode from this segment's own control first, then fall back
+    // to the parent strip-level mode when no segment-local selector exists.
+    cfx::apply_white_mode(this->get_force_white_mode_(), c.r, c.g, c.b, c.w);
 
     this->all() = c;
     // Do NOT call schedule_show() here. ESPHome will call write_state()
@@ -122,14 +120,19 @@ public:
     parent_->request_segment_flush();
   }
 
-  void set_force_white_switch(switch_::Switch *sw) {
-    force_white_sw_ = sw;
-    ESP_LOGI("chimera_fw",
-             "segment stored force_white switch seg=%p id=%s sw=%p state=%d",
-             this, seg_id_.c_str(), force_white_sw_,
-             force_white_sw_ != nullptr ? force_white_sw_->state : -1);
+  void set_force_white_select(select::Select *sel) {
+    force_white_select_ = sel;
+    force_white_mode_ = (force_white_select_ != nullptr)
+                            ? cfx::force_white_mode_from_name(
+                                  force_white_select_->current_option().c_str())
+                            : cfx::FORCE_WHITE_OFF;
+    ESP_LOGD("chimera_fw",
+             "segment stored force_white select seg=%p id=%s sel=%p mode=%d",
+             this, seg_id_.c_str(), force_white_select_,
+             static_cast<int>(force_white_mode_));
   }
-  switch_::Switch *get_force_white_switch() const { return force_white_sw_; }
+  select::Select *get_force_white_select() const { return force_white_select_; }
+  cfx::ForceWhiteMode get_force_white_mode() const { return force_white_mode_; }
 
   void repaint_force_white_current_state() {
     if (parent_->has_outro())
@@ -153,18 +156,14 @@ public:
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    if (this->is_force_white_active_()) {
-      cfx::apply_force_white(c.r, c.g, c.b, c.w);
-    }
+    cfx::apply_white_mode(this->get_force_white_mode_(), c.r, c.g, c.b, c.w);
 
-    ESP_LOGI("chimera_fw",
-             "segment repaint apply seg=%p id=%s seg_sw=%p seg_sw_state=%d parent_sw=%p parent_sw_state=%d rgba=(%u,%u,%u,%u)",
-             this, seg_id_.c_str(), force_white_sw_,
-             force_white_sw_ != nullptr ? force_white_sw_->state : -1,
-             parent_->get_force_white_switch(),
-             parent_->get_force_white_switch() != nullptr
-                 ? parent_->get_force_white_switch()->state
-                 : -1,
+    ESP_LOGD("chimera_fw",
+             "segment repaint apply seg=%p id=%s seg_sel=%p seg_mode=%d parent_sel=%p parent_mode=%d rgba=(%u,%u,%u,%u)",
+             this, seg_id_.c_str(), force_white_select_,
+             static_cast<int>(force_white_mode_),
+             parent_->get_force_white_select(),
+             static_cast<int>(parent_->get_force_white_mode()),
              c.r, c.g, c.b, c.w);
     this->all() = c;
     parent_->request_segment_flush();
@@ -210,22 +209,22 @@ public:
   CFXLightOutput *get_parent() const { return parent_; }
 
 protected:
-  bool is_force_white_active_() const {
+  cfx::ForceWhiteMode get_force_white_mode_() const {
     if (!parent_->has_white_channel())
-      return false;
+      return cfx::FORCE_WHITE_OFF;
 
-    if (force_white_sw_ != nullptr)
-      return force_white_sw_->state;
+    if (force_white_select_ != nullptr)
+      return force_white_mode_;
 
-    return parent_->get_force_white_switch() != nullptr &&
-           parent_->get_force_white_switch()->state;
+    return parent_->get_force_white_mode();
   }
 
   CFXLightOutput *parent_;
   uint16_t start_;
   uint16_t stop_;
   std::string seg_id_;
-  switch_::Switch *force_white_sw_{nullptr};
+  select::Select *force_white_select_{nullptr};
+  cfx::ForceWhiteMode force_white_mode_{cfx::FORCE_WHITE_OFF};
 };
 
 } // namespace cfx_light

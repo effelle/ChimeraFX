@@ -50,6 +50,15 @@ const std::vector<CfxOnCompleteTrigger *>
 const std::vector<CfxOnReachTrigger *>
     CFXAddressableLightEffect::empty_reach_triggers_;
 
+cfx::ForceWhiteMode
+CFXAddressableLightEffect::resolve_force_white_mode_(const CFXControl *c) const {
+  if (this->has_force_white_preset_()) {
+    return this->force_white_preset_val_() ? cfx::FORCE_WHITE_FORCE
+                                           : cfx::FORCE_WHITE_OFF;
+  }
+  return c != nullptr ? c->get_force_white_mode() : cfx::FORCE_WHITE_OFF;
+}
+
 static const char *const TAG = "chimera_fx";
 
 namespace {
@@ -706,22 +715,17 @@ void CFXAddressableLightEffect::start() {
 
   // Pass force_white flag down to the underlying Native CFXRunners
   {
-    bool fw_active = false;
-    if (this->has_force_white_preset_()) {
-      fw_active = this->force_white_preset_val_();
-    } else if (c && c->get_force_white()) {
-      fw_active = c->get_force_white()->state;
-    }
+    cfx::ForceWhiteMode fw_mode = this->resolve_force_white_mode_(c);
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
-        r->force_white_active_ = fw_active;
+        r->force_white_mode_ = fw_mode;
         r->setBakeBrightness(true);
       }
     } else if (act_->runner) {
-      act_->runner->force_white_active_ = fw_active;
+      act_->runner->force_white_mode_ = fw_mode;
       act_->runner->setBakeBrightness(this->is_virtual_segment_);
     }
-    act_->active_force_white = fw_active;
+    act_->active_force_white_mode = fw_mode;
   }
 
   act_->initial_preset_applied = true;
@@ -1188,12 +1192,7 @@ void CFXAddressableLightEffect::stop() {
       }
 #endif
 
-      act_->active_outro_force_white = false;
-      if (this->has_force_white_preset_()) {
-        act_->active_outro_force_white = this->force_white_preset_val_();
-      } else if (c != nullptr && c->get_force_white() != nullptr) {
-        act_->active_outro_force_white = c->get_force_white()->state;
-      }
+      act_->active_outro_force_white_mode = this->resolve_force_white_mode_(c);
 
       // Capture runners for the outro.
       // CFX-046: Virtual segment fix — when a virtual segment stops, only
@@ -1551,11 +1550,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
 
-  if (this->has_force_white_preset_()) {
-    act_->active_force_white = this->force_white_preset_val_();
-  } else if (act_->controller && act_->controller->get_force_white()) {
-    act_->active_force_white = act_->controller->get_force_white()->state;
-  }
+  act_->active_force_white_mode = this->resolve_force_white_mode_(act_->controller);
 
   // Use the name cached in start() — avoids heap allocation every frame
   // (audit 1.1).
@@ -2630,22 +2625,17 @@ void CFXAddressableLightEffect::run_controls_() {
 
   CFXControl *c = act_->controller;
 
-  // QoL FIX: Live force_white sync — re-read the switch every frame so
+  // QoL FIX: Live white-mode sync — re-read the selector every frame so
   // toggling it mid-effect takes effect immediately (not just at start()).
-  bool fw_active = false;
-  if (this->has_force_white_preset_()) {
-    fw_active = this->force_white_preset_val_();
-  } else if (c && c->get_force_white()) {
-    fw_active = c->get_force_white()->state;
-  }
+  cfx::ForceWhiteMode fw_mode = this->resolve_force_white_mode_(c);
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
-      r->force_white_active_ = fw_active;
+      r->force_white_mode_ = fw_mode;
     }
   } else if (act_->runner) {
-    act_->runner->force_white_active_ = fw_active;
+    act_->runner->force_white_mode_ = fw_mode;
   }
-  act_->active_force_white = fw_active;
+  act_->active_force_white_mode = fw_mode;
 
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
@@ -3113,11 +3103,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // Do NOT apply user_brightness here — it would cause double-application.
 
   // BUG 13 FIX: Apply force_white to Intro transitions
-  if (act_->controller != nullptr &&
-      act_->controller->get_force_white() != nullptr &&
-      act_->controller->get_force_white()->state) {
-    cfx::apply_force_white(c.r, c.g, c.b, c.w);
-  }
+  cfx::apply_white_mode(this->resolve_force_white_mode_(act_->controller), c.r,
+                        c.g, c.b, c.w);
 
   // Check for Palette usage
   bool use_palette = false;
@@ -3762,10 +3749,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
         if (brightness < 0.1f)
           brightness = 0.1f;
         uint8_t b = (uint8_t)(255 * brightness);
-        if (act_->active_force_white)
-          it[seg_start + i] = Color(0, 0, 0, b);
-        else
-          it[seg_start + i] = Color(b, b, b, b);
+        uint8_t r = b, g = b, b_val = b, w = b;
+        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        it[seg_start + i] = Color(r, g, b_val, w);
       }
     }
 
@@ -3773,10 +3759,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = act_->hydraulics_fluid_level - floor_level;
       uint8_t b = (uint8_t)(255 * (0.8f + fraction * 0.2f));
-      if (act_->active_force_white)
-        it[seg_start + floor_level] = Color(0, 0, 0, b);
-      else
-        it[seg_start + floor_level] = Color(b, b, b, b);
+      uint8_t r = b, g = b, b_val = b, w = b;
+      cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+      it[seg_start + floor_level] = Color(r, g, b_val, w);
     }
 
     // 4. Droplets / Particles Rendering
@@ -3798,10 +3783,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       }
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
-        if (act_->active_force_white)
-          it[seg_start + p_idx] = Color(0, 0, 0, 255);
-        else
-          it[seg_start + p_idx] = Color(255, 255, 255, 255);
+        uint8_t r = 255, g = 255, b_val = 255, w = 255;
+        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        it[seg_start + p_idx] = Color(r, g, b_val, w);
       }
     }
     // Compact inactive particles (audit 3.3: replaces erase/remove_if on
@@ -5179,9 +5163,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
 
     // BUG 13 FIX: Apply force_white to Outro transitions
-    if (act_->active_outro_force_white) {
-      cfx::apply_force_white(r, g, b, w);
-    }
+    cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g, b, w);
 
     it[global_idx] = Color(r, g, b, w);
   }
@@ -5544,19 +5526,17 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         if (brightness > 1.0f)
           brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
-        if (act_->active_force_white)
-          it[seg_start + i] = Color(0, 0, 0, b);
-        else
-          it[seg_start + i] = Color(b, b, b, b);
+        uint8_t r = b, g = b, b_val = b, w = b;
+        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        it[seg_start + i] = Color(r, g, b_val, w);
       }
     }
     if (floor_level < seg_len && floor_level >= 0) {
       float fraction = act_->hydraulics_fluid_level - floor_level;
       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
-      if (act_->active_force_white)
-        it[seg_start + floor_level] = Color(0, 0, 0, b);
-      else
-        it[seg_start + floor_level] = Color(b, b, b, b);
+      uint8_t r = b, g = b, b_val = b, w = b;
+      cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+      it[seg_start + floor_level] = Color(r, g, b_val, w);
     }
 
     float gravity = 25.0f + (intensity_val * 20.0f);
@@ -5577,10 +5557,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       }
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
-        if (act_->active_force_white)
-          it[seg_start + p_idx] = Color(0, 0, 0, 255);
-        else
-          it[seg_start + p_idx] = Color::WHITE;
+        uint8_t r = 255, g = 255, b_val = 255, w = 255;
+        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        it[seg_start + p_idx] = Color(r, g, b_val, w);
       }
     }
     // Compact inactive particles (audit 3.3: replaces erase/remove_if on
@@ -5728,9 +5707,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
             Color c_cached = act_->outro_color_cache[cache_idx];
             uint8_t r = c_cached.r, g = c_cached.g, b_val = c_cached.b,
                     w = c_cached.w;
-            if (act_->active_outro_force_white) {
-              cfx::apply_force_white(r, g, b_val, w);
-            }
+            cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g,
+                                  b_val, w);
             it[seg_start + px] = Color(r, g, b_val, w);
           }
         }
@@ -5761,9 +5739,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
             uint8_t b_val = (uint8_t)(c_cached.b * dim_factor);
             uint8_t w = (uint8_t)(c_cached.w * dim_factor);
 
-            if (act_->active_outro_force_white) {
-              cfx::apply_force_white(r, g, b_val, w);
-            }
+            cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g,
+                                  b_val, w);
             it[seg_start + px] = Color(r, g, b_val, w);
           }
         }

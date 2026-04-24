@@ -104,8 +104,8 @@ public:
 
     CFXControl *controller{nullptr};
     bool active_outro_mirror{false};
-    bool active_force_white{false};
-    bool active_outro_force_white{false};
+    cfx::ForceWhiteMode active_force_white_mode{cfx::FORCE_WHITE_OFF};
+    cfx::ForceWhiteMode active_outro_force_white_mode{cfx::FORCE_WHITE_OFF};
     bool initial_preset_applied{false};
 
     bool autotune_active{false};
@@ -381,6 +381,7 @@ public:
 protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};
+  cfx::ForceWhiteMode resolve_force_white_mode_(const CFXControl *c) const;
 
   // ── CFXEffectConfig pointer — null for virtual segments ────────────────────
   // Holds UI entity pointers, preset optionals, and trigger vectors.

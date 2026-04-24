@@ -17,7 +17,7 @@ The component creates the following entities based on your light's name (for exa
 - `LED Strip Intro` (Select)
 - `LED Strip Outro` (Select)
 - `LED Strip In/Out Duration` (Number)
-- `LED Strip Force White` (Switch, RGBW/WRGB only)
+- `LED Strip White Mode` (Select, RGBW/WRGB only)
 - `LED Strip Autotune` (Switch)
 - `LED Strip Debug` (Switch)
 
@@ -65,7 +65,7 @@ light:
 | 5 | Intro Effects (Intro, Outro and Duration) |
 | 6 | HA Events |
 | 7 | Autotune |
-| 8 | Force White |
+| 8 | White Mode |
 | 9 | Debug (Diagnostic) |
 
 ### ID 1: Speed
@@ -93,9 +93,14 @@ Enables or disables **Intelligent Autotune**. When enabled, the effect will auto
 
 - **Manual Reset:** If you get lost in manual tweaks, simply flip Autotune back **ON** to snap everything back to the factory defaults.
 
-### ID 8: Force White
-Available only on RGBW/WRGB lights with a dedicated white channel. When enabled, ChimeraFX moves the shared part of the current RGB color into the white LED channel instead of reproducing that portion with red, green, and blue together.
-This produces cleaner whites and pastel tones, usually improves efficiency, and reduces the "washed RGB" look on compatible strips. On plain RGB strips, this control is not created.
+### ID 8: White Mode
+Available only on RGBW/WRGB lights with a dedicated white channel. This selector controls how ChimeraFX uses that white LED channel on compatible strips.
+
+- `Off`: keep the original RGB/RGBW mix untouched.
+- `Smart`: automatically move only near-neutral RGB content into the white channel using a conservative internal heuristic.
+- `Force`: always move the shared part of the current RGB color into the white channel.
+
+This control defaults to `Off`. `Smart` is meant as the safe everyday option, while `Force` remains the deterministic hard override for users who want the cleanest possible white-channel extraction.
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead. See [Troubleshooting](Troubleshooting.md) for more details.

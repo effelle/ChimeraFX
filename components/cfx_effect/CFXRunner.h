@@ -377,7 +377,7 @@ public:
   CRGBPalette16 _currentRandomPalette;
   uint32_t _currentRandomPaletteBuffer[16];
 
-  bool force_white_active_ = false;
+  cfx::ForceWhiteMode force_white_mode_{cfx::FORCE_WHITE_OFF};
   float global_brightness_ = 1.0f;
   bool is_return_phase_{false};
   // audit 4.2: per-runner flag so each strip initialises its own pacifica

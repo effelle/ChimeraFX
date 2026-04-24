@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
@@ -29,6 +30,12 @@
 #include "esphome/core/log.h"
 
 namespace cfx {
+
+enum ForceWhiteMode : uint8_t {
+  FORCE_WHITE_OFF = 0,
+  FORCE_WHITE_SMART = 1,
+  FORCE_WHITE_FORCE = 2,
+};
 
 // ============================================================================
 // ============================================================================
@@ -343,6 +350,16 @@ inline uint32_t color_wheel(uint8_t pos) {
 // Gamma inverse placeholder (can be extended later)
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
+inline ForceWhiteMode force_white_mode_from_name(const char *name) {
+  if (name == nullptr || name[0] == '\0' || strcmp(name, "Off") == 0)
+    return FORCE_WHITE_OFF;
+  if (strcmp(name, "Smart") == 0)
+    return FORCE_WHITE_SMART;
+  if (strcmp(name, "Force") == 0)
+    return FORCE_WHITE_FORCE;
+  return FORCE_WHITE_OFF;
+}
+
 /**
  * FORCE WHITE: Centralized math to shift the common RGB component to the White
  * channel. Applied BEFORE gamma correction to maintain linear physics.
@@ -356,6 +373,31 @@ inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
     uint16_t new_w = (uint16_t)w + min_rgb;
     w = (new_w > 255) ? 255 : (uint8_t)new_w;
   }
+}
+
+inline bool should_extract_smart_white(uint8_t r, uint8_t g, uint8_t b,
+                                       uint8_t w) {
+  const uint8_t min_rgb = std::min({r, g, b});
+  const uint8_t max_rgb = std::max({r, g, b});
+  const uint8_t spread = max_rgb - min_rgb;
+
+  // Keep Smart mode conservative: near-neutral colors extract to white,
+  // but tinted colors stay in RGB. At very low RGB levels we require an
+  // existing white contribution to avoid flickery white-channel steals.
+  if (spread > 16)
+    return false;
+  if (max_rgb < 12 && w == 0)
+    return false;
+  return true;
+}
+
+inline void apply_white_mode(ForceWhiteMode mode, uint8_t &r, uint8_t &g,
+                             uint8_t &b, uint8_t &w) {
+  if (mode == FORCE_WHITE_OFF)
+    return;
+  if (mode == FORCE_WHITE_SMART && !should_extract_smart_white(r, g, b, w))
+    return;
+  apply_force_white(r, g, b, w);
 }
 
 // ============================================================================
