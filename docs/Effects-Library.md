@@ -716,6 +716,31 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Venetian.webm" type="video/webm">
+        </video>
+        *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Venetian"
+              effect_id: 173
+        ```
+
+??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Resonance_Fill.webm" type="video/webm">
         </video>
         *A liquid-reactive fill sequence. Light surges across the strip with a decaying ripple effect, resonating at the leading edge. The "Resonance" intro features a high-impact surge, while the "Resonance Fade" outro provides a rhythmic, decaying drain.*
