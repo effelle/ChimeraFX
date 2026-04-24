@@ -550,31 +550,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 166
         ```
 
-??? abstract "167 | Four Times the Charm | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Four_Times_the_Charm.webm" type="video/webm">
-        </video>
-        *A multi-center architectural sweep. Splitting the strip into quadrants, it runs two simultaneous 'Curtain Sweeps' starting from the 25% and 75% positions. Perfect for complex architectural highlight sequences.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edges. |
-        | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transitions. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Four Times the Charm"
-              effect_id: 167
-        ```
-
 ??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
 
     === "🎬 Preview"
@@ -652,31 +627,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 175
         ```
 
-??? abstract "171 | Inertia Sweep | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Inertia_Sweep.webm" type="video/webm">
-        </video>
-        *A precisely-eased fill that sweeps from dark to full brightness in a single pass, with a hot leading edge that pulses three pixels of decreasing intensity ahead of the cursor.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Inertia Sweep"
-              effect_id: 171
-        ```
-
 ??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
@@ -700,28 +650,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
           - addressable_cfx:
               name: "Sonar Reveal"
               effect_id: 172
-        ```
-
-??? abstract "189 | Standing Wave | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High </span>"
-
-    === "🎬 Preview"
-        *A monochromatic interference field that rises from darkness in a dense, high-frequency shimmer. Colliding wavefronts gradually stabilize into a solid architectural floor, then dissolve back into vibrating noise during shutdown.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `180` | **Wave density**: adjusts the complexity and brightness contrast of the interference field during intro and outro. |
-        | **Speed** | `160` | **Drift rate**: controls how quickly the standing-wave shimmer evolves before settling to the static hold. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Standing Wave"
-              effect_id: 189
         ```
 
 ??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"

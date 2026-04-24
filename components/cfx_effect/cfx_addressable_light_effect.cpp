@@ -176,16 +176,12 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_TWIN_PULSE, INTRO_TWIN_PULSE};
   case 166: // Transmission
     return {true, INTRO_MORSE, INTRO_MORSE};
-  case 167: // Four Times the Charm
-    return {true, INTRO_MODE_QUADRANT, INTRO_MODE_QUADRANT};
   case 168: // Hydro-Pulse
     return {true, INTRO_MODE_HYDRAULICS, INTRO_MODE_HYDRAULICS};
   case 169: // Dropping Fill
     return {true, INTRO_MODE_DROPPING, INTRO_MODE_DROPPING};
   case 170: // Assembly
     return {true, INTRO_MODE_ASSEMBLY, INTRO_MODE_ASSEMBLY};
-  case 171: // Inertia Sweep
-    return {true, INTRO_MODE_INERTIA_SWEEP, INTRO_MODE_INERTIA_SWEEP};
   case 172: // Sonar Reveal
     return {true, INTRO_MODE_SONAR_REVEAL, INTRO_MODE_SONAR_REVEAL};
   case 173: // Venetian
@@ -216,8 +212,6 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_IMPACT_FLARE, OUTRO_MODE_CENTER_SQUEEZE};
   case 188: // Monolith
     return {true, INTRO_MODE_FADE, INTRO_MODE_FADE};
-  case 189: // Standing Wave
-    return {true, INTRO_MODE_INTERFERENCE, INTRO_MODE_INTERFERENCE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -230,11 +224,9 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   case 163: // Stardust Sweep
   case 165: // Twin Pulse Sweep
   case 166: // Transmission
-  case 167: // Four Times the Charm
   case 168: // Aqueous Flow
   case 169: // Dropping Fill
   case 170: // Assembly
-  case 171: // Inertia Sweep
   case 172: // Sonar Reveal
   case 173: // Venetian
   case 174: // Crystallize
@@ -250,7 +242,6 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   case 186: // Tidal Surge
   case 187: // Impact Flare
   case 188: // Monolith
-  case 189: // Standing Wave
     return true;
   default:
     return false;
@@ -2423,7 +2414,6 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
     return 15; // Defaults to Cyberpunk
 
   case 170:     // Assembly
-  case 171:     // Inertia Sweep
   case 172:     // Sonar Reveal
   case 173:     // Venetian
   case 174:     // Crystallize
@@ -2662,7 +2652,6 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
   case 168:
     return 128; // Aqueous Flow (Default Speed)
   case 169:
-  case 171:
   case 172:
   case 173:
   case 174:
@@ -2672,8 +2661,6 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 100; // Collider (Default Speed)
   case 180:
     return 160; // Interference (Default Speed)
-  case 189:
-    return 160; // Standing Wave (same as Interference intro/outro)
   default:
     return 128; // WLED default
   }
@@ -2707,7 +2694,6 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
   case 168:
     return 128; // Aqueous Flow (Default Viscosity)
   case 169:
-  case 171:
   case 172:
   case 173:
   case 174:
@@ -2717,8 +2703,6 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 170; // Collider (Default Intensity)
   case 180:
     return 180; // Interference (Default Intensity)
-  case 189:
-    return 180; // Standing Wave (same as Interference intro/outro)
   default:
     return 128; // WLED default
   }
