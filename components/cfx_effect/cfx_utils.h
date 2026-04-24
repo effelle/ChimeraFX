@@ -381,12 +381,25 @@ inline bool should_extract_smart_white(uint8_t r, uint8_t g, uint8_t b,
   const uint8_t max_rgb = std::max({r, g, b});
   const uint8_t spread = max_rgb - min_rgb;
 
-  // Keep Smart mode conservative: near-neutral colors extract to white,
-  // but tinted colors stay in RGB. At very low RGB levels we require an
-  // existing white contribution to avoid flickery white-channel steals.
-  if (spread > 16)
+  // Keep Smart mode strict: only obvious whites / near-whites should migrate
+  // into the dedicated white channel. Soft tints and pastel hues should stay
+  // in RGB so Smart feels visibly different from Force.
+  if (max_rgb == 0)
     return false;
-  if (max_rgb < 12 && w == 0)
+  if (spread > 10)
+    return false;
+
+  // Relative chroma guard: even at high brightness, reject colors whose
+  // channel spread exceeds ~8% of the brightest channel.
+  if ((uint16_t)spread * 255u > (uint16_t)max_rgb * 20u)
+    return false;
+
+  // At low RGB levels, only extract if the source already contains some white.
+  if (max_rgb < 20 && w == 0)
+    return false;
+
+  // Reject dim/off-whites that don't have a meaningful common RGB core.
+  if (w == 0 && min_rgb < 28)
     return false;
   return true;
 }
