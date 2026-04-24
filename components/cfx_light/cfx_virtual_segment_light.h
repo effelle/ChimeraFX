@@ -173,6 +173,8 @@ public:
     auto *state = this->state_parent_;
     if (state == nullptr || this->is_effect_active())
       return;
+    if (!state->remote_values.is_on() || state->current_values.get_state() <= 0.0f)
+      return;
 
     auto val = state->current_values;
     float bri = val.get_brightness() * val.get_state();

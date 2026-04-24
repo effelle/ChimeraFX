@@ -84,6 +84,11 @@ void CFXLightOutput::repaint_force_white_solid_(bool state) {
     return;
 
   if (this->state_parent_ != nullptr) {
+    if (!this->state_parent_->remote_values.is_on() ||
+        this->state_parent_->current_values.get_state() <= 0.0f) {
+      return;
+    }
+
     auto val = this->state_parent_->current_values;
     Color c = light::color_from_light_color_values(val);
     if (state)
