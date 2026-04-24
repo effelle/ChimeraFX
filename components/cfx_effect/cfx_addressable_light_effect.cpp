@@ -423,6 +423,8 @@ void CFXAddressableLightEffect::start() {
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   act_->outro_start_time = 0;
   act_->active_transition_duration_ms = 0;
+  act_->intro_snapshot.clear();
+  act_->transition_target_snapshot.clear();
   act_->is_sequence_outro = false;
   act_->suppress_reach_event = false;
   act_->suppress_positional_events = false;
@@ -993,6 +995,7 @@ void CFXAddressableLightEffect::stop() {
   // Clear intro snapshot — keep capacity for next start() to avoid realloc
   // during the transition (audit 3.1).
   act_->intro_snapshot.clear();
+  act_->transition_target_snapshot.clear();
 
   // Restore the light default transition length that was suppressed in start()
   // so solid-color ON/OFF behavior works again after the effect stops.
@@ -2062,6 +2065,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         // transition (audit 3.1).
         act_->intro_snapshot.reserve(it.size());
         act_->intro_snapshot.resize(it.size());
+        act_->transition_target_snapshot.clear();
+        act_->transition_target_snapshot.reserve(it.size());
         for (int i = 0; i < it.size(); i++) {
           act_->intro_snapshot[i] = it[i].get();
           if ((i & 0x1F) == 0) esphome::App.feed_wdt(); // Every 32 pixels
@@ -2088,6 +2093,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Handle Intro→Main Blending
   if (act_->state == TRANSITION_RUNNING) {
+    if (is_mono_preset && act_->transition_target_snapshot.size() != it.size()) {
+      // CFX-067: Monochromatic presets go idle immediately after intro, so the
+      // transition cannot rely on the live DMA buffer staying equal to the
+      // true hold frame. Cache the first post-intro runner output once, then
+      // dissolve toward that stable target on every subsequent frame.
+      act_->transition_target_snapshot.resize(it.size());
+      for (int i = 0; i < it.size(); i++) {
+        act_->transition_target_snapshot[i] = it[i].get();
+        if ((i & 0x1F) == 0) esphome::App.feed_wdt();
+      }
+    }
+
     uint32_t trans_elapsed =
         (uint32_t)(millis_64() - act_->transition_start_ms);
     float trans_dur_ms =
@@ -2123,6 +2140,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // In between, it linearly interpolates.
       float diff = (progress - threshold) / softness;
       float mix = diff < 0.0f ? 0.0f : (diff > 1.0f ? 1.0f : diff);
+      Color main =
+          (act_->transition_target_snapshot.size() == it.size())
+              ? act_->transition_target_snapshot[i]
+              : it[i].get();
 
       if (mix < 1.0f) {
         if (mix <= 0.0f) {
@@ -2131,7 +2152,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           // Blend Intro -> Main using fixed-point (audit 1.3):
           // multiply by 256 and shift right 8 — avoids 8 float muls per pixel.
           Color buf = act_->intro_snapshot[i];
-          Color main = it[i].get();
           uint16_t mix_fp = (uint16_t)(mix * 256.0f); // [0, 256]
           uint16_t imix_fp = 256u - mix_fp;           // [256, 0]
           uint8_t r = (uint8_t)((buf.r * imix_fp + main.r * mix_fp) >> 8);
@@ -2140,6 +2160,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           uint8_t w = (uint8_t)((buf.w * imix_fp + main.w * mix_fp) >> 8);
           it[i] = Color(r, g, b, w);
         }
+      } else {
+        it[i] = main;
       }
       if ((i & 0x1F) == 0) esphome::App.feed_wdt(); // Every 32 pixels
     }
@@ -2147,6 +2169,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // End transition when fully complete
     if (progress >= (1.0f + softness)) {
       act_->state = TRANSITION_NONE;
+      act_->intro_snapshot.clear();
+      act_->transition_target_snapshot.clear();
     }
   }
 

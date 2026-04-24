@@ -77,6 +77,7 @@ public:
     uint64_t transition_start_ms{0};
     uint32_t active_transition_duration_ms{0};
     std::vector<Color> intro_snapshot{};
+    std::vector<Color> transition_target_snapshot{};
     bool is_sequence_outro{false};
 
     bool intro_active{false};
