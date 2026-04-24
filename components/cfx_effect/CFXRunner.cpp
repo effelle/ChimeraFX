@@ -7323,8 +7323,6 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
-  uint32_t scroll = instance->now >> 3;
-
   // Rebuild pattern — same hash as intro/outro
   const int PATTERN_SLOTS = 128;
   uint16_t seg_start_arr[PATTERN_SLOTS];
@@ -7345,6 +7343,12 @@ uint16_t mode_lithograph(void) {
     if (pattern_total >= (int)len * 3) break;
   }
   if (pattern_total == 0) pattern_total = 1;
+
+  // Intensity repositions the barcode map without turning Lithograph into a
+  // permanently animated hold. Changing intensity wakes mono_idle for one
+  // frame, so users can "move" the dark spots interactively.
+  uint32_t scroll =
+      ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];

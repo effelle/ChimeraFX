@@ -2765,7 +2765,7 @@ uint32_t CFXAddressableLightEffect::get_intro_mode_min_duration_ms_(
   case INTRO_MODE_CRYSTALLIZE:
     return 1500;
   case INTRO_MODE_DEEP_BREATHE:
-    return 1800;
+    return 1500;
   case INTRO_MODE_MOIRE_SHIFT:
     return 3000;
   case INTRO_MODE_RESONANCE_FILL:
@@ -2829,7 +2829,7 @@ std::optional<float> CFXAddressableLightEffect::get_default_inout_duration_s_(
   case 174: // Crystallize
     return 1.5f;
   case 175: // Deep Breathe
-    return 1.8f;
+    return 1.5f;
   case 176: // Moiré Shift
     return 5.0f;
   case 177: // Resonance Fill
@@ -2837,7 +2837,7 @@ std::optional<float> CFXAddressableLightEffect::get_default_inout_duration_s_(
   case 178: // Telemetry
     return 1.2f;
   case 179: // Stellar Dust
-    return 3.0f;
+    return 2.0f;
   case 181: // Eclipse
     return 1.5f;
   case 182: // Gas Discharge
@@ -3455,14 +3455,16 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // NOTE: Brightness is handled by global_brightness_ on the runner.
   // Do NOT apply user_brightness here — it would cause double-application.
 
+  bool is_manual_transition = !preset.is_active;
+
   // Check for Palette usage
   bool use_palette = false;
   uint8_t pal = 0;
 
-  // CFX-026: Derive intro color from the active effect palette using the
-  // curated palette-to-intro lookup. For unsupported/random palettes, keep
-  // the current light color instead of averaging the palette into mud.
-  if (chimera_fx::instance != nullptr) {
+  // Manual user-selected intros/outros should follow the color picker, not
+  // the wrapped effect palette. Palette-derived intro color is reserved for
+  // embedded monochromatic preset behavior only.
+  if (!is_manual_transition && chimera_fx::instance != nullptr) {
     pal = chimera_fx::instance->_segment.palette;
     if (pal == 0)
       pal = this->get_default_palette_id_(chimera_fx::instance->getMode());
@@ -4376,16 +4378,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_SONAR_REVEAL: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 2000;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
+    uint32_t duration = (act_->active_intro_duration_ms > 0)
+                            ? act_->active_intro_duration_ms
+                            : 2000;
 
     // ── 2. Local helpers
     // ──────────────────────────────────────────────────────
@@ -4494,16 +4489,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_CRYSTALLIZE: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 1500;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
+    uint32_t duration = (act_->active_intro_duration_ms > 0)
+                            ? act_->active_intro_duration_ms
+                            : 1500;
 
     // ── 2. Local helpers
     // ──────────────────────────────────────────────────────
@@ -4620,7 +4608,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
     if (prog > 1.0f)
       prog = 1.0f;
-    float eased_p = prog * prog * (3.0f - 2.0f * prog);
+    float eased_p = prog * (2.0f - prog);
     uint8_t env = (uint8_t)(eased_p * 255.0f);
 
     uint8_t t1 = (uint8_t)(elapsed >> 4);
@@ -4781,16 +4769,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_STELLAR_DUST: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 2000;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
+    uint32_t duration = (act_->active_intro_duration_ms > 0)
+                            ? act_->active_intro_duration_ms
+                            : 2000;
 
     // Lambdas moved to function scope
 
@@ -4842,16 +4823,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_ECLIPSE: {
     // ── 1. Duration / Intensity fetch
     // ──────────────────────────────────────────
-    uint32_t duration = 1500;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
+    uint32_t duration = (act_->active_intro_duration_ms > 0)
+                            ? act_->active_intro_duration_ms
+                            : 1500;
 
     uint8_t intensity = 128;
     if (this->local_intensity_() != nullptr &&
@@ -5092,16 +5066,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   case INTRO_MODE_LITHOGRAPH: {
     // ── 1. Duration fetch
     // ─────────────────────────────────────────────────────
-    uint32_t duration = 1100;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
+    uint32_t duration = (act_->active_intro_duration_ms > 0)
+                            ? act_->active_intro_duration_ms
+                            : 1100;
 
     // ── 2. Sweep cursor (ease-in-out)
     // ─────────────────────────────────────────
@@ -5114,7 +5081,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // ── 3. Scroll position: 1 pixel per 8 ms  (125 px/sec scanner speed)
     // ──────
-    uint32_t scroll = elapsed >> 3;
+    uint8_t litho_intensity = act_->active_intro_intensity;
 
     // ── 4. Build pattern lookup (segment index → lit or dark)
     // ─────────────────
@@ -5146,6 +5113,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     if (pattern_total == 0)
       pattern_total = 1;
+
+    uint32_t pattern_offset =
+        ((uint32_t)litho_intensity * (uint32_t)pattern_total) >> 8;
+    uint32_t scroll = pattern_offset + (elapsed >> 3);
 
     // ── 5. Clear strip
     // ────────────────────────────────────────────────────────
