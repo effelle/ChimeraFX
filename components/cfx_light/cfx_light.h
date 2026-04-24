@@ -12,13 +12,10 @@
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/light/light_output.h"
 #include "esphome/components/light/light_transformer.h"
-#include "esphome/components/select/select.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
-
-#include "../cfx_effect/cfx_utils.h"
-
 #include <driver/gpio.h>
 #include <driver/rmt_tx.h>
 #include <driver/spi_master.h>
@@ -151,14 +148,9 @@ public:
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
-  void set_force_white_select(select::Select *sel);
-  select::Select *get_force_white_select() const {
-    return this->force_white_select_;
-  }
-  cfx::ForceWhiteMode get_force_white_mode() const {
-    return this->force_white_mode_;
-  }
-  cfx::ForceWhiteMode get_force_white_mode_for(light::LightState *state) const;
+  void set_force_white_switch(switch_::Switch *sw);
+  switch_::Switch *get_force_white_switch() const { return this->force_white_sw_; }
+  bool is_force_white_active_for(light::LightState *state) const;
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
@@ -262,9 +254,8 @@ protected:
   void setup_spi_();
   void flush_rmt_();
   void flush_spi_();
-  void bind_force_white_select_();
-  void sync_force_white_mode_();
-  void repaint_force_white_solid_();
+  void bind_force_white_switch_();
+  void repaint_force_white_solid_(bool state);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
@@ -316,9 +307,8 @@ protected:
 
   bool is_rgbw_{false};
   bool is_wrgb_{false};
-  select::Select *force_white_select_{nullptr};
-  select::Select *force_white_cb_select_{nullptr};
-  cfx::ForceWhiteMode force_white_mode_{cfx::FORCE_WHITE_OFF};
+  switch_::Switch *force_white_sw_{nullptr};
+  switch_::Switch *force_white_cb_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
 
   // SPI transport fields (idle harmlessly for RMT instances)

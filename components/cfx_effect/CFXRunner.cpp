@@ -181,10 +181,8 @@ void Segment::setPixelColor(int n, uint32_t c) {
   uint8_t w = CFX_W(c);
 
   // Apply native force_white BEFORE hitting the ESPHome gamma cache
-  cfx::apply_white_mode(instance->force_white_mode_,
-                        cfx::smart_white_floor_scale_for_palette(
-                            instance->_segment.palette),
-                        r, g, b, w);
+  if (instance->force_white_active_)
+    cfx::apply_force_white(r, g, b, w);
 
   // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
   // to bake their own brightness before returning the buffer.
@@ -244,10 +242,8 @@ void Segment::fill(uint32_t c) {
   uint8_t w = CFX_W(c);
 
   // Apply native force_white BEFORE hitting the ESPHome gamma cache
-  cfx::apply_white_mode(instance->force_white_mode_,
-                        cfx::smart_white_floor_scale_for_palette(
-                            instance->_segment.palette),
-                        r, g, b, w);
+  if (instance->force_white_active_)
+    cfx::apply_force_white(r, g, b, w);
 
   // CFX-BRIGHTNESS FIX: ESPHome's AddressableLight wrapper expects effects 
   // to bake their own brightness before returning the buffer.

@@ -101,7 +101,6 @@ public:
   CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
-    this->force_white_mode_ = this->resolve_force_white_mode_();
     this->bind_force_white_callback_();
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
@@ -187,9 +186,8 @@ public:
   void set_palette(select::Select *s) { palette_ = s; }
   void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
   void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
-  void set_force_white(select::Select *s) {
+  void set_force_white(esphome::switch_::Switch *s) {
     force_white_ = s;
-    this->force_white_mode_ = this->resolve_force_white_mode_();
     this->bind_force_white_callback_();
     this->sync_force_white_output_();
   }
@@ -245,10 +243,7 @@ public:
   esphome::light::LightState *get_light() { return light_; }
   esphome::switch_::Switch *get_mirror() { return mirror_; }
   esphome::switch_::Switch *get_autotune() { return autotune_; }
-  select::Select *get_force_white_select() { return force_white_; }
-  cfx::ForceWhiteMode get_force_white_mode() const {
-    return this->force_white_mode_;
-  }
+  esphome::switch_::Switch *get_force_white() { return force_white_; }
   esphome::switch_::Switch *get_debug() { return debug_; }
   select::Select *get_intro_effect() { return intro_effect_; }
   number::Number *get_intro_duration() { return inout_duration_; }
@@ -259,31 +254,22 @@ protected:
   void bind_force_white_callback_() {
     if (this->force_white_ == nullptr)
       return;
-    if (this->force_white_cb_select_ == this->force_white_)
+    if (this->force_white_cb_switch_ == this->force_white_)
       return;
 
-    this->force_white_cb_select_ = this->force_white_;
+    this->force_white_cb_switch_ = this->force_white_;
     ESP_LOGD("chimera_fw",
-             "register force_white callback ctrl=%p light=%p sel=%p name=%s",
+             "register force_white callback ctrl=%p light=%p sw=%p name=%s",
              this, this->light_, this->force_white_,
              this->force_white_->get_name().c_str());
     this->force_white_->add_on_state_callback(
-        [this](size_t) {
-          this->force_white_mode_ = this->resolve_force_white_mode_();
+        [this](bool state) {
           ESP_LOGD("chimera_fw",
-                   "force_white toggle ctrl=%p light=%p sel=%p mode=%d",
-                   this, this->light_, this->force_white_,
-                   static_cast<int>(this->force_white_mode_));
+                   "force_white toggle ctrl=%p light=%p sw=%p state=%d",
+                   this, this->light_, this->force_white_, state);
           this->repaint_force_white_segment_();
           this->schedule_force_white_sync_(25, true);
         });
-  }
-
-  cfx::ForceWhiteMode resolve_force_white_mode_() const {
-    if (this->force_white_ == nullptr)
-      return cfx::FORCE_WHITE_OFF;
-    return cfx::force_white_mode_from_name(
-        this->force_white_->current_option().c_str());
   }
 
   void schedule_force_white_sync_(uint32_t delay_ms, bool repaint_after) {
@@ -344,12 +330,14 @@ protected:
       }
 
       ESP_LOGD("chimera_fw",
-               "segment repaint now ctrl=%p seg=%p id=%s seg_sel=%p seg_mode=%d ctrl_sel=%p ctrl_mode=%d",
+               "segment repaint now ctrl=%p seg=%p id=%s seg_sw=%p seg_sw_state=%d ctrl_sw=%p ctrl_sw_state=%d",
                this, seg_out, seg_out->get_segment_id().c_str(),
-               seg_out->get_force_white_select(),
-               static_cast<int>(seg_out->get_force_white_mode()),
+               seg_out->get_force_white_switch(),
+               seg_out->get_force_white_switch() != nullptr
+                   ? seg_out->get_force_white_switch()->state
+                   : -1,
                this->force_white_,
-               static_cast<int>(this->force_white_mode_));
+               this->force_white_ != nullptr ? this->force_white_->state : -1);
       seg_out->repaint_force_white_current_state();
       return;
     }
@@ -379,10 +367,11 @@ protected:
     for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
       if (seg_out == output) {
         ESP_LOGD("chimera_fw",
-                 "bind segment force_white ctrl=%p seg=%p id=%s sel=%p mode=%d",
+                 "bind segment force_white ctrl=%p seg=%p id=%s sw=%p state=%d",
                  this, seg_out, seg_out->get_segment_id().c_str(),
-                 this->force_white_, static_cast<int>(this->force_white_mode_));
-        seg_out->set_force_white_select(this->force_white_);
+                 this->force_white_,
+                 this->force_white_ != nullptr ? this->force_white_->state : -1);
+        seg_out->set_force_white_switch(this->force_white_);
         return;
       }
     }
@@ -390,10 +379,10 @@ protected:
 
     auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
     ESP_LOGD("chimera_fw",
-             "bind master force_white ctrl=%p out=%p sel=%p mode=%d",
+             "bind master force_white ctrl=%p out=%p sw=%p state=%d",
              this, cfx_out, this->force_white_,
-             static_cast<int>(this->force_white_mode_));
-    cfx_out->set_force_white_select(this->force_white_);
+             this->force_white_ != nullptr ? this->force_white_->state : -1);
+    cfx_out->set_force_white_switch(this->force_white_);
   }
 
   number::Number *speed_{nullptr};
@@ -401,9 +390,8 @@ protected:
   select::Select *palette_{nullptr};
   esphome::switch_::Switch *mirror_{nullptr};
   esphome::switch_::Switch *autotune_{nullptr};
-  select::Select *force_white_{nullptr};
-  select::Select *force_white_cb_select_{nullptr};
-  cfx::ForceWhiteMode force_white_mode_{cfx::FORCE_WHITE_OFF};
+  esphome::switch_::Switch *force_white_{nullptr};
+  esphome::switch_::Switch *force_white_cb_switch_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
   number::Number *inout_duration_{nullptr};

@@ -11,6 +11,7 @@
 #include "cfx_virtual_segment_light.h"
 #include "../cfx_effect/cfx_control.h"
 #include "../cfx_effect/cfx_scheduler.h"
+#include "../cfx_effect/cfx_utils.h"
 
 #ifdef USE_WIFI
 #include <lwip/inet.h>
@@ -45,58 +46,48 @@ std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 
-void CFXLightOutput::set_force_white_select(select::Select *sel) {
-  if (this->force_white_select_ == sel && this->force_white_cb_select_ == sel)
+void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
+  if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
     return;
 
-  this->force_white_select_ = sel;
-  this->sync_force_white_mode_();
-  this->bind_force_white_select_();
+  this->force_white_sw_ = sw;
+  this->bind_force_white_switch_();
 }
 
-void CFXLightOutput::sync_force_white_mode_() {
-  this->force_white_mode_ = cfx::FORCE_WHITE_OFF;
-  if (this->force_white_select_ == nullptr)
+void CFXLightOutput::bind_force_white_switch_() {
+  if (this->force_white_sw_ == nullptr)
     return;
-  this->force_white_mode_ = cfx::force_white_mode_from_name(
-      this->force_white_select_->current_option().c_str());
-}
-
-void CFXLightOutput::bind_force_white_select_() {
-  if (this->force_white_select_ == nullptr)
-    return;
-  if (this->force_white_cb_select_ == this->force_white_select_)
+  if (this->force_white_cb_sw_ == this->force_white_sw_)
     return;
 
-  this->force_white_cb_select_ = this->force_white_select_;
-  this->force_white_select_->add_on_state_callback([this](size_t) {
-    this->sync_force_white_mode_();
-    this->repaint_force_white_solid_();
+  this->force_white_cb_sw_ = this->force_white_sw_;
+  this->force_white_sw_->add_on_state_callback([this](bool state) {
+    this->repaint_force_white_solid_(state);
   });
 }
 
-cfx::ForceWhiteMode
-CFXLightOutput::get_force_white_mode_for(light::LightState *state) const {
+bool CFXLightOutput::is_force_white_active_for(light::LightState *state) const {
   if (!this->has_white_channel())
-    return cfx::FORCE_WHITE_OFF;
+    return false;
 
   if (state != nullptr) {
     auto *ctrl = chimera_fx::CFXControl::find(state);
-    if (ctrl != nullptr)
-      return ctrl->get_force_white_mode();
+    if (ctrl != nullptr && ctrl->get_force_white() != nullptr)
+      return ctrl->get_force_white()->state;
   }
 
-  return this->force_white_mode_;
+  return this->force_white_sw_ != nullptr && this->force_white_sw_->state;
 }
 
-void CFXLightOutput::repaint_force_white_solid_() {
+void CFXLightOutput::repaint_force_white_solid_(bool state) {
   if (this->is_effect_active() || this->has_segments())
     return;
 
   if (this->state_parent_ != nullptr) {
     auto val = this->state_parent_->current_values;
     Color c = light::color_from_light_color_values(val);
-    cfx::apply_white_mode(this->force_white_mode_, c.r, c.g, c.b, c.w);
+    if (state)
+      cfx::apply_force_white(c.r, c.g, c.b, c.w);
     this->all() = c;
     this->schedule_show();
   }
@@ -333,10 +324,10 @@ void CFXLightOutput::setup() {
     }
   }
 
-  // QoL FIX: Live white-mode reactivity for solid colors.
-  // The selector may be attached either before or after setup(), so bind here
+  // QoL FIX: Live force-white reactivity for solid colors.
+  // The switch may be attached either before or after setup(), so bind here
   // and also on late attachment from CFXControl.
-  this->bind_force_white_select_();
+  this->bind_force_white_switch_();
 
   if (this->transport_ == TRANSPORT_SPI) {
     ESP_LOGI(TAG, "CFXLight ready: %u LEDs on SPI (data=GPIO%u clock=GPIO%u speed=%" PRIu32 " Hz)",
@@ -806,8 +797,14 @@ void CFXLightOutput::update_state(light::LightState *state) {
   // directly into the buffer.
   Color c = light::color_from_light_color_values(val);
 
+  if (this->force_white_sw_ != nullptr && this->force_white_sw_->state &&
+      cfx::should_auto_disable_force_white(c.r, c.g, c.b)) {
+    this->force_white_sw_->turn_off();
+  }
+
   // BUG 13 FIX: Apply force_white to solid colors BEFORE they hit the buffer
-  cfx::apply_white_mode(this->force_white_mode_, c.r, c.g, c.b, c.w);
+  if (this->is_force_white_active_for(state))
+    cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
   this->all() = c;
   this->schedule_show();

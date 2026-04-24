@@ -31,12 +31,6 @@
 
 namespace cfx {
 
-enum ForceWhiteMode : uint8_t {
-  FORCE_WHITE_OFF = 0,
-  FORCE_WHITE_SMART = 1,
-  FORCE_WHITE_FORCE = 2,
-};
-
 // ============================================================================
 // ============================================================================
 // RANDOM HELPERS
@@ -350,16 +344,6 @@ inline uint32_t color_wheel(uint8_t pos) {
 // Gamma inverse placeholder (can be extended later)
 inline uint8_t gamma8inv(uint8_t v) { return v; }
 
-inline ForceWhiteMode force_white_mode_from_name(const char *name) {
-  if (name == nullptr || name[0] == '\0' || strcmp(name, "Off") == 0)
-    return FORCE_WHITE_OFF;
-  if (strcmp(name, "Smart") == 0)
-    return FORCE_WHITE_SMART;
-  if (strcmp(name, "Force") == 0)
-    return FORCE_WHITE_FORCE;
-  return FORCE_WHITE_OFF;
-}
-
 /**
  * FORCE WHITE: Centralized math to shift the common RGB component to the White
  * channel. Applied BEFORE gamma correction to maintain linear physics.
@@ -375,87 +359,15 @@ inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
   }
 }
 
-inline uint8_t smart_white_amount(uint8_t r, uint8_t g, uint8_t b,
-                                  uint8_t w) {
-  const uint8_t min_rgb = std::min({r, g, b});
+inline bool should_auto_disable_force_white(uint8_t r, uint8_t g, uint8_t b) {
   const uint8_t max_rgb = std::max({r, g, b});
-  const uint8_t spread = max_rgb - min_rgb;
-
-  if (max_rgb == 0)
-    return 0;
-
-  // Smart mode is a soft blend, not a hard gate:
-  // - pastels / near-whites should move SOME shared RGB energy into W
-  // - strongly colored pixels should stay mostly RGB
-  // - true whites should behave close to Force
-  //
-  // We derive a weight from two factors:
-  // 1. neutrality: how close the RGB channels are to each other
-  // 2. brightness/core: avoid extracting tiny dim values where the shift is
-  //    mostly noise
-  if (spread >= max_rgb)
-    return 0;
-
-  uint8_t neutrality = 255 - (uint8_t)(((uint16_t)spread * 255u) /
-                                       std::max<uint8_t>(max_rgb, 1));
-
-  // Stronger falloff so visibly tinted colors diverge from Force, but
-  // near-neutral pastels still get a noticeable white contribution.
-  neutrality = scale8(neutrality, neutrality);
-
-  uint8_t core = std::max(min_rgb, w);
-  uint8_t brightness = core >= 24 ? 255 : (uint8_t)((core * 255u) / 24u);
-
-  uint8_t weight = scale8(neutrality, brightness);
-
-  // Tiny extractions are visually meaningless and just add churn.
-  uint8_t amount = scale8(min_rgb, weight);
-  return amount < 6 ? 0 : amount;
-}
-
-inline uint8_t smart_white_floor_scale_for_palette(uint8_t palette_id) {
-  switch (palette_id) {
-  case 0:   // Default fallback when palette intent is unknown
-    return 80;
-  case 7:   // Ice
-    return 176;
-  case 10:  // Pastel
-    return 96;
-  case 13:  // Sakura
-    return 48;
-  case 255: // Solid
-    return 192;
-  default:
-    return 0;
-  }
-}
-
-inline void apply_white_mode(ForceWhiteMode mode, uint8_t smart_floor_scale,
-                             uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
-  if (mode == FORCE_WHITE_OFF)
-    return;
-  if (mode == FORCE_WHITE_SMART) {
-    uint8_t amount = smart_white_amount(r, g, b, w);
-    if (smart_floor_scale > 0) {
-      uint8_t floor_amount = scale8(std::min({r, g, b}), smart_floor_scale);
-      if (floor_amount > amount)
-        amount = floor_amount;
-    }
-    if (amount == 0)
-      return;
-    r -= amount;
-    g -= amount;
-    b -= amount;
-    uint16_t new_w = (uint16_t)w + amount;
-    w = (new_w > 255) ? 255 : (uint8_t)new_w;
-    return;
-  }
-  apply_force_white(r, g, b, w);
-}
-
-inline void apply_white_mode(ForceWhiteMode mode, uint8_t &r, uint8_t &g,
-                             uint8_t &b, uint8_t &w) {
-  apply_white_mode(mode, 0, r, g, b, w);
+  const uint8_t min_rgb = std::min({r, g, b});
+  // QoL auto-yield for Force White:
+  // keep true/near whites intact, but release the switch once the solid color
+  // is clearly tinted. The brightness floor avoids dim-channel noise.
+  if (max_rgb < 32)
+    return false;
+  return (max_rgb - min_rgb) > 24;
 }
 
 // ============================================================================
