@@ -2449,6 +2449,40 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   }
 }
 
+Color CFXAddressableLightEffect::get_intro_palette_color_(
+    uint8_t palette_id, const Color &fallback) const {
+  switch (palette_id) {
+  case 1:  return Color(0, 180, 200, 0);     // Aurora
+  case 2:  return Color(32, 140, 48, 0);     // Forest
+  case 3:  return Color(220, 110, 0, 0);     // Halloween
+  case 4:  return Color(240, 245, 255, 0);   // Rainbow
+  case 5:  return Color(255, 96, 16, 0);     // Fire
+  case 6:  return Color(255, 140, 48, 0);    // Sunset
+  case 7:  return Color(120, 220, 255, 0);   // Ice
+  case 8:  return Color(255, 80, 220, 0);    // Party
+  case 9:  return Color(210, 25, 0, 0);      // Lava
+  case 10: return Color(255, 220, 210, 0);   // Pastel
+  case 11: return Color(0, 120, 220, 0);     // Ocean
+  case 12: return Color(255, 90, 0, 0);      // HeatColors
+  case 13: return Color(255, 140, 180, 0);   // Sakura
+  case 14: return Color(100, 140, 110, 0);   // Rivendell
+  case 15: return Color(255, 0, 160, 0);     // Cyberpunk
+  case 16: return Color(0, 190, 175, 0);     // OrangeTeal
+  case 17: return Color(255, 170, 90, 0);    // Christmas
+  case 18: return Color(60, 80, 255, 0);     // RedBlue
+  case 19: return Color(0, 200, 0, 0);       // Matrix
+  case 20: return Color(255, 210, 40, 0);    // SunnyGold
+  case 22: return Color(225, 160, 255, 0);   // Fairy
+  case 23: return Color(72, 40, 160, 0);     // Twilight
+  case 0:
+  case 21:
+  case 254:
+  case 255:
+  default:
+    return fallback;
+  }
+}
+
 bool CFXAddressableLightEffect::resolve_force_white_active_(bool requested,
                                                             uint8_t palette_id) const {
   if (!requested) {
@@ -3250,7 +3284,30 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // NOTE: Brightness is handled by global_brightness_ on the runner.
   // Do NOT apply user_brightness here — it would cause double-application.
 
-  // BUG 13 FIX: Apply force_white to Intro transitions
+  // Check for Palette usage
+  bool use_palette = false;
+  uint8_t pal = 0;
+
+  // CFX-026: Derive intro color from the active effect palette using the
+  // curated palette-to-intro lookup. For unsupported/random palettes, keep
+  // the current light color instead of averaging the palette into mud.
+  if (chimera_fx::instance != nullptr) {
+    pal = chimera_fx::instance->_segment.palette;
+    if (pal == 0)
+      pal = this->get_default_palette_id_(chimera_fx::instance->getMode());
+    if (pal != 255) {
+      use_palette = true;
+    }
+  }
+
+  if (use_palette && chimera_fx::instance != nullptr) {
+    // Force update the runner's palette immediately
+    chimera_fx::instance->_segment.palette = pal;
+    c = this->get_intro_palette_color_(pal, c);
+    use_palette = false; // render as solid from here — no per-pixel mapping
+  }
+
+  // BUG 13 FIX: Apply force_white to the final resolved intro color.
   bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
@@ -3265,179 +3322,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                                         force_white_palette);
   if (force_white_active)
     cfx::apply_force_white(c.r, c.g, c.b, c.w);
-
-  // Check for Palette usage
-  bool use_palette = false;
-  uint8_t pal = 0;
-
-  // CFX-026: Always derive intro color from the active effect palette.
-  // Compute dominant color = average of 16 evenly-spaced palette samples.
-  // For solid palettes (255) or no runner, fall back to the solid color c.
-  if (chimera_fx::instance != nullptr) {
-    pal = chimera_fx::instance->_segment.palette;
-    if (pal == 0)
-      pal = this->get_default_palette_id_(chimera_fx::instance->getMode());
-    if (pal != 255) {
-      use_palette = true;
-    }
-  }
-
-  if (use_palette && chimera_fx::instance != nullptr) {
-    // Force update the runner's palette immediately
-    chimera_fx::instance->_segment.palette = pal;
-
-    // CFX-026: Derive intro dominant color per palette.
-    // Hand-tuned representative colors — easy to adjust per palette.
-    // Replaces raw per-pixel palette mapping which produced stripes.
-    // Falls back to averaged math for unknown/future palette IDs.
-    uint8_t dr = 128, dg = 128, db = 128; // default: mid-grey fallback
-    switch (pal) {
-    case 1:
-      dr = 0;
-      dg = 180;
-      db = 200;
-      break; // Aurora      — teal-blue
-    case 2:
-      dr = 20;
-      dg = 120;
-      db = 20;
-      break; // Forest      — mid green
-    case 3:
-      dr = 200;
-      dg = 60;
-      db = 0;
-      break; // Halloween   — deep orange
-    case 4:
-      dr = 160;
-      dg = 0;
-      db = 160;
-      break; // Rainbow     — violet (midpoint)
-    case 5:
-      dr = 220;
-      dg = 60;
-      db = 0;
-      break; // Fire        — orange-red
-    case 6:
-      dr = 220;
-      dg = 100;
-      db = 20;
-      break; // Sunset      — warm orange
-    case 7:
-      dr = 0;
-      dg = 180;
-      db = 220;
-      break; // Ice         — cyan-blue
-    case 8:
-      dr = 200;
-      dg = 0;
-      db = 200;
-      break; // Party       — magenta
-    case 9:
-      dr = 220;
-      dg = 20;
-      db = 0;
-      break; // Lava        — deep red
-    case 10:
-      dr = 200;
-      dg = 160;
-      db = 180;
-      break; // Pastel      — soft pink
-    case 11:
-      dr = 0;
-      dg = 80;
-      db = 200;
-      break; // Ocean       — deep blue
-    case 12:
-      dr = 220;
-      dg = 80;
-      db = 0;
-      break; // HeatColors  — orange
-    case 13:
-      dr = 220;
-      dg = 100;
-      db = 140;
-      break; // Sakura      — cherry pink
-    case 14:
-      dr = 60;
-      dg = 120;
-      db = 80;
-      break; // Rivendell   — muted green
-    case 15:
-      dr = 180;
-      dg = 0;
-      db = 220;
-      break; // Cyberpunk   — neon purple
-    case 16:
-      dr = 0;
-      dg = 180;
-      db = 160;
-      break; // OrangeTeal  — teal (cooler)
-    case 17:
-      dr = 180;
-      dg = 20;
-      db = 20;
-      break; // Christmas   — red
-    case 18:
-      dr = 20;
-      dg = 20;
-      db = 200;
-      break; // RedBlue     — blue (cool side)
-    case 19:
-      dr = 0;
-      dg = 200;
-      db = 0;
-      break; // Matrix      — green
-    case 20:
-      dr = 220;
-      dg = 180;
-      db = 0;
-      break; // SunnyGold   — golden yellow
-    case 22:
-      dr = 180;
-      dg = 100;
-      db = 220;
-      break; // Fairy       — lavender
-    case 23:
-      dr = 60;
-      dg = 20;
-      db = 140;
-      break; // Twilight    — deep indigo
-    case 254: {
-      // Smart Random — compute average from current random palette
-      uint32_t r_sum = 0, g_sum = 0, b_sum = 0;
-      for (uint8_t s = 0; s < 16; s++) {
-        uint8_t idx = s * 16;
-        uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
-            idx, false, true, 255, 255);
-        r_sum += (cp >> 16) & 0xFF;
-        g_sum += (cp >> 8) & 0xFF;
-        b_sum += (cp) & 0xFF;
-      }
-      dr = (uint8_t)(r_sum / 16);
-      dg = (uint8_t)(g_sum / 16);
-      db = (uint8_t)(b_sum / 16);
-      break;
-    }
-    default: {
-      // Unknown palette — fall back to average
-      uint32_t r_sum = 0, g_sum = 0, b_sum = 0;
-      for (uint8_t s = 0; s < 16; s++) {
-        uint8_t idx = s * 16;
-        uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
-            idx, false, true, 255, 255);
-        r_sum += (cp >> 16) & 0xFF;
-        g_sum += (cp >> 8) & 0xFF;
-        b_sum += (cp) & 0xFF;
-      }
-      dr = (uint8_t)(r_sum / 16);
-      dg = (uint8_t)(g_sum / 16);
-      db = (uint8_t)(b_sum / 16);
-      break;
-    }
-    }
-    c = Color(dr, dg, db, 0);
-    use_palette = false; // render as solid from here — no per-pixel mapping
-  }
 
   // CFX-094: Final Frame Guard
   // For monochromatic presets, the very last frame of the intro MUST be a

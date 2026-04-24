@@ -21,3 +21,4 @@ tools/visualizer/
 all_blobs.txt
 local_only
 .agent
+scratch/

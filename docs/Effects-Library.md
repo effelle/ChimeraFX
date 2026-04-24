@@ -687,6 +687,28 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 175
         ```
 
+??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
+
+    === "🎬 Preview"
+        *A dense monochromatic interference field. Fine wave collisions shimmer across the strip during the build, then settle into a solid architectural floor before dissolving back into patterned noise on shutdown.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Wave Density**: controls how tightly packed the interference bands feel. |
+        | **Speed** | `128` | **Phase Drift**: controls how quickly the moiré field evolves during intro and outro. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Moiré Shift"
+              effect_id: 176
+        ```
+
 ??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
