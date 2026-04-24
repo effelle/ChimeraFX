@@ -1299,17 +1299,22 @@ void CFXAddressableLightEffect::stop() {
       auto *output = this->get_light_state()->get_output();
       auto *it_light = static_cast<light::AddressableLight *>(output);
 #ifdef USE_ESP32
+      CFXActivation *captured_act = act_;
       // `out` is already correctly set above (via vseg->get_parent() for
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
         if (act_->active_outro_mode == INTRO_MODE_NONE) {
+          this->act_ = nullptr;
           for (auto *r : *captured_runners)
             delete r;
           captured_runners->clear();
-          act_->outro_start_time = 0;
+          captured_act->outro_start_time = 0;
+          delete captured_act;
+          return;
         } else {
+          this->act_ = nullptr;
           out->add_outro_callback([this, it_light, captured_runners,
-                                   captured_sequence]() -> bool {
+                                   captured_sequence, captured_act]() -> bool {
             auto *current_state = this->get_light_state();
 
             if (current_state != nullptr &&
@@ -1320,26 +1325,30 @@ void CFXAddressableLightEffect::stop() {
               for (auto *r : *captured_runners)
                 delete r;
               captured_runners->clear();
-              act_->outro_start_time = 0; // Reset for the NEXT outro
+              captured_act->outro_start_time = 0; // Reset for the NEXT outro
+              delete captured_act;
               return true;
             }
 
             // Initialize outro start time on the very first allowed frame
-            if (act_->outro_start_time == 0) {
-              act_->outro_start_time = millis_64();
-              act_->hydraulics_last_ms = act_->outro_start_time;
-              if (act_->active_outro_mode == INTRO_MODE_HYDRAULICS) {
-                act_->hydraulics_fluid_level = (float)it_light->size();
-                act_->hydraulics_particle_count = 0; // audit 3.3
+            if (captured_act->outro_start_time == 0) {
+              captured_act->outro_start_time = millis_64();
+              captured_act->hydraulics_last_ms = captured_act->outro_start_time;
+              if (captured_act->active_outro_mode == INTRO_MODE_HYDRAULICS) {
+                captured_act->hydraulics_fluid_level = (float)it_light->size();
+                captured_act->hydraulics_particle_count = 0; // audit 3.3
               }
             }
 
             // Run outro frame on ALL captured segment runners
             bool done = false;
+            CFXActivation *live_act = this->act_;
+            this->act_ = captured_act;
             for (auto *r : *captured_runners) {
               chimera_fx::instance = r;
               done = this->run_outro_frame(*it_light, r);
             }
+            this->act_ = live_act;
             chimera_fx::instance = nullptr;
 
             // CFX-046b: While a segment outro is animating into the shared DMA
@@ -1347,7 +1356,7 @@ void CFXAddressableLightEffect::stop() {
             // mono_dirty set on every outro frame so surviving idle siblings
             // repaint their pixel ranges each frame and correct any contamination.
             if (!done)
-              act_->mono_dirty = true;
+              captured_act->mono_dirty = true;
 
             if (done) {
               ESP_LOGV("chimera_fx", "[T05] outro DONE: effect_id=%u is_mono=%d",
@@ -1363,9 +1372,9 @@ void CFXAddressableLightEffect::stop() {
               // preset or user-configured outro selector. INTRO_MODE_NONE is the
               // default fade-to-black on every light-off — not a meaningful
               // outro, must not fire cfx_complete.
-              if (!act_->suppress_complete_event &&
-                  !act_->is_sequence_outro &&
-                  act_->active_outro_mode != INTRO_MODE_NONE) {
+              if (!captured_act->suppress_complete_event &&
+                  !captured_act->is_sequence_outro &&
+                  captured_act->active_outro_mode != INTRO_MODE_NONE) {
 #ifdef USE_CFX_SEQUENCE
                 if (captured_sequence != nullptr) {
                   // Sequence-driven path: route through report_event_complete()
@@ -1378,9 +1387,9 @@ void CFXAddressableLightEffect::stop() {
                 {
                   // Standalone (no sequence bound): fire HA event directly.
                   // Use instance act_->strip_tag — no singleton dependency.
-                  if (!act_->strip_tag.empty()) {
+                  if (!captured_act->strip_tag.empty()) {
                     std::string evt =
-                        std::string("cfx_complete:") + act_->strip_tag;
+                        std::string("cfx_complete:") + captured_act->strip_tag;
                     chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
                   }
                 }
@@ -1389,7 +1398,8 @@ void CFXAddressableLightEffect::stop() {
               for (auto *r : *captured_runners)
                 delete r;
               captured_runners->clear();
-              act_->outro_start_time = 0; // Reset for the NEXT outro
+              captured_act->outro_start_time = 0; // Reset for the NEXT outro
+              delete captured_act;
             }
             return done;
           });
