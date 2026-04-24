@@ -382,6 +382,7 @@ protected:
   uint8_t effect_id_{0};
   uint8_t configured_effect_id_{0};
   cfx::ForceWhiteMode resolve_force_white_mode_(const CFXControl *c) const;
+  uint8_t resolve_force_white_smart_floor_scale_(const CFXActivation *act) const;
 
   // ── CFXEffectConfig pointer — null for virtual segments ────────────────────
   // Holds UI entity pointers, preset optionals, and trigger vectors.

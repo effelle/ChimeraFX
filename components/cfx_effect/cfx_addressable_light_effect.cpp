@@ -59,6 +59,19 @@ CFXAddressableLightEffect::resolve_force_white_mode_(const CFXControl *c) const 
   return c != nullptr ? c->get_force_white_mode() : cfx::FORCE_WHITE_OFF;
 }
 
+uint8_t CFXAddressableLightEffect::resolve_force_white_smart_floor_scale_(
+    const CFXActivation *act) const {
+  if (act == nullptr)
+    return cfx::smart_white_floor_scale_for_palette(0);
+  if (act->runner != nullptr)
+    return cfx::smart_white_floor_scale_for_palette(act->runner->getPalette());
+  if (!act->segment_runners.empty() && act->segment_runners[0] != nullptr) {
+    return cfx::smart_white_floor_scale_for_palette(
+        act->segment_runners[0]->getPalette());
+  }
+  return cfx::smart_white_floor_scale_for_palette(0);
+}
+
 static const char *const TAG = "chimera_fx";
 
 namespace {
@@ -3019,6 +3032,8 @@ void CFXAddressableLightEffect::run_controls_() {
 // Intro Routine Implementation
 void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
                                           const Color &target_color) {
+  const uint8_t smart_floor =
+      this->resolve_force_white_smart_floor_scale_(act_);
   uint32_t elapsed = (uint32_t)(millis_64() - act_->intro_start_time);
 
   // Safety: If mode is NONE, abort immediately and release control
@@ -3103,8 +3118,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // Do NOT apply user_brightness here — it would cause double-application.
 
   // BUG 13 FIX: Apply force_white to Intro transitions
-  cfx::apply_white_mode(this->resolve_force_white_mode_(act_->controller), c.r,
-                        c.g, c.b, c.w);
+  cfx::apply_white_mode(this->resolve_force_white_mode_(act_->controller),
+                        smart_floor, c.r, c.g, c.b, c.w);
 
   // Check for Palette usage
   bool use_palette = false;
@@ -3750,7 +3765,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
           brightness = 0.1f;
         uint8_t b = (uint8_t)(255 * brightness);
         uint8_t r = b, g = b, b_val = b, w = b;
-        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                              b_val, w);
         it[seg_start + i] = Color(r, g, b_val, w);
       }
     }
@@ -3760,7 +3776,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       float fraction = act_->hydraulics_fluid_level - floor_level;
       uint8_t b = (uint8_t)(255 * (0.8f + fraction * 0.2f));
       uint8_t r = b, g = b, b_val = b, w = b;
-      cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+      cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                            b_val, w);
       it[seg_start + floor_level] = Color(r, g, b_val, w);
     }
 
@@ -3784,7 +3801,8 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
         uint8_t r = 255, g = 255, b_val = 255, w = 255;
-        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                              b_val, w);
         it[seg_start + p_idx] = Color(r, g, b_val, w);
       }
     }
@@ -5089,6 +5107,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                                                 CFXRunner *runner) {
   if (runner == nullptr)
     return true;
+  const uint8_t smart_floor =
+      this->resolve_force_white_smart_floor_scale_(act_);
 
   auto *state = this->get_light_state();
   if (state != nullptr && state->remote_values.is_on()) {
@@ -5163,7 +5183,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
 
     // BUG 13 FIX: Apply force_white to Outro transitions
-    cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g, b, w);
+    cfx::apply_white_mode(act_->active_outro_force_white_mode, smart_floor, r,
+                          g, b, w);
 
     it[global_idx] = Color(r, g, b, w);
   }
@@ -5527,7 +5548,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
           brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
         uint8_t r = b, g = b, b_val = b, w = b;
-        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                              b_val, w);
         it[seg_start + i] = Color(r, g, b_val, w);
       }
     }
@@ -5535,7 +5557,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       float fraction = act_->hydraulics_fluid_level - floor_level;
       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
       uint8_t r = b, g = b, b_val = b, w = b;
-      cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+      cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                            b_val, w);
       it[seg_start + floor_level] = Color(r, g, b_val, w);
     }
 
@@ -5558,7 +5581,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
         uint8_t r = 255, g = 255, b_val = 255, w = 255;
-        cfx::apply_white_mode(act_->active_force_white_mode, r, g, b_val, w);
+        cfx::apply_white_mode(act_->active_force_white_mode, smart_floor, r, g,
+                              b_val, w);
         it[seg_start + p_idx] = Color(r, g, b_val, w);
       }
     }
@@ -5707,8 +5731,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
             Color c_cached = act_->outro_color_cache[cache_idx];
             uint8_t r = c_cached.r, g = c_cached.g, b_val = c_cached.b,
                     w = c_cached.w;
-            cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g,
-                                  b_val, w);
+            cfx::apply_white_mode(act_->active_outro_force_white_mode,
+                                  smart_floor, r, g, b_val, w);
             it[seg_start + px] = Color(r, g, b_val, w);
           }
         }
@@ -5739,8 +5763,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
             uint8_t b_val = (uint8_t)(c_cached.b * dim_factor);
             uint8_t w = (uint8_t)(c_cached.w * dim_factor);
 
-            cfx::apply_white_mode(act_->active_outro_force_white_mode, r, g,
-                                  b_val, w);
+            cfx::apply_white_mode(act_->active_outro_force_white_mode,
+                                  smart_floor, r, g, b_val, w);
             it[seg_start + px] = Color(r, g, b_val, w);
           }
         }

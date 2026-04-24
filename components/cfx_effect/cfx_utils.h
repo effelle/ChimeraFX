@@ -375,42 +375,87 @@ inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
   }
 }
 
-inline bool should_extract_smart_white(uint8_t r, uint8_t g, uint8_t b,
-                                       uint8_t w) {
+inline uint8_t smart_white_amount(uint8_t r, uint8_t g, uint8_t b,
+                                  uint8_t w) {
   const uint8_t min_rgb = std::min({r, g, b});
   const uint8_t max_rgb = std::max({r, g, b});
   const uint8_t spread = max_rgb - min_rgb;
 
-  // Keep Smart mode strict: only obvious whites / near-whites should migrate
-  // into the dedicated white channel. Soft tints and pastel hues should stay
-  // in RGB so Smart feels visibly different from Force.
   if (max_rgb == 0)
-    return false;
-  if (spread > 10)
-    return false;
+    return 0;
 
-  // Relative chroma guard: even at high brightness, reject colors whose
-  // channel spread exceeds ~8% of the brightest channel.
-  if ((uint16_t)spread * 255u > (uint16_t)max_rgb * 20u)
-    return false;
+  // Smart mode is a soft blend, not a hard gate:
+  // - pastels / near-whites should move SOME shared RGB energy into W
+  // - strongly colored pixels should stay mostly RGB
+  // - true whites should behave close to Force
+  //
+  // We derive a weight from two factors:
+  // 1. neutrality: how close the RGB channels are to each other
+  // 2. brightness/core: avoid extracting tiny dim values where the shift is
+  //    mostly noise
+  if (spread >= max_rgb)
+    return 0;
 
-  // At low RGB levels, only extract if the source already contains some white.
-  if (max_rgb < 20 && w == 0)
-    return false;
+  uint8_t neutrality = 255 - (uint8_t)(((uint16_t)spread * 255u) /
+                                       std::max<uint8_t>(max_rgb, 1));
 
-  // Reject dim/off-whites that don't have a meaningful common RGB core.
-  if (w == 0 && min_rgb < 28)
-    return false;
-  return true;
+  // Stronger falloff so visibly tinted colors diverge from Force, but
+  // near-neutral pastels still get a noticeable white contribution.
+  neutrality = scale8(neutrality, neutrality);
+
+  uint8_t core = std::max(min_rgb, w);
+  uint8_t brightness = core >= 24 ? 255 : (uint8_t)((core * 255u) / 24u);
+
+  uint8_t weight = scale8(neutrality, brightness);
+
+  // Tiny extractions are visually meaningless and just add churn.
+  uint8_t amount = scale8(min_rgb, weight);
+  return amount < 6 ? 0 : amount;
+}
+
+inline uint8_t smart_white_floor_scale_for_palette(uint8_t palette_id) {
+  switch (palette_id) {
+  case 0:   // Default fallback when palette intent is unknown
+    return 80;
+  case 7:   // Ice
+    return 176;
+  case 10:  // Pastel
+    return 96;
+  case 13:  // Sakura
+    return 48;
+  case 255: // Solid
+    return 192;
+  default:
+    return 0;
+  }
+}
+
+inline void apply_white_mode(ForceWhiteMode mode, uint8_t smart_floor_scale,
+                             uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
+  if (mode == FORCE_WHITE_OFF)
+    return;
+  if (mode == FORCE_WHITE_SMART) {
+    uint8_t amount = smart_white_amount(r, g, b, w);
+    if (smart_floor_scale > 0) {
+      uint8_t floor_amount = scale8(std::min({r, g, b}), smart_floor_scale);
+      if (floor_amount > amount)
+        amount = floor_amount;
+    }
+    if (amount == 0)
+      return;
+    r -= amount;
+    g -= amount;
+    b -= amount;
+    uint16_t new_w = (uint16_t)w + amount;
+    w = (new_w > 255) ? 255 : (uint8_t)new_w;
+    return;
+  }
+  apply_force_white(r, g, b, w);
 }
 
 inline void apply_white_mode(ForceWhiteMode mode, uint8_t &r, uint8_t &g,
                              uint8_t &b, uint8_t &w) {
-  if (mode == FORCE_WHITE_OFF)
-    return;
-  if (mode == FORCE_WHITE_SMART && !should_extract_smart_white(r, g, b, w))
-    return;
-  apply_force_white(r, g, b, w);
+  apply_white_mode(mode, 0, r, g, b, w);
 }
 
 // ============================================================================
