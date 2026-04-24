@@ -216,6 +216,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_IMPACT_FLARE, OUTRO_MODE_CENTER_SQUEEZE};
   case 188: // Monolith
     return {true, INTRO_MODE_FADE, INTRO_MODE_FADE};
+  case 189: // Standing Wave
+    return {true, INTRO_MODE_INTERFERENCE, INTRO_MODE_INTERFERENCE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -248,6 +250,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   case 186: // Tidal Surge
   case 187: // Impact Flare
   case 188: // Monolith
+  case 189: // Standing Wave
     return true;
   default:
     return false;
@@ -2592,6 +2595,8 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
     return 100; // Collider (Default Speed)
   case 180:
     return 160; // Interference (Default Speed)
+  case 189:
+    return 160; // Standing Wave (same as Interference intro/outro)
   default:
     return 128; // WLED default
   }
@@ -2635,6 +2640,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 170; // Collider (Default Intensity)
   case 180:
     return 180; // Interference (Default Intensity)
+  case 189:
+    return 180; // Standing Wave (same as Interference intro/outro)
   default:
     return 128; // WLED default
   }

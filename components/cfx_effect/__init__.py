@@ -146,6 +146,7 @@ CFX_EFFECT_NAMES = {
     186: "Tidal Surge",
     187: "Impact Flare",
     188: "Monolith",
+    189: "Standing Wave",
     185: "--- separator ---",
     255: "Ambient Roulette"
 }
@@ -177,6 +178,7 @@ CFX_EFFECTS = [
     ("architectural",  176, "Moiré Shift"),
     ("architectural",  177, "Resonance Fill"),
     ("architectural",  172, "Sonar Reveal"),
+    ("architectural",  189, "Standing Wave"),
     ("architectural",  163, "Stardust Sweep"),
     ("architectural",  179, "Stellar Dust"),
     ("architectural",  178, "Telemetry"),

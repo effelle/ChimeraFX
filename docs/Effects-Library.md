@@ -702,6 +702,28 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 172
         ```
 
+??? abstract "189 | Standing Wave | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: High </span>"
+
+    === "🎬 Preview"
+        *A monochromatic interference field that rises from darkness in a dense, high-frequency shimmer. Colliding wavefronts gradually stabilize into a solid architectural floor, then dissolve back into vibrating noise during shutdown.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `180` | **Wave density**: adjusts the complexity and brightness contrast of the interference field during intro and outro. |
+        | **Speed** | `160` | **Drift rate**: controls how quickly the standing-wave shimmer evolves before settling to the static hold. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Standing Wave"
+              effect_id: 189
+        ```
+
 ??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
 
     === "🎬 Preview"
@@ -2212,6 +2234,9 @@ These short animations play once when the light is turned ON or OFF.
     *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
 
 ??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/lithograph.webm" type="video/webm">
+        </video>
     *A precise, technical construction. A razor-sharp bright cursor 'prints' the light onto the strip line by line with mechanical precision, constructng a solid trail until the entire segment is fully revealed.*
 
 ??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
