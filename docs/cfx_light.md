@@ -161,7 +161,7 @@ light:
 * **set_outro** (*int*, Optional): Override the global outro mode for this specific segment.
 * **set_inout_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
 * **set_brightness** (*percentage*, Optional): Applies a brightness default every time the segment turns on, using the same `0-100%` style as ESPHome light brightness values.
-* **set_color** (*list[int]*, Optional): Applies a color default every time the segment turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). Like the parent light, this affects solid-color mode and single-tone effects that use the light state's color.
+* **set_color** (*list[int]*, Optional): Defines the default color applied when the segment turns on. Accepts `[r, g, b]` or `[r, g, b, w]` values (where `w` requires a white-channel strip) using `0-100` channel percentages. This setting affects solid-color mode and single-tone effects. Values can be validated via the light logs.
 
 ### Master vs. Segment Behavior
 

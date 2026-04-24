@@ -145,6 +145,7 @@ CFX_EFFECT_NAMES = {
     184: "Lithograph",
     186: "Tidal Surge",
     187: "Impact Flare",
+    188: "Monolith",
     185: "--- separator ---",
     255: "Ambient Roulette"
 }
@@ -172,6 +173,7 @@ CFX_EFFECTS = [
     ("architectural",  168, "Hydro-Pulse"),
     ("architectural",  171, "Inertia Sweep"),
     ("architectural",  184, "Lithograph"),
+    ("architectural",  188, "Monolith"),
     ("architectural",  176, "Moiré Shift"),
     ("architectural",  177, "Resonance Fill"),
     ("architectural",  172, "Sonar Reveal"),

@@ -973,6 +973,28 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 184
         ```
 
+??? abstract "188 | Monolith | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        *A pure architectural hold. The strip fades in as a single uninterrupted slab of light, remains perfectly still, and fades back out with the same restraint.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used**: Static monochromatic floor, reserved for future refinements. |
+        | **Speed** | `128` | **Not used**: Fade duration is driven by the built-in intro/outro timing or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Monolith"
+              effect_id: 188
+        ```
+
 ---
 ## 3. WLED Classics (Remastered)
 **The definitive collection of open-source favorites.**
@@ -2122,7 +2144,7 @@ These short animations play once when the light is turned ON or OFF.
 
 ??? abstract "3 | Center | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/center_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Curtain_Sweep.webm" type="video/webm">
         </video>
     *Wipe from center outwards (or inwards if reversed).*
 
@@ -2133,9 +2155,15 @@ These short animations play once when the light is turned ON or OFF.
     *Simulates kinetic physical structure. **Construct** features free-falling blocks that stack to build the strip during the intro, while **Dismantle** breaks the light apart from the top down, with segments peeling off and falling away during the outro.*
 
 ??? abstract "14 | Crystallize / Erode | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
+        </video>
     *Geological nucleation transition. **Crystallize** grow seeds of light outward into a solid floor during the intro. **Erode** causes the light to fragment and dissolve at the edges, slowly consuming the strip from within.*
 
 ??? abstract "15 | Deep Breathe / Exhale | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/deep_breathe.webm" type="video/webm">
+        </video>
     *A slow, organic brightness ramp. **Deep Breathe** rises from darkness with a subtle triangular shimmer during the intro. **Exhale** provides a natural, lung-like curve that gently releases the light into darkness.*
 
 ??? abstract "9 | Dropping / Emptying | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
@@ -2145,27 +2173,39 @@ These short animations play once when the light is turned ON or OFF.
     *Simulates gravity-based physics. **Dropping** features falling droplets that fill the strip during the intro, while **Emptying** clears the light with rising air bubbles and surface highlights during the outro.*
 
 ??? abstract "21 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/eclipse.webm" type="video/webm">
+        </video>
     *A masterclass in negative space. **Eclipse** sweeps a deep, smooth shadow across the strip, modulating the brightness in a calming reverse-kinetic motion. Perfect for transitions into solid, ambient colors.*
 
 ??? abstract "2 | Fade | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/fade_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Monolith.webm" type="video/webm">
         </video>
     *Smooth brightness fade-in.*
 
 ??? abstract "22 | Gas Discharge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Gas_discharge.webm" type="video/webm">
+        </video>
     *The strip stutters to life with high-frequency flashes and crackling brightness surges, simulating an old neon tube or high-pressure lamp striking before it settles into stable illumination.*
 
 ??? abstract "4 | Glitter | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/glitter_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/stardust_sweep.webm" type="video/webm">
         </video>
     *Random pixels sparkle as brightness increases.*
 
 ??? abstract "23 | Harmonic Settle | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Harmonic_Settle.webm" type="video/webm">
+        </video>
     *A highly physical, spring-loaded transition. The light surges forward, overshoots the target brightness, and bounces back and forth with decaying momentum until it smoothly settles into its final solid state.*
 
 ??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Inertia_Sweep.webm" type="video/webm">
+        </video>
     *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
 
 ??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High </span>"

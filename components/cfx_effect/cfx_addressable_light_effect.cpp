@@ -214,6 +214,8 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
     return {true, INTRO_MODE_TIDAL_SURGE, INTRO_MODE_TIDAL_SURGE};
   case 187: // Impact Flare
     return {true, INTRO_MODE_IMPACT_FLARE, OUTRO_MODE_CENTER_SQUEEZE};
+  case 188: // Monolith
+    return {true, INTRO_MODE_FADE, INTRO_MODE_FADE};
   default:
     return {false, INTRO_NONE, INTRO_NONE};
   }
@@ -245,6 +247,7 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   case 184: // Lithograph
   case 186: // Tidal Surge
   case 187: // Impact Flare
+  case 188: // Monolith
     return true;
   default:
     return false;
