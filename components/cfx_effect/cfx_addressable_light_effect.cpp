@@ -3211,6 +3211,7 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     duration = 1; // Prevent div by zero
 
   float progress = (float)elapsed / (float)duration;
+  bool is_final_frame = (progress >= 1.0f);
   if (progress > 1.0f)
     progress = 1.0f;
 
@@ -3436,6 +3437,19 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     }
     c = Color(dr, dg, db, 0);
     use_palette = false; // render as solid from here — no per-pixel mapping
+  }
+
+  // CFX-094: Final Frame Guard
+  // For monochromatic presets, the very last frame of the intro MUST be a
+  // perfectly solid fill of the target color. This ensures that effects using
+  // noise, physics, or anti-aliasing (Hydraulics, Stellar Dust, Gas Discharge)
+  // don't leave "dirty" or dim pixels behind when mono_idle kicks in.
+  if (is_final_frame && preset.is_active) {
+    for (int i = 0; i < it.size(); i++) {
+      it[i] = c;
+    }
+    act_->intro_active = false;
+    return;
   }
 
   // Segment Aware Bounds
@@ -3833,7 +3847,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     float target_l = (float)seg_len;
     float dt = dt_ms / 1000.0f;
     float damping = 1.0f + (intensity_val * 4.0f);
-    float pressure = 10.0f + (speed_scale * 50.0f);
+    // CFX-095: Scale pressure by duration. 
+    // Higher duration = lower pressure = slower organic slosh.
+    float duration_factor = 1000.0f / (float)duration;
+    float pressure = (10.0f + (speed_scale * 50.0f)) * duration_factor;
 
     float force = (target_l - act_->hydraulics_fluid_level) * pressure;
     float accel = force - (damping * act_->hydraulics_fluid_velocity);
@@ -4536,51 +4553,6 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
-  case INTRO_MODE_MOIRE_SHIFT: {
-    // ── 1. Duration fetch
-    // ─────────────────────────────────────────────────────
-    uint32_t duration = 1200;
-    number::Number *dur_num = this->local_inout_duration_();
-    if (dur_num == nullptr && act_->controller != nullptr)
-      dur_num = act_->controller->get_intro_duration();
-    if (auto duration_override =
-            this->resolve_inout_duration_override_ms_(dur_num);
-        duration_override.has_value())
-      duration = duration_override.value();
-    if (duration == 0)
-      duration = 1;
-
-    // ── 2. Local helpers
-    // ──────────────────────────────────────────────────────
-    auto dim = [](Color col, uint8_t f) -> Color {
-      return Color((uint8_t)(((uint16_t)col.r * f) >> 8),
-                   (uint8_t)(((uint16_t)col.g * f) >> 8),
-                   (uint8_t)(((uint16_t)col.b * f) >> 8),
-                   (uint8_t)(((uint16_t)col.w * f) >> 8));
-    };
-
-    float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
-    if (prog > 1.0f)
-      prog = 1.0f;
-    float eased_p = prog * prog * (3.0f - 2.0f * prog);
-    uint8_t env = (uint8_t)(eased_p * 255.0f);
-
-    uint8_t t1 = (uint8_t)(elapsed >> 4);
-    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
-
-    // Restore original Interference/Moire ripples for the full duration
-    // The "gentle turn on" is handled by the global transition after intro ends
-    for (int i = 0; i < seg_len; i++) {
-      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
-      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
-      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
-      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
-
-      uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
-      it[seg_start + i] = dim(c, final_b);
-    }
-    break;
-  }
 
   case INTRO_MODE_RESONANCE_FILL: {
     // ── 1. Duration fetch

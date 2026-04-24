@@ -611,6 +611,66 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
 
     === "⚙️ Controls"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
+        </video>
+        
+        *Falling droplets that accumulate at the bottom of the strip. Similar to Dropping Time but with a monochromatic focus and physics-based accumulation.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
+        | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Dropping Fill"
+              effect_id: 169
+        ```
+
+
+??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
+        </video>
+        *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Crystallize"
+              effect_id: 174
+        ```
+
+??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Deep_Breathe.webm" type="video/webm">
+        </video>
+        *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
+
+    === "⚙️ Controls"
         | Parameter | Autotune | Function Description |
         | :--- | :--: | :--- |
         | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
@@ -653,56 +713,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         ```
 
 ??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Venetian.webm" type="video/webm">
-        </video>
-        *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Venetian"
-              effect_id: 173
-        ```
-
-??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
-
-    === "🎬 Preview"
-    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
-        </video>
-        *A high-frequency interference pattern that shifts and breathes. Features a complex overlapping sinewave engine that creates organic, shifting shadows and light pockets. Now refined with a proper architectural transition that resolves to a solid floor.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Complexity**: adjusts the frequency of the overlapping waves. |
-        | **Speed** | `128` | **Drift**: controls the velocity of the interference shift. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Moiré Shift"
-              effect_id: 176
-        ```
-
-??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
