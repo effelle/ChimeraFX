@@ -4437,6 +4437,38 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     break;
   }
 
+  case INTRO_MODE_MOIRE_SHIFT: {
+    uint32_t duration = 1200;
+    number::Number *dur_num = this->local_inout_duration_();
+    if (dur_num == nullptr && act_->controller != nullptr)
+      dur_num = act_->controller->get_intro_duration();
+    if (auto duration_override =
+            this->resolve_inout_duration_override_ms_(dur_num);
+        duration_override.has_value())
+      duration = duration_override.value();
+    if (duration == 0)
+      duration = 1;
+
+    float prog = (float)elapsed / (duration > 0 ? (float)duration : 1.0f);
+    if (prog > 1.0f)
+      prog = 1.0f;
+    float eased_p = prog * prog * (3.0f - 2.0f * prog);
+    uint8_t env = (uint8_t)(eased_p * 255.0f);
+
+    uint8_t t1 = (uint8_t)(elapsed >> 4);
+    uint8_t t2 = (uint8_t)((elapsed * 3u) >> 5);
+
+    for (int i = 0; i < seg_len; i++) {
+      uint8_t s = cfx::sin8((uint8_t)(i * 3u) + t1);
+      uint8_t co = cfx::sin8((uint8_t)((uint8_t)(i * 5u) - t2 + 64u));
+      uint8_t avg = (uint8_t)(((uint16_t)s + co) >> 1);
+      uint8_t gam = (uint8_t)(((uint16_t)avg * avg) >> 8);
+
+      uint8_t final_b = (uint8_t)(((uint16_t)gam * env) >> 8);
+      it[seg_start + i] = dim(c, final_b);
+    }
+    break;
+  }
 
   case INTRO_MODE_RESONANCE_FILL: {
     // ── 1. Duration fetch
