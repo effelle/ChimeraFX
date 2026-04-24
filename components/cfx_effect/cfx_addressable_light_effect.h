@@ -548,7 +548,7 @@ public:
 
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
-  bool is_monochromatic_(uint8_t effect_id);
+  bool is_monochromatic_(uint8_t effect_id) const;
   std::vector<uint8_t> get_monochromatic_pool_();
 
   static uint8_t last_roulette_id_;

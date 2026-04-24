@@ -219,7 +219,7 @@ CFXAddressableLightEffect::get_monochromatic_preset_(uint8_t effect_id) {
   }
 }
 
-bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) {
+bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   switch (effect_id) {
   case 161: // Horizon Sweep
   case 162: // Curtain Sweep
