@@ -3324,11 +3324,23 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
   // CFX-094: Final Frame Guard
-  // For monochromatic presets, the very last frame of the intro MUST be a
-  // perfectly solid fill of the target color. This ensures that effects using
-  // noise, physics, or anti-aliasing (Hydraulics, Stellar Dust, Gas Discharge)
-  // don't leave "dirty" or dim pixels behind when mono_idle kicks in.
-  if (is_final_frame && preset.is_active) {
+  // Only a few monochromatic presets still need a forced solid final frame to
+  // avoid freezing a noisy/half-settled hold image when mono_idle kicks in.
+  // Pattern-based transitions like Moiré Shift and Stellar Dust must preserve
+  // their real final intro frame so the dissolve can blend gracefully into the
+  // static hold, just like the standalone intro + static path does.
+  bool force_final_hold_guard = false;
+  if (preset.is_active) {
+    switch (this->effect_id_) {
+    case 168: // Hydro-Pulse
+    case 182: // Gas Discharge
+      force_final_hold_guard = true;
+      break;
+    default:
+      break;
+    }
+  }
+  if (is_final_frame && force_final_hold_guard) {
     for (int i = 0; i < it.size(); i++) {
       it[i] = c;
     }
