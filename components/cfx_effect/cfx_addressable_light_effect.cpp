@@ -2093,7 +2093,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // Handle Intro→Main Blending
   if (act_->state == TRANSITION_RUNNING) {
-    if (is_mono_preset && act_->transition_target_snapshot.size() != it.size()) {
+    if (is_mono_preset &&
+        act_->transition_target_snapshot.size() != it.size() &&
+        !act_->mono_dirty) {
       // CFX-067: Monochromatic presets go idle immediately after intro, so the
       // transition cannot rely on the live DMA buffer staying equal to the
       // true hold frame. Cache the first post-intro runner output once, then
