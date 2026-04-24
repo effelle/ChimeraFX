@@ -81,8 +81,8 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **set_intro** (*int*, Optional): Force a specific global Intro Animation for all effects.
 * **set_outro** (*int*, Optional): Force a specific global Outro Animation for all effects.
 * **set_inout_dur** (*Time*, Optional): Sets the duration for both global intros and outros.
-* **set_brightness** (*percentage*, Optional): Sets the default brightness for the light, using the same `0-100%` style as ESPHome light brightness values.
-* **set_color** (*list[int]*, Optional): Sets the default base color for the light as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This seeds solid-color mode and also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
+* **set_brightness** (*percentage*, Optional): Applies a brightness default every time the light turns on, using the same `0-100%` style as ESPHome light brightness values.
+* **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
 * **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`.
@@ -160,8 +160,8 @@ light:
 * **set_intro** (*int*, Optional): Override the global intro mode for this specific segment.
 * **set_outro** (*int*, Optional): Override the global outro mode for this specific segment.
 * **set_inout_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
-* **set_brightness** (*percentage*, Optional): Override the segment's default brightness, using the same `0-100%` style as ESPHome light brightness values.
-* **set_color** (*list[int]*, Optional): Override the segment's default base color as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). Like the parent light, this affects solid-color mode and single-tone effects that use the light state's color.
+* **set_brightness** (*percentage*, Optional): Applies a brightness default every time the segment turns on, using the same `0-100%` style as ESPHome light brightness values.
+* **set_color** (*list[int]*, Optional): Applies a color default every time the segment turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). Like the parent light, this affects solid-color mode and single-tone effects that use the light state's color.
 
 ### Master vs. Segment Behavior
 

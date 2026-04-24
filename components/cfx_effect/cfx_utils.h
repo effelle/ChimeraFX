@@ -370,6 +370,23 @@ inline bool should_apply_force_white(uint8_t r, uint8_t g, uint8_t b) {
   return min_rgb >= 48 && chroma <= (max_rgb / 2);
 }
 
+inline bool palette_supports_force_white(uint8_t palette_id) {
+  switch (palette_id) {
+  case 7:   // Ice
+  case 10:  // Pastel
+  case 11:  // Ocean
+  case 12:  // HeatColors
+  case 13:  // Sakura
+  case 17:  // Christmas
+  case 20:  // SunnyGold
+  case 22:  // Fairy
+  case 255: // Solid
+    return true;
+  default:
+    return false;
+  }
+}
+
 inline void apply_force_white(uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &w) {
   if (!should_apply_force_white(r, g, b))
     return;

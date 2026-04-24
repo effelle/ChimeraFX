@@ -556,6 +556,7 @@ public:
   uint8_t get_palette_index_();
   uint8_t get_pal_idx(select::Select *s);
   uint8_t get_default_palette_id_(uint8_t effect_id);
+  bool resolve_force_white_active_(bool requested, uint8_t palette_id) const;
   std::string get_palette_name_(uint8_t pal_id);
   std::string get_intro_name_(uint8_t intro_id);
   std::string get_outro_name_(uint8_t outro_id);

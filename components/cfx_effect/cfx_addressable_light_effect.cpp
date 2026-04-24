@@ -707,11 +707,17 @@ void CFXAddressableLightEffect::start() {
 
   // Pass force_white flag down to the underlying Native CFXRunners
   {
-    bool force_white_active =
+    bool force_white_requested =
         this->has_force_white_preset_()
             ? this->force_white_preset_val_()
             : (c != nullptr && c->get_force_white() != nullptr &&
                c->get_force_white()->state);
+    uint8_t force_white_palette =
+        act_->runner != nullptr ? act_->runner->getPalette()
+                                : this->get_palette_index_();
+    bool force_white_active =
+        this->resolve_force_white_active_(force_white_requested,
+                                          force_white_palette);
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         r->force_white_active_ = force_white_active;
@@ -1188,11 +1194,17 @@ void CFXAddressableLightEffect::stop() {
       }
 #endif
 
-      act_->active_outro_force_white =
+      bool force_white_requested =
           this->has_force_white_preset_()
               ? this->force_white_preset_val_()
               : (c != nullptr && c->get_force_white() != nullptr &&
                  c->get_force_white()->state);
+      uint8_t force_white_palette =
+          act_->runner != nullptr ? act_->runner->getPalette()
+                                  : this->get_palette_index_();
+      act_->active_outro_force_white =
+          this->resolve_force_white_active_(force_white_requested,
+                                            force_white_palette);
 
       // Capture runners for the outro.
       // CFX-046: Virtual segment fix — when a virtual segment stops, only
@@ -1550,12 +1562,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
 
-  act_->active_force_white =
+  bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
           : (act_->controller != nullptr &&
              act_->controller->get_force_white() != nullptr &&
              act_->controller->get_force_white()->state);
+  uint8_t force_white_palette =
+      act_->runner != nullptr ? act_->runner->getPalette()
+                              : this->get_palette_index_();
+  act_->active_force_white =
+      this->resolve_force_white_active_(force_white_requested,
+                                        force_white_palette);
 
   // Use the name cached in start() — avoids heap allocation every frame
   // (audit 1.1).
@@ -2388,6 +2406,19 @@ uint8_t CFXAddressableLightEffect::get_default_palette_id_(uint8_t effect_id) {
   }
 }
 
+bool CFXAddressableLightEffect::resolve_force_white_active_(bool requested,
+                                                            uint8_t palette_id) const {
+  if (!requested) {
+    return false;
+  }
+
+  if (this->is_monochromatic_(this->effect_id_)) {
+    return true;
+  }
+
+  return cfx::palette_supports_force_white(palette_id);
+}
+
 std::string CFXAddressableLightEffect::get_palette_name_(uint8_t pal_id) {
   switch (pal_id) {
   case 1:
@@ -2637,19 +2668,11 @@ void CFXAddressableLightEffect::run_controls_() {
 
   // QoL FIX: Live force-white sync — re-read the switch every frame so
   // toggling it mid-effect takes effect immediately (not just at start()).
-  bool force_white_active =
+  bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
           : (c != nullptr && c->get_force_white() != nullptr &&
              c->get_force_white()->state);
-  if (!act_->segment_runners.empty()) {
-    for (auto *r : act_->segment_runners) {
-      r->force_white_active_ = force_white_active;
-    }
-  } else if (act_->runner) {
-    act_->runner->force_white_active_ = force_white_active;
-  }
-  act_->active_force_white = force_white_active;
 
   select::Select *palette_sel =
       (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
@@ -3022,6 +3045,21 @@ void CFXAddressableLightEffect::run_controls_() {
       }
     }
 
+    uint8_t force_white_palette =
+        act_->runner != nullptr ? act_->runner->getPalette()
+                                : this->get_palette_index_();
+    bool force_white_active =
+        this->resolve_force_white_active_(force_white_requested,
+                                          force_white_palette);
+    if (!act_->segment_runners.empty()) {
+      for (auto *r : act_->segment_runners) {
+        r->force_white_active_ = force_white_active;
+      }
+    } else if (act_->runner) {
+      act_->runner->force_white_active_ = force_white_active;
+    }
+    act_->active_force_white = force_white_active;
+
     // 7. Debug
     if (c && c->get_debug()) {
       ensure_cfg_();
@@ -3117,12 +3155,18 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // Do NOT apply user_brightness here — it would cause double-application.
 
   // BUG 13 FIX: Apply force_white to Intro transitions
-  bool force_white_active =
+  bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
           : (act_->controller != nullptr &&
              act_->controller->get_force_white() != nullptr &&
              act_->controller->get_force_white()->state);
+  uint8_t force_white_palette =
+      act_->runner != nullptr ? act_->runner->getPalette()
+                              : this->get_palette_index_();
+  bool force_white_active =
+      this->resolve_force_white_active_(force_white_requested,
+                                        force_white_palette);
   if (force_white_active)
     cfx::apply_force_white(c.r, c.g, c.b, c.w);
 

@@ -309,13 +309,16 @@ void CFXLightOutput::setup() {
 
   // --- Phase 2: Set up Event-Driven State Synchronization ---
   // Decoupled from the high-frequency DMA write loop to prevent recursion!
-  if (this->master_light_state_ != nullptr &&
-      !this->segment_light_states_.empty()) {
-
-    // Wire up listeners.
+  if (this->master_light_state_ != nullptr) {
     this->master_listener_ = new MasterListener(this);
     this->master_light_state_->add_remote_values_listener(
         this->master_listener_);
+    this->prev_master_defaults_state_ =
+        this->master_light_state_->remote_values.is_on();
+  }
+
+  if (this->master_light_state_ != nullptr &&
+      !this->segment_light_states_.empty()) {
 
     for (auto *seg_state : this->segment_light_states_) {
       auto *listener = new SegmentListener(this);
@@ -578,9 +581,40 @@ void CFXLightOutput::setup_spi_() {
 
 // --- Dynamic State Synchronization ---
 
+void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
+                                                   bool &prev_on_state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  bool is_on = state->remote_values.is_on();
+  bool turned_on = is_on && !prev_on_state;
+  prev_on_state = is_on;
+
+  if (!turned_on || this->applying_turn_on_defaults_) {
+    return;
+  }
+
+  if (!this->turn_on_defaults_.should_apply(state, this->has_white_channel())) {
+    return;
+  }
+
+  auto call = state->make_call();
+  this->turn_on_defaults_.apply(call, this->has_white_channel());
+  this->applying_turn_on_defaults_ = true;
+  call.perform();
+  this->applying_turn_on_defaults_ = false;
+}
+
 void CFXLightOutput::on_master_update() {
-  if (this->master_light_state_ == nullptr ||
-      this->segment_light_states_.empty()) {
+  if (this->master_light_state_ == nullptr) {
+    return;
+  }
+
+  this->maybe_apply_turn_on_defaults_(this->master_light_state_,
+                                      this->prev_master_defaults_state_);
+
+  if (this->segment_light_states_.empty()) {
     return;
   }
 

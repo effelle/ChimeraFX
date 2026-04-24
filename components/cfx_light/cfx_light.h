@@ -11,6 +11,7 @@
 
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/light/light_output.h"
+#include "esphome/components/light/light_state.h"
 #include "esphome/components/light/light_transformer.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
@@ -21,6 +22,7 @@
 #include <driver/spi_master.h>
 #include <esp_err.h>
 #include <esp_idf_version.h>
+#include <cmath>
 #include <functional>
 #include <string>
 #include <vector>
@@ -44,6 +46,65 @@ struct CFXSegmentDef {
   uint8_t outro_mode;     // 0 = inherit root default
   float intro_duration_s; // 0.0 = inherit root default
   float outro_duration_s; // 0.0 = inherit root default
+};
+
+struct CFXTurnOnDefaults {
+  bool has_brightness{false};
+  float brightness{1.0f};
+  bool has_color{false};
+  bool color_has_white{false};
+  float red{0.0f};
+  float green{0.0f};
+  float blue{0.0f};
+  float white{0.0f};
+
+  bool should_apply(light::LightState *state, bool allow_white) const {
+    if (state == nullptr || !state->remote_values.is_on()) {
+      return false;
+    }
+
+    if (this->has_brightness &&
+        std::abs(state->remote_values.get_brightness() - this->brightness) > 0.01f) {
+      return true;
+    }
+
+    if (!this->has_color) {
+      return false;
+    }
+
+    if (std::abs(state->remote_values.get_red() - this->red) > 0.01f ||
+        std::abs(state->remote_values.get_green() - this->green) > 0.01f ||
+        std::abs(state->remote_values.get_blue() - this->blue) > 0.01f) {
+      return true;
+    }
+
+    if (allow_white && this->color_has_white &&
+        std::abs(state->remote_values.get_white() - this->white) > 0.01f) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void apply(light::LightCall &call, bool allow_white) const {
+    call.set_transition_length(0);
+
+    if (this->has_brightness) {
+      call.set_brightness(this->brightness);
+    }
+
+    if (!this->has_color) {
+      return;
+    }
+
+    call.set_color_mode(
+        allow_white && this->color_has_white ? light::ColorMode::RGB_WHITE
+                                             : light::ColorMode::RGB);
+    call.set_rgb(this->red, this->green, this->blue);
+    if (allow_white && this->color_has_white) {
+      call.set_white(this->white);
+    }
+  }
 };
 
 // Supported LED chipsets
@@ -148,6 +209,26 @@ public:
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
+  void set_turn_on_brightness(float brightness) {
+    this->turn_on_defaults_.has_brightness = true;
+    this->turn_on_defaults_.brightness = brightness;
+  }
+  void set_turn_on_color_rgb(float r, float g, float b) {
+    this->turn_on_defaults_.has_color = true;
+    this->turn_on_defaults_.color_has_white = false;
+    this->turn_on_defaults_.red = r;
+    this->turn_on_defaults_.green = g;
+    this->turn_on_defaults_.blue = b;
+    this->turn_on_defaults_.white = 0.0f;
+  }
+  void set_turn_on_color_rgbw(float r, float g, float b, float w) {
+    this->turn_on_defaults_.has_color = true;
+    this->turn_on_defaults_.color_has_white = true;
+    this->turn_on_defaults_.red = r;
+    this->turn_on_defaults_.green = g;
+    this->turn_on_defaults_.blue = b;
+    this->turn_on_defaults_.white = w;
+  }
   void set_force_white_switch(switch_::Switch *sw);
   switch_::Switch *get_force_white_switch() const { return this->force_white_sw_; }
   bool is_force_white_active_for(light::LightState *state) const;
@@ -255,6 +336,7 @@ protected:
   void flush_rmt_();
   void flush_spi_();
   void bind_force_white_switch_();
+  void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
@@ -370,8 +452,11 @@ protected:
   std::vector<SegmentListener *> segment_listeners_;
 
   bool is_syncing_{false};
+  bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
+  bool prev_master_defaults_state_{false};
   uint8_t tracked_brightness_{0};
+  CFXTurnOnDefaults turn_on_defaults_{};
 };
 
 } // namespace cfx_light

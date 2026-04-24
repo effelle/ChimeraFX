@@ -24,6 +24,17 @@ namespace cfx_light {
 
 class CFXVirtualSegmentLight : public light::AddressableLight {
 public:
+  class TurnOnDefaultsListener : public light::LightRemoteValuesListener {
+  public:
+    explicit TurnOnDefaultsListener(CFXVirtualSegmentLight *parent)
+        : parent_(parent) {}
+    void on_light_remote_values_update() override {
+      parent_->maybe_apply_turn_on_defaults_();
+    }
+
+  private:
+    CFXVirtualSegmentLight *parent_;
+  };
   static std::vector<CFXVirtualSegmentLight *> all_segments;
 
   CFXVirtualSegmentLight(CFXLightOutput *parent, uint16_t start, uint16_t stop,
@@ -124,12 +135,29 @@ public:
     parent_->request_segment_flush();
   }
 
+  void set_turn_on_brightness(float brightness) {
+    this->turn_on_defaults_.has_brightness = true;
+    this->turn_on_defaults_.brightness = brightness;
+  }
+  void set_turn_on_color_rgb(float r, float g, float b) {
+    this->turn_on_defaults_.has_color = true;
+    this->turn_on_defaults_.color_has_white = false;
+    this->turn_on_defaults_.red = r;
+    this->turn_on_defaults_.green = g;
+    this->turn_on_defaults_.blue = b;
+    this->turn_on_defaults_.white = 0.0f;
+  }
+  void set_turn_on_color_rgbw(float r, float g, float b, float w) {
+    this->turn_on_defaults_.has_color = true;
+    this->turn_on_defaults_.color_has_white = true;
+    this->turn_on_defaults_.red = r;
+    this->turn_on_defaults_.green = g;
+    this->turn_on_defaults_.blue = b;
+    this->turn_on_defaults_.white = w;
+  }
+
   void set_force_white_switch(switch_::Switch *sw) {
     force_white_sw_ = sw;
-    ESP_LOGD("chimera_fw",
-             "segment stored force_white switch seg=%p id=%s sw=%p state=%d",
-             this, seg_id_.c_str(), force_white_sw_,
-             force_white_sw_ != nullptr ? force_white_sw_->state : -1);
   }
   switch_::Switch *get_force_white_switch() const { return force_white_sw_; }
 
@@ -158,15 +186,6 @@ public:
     if (this->is_force_white_active_())
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
-    ESP_LOGD("chimera_fw",
-             "segment repaint apply seg=%p id=%s seg_sw=%p seg_sw_state=%d parent_sw=%p parent_sw_state=%d rgba=(%u,%u,%u,%u)",
-             this, seg_id_.c_str(), force_white_sw_,
-             force_white_sw_ != nullptr ? force_white_sw_->state : -1,
-             parent_->get_force_white_switch(),
-             parent_->get_force_white_switch() != nullptr
-                 ? parent_->get_force_white_switch()->state
-                 : -1,
-             c.r, c.g, c.b, c.w);
     this->all() = c;
     parent_->request_segment_flush();
   }
@@ -195,7 +214,14 @@ public:
   }
 
   void setup() override {
-    // Nothing to do — parent owns all hardware
+    if (this->state_parent_ != nullptr) {
+      this->prev_remote_on_ = this->state_parent_->remote_values.is_on();
+      if (this->turn_on_defaults_listener_ == nullptr) {
+        this->turn_on_defaults_listener_ = new TurnOnDefaultsListener(this);
+        this->state_parent_->add_remote_values_listener(
+            this->turn_on_defaults_listener_);
+      }
+    }
   }
 
   void dump_config() override {
@@ -211,6 +237,31 @@ public:
   CFXLightOutput *get_parent() const { return parent_; }
 
 protected:
+  void maybe_apply_turn_on_defaults_() {
+    if (this->state_parent_ == nullptr) {
+      return;
+    }
+
+    bool is_on = this->state_parent_->remote_values.is_on();
+    bool turned_on = is_on && !this->prev_remote_on_;
+    this->prev_remote_on_ = is_on;
+
+    if (!turned_on || this->applying_turn_on_defaults_) {
+      return;
+    }
+
+    if (!this->turn_on_defaults_.should_apply(this->state_parent_,
+                                              parent_->has_white_channel())) {
+      return;
+    }
+
+    auto call = this->state_parent_->make_call();
+    this->turn_on_defaults_.apply(call, parent_->has_white_channel());
+    this->applying_turn_on_defaults_ = true;
+    call.perform();
+    this->applying_turn_on_defaults_ = false;
+  }
+
   bool is_force_white_active_() const {
     if (!parent_->has_white_channel())
       return false;
@@ -227,6 +278,10 @@ protected:
   uint16_t stop_;
   std::string seg_id_;
   switch_::Switch *force_white_sw_{nullptr};
+  TurnOnDefaultsListener *turn_on_defaults_listener_{nullptr};
+  bool applying_turn_on_defaults_{false};
+  bool prev_remote_on_{false};
+  CFXTurnOnDefaults turn_on_defaults_{};
 };
 
 } // namespace cfx_light

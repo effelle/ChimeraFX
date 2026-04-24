@@ -19,7 +19,6 @@ from esphome.const import (
     CONF_BLUE,
     CONF_BRIGHTNESS,
     CONF_CHIPSET,
-    CONF_COLOR_BRIGHTNESS,
     CONF_COLOR_MODE,
     CONF_EFFECTS,
     CONF_GREEN,
@@ -33,7 +32,6 @@ from esphome.const import (
     CONF_OUTPUT_ID,
     CONF_PIN,
     CONF_RED,
-    CONF_STATE,
     CONF_WHITE,
 )
 
@@ -348,39 +346,6 @@ def _validate_set_color(config):
 
     return config
 
-
-def _build_initial_state_from_set_color(config, set_color):
-    initial_state = dict(config.get(CONF_INITIAL_STATE, {}))
-    initial_state[CONF_COLOR_MODE] = (
-        light.ColorMode.RGB_WHITE if len(set_color) == 4 else light.ColorMode.RGB
-    )
-    initial_state[CONF_RED] = set_color[0] / 100.0
-    initial_state[CONF_GREEN] = set_color[1] / 100.0
-    initial_state[CONF_BLUE] = set_color[2] / 100.0
-    initial_state[CONF_WHITE] = set_color[3] / 100.0 if len(set_color) == 4 else 0.0
-
-    # Keep startup power behavior user-controlled, but ensure a deterministic base color.
-    initial_state.setdefault(CONF_STATE, False)
-    initial_state.setdefault(CONF_BRIGHTNESS, 1.0)
-    initial_state.setdefault(CONF_COLOR_BRIGHTNESS, 1.0)
-    return initial_state
-
-
-def _apply_set_color_initial_state(config, set_color):
-    config = dict(config)
-    config[CONF_INITIAL_STATE] = _build_initial_state_from_set_color(config, set_color)
-    return config
-
-
-def _apply_set_brightness_initial_state(config, brightness):
-    config = dict(config)
-    initial_state = dict(config.get(CONF_INITIAL_STATE, {}))
-    initial_state[CONF_BRIGHTNESS] = brightness
-    initial_state.setdefault(CONF_STATE, False)
-    config[CONF_INITIAL_STATE] = initial_state
-    return config
-
-
 def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
@@ -608,12 +573,6 @@ async def to_code(config):
 
     segments = config.get(CONF_SEGMENTS, [])
     light_config = config
-    if CONF_SET_COLOR in config:
-        light_config = _apply_set_color_initial_state(config, config[CONF_SET_COLOR])
-    if CONF_SET_BRIGHTNESS in config:
-        light_config = _apply_set_brightness_initial_state(
-            light_config, config[CONF_SET_BRIGHTNESS]
-        )
 
     if segments:
         # --- Phase 2: Per-segment light entities ---
@@ -671,6 +630,26 @@ async def to_code(config):
 
     # wrgb explicitly required by some variants
     cg.add(var.set_is_wrgb(config[CONF_IS_WRGB]))
+
+    if CONF_SET_BRIGHTNESS in config:
+        cg.add(var.set_turn_on_brightness(config[CONF_SET_BRIGHTNESS]))
+    if CONF_SET_COLOR in config:
+        color = config[CONF_SET_COLOR]
+        if len(color) == 3:
+            cg.add(
+                var.set_turn_on_color_rgb(
+                    color[0] / 100.0, color[1] / 100.0, color[2] / 100.0
+                )
+            )
+        else:
+            cg.add(
+                var.set_turn_on_color_rgbw(
+                    color[0] / 100.0,
+                    color[1] / 100.0,
+                    color[2] / 100.0,
+                    color[3] / 100.0,
+                )
+            )
 
     # RGB Order: explicit > auto-detect from chipset
     if CONF_RGB_ORDER in config:
@@ -802,18 +781,31 @@ async def to_code(config):
             "internal": False,
             "restore_mode": config.get("restore_mode", "ALWAYS_OFF"),
         }
-        if CONF_SEGMENT_SET_COLOR in seg:
-            seg_light_config = _apply_set_color_initial_state(
-                seg_light_config, seg[CONF_SEGMENT_SET_COLOR]
-            )
-        if CONF_SEGMENT_SET_BRIGHTNESS in seg:
-            seg_light_config = _apply_set_brightness_initial_state(
-                seg_light_config, seg[CONF_SEGMENT_SET_BRIGHTNESS]
-            )
-
         # Register the LightState (without effects)
         await light.register_light(vl, seg_light_config)
         light_state = await cg.get_variable(seg_id_obj)
+
+        if CONF_SEGMENT_SET_BRIGHTNESS in seg:
+            cg.add(vl.set_turn_on_brightness(seg[CONF_SEGMENT_SET_BRIGHTNESS]))
+        if CONF_SEGMENT_SET_COLOR in seg:
+            seg_color = seg[CONF_SEGMENT_SET_COLOR]
+            if len(seg_color) == 3:
+                cg.add(
+                    vl.set_turn_on_color_rgb(
+                        seg_color[0] / 100.0,
+                        seg_color[1] / 100.0,
+                        seg_color[2] / 100.0,
+                    )
+                )
+            else:
+                cg.add(
+                    vl.set_turn_on_color_rgbw(
+                        seg_color[0] / 100.0,
+                        seg_color[1] / 100.0,
+                        seg_color[2] / 100.0,
+                        seg_color[3] / 100.0,
+                    )
+                )
 
         # Manually create strictly unique effects and attach them to the segment
         from esphome.core import ID as CoreID
