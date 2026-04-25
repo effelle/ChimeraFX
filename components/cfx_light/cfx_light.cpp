@@ -187,9 +187,10 @@ void CFXLightOutput::harvest_rmt_encoder_diag_() {
 }
 
 void CFXLightOutput::note_show_request() {
-  if (this->perf_diag_last_show_request_us_ == 0) {
-    this->perf_diag_last_show_request_us_ = micros();
-  }
+  // Track the freshest show request. Coalesced flushes render the latest
+  // completed frame, not the oldest pending request, so keeping the newest
+  // timestamp gives a truer queue-age measurement and avoids stale outliers.
+  this->perf_diag_last_show_request_us_ = micros();
 }
 
 // Query the RMT default clock source frequency (varies by chip variant)
