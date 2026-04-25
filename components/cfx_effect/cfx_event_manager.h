@@ -3,6 +3,7 @@
 #include "esphome/components/event/event.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include <cstdio>
 #include <map>
 #include <string>
 #include <vector>
@@ -38,13 +39,33 @@ public:
   void add_known_tag(const std::string &tag) { (void) tag; }
 
   void fire_event(const char *type) {
-    if (!this->ha_events_enabled_) return;
-    this->push_deferred(std::string(type));
+    if (!this->ha_events_enabled_ || type == nullptr)
+      return;
+    std::string evt(type);
+    esphome::event::Event *target_entity = this->event_entity_;
+    if (!this->resolve_target_entity_(evt, &target_entity))
+      return;
+    this->push_deferred_(evt, target_entity);
+  }
+
+  void fire_reach_event(const std::string &tag, uint8_t milestone) {
+    if (!this->ha_events_enabled_ || tag.empty())
+      return;
+
+    esphome::event::Event *target_entity = this->event_entity_;
+    if (!this->resolve_target_for_tag_(tag, &target_entity))
+      return;
+
+    char evt[48];
+    std::snprintf(evt, sizeof(evt), "cfx_reach:%s:%u", tag.c_str(),
+                  (unsigned) milestone);
+    this->push_deferred_(std::string(evt), target_entity);
   }
 
   // Push one event string onto the deferred ring-buffer queue.
   // Full-string coalescing: exact duplicates are dropped. (CFX-034)
-  void push_deferred(const std::string &evt) {
+  void push_deferred_(const std::string &evt,
+                      esphome::event::Event *target_entity) {
     // 1. Coalescing: Drop if an identical event is already in the queue.
     for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
          i = (i + 1) % DEFERRED_QUEUE_SIZE) {
@@ -73,6 +94,7 @@ public:
           if (this->deferred_queue_[idx].find("cfx_reach") != std::string::npos) {
             // Drop this milestone to make room
             this->deferred_queue_[idx] = evt;
+            this->deferred_targets_[idx] = target_entity;
             this->deferred_write_ = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
             this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
             reclaimed = true;
@@ -89,6 +111,7 @@ public:
     }
     
     this->deferred_queue_[this->deferred_write_] = evt;
+    this->deferred_targets_[this->deferred_write_] = target_entity;
     this->deferred_write_ = next;
   }
 
@@ -123,42 +146,10 @@ public:
       const uint8_t idx = this->deferred_read_;
       std::string evt;
       evt.swap(this->deferred_queue_[idx]);
+      esphome::event::Event *target_entity = this->deferred_targets_[idx];
+      this->deferred_targets_[idx] = nullptr;
       this->deferred_read_ = (idx + 1) % DEFERRED_QUEUE_SIZE;
       flushed_this_loop++;
-
-      // CFX-028: route to the per-strip entity whose tag appears in the string.
-      esphome::event::Event *target_entity = this->event_entity_;
-      bool parsed_tag = false;
-      bool resolved_tag = false;
-      std::string tag;
-      size_t first_colon = evt.find(':');
-      if (first_colon != std::string::npos) {
-        size_t second_colon = evt.find(':', first_colon + 1);
-        tag = (second_colon != std::string::npos)
-                  ? evt.substr(first_colon + 1, second_colon - first_colon - 1)
-                  : evt.substr(first_colon + 1);
-        parsed_tag = true;
-
-        // CFX-040: per-tag opt-out
-        if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) != this->disabled_tags_.end()) {
-          continue;
-        }
-
-        auto it = this->strip_entities_.find(tag);
-        if (it != this->strip_entities_.end() && it->second != nullptr) {
-          target_entity = it->second;
-          resolved_tag = true;
-        }
-      }
-
-      // Unknown tagged events should not fall through to an unrelated default
-      // entity; that produces misleading "invalid event type" errors on the
-      // wrong strip and hides the real tag mismatch.
-      if (parsed_tag && !resolved_tag) {
-        ESP_LOGW("cfx_seq", "dropping event with unknown tag '%s': %s",
-                 tag.c_str(), evt.c_str());
-        continue;
-      }
 
       if (target_entity != nullptr) {
         target_entity->trigger(evt);
@@ -167,6 +158,38 @@ public:
   }
 
 protected:
+  bool resolve_target_for_tag_(const std::string &tag,
+                               esphome::event::Event **target_entity) {
+    if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) !=
+        this->disabled_tags_.end()) {
+      return false;
+    }
+
+    auto it = this->strip_entities_.find(tag);
+    if (it != this->strip_entities_.end() && it->second != nullptr) {
+      *target_entity = it->second;
+      return true;
+    }
+
+    ESP_LOGW("cfx_seq", "dropping event with unknown tag '%s'", tag.c_str());
+    return false;
+  }
+
+  bool resolve_target_entity_(const std::string &evt,
+                              esphome::event::Event **target_entity) {
+    size_t first_colon = evt.find(':');
+    if (first_colon == std::string::npos) {
+      return true;
+    }
+
+    size_t second_colon = evt.find(':', first_colon + 1);
+    std::string tag = (second_colon != std::string::npos)
+                          ? evt.substr(first_colon + 1,
+                                       second_colon - first_colon - 1)
+                          : evt.substr(first_colon + 1);
+    return this->resolve_target_for_tag_(tag, target_entity);
+  }
+
   CFXEventManager() = default;
   esphome::event::Event *event_entity_{nullptr};
   std::map<std::string, esphome::event::Event *> strip_entities_;
@@ -175,6 +198,7 @@ protected:
 
   static constexpr uint8_t DEFERRED_QUEUE_SIZE = 64;
   std::string deferred_queue_[DEFERRED_QUEUE_SIZE];
+  esphome::event::Event *deferred_targets_[DEFERRED_QUEUE_SIZE]{};
   uint8_t deferred_write_{0};
   uint8_t deferred_read_{0};
 };

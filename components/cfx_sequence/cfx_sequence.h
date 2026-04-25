@@ -302,10 +302,8 @@ protected:
     while (current_pct >= next && next <= 100) {
       this->last_fired_milestone_ = next;
       this->milestone_fired_this_frame_ = true;
-      char buf[48];
-      snprintf(buf, sizeof(buf), "cfx_reach:%s:%u",
-               this->strip_tag_.c_str(), (unsigned)this->last_fired_milestone_);
-      CFXEventManager::get().fire_event(buf);
+      CFXEventManager::get().fire_reach_event(this->strip_tag_,
+                                              this->last_fired_milestone_);
       next = this->last_fired_milestone_ + MILESTONE_STEP;
     }
     // Auto-reset when a new forward pass begins (pct wraps back to ~0)

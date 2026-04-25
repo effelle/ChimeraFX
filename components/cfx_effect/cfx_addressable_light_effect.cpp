@@ -6880,40 +6880,37 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     return;
   act_->milestone_fired_this_frame = false;
   static uint8_t spi_reach_suppress_logs = 0;
+  bool suppress_ha_reach = false;
+#ifdef USE_CFX_EVENTS
+#ifdef USE_CFX_SEQUENCE
+  if (!act_->suppress_reach_event && act_->active_sequence != nullptr) {
+    SPIDiagCensus diag_census = collect_spi_diag_census();
+    suppress_ha_reach =
+        diag_census.active_spi_effects > 0 && diag_census.active_effects >= 2;
+    if (suppress_ha_reach && spi_reach_suppress_logs < 12) {
+      ESP_LOGD("cfx_seq",
+               "SPI diag reach-suppress[%u]: effect=%s tag=%s active(e=%u,"
+               "se=%u,spi=%u) bound=%u runners=%u",
+               static_cast<unsigned>(spi_reach_suppress_logs),
+               act_->cached_runner_name.c_str(), act_->strip_tag.c_str(),
+               static_cast<unsigned>(diag_census.active_effects),
+               static_cast<unsigned>(diag_census.active_segment_effects),
+               static_cast<unsigned>(diag_census.active_spi_effects),
+               static_cast<unsigned>(diag_census.bound_sequences),
+               static_cast<unsigned>(diag_census.runner_count));
+      spi_reach_suppress_logs++;
+    }
+  }
+#endif
+#endif
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
   while (current_pct >= next && next <= 100) {
     act_->last_fired_milestone = next;
     act_->milestone_fired_this_frame = true;
 #ifdef USE_CFX_EVENTS
-    char buf[48];
-    snprintf(buf, sizeof(buf), "cfx_reach:%s:%u", act_->strip_tag.c_str(),
-             (unsigned)act_->last_fired_milestone);
-    if (!act_->suppress_reach_event) {
-      bool suppress_ha_reach = false;
-#ifdef USE_CFX_SEQUENCE
-      if (act_->active_sequence != nullptr) {
-        SPIDiagCensus diag_census = collect_spi_diag_census();
-        suppress_ha_reach = diag_census.active_spi_effects > 0 &&
-                            diag_census.active_effects >= 2;
-        if (suppress_ha_reach && spi_reach_suppress_logs < 12) {
-          ESP_LOGD("cfx_seq",
-                   "SPI diag reach-suppress[%u]: effect=%s tag=%s milestone=%u "
-                   "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
-                   static_cast<unsigned>(spi_reach_suppress_logs),
-                   act_->cached_runner_name.c_str(), act_->strip_tag.c_str(),
-                   static_cast<unsigned>(act_->last_fired_milestone),
-                   static_cast<unsigned>(diag_census.active_effects),
-                   static_cast<unsigned>(diag_census.active_segment_effects),
-                   static_cast<unsigned>(diag_census.active_spi_effects),
-                   static_cast<unsigned>(diag_census.bound_sequences),
-                   static_cast<unsigned>(diag_census.runner_count));
-          spi_reach_suppress_logs++;
-        }
-      }
-#endif
-      if (!suppress_ha_reach) {
-        chimera_fx::CFXEventManager::get().fire_event(buf);
-      }
+    if (!act_->suppress_reach_event && !suppress_ha_reach) {
+      chimera_fx::CFXEventManager::get().fire_reach_event(
+          act_->strip_tag, act_->last_fired_milestone);
     }
 #endif
     next = act_->last_fired_milestone + MILESTONE_STEP;
