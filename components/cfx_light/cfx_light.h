@@ -480,6 +480,7 @@ protected:
   uint32_t perf_diag_max_tx_us_{0};
   uint32_t perf_diag_max_wait_us_{0};
   uint32_t perf_diag_max_gate_us_{0};
+  uint32_t perf_diag_max_gate_defers_{0};
   uint32_t perf_diag_max_rmt_starve_count_{0};
   uint32_t perf_diag_max_rmt_reset_starve_count_{0};
   uint32_t perf_diag_max_seg_contrib_{0};
@@ -490,6 +491,7 @@ protected:
   uint64_t perf_diag_total_tx_us_{0};
   uint64_t perf_diag_total_wait_us_{0};
   uint64_t perf_diag_total_gate_us_{0};
+  uint64_t perf_diag_total_gate_defers_{0};
   uint64_t perf_diag_total_rmt_starve_count_{0};
   uint64_t perf_diag_total_rmt_reset_starve_count_{0};
   uint64_t perf_diag_total_rmt_callback_count_{0};
@@ -497,6 +499,8 @@ protected:
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_last_flush_mask_{0};
   uint8_t seg_last_flush_count_{0};
+  uint8_t perf_diag_pending_gate_defers_{0};
+  uint8_t perf_diag_last_launch_slot_{0};
   CFXTurnOnDefaults turn_on_defaults_{};
 };
 

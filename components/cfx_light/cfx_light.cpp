@@ -46,6 +46,7 @@ std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 static uint32_t g_last_rmt_launch_us = 0;
+static uint32_t g_rmt_launch_seq = 0;
 
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -149,6 +150,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_tx_us_ = 0;
   this->perf_diag_max_wait_us_ = 0;
   this->perf_diag_max_gate_us_ = 0;
+  this->perf_diag_max_gate_defers_ = 0;
   this->perf_diag_max_rmt_starve_count_ = 0;
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
   this->perf_diag_max_seg_contrib_ = 0;
@@ -159,6 +161,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_tx_us_ = 0;
   this->perf_diag_total_wait_us_ = 0;
   this->perf_diag_total_gate_us_ = 0;
+  this->perf_diag_total_gate_defers_ = 0;
   this->perf_diag_total_rmt_starve_count_ = 0;
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
@@ -1175,6 +1178,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
         if (gate_us > this->perf_diag_max_gate_us_) {
           this->perf_diag_max_gate_us_ = gate_us;
         }
+        if (this->perf_diag_pending_gate_defers_ < 255) {
+          this->perf_diag_pending_gate_defers_++;
+        }
         this->schedule_show();
         return;
       }
@@ -1215,6 +1221,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   } else {
     const uint32_t launch_us = micros();
     g_last_rmt_launch_us = launch_us;
+    this->perf_diag_last_launch_slot_ = static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
+    g_rmt_launch_seq++;
     this->flush_rmt_();
   }
 
@@ -1233,6 +1241,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
     this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
     this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
+    this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
     this->perf_diag_flush_count_++;
 
     if (write_us > this->perf_diag_max_write_us_) {
@@ -1247,6 +1256,10 @@ void CFXLightOutput::write_state(light::LightState *state) {
     if (this->seg_last_flush_count_ > this->perf_diag_max_seg_contrib_) {
       this->perf_diag_max_seg_contrib_ = this->seg_last_flush_count_;
     }
+    if (this->perf_diag_pending_gate_defers_ > this->perf_diag_max_gate_defers_) {
+      this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
+    }
+    this->perf_diag_pending_gate_defers_ = 0;
     this->seg_last_flush_count_ = 0;
     this->seg_last_flush_mask_ = 0;
 
@@ -1279,6 +1292,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_gate_ms =
           (float)(this->perf_diag_total_gate_us_ / this->perf_diag_flush_count_) /
           1000.0f;
+      const float avg_gate_defers =
+          (float)this->perf_diag_total_gate_defers_ /
+          (float)this->perf_diag_flush_count_;
       const float avg_rmt_starve =
           (float)this->perf_diag_total_rmt_starve_count_ /
           (float)this->perf_diag_flush_count_;
@@ -1297,14 +1313,17 @@ void CFXLightOutput::write_state(light::LightState *state) {
         ESP_LOGI(
             TAG,
             "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
-            "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Stall: %.2f/%u (R:%.2f/%u) | "
-            "Seg: %.2f/%u | Free:%u | Calls:%u",
+            "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Def: %.2f/%u | "
+            "Slot:%u | Stall: %.2f/%u (R:%.2f/%u) | Seg: %.2f/%u | Free:%u | Calls:%u",
             light_name, transport_name,
             avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
             avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
             avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
             avg_wait_ms, (float)this->perf_diag_max_wait_us_ / 1000.0f,
             avg_gate_ms, (float)this->perf_diag_max_gate_us_ / 1000.0f,
+            avg_gate_defers,
+            static_cast<unsigned>(this->perf_diag_max_gate_defers_),
+            static_cast<unsigned>(this->perf_diag_last_launch_slot_),
             avg_rmt_starve,
             static_cast<unsigned>(this->perf_diag_max_rmt_starve_count_),
             avg_rmt_reset_starve,
