@@ -141,6 +141,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_wait_us_ = 0;
   this->perf_diag_max_rmt_starve_count_ = 0;
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
+  this->perf_diag_max_seg_contrib_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
@@ -150,6 +151,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_rmt_starve_count_ = 0;
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
+  this->perf_diag_total_seg_contrib_ = 0;
 }
 
 void CFXLightOutput::reset_rmt_encoder_diag_() {
@@ -892,6 +894,10 @@ void CFXLightOutput::loop() {
   if (this->seg_flush_pending_) {
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= 2) {
+      this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
+      this->seg_last_flush_count_ = static_cast<uint8_t>(
+          __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
+      this->seg_flush_pending_mask_ = 0;
       this->seg_flush_pending_ = false;
       this->seg_flush_first_ms_ = 0;
       this->write_state(nullptr);
@@ -969,7 +975,15 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // timeout expires for the solid-color / mixed path), we flush once with the
 // complete buffer. This prevents partial-frame DMA which causes random color
 // artifacts on segments with misaligned update_interval_ phases.
-void CFXLightOutput::request_segment_flush() {
+void CFXLightOutput::request_segment_flush(light::LightState *state) {
+  if (state != nullptr) {
+    for (size_t i = 0; i < this->segment_light_states_.size() && i < 8; i++) {
+      if (this->segment_light_states_[i] == state) {
+        this->seg_flush_pending_mask_ |= static_cast<uint8_t>(1u << i);
+        break;
+      }
+    }
+  }
   // CFX-032: Coalesced Segment Flush.
   // Instead of calling write_state(nullptr) immediately (which blocks the
   // loop N-times per frame), we set a dirty flag and record the timestamp.
@@ -1138,6 +1152,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->perf_diag_total_write_us_ += write_us;
     this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
     this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
+    this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
     this->perf_diag_flush_count_++;
 
     if (write_us > this->perf_diag_max_write_us_) {
@@ -1149,6 +1164,11 @@ void CFXLightOutput::write_state(light::LightState *state) {
     if (this->perf_diag_last_flush_tx_us_ > this->perf_diag_max_tx_us_) {
       this->perf_diag_max_tx_us_ = this->perf_diag_last_flush_tx_us_;
     }
+    if (this->seg_last_flush_count_ > this->perf_diag_max_seg_contrib_) {
+      this->perf_diag_max_seg_contrib_ = this->seg_last_flush_count_;
+    }
+    this->seg_last_flush_count_ = 0;
+    this->seg_last_flush_mask_ = 0;
 
     const uint32_t now_ms = esphome::millis();
     if (this->perf_diag_last_log_ms_ == 0) {
@@ -1182,6 +1202,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_rmt_reset_starve =
           (float)this->perf_diag_total_rmt_reset_starve_count_ /
           (float)this->perf_diag_flush_count_;
+      const float avg_seg_contrib =
+          (float)this->perf_diag_total_seg_contrib_ /
+          (float)this->perf_diag_flush_count_;
 
       if (this->transport_ == TRANSPORT_RMT) {
         const uint32_t min_symbols_free =
@@ -1192,7 +1215,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
             TAG,
             "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
             "%.2f/%.2fms | Wait: %.2f/%.2fms | Stall: %.2f/%u (R:%.2f/%u) | "
-            "Free:%u | Calls:%u",
+            "Seg: %.2f/%u | Free:%u | Calls:%u",
             light_name, transport_name,
             avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
             avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
@@ -1203,6 +1226,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
             avg_rmt_reset_starve,
             static_cast<unsigned>(
                 this->perf_diag_max_rmt_reset_starve_count_),
+            avg_seg_contrib,
+            static_cast<unsigned>(this->perf_diag_max_seg_contrib_),
             static_cast<unsigned>(min_symbols_free),
             static_cast<unsigned>(this->perf_diag_flush_count_));
       } else {

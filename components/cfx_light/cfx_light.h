@@ -175,7 +175,7 @@ public:
   // that bypasses the Master LightState's rendering pipeline.
   // Counter-based: fires write_state(nullptr) only when ALL N segments have
   // reported their render complete, preventing premature DMA on partial frames.
-  void request_segment_flush();
+  void request_segment_flush(light::LightState *state = nullptr);
 
   // Segment flush coalescing state (Fix-2: one DMA call per frame)
   bool     seg_flush_pending_{false};
@@ -481,6 +481,7 @@ protected:
   uint32_t perf_diag_max_wait_us_{0};
   uint32_t perf_diag_max_rmt_starve_count_{0};
   uint32_t perf_diag_max_rmt_reset_starve_count_{0};
+  uint32_t perf_diag_max_seg_contrib_{0};
   uint32_t perf_diag_min_rmt_symbols_free_{UINT32_MAX};
   uint64_t perf_diag_total_queue_us_{0};
   uint64_t perf_diag_total_write_us_{0};
@@ -490,6 +491,10 @@ protected:
   uint64_t perf_diag_total_rmt_starve_count_{0};
   uint64_t perf_diag_total_rmt_reset_starve_count_{0};
   uint64_t perf_diag_total_rmt_callback_count_{0};
+  uint64_t perf_diag_total_seg_contrib_{0};
+  uint8_t seg_flush_pending_mask_{0};
+  uint8_t seg_last_flush_mask_{0};
+  uint8_t seg_last_flush_count_{0};
   CFXTurnOnDefaults turn_on_defaults_{};
 };
 

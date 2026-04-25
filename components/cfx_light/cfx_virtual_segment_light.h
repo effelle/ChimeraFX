@@ -132,7 +132,7 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
-    parent_->request_segment_flush();
+    parent_->request_segment_flush(this->state_parent_);
   }
 
   void note_show_request() { parent_->note_show_request(); }
@@ -191,7 +191,7 @@ public:
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
     this->all() = c;
-    parent_->request_segment_flush();
+    parent_->request_segment_flush(this->state_parent_);
   }
 
   light::LightTraits get_traits() override {
