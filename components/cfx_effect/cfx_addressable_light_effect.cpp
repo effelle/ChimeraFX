@@ -990,9 +990,11 @@ void CFXAddressableLightEffect::start() {
           this->get_default_intensity_(this->effect_id_);
     }
 
-    // Cache for this run
-    ensure_cfg_();
-    cfg_->intro_effect = intro_sel;
+    // Keep existing per-effect config in sync, but do not allocate config just
+    // to mirror the controller selector. Unconfigured effects must stay cheap.
+    if (cfg_ != nullptr) {
+      cfg_->intro_effect = intro_sel;
+    }
 
     if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active) {
       act_->intro_active = false;
@@ -3388,8 +3390,7 @@ void CFXAddressableLightEffect::run_controls_() {
     act_->active_force_white = force_white_active;
 
     // 7. Debug
-    if (c && c->get_debug()) {
-      ensure_cfg_();
+    if (c && c->get_debug() && cfg_ != nullptr) {
       cfg_->debug_switch = c->get_debug();
     }
   }
