@@ -268,7 +268,8 @@ public:
 
   // Gamma Correction Helper Support
   // Non-static to allow multiple strips with different gammas to coexist
-  uint8_t _lut[256];
+  const uint8_t *_lut{nullptr};
+  uint8_t *_dynamic_lut{nullptr};
   float _gamma;
 
   // Sequence Iteration Limits
@@ -284,13 +285,19 @@ public:
   bool sequence_owns_mirror_{false};
 
   void setGamma(float g);
-  inline uint8_t applyGamma(uint8_t val) { return _lut[val]; }
+  inline uint8_t applyGamma(uint8_t val) { return _lut ? _lut[val] : val; }
   uint8_t shiftFloor(uint8_t val);
   uint8_t getFadeFactor(uint8_t factor);
   uint8_t getSubFactor(uint8_t factor);
 
   // Destructor: Release segment data to reclaim RAM
-  ~CFXRunner() { _segment.deallocateData(); }
+  ~CFXRunner() {
+    _segment.deallocateData();
+    if (_dynamic_lut != nullptr) {
+      free(_dynamic_lut);
+      _dynamic_lut = nullptr;
+    }
+  }
 
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }

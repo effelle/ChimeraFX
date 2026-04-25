@@ -37,6 +37,25 @@ namespace chimera_fx {
 
 CFXRunner *instance_per_core[2] = {nullptr, nullptr};
 
+static constexpr float CFX_DEFAULT_GAMMA = 2.8f;
+static const uint8_t CFX_DEFAULT_GAMMA_LUT[256] CFX_PROGMEM = {
+      0,   0,   0,   0,   1,   1,   2,   2,   3,   3,   4,   5,   5,   6,   6,   7,
+      8,   8,   9,   9,  10,  11,  11,  12,  13,  13,  14,  15,  16,  16,  17,  18,
+     19,  19,  20,  21,  22,  22,  23,  24,  25,  25,  26,  27,  28,  29,  29,  30,
+     31,  32,  33,  34,  34,  35,  36,  37,  38,  39,  40,  40,  41,  42,  43,  44,
+     45,  46,  47,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  58,
+     59,  60,  61,  62,  63,  64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,
+     75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,
+     91,  92,  93,  94,  95,  96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106,
+    107, 108, 109, 110, 111, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
+    124, 125, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 139, 140, 141,
+    142, 143, 144, 145, 146, 147, 149, 150, 151, 152, 153, 154, 155, 157, 158, 159,
+    160, 161, 162, 163, 164, 166, 167, 168, 169, 170, 171, 173, 174, 175, 176, 177,
+    178, 180, 181, 182, 183, 184, 185, 187, 188, 189, 190, 191, 192, 194, 195, 196,
+    197, 198, 200, 201, 202, 203, 204, 206, 207, 208, 209, 210, 212, 213, 214, 215,
+    216, 218, 219, 220, 221, 222, 224, 225, 226, 227, 229, 230, 231, 232, 233, 235,
+    236, 237, 238, 240, 241, 242, 243, 245, 246, 247, 248, 250, 251, 252, 253, 255};
+
 // Forward declarations
 uint16_t mode_running_lights(void);
 uint16_t mode_running_dual(void);
@@ -106,13 +125,33 @@ void CFXRunner::setGamma(float g) {
     g = 1.0f; // Safety
   _gamma = g;
 
+  if (g > (CFX_DEFAULT_GAMMA - 0.01f) && g < (CFX_DEFAULT_GAMMA + 0.01f)) {
+    if (_dynamic_lut != nullptr) {
+      free(_dynamic_lut);
+      _dynamic_lut = nullptr;
+    }
+    _lut = CFX_DEFAULT_GAMMA_LUT;
+    return;
+  }
+
+  if (_dynamic_lut == nullptr) {
+    _dynamic_lut = (uint8_t *)malloc(256);
+    if (_dynamic_lut == nullptr) {
+      ESP_LOGW("CFX", "Gamma LUT allocation failed; using default 2.8 table");
+      _gamma = CFX_DEFAULT_GAMMA;
+      _lut = CFX_DEFAULT_GAMMA_LUT;
+      return;
+    }
+  }
+  _lut = _dynamic_lut;
+
   // The power we need to raise input by to get x^3.5 output (Compromise for
   // Aurora vs Plasma) If Gamma=3.5 -> p=1.0 If Gamma=1.0 -> p=3.5 ->
   // (x^3.5)^1.0 = x^3.5
   float power = 3.5f / _gamma;
 
   for (int i = 0; i < 256; i++) {
-    _lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+    _dynamic_lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
   }
 }
 
