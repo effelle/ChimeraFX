@@ -124,8 +124,10 @@ public:
 
     uint8_t flushed_this_loop = 0;
     while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
-      const std::string evt = this->deferred_queue_[this->deferred_read_];
-      this->deferred_read_ = (this->deferred_read_ + 1) % DEFERRED_QUEUE_SIZE;
+      const uint8_t idx = this->deferred_read_;
+      std::string evt;
+      evt.swap(this->deferred_queue_[idx]);
+      this->deferred_read_ = (idx + 1) % DEFERRED_QUEUE_SIZE;
       flushed_this_loop++;
 
       // CFX-028: route to the per-strip entity whose tag appears in the string.
