@@ -147,6 +147,7 @@ struct LedParams {
 
 class CFXLightOutput : public light::AddressableLight {
 public:
+  CFXLightOutput();
   ~CFXLightOutput(); // CFX-025: closes visualizer socket_fd_ to prevent FD leak
   void setup() override;
   void loop() override;
@@ -163,6 +164,8 @@ public:
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
   void drain_outro_callbacks();
   bool has_outro() const { return !this->outro_cbs_.empty(); }
+  size_t get_outro_callback_count() const { return this->outro_cbs_.size(); }
+  static const std::vector<CFXLightOutput *> &get_instances() { return instances_; }
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
@@ -352,6 +355,8 @@ protected:
 
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
+
+  static std::vector<CFXLightOutput *> instances_;
 
   // Callbacks used to execute Outro animations after ESPHome turns the light
   // off

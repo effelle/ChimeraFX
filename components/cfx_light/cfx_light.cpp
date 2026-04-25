@@ -43,8 +43,13 @@ namespace cfx_light {
 static const char *const TAG = "cfx_light";
 
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
+std::vector<CFXLightOutput *> CFXLightOutput::instances_;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
+
+CFXLightOutput::CFXLightOutput() {
+  this->instances_.push_back(this);
+}
 
 void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
   if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
@@ -190,6 +195,10 @@ static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
 // all subsequent socket() calls to fail. close() is available via
 // lwip/sockets.h.
 CFXLightOutput::~CFXLightOutput() {
+  auto it = std::find(this->instances_.begin(), this->instances_.end(), this);
+  if (it != this->instances_.end()) {
+    this->instances_.erase(it);
+  }
   if (this->socket_fd_ >= 0) {
     ::close(this->socket_fd_);
     this->socket_fd_ = -1;

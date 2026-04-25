@@ -29,6 +29,30 @@
 #include "esphome/core/color.h"
 #include "esphome/core/log.h"
 
+namespace esphome {
+namespace chimera_fx {
+
+struct RuntimeDiagCensus {
+  size_t active_activations{0};
+  size_t runner_count{0};
+  size_t outputs_with_outro{0};
+  size_t outro_callbacks{0};
+  size_t running_sequences{0};
+  size_t pool_sequences{0};
+  size_t pending_teardowns{0};
+  size_t pending_triggers{0};
+  size_t pending_duration_completions{0};
+  size_t saved_states{0};
+  size_t saved_state_capacity{0};
+  size_t monitored_lights{0};
+  size_t owned_lights{0};
+};
+
+RuntimeDiagCensus collect_runtime_diag_census();
+
+} // namespace chimera_fx
+} // namespace esphome
+
 namespace cfx {
 
 // ============================================================================
@@ -524,11 +548,27 @@ struct FrameDiagnostics {
 
     float avg_frame_ms = (float)avg_frame_us / 1000.0f;
     uint32_t free_heap_kb = free_heap / 1024;
+    auto census = esphome::chimera_fx::collect_runtime_diag_census();
 
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [ACTV]",
+             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
+             "[ACTV] | Own act:%u run:%u out:%u cb:%u seq:%u pool:%u td:%u "
+             "tr:%u dc:%u sv:%u/%u mon:%u own:%u",
              pending_name_ ? pending_name_ : "?",
-             fps, avg_frame_ms, jitter_pct, free_heap_kb);
+             fps, avg_frame_ms, jitter_pct, free_heap_kb,
+             static_cast<unsigned>(census.active_activations),
+             static_cast<unsigned>(census.runner_count),
+             static_cast<unsigned>(census.outputs_with_outro),
+             static_cast<unsigned>(census.outro_callbacks),
+             static_cast<unsigned>(census.running_sequences),
+             static_cast<unsigned>(census.pool_sequences),
+             static_cast<unsigned>(census.pending_teardowns),
+             static_cast<unsigned>(census.pending_triggers),
+             static_cast<unsigned>(census.pending_duration_completions),
+             static_cast<unsigned>(census.saved_states),
+             static_cast<unsigned>(census.saved_state_capacity),
+             static_cast<unsigned>(census.monitored_lights),
+             static_cast<unsigned>(census.owned_lights));
 
     reset();
     last_log_time = cfx_millis();
@@ -559,10 +599,27 @@ struct FrameDiagnostics {
       jitter_pct   = (100.0f * jitter_count_in) / (float)frame_count_in;
     }
 
+    auto census = esphome::chimera_fx::collect_runtime_diag_census();
+
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
+             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB "
+             "[IDLE] | Own act:%u run:%u out:%u cb:%u seq:%u pool:%u td:%u "
+             "tr:%u dc:%u sv:%u/%u mon:%u own:%u",
              effect_name ? effect_name : "?",
-             fps, avg_frame_ms, jitter_pct, free_heap_kb);
+             fps, avg_frame_ms, jitter_pct, free_heap_kb,
+             static_cast<unsigned>(census.active_activations),
+             static_cast<unsigned>(census.runner_count),
+             static_cast<unsigned>(census.outputs_with_outro),
+             static_cast<unsigned>(census.outro_callbacks),
+             static_cast<unsigned>(census.running_sequences),
+             static_cast<unsigned>(census.pool_sequences),
+             static_cast<unsigned>(census.pending_teardowns),
+             static_cast<unsigned>(census.pending_triggers),
+             static_cast<unsigned>(census.pending_duration_completions),
+             static_cast<unsigned>(census.saved_states),
+             static_cast<unsigned>(census.saved_state_capacity),
+             static_cast<unsigned>(census.monitored_lights),
+             static_cast<unsigned>(census.owned_lights));
 
     last_log_time = now_ms;
   }
