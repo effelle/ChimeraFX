@@ -134,12 +134,20 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_last_flush_total_us_ = 0;
   this->perf_diag_last_flush_tx_us_ = 0;
   this->perf_diag_flush_count_ = 0;
+  this->perf_diag_max_queue_us_ = 0;
   this->perf_diag_max_write_us_ = 0;
   this->perf_diag_max_flush_us_ = 0;
   this->perf_diag_max_tx_us_ = 0;
+  this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
   this->perf_diag_total_flush_us_ = 0;
   this->perf_diag_total_tx_us_ = 0;
+}
+
+void CFXLightOutput::note_show_request() {
+  if (this->perf_diag_last_show_request_us_ == 0) {
+    this->perf_diag_last_show_request_us_ = micros();
+  }
 }
 
 // Query the RMT default clock source frequency (varies by chip variant)
@@ -1069,6 +1077,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 
   if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
+    uint32_t queue_us = 0;
+    if (this->perf_diag_last_show_request_us_ != 0) {
+      queue_us = write_start_us - this->perf_diag_last_show_request_us_;
+      this->perf_diag_total_queue_us_ += queue_us;
+      if (queue_us > this->perf_diag_max_queue_us_) {
+        this->perf_diag_max_queue_us_ = queue_us;
+      }
+    }
+    this->perf_diag_last_show_request_us_ = 0;
     const uint32_t write_us = micros() - write_start_us;
     this->perf_diag_total_write_us_ += write_us;
     this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
@@ -1105,11 +1122,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_tx_ms =
           (float)(this->perf_diag_total_tx_us_ / this->perf_diag_flush_count_) /
           1000.0f;
+      const float avg_queue_ms =
+          (float)(this->perf_diag_total_queue_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
 
       ESP_LOGI(TAG,
-               "[%s] IO:%s | Write: %.2f/%.2fms | Flush: %.2f/%.2fms | TX: "
-               "%.2f/%.2fms | Calls:%u",
+               "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
+               "%.2f/%.2fms | TX: %.2f/%.2fms | Calls:%u",
                light_name, transport_name,
+               avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
                avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
                avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
                avg_tx_ms, (float)this->perf_diag_max_tx_us_ / 1000.0f,

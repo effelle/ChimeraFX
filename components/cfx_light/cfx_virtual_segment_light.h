@@ -135,6 +135,8 @@ public:
     parent_->request_segment_flush();
   }
 
+  void note_show_request() { parent_->note_show_request(); }
+
   void set_turn_on_brightness(float brightness) {
     this->turn_on_defaults_.has_brightness = true;
     this->turn_on_defaults_.brightness = brightness;

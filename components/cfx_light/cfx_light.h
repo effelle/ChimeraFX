@@ -163,6 +163,7 @@ public:
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
   void drain_outro_callbacks();
   bool has_outro() const { return !this->outro_cbs_.empty(); }
+  void note_show_request();
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
@@ -463,10 +464,13 @@ protected:
   uint32_t perf_diag_last_flush_total_us_{0};
   uint32_t perf_diag_last_flush_tx_us_{0};
   uint32_t perf_diag_last_log_ms_{0};
+  uint32_t perf_diag_last_show_request_us_{0};
   uint32_t perf_diag_flush_count_{0};
+  uint32_t perf_diag_max_queue_us_{0};
   uint32_t perf_diag_max_write_us_{0};
   uint32_t perf_diag_max_flush_us_{0};
   uint32_t perf_diag_max_tx_us_{0};
+  uint64_t perf_diag_total_queue_us_{0};
   uint64_t perf_diag_total_write_us_{0};
   uint64_t perf_diag_total_flush_us_{0};
   uint64_t perf_diag_total_tx_us_{0};

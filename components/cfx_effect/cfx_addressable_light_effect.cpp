@@ -2396,6 +2396,19 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   for (auto *sr : act_->segment_runners)
     sr->diagnostics.flush_log();
 
+  auto *light_output = this->get_light_state() != nullptr
+                           ? this->get_light_state()->get_output()
+                           : nullptr;
+  if (light_output != nullptr) {
+    if (this->is_virtual_segment_) {
+      auto *seg_out =
+          static_cast<cfx_light::CFXVirtualSegmentLight *>(light_output);
+      seg_out->note_show_request();
+    } else {
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(light_output);
+      cfx_out->note_show_request();
+    }
+  }
   it.schedule_show();
   chimera_fx::instance = nullptr;
 }
