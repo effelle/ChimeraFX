@@ -911,13 +911,21 @@ void CFXLightOutput::loop() {
   // Fix-2: Drain the coalesced segment flush.
   // request_segment_flush() sets a dirty flag instead of calling write_state()
   // immediately. Here we fire exactly ONE DMA call once all segments in the
-  // same ESPHome loop tick have contributed their updates (2ms window).
+  // same ESPHome loop tick have contributed their updates.
   if (this->seg_flush_pending_) {
+    const uint8_t contributed_count = static_cast<uint8_t>(
+        __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
+    const size_t segment_count = this->segment_light_states_.size();
+    uint32_t wait_target_ms = 2;
+    // If nearly all configured segments have already contributed, shorten the
+    // fallback window to cut fan-in latency without flushing on a lone segment.
+    if (segment_count >= 2 && contributed_count + 1 >= segment_count) {
+      wait_target_ms = 1;
+    }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
-    if (elapsed >= 2) {
+    if (elapsed >= wait_target_ms) {
       this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
-      this->seg_last_flush_count_ = static_cast<uint8_t>(
-          __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
+      this->seg_last_flush_count_ = contributed_count;
       this->seg_flush_pending_mask_ = 0;
       this->seg_flush_pending_ = false;
       this->seg_flush_first_ms_ = 0;
