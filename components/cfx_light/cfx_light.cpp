@@ -271,6 +271,20 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   return nullptr;
 }
 
+static bool has_active_segment_effects(CFXLightOutput *output) {
+  if (output == nullptr) {
+    return false;
+  }
+
+  for (auto *seg_state : output->get_segment_light_states()) {
+    if (resolve_active_cfx_effect(seg_state) != nullptr) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
     return 75;
@@ -917,6 +931,13 @@ void CFXLightOutput::loop() {
     const uint8_t contributed_count = static_cast<uint8_t>(
         __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
     const size_t segment_count = this->segment_light_states_.size();
+    if (has_active_segment_effects(this)) {
+      // Active segmented effects favor frame completeness over lower queue
+      // latency. request_segment_flush() already fires immediately at full
+      // contribution; here we only keep the pending frame alive until the last
+      // segment arrives.
+      return;
+    }
     uint32_t wait_target_ms = 2;
     // If nearly all configured segments have already contributed, shorten the
     // fallback window to cut fan-in latency without flushing on a lone segment.
