@@ -249,6 +249,27 @@ static bool perf_diag_enabled_for_effect(
   return false;
 }
 
+static chimera_fx::CFXAddressableLightEffect *
+resolve_perf_diag_effect(CFXLightOutput *output) {
+  if (output == nullptr) {
+    return nullptr;
+  }
+
+  auto *effect = resolve_active_cfx_effect(output->get_master_light_state());
+  if (perf_diag_enabled_for_effect(effect)) {
+    return effect;
+  }
+
+  for (auto *seg_state : output->get_segment_light_states()) {
+    effect = resolve_active_cfx_effect(seg_state);
+    if (perf_diag_enabled_for_effect(effect)) {
+      return effect;
+    }
+  }
+
+  return nullptr;
+}
+
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
     return 75;
@@ -998,7 +1019,7 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
 
 void CFXLightOutput::write_state(light::LightState *state) {
   chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
-      resolve_active_cfx_effect(this->state_parent_);
+      resolve_perf_diag_effect(this);
   const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
   const uint32_t write_start_us = perf_diag_enabled ? micros() : 0;
   this->perf_diag_last_flush_valid_ = false;
