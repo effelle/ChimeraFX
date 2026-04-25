@@ -481,6 +481,7 @@ protected:
   uint32_t perf_diag_max_wait_us_{0};
   uint32_t perf_diag_max_gate_us_{0};
   uint32_t perf_diag_max_gate_defers_{0};
+  uint32_t perf_diag_max_partial_missing_{0};
   uint32_t perf_diag_max_rmt_starve_count_{0};
   uint32_t perf_diag_max_rmt_reset_starve_count_{0};
   uint32_t perf_diag_max_seg_contrib_{0};
@@ -492,6 +493,7 @@ protected:
   uint64_t perf_diag_total_wait_us_{0};
   uint64_t perf_diag_total_gate_us_{0};
   uint64_t perf_diag_total_gate_defers_{0};
+  uint64_t perf_diag_total_partial_flushes_{0};
   uint64_t perf_diag_total_rmt_starve_count_{0};
   uint64_t perf_diag_total_rmt_reset_starve_count_{0};
   uint64_t perf_diag_total_rmt_callback_count_{0};

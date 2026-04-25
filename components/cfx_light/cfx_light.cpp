@@ -151,6 +151,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_wait_us_ = 0;
   this->perf_diag_max_gate_us_ = 0;
   this->perf_diag_max_gate_defers_ = 0;
+  this->perf_diag_max_partial_missing_ = 0;
   this->perf_diag_max_rmt_starve_count_ = 0;
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
   this->perf_diag_max_seg_contrib_ = 0;
@@ -162,6 +163,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_wait_us_ = 0;
   this->perf_diag_total_gate_us_ = 0;
   this->perf_diag_total_gate_defers_ = 0;
+  this->perf_diag_total_partial_flushes_ = 0;
   this->perf_diag_total_rmt_starve_count_ = 0;
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
@@ -931,16 +933,32 @@ void CFXLightOutput::loop() {
     const uint8_t contributed_count = static_cast<uint8_t>(
         __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
     const size_t segment_count = this->segment_light_states_.size();
+    const bool rgbw_segment_parent =
+        this->has_white_channel() && segment_count > 0;
     uint32_t wait_target_ms = 2;
-    // If nearly all configured segments have already contributed, shorten the
-    // fallback window to cut fan-in latency without flushing on a lone segment.
-    if (segment_count >= 2 && contributed_count + 1 >= segment_count) {
+    // RGBW segmented parents are visibly less tolerant of partial-frame
+    // presentation, so bias them a bit harder toward waiting for full 3/3
+    // convergence without ever blocking indefinitely.
+    if (rgbw_segment_parent) {
+      wait_target_ms = (segment_count >= 2 && contributed_count + 1 >= segment_count)
+                           ? 2
+                           : 3;
+    } else if (segment_count >= 2 && contributed_count + 1 >= segment_count) {
+      // If nearly all configured segments have already contributed, shorten the
+      // fallback window to cut fan-in latency without flushing on a lone segment.
       wait_target_ms = 1;
     }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
       this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
       this->seg_last_flush_count_ = contributed_count;
+      if (segment_count > contributed_count) {
+        const uint32_t missing = static_cast<uint32_t>(segment_count - contributed_count);
+        this->perf_diag_total_partial_flushes_++;
+        if (missing > this->perf_diag_max_partial_missing_) {
+          this->perf_diag_max_partial_missing_ = missing;
+        }
+      }
       this->seg_flush_pending_mask_ = 0;
       this->seg_flush_pending_ = false;
       this->seg_flush_first_ms_ = 0;
@@ -1295,6 +1313,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_gate_defers =
           (float)this->perf_diag_total_gate_defers_ /
           (float)this->perf_diag_flush_count_;
+      const float avg_partial_flushes =
+          (float)this->perf_diag_total_partial_flushes_ /
+          (float)this->perf_diag_flush_count_;
       const float avg_rmt_starve =
           (float)this->perf_diag_total_rmt_starve_count_ /
           (float)this->perf_diag_flush_count_;
@@ -1314,7 +1335,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
             TAG,
             "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
             "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Def: %.2f/%u | "
-            "Slot:%u | Stall: %.2f/%u (R:%.2f/%u) | Seg: %.2f/%u | Free:%u | Calls:%u",
+            "Part: %.2f/%u | Slot:%u | Stall: %.2f/%u (R:%.2f/%u) | Seg: %.2f/%u | Free:%u | Calls:%u",
             light_name, transport_name,
             avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
             avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
@@ -1323,6 +1344,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
             avg_gate_ms, (float)this->perf_diag_max_gate_us_ / 1000.0f,
             avg_gate_defers,
             static_cast<unsigned>(this->perf_diag_max_gate_defers_),
+            avg_partial_flushes,
+            static_cast<unsigned>(this->perf_diag_max_partial_missing_),
             static_cast<unsigned>(this->perf_diag_last_launch_slot_),
             avg_rmt_starve,
             static_cast<unsigned>(this->perf_diag_max_rmt_starve_count_),
