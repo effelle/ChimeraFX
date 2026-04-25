@@ -32,6 +32,14 @@ std::atomic<bool> CFXSequenceSelect::suppress_callback_{false};
 CFXSequence *CFXSequence::current_trigger_sequence_ = nullptr;
 
 namespace {
+template <typename T> static void release_vector_storage_(std::vector<T> &v) {
+  std::vector<T>().swap(v);
+}
+
+static void release_string_storage_(std::string &s) {
+  std::string().swap(s);
+}
+
 class SequenceTriggerContextGuard {
 public:
   explicit SequenceTriggerContextGuard(CFXSequence *seq)
@@ -261,23 +269,23 @@ void CFXRunPool::release(CFXSequence *seq) {
           child->runtime_parent_ = nullptr;
         }
       }
-      seq->runtime_children_.clear();
+      release_vector_storage_(seq->runtime_children_);
       seq->is_pool_owned_ = false;
       // Remove from global instances so it doesn't appear in stop_all() etc.
       auto &v = CFXSequence::instances;
       v.erase(std::remove(v.begin(), v.end(), seq), v.end());
       // Reset sequence state for next claim.
       seq->configured_light_count_ = 0;
-      seq->lights_.clear();
-      seq->on_reach_triggers_.clear();
-      seq->on_complete_triggers_.clear();
-      seq->on_stop_triggers_.clear();
-      seq->on_start_triggers_.clear();
-      seq->saved_states_.clear();
-      seq->pending_reach_triggers_.clear();
-      seq->fired_reach_triggers_.clear();
-      seq->strip_tag_ = "";
-      seq->effect_    = "";
+      release_vector_storage_(seq->lights_);
+      release_vector_storage_(seq->on_reach_triggers_);
+      release_vector_storage_(seq->on_complete_triggers_);
+      release_vector_storage_(seq->on_stop_triggers_);
+      release_vector_storage_(seq->on_start_triggers_);
+      release_vector_storage_(seq->saved_states_);
+      release_vector_storage_(seq->pending_reach_triggers_);
+      release_vector_storage_(seq->fired_reach_triggers_);
+      release_string_storage_(seq->strip_tag_);
+      release_string_storage_(seq->effect_);
       seq->speed_     = {};
       seq->intensity_ = {};
       seq->palette_   = {};
@@ -1211,6 +1219,12 @@ void CFXSequence::finalize_teardown_() {
     // LAST: fire on_complete — any chained cfx_set now wins with no
     // subsequent stop() able to undo the next step.
     this->report_event_complete();
+  }
+
+  if (!this->is_pool_owned_) {
+    release_vector_storage_(this->saved_states_);
+    release_vector_storage_(this->pending_reach_triggers_);
+    release_vector_storage_(this->fired_reach_triggers_);
   }
 
   if (this->is_pool_owned_ &&
