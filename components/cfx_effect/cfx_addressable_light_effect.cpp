@@ -1531,6 +1531,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       (now_ms - frame_budget_window_start_ms) >= 30) {
     frame_budget_window_start_ms = now_ms;
   }
+  const SPIDiagCensus diag_census = collect_spi_diag_census();
+  const bool enforce_frame_budget = diag_census.active_spi_effects > 0;
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
     uint32_t delta_ms = 0;
     if (this->act_->spi_diag_last_apply_ms != 0) {
@@ -1541,7 +1543,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (this->act_->spi_diag_heartbeat_logs < 8 &&
         (this->act_->spi_diag_heartbeat_logs == 0 || delta_ms > 25 ||
          this->act_->spi_diag_apply_logs == 6)) {
-      SPIDiagCensus diag_census = collect_spi_diag_census();
       ESP_LOGD(
           "cfx_seq",
           "SPI diag heartbeat[%u]: effect=%s act=%p dt=%ums totals(e=%u,se=%u) "
@@ -1559,23 +1560,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
   uint32_t budget_elapsed_ms = now_ms - frame_budget_window_start_ms;
-  if (!act_->mono_idle && budget_elapsed_ms > 22) {
+  if (enforce_frame_budget && !act_->mono_idle && budget_elapsed_ms > 22) {
     if (spi_budget_skip_logs < 8) {
-      SPIDiagCensus diag_census = collect_spi_diag_census();
-      if (diag_census.active_spi_effects > 0) {
-        ESP_LOGD("cfx_seq",
-                 "SPI diag budget-skip[%u]: effect=%s tag=%s elapsed=%ums "
-                 "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
-                 static_cast<unsigned>(spi_budget_skip_logs),
-                 this->act_->cached_runner_name.c_str(),
-                 this->act_->strip_tag.c_str(), budget_elapsed_ms,
-                 static_cast<unsigned>(diag_census.active_effects),
-                 static_cast<unsigned>(diag_census.active_segment_effects),
-                 static_cast<unsigned>(diag_census.active_spi_effects),
-                 static_cast<unsigned>(diag_census.bound_sequences),
-                 static_cast<unsigned>(diag_census.runner_count));
-        spi_budget_skip_logs++;
-      }
+      ESP_LOGD("cfx_seq",
+               "SPI diag budget-skip[%u]: effect=%s tag=%s elapsed=%ums "
+               "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
+               static_cast<unsigned>(spi_budget_skip_logs),
+               this->act_->cached_runner_name.c_str(),
+               this->act_->strip_tag.c_str(), budget_elapsed_ms,
+               static_cast<unsigned>(diag_census.active_effects),
+               static_cast<unsigned>(diag_census.active_segment_effects),
+               static_cast<unsigned>(diag_census.active_spi_effects),
+               static_cast<unsigned>(diag_census.bound_sequences),
+               static_cast<unsigned>(diag_census.runner_count));
+      spi_budget_skip_logs++;
     }
     ESP_LOGV("chimera_fx",
              "Frame Budget Exceeded (%ums), skipping render for '%s'",
