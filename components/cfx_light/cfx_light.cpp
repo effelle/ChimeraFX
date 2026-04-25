@@ -45,6 +45,15 @@ static const char *const TAG = "cfx_light";
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
+static uint32_t g_last_rmt_launch_us = 0;
+
+static uint32_t rmt_launch_stagger_gap_us() {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  return 300;
+#else
+  return 0;
+#endif
+}
 
 void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
   if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
@@ -139,6 +148,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_flush_us_ = 0;
   this->perf_diag_max_tx_us_ = 0;
   this->perf_diag_max_wait_us_ = 0;
+  this->perf_diag_max_gate_us_ = 0;
   this->perf_diag_max_rmt_starve_count_ = 0;
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
   this->perf_diag_max_seg_contrib_ = 0;
@@ -148,6 +158,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_flush_us_ = 0;
   this->perf_diag_total_tx_us_ = 0;
   this->perf_diag_total_wait_us_ = 0;
+  this->perf_diag_total_gate_us_ = 0;
   this->perf_diag_total_rmt_starve_count_ = 0;
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
@@ -269,20 +280,6 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   }
 
   return nullptr;
-}
-
-static bool has_active_segment_effects(CFXLightOutput *output) {
-  if (output == nullptr) {
-    return false;
-  }
-
-  for (auto *seg_state : output->get_segment_light_states()) {
-    if (resolve_active_cfx_effect(seg_state) != nullptr) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
@@ -931,13 +928,6 @@ void CFXLightOutput::loop() {
     const uint8_t contributed_count = static_cast<uint8_t>(
         __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
     const size_t segment_count = this->segment_light_states_.size();
-    if (has_active_segment_effects(this)) {
-      // Active segmented effects favor frame completeness over lower queue
-      // latency. request_segment_flush() already fires immediately at full
-      // contribution; here we only keep the pending frame alive until the last
-      // segment arrives.
-      return;
-    }
     uint32_t wait_target_ms = 2;
     // If nearly all configured segments have already contributed, shorten the
     // fallback window to cut fan-in latency without flushing on a lone segment.
@@ -1174,6 +1164,23 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->schedule_show();
     return;
   }
+
+  if (this->transport_ == TRANSPORT_RMT) {
+    const uint32_t stagger_gap_us = rmt_launch_stagger_gap_us();
+    if (stagger_gap_us > 0 && g_last_rmt_launch_us != 0) {
+      const uint32_t since_last_launch = now - g_last_rmt_launch_us;
+      if (since_last_launch < stagger_gap_us) {
+        const uint32_t gate_us = stagger_gap_us - since_last_launch;
+        this->perf_diag_total_gate_us_ += gate_us;
+        if (gate_us > this->perf_diag_max_gate_us_) {
+          this->perf_diag_max_gate_us_ = gate_us;
+        }
+        this->schedule_show();
+        return;
+      }
+    }
+  }
+
   this->last_refresh_ = now;
   this->mark_shown_();
 
@@ -1206,6 +1213,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
     esphome::App.feed_wdt();
     this->flush_spi_();
   } else {
+    const uint32_t launch_us = micros();
+    g_last_rmt_launch_us = launch_us;
     this->flush_rmt_();
   }
 
@@ -1267,6 +1276,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_wait_ms =
           (float)(this->perf_diag_total_wait_us_ / this->perf_diag_flush_count_) /
           1000.0f;
+      const float avg_gate_ms =
+          (float)(this->perf_diag_total_gate_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
       const float avg_rmt_starve =
           (float)this->perf_diag_total_rmt_starve_count_ /
           (float)this->perf_diag_flush_count_;
@@ -1285,13 +1297,14 @@ void CFXLightOutput::write_state(light::LightState *state) {
         ESP_LOGI(
             TAG,
             "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
-            "%.2f/%.2fms | Wait: %.2f/%.2fms | Stall: %.2f/%u (R:%.2f/%u) | "
+            "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Stall: %.2f/%u (R:%.2f/%u) | "
             "Seg: %.2f/%u | Free:%u | Calls:%u",
             light_name, transport_name,
             avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
             avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
             avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
             avg_wait_ms, (float)this->perf_diag_max_wait_us_ / 1000.0f,
+            avg_gate_ms, (float)this->perf_diag_max_gate_us_ / 1000.0f,
             avg_rmt_starve,
             static_cast<unsigned>(this->perf_diag_max_rmt_starve_count_),
             avg_rmt_reset_starve,
