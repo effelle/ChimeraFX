@@ -343,6 +343,7 @@ protected:
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
+  void reset_perf_diag_();
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;
@@ -458,6 +459,17 @@ protected:
   bool prev_master_state_{false};
   bool prev_master_defaults_state_{false};
   uint8_t tracked_brightness_{0};
+  bool perf_diag_last_flush_valid_{false};
+  uint32_t perf_diag_last_flush_total_us_{0};
+  uint32_t perf_diag_last_flush_tx_us_{0};
+  uint32_t perf_diag_last_log_ms_{0};
+  uint32_t perf_diag_flush_count_{0};
+  uint32_t perf_diag_max_write_us_{0};
+  uint32_t perf_diag_max_flush_us_{0};
+  uint32_t perf_diag_max_tx_us_{0};
+  uint64_t perf_diag_total_write_us_{0};
+  uint64_t perf_diag_total_flush_us_{0};
+  uint64_t perf_diag_total_tx_us_{0};
   CFXTurnOnDefaults turn_on_defaults_{};
 };
 

@@ -129,6 +129,19 @@ void CFXLightOutput::drain_outro_callbacks() {
   this->release_outro_callback_storage_();
 }
 
+void CFXLightOutput::reset_perf_diag_() {
+  this->perf_diag_last_flush_valid_ = false;
+  this->perf_diag_last_flush_total_us_ = 0;
+  this->perf_diag_last_flush_tx_us_ = 0;
+  this->perf_diag_flush_count_ = 0;
+  this->perf_diag_max_write_us_ = 0;
+  this->perf_diag_max_flush_us_ = 0;
+  this->perf_diag_max_tx_us_ = 0;
+  this->perf_diag_total_write_us_ = 0;
+  this->perf_diag_total_flush_us_ = 0;
+  this->perf_diag_total_tx_us_ = 0;
+}
+
 // Query the RMT default clock source frequency (varies by chip variant)
 static uint32_t rmt_resolution_hz() {
   uint32_t freq;
@@ -164,6 +177,26 @@ resolve_active_cfx_effect(light::LightState *state) {
   }
 
   return nullptr;
+}
+
+static bool perf_diag_enabled_for_effect(
+    chimera_fx::CFXAddressableLightEffect *effect) {
+  if (effect == nullptr) {
+    return false;
+  }
+  auto *act = effect->get_act();
+  if (act == nullptr) {
+    return false;
+  }
+  if (act->runner != nullptr && act->runner->getDebug()) {
+    return true;
+  }
+  for (auto *runner : act->segment_runners) {
+    if (runner != nullptr && runner->getDebug()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
@@ -894,6 +927,14 @@ void CFXLightOutput::request_segment_flush() {
 // --- Write State (Fire-and-Forget DMA) ---
 
 void CFXLightOutput::write_state(light::LightState *state) {
+  chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
+      resolve_active_cfx_effect(this->state_parent_);
+  const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
+  const uint32_t write_start_us = perf_diag_enabled ? micros() : 0;
+  this->perf_diag_last_flush_valid_ = false;
+  this->perf_diag_last_flush_total_us_ = 0;
+  this->perf_diag_last_flush_tx_us_ = 0;
+
   // 1. Master Mute: When segments are active, the Master LightState's
   // rendering pipeline is suppressed. The Master paints the entire strip with
   // its ON-state color (white) on every frame — this overwrites segment pixels
@@ -948,9 +989,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   this->status_clear_warning();
 
-  chimera_fx::CFXAddressableLightEffect *active_cfx_effect = nullptr;
   if (this->is_spi_transport() && this->outro_cbs_.empty()) {
-    active_cfx_effect = resolve_active_cfx_effect(this->state_parent_);
 #ifdef USE_CFX_SEQUENCE
     if (active_cfx_effect != nullptr &&
         active_cfx_effect->get_active_sequence() != nullptr) {
@@ -1028,11 +1067,64 @@ void CFXLightOutput::write_state(light::LightState *state) {
   } else {
     this->flush_rmt_();
   }
+
+  if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
+    const uint32_t write_us = micros() - write_start_us;
+    this->perf_diag_total_write_us_ += write_us;
+    this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
+    this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
+    this->perf_diag_flush_count_++;
+
+    if (write_us > this->perf_diag_max_write_us_) {
+      this->perf_diag_max_write_us_ = write_us;
+    }
+    if (this->perf_diag_last_flush_total_us_ > this->perf_diag_max_flush_us_) {
+      this->perf_diag_max_flush_us_ = this->perf_diag_last_flush_total_us_;
+    }
+    if (this->perf_diag_last_flush_tx_us_ > this->perf_diag_max_tx_us_) {
+      this->perf_diag_max_tx_us_ = this->perf_diag_last_flush_tx_us_;
+    }
+
+    const uint32_t now_ms = esphome::millis();
+    if (this->perf_diag_last_log_ms_ == 0) {
+      this->perf_diag_last_log_ms_ = now_ms;
+    } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
+               this->perf_diag_flush_count_ > 0) {
+      const char *light_name =
+          (this->state_parent_ != nullptr)
+              ? this->state_parent_->get_name().c_str()
+              : "<strip>";
+      const char *transport_name =
+          this->transport_ == TRANSPORT_SPI ? "SPI" : "RMT";
+      const float avg_write_ms =
+          (float)(this->perf_diag_total_write_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
+      const float avg_flush_ms =
+          (float)(this->perf_diag_total_flush_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
+      const float avg_tx_ms =
+          (float)(this->perf_diag_total_tx_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
+
+      ESP_LOGI(TAG,
+               "[%s] IO:%s | Write: %.2f/%.2fms | Flush: %.2f/%.2fms | TX: "
+               "%.2f/%.2fms | Calls:%u",
+               light_name, transport_name,
+               avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
+               avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
+               avg_tx_ms, (float)this->perf_diag_max_tx_us_ / 1000.0f,
+               static_cast<unsigned>(this->perf_diag_flush_count_));
+
+      this->reset_perf_diag_();
+      this->perf_diag_last_log_ms_ = now_ms;
+    }
+  }
 }
 
 // --- RMT Transport Flush ---
 
 void CFXLightOutput::flush_rmt_() {
+  const uint32_t flush_start_us = micros();
   // Wait for previous DMA transmission to complete (safety valve)
   // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
   int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
@@ -1095,6 +1187,9 @@ void CFXLightOutput::flush_rmt_() {
     return;
   }
   this->status_clear_warning();
+  this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
+  this->perf_diag_last_flush_tx_us_ = 0;
+  this->perf_diag_last_flush_valid_ = true;
 }
 
 // --- SPI Transport Flush ---
@@ -1214,6 +1309,9 @@ void CFXLightOutput::flush_spi_() {
     this->spi_tx_in_flight_ = false;
     this->spi_last_flush_ms_ = esphome::millis();
     this->status_clear_warning();
+    this->perf_diag_last_flush_total_us_ = total_us;
+    this->perf_diag_last_flush_tx_us_ = tx_us;
+    this->perf_diag_last_flush_valid_ = true;
   }
 }
 
