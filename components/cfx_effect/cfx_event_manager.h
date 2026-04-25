@@ -35,11 +35,7 @@ public:
     }
   }
 
-  void add_known_tag(const std::string &tag) {
-    for (const auto &t : this->known_tags_)
-      if (t == tag) return;
-    this->known_tags_.push_back(tag);
-  }
+  void add_known_tag(const std::string &tag) { (void) tag; }
 
   void fire_event(const char *type) {
     if (!this->ha_events_enabled_) return;
@@ -175,8 +171,6 @@ protected:
   esphome::event::Event *event_entity_{nullptr};
   std::map<std::string, esphome::event::Event *> strip_entities_;
   bool ha_events_enabled_{true};
-  bool discovery_done_{false};
-  std::vector<std::string> known_tags_;
   std::vector<std::string> disabled_tags_;
 
   static constexpr uint8_t DEFERRED_QUEUE_SIZE = 64;
