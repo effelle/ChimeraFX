@@ -138,10 +138,50 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_write_us_ = 0;
   this->perf_diag_max_flush_us_ = 0;
   this->perf_diag_max_tx_us_ = 0;
+  this->perf_diag_max_wait_us_ = 0;
+  this->perf_diag_max_rmt_starve_count_ = 0;
+  this->perf_diag_max_rmt_reset_starve_count_ = 0;
+  this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
   this->perf_diag_total_flush_us_ = 0;
   this->perf_diag_total_tx_us_ = 0;
+  this->perf_diag_total_wait_us_ = 0;
+  this->perf_diag_total_rmt_starve_count_ = 0;
+  this->perf_diag_total_rmt_reset_starve_count_ = 0;
+  this->perf_diag_total_rmt_callback_count_ = 0;
+}
+
+void CFXLightOutput::reset_rmt_encoder_diag_() {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  this->params_.diag_callback_count = 0;
+  this->params_.diag_starve_count = 0;
+  this->params_.diag_reset_starve_count = 0;
+  this->params_.diag_min_symbols_free = UINT32_MAX;
+#endif
+}
+
+void CFXLightOutput::harvest_rmt_encoder_diag_() {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  const uint32_t callback_count = this->params_.diag_callback_count;
+  const uint32_t starve_count = this->params_.diag_starve_count;
+  const uint32_t reset_starve_count = this->params_.diag_reset_starve_count;
+  const uint32_t min_symbols_free = this->params_.diag_min_symbols_free;
+
+  this->perf_diag_total_rmt_callback_count_ += callback_count;
+  this->perf_diag_total_rmt_starve_count_ += starve_count;
+  this->perf_diag_total_rmt_reset_starve_count_ += reset_starve_count;
+
+  if (starve_count > this->perf_diag_max_rmt_starve_count_) {
+    this->perf_diag_max_rmt_starve_count_ = starve_count;
+  }
+  if (reset_starve_count > this->perf_diag_max_rmt_reset_starve_count_) {
+    this->perf_diag_max_rmt_reset_starve_count_ = reset_starve_count;
+  }
+  if (min_symbols_free < this->perf_diag_min_rmt_symbols_free_) {
+    this->perf_diag_min_rmt_symbols_free_ = min_symbols_free;
+  }
+#endif
 }
 
 void CFXLightOutput::note_show_request() {
@@ -314,9 +354,14 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
   auto *params = static_cast<LedParams *>(arg);
   const auto *bytes = static_cast<const uint8_t *>(data);
   size_t index = symbols_written / RMT_SYMBOLS_PER_BYTE;
+  params->diag_callback_count++;
+  if (symbols_free < params->diag_min_symbols_free) {
+    params->diag_min_symbols_free = symbols_free;
+  }
 
   if (index < size) {
     if (symbols_free < RMT_SYMBOLS_PER_BYTE) {
+      params->diag_starve_count++;
       return 0;
     }
     for (size_t i = 0; i < RMT_SYMBOLS_PER_BYTE; i++) {
@@ -335,6 +380,7 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 
   // Send reset pulse
   if (symbols_free < 1) {
+    params->diag_reset_starve_count++;
     return 0;
   }
   symbols[0] = params->reset;
@@ -501,6 +547,8 @@ void CFXLightOutput::setup_rmt_() {
     this->mark_failed();
     return;
   }
+
+  this->reset_rmt_encoder_diag_();
 }
 
 // --- SPI Transport Setup ---
@@ -1125,16 +1173,49 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const float avg_queue_ms =
           (float)(this->perf_diag_total_queue_us_ / this->perf_diag_flush_count_) /
           1000.0f;
+      const float avg_wait_ms =
+          (float)(this->perf_diag_total_wait_us_ / this->perf_diag_flush_count_) /
+          1000.0f;
+      const float avg_rmt_starve =
+          (float)this->perf_diag_total_rmt_starve_count_ /
+          (float)this->perf_diag_flush_count_;
+      const float avg_rmt_reset_starve =
+          (float)this->perf_diag_total_rmt_reset_starve_count_ /
+          (float)this->perf_diag_flush_count_;
 
-      ESP_LOGI(TAG,
-               "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
-               "%.2f/%.2fms | TX: %.2f/%.2fms | Calls:%u",
-               light_name, transport_name,
-               avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
-               avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
-               avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
-               avg_tx_ms, (float)this->perf_diag_max_tx_us_ / 1000.0f,
-               static_cast<unsigned>(this->perf_diag_flush_count_));
+      if (this->transport_ == TRANSPORT_RMT) {
+        const uint32_t min_symbols_free =
+            (this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX)
+                ? 0
+                : this->perf_diag_min_rmt_symbols_free_;
+        ESP_LOGI(
+            TAG,
+            "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
+            "%.2f/%.2fms | Wait: %.2f/%.2fms | Stall: %.2f/%u (R:%.2f/%u) | "
+            "Free:%u | Calls:%u",
+            light_name, transport_name,
+            avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
+            avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
+            avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
+            avg_wait_ms, (float)this->perf_diag_max_wait_us_ / 1000.0f,
+            avg_rmt_starve,
+            static_cast<unsigned>(this->perf_diag_max_rmt_starve_count_),
+            avg_rmt_reset_starve,
+            static_cast<unsigned>(
+                this->perf_diag_max_rmt_reset_starve_count_),
+            static_cast<unsigned>(min_symbols_free),
+            static_cast<unsigned>(this->perf_diag_flush_count_));
+      } else {
+        ESP_LOGI(TAG,
+                 "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | "
+                 "Flush: %.2f/%.2fms | TX: %.2f/%.2fms | Calls:%u",
+                 light_name, transport_name,
+                 avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
+                 avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
+                 avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
+                 avg_tx_ms, (float)this->perf_diag_max_tx_us_ / 1000.0f,
+                 static_cast<unsigned>(this->perf_diag_flush_count_));
+      }
 
       this->reset_perf_diag_();
       this->perf_diag_last_log_ms_ = now_ms;
@@ -1152,13 +1233,21 @@ void CFXLightOutput::flush_rmt_() {
   if (timeout_ms < 15)
     timeout_ms = 15; // Minimum 15ms
 
+  const uint32_t wait_start_us = micros();
   esp_err_t error = rmt_tx_wait_all_done(this->channel_, timeout_ms);
+  const uint32_t wait_us = micros() - wait_start_us;
+  this->perf_diag_total_wait_us_ += wait_us;
+  if (wait_us > this->perf_diag_max_wait_us_) {
+    this->perf_diag_max_wait_us_ = wait_us;
+  }
   if (error != ESP_OK) {
     ESP_LOGE(TAG, "RMT TX timeout (Wait: %dms, LEDs: %d)", timeout_ms,
              this->num_leds_);
     this->status_set_warning();
     return;
   }
+  this->harvest_rmt_encoder_diag_();
+  this->reset_rmt_encoder_diag_();
 
   // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)

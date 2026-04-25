@@ -143,6 +143,12 @@ struct LedParams {
   rmt_symbol_word_t bit0;
   rmt_symbol_word_t bit1;
   rmt_symbol_word_t reset;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  volatile uint32_t diag_callback_count{0};
+  volatile uint32_t diag_starve_count{0};
+  volatile uint32_t diag_reset_starve_count{0};
+  volatile uint32_t diag_min_symbols_free{UINT32_MAX};
+#endif
 };
 
 class CFXLightOutput : public light::AddressableLight {
@@ -345,6 +351,8 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
+  void reset_rmt_encoder_diag_();
+  void harvest_rmt_encoder_diag_();
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;
@@ -470,10 +478,18 @@ protected:
   uint32_t perf_diag_max_write_us_{0};
   uint32_t perf_diag_max_flush_us_{0};
   uint32_t perf_diag_max_tx_us_{0};
+  uint32_t perf_diag_max_wait_us_{0};
+  uint32_t perf_diag_max_rmt_starve_count_{0};
+  uint32_t perf_diag_max_rmt_reset_starve_count_{0};
+  uint32_t perf_diag_min_rmt_symbols_free_{UINT32_MAX};
   uint64_t perf_diag_total_queue_us_{0};
   uint64_t perf_diag_total_write_us_{0};
   uint64_t perf_diag_total_flush_us_{0};
   uint64_t perf_diag_total_tx_us_{0};
+  uint64_t perf_diag_total_wait_us_{0};
+  uint64_t perf_diag_total_rmt_starve_count_{0};
+  uint64_t perf_diag_total_rmt_reset_starve_count_{0};
+  uint64_t perf_diag_total_rmt_callback_count_{0};
   CFXTurnOnDefaults turn_on_defaults_{};
 };
 
