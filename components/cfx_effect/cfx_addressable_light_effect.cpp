@@ -139,9 +139,11 @@ template <typename T> static void release_vector_storage(std::vector<T> &v) {
 
 RuntimeDiagCensus collect_runtime_diag_census() {
   RuntimeDiagCensus census;
+  std::vector<cfx_light::CFXLightOutput *> seen_outputs;
 
   auto collect_effect_group =
-      [&census](const std::vector<CFXAddressableLightEffect *> &group) {
+      [&census, &seen_outputs](
+          const std::vector<CFXAddressableLightEffect *> &group) {
         for (auto *inst : group) {
           if (inst == nullptr) {
             continue;
@@ -150,22 +152,24 @@ RuntimeDiagCensus collect_runtime_diag_census() {
             census.active_activations++;
           }
           census.runner_count += inst->get_runner_count();
+
+          auto *out = inst->get_diag_output();
+          if (out == nullptr ||
+              std::find(seen_outputs.begin(), seen_outputs.end(), out) !=
+                  seen_outputs.end()) {
+            continue;
+          }
+          seen_outputs.push_back(out);
+          const size_t callback_count = out->get_outro_callback_count();
+          if (callback_count > 0) {
+            census.outputs_with_outro++;
+            census.outro_callbacks += callback_count;
+          }
         }
       };
 
   collect_effect_group(CFXAddressableLightEffect::all_effects);
   collect_effect_group(CFXAddressableLightEffect::all_segment_effects);
-
-  for (auto *out : cfx_light::CFXLightOutput::get_instances()) {
-    if (out == nullptr) {
-      continue;
-    }
-    const size_t callback_count = out->get_outro_callback_count();
-    if (callback_count > 0) {
-      census.outputs_with_outro++;
-      census.outro_callbacks += callback_count;
-    }
-  }
 
 #ifdef USE_CFX_SEQUENCE
   for (auto *seq : cfx_sequence::CFXSequence::instances) {
@@ -187,10 +191,14 @@ RuntimeDiagCensus collect_runtime_diag_census() {
     if (seq->has_pending_duration_completion()) {
       census.pending_duration_completions++;
     }
-    census.saved_states += seq->get_saved_state_count();
-    census.saved_state_capacity += seq->get_saved_state_capacity();
-    census.monitored_lights += seq->get_monitored_light_count();
-    census.owned_lights += seq->get_owned_light_count();
+    if (seq->is_running() || seq->has_pending_teardown() ||
+        seq->has_pending_triggers() || seq->has_pending_duration_completion() ||
+        seq->is_pool_owned()) {
+      census.saved_states += seq->get_saved_state_count();
+      census.saved_state_capacity += seq->get_saved_state_capacity();
+      census.monitored_lights += seq->get_monitored_light_count();
+      census.owned_lights += seq->get_owned_light_count();
+    }
   }
 #endif
 
