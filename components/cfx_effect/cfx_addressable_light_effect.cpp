@@ -506,14 +506,15 @@ void CFXAddressableLightEffect::start() {
       // Virtual segment lights are single-runner by design.
       // We check the flag injected by Python codegen to avoid illegal
       // dynamic_cast (-fno-rtti)
-      std::vector<cfx_light::CFXSegmentDef> seg_defs;
+      const std::vector<cfx_light::CFXSegmentDef> *seg_defs = nullptr;
       if (!this->is_virtual_segment_) {
         auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
-        seg_defs = cfx_out->get_segment_defs();
+        seg_defs = &cfx_out->get_segment_defs();
       }
 
-      if (!seg_defs.empty() && !act_->segments_initialized) {
-        for (const auto &def : seg_defs) {
+      if (seg_defs != nullptr && !seg_defs->empty() &&
+          !act_->segments_initialized) {
+        for (const auto &def : *seg_defs) {
           auto *r = new CFXRunner(it);
           if (r == nullptr) {
             ESP_LOGE("chimera_fx",
