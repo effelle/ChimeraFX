@@ -1013,6 +1013,26 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
     this->seg_flush_pending_ = true;
     this->seg_flush_first_ms_ = esphome::millis();
   }
+
+  const size_t segment_count = this->segment_light_states_.size();
+  if (segment_count == 0 || segment_count > 8) {
+    return;
+  }
+
+  const uint8_t expected_mask =
+      static_cast<uint8_t>((1u << segment_count) - 1u);
+  if (this->seg_flush_pending_mask_ != expected_mask) {
+    return;
+  }
+
+  // All configured segment entities have already contributed to this frame.
+  // Flush immediately instead of idling in the 2ms coalescing window.
+  this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
+  this->seg_last_flush_count_ = static_cast<uint8_t>(segment_count);
+  this->seg_flush_pending_mask_ = 0;
+  this->seg_flush_pending_ = false;
+  this->seg_flush_first_ms_ = 0;
+  this->write_state(nullptr);
 }
 
 // --- Write State (Fire-and-Forget DMA) ---
