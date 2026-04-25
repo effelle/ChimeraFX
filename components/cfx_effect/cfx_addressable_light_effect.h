@@ -184,6 +184,16 @@ public:
     uint64_t idle_total_frame_us{0};
     uint32_t idle_jitter_count{0};
     uint32_t idle_target_frame_us{16666}; // updated from update_interval_ on first frame
+    uint32_t perf_log_ms{0};
+    uint32_t perf_apply_count{0};
+    uint32_t perf_apply_max_total_us{0};
+    uint32_t perf_apply_max_prep_us{0};
+    uint32_t perf_apply_max_dispatch_us{0};
+    uint32_t perf_apply_max_post_us{0};
+    uint64_t perf_apply_total_us{0};
+    uint64_t perf_apply_prep_us{0};
+    uint64_t perf_apply_dispatch_us{0};
+    uint64_t perf_apply_post_us{0};
   };
 
   // ── CFXEffectConfig — codegen-time config for non-virtual-segment effects ──

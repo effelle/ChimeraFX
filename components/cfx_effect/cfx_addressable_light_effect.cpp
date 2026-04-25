@@ -1630,6 +1630,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   } else if (this->local_debug_switch_()) {
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
+  const bool apply_perf_enabled = debug_active;
+  const uint32_t apply_start_us = apply_perf_enabled ? cfx_micros() : 0;
+  uint32_t apply_dispatch_us = 0;
+  uint32_t apply_post_us = 0;
 
   bool force_white_requested =
       this->has_force_white_preset_()
@@ -1870,6 +1874,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   if (!skip_service) {
+    const uint32_t dispatch_start_us = apply_perf_enabled ? cfx_micros() : 0;
     CFXScheduler::get().set_force_sequential(
         should_force_spi_sequential_dispatch());
 
@@ -1931,7 +1936,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       }
 #endif
     }
+    if (apply_perf_enabled) {
+      apply_dispatch_us = cfx_micros() - dispatch_start_us;
+    }
   }
+  const uint32_t post_start_us = apply_perf_enabled ? cfx_micros() : 0;
 
 #ifdef USE_CFX_SEQUENCE
   // CFX-run: Check effect_complete_ regardless of skip_service so that
@@ -2317,6 +2326,66 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         // CFX-043: Feed WDT while scrubbing large strips with many segments
         esphome::App.feed_wdt();
       }
+    }
+  }
+
+  if (apply_perf_enabled) {
+    apply_post_us = cfx_micros() - post_start_us;
+    const uint32_t apply_total_us = cfx_micros() - apply_start_us;
+    const uint32_t apply_prep_us =
+        (apply_total_us > (apply_dispatch_us + apply_post_us))
+            ? (apply_total_us - apply_dispatch_us - apply_post_us)
+            : 0;
+
+    act_->perf_apply_total_us += apply_total_us;
+    act_->perf_apply_prep_us += apply_prep_us;
+    act_->perf_apply_dispatch_us += apply_dispatch_us;
+    act_->perf_apply_post_us += apply_post_us;
+    act_->perf_apply_count++;
+
+    if (apply_total_us > act_->perf_apply_max_total_us)
+      act_->perf_apply_max_total_us = apply_total_us;
+    if (apply_prep_us > act_->perf_apply_max_prep_us)
+      act_->perf_apply_max_prep_us = apply_prep_us;
+    if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
+      act_->perf_apply_max_dispatch_us = apply_dispatch_us;
+    if (apply_post_us > act_->perf_apply_max_post_us)
+      act_->perf_apply_max_post_us = apply_post_us;
+
+    const uint32_t now_ms = cfx_millis();
+    if (act_->perf_log_ms == 0) {
+      act_->perf_log_ms = now_ms;
+    } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
+               act_->perf_apply_count > 0) {
+      const float avg_total_ms =
+          (float)(act_->perf_apply_total_us / act_->perf_apply_count) / 1000.0f;
+      const float avg_prep_ms =
+          (float)(act_->perf_apply_prep_us / act_->perf_apply_count) / 1000.0f;
+      const float avg_dispatch_ms =
+          (float)(act_->perf_apply_dispatch_us / act_->perf_apply_count) /
+          1000.0f;
+      const float avg_post_ms =
+          (float)(act_->perf_apply_post_us / act_->perf_apply_count) / 1000.0f;
+
+      ESP_LOGI("chimera_fx",
+               "[%s] Apply: %.2f/%.2fms | Prep: %.2f/%.2fms | Dispatch: "
+               "%.2f/%.2fms | Post: %.2f/%.2fms",
+               act_->cached_runner_name.c_str(), avg_total_ms,
+               (float)act_->perf_apply_max_total_us / 1000.0f, avg_prep_ms,
+               (float)act_->perf_apply_max_prep_us / 1000.0f, avg_dispatch_ms,
+               (float)act_->perf_apply_max_dispatch_us / 1000.0f, avg_post_ms,
+               (float)act_->perf_apply_max_post_us / 1000.0f);
+
+      act_->perf_log_ms = now_ms;
+      act_->perf_apply_count = 0;
+      act_->perf_apply_total_us = 0;
+      act_->perf_apply_prep_us = 0;
+      act_->perf_apply_dispatch_us = 0;
+      act_->perf_apply_post_us = 0;
+      act_->perf_apply_max_total_us = 0;
+      act_->perf_apply_max_prep_us = 0;
+      act_->perf_apply_max_dispatch_us = 0;
+      act_->perf_apply_max_post_us = 0;
     }
   }
 
