@@ -14,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #include <algorithm> // For std::min, std::max
+#include <array>
 #include <cmath>     // For powf
 #include <cstdint>
 #include <vector>
@@ -1404,48 +1405,69 @@ uint16_t mode_fire_dual(void) {
 // Gentle ocean waves - December 2019
 // OPTIMIZED: Pre-computed palette caches for fast lookup
 
-// Static palette caches - 256 entries each for all 3 WLED palettes
-static CRGB pacifica_cache_1[256];
-static CRGB pacifica_cache_2[256];
-static CRGB pacifica_cache_3[256]; // WLED palette 3 (blue-purple)
-// audit 4.2: removed file-scope pacifica_caches_initialized — each runner now
-// tracks its own flag via instance->pacifica_initialized_ so that multiple
-// strips do not share initialisation state.
+// Flash-resident palette caches - 256 entries each for all 3 WLED palettes
+using PacificaPalette = std::array<uint32_t, 16>;
+using PacificaCache = std::array<uint32_t, 256>;
 
-// Initialize palette caches for the calling runner (idempotent per runner).
-static void pacifica_init_caches(CFXRunner *runner) {
-  if (runner->pacifica_initialized_)
-    return;
+static constexpr uint32_t pacifica_blend(uint32_t c1, uint32_t c2,
+                                         uint8_t amount_of_c2) {
+  const uint8_t amount_of_c1 = 255 - amount_of_c2;
+  const uint8_t r1 = (c1 >> 16) & 0xFF;
+  const uint8_t g1 = (c1 >> 8) & 0xFF;
+  const uint8_t b1 = c1 & 0xFF;
+  const uint8_t r2 = (c2 >> 16) & 0xFF;
+  const uint8_t g2 = (c2 >> 8) & 0xFF;
+  const uint8_t b2 = c2 & 0xFF;
+  const uint8_t r = ((uint16_t)r1 * amount_of_c1 +
+                     (uint16_t)r2 * amount_of_c2) >> 8;
+  const uint8_t g = ((uint16_t)g1 * amount_of_c1 +
+                     (uint16_t)g2 * amount_of_c2) >> 8;
+  const uint8_t b = ((uint16_t)b1 * amount_of_c1 +
+                     (uint16_t)b2 * amount_of_c2) >> 8;
+  return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
 
-  // Palette 1: Deep ocean blues transitioning to cyan-green (WLED
-  // pacifica_palette_1)
-  static const CRGBPalette16 pal1 = {0x000507, 0x000409, 0x00030B, 0x00030D,
-                                     0x000210, 0x000212, 0x000114, 0x000117,
-                                     0x000019, 0x00001C, 0x000026, 0x000031,
-                                     0x00003B, 0x000046, 0x14554B, 0x28AA50};
-
-  // Palette 2: Similar with different cyan-green highlights (WLED
-  // pacifica_palette_2)
-  static const CRGBPalette16 pal2 = {0x000507, 0x000409, 0x00030B, 0x00030D,
-                                     0x000210, 0x000212, 0x000114, 0x000117,
-                                     0x000019, 0x00001C, 0x000026, 0x000031,
-                                     0x00003B, 0x000046, 0x0C5F52, 0x19BE5F};
-
-  // Palette 3: Blue-purple (WLED pacifica_palette_3) - used for layers 3
-  // and 4
-  static const CRGBPalette16 pal3 = {0x000208, 0x00030E, 0x000514, 0x00061A,
-                                     0x000820, 0x000927, 0x000B2D, 0x000C33,
-                                     0x000E39, 0x001040, 0x001450, 0x001860,
-                                     0x001C70, 0x002080, 0x1040BF, 0x2060FF};
-
-  // Pre-compute all 256 interpolated colors for each palette
-  for (int i = 0; i < 256; i++) {
-    pacifica_cache_1[i] = ColorFromPalette(pal1, i, 255, LINEARBLEND);
-    pacifica_cache_2[i] = ColorFromPalette(pal2, i, 255, LINEARBLEND);
-    pacifica_cache_3[i] = ColorFromPalette(pal3, i, 255, LINEARBLEND);
+static constexpr PacificaCache make_pacifica_cache(
+    const PacificaPalette &palette) {
+  PacificaCache cache{};
+  for (size_t i = 0; i < cache.size(); i++) {
+    const uint8_t hi4 = i >> 4;
+    const uint8_t lo4 = i & 0x0F;
+    cache[i] = (lo4 == 0)
+                   ? palette[hi4]
+                   : pacifica_blend(palette[hi4], palette[(hi4 + 1) & 0x0F],
+                                    lo4 << 4);
   }
+  return cache;
+}
 
-  runner->pacifica_initialized_ = true;
+static constexpr PacificaPalette PACIFICA_PALETTE_1 = {
+    0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212,
+    0x000114, 0x000117, 0x000019, 0x00001C, 0x000026, 0x000031,
+    0x00003B, 0x000046, 0x14554B, 0x28AA50};
+static constexpr PacificaPalette PACIFICA_PALETTE_2 = {
+    0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212,
+    0x000114, 0x000117, 0x000019, 0x00001C, 0x000026, 0x000031,
+    0x00003B, 0x000046, 0x0C5F52, 0x19BE5F};
+static constexpr PacificaPalette PACIFICA_PALETTE_3 = {
+    0x000208, 0x00030E, 0x000514, 0x00061A, 0x000820, 0x000927,
+    0x000B2D, 0x000C33, 0x000E39, 0x001040, 0x001450, 0x001860,
+    0x001C70, 0x002080, 0x1040BF, 0x2060FF};
+
+static const PacificaCache PACIFICA_CACHE_1 CFX_PROGMEM =
+    make_pacifica_cache(PACIFICA_PALETTE_1);
+static const PacificaCache PACIFICA_CACHE_2 CFX_PROGMEM =
+    make_pacifica_cache(PACIFICA_PALETTE_2);
+static const PacificaCache PACIFICA_CACHE_3 CFX_PROGMEM =
+    make_pacifica_cache(PACIFICA_PALETTE_3);
+
+static CRGB pacifica_cache_color(uint8_t cache_id, uint8_t index) {
+  const PacificaCache *cache = &PACIFICA_CACHE_3;
+  if (cache_id == 1)
+    cache = &PACIFICA_CACHE_1;
+  else if (cache_id == 2)
+    cache = &PACIFICA_CACHE_2;
+  return CRGB(cfx_pgm_read_dword(&(*cache)[index]));
 }
 
 // Helper: WLED-EXACT wave layer function
@@ -1476,16 +1498,8 @@ static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
   // WLED EXACT: unsigned sindex8 = scale16(sindex16, 240);
   unsigned sindex8 = scale16(sindex16, 240);
 
-  // Get color from cache (WLED uses ColorFromPalette directly)
-  CRGB *cache;
-  if (cache_id == 1)
-    cache = pacifica_cache_1;
-  else if (cache_id == 2)
-    cache = pacifica_cache_2;
-  else
-    cache = pacifica_cache_3;
-
-  CRGB layer = cache[sindex8];
+  // Get color from flash cache (WLED uses ColorFromPalette directly)
+  CRGB layer = pacifica_cache_color(cache_id, sindex8);
 
   // Apply brightness scaling
   layer.r = scale8(layer.r, bri);
@@ -1563,10 +1577,9 @@ static void pacifica_one_layer_zoomed(CRGB &c, uint16_t i, uint8_t cache_id,
   index_lo = scale8(index_lo, 240);
   index_hi = scale8(index_hi, 240);
 
-  // Get adjacent cache entries and LERP
-  CRGB *cache = (cache_id == 1) ? pacifica_cache_1 : pacifica_cache_2;
-  CRGB lo = cache[index_lo];
-  CRGB hi = cache[index_hi];
+  // Get adjacent flash-cache entries and LERP
+  CRGB lo = pacifica_cache_color(cache_id, index_lo);
+  CRGB hi = pacifica_cache_color(cache_id, index_hi);
 
   CRGB layer;
   layer.r = lo.r + (((int16_t)(hi.r - lo.r) * frac) >> 8);
@@ -1596,9 +1609,6 @@ uint16_t mode_ocean() {
 
   if (!instance)
     return 350;
-
-  // Initialize palette caches on first call for this runner (audit 4.2)
-  pacifica_init_caches(instance);
 
   int len = instance->_segment.length();
   uint8_t speed = instance->_segment.speed;
@@ -1640,25 +1650,25 @@ uint16_t mode_ocean() {
     CRGB c = CRGB(16, 48, 64);
 
     // Layer 1 (palette 1, forward)
-    CRGB layer1 = pacifica_cache_1[idx1];
+    CRGB layer1 = pacifica_cache_color(1, idx1);
     c.r = qadd8(c.r, scale8(layer1.r, bri1));
     c.g = qadd8(c.g, scale8(layer1.g, bri1));
     c.b = qadd8(c.b, scale8(layer1.b, bri1));
 
     // Layer 2 (palette 2, forward)
-    CRGB layer2 = pacifica_cache_2[idx2];
+    CRGB layer2 = pacifica_cache_color(2, idx2);
     c.r = qadd8(c.r, scale8(layer2.r, bri2));
     c.g = qadd8(c.g, scale8(layer2.g, bri2));
     c.b = qadd8(c.b, scale8(layer2.b, bri2));
 
     // Layer 3 (palette 3, backward)
-    CRGB layer3 = pacifica_cache_3[idx3];
+    CRGB layer3 = pacifica_cache_color(3, idx3);
     c.r = qadd8(c.r, scale8(layer3.r, bri3));
     c.g = qadd8(c.g, scale8(layer3.g, bri3));
     c.b = qadd8(c.b, scale8(layer3.b, bri3));
 
     // Layer 4 (palette 3, backward different freq)
-    CRGB layer4 = pacifica_cache_3[idx4];
+    CRGB layer4 = pacifica_cache_color(3, idx4);
     c.r = qadd8(c.r, scale8(layer4.r, bri4));
     c.g = qadd8(c.g, scale8(layer4.g, bri4));
     c.b = qadd8(c.b, scale8(layer4.b, bri4));

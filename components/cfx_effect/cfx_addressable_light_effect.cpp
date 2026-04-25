@@ -131,6 +131,10 @@ static SPIDiagCensus collect_spi_diag_census() {
 static bool should_force_spi_sequential_dispatch() {
   return collect_spi_diag_census().active_spi_effects > 0;
 }
+
+template <typename T> static void release_vector_storage(std::vector<T> &v) {
+  std::vector<T>().swap(v);
+}
 } // namespace
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
@@ -268,6 +272,10 @@ void CFXAddressableLightEffect::start() {
 
   // Initialise Core 0 dispatch task on first effect start (idempotent).
   CFXScheduler::get().setup();
+
+  if (auto *out = resolve_diag_output(this); out != nullptr && out->has_outro()) {
+    out->drain_outro_callbacks();
+  }
 
   // ── CFX-044: Heap floor guard ─────────────────────────────────────────────
   // Refuse to start a new effect if free heap is below the safety floor.
@@ -429,14 +437,14 @@ void CFXAddressableLightEffect::start() {
   // Defensive reset: ensure outro_start_time_ is clean for the next outro.
   act_->outro_start_time = 0;
   act_->active_transition_duration_ms = 0;
-  act_->intro_snapshot.clear();
-  act_->transition_target_snapshot.clear();
+  release_vector_storage(act_->intro_snapshot);
+  release_vector_storage(act_->transition_target_snapshot);
   act_->is_sequence_outro = false;
   act_->suppress_reach_event = false;
   act_->suppress_positional_events = false;
   act_->suppress_stop_event = false;
   act_->suppress_complete_event = false;
-  act_->outro_color_cache.clear();
+  release_vector_storage(act_->outro_color_cache);
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
   act_->hydraulics_particle_count = 0; // audit 3.3: fixed array, reset count
@@ -1021,10 +1029,10 @@ void CFXAddressableLightEffect::stop() {
   }
   this->trigger_on_complete();
 
-  // Clear intro snapshot — keep capacity for next start() to avoid realloc
-  // during the transition (audit 3.1).
-  act_->intro_snapshot.clear();
-  act_->transition_target_snapshot.clear();
+  // Transition snapshots are no longer useful once stop() begins; release
+  // capacity instead of holding full-strip buffers until act_ is deleted.
+  release_vector_storage(act_->intro_snapshot);
+  release_vector_storage(act_->transition_target_snapshot);
 
   // Restore the light default transition length that was suppressed in start()
   // so solid-color ON/OFF behavior works again after the effect stops.
@@ -2221,8 +2229,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // End transition when fully complete
     if (progress >= (1.0f + softness)) {
       act_->state = TRANSITION_NONE;
-      act_->intro_snapshot.clear();
-      act_->transition_target_snapshot.clear();
+      release_vector_storage(act_->intro_snapshot);
+      release_vector_storage(act_->transition_target_snapshot);
     }
   }
 

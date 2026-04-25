@@ -161,6 +161,7 @@ public:
   std::unique_ptr<light::LightTransformer> create_default_transition() override;
 
   void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
+  void drain_outro_callbacks();
   bool has_outro() const { return !this->outro_cbs_.empty(); }
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
@@ -338,6 +339,7 @@ protected:
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
+  void release_outro_callback_storage_();
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }

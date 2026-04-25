@@ -387,9 +387,6 @@ public:
   bool force_white_active_{false};
   float global_brightness_ = 1.0f;
   bool is_return_phase_{false};
-  // audit 4.2: per-runner flag so each strip initialises its own pacifica
-  // palette caches rather than relying on a shared file-scope static bool.
-  bool pacifica_initialized_{false};
   bool bake_brightness_ = false;
 
 

@@ -107,6 +107,28 @@ CFXLightOutput::create_default_transition() {
   return make_unique<light::LightTransitionTransformer>();
 }
 
+void CFXLightOutput::release_outro_callback_storage_() {
+  if (this->outro_cbs_.empty()) {
+    std::vector<OutroCallback>().swap(this->outro_cbs_);
+  }
+}
+
+void CFXLightOutput::drain_outro_callbacks() {
+  if (this->outro_cbs_.empty()) {
+    return;
+  }
+
+  for (auto it = this->outro_cbs_.begin(); it != this->outro_cbs_.end();) {
+    bool done = (*it)();
+    if (done) {
+      it = this->outro_cbs_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  this->release_outro_callback_storage_();
+}
+
 // Query the RMT default clock source frequency (varies by chip variant)
 static uint32_t rmt_resolution_hz() {
   uint32_t freq;
@@ -770,6 +792,7 @@ void CFXLightOutput::loop() {
         }
       }
       this->write_state(nullptr);
+      this->release_outro_callback_storage_();
     }
   }
 
