@@ -363,11 +363,6 @@ public:
   bool has_pending_teardown() const { return this->teardown_mode_ != TeardownMode::NONE; }
   bool has_pending_triggers() const { return !this->pending_reach_triggers_.empty(); }
   bool has_pending_duration_completion() const { return this->duration_completion_pending_; }
-  size_t get_saved_state_count() const { return this->saved_states_.size(); }
-  size_t get_saved_state_capacity() const { return this->saved_states_.capacity(); }
-  size_t get_monitored_light_count() const { return this->monitored_lights_.size(); }
-  size_t get_owned_light_count() const { return this->lights_.size(); }
-  bool is_pool_owned() const { return this->is_pool_owned_; }
   static std::vector<CFXSequence *> instances;
   bool owns_light(light::LightState *state) {
     for (auto *l : this->lights_) {

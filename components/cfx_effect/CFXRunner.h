@@ -302,6 +302,7 @@ public:
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }
   void setName(const char *name) { _name = name; }
+  const char *getModeName() const;
 
   void service();
   void reset();

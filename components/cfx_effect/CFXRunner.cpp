@@ -4407,7 +4407,9 @@ void CFXRunner::service() {
   _segment.call++;
 
   // Perform periodic logging if enabled
-  diagnostics.maybe_log(_name);
+  diagnostics.maybe_log(_name, this->getModeName(), _mode);
+
+  uint32_t service_start_us = cfx_micros();
 
   // --- VIRTUAL TIME TRACKING ---
   // Tracks elapsed time purely during active runner service.
@@ -4427,6 +4429,7 @@ void CFXRunner::service() {
       // We let the next loop iteration handle the main effect start to
       // ensure clean state.
     }
+    diagnostics.record_service_us(cfx_micros() - service_start_us);
     return;
   }
 
@@ -4638,6 +4641,179 @@ void CFXRunner::service() {
   default:
     mode_static();
     break;
+  }
+
+  diagnostics.record_service_us(cfx_micros() - service_start_us);
+}
+
+const char *CFXRunner::getModeName() const {
+  switch (_mode) {
+  case FX_MODE_STATIC:
+    return "Solid";
+  case FX_MODE_BLINK:
+    return "Blink";
+  case FX_MODE_BREATH:
+    return "Breathe";
+  case FX_MODE_COLOR_WIPE:
+    return "Wipe";
+  case FX_MODE_COLOR_WIPE_RANDOM:
+    return "Wipe Random";
+  case FX_MODE_COLOR_SWEEP:
+    return "Sweep";
+  case FX_MODE_RAINBOW:
+    return "Rainbow";
+  case FX_MODE_RAINBOW_CYCLE:
+    return "Rainbow Cycle";
+  case FX_MODE_RUNNING_LIGHTS:
+    return "Running Lights";
+  case FX_MODE_SAW:
+    return "Saw";
+  case FX_MODE_DISSOLVE:
+    return "Dissolve";
+  case FX_MODE_SPARKLE:
+    return "Sparkle";
+  case FX_MODE_FLASH_SPARKLE:
+    return "Flash Sparkle";
+  case FX_MODE_HYPER_SPARKLE:
+    return "Hyper Sparkle";
+  case FX_MODE_STROBE:
+    return "Strobe";
+  case FX_MODE_STROBE_RAINBOW:
+    return "Strobe Rainbow";
+  case FX_MODE_MULTI_STROBE:
+    return "Multi Strobe";
+  case FX_MODE_BLINK_RAINBOW:
+    return "Blink Rainbow";
+  case FX_MODE_CHASE_COLOR:
+    return "Chase";
+  case FX_MODE_AURORA:
+    return "Aurora";
+  case FX_MODE_SCANNER:
+    return "Scanner";
+  case FX_MODE_RAIN:
+    return "Rain";
+  case FX_MODE_RUNNING_DUAL:
+    return "Running Dual";
+  case FX_MODE_CHASE_MULTI:
+    return "Chase Multi";
+  case FX_MODE_SCANNER_DUAL:
+    return "Scanner Dual";
+  case FX_MODE_PRIDE_2015:
+    return "Pride 2015";
+  case FX_MODE_JUGGLE:
+    return "Juggle";
+  case FX_MODE_FIRE_2012:
+    return "Fire 2012";
+  case FX_MODE_BPM:
+    return "BPM";
+  case FX_MODE_COLORTWINKLE:
+    return "Colortwinkle";
+  case FX_MODE_METEOR:
+    return "Meteor";
+  case FX_MODE_RIPPLE:
+    return "Ripple";
+  case FX_MODE_GLITTER:
+    return "Glitter";
+  case FX_MODE_EXPLODING_FIREWORKS:
+    return "Fireworks";
+  case FX_MODE_BOUNCINGBALLS:
+    return "Bouncing Balls";
+  case FX_MODE_POPCORN:
+    return "Popcorn";
+  case FX_MODE_DRIP:
+    return "Drip";
+  case FX_MODE_PLASMA:
+    return "Plasma";
+  case FX_MODE_PERCENT:
+    return "Percent";
+  case FX_MODE_HEARTBEAT:
+    return "Heartbeat";
+  case FX_MODE_OCEAN:
+    return "Ocean";
+  case FX_MODE_SUNRISE:
+    return "Sunrise";
+  case FX_MODE_PHASED:
+    return "Phased";
+  case FX_MODE_NOISEPAL:
+    return "Noise Pal";
+  case FX_MODE_FLOW:
+    return "Flow";
+  case FX_MODE_DROPPING_TIME:
+    return "Dropping Time";
+  case FX_MODE_PERCENT_CENTER:
+    return "Percent Center";
+  case FX_MODE_FIRE_DUAL:
+    return "Fire Dual";
+  case FX_MODE_HEARTBEAT_CENTER:
+    return "Heartbeat Center";
+  case FX_MODE_KALEIDOS:
+    return "Kaleidos";
+  case FX_MODE_FOLLOW_ME:
+    return "Follow Me";
+  case FX_MODE_FOLLOW_US:
+    return "Follow Us";
+  case FX_MODE_ENERGY:
+    return "Energy";
+  case FX_MODE_CHAOS_THEORY:
+    return "Chaos Theory";
+  case FX_MODE_FLUID_RAIN:
+    return "Fluid Rain";
+  case FX_MODE_HORIZON_SWEEP:
+    return "Horizon Sweep";
+  case FX_MODE_CENTER_SWEEP:
+    return "Center Sweep";
+  case FX_MODE_GLITTER_SWEEP:
+    return "Glitter Sweep";
+  case FX_MODE_COLLIDER:
+    return "Collider";
+  case FX_MODE_TWIN_PULSE_SWEEP:
+    return "Twin Pulse Sweep";
+  case FX_MODE_TRANSMISSION:
+    return "Transmission";
+  case FX_MODE_FOUR_TIMES_THE_CHARM:
+    return "Four Times The Charm";
+  case FX_MODE_HYDRO_PULSE:
+    return "Hydro Pulse";
+  case FX_MODE_DROPPING_FILL:
+    return "Dropping Fill";
+  case FX_MODE_ASSEMBLY:
+    return "Assembly";
+  case FX_MODE_INERTIA_SWEEP:
+    return "Inertia Sweep";
+  case FX_MODE_SONAR_REVEAL:
+    return "Sonar Reveal";
+  case FX_MODE_VENETIAN:
+    return "Venetian";
+  case FX_MODE_CRYSTALLIZE:
+    return "Crystallize";
+  case FX_MODE_DEEP_BREATHE:
+    return "Deep Breathe";
+  case FX_MODE_MOIRE_SHIFT:
+    return "Moire Shift";
+  case FX_MODE_RESONANCE_FILL:
+    return "Resonance Fill";
+  case FX_MODE_TELEMETRY:
+    return "Telemetry";
+  case FX_MODE_STELLAR_DUST:
+    return "Stellar Dust";
+  case FX_MODE_INTERFERENCE:
+    return "Interference";
+  case FX_MODE_ECLIPSE:
+    return "Eclipse";
+  case FX_MODE_GAS_DISCHARGE:
+    return "Gas Discharge";
+  case FX_MODE_HARMONIC_SETTLE:
+    return "Harmonic Settle";
+  case FX_MODE_LITHOGRAPH:
+    return "Lithograph";
+  case FX_MODE_SEPARATOR:
+    return "Separator";
+  case FX_MODE_TIDAL_SURGE:
+    return "Tidal Surge";
+  case FX_MODE_IMPACT_FLARE:
+    return "Impact Flare";
+  default:
+    return "Unknown";
   }
 }
 
