@@ -471,6 +471,17 @@ void CFXLightOutput::setup() {
   if (this->is_failed())
     return;
 
+  // The LED strip keeps its last latched pixels across MCU resets until we
+  // actively transmit a new frame. Push one startup blackout frame so a reboot
+  // cannot leave the previous effect visually stuck on the strip until the
+  // first HA-driven state update arrives.
+  if (this->transport_ == TRANSPORT_SPI) {
+    this->flush_spi_();
+  } else {
+    this->flush_rmt_();
+  }
+  this->reset_perf_diag_();
+
   // --- Phase 2: Set up Event-Driven State Synchronization ---
   // Decoupled from the high-frequency DMA write loop to prevent recursion!
   if (this->master_light_state_ != nullptr) {
