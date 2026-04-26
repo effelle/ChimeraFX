@@ -501,6 +501,9 @@ protected:
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_last_flush_mask_{0};
   uint8_t seg_last_flush_count_{0};
+  uint16_t seg_generation_counter_{0};
+  uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
+  uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
   uint8_t perf_diag_pending_gate_defers_{0};
   uint8_t perf_diag_last_launch_slot_{0};
   CFXTurnOnDefaults turn_on_defaults_{};

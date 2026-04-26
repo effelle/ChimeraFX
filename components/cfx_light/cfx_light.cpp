@@ -287,6 +287,16 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   return nullptr;
 }
 
+static bool segment_participates_in_barrier(light::LightState *state) {
+  if (state == nullptr) {
+    return false;
+  }
+  if (!state->remote_values.is_on()) {
+    return false;
+  }
+  return resolve_active_cfx_effect(state) != nullptr;
+}
+
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
     return 75;
@@ -930,28 +940,40 @@ void CFXLightOutput::loop() {
   // immediately. Here we fire exactly ONE DMA call once all segments in the
   // same ESPHome loop tick have contributed their updates.
   if (this->seg_flush_pending_) {
-    const uint8_t contributed_count = static_cast<uint8_t>(
-        __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
     const size_t segment_count = this->segment_light_states_.size();
+    uint8_t active_count = 0;
+    uint8_t ready_count = 0;
+    for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
+      if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+        continue;
+      }
+      active_count++;
+      if (this->seg_request_generation_[i] != this->seg_flushed_generation_[i]) {
+        ready_count++;
+      }
+    }
     uint32_t wait_target_ms = 2;
     // Segmented parents are visibly less tolerant of partial-frame
     // presentation, so bias them harder toward waiting for full convergence
     // without ever blocking indefinitely.
     if (segment_count > 0) {
-      wait_target_ms = (segment_count >= 2 && contributed_count + 1 >= segment_count)
+      wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
                            ? 2
                            : 3;
     }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
       this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
-      this->seg_last_flush_count_ = contributed_count;
-      if (segment_count > contributed_count) {
-        const uint32_t missing = static_cast<uint32_t>(segment_count - contributed_count);
+      this->seg_last_flush_count_ = ready_count;
+      if (active_count > ready_count) {
+        const uint32_t missing = static_cast<uint32_t>(active_count - ready_count);
         this->perf_diag_total_partial_flushes_++;
         if (missing > this->perf_diag_max_partial_missing_) {
           this->perf_diag_max_partial_missing_ = missing;
         }
+      }
+      for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
+        this->seg_flushed_generation_[i] = this->seg_request_generation_[i];
       }
       this->seg_flush_pending_mask_ = 0;
       this->seg_flush_pending_ = false;
@@ -1036,6 +1058,11 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
     for (size_t i = 0; i < this->segment_light_states_.size() && i < 8; i++) {
       if (this->segment_light_states_[i] == state) {
         this->seg_flush_pending_mask_ |= static_cast<uint8_t>(1u << i);
+        this->seg_generation_counter_++;
+        if (this->seg_generation_counter_ == 0) {
+          this->seg_generation_counter_ = 1;
+        }
+        this->seg_request_generation_[i] = this->seg_generation_counter_;
         break;
       }
     }
@@ -1054,16 +1081,28 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
     return;
   }
 
-  const uint8_t expected_mask =
-      static_cast<uint8_t>((1u << segment_count) - 1u);
-  if (this->seg_flush_pending_mask_ != expected_mask) {
+  uint8_t active_count = 0;
+  uint8_t ready_count = 0;
+  for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
+    if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+      continue;
+    }
+    active_count++;
+    if (this->seg_request_generation_[i] != this->seg_flushed_generation_[i]) {
+      ready_count++;
+    }
+  }
+  if (active_count == 0 || ready_count != active_count) {
     return;
   }
 
-  // All configured segment entities have already contributed to this frame.
-  // Flush immediately instead of idling in the 2ms coalescing window.
+  // All active segment effect entities have already contributed to this frame.
+  // Flush immediately instead of idling in the fallback window.
   this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
-  this->seg_last_flush_count_ = static_cast<uint8_t>(segment_count);
+  this->seg_last_flush_count_ = ready_count;
+  for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
+    this->seg_flushed_generation_[i] = this->seg_request_generation_[i];
+  }
   this->seg_flush_pending_mask_ = 0;
   this->seg_flush_pending_ = false;
   this->seg_flush_first_ms_ = 0;
