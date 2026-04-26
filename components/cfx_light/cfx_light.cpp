@@ -933,20 +933,14 @@ void CFXLightOutput::loop() {
     const uint8_t contributed_count = static_cast<uint8_t>(
         __builtin_popcount(static_cast<unsigned>(this->seg_flush_pending_mask_)));
     const size_t segment_count = this->segment_light_states_.size();
-    const bool rgbw_segment_parent =
-        this->has_white_channel() && segment_count > 0;
     uint32_t wait_target_ms = 2;
-    // RGBW segmented parents are visibly less tolerant of partial-frame
-    // presentation, so bias them a bit harder toward waiting for full 3/3
-    // convergence without ever blocking indefinitely.
-    if (rgbw_segment_parent) {
+    // Segmented parents are visibly less tolerant of partial-frame
+    // presentation, so bias them harder toward waiting for full convergence
+    // without ever blocking indefinitely.
+    if (segment_count > 0) {
       wait_target_ms = (segment_count >= 2 && contributed_count + 1 >= segment_count)
                            ? 2
                            : 3;
-    } else if (segment_count >= 2 && contributed_count + 1 >= segment_count) {
-      // If nearly all configured segments have already contributed, shorten the
-      // fallback window to cut fan-in latency without flushing on a lone segment.
-      wait_target_ms = 1;
     }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
