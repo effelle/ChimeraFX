@@ -297,6 +297,34 @@ static bool segment_participates_in_barrier(light::LightState *state) {
   return resolve_active_cfx_effect(state) != nullptr;
 }
 
+static uint32_t resolve_presentation_min_interval_us(CFXLightOutput *output) {
+  if (output == nullptr) {
+    return 0;
+  }
+
+  uint32_t interval_us = 0;
+  auto consider_state = [&](light::LightState *state) {
+    auto *effect = resolve_active_cfx_effect(state);
+    if (effect == nullptr) {
+      return;
+    }
+    const uint32_t candidate = effect->get_presentation_min_interval_us();
+    if (candidate > interval_us) {
+      interval_us = candidate;
+    }
+  };
+
+  if (output->has_segments()) {
+    for (auto *seg_state : output->get_segment_light_states()) {
+      consider_state(seg_state);
+    }
+  } else {
+    consider_state(output->get_master_light_state());
+  }
+
+  return interval_us;
+}
+
 static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
   if (active_effects >= 8) {
     return 75;
@@ -963,14 +991,22 @@ void CFXLightOutput::loop() {
         ready_count++;
       }
     }
-    uint32_t wait_target_ms = 2;
+    const bool cadence_sensitive =
+        resolve_presentation_min_interval_us(this) >= 24000;
+    uint32_t wait_target_ms = cadence_sensitive ? 3 : 2;
     // Segmented parents are visibly less tolerant of partial-frame
     // presentation, so bias them harder toward waiting for full convergence
     // without ever blocking indefinitely.
     if (segment_count > 0) {
-      wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
-                           ? 2
-                           : 3;
+      if (cadence_sensitive) {
+        wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
+                             ? 3
+                             : 4;
+      } else {
+        wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
+                             ? 2
+                             : 3;
+      }
     }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
@@ -1224,8 +1260,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   // Protect from refreshing too often
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  uint32_t effective_refresh_limit_us = *this->max_refresh_rate_;
+  if (!this->has_segments()) {
+    const uint32_t cadence_limit_us = resolve_presentation_min_interval_us(this);
+    if (cadence_limit_us > effective_refresh_limit_us) {
+      effective_refresh_limit_us = cadence_limit_us;
+    }
+  }
+  if (effective_refresh_limit_us != 0 &&
+      (now - this->last_refresh_) < effective_refresh_limit_us) {
     this->schedule_show();
     return;
   }

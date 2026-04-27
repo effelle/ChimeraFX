@@ -837,6 +837,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "186 | Tidal Surge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Tidal_Surge.webm" type="video/webm">
+        </video>
         *A rhythmic, multi-waypoint oscillating sweep. The light surges forward and retreats in an organic sequence, creating a fluid, breathing personality before settling into a solid colored floor.*
 
     === "⚙️ Controls"
@@ -980,9 +983,37 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 184
         ```
 
+??? abstract "187 | Impact Flare | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Impact_Flare.webm" type="video/webm">
+        </video>
+        *An explosive, sudden burst of light. Inspired by a meteor strike, the strip detonates with instant brilliance before rapidly fading away.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used**: Static monochromatic floor, reserved for future refinements. |
+        | **Speed** | `128` | **Not used**: Fade duration is driven by the built-in intro/outro timing or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Impact Flare"
+              effect_id: 187
+        ```
+
 ??? abstract "188 | Monolith | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Monolith.webm" type="video/webm">
+        </video>
         *A pure architectural hold. The strip fades in as a single uninterrupted slab of light, remains perfectly still, and fades back out with the same restraint.*
 
     === "⚙️ Controls"
@@ -2209,14 +2240,17 @@ These short animations play once when the light is turned ON or OFF.
         </video>
     *A highly physical, spring-loaded transition. The light surges forward, overshoots the target brightness, and bounces back and forth with decaying momentum until it smoothly settles into its final solid state.*
 
+??? abstract "26 & 27 | Impact Flare / Center Squeeze | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Impact_Flare.webm" type="video/webm">
+        </video>
+    *The perfect effect for a dramatic reveal. **Impact Flare** - Pure kinetic energy. The effect triggers an instantaneous, violent flare that floods the strip. **Center Squeeze** - The light dissolves into a shockwave that quickly burns out into the void.*
+
 ??? abstract "11 | Inertia Sweep / Decelerate | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Inertia_Sweep.webm" type="video/webm">
         </video>
     *A precisely-eased transition that sweeps brightness in a single pass. **Inertia Sweep** features a hot leading edge that pulses ahead during the intro, while **Decelerate** provides a smooth, momentum-based fade to black during the outro.*
-
-??? abstract "20 | Interference / Interference Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: High </span>"
-    *A high-frequency shimmering transition. **Interference** uses colliding light waves for a vibrant startup. **Interference Fade** dissolves the main effect into a high-energy field that quickly sinks into darkness.*
 
 ??? abstract "24 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -2225,11 +2259,14 @@ These short animations play once when the light is turned ON or OFF.
     *A precise, technical construction. A razor-sharp bright cursor 'prints' the light onto the strip line by line with mechanical precision, constructng a solid trail until the entire segment is fully revealed.*
 
 ??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+        <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
+    </video>
     *A high-frequency interference transition. **Moiré Shift** builds the floor through breathing shadows during the intro. **Moiré Fade** uses shifting waves to break up the solid color before dissolving into black.*
 
 ??? abstract "6 | Morse Code | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/morse_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/transmission.webm" type="video/webm">
         </video>
     *Flashes "ON" in Morse code during the intro and "OFF" during the outro.*
 
@@ -2241,37 +2278,55 @@ These short animations play once when the light is turned ON or OFF.
 
 ??? abstract "7 | Quadrant | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/quadrant_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Four_Times_the_Charm.webm" type="video/webm">
         </video>
     *Splits the strip into 4 wings. Converges from quadrant edges to centers during intro, and clears from centers outwards during outro.*
 
 ??? abstract "17 | Resonance / Resonance Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Resonance_Fill.webm" type="video/webm">
+        </video>
     *A liquid-reactive transition. **Resonance** surges across the strip with decaying ripples during the intro. **Resonance Fade** provides a rhythmic, decaying drain that rhythmically pulls the light away during the outro.*
 
 ??? abstract "12 | Sonar Reveal / Sonar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Sonar_Reveal.webm" type="video/webm">
+        </video>
     *A radar-like scanning transition. **Sonar Reveal** sweeps back and forth, gradually resolving the brightness floor during the intro. **Sonar Fade** uses a retreating scan to systematically dim the strip into darkness during the outro.*
 
 ??? abstract "19 | Stellar Dust / Stellar Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Stellar_Dust.webm" type="video/webm">
+        </video>
     *A randomized phase-pulsed transition. **Stellar Dust** awakens pixels as breathing stars that stabilize into a floor during the intro. **Stellar Fade** cause the pixels to drift back into random twinkling before extinguishing.*
 
 ??? abstract "18 | Telemetry / Telemetry Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Telemetry.webm" type="video/webm">
+        </video>
     *A digital data-stream transition. **Telemetry** transmits sharp data-bursts to construct the floor during the intro. **Telemetry Fade** uses softened trail-retraction to "de-materialize" the strip into nothingness.*
 
 ??? abstract "25 | Tidal Surge / Tidal Recede | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Tidal_Surge.webm" type="video/webm">
+        </video>
     *A rhythmic, fluid transition. **Tidal Surge** sweeps forward with a multi-stage organic oscillation, swelling and retreating as it builds the floor during the intro. **Tidal Recede** mirrors this rhythm in reverse, smoothly draining the light to black during the outro.*
 
 ??? abstract "5 | Twin Pulse | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/twin_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/twin_pulse_sweep.webm" type="video/webm">
         </video>
     *Symmetrical dual-cursor pulses that race across the strip, leading a solid color wipe or erasing light during the outro.*
 
 ??? abstract "13 | Venetian / Close Blinds | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+    <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/venetian.webm" type="video/webm">
+        </video>
     *Architectural shutter transition. **Venetian** opens the light in two alternating stages during the intro. **Close Blinds** reverses the logic, snapping the light shut in alternating patterns for a clean exit.*
 
 ??? abstract "1 | Wipe | <span class='extra-info'>:material-tag-outline: 1.2.1 | :material-speedometer: Low  </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/wipe_io.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/horizon_sweep.webm" type="video/webm">
         </video>
     *Linear wipe from start to end (respects Mirror).*
 
