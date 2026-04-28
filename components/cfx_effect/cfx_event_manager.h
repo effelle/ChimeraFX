@@ -66,6 +66,26 @@ public:
   // Full-string coalescing: exact duplicates are dropped. (CFX-034)
   void push_deferred_(const std::string &evt,
                       esphome::event::Event *target_entity) {
+    std::string reach_tag;
+    const bool is_reach_evt = this->parse_reach_tag_(evt, &reach_tag);
+
+    // For HA-facing cfx_reach, a newer milestone for the same strip supersedes
+    // any older undelivered milestone. This keeps wipe-style bursts from
+    // piling up stale progress snapshots while preserving exact internal
+    // on_cfx_reach trigger semantics (handled elsewhere).
+    if (is_reach_evt) {
+      for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
+           i = (i + 1) % DEFERRED_QUEUE_SIZE) {
+        std::string queued_tag;
+        if (this->parse_reach_tag_(this->deferred_queue_[i], &queued_tag) &&
+            queued_tag == reach_tag) {
+          this->deferred_queue_[i] = evt;
+          this->deferred_targets_[i] = target_entity;
+          return;
+        }
+      }
+    }
+
     // 1. Coalescing: Drop if an identical event is already in the queue.
     for (uint8_t i = this->deferred_read_; i != this->deferred_write_;
          i = (i + 1) % DEFERRED_QUEUE_SIZE) {
@@ -75,16 +95,14 @@ public:
     }
 
     uint8_t next = (this->deferred_write_ + 1) % DEFERRED_QUEUE_SIZE;
-    
+
     // 2. Priority-aware Dropping (CFX-051)
     // If we're hitting the limit (~80% full), and the new event is a high-priority 
     // lifecycle event, we can safely drop an old non-critical milestone to make room.
-    uint8_t count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
-
     if (next == this->deferred_read_) {
       // Queue is hard-full. Try to reclaim one slot from the oldest milestone.
       bool reclaimed = false;
-      const bool is_critical = (evt.find("cfx_reach") == std::string::npos);
+      const bool is_critical = !is_reach_evt;
       
       if (is_critical) {
         for (uint8_t j = 0; j < DEFERRED_QUEUE_SIZE; j++) {
@@ -160,6 +178,24 @@ public:
   }
 
 protected:
+  bool parse_reach_tag_(const std::string &evt, std::string *tag) const {
+    static constexpr const char *prefix = "cfx_reach:";
+    if (evt.rfind(prefix, 0) != 0) {
+      return false;
+    }
+
+    const size_t start = sizeof("cfx_reach:") - 1;
+    const size_t end = evt.find(':', start);
+    if (end == std::string::npos || end == start) {
+      return false;
+    }
+
+    if (tag != nullptr) {
+      *tag = evt.substr(start, end - start);
+    }
+    return true;
+  }
+
   bool resolve_target_for_tag_(const std::string &tag,
                                esphome::event::Event **target_entity) {
     if (std::find(this->disabled_tags_.begin(), this->disabled_tags_.end(), tag) !=
