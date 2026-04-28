@@ -6126,6 +6126,20 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   // cleared the last pixel. Range expanded to allow the wipe front to travel
   // across the entire segment PLUS the fade width.
   uint32_t fadeWidth = (instance->_segment.intensity << 8) + 1;
+  // Slow wipe-family effects are visually judged by the regularity of their
+  // advancing edge. On ESP32-class transports a late frame is perceived less
+  // as "jitter" and more as a harsh step when the feather is only ~1 pixel
+  // wide. Give slower wipes a modest minimum feather so cadence wobble is
+  // absorbed into a softer front without changing milestone semantics.
+  uint32_t minStableFadeWidth = 1u << 15;  // 1 pixel in Q15 space
+  if (cycleTime >= 18000) {
+    minStableFadeWidth = 2u << 15;         // default-speed wipe: 2 pixels
+  } else if (cycleTime >= 12000) {
+    minStableFadeWidth = 3u << 14;         // mid-speed wipe: 1.5 pixels
+  }
+  if (fadeWidth < minStableFadeWidth) {
+    fadeWidth = minStableFadeWidth;
+  }
   // CFX-032 FIX: Avoid 64-bit math (can cause ROM bugs/jitter) while expanding range
   uint32_t totalPos = ((uint32_t)prog * len) + (((uint32_t)prog * fadeWidth) >> 15);
   uint16_t ledIndex = totalPos >> 15;
