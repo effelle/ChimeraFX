@@ -255,62 +255,6 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   }
 }
 
-uint32_t CFXAddressableLightEffect::get_presentation_min_interval_us() {
-  if (this->act_ == nullptr) {
-    return 0;
-  }
-
-  if (this->act_->mono_idle) {
-    return 0;
-  }
-
-  // Long progressive fills are visually judged almost entirely by cadence.
-  // Prefer a steadier launch rhythm over maximum throughput.
-  if (this->effect_id_ == 3) {  // Wipe
-    return 28000;
-  }
-
-  const auto preset = this->get_monochromatic_preset_(this->effect_id_);
-  if (!preset.is_active) {
-    return 0;
-  }
-
-  if (this->act_->state == OUTRO_RUNNING || this->act_->outro_active) {
-    return 26000;
-  }
-
-  if (!this->act_->intro_active) {
-    return 0;
-  }
-
-  switch (this->act_->active_intro_mode) {
-  case INTRO_MODE_WIPE:
-  case INTRO_MODE_CENTER:
-  case INTRO_MODE_QUADRANT:
-  case INTRO_MODE_HYDRAULICS:
-  case INTRO_MODE_DROPPING:
-  case INTRO_MODE_ASSEMBLY:
-  case INTRO_MODE_INERTIA_SWEEP:
-  case INTRO_MODE_SONAR_REVEAL:
-  case INTRO_MODE_VENETIAN:
-  case INTRO_MODE_CRYSTALLIZE:
-  case INTRO_MODE_RESONANCE_FILL:
-  case INTRO_MODE_TELEMETRY:
-  case INTRO_MODE_TIDAL_SURGE:
-  case INTRO_MODE_IMPACT_FLARE:
-    return 28000;
-  case INTRO_MODE_FADE:
-  case INTRO_MODE_GLITTER:
-  case INTRO_MODE_TWIN_PULSE:
-  case INTRO_MODE_MORSE:
-  case INTRO_MODE_DEEP_BREATHE:
-  case INTRO_MODE_STELLAR_DUST:
-    return 24000;
-  default:
-    return 22000;
-  }
-}
-
 std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
   // Automatically builds the pool from all effects registered as monochromatic
   std::vector<uint8_t> pool;

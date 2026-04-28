@@ -134,8 +134,10 @@ public:
     // Compute current queue occupancy and pick batch size.
     uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
     uint8_t max_this_loop;
-    if (queue_count >= DEFERRED_QUEUE_SIZE / 2)
-      max_this_loop = 3; // > 50% full — drain aggressively
+    if (queue_count >= (DEFERRED_QUEUE_SIZE * 3) / 4)
+      max_this_loop = 6; // > 75% full — wipe/milestone bursts need faster drain
+    else if (queue_count >= DEFERRED_QUEUE_SIZE / 2)
+      max_this_loop = 4; // > 50% full — drain aggressively
     else if (queue_count >= DEFERRED_QUEUE_SIZE / 4)
       max_this_loop = 2; // 25–50% full — moderate pace
     else
