@@ -288,11 +288,11 @@ protected:
     this->last_fired_milestone_ = 0;
     this->milestone_fired_this_frame_ = false;
     // Simple reset: main effect starts at pixel 0, so last_fired_milestone_ = 0
-    // guarantees the first milestone (5%) fires correctly without any suppression.
+    // guarantees the first milestone (10%) fires correctly without any suppression.
   }
 
   // Sweep all milestones crossed since last call. While loop ensures no
-  // milestone is skipped even when the frame step > 5%. (CFX sweep fix)
+  // milestone is skipped even when the frame step > 10%. (CFX sweep fix)
   // Note: intro guard is enforced at the effect layer (check_milestones_ in
   // cfx_addressable_light_effect.cpp returns early when intro_active is true),
   // so this sequence-side function is only reached during the main effect.

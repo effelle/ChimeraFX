@@ -371,7 +371,7 @@ public:
   // Each effect instance tracks its own progress so concurrent strips are
   // fully independent. (multi-strip fix)
   static constexpr uint8_t MILESTONE_STEP = 10;
-  static constexpr uint8_t MAX_MILESTONES = 20;  // 5..100 in steps of 5
+  static constexpr uint8_t MAX_MILESTONES = 10;  // 10..100 in steps of 10
   // No pre-computed string array — there are 100+ effect instances per light
   // so per-instance arrays would exhaust the heap at setup time.
   // Event strings are built on the stack at fire time (snprintf into 48-byte

@@ -839,25 +839,26 @@ async def to_code(config):
         return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
         
     import esphome.core as core
-    progress_step = 5
+    progress_step = 10
     milestones = list(range(progress_step, 101, progress_step))
     if 100 not in milestones:
         milestones.append(100)
         
     tags_to_register = []
-    
-    # 1. Parent light tag
-    parent_obj = config[CONF_ID]
-    parent_name = config.get(CONF_NAME, "")
-    parent_tag = _cfx_slugify(str(parent_name)) if parent_name else str(parent_obj.id)
-    tags_to_register.append(parent_tag)
-    
-    # 2. Segment tags
-    for seg in segments:
-        seg_id_obj = seg[CONF_SEGMENT_ID]
-        seg_name = seg.get(CONF_SEGMENT_NAME, "")
-        seg_tag = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
-        tags_to_register.append(seg_tag)
+
+    if segments:
+        # Segmented parents are not event-capable in HA; only register the
+        # logical segment event entities.
+        for seg in segments:
+            seg_id_obj = seg[CONF_SEGMENT_ID]
+            seg_name = seg.get(CONF_SEGMENT_NAME, "")
+            seg_tag = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
+            tags_to_register.append(seg_tag)
+    else:
+        parent_obj = config[CONF_ID]
+        parent_name = config.get(CONF_NAME, "")
+        parent_tag = _cfx_slugify(str(parent_name)) if parent_name else str(parent_obj.id)
+        tags_to_register.append(parent_tag)
         
     for tag in tags_to_register:
         safe_id = re.sub(r'[^a-z0-9_]', '_', tag)

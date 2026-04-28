@@ -2072,7 +2072,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
       // CFX-031: Reset milestones when intro ends so the main effect starts
       // its own 0->100% sweep cleanly. Without this, the intro's wipe pass
-      // already consumed milestones 5..100, and the effect's first forward
+      // already consumed milestones 10..100, and the effect's first forward
       // pass would appear to start at whatever the intro left behind.
       this->reset_milestones_();
 
@@ -2151,7 +2151,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // and is_return_phase_ that accumulated during the invisible background
       // run. Without reset(), the first frame after intro sees a mid-sweep
       // pixel position against a freshly-wiped milestone table and bursts all
-      // milestones 5..100 in a single pass.
+      // milestones 10..100 in a single pass.
       chimera_fx::InstanceGuard start_guard(act_->runner);
       act_->runner->reset();
       act_->runner->start();
