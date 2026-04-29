@@ -216,12 +216,21 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   // Fall through: task not ready yet, or only 1 runner — sequential is fine.
 #endif
 
-  // Sequential path (single-core chip, 1 runner, or dual-core task not live).
+  // Sequential fallthrough: single-core, only 1 runner, or dual-core task not live.
   for (auto *r : runners) {
     if (r != nullptr) {
       InstanceGuard guard(r);
       r->service();
     }
+  }
+
+  // RAM-AUDIT: Shared HWM counter — hits whichever path is actually hot.
+  static uint32_t fallthrough_hwm_counter = 0;
+  if (++fallthrough_hwm_counter >= 200) {
+    fallthrough_hwm_counter = 0;
+    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+    ESP_LOGD(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
+             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
   }
 }
 
@@ -229,6 +238,16 @@ void CFXScheduler::service_runner(CFXRunner *r) {
   if (r == nullptr) return;
   InstanceGuard guard(r);
   r->service();
+
+  // RAM-AUDIT: HWM instrumentation — this is the hot path for non-segmented lights.
+  // 8 effects × ~34 FPS = ~272 calls/sec → counter trips every ~0.7s.
+  static uint32_t single_hwm_counter = 0;
+  if (++single_hwm_counter >= 200) {
+    single_hwm_counter = 0;
+    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+    ESP_LOGD(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
+  }
 }
 
 void CFXScheduler::drain_core0() {
