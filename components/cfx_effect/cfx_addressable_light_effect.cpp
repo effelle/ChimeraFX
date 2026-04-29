@@ -391,7 +391,7 @@ void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
 
   uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
                   0xD37Au;
-  esphome::App.scheduler.set_timeout(owner, hash, 1, [this]() {
+  esphome::App.scheduler.set_timeout(owner, hash, 250, [this]() {
     auto *state = this->get_light_state();
     if (state != nullptr && state->remote_values.is_on()) {
       return;
@@ -1358,12 +1358,7 @@ void CFXAddressableLightEffect::stop() {
 
   CFXControl *c = act_->controller;
   auto *state = this->get_light_state();
-  const bool light_is_turning_off =
-      state != nullptr && !state->remote_values.is_on();
-
-  if (light_is_turning_off) {
-    this->restore_preset_runtime_defaults_();
-  }
+  this->restore_preset_runtime_defaults_();
 
   if (state != nullptr && act_->runner != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
