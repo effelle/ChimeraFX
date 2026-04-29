@@ -397,8 +397,16 @@ void CFXAddressableLightEffect::restore_preset_runtime_defaults_(
                   0xD37Au;
   esphome::App.scheduler.set_timeout(owner, hash, delay_ms, [this]() {
     auto *state = this->get_light_state();
-    if (state != nullptr && state->remote_values.is_on()) {
-      return;
+    if (state != nullptr) {
+      bool target_on = state->remote_values.is_on();
+      bool visibly_on =
+          state->current_values.is_on() &&
+          ((state->current_values.get_state() > 0.001f) ||
+           (state->current_values.get_brightness() > 0.001f));
+      if (target_on || visibly_on) {
+        this->restore_preset_runtime_defaults_(50);
+        return;
+      }
     }
 
     CFXControl *c = (state != nullptr) ? CFXControl::find(state) : nullptr;
@@ -644,17 +652,31 @@ void CFXAddressableLightEffect::start() {
 
   // ── CFX-044: Heap floor guard ─────────────────────────────────────────────
   // Refuse to start a new effect if free heap is below the safety floor.
-  // The ESP32 radio stack (WiFi / BT / LwIP) needs ~60 kB of contiguous heap
-  // to operate. We keep a modest safety margin above that floor so the MCU
-  // does not drift into the instability range while starting a new effect.
+  // ChimeraFX is a component sharing resources with other ESPHome components.
+  // The ESP32 radio stack (WiFi / BT / LwIP) and UI components (LVGL) need
+  // contiguous heap to operate. We calculate this floor dynamically based on
+  // the components compiled into the firmware, ensuring we don't penalize
+  // Wi-Fi-only nodes while still protecting memory-heavy nodes.
   //
   // When the guard fires the effect simply does not start. Instead, the
   // impacted light shows a native red 5-second warning and is then forced OFF.
   //
   // The guard is skipped when act_ is already allocated (rapid start/stop
   // cycle reusing the existing object) because no new heap is consumed.
-  constexpr uint32_t CFX_HEAP_FLOOR =
-      75000U;
+  constexpr uint32_t CFX_HEAP_FLOOR = 15000   // Base System Margin
+#ifdef USE_WIFI
+                                      + 30000 // Wi-Fi TX/RX buffers + LwIP
+#endif
+#ifdef USE_API
+                                      + 10000 // ESPHome HA API overhead
+#endif
+#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
+                                      + 20000 // BLE Dynamic Buffers
+#endif
+#ifdef USE_LVGL
+                                      + 15000 // LVGL dynamic widgets/animations
+#endif
+      ;
   if (this->act_ == nullptr) {
     uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (free_heap < CFX_HEAP_FLOOR) {
