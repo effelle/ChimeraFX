@@ -109,7 +109,20 @@ These symptoms are **not software bugs** — they are hardware power-rail collap
 ## RAM optimization
 
 Visual effects are computationally expensive, and hardware resources are finite (especially RAM).
-Wi-Fi-connected devices require approximately ~75kB of free RAM for the radio stack; below this threshold, the MCU will start to experience instability, such as spontaneous resets. Every time a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM. If the RAM is too low, it logs a warning, forces the impacted light to solid red for 5 seconds, and then turns that same light OFF.
+Because ChimeraFX is an ecosystem component that shares resources with other ESPHome components, it employs a dynamic **Heap Floor Guard** to prevent memory starvation and system instability (like spontaneous resets or API disconnects). 
+
+Every time a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM against this dynamic floor. If the RAM is too low, it logs a warning, forces the impacted light to solid red for 5 seconds, and then turns that same light OFF.
+
+**How the Limit is Calculated:**
+To maximize available RAM without penalizing lightweight setups, the limit is calculated automatically during compilation based on the components you include:
+- Base Margin: `15kB`
+- Wi-Fi Stack: `+30kB`
+- ESPHome API: `+10kB`
+- Bluetooth Stack: `+20kB`
+- LVGL Display: `+15kB`
+
+A standard Wi-Fi node will have a floor of `55kB`, whereas a heavy node (Wi-Fi + BT + LVGL) will enforce a `90kB` floor to protect the radio stacks and UI buffers.
+
 Fortunately, you can free up RAM with a few minor adjustments. Because every setup is different, please consider the following suggestions as a starting point:
 
 **Webserver**: Unless you are running ESPHome standalone without Home Assistant, the webserver is completely redundant. It is not optimized for modern web standards, and disabling it won't affect your Home Assistant integration at all. Removing it will free ~8 kB.
