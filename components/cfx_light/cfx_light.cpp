@@ -1882,22 +1882,18 @@ void CFXLightOutput::dump_config() {
     }
   }
 
-  static bool boot_logged = false;
-  if (!boot_logged) {
-    constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
+  constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
 #ifdef USE_WIFI
-                                        + 30000 // Wi-Fi TX/RX buffers + LwIP
+                                      + 30000 // Wi-Fi TX/RX buffers + LwIP
 #endif
 #ifdef USE_API
-                                        + 10000 // ESPHome HA API overhead
+                                      + 10000 // ESPHome HA API overhead
 #endif
 #if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
-                                        + 20000 // BLE Dynamic Buffers
+                                      + 20000 // BLE Dynamic Buffers
 #endif
-        ;
-    ESP_LOGCONFIG(TAG, "  System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
-    boot_logged = true;
-  }
+      ;
+  ESP_LOGCONFIG(TAG, "  System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
 }
 
 float CFXLightOutput::get_setup_priority() const {
