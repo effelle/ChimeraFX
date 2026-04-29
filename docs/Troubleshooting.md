@@ -36,7 +36,8 @@ Example:
 *   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. For example, 17ms corresponds to ~59 FPS.
 *   **Jitter**: The percentage of variation in frame timing. **0-8% is excellent**. Consistently high jitter (>50%) means other components (like Wi-Fi, heavy sensors, or multiple light effects running at the same time) are interrupting the LED driver, which can cause visible stuttering and low frame rates.
 *   **Heap**: The available RAM on your chip. More is better. If you fall under the **Heap Floor**, you should rethink your configuration, especially if you are running the firmware on a Wi-Fi device. More information about the Heap Floor can be found in the [Memory Management & Stability](#memory-management-stability) section.
-
+*   **[ACTV]** or **[IDLE]**: Indicates whether the effect is currently active or idle. Static effects, such as solid colors, will be marked as idle to save system resources.
+ 
 
 ## Common Issues
 

@@ -51,11 +51,11 @@ void CFXScheduler::setup() {
     ESP_LOGE(TAG, "Task create failed (err=%d) — falling back to sequential dispatch", (int)ret);
     core0_task_ = nullptr;
   } else {
-    ESP_LOGV(TAG, "Core 0 task created — dual-core LED dispatch enabled");
+    ESP_LOGD(TAG, "Core 0 task created — dual-core LED dispatch enabled");
   }
 
 #else
-  ESP_LOGV(TAG, "Single-core ESP32 — sequential dispatch active");
+  ESP_LOGD(TAG, "Single-core ESP32 — sequential dispatch active");
 #endif
 }
 
@@ -119,6 +119,15 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
         InstanceGuard guard(r);
         r->service();
       }
+    }
+
+    // RAM-AUDIT: Sequential path (Main Loop) stack instrumentation.
+    static uint32_t seq_hwm_counter = 0;
+    if (++seq_hwm_counter >= 200) {
+      seq_hwm_counter = 0;
+      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+      ESP_LOGD(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
+               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
     return;
   }
@@ -192,6 +201,15 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) != pdTRUE) {
       ESP_LOGW(TAG, "Core 0 runner timeout (%u ms) — frame skipped for %u runners",
                CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
+    }
+
+    // RAM-AUDIT: Parallel path (Main Loop / Core 1) stack instrumentation.
+    static uint32_t main_hwm_counter = 0;
+    if (++main_hwm_counter >= 200) {
+      main_hwm_counter = 0;
+      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+      ESP_LOGD(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
     return;
   }

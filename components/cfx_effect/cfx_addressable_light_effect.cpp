@@ -2821,7 +2821,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       const float avg_post_ms =
           (float)(act_->perf_apply_post_us / act_->perf_apply_count) / 1000.0f;
 
-      ESP_LOGI("chimera_fx",
+      ESP_LOGV("chimera_fx",
                "[%s] Apply: %.2f/%.2fms | Prep: %.2f/%.2fms | Dispatch: "
                "%.2f/%.2fms | Post: %.2f/%.2fms",
                act_->cached_runner_name.c_str(), avg_total_ms,
