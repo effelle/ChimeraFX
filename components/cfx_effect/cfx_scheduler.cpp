@@ -239,11 +239,78 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
 
 void CFXScheduler::service_runner(CFXRunner *r) {
   if (r == nullptr) return;
+
+#if CFX_DUAL_CORE
+  if (!force_sequential_ && core0_task_ != nullptr && core0_done_ != nullptr) {
+
+    // \u2500\u2500 Step 1: Drain previous Core 0 runner \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // Core 0 has had the entire previous apply()'s post-work window to run,
+    // so this semaphore take is typically instant (Core 0 already done).
+    // This guarantees the previous strip's DMA buffer is fully written
+    // before we exit and schedule_show() fires for that strip.
+    if (core0_runner_pending_) {
+      constexpr uint32_t DRAIN_TIMEOUT_MS = FRAMETIME + 12 > 25 ? FRAMETIME + 12 : 25;
+      if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(DRAIN_TIMEOUT_MS)) != pdTRUE) {
+        ESP_LOGW(TAG, "Core 0 runner drain timeout (%ums) \u2014 frame may be partial",
+                 DRAIN_TIMEOUT_MS);
+      }
+      core0_runner_pending_ = false;
+    }
+
+    // \u2500\u2500 Step 2: Update load-based dispatch state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // frame_time is the inter-frame delta in ms \u2014 a proxy for total loop cost.
+    // It is always valid (updated at the top of service()) and zero-overhead.
+    const uint32_t ft = r->frame_time;
+
+    if (ft > CORE0_ACTIVATE_MS) {
+      underload_counter_ = 0;
+      if (overload_counter_ < CORE0_HYSTERESIS) {
+        overload_counter_++;
+        if (overload_counter_ >= CORE0_HYSTERESIS && !use_core0_) {
+          use_core0_ = true;
+          ESP_LOGD(TAG, "Core 0 dispatch ACTIVATED (frame_time=%ums)", ft);
+        }
+      }
+    } else if (ft < CORE0_DEACTIVATE_MS) {
+      overload_counter_ = 0;
+      if (underload_counter_ < CORE0_HYSTERESIS) {
+        underload_counter_++;
+        if (underload_counter_ >= CORE0_HYSTERESIS && use_core0_) {
+          use_core0_ = false;
+          ESP_LOGD(TAG, "Core 0 dispatch DEACTIVATED (frame_time=%ums)", ft);
+        }
+      }
+    } else {
+      // In the hysteresis band \u2014 hold current state, reset both counters.
+      overload_counter_ = 0;
+      underload_counter_ = 0;
+    }
+
+    // \u2500\u2500 Step 3: Dispatch \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    if (use_core0_) {
+      // Post this runner to Core 0. Core 0 will call service() and then
+      // give core0_done_ when finished.
+      // Core 1 returns immediately so apply() can do its post-service
+      // work (intro/outro masking, milestone tracking) in parallel with
+      // Core 0's pixel computation.
+      // The drain at the TOP of the NEXT call guarantees DMA safety.
+      // NOTE: InstanceGuard is NOT set here — core0_task_fn creates its
+      // own guard for instance_per_core[0]. Core 1 has nothing to guard.
+      core0_slice_.clear();
+      core0_slice_.push_back(r);
+      core0_runner_pending_ = true;
+      xTaskNotifyGive(core0_task_);
+      // Do NOT wait here — Core 1 returns to apply() immediately.
+      return;
+    }
+  }
+#endif
+
+  // Sequential path: single-core, below threshold, or force_sequential.
   InstanceGuard guard(r);
   r->service();
 
-  // RAM-AUDIT: HWM instrumentation — this is the hot path for non-segmented lights.
-  // 8 effects × ~34 FPS = ~272 calls/sec → counter trips every ~0.7s.
+  // RAM-AUDIT: HWM instrumentation (VERBOSE \u2014 measurement complete).
   static uint32_t single_hwm_counter = 0;
   if (++single_hwm_counter >= 200) {
     single_hwm_counter = 0;

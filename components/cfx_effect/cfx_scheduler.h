@@ -82,6 +82,24 @@ private:
   bool force_sequential_{false};
   bool sequential_diag_logged_{false};
 
+  // ── Dynamic load-based Core 0 dispatch ───────────────────────────────────
+  // When frame_time from any active runner exceeds CORE0_ACTIVATE_MS, the
+  // scheduler starts posting runners to Core 0 asynchronously so Core 1 can
+  // immediately continue with the next effect's apply() work in parallel.
+  //
+  // Thresholds (data-driven from measurement session 2026-04-29):
+  //   Activate  >20ms : ≥3 heavy runners, loop clearly over budget
+  //   Deactivate <18ms: ≤2 runners, Core 1 can manage alone
+  //   Hysteresis count: 5 frames to prevent flapping at the boundary
+  static constexpr uint32_t CORE0_ACTIVATE_MS   = 20;
+  static constexpr uint32_t CORE0_DEACTIVATE_MS = 18;
+  static constexpr uint8_t  CORE0_HYSTERESIS     = 5;
+
+  bool     use_core0_{false};         // true → post runners to Core 0
+  bool     core0_runner_pending_{false}; // true → Core 0 is running a runner
+  uint8_t  overload_counter_{0};      // consecutive frames above activate threshold
+  uint8_t  underload_counter_{0};     // consecutive frames below deactivate threshold
+
 #if CFX_DUAL_CORE
   static void core0_task_fn(void *arg);
 
