@@ -1809,7 +1809,7 @@ void CFXLightOutput::dump_config() {
                                         + 15000 // LVGL dynamic widgets/animations
 #endif
         ;
-    ESP_LOGI("chimera_fx", "System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
+    ESP_LOGCONFIG("chimera_fx", "System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
     boot_logged = true;
   }
   const char *chipset_str;
