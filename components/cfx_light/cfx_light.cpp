@@ -1019,26 +1019,6 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
-  static bool boot_logged = false;
-  if (!boot_logged) {
-    constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
-#ifdef USE_WIFI
-                                        + 30000 // Wi-Fi TX/RX buffers + LwIP
-#endif
-#ifdef USE_API
-                                        + 10000 // ESPHome HA API overhead
-#endif
-#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
-                                        + 20000 // BLE Dynamic Buffers
-#endif
-#ifdef USE_LVGL
-                                        + 15000 // LVGL dynamic widgets/animations
-#endif
-        ;
-    ESP_LOGI("chimera_fx", "System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
-    boot_logged = true;
-  }
-
   if (!this->outro_cbs_.empty()) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
@@ -1900,6 +1880,23 @@ void CFXLightOutput::dump_config() {
           seg.mirror ? " [MIRROR]" : "", this->resolve_intro_mode(seg),
           this->resolve_outro_mode(seg));
     }
+  }
+
+  static bool boot_logged = false;
+  if (!boot_logged) {
+    constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
+#ifdef USE_WIFI
+                                        + 30000 // Wi-Fi TX/RX buffers + LwIP
+#endif
+#ifdef USE_API
+                                        + 10000 // ESPHome HA API overhead
+#endif
+#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
+                                        + 20000 // BLE Dynamic Buffers
+#endif
+        ;
+    ESP_LOGCONFIG(TAG, "  System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
+    boot_logged = true;
   }
 }
 

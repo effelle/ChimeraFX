@@ -119,9 +119,8 @@ To maximize available RAM without penalizing lightweight setups, the limit is ca
 - Wi-Fi Stack: `+30kB`
 - ESPHome API: `+10kB`
 - Bluetooth Stack: `+20kB`
-- LVGL Display: `+15kB`
 
-A standard Wi-Fi node will have a floor of `55kB`, whereas a heavy node (Wi-Fi + BT + LVGL) will enforce a `90kB` floor to protect the radio stacks and UI buffers.
+A standard Wi-Fi node will have a floor of `55kB`, whereas a heavy node (Wi-Fi + BT) will enforce a `75kB` floor to protect the radio stacks and UI buffers.
 
 Fortunately, you can free up RAM with a few minor adjustments. Because every setup is different, please consider the following suggestions as a starting point:
 

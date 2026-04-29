@@ -676,9 +676,6 @@ void CFXAddressableLightEffect::start() {
 #if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
                                       + 20000 // BLE Dynamic Buffers
 #endif
-#ifdef USE_LVGL
-                                      + 15000 // LVGL dynamic widgets/animations
-#endif
       ;
   if (this->act_ == nullptr) {
     uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
