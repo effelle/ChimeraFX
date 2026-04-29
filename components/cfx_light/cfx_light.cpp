@@ -557,26 +557,6 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 // --- Setup ---
 
 void CFXLightOutput::setup() {
-  static bool boot_logged = false;
-  if (!boot_logged) {
-    constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
-#ifdef USE_WIFI
-                                        + 30000 // Wi-Fi TX/RX buffers + LwIP
-#endif
-#ifdef USE_API
-                                        + 10000 // ESPHome HA API overhead
-#endif
-#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
-                                        + 20000 // BLE Dynamic Buffers
-#endif
-#ifdef USE_LVGL
-                                        + 15000 // LVGL dynamic widgets/animations
-#endif
-        ;
-    ESP_LOGI("chimera_fx", "System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
-    boot_logged = true;
-  }
-
   size_t buffer_size = this->get_buffer_size_();
 
   // Allocate pixel buffer (internal RAM)
@@ -1813,6 +1793,25 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 // --- Config Dump ---
 
 void CFXLightOutput::dump_config() {
+  static bool boot_logged = false;
+  if (!boot_logged) {
+    constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
+#ifdef USE_WIFI
+                                        + 30000 // Wi-Fi TX/RX buffers + LwIP
+#endif
+#ifdef USE_API
+                                        + 10000 // ESPHome HA API overhead
+#endif
+#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
+                                        + 20000 // BLE Dynamic Buffers
+#endif
+#ifdef USE_LVGL
+                                        + 15000 // LVGL dynamic widgets/animations
+#endif
+        ;
+    ESP_LOGI("chimera_fx", "System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
+    boot_logged = true;
+  }
   const char *chipset_str;
   switch (this->chipset_) {
   case CHIPSET_WS2812X:
