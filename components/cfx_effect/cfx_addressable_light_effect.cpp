@@ -1761,6 +1761,17 @@ void CFXAddressableLightEffect::stop() {
 
       auto *output = this->get_light_state()->get_output();
       auto *it_light = static_cast<light::AddressableLight *>(output);
+      if ((act_->active_outro_mode == INTRO_MODE_NONE ||
+           act_->active_outro_mode == INTRO_MODE_FADE) &&
+          act_->transition_target_snapshot.empty()) {
+        act_->transition_target_snapshot.reserve(it_light->size());
+        act_->transition_target_snapshot.resize(it_light->size());
+        for (int i = 0; i < it_light->size(); i++) {
+          act_->transition_target_snapshot[i] = (*it_light)[i].get();
+          if ((i & 0x1F) == 0)
+            esphome::App.feed_wdt();
+        }
+      }
 #ifdef USE_ESP32
       CFXActivation *captured_act = act_;
       // `out` is already correctly set above (via vseg->get_parent() for
@@ -5824,9 +5835,15 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     progress = 1.0f;
 
   float fade_scaler = 1.0f - progress;
+  uint8_t mode = act_->active_outro_mode;
+  const bool freeze_outro_frame =
+      (mode == INTRO_MODE_NONE || mode == INTRO_MODE_FADE);
 
-  // 1. Advance the underlying effect in the background
-  runner->service();
+  // 1. Advance the underlying effect in the background only for authored
+  // outros. Plain fade-to-black should freeze the exact last visible frame.
+  if (!freeze_outro_frame) {
+    runner->service();
+  }
 
   // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our
   // pixels! Non-segmented: ESPHome is actively fading brightness to 0.0f.
@@ -5872,19 +5889,30 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                  (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
   };
 
-  for (int i = 0; i < seg_len; i++) {
-    int global_idx = seg_start + i;
-    uint32_t c = runner->_segment.getPixelColor(i);
-    uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
-    uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
-    uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
-    uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
+  if (freeze_outro_frame &&
+      act_->transition_target_snapshot.size() == static_cast<size_t>(it.size())) {
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      Color c = act_->transition_target_snapshot[global_idx];
+      it[global_idx] =
+          Color((uint8_t)(c.r * fade_scaler), (uint8_t)(c.g * fade_scaler),
+                (uint8_t)(c.b * fade_scaler), (uint8_t)(c.w * fade_scaler));
+    }
+  } else {
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      uint32_t c = runner->_segment.getPixelColor(i);
+      uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
+      uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
+      uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
+      uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
 
-    // BUG 13 FIX: Apply force_white to Outro transitions
-    if (act_->active_outro_force_white)
-      cfx::apply_force_white(r, g, b, w);
+      // BUG 13 FIX: Apply force_white to Outro transitions
+      if (act_->active_outro_force_white)
+        cfx::apply_force_white(r, g, b, w);
 
-    it[global_idx] = Color(r, g, b, w);
+      it[global_idx] = Color(r, g, b, w);
+    }
   }
 
   // Restore the scaling factor so we don't permanently corrupt the
@@ -5893,7 +5921,9 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     ls->current_values.set_brightness(original_brightness);
   }
 
-  uint8_t mode = act_->active_outro_mode;
+  if (freeze_outro_frame) {
+    return (progress >= 1.0f);
+  }
 
   bool reverse = act_->active_outro_mirror;
 
