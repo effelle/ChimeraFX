@@ -1217,6 +1217,7 @@ void CFXAddressableLightEffect::start() {
 
   // Resolve Intro Mode (Now reflecting Presets!)
   act_->active_intro_mode = INTRO_NONE;
+  act_->active_intro_uses_live_frame_fade = false;
   select::Select *intro_sel = (c && c->get_intro_effect())
                                   ? c->get_intro_effect()
                                   : this->local_intro_effect_();
@@ -1305,6 +1306,7 @@ void CFXAddressableLightEffect::start() {
       if (intro_state != nullptr &&
           intro_state->get_default_transition_length() > 0) {
         act_->active_intro_mode = INTRO_MODE_FADE;
+        act_->active_intro_uses_live_frame_fade = true;
       }
     }
 
@@ -4286,7 +4288,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
     for (int i = 0; i < seg_len; i++) {
       int global_idx = seg_start + i;
       Color base_c = c;
-      if (use_palette && chimera_fx::instance) {
+      if (act_->active_intro_uses_live_frame_fade) {
+        base_c = it[global_idx].get();
+      } else if (use_palette && chimera_fx::instance) {
         // Map whole segment to spectrum for Fade
         uint8_t map_idx = (uint8_t)((i * 255) / (seg_len > 0 ? seg_len : 1));
         uint32_t cp = chimera_fx::instance->_segment.color_from_palette(
