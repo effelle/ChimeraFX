@@ -1756,25 +1756,9 @@ void CFXAddressableLightEffect::stop() {
       // `out` is already correctly set above (via vseg->get_parent() for
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
-        if (act_->active_outro_mode == INTRO_MODE_NONE) {
-          uint32_t cleanup_delay_ms = 50;
-          auto *current_state = this->get_light_state();
-          if (current_state != nullptr &&
-              current_state->get_default_transition_length() > 0) {
-            cleanup_delay_ms += current_state->get_default_transition_length();
-          }
-          this->restore_preset_runtime_defaults_(cleanup_delay_ms);
-          this->act_ = nullptr;
-          for (auto *r : *captured_runners)
-            delete r;
-          captured_runners->clear();
-          captured_act->outro_start_time = 0;
-          delete captured_act;
-          return;
-        } else {
-          this->act_ = nullptr;
-          out->add_outro_callback([this, it_light, captured_runners,
-                                   captured_sequence, captured_act]() -> bool {
+        this->act_ = nullptr;
+        out->add_outro_callback([this, it_light, captured_runners,
+                                 captured_sequence, captured_act]() -> bool {
             auto *current_state = this->get_light_state();
 
             if (current_state != nullptr &&
@@ -1867,8 +1851,7 @@ void CFXAddressableLightEffect::stop() {
             return done;
           });
 
-          return;
-        }
+        return;
       }
 #endif
     }
