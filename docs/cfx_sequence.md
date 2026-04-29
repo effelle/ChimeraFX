@@ -1,6 +1,6 @@
 # Sequencer (`cfx_sequence`)
 
-A **sequence** is the way you script LED behaviour in ChimeraFX. You pick an effect, point it at one or more strips, and optionally tell it what to do at specific moments â€” when the animation starts, when it reaches a certain point, when it stops.
+A **sequence** is ChimeraFX's optional scripting layer. You pick an effect, point it at one or more strips, and optionally tell it what to do at specific moments — when the animation starts, when it reaches a certain point, when it stops. Effects run perfectly well without sequences; use them when you need precise event timing, multi-strip coordination, or reactive Home Assistant automations.
 
 Everything runs directly on the ESP32. No round-trip to Home Assistant, no network lag.
 
@@ -160,7 +160,7 @@ event source, set `ha_events: true` to opt back in.
 ## Triggers in Detail
 
 ### `on_cfx_begin`
-Fires the moment `start()` is invoked â€” before any intro animation or rendering. Good for pre-arming other hardware.
+Fires the moment `start()` is invoked — before any intro animation or rendering. Good for pre-arming other hardware.
 
 === "On-Device YAML"
       ```yaml
@@ -268,7 +268,7 @@ Fires when the animation's leading pixel crosses a percentage threshold. You can
 
 === "Home Assistant YAML"
       ```yaml
-        alias: ChimeraFX â€” Logger
+        alias: ChimeraFX — Logger
         description: ""
         triggers:
           - trigger: state
@@ -756,7 +756,7 @@ Three strips start one after another as the primary strip sweeps forward. When t
 
     === "Home Assistant YAML"
         ```yaml
-          alias: ChimeraFX â€” Cascade with staggered stop
+          alias: ChimeraFX — Cascade with staggered stop
           description: ""
           triggers:
             - trigger: state
@@ -853,7 +853,7 @@ Two strips start together, and when they reach 90% the third strip starts buldin
 
     === "Home Assistant YAML"
         ```yaml
-          alias: ChimeraFX â€” Gas Discarge under the Curtains
+          alias: ChimeraFX — Gas Discarge under the Curtains
           description: ""
           triggers:
             - trigger: state

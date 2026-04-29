@@ -297,22 +297,6 @@ static bool segment_participates_in_barrier(light::LightState *state) {
   return resolve_active_cfx_effect(state) != nullptr;
 }
 
-static uint32_t compute_spi_sequence_throttle_ms(uint32_t active_effects) {
-  if (active_effects >= 8) {
-    return 75;
-  }
-  if (active_effects >= 6) {
-    return 60;
-  }
-  if (active_effects >= 4) {
-    return 45;
-  }
-  if (active_effects >= 2) {
-    return 35;
-  }
-  return 0;
-}
-
 // --- Core Control Loop & Initialization ---
 
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
@@ -1184,43 +1168,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 
   this->status_clear_warning();
-
-  if (this->is_spi_transport() && this->outro_cbs_.empty()) {
-#ifdef USE_CFX_SEQUENCE
-    if (active_cfx_effect != nullptr &&
-        active_cfx_effect->get_active_sequence() != nullptr) {
-      uint32_t active_effects = 0;
-      for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
-        if (inst != nullptr && inst->get_act() != nullptr)
-          active_effects++;
-      }
-      const uint32_t throttle_ms =
-          compute_spi_sequence_throttle_ms(active_effects);
-      const uint32_t now_ms = esphome::millis();
-
-      if (throttle_ms > 0 && this->spi_last_flush_ms_ != 0 &&
-          (now_ms - this->spi_last_flush_ms_) < throttle_ms) {
-        if (this->spi_diag_throttle_logs_ < 12) {
-          const char *light_name =
-              (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                               : "<spi>";
-          ESP_LOGD(TAG,
-                   "SPI diag throttle[%u]: light=%s seq=%p active_fx=%u "
-                   "wait=%" PRIu32 "ms since_last=%" PRIu32 "ms state_ptr=%p",
-                   static_cast<unsigned>(this->spi_diag_throttle_logs_),
-                   light_name, active_cfx_effect->get_active_sequence(),
-                   static_cast<unsigned>(active_effects), throttle_ms,
-                   now_ms - this->spi_last_flush_ms_, state);
-          this->spi_diag_throttle_logs_++;
-        }
-        if (state != nullptr) {
-          this->schedule_show();
-        }
-        return;
-      }
-    }
-#endif
-  }
 
   // Protect from refreshing too often
   uint32_t now = micros();

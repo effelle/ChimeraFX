@@ -55,65 +55,6 @@ private:
   CFXSequence *previous_;
 };
 
-static cfx_light::CFXLightOutput *resolve_cfx_output_(light::LightState *state) {
-  if (state == nullptr) {
-    return nullptr;
-  }
-
-  auto *output = state->get_output();
-  if (output == nullptr) {
-    return nullptr;
-  }
-
-  for (auto *seg : cfx_light::CFXVirtualSegmentLight::all_segments) {
-    if (seg == output) {
-      return seg->get_parent();
-    }
-  }
-
-  return static_cast<cfx_light::CFXLightOutput *>(output);
-}
-
-// CFX-057: Cached SPI presence check — avoid scanning 656+ effects on every
-// do_play_() call. SPI transport presence doesn't change within 500ms.
-static bool cached_has_spi_{false};
-static uint32_t cached_has_spi_ms_{0};
-
-static bool has_active_spi_effect_() {
-  const uint32_t now = esphome::millis();
-  if (cached_has_spi_ms_ != 0 && (now - cached_has_spi_ms_) < 500) {
-    return cached_has_spi_;
-  }
-
-  auto has_active_spi_in_group =
-      [](const std::vector<chimera_fx::CFXAddressableLightEffect *> &group) {
-        for (auto *inst : group) {
-          if (inst == nullptr || inst->get_act() == nullptr) {
-            continue;
-          }
-          auto *diag_out = inst->get_diag_output();
-          if (diag_out != nullptr && diag_out->is_spi_transport()) {
-            return true;
-          }
-        }
-        return false;
-      };
-
-  cached_has_spi_ =
-      has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_effects) ||
-      has_active_spi_in_group(chimera_fx::CFXAddressableLightEffect::all_segment_effects);
-  cached_has_spi_ms_ = now;
-  return cached_has_spi_;
-}
-
-static bool should_defer_pool_sequence_start_(light::LightState *target_light) {
-  auto *target_out = resolve_cfx_output_(target_light);
-  if (target_out != nullptr && target_out->is_spi_transport()) {
-    return true;
-  }
-  return has_active_spi_effect_();
-}
-
 static void ensure_sequence_registry_capacity_(size_t extra_slots,
                                                const char *reason) {
   auto &registry = CFXSequence::instances;
@@ -404,21 +345,6 @@ void CfxRunActionBase::do_play_() {
            this->light_->get_name().c_str(),
            effective_depth,
            this->iterations_);
-
-  if (CFXSequenceSelect::instance != nullptr &&
-      should_defer_pool_sequence_start_(this->light_)) {
-    uint32_t start_hash = esphome::fnv1_hash(seq->get_id() + "_deferred_start");
-    ESP_LOGV("cfx_run", "Deferring start of '%s' on '%s' to next scheduler tick",
-             this->effect_.c_str(), this->light_->get_name().c_str());
-    esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, start_hash, 0,
-                                       [seq]() {
-                                         if (seq != nullptr && !seq->is_running() &&
-                                             !seq->is_starting()) {
-                                           seq->start();
-                                         }
-                                       });
-    return;
-  }
 
   seq->start();
 }
@@ -759,12 +685,6 @@ void CFXSequence::start() {
     return;
   this->is_starting_ = true;
 
-  // CFX-052: SPI strips are UNSUPPORTED in multi-light sequences.
-  // SPI driver (APA102/SK9822) causes crashes when used with more than
-  // 2 lights or when >2 triggers fire per sequence (25%/50%/75%).
-  // Root cause: SPI initialization/timing conflicts with ESPHome API.
-  // Limitation: Use SPI strips alone or with max 2 RMT lights only.
-
   // CFX-044b: Conflict-aware handover — only stop sequences that share a
   // target light with this one. Sequences on independent strips can run in
   // parallel. Previously all sequences were stopped globally, destroying
@@ -976,7 +896,7 @@ void CFXSequence::start() {
       // the effect is started and bound, light is ON.
       this->stagger_tasks_pending_--;
     });
-    stagger_delay += 50; // 50ms gap per strip start (CFX-052: longer for SPI compatibility)
+    stagger_delay += 20; // Generic start staggering keeps API bursts smooth.
   }
 
   // CFX-055: Deferred binding — verification & retry.

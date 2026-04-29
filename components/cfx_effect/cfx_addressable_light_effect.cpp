@@ -71,6 +71,53 @@ resolve_diag_output(CFXAddressableLightEffect *effect) {
   return effect->get_diag_output();
 }
 
+static light::ColorMode resolve_effect_call_color_mode(light::LightState *light,
+                                                       bool prefer_white) {
+  if (prefer_white &&
+      light->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    return light::ColorMode::RGB_WHITE;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+    return light::ColorMode::RGB;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    return light::ColorMode::RGB_WHITE;
+  }
+  if (prefer_white &&
+      light->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+    return light::ColorMode::WHITE;
+  }
+
+  auto valid_mode = light->remote_values.get_color_mode();
+  if (valid_mode != light::ColorMode::UNKNOWN) {
+    return valid_mode;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+    return light::ColorMode::WHITE;
+  }
+  if (light->get_traits().supports_color_mode(light::ColorMode::BRIGHTNESS)) {
+    return light::ColorMode::BRIGHTNESS;
+  }
+  return light::ColorMode::ON_OFF;
+}
+
+static void apply_effect_preset_color(light::LightState *light,
+                                      light::LightCall &call, uint8_t r,
+                                      uint8_t g, uint8_t b, uint8_t w,
+                                      bool color_has_white) {
+  auto mode = resolve_effect_call_color_mode(light, color_has_white);
+  call.set_color_mode(mode);
+
+  if (mode == light::ColorMode::RGB || mode == light::ColorMode::RGB_WHITE) {
+    call.set_rgb(r / 255.0f, g / 255.0f, b / 255.0f);
+  }
+  if (mode == light::ColorMode::RGB_WHITE || mode == light::ColorMode::WHITE ||
+      mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+      mode == light::ColorMode::COLD_WARM_WHITE) {
+    call.set_white(color_has_white ? (w / 255.0f) : 0.0f);
+  }
+}
+
 // CFX-057: Cached census — avoid scanning 656+ effect instances every frame.
 // The census is recomputed at most once every 250ms. Callers that run on the
 // hot render path (apply(), check_milestones_) now get O(1) reads instead of
@@ -128,10 +175,6 @@ static SPIDiagCensus collect_spi_diag_census() {
   return census;
 }
 
-static bool should_force_spi_sequential_dispatch() {
-  return collect_spi_diag_census().active_spi_effects > 0;
-}
-
 template <typename T> static void release_vector_storage(std::vector<T> &v) {
   std::vector<T>().swap(v);
 }
@@ -166,6 +209,63 @@ cfx_light::CFXLightOutput *CFXAddressableLightEffect::get_diag_output() const {
   }
 
   return static_cast<cfx_light::CFXLightOutput *>(this->get_addressable_());
+}
+
+void CFXAddressableLightEffect::apply_startup_light_presets_() {
+  auto *state = this->get_light_state();
+  if (state == nullptr) {
+    return;
+  }
+
+  const bool has_brightness = this->has_brightness_preset_();
+  const bool has_color = this->has_color_preset_();
+  if (!has_brightness && !has_color) {
+    return;
+  }
+
+  bool needs_sync = !state->remote_values.is_on();
+  if (has_brightness &&
+      std::abs(state->remote_values.get_brightness() -
+               this->brightness_preset_val_()) > 0.01f) {
+    needs_sync = true;
+  }
+  if (has_color) {
+    const float target_r = this->color_preset_r_() / 255.0f;
+    const float target_g = this->color_preset_g_() / 255.0f;
+    const float target_b = this->color_preset_b_() / 255.0f;
+    const float target_w = this->color_preset_w_() / 255.0f;
+
+    if (std::abs(state->remote_values.get_red() - target_r) > 0.01f ||
+        std::abs(state->remote_values.get_green() - target_g) > 0.01f ||
+        std::abs(state->remote_values.get_blue() - target_b) > 0.01f) {
+      needs_sync = true;
+    }
+    if (this->color_preset_has_white_()) {
+      if (std::abs(state->remote_values.get_white() - target_w) > 0.01f) {
+        needs_sync = true;
+      }
+    } else if (state->remote_values.get_white() > 0.01f) {
+      needs_sync = true;
+    }
+  }
+
+  if (!needs_sync) {
+    return;
+  }
+
+  auto call = state->make_call();
+  call.set_state(true);
+  call.set_transition_length(0);
+  if (has_brightness) {
+    call.set_brightness(this->brightness_preset_val_());
+  }
+  if (has_color) {
+    apply_effect_preset_color(state, call, this->color_preset_r_(),
+                              this->color_preset_g_(), this->color_preset_b_(),
+                              this->color_preset_w_(),
+                              this->color_preset_has_white_());
+  }
+  call.perform();
 }
 
 CFXAddressableLightEffect::MonochromaticPreset
@@ -477,6 +577,11 @@ void CFXAddressableLightEffect::start() {
     act_->controller = CFXControl::find(this->get_light_state());
   }
 
+  // Effect-level color/brightness presets are light-state defaults.
+  // Sync them once here so intro, main rendering, and HA-visible state all
+  // start from the same target values.
+  this->apply_startup_light_presets_();
+
   // Prevent leaking if start() is called while runner_ is already initialized
   // (e.g. rapid toggles)
   if (act_->runner != nullptr) {
@@ -680,8 +785,6 @@ void CFXAddressableLightEffect::start() {
             : this->local_autotune_();
     if (act_->sequence_autotune.has_value())
       autotune_will_run = act_->sequence_autotune.value();
-    else if (this->has_autotune_preset_())
-      autotune_will_run = this->autotune_preset_val_();
     else if (at_sw != nullptr)
       autotune_will_run = at_sw->state;
   }
@@ -722,8 +825,6 @@ void CFXAddressableLightEffect::start() {
         (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
     if (act_->sequence_autotune.has_value())
       autotune_enabled = act_->sequence_autotune.value();
-    else if (this->has_autotune_preset_())
-      autotune_enabled = this->autotune_preset_val_();
     else if (autotune_sw != nullptr)
       autotune_enabled = autotune_sw->state;
     act_->autotune_active = autotune_enabled;
@@ -1531,9 +1632,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       (now_ms - frame_budget_window_start_ms) >= 30) {
     frame_budget_window_start_ms = now_ms;
   }
-  const SPIDiagCensus diag_census = collect_spi_diag_census();
-  const bool enforce_frame_budget = diag_census.active_spi_effects > 0;
+  SPIDiagCensus diag_census{};
+  bool enforce_frame_budget = false;
+  bool force_spi_sequential_dispatch = false;
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
+    diag_census = collect_spi_diag_census();
+    enforce_frame_budget = diag_census.active_spi_effects > 0;
+    force_spi_sequential_dispatch = enforce_frame_budget;
+
     uint32_t delta_ms = 0;
     if (this->act_->spi_diag_last_apply_ms != 0) {
       delta_ms = now_ms - this->act_->spi_diag_last_apply_ms;
@@ -1873,8 +1979,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!skip_service) {
     const uint32_t dispatch_start_us = apply_perf_enabled ? cfx_micros() : 0;
-    CFXScheduler::get().set_force_sequential(
-        should_force_spi_sequential_dispatch());
+    CFXScheduler::get().set_force_sequential(force_spi_sequential_dispatch);
 
     if (!act_->segment_runners.empty()) {
       // ── Set per-runner brightness BEFORE dispatch ────────────────────────
@@ -3515,14 +3620,9 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   uint8_t mode = act_->active_intro_mode;
 
   // 3. Setup Color/Palette
-  // BUG 11 FIX: Use Current Color (current_values) for smooth fade-in
+  // Use the resolved target color from apply() so the intro and the main
+  // effect share the same source color instead of diverging during startup.
   Color c = target_color;
-  auto *state = this->get_light_state();
-  if (state) {
-    auto v = state->current_values;
-    c = Color((uint8_t)(v.get_red() * 255), (uint8_t)(v.get_green() * 255),
-              (uint8_t)(v.get_blue() * 255), (uint8_t)(v.get_white() * 255));
-  }
   if (c.r == 0 && c.g == 0 && c.b == 0 && c.w == 0) {
     c = Color::WHITE;
   }

@@ -14,8 +14,9 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
           set_speed: 70             # Slowing down the animation 
           set_palette: 5            # Force 'Fire' palette (ID 5)
           set_intensity: 170        # Longer tail 
+          set_brightness: 80%       # Start the light at a known brightness
+          set_color: [100, 70, 31]  # Start the light with a warm amber color
           set_mirror: true          # Enable mirroring
-          set_autotune: false       # Disable automatic parameter tuning
           set_force_white: true     # Force white channel (eligible effects)
           set_intro: 3              # Set Intro to Center
           set_outro: 5              # Set Outro to Twin Pulse
@@ -27,15 +28,16 @@ If you use the same name as an existing effect, it will be overridden with the n
 
 While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
 
-**Note:** When a light is turned off and then on again when [autotune](Controls.md#id-7-autotune) is enabled, the effect will reset to its default speed and intensity. 
+**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`.
 
 ## Parameters
 
 *   **`set_speed`**: (0-255) Sets the default speed.
 *   **`set_intensity`**: (0-255) Sets the default intensity.
 *   **`set_palette`**: (0-255) Sets the default palette ID. See [here](Effects-Library.md#palettes) for a list of available palettes.
+*   **`set_brightness`**: (0-100%) Sets the default light brightness when the effect starts.
+*   **`set_color`**: (`[R, G, B]` or `[R, G, B, W]` in percent) Sets the default light color when the effect starts.
 *   **`set_mirror`**: (true/false) Sets the default mirror state. Affects both intro and main effect.
-*   **`set_autotune`**: (true/false) Enable or disable Autotune for this specific effect instance.
 *   **`set_force_white`**: (true/false) Forces the white channel on eligible monochromatic/static effects.
 *   **`set_intro`**: (int) Sets the default Intro effect. See [here](Effects-Library.md#intro-and-outro-animations) for a list of available.
 *   **`set_outro`**: (int) Sets the default Outro effect (uses the same indices as `set_intro`).

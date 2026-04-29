@@ -16,38 +16,14 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 
 ### Reality Check
 
-**Your mileage may vary.**
-Visual effects are computationally expensive.
+**Your mileage may vary.** Visual effects are computationally expensive.
 
-*   **Hardware:** A dual-core ESP32 is highly recommended. Its architecture allows for smooth effect rendering independent of network tasks. Single-core devices are not suggested, but performance cannot be guaranteed and will vary significantly based on the specific effect and overall system load.
+*   **Use a dual-core ESP32.** Single-core devices (C3, S2) can run ChimeraFX, but may stutter under load — see the [hardware compatibility table](Installation.md#prerequisites).
+*   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. As a rule of thumb, target **60–70% of theoretical maximums** to leave breathing room for Wi-Fi and other tasks.
+*   **SPI strips (APA102, SK9822) shift the bottleneck to the CPU**, not the wire. More LEDs = more math per frame.
+*   **Heavy co-residents hurt.** Running ChimeraFX alongside *Bluetooth Proxy* or *Camera* components will likely cause instability.
 
-*   **System Framerate & Performance Bottlenecks:**
-    Maintaining a fluid **50-60 FPS** (or even a stable **30 FPS**) requires balancing two distinct bottlenecks: the physical speed of the LED protocol, and the computational "math" budget of the ESP32.
-
-    ### 1. The Physical Limit (1-Wire Strips)
-    For **1-wire NRZ** (WS281x, SK6812, WS2811), the protocol is strictly locked to an **800kHz** data rate. Data is sent serially, meaning your **pixel count per pin** dictates the minimum time required just to push data down the wire, regardless of how fast your CPU is.
-
-    *   **RGB (WS2812B/WS2811):** ~30µs per LED. Theoretical max for 30 FPS: **~1,000 LEDs.**
-    *   **RGBW (SK6812):** ~40µs per LED. Theoretical max for 30 FPS: **~800 LEDs.**
-
-    ### 2. The SPI Advantage (2-Wire Strips)
-    If you are using **2-wire SPI strips** (APA102, SK9822), the physical bottleneck practically disappears. Because they have a dedicated clock line, data can be pushed at much higher speeds (often 10MHz to 20MHz+). They are incredibly solid and won't bottleneck your framerate at the hardware level.
-    
-    *However*, using SPI strips simply shifts the bottleneck directly to the **ESP32's CPU**. Pushing data to 2,000 APA102 LEDs is incredibly fast, but asking the ESP32 to calculate complex ChimeraFX animations for 2,000 pixels 60 times a second will quickly max out your math budget and CPU availability. 
-
-    ### 2. The Computational Limit (Processing Overhead)
-    Because ChimeraFX operates as a modular component, it must share the ESP32’s CPU cycles with other tasks (such as Wi-Fi, Bluetooth, sensor polling, or web servers). 
-    *   **The "Math" Tax:** Every additional LED increases the time the CPU needs to calculate complex math for an effect.
-    *   **Resource Contention:** If other components are active, the time available for ChimeraFX to "render" a frame shrinks. If the math + transmission time exceeds your frame budget (e.g., 33ms for 30 FPS), the system will drop frames, causing visible stuttering.
-
-    **Note:** The values above are theoretical maximums. In practice, you should target **60–70% of these limits** to provide enough "breathing room" for the CPU to handle effect calculations and background system tasks without dropping frames.
-
-    **Pro Tip:** To drive large arrays without sacrificing smoothness, distribute your LEDs across **multiple data pins**. This allows the hardware to take advantage of parallel driving, effectively multiplying your available bandwidth.
-
-
-    *   **Resources:** Trying to run complex effects alongside heavy components (like *Bluetooth Proxy* or *Cameras*) will likely cause instability.
-
-    *   **Optimization:** This library is optimized for both ESP-IDF and Arduino frameworks, but hardware resources are finite. Manage your load accordingly.
+For detailed FPS targets, RMT limits, RAM budgets, and power planning, see [Performance & Troubleshooting](Troubleshooting.md).
 
 ---
 
@@ -58,10 +34,10 @@ Visual effects are computationally expensive.
 *   **ChimeraFX Sequencer**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
 *   **Zero-Lambda Config**: Uses a clean `external_components` setup.
 *   **Rich Effect Library**: Ports of complex effects that were previously impossible or slow in pure YAML using `addressable_lambda`.
-*   **Custom Palettes**: A curated selection of palettes to choose from.
+*   **Custom Palettes**: A curated selection of palettes to choose from plus a smart palette generator.
 *   **Intro and Outro Effects**: Run a special effect when the light turns on or off.
 *   **Presets**: Create your own effect configurations.
-*   **Full Control**: Support for Speed, Intensity, Palettes, timers and Mirroring in real time or through presets.
+*   **Full Control**: Support for Speed, Intensity, Palettes, and Mirroring in real time or through presets.
 *   **Autotuning**: Automatically load default parameters and tune the effect for you .
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
 
@@ -70,7 +46,7 @@ Visual effects are computationally expensive.
 *   **[Installation Guide](Installation.md)** - Get up and running in minutes.
 *   **[Controls Guide](Controls.md)** - How to set up inputs and switches.
 *   **[Effect Library](Effects-Library.md)** - Browse available effects and palettes.
-*   **[ChimeraFX Orchestrator](cfx_sequence.md)** - Logic, events, and reactive automations.
+*   **[ChimeraFX Sequencer](cfx_sequence.md)** - Logic, events, and reactive automations.
 *   **[Troubleshooting](Troubleshooting.md)** - Fix common issues (flickering, memory).
 
 ---

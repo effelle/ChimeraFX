@@ -27,32 +27,6 @@ You can achieve that in two ways under your `cfx_light` entity:
 
 - Remove specific controls with the `ctrl_exclude` option by listing the IDs you want to exclude:
 
-```yaml
-light:
-  - platform: cfx_light
-    name: "LED Strip"
-    id: led_strip
-    pin: GPIO16
-    num_leds: 120
-    chipset: WS2812X
-    ctrl_exclude: [3,4,5,6,7,8,9] # Keeping only Speed and Intensity controls
-```
-
-- Or use `controls: false` to disable all controls at once.
-
-```yaml
-light:
-  - platform: cfx_light
-    name: "LED Strip"
-    id: led_strip
-    pin: GPIO16
-    num_leds: 120
-    chipset: WS2812X
-    controls: false # Disable all controls
-```
-
----
-
 ## Overview of Controls
 
 ### Controls IDs List
@@ -69,10 +43,10 @@ light:
 | 9 | Debug (Diagnostic) |
 
 ### ID 1: Speed
-Controls the speed of the effect. The higher the value, the faster the effect will run. Range: `0-255`.
+Controls the speed of the effect. The higher the value, the faster the effect will run. Range: `0-255` *(default: 128 when Autotune is disabled)*.
 
 ### ID 2: Intensity
-Controls the intensity of the effect. Depending on the effect, this slider may influence parameters such as saturation, pattern length, and more. Range: `0-255`.
+Controls the intensity of the effect. Depending on the effect, this slider may influence parameters such as saturation, pattern length, and more. Range: `0-255` *(default: 128 when Autotune is disabled)*.
 
 ### ID 3: Palette
 Controls the palette used by the effect. A palette is the set of colors the effect draws from, and each effect has a default palette that this control can override. Some effects, such as Fire, Fire Dual, and Ocean, do not allow palette changes; this is intentional to preserve their visual character. The list of selectable palettes can be found in the [Palettes](Effects-Library.md#palettes) section.
@@ -98,3 +72,31 @@ Available only on RGBW/WRGB lights with a dedicated white channel. When enabled,
 
 ### ID 9: Debug
 Enables or disables runtime debug logging. This switch is available under the Diagnostic tab in Home Assistant. Useful for troubleshooting issues by providing detailed output in the ESPHome logs. **Defaults to OFF.** Enabling debug mode may slightly impact animation smoothness due to logging overhead. See [Troubleshooting](Troubleshooting.md) for more details.
+
+#### Examples
+Example of how to remove specific controls or all controls:
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    ctrl_exclude: [3,4,5,6,7,8,9] # Exclude Palette, Mirror, Intro/Outro, 
+                                  # HA Events, Autotune, Force White, Debug
+```
+
+- Or use `controls: false` to disable all controls at once.
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    controls: false # Disable all controls
+```

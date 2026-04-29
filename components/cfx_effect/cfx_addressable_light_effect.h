@@ -214,12 +214,18 @@ public:
     select::Select *outro_effect{nullptr};
     switch_::Switch *debug_switch{nullptr};
 
-    // 9 preset optionals (~24 bytes) — empty for most virtual segments
+    // Effect preset defaults. Empty/inactive for most virtual segments.
     std::optional<uint8_t> speed_preset{};
     std::optional<uint8_t> intensity_preset{};
     std::optional<uint8_t> palette_preset{};
+    std::optional<float> brightness_preset{};
+    bool has_color_preset{false};
+    bool color_preset_has_white{false};
+    uint8_t color_preset_r{0};
+    uint8_t color_preset_g{0};
+    uint8_t color_preset_b{0};
+    uint8_t color_preset_w{0};
     std::optional<bool> mirror_preset{};
-    std::optional<bool> autotune_preset{};
     std::optional<bool> force_white_preset{};
     std::optional<uint8_t> intro_preset{};
     std::optional<float> inout_duration_preset{};
@@ -322,8 +328,26 @@ public:
   void set_outro_duration_preset(float v) { ensure_cfg_(); cfg_->inout_duration_preset = v; }
   void set_intensity_preset(uint8_t v) { ensure_cfg_(); cfg_->intensity_preset = v; }
   void set_palette_preset(uint8_t v) { ensure_cfg_(); cfg_->palette_preset = v; }
+  void set_brightness_preset(float v) { ensure_cfg_(); cfg_->brightness_preset = v; }
+  void set_color_preset_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    ensure_cfg_();
+    cfg_->has_color_preset = true;
+    cfg_->color_preset_has_white = false;
+    cfg_->color_preset_r = r;
+    cfg_->color_preset_g = g;
+    cfg_->color_preset_b = b;
+    cfg_->color_preset_w = 0;
+  }
+  void set_color_preset_rgbw(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+    ensure_cfg_();
+    cfg_->has_color_preset = true;
+    cfg_->color_preset_has_white = true;
+    cfg_->color_preset_r = r;
+    cfg_->color_preset_g = g;
+    cfg_->color_preset_b = b;
+    cfg_->color_preset_w = w;
+  }
   void set_mirror_preset(bool v) { ensure_cfg_(); cfg_->mirror_preset = v; }
-  void set_autotune_preset(bool v) { ensure_cfg_(); cfg_->autotune_preset = v; }
   void set_force_white_preset(bool v) { ensure_cfg_(); cfg_->force_white_preset = v; }
 
   void set_virtual_segment(bool virtual_segment) {
@@ -418,8 +442,9 @@ protected:
   bool has_speed_preset_() const { return cfg_ && cfg_->speed_preset.has_value(); }
   bool has_intensity_preset_() const { return cfg_ && cfg_->intensity_preset.has_value(); }
   bool has_palette_preset_() const { return cfg_ && cfg_->palette_preset.has_value(); }
+  bool has_brightness_preset_() const { return cfg_ && cfg_->brightness_preset.has_value(); }
+  bool has_color_preset_() const { return cfg_ && cfg_->has_color_preset; }
   bool has_mirror_preset_() const { return cfg_ && cfg_->mirror_preset.has_value(); }
-  bool has_autotune_preset_() const { return cfg_ && cfg_->autotune_preset.has_value(); }
   bool has_force_white_preset_() const { return cfg_ && cfg_->force_white_preset.has_value(); }
   bool has_intro_preset_() const { return cfg_ && cfg_->intro_preset.has_value(); }
   bool has_inout_duration_preset_() const { return cfg_ && cfg_->inout_duration_preset.has_value(); }
@@ -428,8 +453,13 @@ protected:
   uint8_t speed_preset_val_() const { return cfg_->speed_preset.value(); }
   uint8_t intensity_preset_val_() const { return cfg_->intensity_preset.value(); }
   uint8_t palette_preset_val_() const { return cfg_->palette_preset.value(); }
+  float brightness_preset_val_() const { return cfg_->brightness_preset.value(); }
+  bool color_preset_has_white_() const { return cfg_->color_preset_has_white; }
+  uint8_t color_preset_r_() const { return cfg_->color_preset_r; }
+  uint8_t color_preset_g_() const { return cfg_->color_preset_g; }
+  uint8_t color_preset_b_() const { return cfg_->color_preset_b; }
+  uint8_t color_preset_w_() const { return cfg_->color_preset_w; }
   bool mirror_preset_val_() const { return cfg_->mirror_preset.value(); }
-  bool autotune_preset_val_() const { return cfg_->autotune_preset.value(); }
   bool force_white_preset_val_() const { return cfg_->force_white_preset.value(); }
   uint8_t intro_preset_val_() const { return cfg_->intro_preset.value(); }
   float inout_duration_preset_val_() const { return cfg_->inout_duration_preset.value(); }
@@ -590,6 +620,7 @@ public:
   // Applies per-effect defaults to UI sliders/palette and records expected
   // values. Only touches controls that don't have a hard YAML preset.
   void apply_autotune_defaults_();
+  void apply_startup_light_presets_();
 
   // Transition length saved/restored around effect runs for virtual segments
   // to prevent the white flash from ESPHome's transition engine.

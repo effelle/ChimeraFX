@@ -636,57 +636,6 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 169
         ```
 
-
-??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
-        </video>
-        *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Crystallize"
-              effect_id: 174
-        ```
-
-??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Deep_Breathe.webm" type="video/webm">
-        </video>
-        *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Deep Breathe"
-              effect_id: 175
-        ```
-
 ??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
 
     === "🎬 Preview"

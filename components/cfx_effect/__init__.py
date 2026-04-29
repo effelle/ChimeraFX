@@ -77,11 +77,18 @@ CONF_MIRROR = "mirror"
 CONF_SET_SPEED = "set_speed"
 CONF_SET_INTENSITY = "set_intensity"
 CONF_SET_PALETTE = "set_palette"
+CONF_SET_BRIGHTNESS = "set_brightness"
+CONF_SET_COLOR = "set_color"
 CONF_SET_MIRROR = "set_mirror"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_INOUT_DURATION = "set_inout_dur"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_FORCE_WHITE = "set_force_white"
+
+SET_COLOR_SCHEMA = cv.All(
+    cv.ensure_list(cv.int_range(min=0, max=100)),
+    cv.Length(min=3, max=4),
+)
 
 
 # Intro Configuration
@@ -260,6 +267,8 @@ CFX_EFFECTS = [
         cv.Optional(CONF_SET_SPEED): cv.int_range(0, 255),
         cv.Optional(CONF_SET_INTENSITY): cv.int_range(0, 255),
         cv.Optional(CONF_SET_PALETTE): cv.int_range(0, 255),
+        cv.Optional(CONF_SET_BRIGHTNESS): cv.percentage,
+        cv.Optional(CONF_SET_COLOR): SET_COLOR_SCHEMA,
         cv.Optional(CONF_SET_MIRROR): cv.boolean,
         cv.Optional(CONF_SET_INTRO): cv.int_range(min=0, max=27),  # CFX-024: IntroMode enum now has 28 entries (0-27)
         cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
@@ -343,6 +352,19 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
         cg.add(effect.set_intensity_preset(config[CONF_SET_INTENSITY]))
     if CONF_SET_PALETTE in config:
         cg.add(effect.set_palette_preset(config[CONF_SET_PALETTE]))
+    if CONF_SET_BRIGHTNESS in config:
+        cg.add(effect.set_brightness_preset(config[CONF_SET_BRIGHTNESS]))
+    if CONF_SET_COLOR in config:
+        color = config[CONF_SET_COLOR]
+        scaled = [int(round(channel * 255 / 100)) for channel in color]
+        if len(color) == 3:
+            cg.add(effect.set_color_preset_rgb(scaled[0], scaled[1], scaled[2]))
+        else:
+            cg.add(
+                effect.set_color_preset_rgbw(
+                    scaled[0], scaled[1], scaled[2], scaled[3]
+                )
+            )
     if CONF_SET_MIRROR in config:
         cg.add(effect.set_mirror_preset(config[CONF_SET_MIRROR]))
     if CONF_SET_INTRO in config:
