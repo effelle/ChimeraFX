@@ -1133,11 +1133,18 @@ void CFXLightOutput::update_state(light::LightState *state) {
   // starts while the light is OFF, the gate stays at 0 and the strip stays
   // black.
   uint8_t max_brightness = 0;
+  auto *active_cfx_effect = resolve_active_cfx_effect(state);
+  const bool effect_uses_default_transition =
+      active_cfx_effect != nullptr &&
+      active_cfx_effect->uses_default_transition();
   if (this->is_effect_active()) {
-    auto remote = state->remote_values;
-    max_brightness =
-        light::to_uint8_scale(remote.get_brightness() * remote.get_state());
-    if (max_brightness == 0 && remote.is_on()) {
+    const auto &gate_values =
+        effect_uses_default_transition ? state->current_values
+                                       : state->remote_values;
+    max_brightness = light::to_uint8_scale(gate_values.get_brightness() *
+                                           gate_values.get_state());
+    if (max_brightness == 0 && state->remote_values.is_on() &&
+        !chimera_fx::LightStateProxy::has_active_transformer(state)) {
       max_brightness = 255;
     }
   } else {

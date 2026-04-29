@@ -271,6 +271,7 @@ public:
   // CFX-044: Stack bypass evaluation
   bool has_pending_completion() const { return this->act_ != nullptr && this->act_->completion_pending; }
   void execute_completion();
+  bool uses_default_transition() const { return this->allow_default_transition_(); }
 
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
