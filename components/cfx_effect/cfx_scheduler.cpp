@@ -237,24 +237,111 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   }
 }
 
+// ── flush_pending ─────────────────────────────────────────────────────────────
+
+#if CFX_DUAL_CORE
+void CFXScheduler::flush_pending() {
+  const size_t total = pending_runners_.size();
+  if (total == 0) return;
+
+  if (force_sequential_ || total < 2 || core0_task_ == nullptr || core0_done_ == nullptr) {
+    // Sequential fallback: single runner, no Core 0, or diag mode.
+    for (auto *r : pending_runners_) {
+      if (r != nullptr) {
+        InstanceGuard guard(r);
+        r->service();
+      }
+    }
+    return;
+  }
+
+  // ── Cost-weighted bin-packing split (Longest Processing Time heuristic) ──
+  // Sort runners heaviest-first so largest jobs are placed first,
+  // minimising load imbalance between cores.
+  std::vector<CFXRunner *> sorted(pending_runners_.begin(), pending_runners_.end());
+  std::sort(sorted.begin(), sorted.end(), [](CFXRunner *a, CFXRunner *b) {
+    return a->frame_time > b->frame_time;
+  });
+
+  uint32_t cost0 = 0, cost1 = 0;
+  core0_slice_.clear();
+  std::vector<CFXRunner *> core1_slice;
+
+  for (auto *r : sorted) {
+    if (cost1 <= cost0) {
+      core1_slice.push_back(r);
+      cost1 += r->frame_time;
+    } else {
+      core0_slice_.push_back(r);
+      cost0 += r->frame_time;
+    }
+  }
+
+  constexpr uint32_t TIMEOUT_MS = (FRAMETIME + 12 > 25) ? (FRAMETIME + 12) : 25;
+
+  // Wake Core 0 — it will start servicing core0_slice_ immediately.
+  xTaskNotifyGive(core0_task_);
+
+  // Core 1 services its slice inline in parallel with Core 0.
+  for (auto *r : core1_slice) {
+    if (r != nullptr) {
+      InstanceGuard guard(r);
+      r->service();
+    }
+  }
+
+  // Wait for Core 0 to finish before returning.
+  // On timeout the strip retains its last valid pixel values — graceful degradation.
+  if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(TIMEOUT_MS)) != pdTRUE) {
+    ESP_LOGW(TAG, "Core 0 batch flush timeout (%ums) — %u runners may have stale pixels",
+             TIMEOUT_MS, (unsigned)core0_slice_.size());
+  }
+
+  ESP_LOGV(TAG, "Batch flush: %u runners split C0=%u/C1=%u (cost %u/%u ms)",
+           (unsigned)total, (unsigned)core0_slice_.size(), (unsigned)core1_slice.size(),
+           (unsigned)cost0, (unsigned)cost1);
+}
+#endif
+
+// ── service_runner ────────────────────────────────────────────────────────────
+
 void CFXScheduler::service_runner(CFXRunner *r) {
   if (r == nullptr) return;
+
+#if CFX_DUAL_CORE
+  if (!force_sequential_ && core0_task_ != nullptr && core0_done_ != nullptr) {
+
+    // ── Tick boundary detection ─────────────────────────────────────────────
+    // pending_runners_ accumulates one entry per runner per tick.
+    // When a runner that is already in pending_runners_ is presented again,
+    // ESPHome's apply() loop has wrapped around — we are in a new tick.
+    // Flush the previous tick's list in parallel, then start fresh.
+    bool is_new_tick = false;
+    for (auto *p : pending_runners_) {
+      if (p == r) { is_new_tick = true; break; }
+    }
+
+    if (is_new_tick) {
+      const size_t flushed = pending_runners_.size();
+      flush_pending();
+      pending_runners_.clear();
+      ESP_LOGD(TAG, "Tick flush: %u runners dispatched C0=%u / C1=%u",
+               (unsigned)flushed, (unsigned)core0_slice_.size(),
+               (unsigned)(flushed - core0_slice_.size()));
+    }
+
+    // Register this runner for the upcoming flush — do NOT call service() now.
+    // service() will be called by flush_pending() at the next tick boundary.
+    // The pixel buffer retains last tick's values until the flush runs,
+    // introducing ≤1 frame of visual latency (~28ms at 35 FPS — imperceptible).
+    pending_runners_.push_back(r);
+    return;
+  }
+#endif
+
+  // Sequential path: single-core, force_sequential, or Core 0 not live.
   InstanceGuard guard(r);
   r->service();
-
-  // RAM-AUDIT: HWM instrumentation (VERBOSE — measurement complete).
-  // Data collected 2026-04-29: main loop task ~20 KB free under 8-runner load.
-  // Core 0 task (4 KB) is never woken — inter-effect parallelism requires a
-  // deferred batch dispatch model (future work):
-  //   Activate threshold  >20ms: ≥3 heavy runners, loop over budget
-  //   Deactivate threshold <18ms: ≤2 runners, Core 1 sufficient
-  static uint32_t single_hwm_counter = 0;
-  if (++single_hwm_counter >= 200) {
-    single_hwm_counter = 0;
-    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-    ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
-             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-  }
 }
 
 void CFXScheduler::drain_core0() {
