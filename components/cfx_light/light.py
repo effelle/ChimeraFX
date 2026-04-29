@@ -177,6 +177,10 @@ def _coalesce_alias(config, canonical_key, alias_keys, *, scope):
 def _normalize_control_aliases(config):
     config = dict(config)
 
+    effects_conf = config.get(CONF_EFFECTS)
+    if isinstance(effects_conf, dict):
+        config[CONF_EFFECTS] = [effects_conf]
+
     intro_val = _coalesce_alias(
         config, "use_intro", [CONF_SET_INTRO], scope="cfx_light intro default"
     )
