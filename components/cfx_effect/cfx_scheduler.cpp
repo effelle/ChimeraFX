@@ -300,9 +300,6 @@ void CFXScheduler::flush_pending() {
              TIMEOUT_MS, (unsigned)core0_slice_.size());
   }
 
-  ESP_LOGV(TAG, "Batch flush: %u runners split C0=%u/C1=%u (cost %u/%u ms)",
-           (unsigned)total, (unsigned)core0_slice_.size(), (unsigned)core1_slice.size(),
-           (unsigned)cost0, (unsigned)cost1);
 }
 #endif
 
@@ -325,12 +322,8 @@ void CFXScheduler::service_runner(CFXRunner *r) {
     }
 
     if (is_new_tick) {
-      const size_t flushed = pending_runners_.size();
       flush_pending();
       pending_runners_.clear();
-      ESP_LOGV(TAG, "Tick flush: %u runners C0=%u / C1=%u",
-               (unsigned)flushed, (unsigned)core0_slice_.size(),
-               (unsigned)(flushed - core0_slice_.size()));
     }
 
     // Register this runner for the upcoming flush — do NOT call service() now.
