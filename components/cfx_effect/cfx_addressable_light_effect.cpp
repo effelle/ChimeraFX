@@ -645,8 +645,8 @@ void CFXAddressableLightEffect::start() {
   // ── CFX-044: Heap floor guard ─────────────────────────────────────────────
   // Refuse to start a new effect if free heap is below the safety floor.
   // The ESP32 radio stack (WiFi / BT / LwIP) needs ~60 kB of contiguous heap
-  // to operate. We temporarily keep a larger 100 kB test floor so the visible
-  // low-RAM warning is easier to validate on real hardware.
+  // to operate. We keep a wider safety floor here so the MCU never gets close
+  // to the instability range while trying to start a new effect.
   //
   // When the guard fires the effect simply does not start. Instead, the
   // impacted light shows a native red 5-second warning and is then forced OFF.
@@ -654,7 +654,7 @@ void CFXAddressableLightEffect::start() {
   // The guard is skipped when act_ is already allocated (rapid start/stop
   // cycle reusing the existing object) because no new heap is consumed.
   constexpr uint32_t CFX_HEAP_FLOOR =
-      100000U; // Temporary test floor for validating the red warning path
+      100000U;
   if (this->act_ == nullptr) {
     uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (free_heap < CFX_HEAP_FLOOR) {

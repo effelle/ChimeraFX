@@ -241,14 +241,11 @@ void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
   uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(state)) ^
                   0xCF044u;
 
-  auto clear_call = state->make_call();
-  clear_call.set_effect("None");
-  clear_call.perform();
-
   auto on_call = state->make_call();
   on_call.set_effect("None");
-  on_call.set_state(true);
   on_call.set_transition_length(0);
+  on_call.set_state(true);
+  on_call.set_brightness(1.0f);
 
   auto color_mode = resolve_low_ram_warning_mode(state);
   if (color_mode != light::ColorMode::ON_OFF &&
@@ -270,11 +267,8 @@ void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
   this->applying_turn_on_defaults_ = false;
 
   esphome::App.scheduler.set_timeout(this, hash, LOW_RAM_WARNING_MS, [state]() {
-    auto clear_effect = state->make_call();
-    clear_effect.set_effect("None");
-    clear_effect.perform();
-
     auto off_call = state->make_call();
+    off_call.set_effect("None");
     off_call.set_state(false);
     off_call.set_transition_length(0);
     off_call.perform();
