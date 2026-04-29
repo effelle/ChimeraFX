@@ -545,18 +545,14 @@ struct FrameDiagnostics {
 #endif
 
     float avg_frame_ms = (float)avg_frame_us / 1000.0f;
-    float avg_service_ms = (float)avg_service_us / 1000.0f;
-    float max_service_ms = (float)max_service_us / 1000.0f;
     uint32_t free_heap_kb = free_heap / 1024;
 
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Work: %.2f/%.2fms | "
-             "Jitter: %.0f%% | Heap: %ukB [ACTV]",
+             "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
+             "Heap: %ukB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              pending_mode_name_ ? pending_mode_name_ : "?",
-             pending_mode_id_,
-             fps, avg_frame_ms, avg_service_ms, max_service_ms, jitter_pct,
-             free_heap_kb);
+             pending_mode_id_, fps, avg_frame_ms, jitter_pct, free_heap_kb);
 
     reset();
     last_log_time = cfx_millis();

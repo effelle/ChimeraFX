@@ -106,12 +106,11 @@ These symptoms are **not software bugs** — they are hardware power-rail collap
 
 6. **Consider the PSU's current rating.** A 10A / 5V PSU (50W) can be insufficient for a setup with multiple NRZ strips + one SPI strip. A 20A / 5V PSU (100W) provides the necessary headroom.
 
-## RAM optimization
+## Memory Management & Stability
 
-Visual effects are computationally expensive, and hardware resources are finite (especially RAM).
-Because ChimeraFX is an ecosystem component that shares resources with other ESPHome components, it employs a dynamic **Heap Floor Guard** to prevent memory starvation and system instability (like spontaneous resets or API disconnects). 
+Visual effects are computationally expensive, and microcontroller hardware resources are finite, particularly RAM. Because ChimeraFX is an ecosystem component that shares resources with other ESPHome components, it employs a dynamic **Heap Floor Guard** to prevent memory starvation and system instability (such as spontaneous resets or API disconnects). 
 
-Every time a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM against this dynamic floor. If the RAM is too low, it logs a warning, forces the impacted light to solid red for 5 seconds, and then turns that same light OFF.
+Whenever a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM against this dynamic floor. If the available RAM is too low, it logs a warning, forces the impacted light to solid red for 5 seconds, and then turns that same light OFF.
 
 **How the Limit is Calculated:**
 To maximize available RAM without penalizing lightweight setups, the limit is calculated automatically during compilation based on the components you include:
@@ -120,8 +119,14 @@ To maximize available RAM without penalizing lightweight setups, the limit is ca
 - ESPHome API: `+10kB`
 - Bluetooth Stack: `+20kB`
 
-A standard Wi-Fi node will have a floor of `55kB`, whereas a heavy node (Wi-Fi + BT) will enforce a `75kB` floor to protect the radio stacks and UI buffers.
+For example, a standard Wi-Fi node (Base + Wi-Fi + API) will enforce a floor of `55kB`, whereas a "heavy" node that also includes Bluetooth will enforce a `75kB` floor to safely protect the radio stacks and UI buffers.
 
+The amount of RAM reserved by the **Heap Floor Guard** is displayed in the logs at boot time:
+
+```yaml
+# Example log of an ESP32 with just Wi-Fi and API enabled
+[15:53:48.823][C][cfx_light:1896]: System CFX Heap Floor dynamically set to: 55000 B
+```
 Fortunately, you can free up RAM with a few minor adjustments. Because every setup is different, please consider the following suggestions as a starting point:
 
 **Webserver**: Unless you are running ESPHome standalone without Home Assistant, the webserver is completely redundant. It is not optimized for modern web standards, and disabling it won't affect your Home Assistant integration at all. Removing it will free ~8 kB.

@@ -1465,7 +1465,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
             (this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX)
                 ? 0
                 : this->perf_diag_min_rmt_symbols_free_;
-        ESP_LOGI(
+        ESP_LOGV(
             TAG,
             "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
             "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Def: %.2f/%u | "
@@ -1491,7 +1491,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
             static_cast<unsigned>(min_symbols_free),
             static_cast<unsigned>(this->perf_diag_flush_count_));
       } else {
-        ESP_LOGI(TAG,
+        ESP_LOGV(TAG,
                  "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | "
                  "Flush: %.2f/%.2fms | TX: %.2f/%.2fms | Calls:%u",
                  light_name, transport_name,
