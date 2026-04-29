@@ -620,7 +620,7 @@ public:
   void apply_autotune_defaults_();
   void apply_startup_light_presets_();
   void apply_startup_control_presets_();
-  void restore_preset_runtime_defaults_();
+  void restore_preset_runtime_defaults_(uint32_t delay_ms = 250);
 
   // Transition length saved/restored around effect runs for virtual segments
   // to prevent the white flash from ESPHome's transition engine.

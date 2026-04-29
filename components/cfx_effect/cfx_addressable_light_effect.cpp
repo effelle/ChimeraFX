@@ -377,7 +377,8 @@ void CFXAddressableLightEffect::apply_startup_control_presets_() {
   }
 }
 
-void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
+void CFXAddressableLightEffect::restore_preset_runtime_defaults_(
+    uint32_t delay_ms) {
   if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
       !this->has_palette_preset_() && !this->has_intro_preset_() &&
       !this->has_outro_preset_() && !this->has_inout_duration_preset_() &&
@@ -392,7 +393,7 @@ void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
 
   uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
                   0xD37Au;
-  esphome::App.scheduler.set_timeout(owner, hash, 250, [this]() {
+  esphome::App.scheduler.set_timeout(owner, hash, delay_ms, [this]() {
     auto *state = this->get_light_state();
     if (state != nullptr && state->remote_values.is_on()) {
       return;
@@ -1376,7 +1377,6 @@ void CFXAddressableLightEffect::stop() {
 
   CFXControl *c = act_->controller;
   auto *state = this->get_light_state();
-  this->restore_preset_runtime_defaults_();
 
   if (state != nullptr && act_->runner != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
@@ -1532,6 +1532,11 @@ void CFXAddressableLightEffect::stop() {
         duration_ms = outro_mode_min;
       }
       act_->active_outro_duration_ms = duration_ms;
+      uint32_t preset_reset_delay_ms =
+          (act_->active_outro_mode != INTRO_MODE_NONE)
+              ? (act_->active_outro_duration_ms + 250)
+              : 250;
+      this->restore_preset_runtime_defaults_(preset_reset_delay_ms);
 
       // Cache Intensity for Outro (since controller is detached during Outro)
       act_->active_outro_intensity = 128; // fallback
