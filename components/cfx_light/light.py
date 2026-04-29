@@ -360,6 +360,8 @@ def _inject_all_effects(config):
     # Collect names already defined by the user (they take priority)
     user_names = set()
     for eff in user_effects:
+        if not isinstance(eff, dict):
+            continue
         eff_cfx = eff.get("addressable_cfx")
         if isinstance(eff_cfx, dict):
             name = eff_cfx.get(CONF_NAME, "")
@@ -814,6 +816,8 @@ async def to_code(config):
         seg_idx = segments.index(seg)
         effect_vars = []
         for eff_idx, eff in enumerate(config.get(CONF_EFFECTS, [])):
+            if not isinstance(eff, dict):
+                continue
             if "addressable_cfx" in eff:
                 eff_conf = eff["addressable_cfx"]
                 # Must generate a globally unique ID string so we don't crash new_Pvariable
