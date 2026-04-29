@@ -91,7 +91,7 @@ void CFXScheduler::core0_task_fn(void *arg) {
     if (++hwm_report_counter >= 200) {
       hwm_report_counter = 0;
       const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGD(TAG, "Core 0 stack HWM: %u words (%u bytes free of 8192)",
+      ESP_LOGV(TAG, "Core 0 stack HWM: %u words (%u bytes free of 4096)",
                (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
 
@@ -129,7 +129,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     if (++seq_hwm_counter >= 200) {
       seq_hwm_counter = 0;
       const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGD(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
+      ESP_LOGV(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
                (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
     return;
@@ -211,7 +211,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     if (++main_hwm_counter >= 200) {
       main_hwm_counter = 0;
       const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGD(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+      ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
                (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
     return;
@@ -232,7 +232,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   if (++fallthrough_hwm_counter >= 200) {
     fallthrough_hwm_counter = 0;
     const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-    ESP_LOGD(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
+    ESP_LOGV(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
              (unsigned)hwm_words, (unsigned)(hwm_words * 4));
   }
 }
@@ -248,7 +248,7 @@ void CFXScheduler::service_runner(CFXRunner *r) {
   if (++single_hwm_counter >= 200) {
     single_hwm_counter = 0;
     const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-    ESP_LOGD(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+    ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
              (unsigned)hwm_words, (unsigned)(hwm_words * 4));
   }
 }
