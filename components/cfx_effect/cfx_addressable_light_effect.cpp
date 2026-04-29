@@ -1583,11 +1583,6 @@ void CFXAddressableLightEffect::stop() {
         duration_ms = outro_mode_min;
       }
       act_->active_outro_duration_ms = duration_ms;
-      uint32_t preset_reset_delay_ms =
-          (act_->active_outro_mode != INTRO_MODE_NONE)
-              ? (act_->active_outro_duration_ms + 250)
-              : 250;
-      this->restore_preset_runtime_defaults_(preset_reset_delay_ms);
 
       // Cache Intensity for Outro (since controller is detached during Outro)
       act_->active_outro_intensity = 128; // fallback
@@ -1740,6 +1735,7 @@ void CFXAddressableLightEffect::stop() {
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
         if (act_->active_outro_mode == INTRO_MODE_NONE) {
+          this->restore_preset_runtime_defaults_(50);
           this->act_ = nullptr;
           for (auto *r : *captured_runners)
             delete r;
@@ -1796,6 +1792,7 @@ void CFXAddressableLightEffect::stop() {
               captured_act->mono_dirty = true;
 
             if (done) {
+              this->restore_preset_runtime_defaults_(50);
               ESP_LOGV("chimera_fx",
                        "[T05] outro DONE: effect_id=%u is_mono=%d",
                        (unsigned)this->effect_id_,
@@ -1849,6 +1846,7 @@ void CFXAddressableLightEffect::stop() {
     }
 
     // Normal Stop / Cleanup (Failsafe)
+    this->restore_preset_runtime_defaults_(50);
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         if (r != act_->runner && act_->controller) {
