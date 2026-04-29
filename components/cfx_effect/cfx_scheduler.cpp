@@ -40,7 +40,10 @@ void CFXScheduler::setup() {
   BaseType_t ret = xTaskCreatePinnedToCore(
       core0_task_fn,   // task function
       "cfx_core0",     // task name (visible in FreeRTOS task list)
-      8192,            // stack: 8 KB — effects allocate via heap, not stack
+      4096,            // stack: 4 KB — RAM-AUDIT: reduced from 8192 after HWM measurement.
+                       // Task only runs: notify-wait → runner loop (InstanceGuard + service())
+                       // → semaphore-give. Effects allocate on heap, not stack.
+                       // HWM readings across Fire/Energy/Collider confirmed negligible depth.
       this,            // parameter passed to task function
       1,               // priority
       &core0_task_,    // handle out
