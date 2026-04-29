@@ -1757,7 +1757,13 @@ void CFXAddressableLightEffect::stop() {
       // virtual segments, or direct cast for non-virtual). Register outro.
       if (out != nullptr) {
         if (act_->active_outro_mode == INTRO_MODE_NONE) {
-          this->restore_preset_runtime_defaults_(50);
+          uint32_t cleanup_delay_ms = 50;
+          auto *current_state = this->get_light_state();
+          if (current_state != nullptr &&
+              current_state->get_default_transition_length() > 0) {
+            cleanup_delay_ms += current_state->get_default_transition_length();
+          }
+          this->restore_preset_runtime_defaults_(cleanup_delay_ms);
           this->act_ = nullptr;
           for (auto *r : *captured_runners)
             delete r;
@@ -1868,7 +1874,13 @@ void CFXAddressableLightEffect::stop() {
     }
 
     // Normal Stop / Cleanup (Failsafe)
-    this->restore_preset_runtime_defaults_(50);
+    uint32_t cleanup_delay_ms = 50;
+    auto *current_state = this->get_light_state();
+    if (current_state != nullptr &&
+        current_state->get_default_transition_length() > 0) {
+      cleanup_delay_ms += current_state->get_default_transition_length();
+    }
+    this->restore_preset_runtime_defaults_(cleanup_delay_ms);
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         if (r != act_->runner && act_->controller) {
