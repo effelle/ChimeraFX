@@ -218,7 +218,10 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
   }
 
   const bool has_brightness = this->has_brightness_preset_();
-  const bool has_color = this->has_color_preset_();
+  // Palette presets own the effect color story. When a preset defines both,
+  // the palette intentionally wins and the light-state color preset is ignored.
+  const bool has_color =
+      this->has_color_preset_() && !this->has_palette_preset_();
   if (!has_brightness && !has_color) {
     return;
   }
@@ -283,6 +286,65 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
                                 this->color_preset_has_white_());
     }
     call.perform();
+  });
+}
+
+void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
+  if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
+      !this->has_palette_preset_()) {
+    return;
+  }
+
+  auto *owner = this->get_diag_output();
+  if (owner == nullptr) {
+    return;
+  }
+
+  uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
+                  0xD37Au;
+  esphome::App.scheduler.set_timeout(owner, hash, 1, [this]() {
+    auto *state = this->get_light_state();
+    if (state != nullptr && state->remote_values.is_on()) {
+      return;
+    }
+
+    CFXControl *c = this->controller_;
+
+    if (this->has_speed_preset_()) {
+      number::Number *speed_num =
+          (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
+      float target = (float)this->get_default_speed_(this->effect_id_);
+      if (speed_num != nullptr && (!speed_num->has_state() ||
+                                   std::abs(speed_num->state - target) > 0.01f)) {
+        auto call = speed_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+
+    if (this->has_intensity_preset_()) {
+      number::Number *intensity_num =
+          (c && c->get_intensity()) ? c->get_intensity()
+                                    : this->local_intensity_();
+      float target = (float)this->get_default_intensity_(this->effect_id_);
+      if (intensity_num != nullptr &&
+          (!intensity_num->has_state() ||
+           std::abs(intensity_num->state - target) > 0.01f)) {
+        auto call = intensity_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+
+    if (this->has_palette_preset_()) {
+      select::Select *palette_sel =
+          (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
+      if (palette_sel != nullptr && palette_sel->current_option() != "Default") {
+        auto call = palette_sel->make_call();
+        call.set_option("Default");
+        call.perform();
+      }
+    }
   });
 }
 
@@ -1172,6 +1234,12 @@ void CFXAddressableLightEffect::stop() {
 
   CFXControl *c = act_->controller;
   auto *state = this->get_light_state();
+  const bool light_is_turning_off =
+      state != nullptr && !state->remote_values.is_on();
+
+  if (light_is_turning_off) {
+    this->restore_preset_runtime_defaults_();
+  }
 
   if (state != nullptr && act_->runner != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
@@ -3087,7 +3155,7 @@ std::optional<float> CFXAddressableLightEffect::get_default_inout_duration_s_(
 
 uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 #ifdef USE_CFX_SEQUENCE
-  if (act_->sequence_speed.has_value()) {
+  if (act_ != nullptr && act_->sequence_speed.has_value()) {
     return act_->sequence_speed.value();
   }
 #endif
@@ -3139,7 +3207,7 @@ uint8_t CFXAddressableLightEffect::get_default_speed_(uint8_t effect_id) {
 
 uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
 #ifdef USE_CFX_SEQUENCE
-  if (act_->sequence_intensity.has_value()) {
+  if (act_ != nullptr && act_->sequence_intensity.has_value()) {
     return act_->sequence_intensity.value();
   }
 #endif
@@ -3709,7 +3777,12 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
   // Manual user-selected intros/outros should follow the color picker, not
   // the wrapped effect palette. Palette-derived intro color is reserved for
   // embedded monochromatic preset behavior only.
-  if (!is_manual_transition && chimera_fx::instance != nullptr) {
+  if (this->has_palette_preset_()) {
+    pal = this->palette_preset_val_();
+    if (pal != 255) {
+      use_palette = true;
+    }
+  } else if (!is_manual_transition && chimera_fx::instance != nullptr) {
     pal = chimera_fx::instance->_segment.palette;
     if (pal == 0)
       pal = this->get_default_palette_id_(chimera_fx::instance->getMode());

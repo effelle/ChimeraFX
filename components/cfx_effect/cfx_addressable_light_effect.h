@@ -621,6 +621,7 @@ public:
   // values. Only touches controls that don't have a hard YAML preset.
   void apply_autotune_defaults_();
   void apply_startup_light_presets_();
+  void restore_preset_runtime_defaults_();
 
   // Transition length saved/restored around effect runs for virtual segments
   // to prevent the white flash from ESPHome's transition engine.
