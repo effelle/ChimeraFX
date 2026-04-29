@@ -15,9 +15,7 @@ Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these v
           set_palette: 5            # Force 'Fire' palette (ID 5)
           set_intensity: 170        # Longer tail 
           set_brightness: 80%       # Start the light at a known brightness
-          set_color: [100, 70, 31]  # Start the light with a warm amber color
           set_mirror: true          # Enable mirroring
-          set_force_white: true     # Force white channel (eligible effects)
           set_intro: 3              # Set Intro to Center
           set_outro: 5              # Set Outro to Twin Pulse
           set_inout_dur: 1.5        # Set Outro duration to 1.5 seconds
@@ -28,7 +26,7 @@ If you use the same name as an existing effect, it will be overridden with the n
 
 While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
 
-**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`.
+**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`. When a preset effect is turned OFF, all the parameters reset to their defaults values.
 
 ## Parameters
 
