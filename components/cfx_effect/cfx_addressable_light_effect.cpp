@@ -380,7 +380,8 @@ void CFXAddressableLightEffect::apply_startup_control_presets_() {
 void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
   if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
       !this->has_palette_preset_() && !this->has_intro_preset_() &&
-      !this->has_outro_preset_() && !this->has_inout_duration_preset_()) {
+      !this->has_outro_preset_() && !this->has_inout_duration_preset_() &&
+      !this->has_brightness_preset_() && !this->has_color_preset_()) {
     return;
   }
 
@@ -467,6 +468,23 @@ void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
         call.set_option("None");
         call.perform();
       }
+    }
+
+    if (state != nullptr &&
+        (this->has_brightness_preset_() || this->has_color_preset_())) {
+      auto light_call = state->make_call();
+      light_call.set_state(false);
+      light_call.set_transition_length(0);
+
+      if (this->has_brightness_preset_()) {
+        light_call.set_brightness(1.0f);
+      }
+
+      if (this->has_color_preset_()) {
+        apply_effect_preset_color(state, light_call, 255, 255, 255, 255, true);
+      }
+
+      light_call.perform();
     }
   });
 }

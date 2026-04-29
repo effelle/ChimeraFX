@@ -26,7 +26,8 @@ If you use the same name as an existing effect, it will be overridden with the n
 
 While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
 
-**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`. When a preset effect is turned OFF, all the parameters reset to their defaults values.
+**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`. 
+⚠️ **Important:** When a preset effect is turned OFF, all the parameters reset to their defaults values.
 
 ## Parameters
 
