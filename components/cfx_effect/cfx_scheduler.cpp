@@ -244,6 +244,9 @@ void CFXScheduler::flush_pending() {
   const size_t total = pending_runners_.size();
   if (total == 0) return;
 
+  // Always reset core0_slice_ so the caller's log is never stale.
+  core0_slice_.clear();
+
   if (force_sequential_ || total < 2 || core0_task_ == nullptr || core0_done_ == nullptr) {
     // Sequential fallback: single runner, no Core 0, or diag mode.
     for (auto *r : pending_runners_) {
@@ -325,7 +328,7 @@ void CFXScheduler::service_runner(CFXRunner *r) {
       const size_t flushed = pending_runners_.size();
       flush_pending();
       pending_runners_.clear();
-      ESP_LOGD(TAG, "Tick flush: %u runners dispatched C0=%u / C1=%u",
+      ESP_LOGV(TAG, "Tick flush: %u runners C0=%u / C1=%u",
                (unsigned)flushed, (unsigned)core0_slice_.size(),
                (unsigned)(flushed - core0_slice_.size()));
     }
