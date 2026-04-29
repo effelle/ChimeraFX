@@ -103,13 +103,12 @@ private:
   std::vector<CFXRunner *> core0_slice_;
 
   // Deferred batch: runners registered this tick, flushed at the next
-  // tick boundary. Tick boundary is detected when a runner already in
-  // pending_runners_ is presented again (wrap-around from ESPHome loop).
-  // last_batch_size_ is the runner count of the most recent successful full
-  // flush — used to guard against spurious early flushes when runners with
-  // different update cadences trigger duplicate detections prematurely.
+  // tick boundary. A duplicate runner triggers a flush only when at least
+  // MIN_FLUSH_INTERVAL_MS have passed since the previous flush, preventing
+  // spurious flushes from runners that update faster than FRAMETIME.
+  static constexpr uint32_t MIN_FLUSH_INTERVAL_MS = FRAMETIME / 2;
   std::vector<CFXRunner *> pending_runners_;
-  size_t last_batch_size_{1};  // calibrates to the real runner count automatically
+  uint32_t last_flush_ms_{0};
 #endif
 };
 
