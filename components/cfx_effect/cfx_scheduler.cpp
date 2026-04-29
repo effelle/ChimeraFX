@@ -313,27 +313,17 @@ void CFXScheduler::service_runner(CFXRunner *r) {
 
     // ── Tick boundary detection ─────────────────────────────────────────────
     // pending_runners_ accumulates one entry per runner per tick.
-    // A duplicate runner signals a new tick — but only if enough time has
-    // passed since the last flush (MIN_FLUSH_INTERVAL_MS = FRAMETIME/2).
-    // If the duplicate arrives within that window it is a spurious double-call
-    // from a light updating faster than FRAMETIME — skip it.
-    bool already_registered = false;
+    // When a runner already in pending_runners_ is presented again, the
+    // ESPHome apply() loop has wrapped around — flush the batch in parallel
+    // and start collecting fresh for the next tick.
+    bool is_new_tick = false;
     for (auto *p : pending_runners_) {
-      if (p == r) { already_registered = true; break; }
+      if (p == r) { is_new_tick = true; break; }
     }
 
-    if (already_registered) {
-      const uint32_t now = millis();
-      if ((now - last_flush_ms_) < MIN_FLUSH_INTERVAL_MS) {
-        // Spurious: same runner called again within the flush interval.
-        // It is already registered and will be serviced in the upcoming flush.
-        return;
-      }
-      // Real tick boundary: flush the accumulated batch now.
-      last_flush_ms_ = now;
+    if (is_new_tick) {
       flush_pending();
       pending_runners_.clear();
-      // Fall through to register r in the fresh pending list.
     }
 
     // Register this runner for the upcoming flush — do NOT call service() now.

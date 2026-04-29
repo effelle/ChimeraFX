@@ -102,13 +102,9 @@ private:
   // Protected by the notification/semaphore handshake — no mutex needed.
   std::vector<CFXRunner *> core0_slice_;
 
-  // Deferred batch: runners registered this tick, flushed at the next
-  // tick boundary. A duplicate runner triggers a flush only when at least
-  // MIN_FLUSH_INTERVAL_MS have passed since the previous flush, preventing
-  // spurious flushes from runners that update faster than FRAMETIME.
-  static constexpr uint32_t MIN_FLUSH_INTERVAL_MS = FRAMETIME / 2;
+  // Deferred batch: runners registered each tick, flushed at the next tick
+  // boundary (detected when a runner reappears in pending_runners_).
   std::vector<CFXRunner *> pending_runners_;
-  uint32_t last_flush_ms_{0};
 #endif
 };
 
