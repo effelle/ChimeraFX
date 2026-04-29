@@ -105,7 +105,11 @@ private:
   // Deferred batch: runners registered this tick, flushed at the next
   // tick boundary. Tick boundary is detected when a runner already in
   // pending_runners_ is presented again (wrap-around from ESPHome loop).
+  // last_batch_size_ is the runner count of the most recent successful full
+  // flush — used to guard against spurious early flushes when runners with
+  // different update cadences trigger duplicate detections prematurely.
   std::vector<CFXRunner *> pending_runners_;
+  size_t last_batch_size_{1};  // calibrates to the real runner count automatically
 #endif
 };
 

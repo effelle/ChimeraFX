@@ -315,15 +315,27 @@ void CFXScheduler::service_runner(CFXRunner *r) {
     // pending_runners_ accumulates one entry per runner per tick.
     // When a runner that is already in pending_runners_ is presented again,
     // ESPHome's apply() loop has wrapped around — we are in a new tick.
-    // Flush the previous tick's list in parallel, then start fresh.
-    bool is_new_tick = false;
+    // GUARD: only flush when pending has reached last_batch_size_. If the
+    // duplicate arrives before that, it's a spurious double-call caused by
+    // runners at different update cadences — ignore it; the runner is already
+    // registered and will be serviced in the real upcoming flush.
+    bool already_registered = false;
     for (auto *p : pending_runners_) {
-      if (p == r) { is_new_tick = true; break; }
+      if (p == r) { already_registered = true; break; }
     }
 
-    if (is_new_tick) {
+    if (already_registered) {
+      if (pending_runners_.size() < last_batch_size_) {
+        // Spurious double-call: runner is already registered for this tick,
+        // and the batch isn't full yet. Skip — it will be serviced in the
+        // real upcoming flush.
+        return;
+      }
+      // Full batch confirmed — this is a real tick boundary. Flush now.
+      last_batch_size_ = pending_runners_.size();
       flush_pending();
       pending_runners_.clear();
+      // Fall through to register r in the fresh pending list.
     }
 
     // Register this runner for the upcoming flush — do NOT call service() now.
