@@ -2193,14 +2193,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       // ESPHome uses the last saved state. If no state was ever saved (e.g.
       // fresh boot), the brightness remains 0.0f. This causes the segment to
       // multiply by 0 and go dark.
-      if (state_bri == 0.0f && bri_state->remote_values.is_on()) {
+      if (state_bri == 0.0f && bri_state->remote_values.is_on() &&
+          (!this->allow_default_transition_() ||
+           !chimera_fx::LightStateProxy::has_active_transformer(bri_state))) {
         state_bri = 1.0f;
       }
 
       bri = state_bri * bri_state->current_values.get_state();
     } else {
       float state_bri = bri_state->current_values.get_brightness();
-      if (state_bri == 0.0f && bri_state->remote_values.is_on()) {
+      if (state_bri == 0.0f && bri_state->remote_values.is_on() &&
+          (!this->allow_default_transition_() ||
+           !chimera_fx::LightStateProxy::has_active_transformer(bri_state))) {
         state_bri = 1.0f;
       }
       bri = state_bri;
