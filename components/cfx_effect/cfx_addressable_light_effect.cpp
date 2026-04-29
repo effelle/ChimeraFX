@@ -1299,6 +1299,15 @@ void CFXAddressableLightEffect::start() {
       }
     }
 
+    if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active &&
+        this->allow_default_transition_()) {
+      auto *intro_state = this->get_light_state();
+      if (intro_state != nullptr &&
+          intro_state->get_default_transition_length() > 0) {
+        act_->active_intro_mode = INTRO_MODE_FADE;
+      }
+    }
+
     // 10. Intro Duration Priority Chain (Calculated ONCE during start)
     uint32_t duration_ms = 2000; // Final Default: 2.0s
     number::Number *dur_num = this->local_inout_duration_();
@@ -1355,6 +1364,12 @@ void CFXAddressableLightEffect::start() {
           } else {
             duration_ms = 2000; // Standard 2s default
           }
+        }
+      } else if (act_->active_intro_mode == INTRO_MODE_FADE) {
+        auto *current_state = this->get_light_state();
+        if (current_state != nullptr &&
+            current_state->get_default_transition_length() > 0) {
+          duration_ms = current_state->get_default_transition_length();
         }
       }
     }
