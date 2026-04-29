@@ -238,35 +238,37 @@ void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
   }
 
   constexpr uint32_t LOW_RAM_WARNING_MS = 5000U;
-  uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(state)) ^
-                  0xCF044u;
+  uint32_t on_hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(state)) ^
+                     0xCF041u;
+  uint32_t off_hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(state)) ^
+                      0xCF042u;
 
-  auto on_call = state->make_call();
-  on_call.set_effect("None");
-  on_call.set_transition_length(0);
-  on_call.set_state(true);
-  on_call.set_brightness(1.0f);
+  auto clear_call = state->make_call();
+  clear_call.set_effect("None");
+  clear_call.perform();
 
-  auto color_mode = resolve_low_ram_warning_mode(state);
-  if (color_mode != light::ColorMode::ON_OFF &&
-      color_mode != light::ColorMode::UNKNOWN) {
-    on_call.set_color_mode(color_mode);
-  }
-  if (color_mode == light::ColorMode::RGB ||
-      color_mode == light::ColorMode::RGB_WHITE) {
-    on_call.set_rgb(1.0f, 0.0f, 0.0f);
-  }
-  if (color_mode == light::ColorMode::RGB_WHITE) {
-    on_call.set_white(0.0f);
-  } else if (color_mode == light::ColorMode::WHITE) {
-    on_call.set_white(1.0f);
-  }
+  esphome::App.scheduler.set_timeout(this, on_hash, 0, [this, state]() {
+    auto on_call = state->make_call();
+    on_call.set_transition_length(0);
+    on_call.set_state(true);
+    on_call.set_brightness(1.0f);
 
-  this->applying_turn_on_defaults_ = true;
-  on_call.perform();
-  this->applying_turn_on_defaults_ = false;
+    auto color_mode = resolve_low_ram_warning_mode(state);
+    if (color_mode == light::ColorMode::RGB ||
+        color_mode == light::ColorMode::RGB_WHITE) {
+      on_call.set_color_mode(light::ColorMode::RGB);
+      on_call.set_rgb(1.0f, 0.0f, 0.0f);
+    } else if (color_mode == light::ColorMode::WHITE) {
+      on_call.set_color_mode(light::ColorMode::WHITE);
+      on_call.set_white(1.0f);
+    }
 
-  esphome::App.scheduler.set_timeout(this, hash, LOW_RAM_WARNING_MS, [state]() {
+    this->applying_turn_on_defaults_ = true;
+    on_call.perform();
+    this->applying_turn_on_defaults_ = false;
+  });
+
+  esphome::App.scheduler.set_timeout(this, off_hash, LOW_RAM_WARNING_MS, [state]() {
     auto off_call = state->make_call();
     off_call.set_effect("None");
     off_call.set_state(false);
