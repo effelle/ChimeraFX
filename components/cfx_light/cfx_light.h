@@ -86,8 +86,11 @@ struct CFXTurnOnDefaults {
     return false;
   }
 
-  void apply(light::LightCall &call, bool allow_white) const {
-    call.set_transition_length(0);
+  void apply(light::LightCall &call, bool allow_white,
+             bool force_instant = true) const {
+    if (force_instant) {
+      call.set_transition_length(0);
+    }
 
     if (this->has_brightness) {
       call.set_brightness(this->brightness);

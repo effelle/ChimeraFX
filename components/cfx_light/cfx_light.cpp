@@ -892,7 +892,12 @@ void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
   }
 
   auto call = state->make_call();
-  this->turn_on_defaults_.apply(call, this->has_white_channel());
+  auto *active_cfx_effect = resolve_active_cfx_effect(state);
+  const bool preserve_transition =
+      active_cfx_effect != nullptr &&
+      active_cfx_effect->uses_default_transition();
+  this->turn_on_defaults_.apply(call, this->has_white_channel(),
+                                !preserve_transition);
   this->applying_turn_on_defaults_ = true;
   call.perform();
   this->applying_turn_on_defaults_ = false;
