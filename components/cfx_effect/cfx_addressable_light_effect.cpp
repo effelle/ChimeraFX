@@ -1566,30 +1566,40 @@ void CFXAddressableLightEffect::stop() {
         }
         uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
         duration_ms = 35 * unit_ms;
-      } else if (auto duration_override =
-                     this->resolve_inout_duration_override_ms_(dur_num);
-                 duration_override.has_value()) {
-        // B. Runtime override: sequence/YAML preset beats the live UI slider.
-        duration_ms = duration_override.value();
-      } else if (act_->autotune_active) {
-        if (auto autotune_duration =
-                this->get_default_inout_duration_s_(this->effect_id_);
-            autotune_duration.has_value()) {
-          duration_ms =
-              static_cast<uint32_t>(autotune_duration.value() * 1000.0f);
-        }
-      } else if (preset.is_active) {
-        // D. Fallback: Monochromatic Mode Speed Slider
-        number::Number *speed_num = this->local_speed_();
-        if (speed_num == nullptr && c != nullptr)
-          speed_num = c->get_speed();
+      } else if (act_->active_outro_mode != INTRO_MODE_NONE) {
+        if (auto duration_override =
+                this->resolve_inout_duration_override_ms_(dur_num);
+            duration_override.has_value()) {
+          // B. Runtime override: sequence/YAML preset beats the live UI
+          // slider, but only when an authored outro is actually active.
+          duration_ms = duration_override.value();
+        } else if (act_->autotune_active) {
+          if (auto autotune_duration =
+                  this->get_default_inout_duration_s_(this->effect_id_);
+              autotune_duration.has_value()) {
+            duration_ms =
+                static_cast<uint32_t>(autotune_duration.value() * 1000.0f);
+          }
+        } else if (preset.is_active) {
+          // D. Fallback: Monochromatic Mode Speed Slider
+          number::Number *speed_num = this->local_speed_();
+          if (speed_num == nullptr && c != nullptr)
+            speed_num = c->get_speed();
 
-        if (speed_num != nullptr && speed_num->has_state()) {
-          float speed_val = speed_num->state;
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
-        } else if (this->has_speed_preset_()) {
-          float speed_val = this->speed_preset_val_();
-          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          if (speed_num != nullptr && speed_num->has_state()) {
+            float speed_val = speed_num->state;
+            duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          } else if (this->has_speed_preset_()) {
+            float speed_val = this->speed_preset_val_();
+            duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          }
+        } else {
+          // E. Lowest: Light Default Transition
+          auto *current_state = this->get_light_state();
+          if (current_state != nullptr &&
+              current_state->get_default_transition_length() > 0) {
+            duration_ms = current_state->get_default_transition_length();
+          }
         }
       } else {
         // E. Lowest: Light Default Transition
