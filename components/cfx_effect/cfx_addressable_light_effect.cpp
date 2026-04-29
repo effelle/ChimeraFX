@@ -289,6 +289,66 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
   });
 }
 
+void CFXAddressableLightEffect::apply_startup_control_presets_() {
+  if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
+      !this->has_palette_preset_()) {
+    return;
+  }
+
+  auto *owner = this->get_diag_output();
+  if (owner == nullptr) {
+    return;
+  }
+
+  uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
+                  0xB41Eu;
+  esphome::App.scheduler.set_timeout(owner, hash, 1, [this]() {
+    auto *state = this->get_light_state();
+    if (state == nullptr || LightStateProxy::get_active_effect(state) != this) {
+      return;
+    }
+
+    CFXControl *c = this->controller_;
+
+    if (this->has_speed_preset_()) {
+      number::Number *speed_num =
+          (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
+      float target = (float)this->speed_preset_val_();
+      if (speed_num != nullptr && (!speed_num->has_state() ||
+                                   std::abs(speed_num->state - target) > 0.01f)) {
+        auto call = speed_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+
+    if (this->has_intensity_preset_()) {
+      number::Number *intensity_num =
+          (c && c->get_intensity()) ? c->get_intensity()
+                                    : this->local_intensity_();
+      float target = (float)this->intensity_preset_val_();
+      if (intensity_num != nullptr &&
+          (!intensity_num->has_state() ||
+           std::abs(intensity_num->state - target) > 0.01f)) {
+        auto call = intensity_num->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+
+    if (this->has_palette_preset_()) {
+      select::Select *palette_sel =
+          (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
+      std::string target = this->get_palette_name_(this->palette_preset_val_());
+      if (palette_sel != nullptr && palette_sel->current_option() != target) {
+        auto call = palette_sel->make_call();
+        call.set_option(target);
+        call.perform();
+      }
+    }
+  });
+}
+
 void CFXAddressableLightEffect::restore_preset_runtime_defaults_() {
   if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
       !this->has_palette_preset_()) {
@@ -661,6 +721,7 @@ void CFXAddressableLightEffect::start() {
   // Sync them once here so intro, main rendering, and HA-visible state all
   // start from the same target values.
   this->apply_startup_light_presets_();
+  this->apply_startup_control_presets_();
 
   // Prevent leaking if start() is called while runner_ is already initialized
   // (e.g. rapid toggles)
