@@ -238,7 +238,8 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
       return;
     }
 
-    bool needs_sync = !scheduled_state->remote_values.is_on();
+    const bool target_on = scheduled_state->remote_values.is_on();
+    bool needs_sync = !target_on;
     if (this->has_brightness_preset_() &&
         std::abs(scheduled_state->remote_values.get_brightness() -
                  this->brightness_preset_val_()) > 0.01f) {
@@ -273,7 +274,9 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
     }
 
     auto call = scheduled_state->make_call();
-    call.set_state(true);
+    if (!target_on) {
+      call.set_state(true);
+    }
     if (!this->allow_default_transition_()) {
       call.set_transition_length(0);
     }
