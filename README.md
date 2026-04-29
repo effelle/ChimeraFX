@@ -40,7 +40,7 @@ The documentation includes everything you need:
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
-* **Segment Runner Core** — High-performance parallel rendering for up to 3 independent segments per light, with support for up to 4 total `cfx_light` instances per node in any mix of RMT and SPI lights.
+* **Segment Runner Core** — High-performance parallel rendering for up to 4 independent segments per light, with support for up to 4 total `cfx_light` instances per node in any mix of RMT and SPI lights.
 * **Powerful Sequencer** — A native C++ event-driven engine for multi-light orchestration and complex timelines, running locally on-device with seamless Home Assistant integration.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **Modular Preset Architecture** — Build bespoke configurations by mixing-and-matching transitions, settings and effects. Leverage effects and procedural color groups to create a nearly infinite library of architectural and decorative lighting styles.

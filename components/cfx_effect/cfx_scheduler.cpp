@@ -81,6 +81,17 @@ void CFXScheduler::core0_task_fn(void *arg) {
       }
     }
 
+    // RAM-AUDIT: Stack high-water mark instrumentation.
+    // Reports every ~200 frames (~3s @ 66 FPS) to measure actual stack usage.
+    // Safe to remove once stack size is finalized.
+    static uint32_t hwm_report_counter = 0;
+    if (++hwm_report_counter >= 200) {
+      hwm_report_counter = 0;
+      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+      ESP_LOGD(TAG, "Core 0 stack HWM: %u words (%u bytes free of 8192)",
+               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
+    }
+
     // Signal Core 1 that this frame's slice is complete.
     xSemaphoreGive(self->core0_done_);
   }

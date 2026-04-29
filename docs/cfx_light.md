@@ -13,7 +13,7 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 
 If your strip uses standard 800 kbps NRZ timing but is not on the supported list, `WS2812X` is a reliable drop-in. For unlisted SPI strips, try `APA102`.
 
-> **Limits:** ChimeraFX currently supports up to **4** `cfx_light` instances per node (**2** on ESP32-C3), in any mix of RMT and SPI lights. Each `cfx_light` can define up to **3** segments.
+> **Limits:** ChimeraFX currently supports up to **4** `cfx_light` instances per node (**2** on ESP32-C3), in any mix of RMT and SPI lights. Each `cfx_light` can define up to **4** segments.
 
 ## Why use `cfx_light`?
 
@@ -101,7 +101,7 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 
 ## Segments (Multi-Zone Control)
 
-ChimeraFX supports dividing a single physical LED strip into up to **3 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+ChimeraFX supports dividing a single physical LED strip into up to **4 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
 
 ### Segment Configuration
 

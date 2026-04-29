@@ -148,15 +148,11 @@ void CFXRunPool::ensure_initialized_() {
   if (this->initialized_) return;
   this->initialized_ = true;
   ensure_sequence_registry_capacity_(POOL_SIZE + 8, "pool-init");
+  // Lazy: all slots start null. Sequences are heap-allocated on first claim().
+  // This avoids paying ~512 B per slot for pool entries that may never be used.
   for (uint8_t i = 0; i < POOL_SIZE; i++) {
-    // Heap-allocate each slot sequence once. They live for the firmware lifetime.
-    // Using a placeholder id/name/effect — overwritten on each claim().
-    std::string slot_id = "cfx_run_pool_" + std::to_string(i);
-    this->sequences_[i] = new CFXSequence(slot_id, slot_id, "", false);
-    // Remove from instances immediately — pool sequences self-manage registration.
-    auto &v = CFXSequence::instances;
-    v.erase(std::remove(v.begin(), v.end(), this->sequences_[i]), v.end());
-    this->slots_[i].sequence = this->sequences_[i];
+    this->sequences_[i] = nullptr;
+    this->slots_[i].sequence = nullptr;
     this->slots_[i].in_use   = false;
   }
 }
@@ -173,6 +169,18 @@ CFXSequence *CFXRunPool::claim(uint8_t depth) {
 
   for (uint8_t i = 0; i < POOL_SIZE; i++) {
     if (!this->slots_[i].in_use) {
+      // Lazy allocation: create the sequence object on first use of this slot.
+      // Subsequent claims on the same slot reuse the existing object.
+      if (this->sequences_[i] == nullptr) {
+        std::string slot_id = "cfx_run_pool_" + std::to_string(i);
+        this->sequences_[i] = new CFXSequence(slot_id, slot_id, "", false);
+        // Remove from instances — pool sequences self-manage registration.
+        auto &v = CFXSequence::instances;
+        v.erase(std::remove(v.begin(), v.end(), this->sequences_[i]), v.end());
+        this->slots_[i].sequence = this->sequences_[i];
+        ESP_LOGV("cfx_run", "Pool slot %u lazily allocated", i);
+      }
+
       this->slots_[i].in_use = true;
       this->slots_[i].depth  = depth;
       CFXSequence *seq = this->slots_[i].sequence;
@@ -567,13 +575,17 @@ void CFXSequenceSelect::loop() {
   esphome::App.feed_wdt();
   CFXEventManager::get().flush_pending();
 
-  // CFX-057: Feed WDT before each snapshot copy — these allocate and copy
-  // up to 21 registry entries + 656 effect pointers.
+  // RAM-AUDIT: Index-based iteration replaces heap-copying vector snapshots.
+  // The old approach (`std::vector<> snapshot(begin, end)`) heap-allocated
+  // ~84–2624 B every loop tick. With multiple strips this caused measurable
+  // jitter. Size-snapshot + index access is allocation-free and safe: entries
+  // removed mid-iteration are skipped via bounds check, and new entries
+  // appended beyond the snapshot size are deferred to the next tick.
   esphome::App.feed_wdt();
-  const std::vector<CFXSequence *> sequence_snapshot(CFXSequence::instances.begin(),
-                                                     CFXSequence::instances.end());
+  const size_t seq_count = CFXSequence::instances.size();
 
-  for (auto *seq : sequence_snapshot) {
+  for (size_t i = 0; i < seq_count && i < CFXSequence::instances.size(); i++) {
+    CFXSequence *seq = CFXSequence::instances[i];
     if (seq->has_pending_teardown()) {
       esphome::App.feed_wdt();
       seq->process_pending_teardown();
@@ -582,10 +594,11 @@ void CFXSequenceSelect::loop() {
   }
 
   esphome::App.feed_wdt();
-  for (auto *seq : sequence_snapshot)
-    seq->check_duration();
+  for (size_t i = 0; i < seq_count && i < CFXSequence::instances.size(); i++)
+    CFXSequence::instances[i]->check_duration();
 
-  for (auto *seq : sequence_snapshot) {
+  for (size_t i = 0; i < seq_count && i < CFXSequence::instances.size(); i++) {
+    CFXSequence *seq = CFXSequence::instances[i];
     if (seq->has_pending_duration_completion()) {
       esphome::App.feed_wdt();
       seq->complete_and_notify();
@@ -594,7 +607,8 @@ void CFXSequenceSelect::loop() {
   }
 
   esphome::App.feed_wdt();
-  for (auto *seq : sequence_snapshot) {
+  for (size_t i = 0; i < seq_count && i < CFXSequence::instances.size(); i++) {
+    CFXSequence *seq = CFXSequence::instances[i];
     if (seq->has_pending_triggers()) {
       esphome::App.feed_wdt();
       seq->flush_pending_triggers();
@@ -603,10 +617,9 @@ void CFXSequenceSelect::loop() {
   }
 
   esphome::App.feed_wdt();
-  const std::vector<chimera_fx::CFXAddressableLightEffect *> effects_snapshot(
-      chimera_fx::CFXAddressableLightEffect::all_effects.begin(),
-      chimera_fx::CFXAddressableLightEffect::all_effects.end());
-  for (auto *eff : effects_snapshot) {
+  const size_t eff_count = chimera_fx::CFXAddressableLightEffect::all_effects.size();
+  for (size_t i = 0; i < eff_count && i < chimera_fx::CFXAddressableLightEffect::all_effects.size(); i++) {
+    chimera_fx::CFXAddressableLightEffect *eff = chimera_fx::CFXAddressableLightEffect::all_effects[i];
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
       eff->execute_completion();
@@ -614,10 +627,9 @@ void CFXSequenceSelect::loop() {
     }
   }
   esphome::App.feed_wdt();
-  const std::vector<chimera_fx::CFXAddressableLightEffect *> segment_effects_snapshot(
-      chimera_fx::CFXAddressableLightEffect::all_segment_effects.begin(),
-      chimera_fx::CFXAddressableLightEffect::all_segment_effects.end());
-  for (auto *eff : segment_effects_snapshot) {
+  const size_t seg_eff_count = chimera_fx::CFXAddressableLightEffect::all_segment_effects.size();
+  for (size_t i = 0; i < seg_eff_count && i < chimera_fx::CFXAddressableLightEffect::all_segment_effects.size(); i++) {
+    chimera_fx::CFXAddressableLightEffect *eff = chimera_fx::CFXAddressableLightEffect::all_segment_effects[i];
     if (eff->has_pending_completion()) {
       esphome::App.feed_wdt();
       eff->execute_completion();

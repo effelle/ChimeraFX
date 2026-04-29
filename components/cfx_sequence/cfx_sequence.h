@@ -518,19 +518,22 @@ public:
 
 // ── cfx_run ──────────────────────────────────────────────────────────────────
 // Spawns a fully independent, pool-backed CFXSequence at runtime.
-// Each cfx_run claim allocates one slot from a fixed pool of 12 sequences.
+// Each cfx_run claim allocates one slot from a fixed pool of 16 sequences
+// (4 lights × 4 segments). Slots are lazily heap-allocated on first use
+// to avoid paying the ~512 B cost for unused slots.
+//
 // The spawned sequence is autonomous — it has its own milestone tracking,
 // its own lifecycle events, and its own on_cfx_reach triggers. It is not
 // owned by the parent and continues running after the parent completes.
 //
 // Pool slots are returned automatically when the spawned sequence completes
-// or is stopped. If all 12 slots are in use, cfx_run is a no-op with a LOGW.
+// or is stopped. If all 16 slots are in use, cfx_run is a no-op with a LOGW.
 //
 // Maximum nesting depth: CFX_RUN_MAX_DEPTH (default 8). Each cfx_run level
 // consumes one pool slot; the guard still prevents runaway recursion, but is
 // sized for larger multi-strip and segmented choreography trees.
 
-static constexpr uint8_t CFX_RUN_POOL_SIZE  = 12;
+static constexpr uint8_t CFX_RUN_POOL_SIZE  = 16;
 static constexpr uint8_t CFX_RUN_MAX_DEPTH  = 8;
 
 // Forward declaration — pool lives in cfx_sequence.cpp
@@ -649,12 +652,12 @@ public:
 private:
   CFXRunPool() = default;
 
-  // Fixed storage — 12 slots, allocated once, never freed.
-  // Each slot holds a CFXSequence constructed in-place via placement new.
+  // Fixed storage — 16 slots. Lazily heap-allocated on first claim() per slot.
+  // Once allocated, a slot persists for firmware lifetime (never freed).
   static constexpr uint8_t POOL_SIZE = CFX_RUN_POOL_SIZE;
 
-  // Heap-allocated on first use (avoids static init order issues).
-  // Each pointer is valid for the lifetime of the firmware.
+  // Lazy allocation: nullptr until first claim() of each slot.
+  // Once allocated, each pointer is valid for the firmware lifetime.
   CFXSequence *sequences_[POOL_SIZE]{};
   CFXRunSlot   slots_[POOL_SIZE]{};
   bool         initialized_{false};
