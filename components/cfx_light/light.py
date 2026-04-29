@@ -363,14 +363,19 @@ def _inject_all_effects(config):
 
     # Collect names already defined by the user (they take priority)
     user_names = set()
+    has_user_presets = False
+    has_presets_separator = False
     for eff in user_effects:
         if not isinstance(eff, dict):
             continue
         eff_cfx = eff.get("addressable_cfx")
         if isinstance(eff_cfx, dict):
+            has_user_presets = True
             name = eff_cfx.get(CONF_NAME, "")
             if name:
                 user_names.add(name)
+                if name == "--- Presets ---":
+                    has_presets_separator = True
 
     use_intro = config.get("use_intro")
     use_outro = config.get("use_outro")
@@ -382,6 +387,18 @@ def _inject_all_effects(config):
             intro_dur_sec = float(parsed_ms) / 1000.0
         except Exception:
             pass
+
+    if has_user_presets and not has_presets_separator:
+        user_effects.insert(
+            0,
+            {
+                "addressable_cfx": {
+                    "effect_id": 185,
+                    CONF_NAME: "--- Presets ---",
+                }
+            },
+        )
+        user_names.add("--- Presets ---")
 
     # Build synthetic entries from the Python registry (order preserved).
     for (cat, eid, name) in CFX_EFFECTS:

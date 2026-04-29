@@ -212,8 +212,8 @@ cfx_light::CFXLightOutput *CFXAddressableLightEffect::get_diag_output() const {
 }
 
 void CFXAddressableLightEffect::apply_startup_light_presets_() {
-  auto *state = this->get_light_state();
-  if (state == nullptr) {
+  auto *owner = this->get_diag_output();
+  if (owner == nullptr || this->get_light_state() == nullptr) {
     return;
   }
 
@@ -223,49 +223,67 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
     return;
   }
 
-  bool needs_sync = !state->remote_values.is_on();
-  if (has_brightness &&
-      std::abs(state->remote_values.get_brightness() -
-               this->brightness_preset_val_()) > 0.01f) {
-    needs_sync = true;
-  }
-  if (has_color) {
-    const float target_r = this->color_preset_r_() / 255.0f;
-    const float target_g = this->color_preset_g_() / 255.0f;
-    const float target_b = this->color_preset_b_() / 255.0f;
-    const float target_w = this->color_preset_w_() / 255.0f;
+  uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
+                  0xA51Cu;
+  esphome::App.scheduler.set_timeout(owner, hash, 1, [this]() {
+    auto *scheduled_state = this->get_light_state();
+    if (scheduled_state == nullptr) {
+      return;
+    }
 
-    if (std::abs(state->remote_values.get_red() - target_r) > 0.01f ||
-        std::abs(state->remote_values.get_green() - target_g) > 0.01f ||
-        std::abs(state->remote_values.get_blue() - target_b) > 0.01f) {
+    if (LightStateProxy::get_active_effect(scheduled_state) != this) {
+      return;
+    }
+
+    bool needs_sync = !scheduled_state->remote_values.is_on();
+    if (this->has_brightness_preset_() &&
+        std::abs(scheduled_state->remote_values.get_brightness() -
+                 this->brightness_preset_val_()) > 0.01f) {
       needs_sync = true;
     }
-    if (this->color_preset_has_white_()) {
-      if (std::abs(state->remote_values.get_white() - target_w) > 0.01f) {
+    if (this->has_color_preset_()) {
+      const float target_r = this->color_preset_r_() / 255.0f;
+      const float target_g = this->color_preset_g_() / 255.0f;
+      const float target_b = this->color_preset_b_() / 255.0f;
+      const float target_w = this->color_preset_w_() / 255.0f;
+
+      if (std::abs(scheduled_state->remote_values.get_red() - target_r) >
+              0.01f ||
+          std::abs(scheduled_state->remote_values.get_green() - target_g) >
+              0.01f ||
+          std::abs(scheduled_state->remote_values.get_blue() - target_b) >
+              0.01f) {
         needs_sync = true;
       }
-    } else if (state->remote_values.get_white() > 0.01f) {
-      needs_sync = true;
+      if (this->color_preset_has_white_()) {
+        if (std::abs(scheduled_state->remote_values.get_white() - target_w) >
+            0.01f) {
+          needs_sync = true;
+        }
+      } else if (scheduled_state->remote_values.get_white() > 0.01f) {
+        needs_sync = true;
+      }
     }
-  }
 
-  if (!needs_sync) {
-    return;
-  }
+    if (!needs_sync) {
+      return;
+    }
 
-  auto call = state->make_call();
-  call.set_state(true);
-  call.set_transition_length(0);
-  if (has_brightness) {
-    call.set_brightness(this->brightness_preset_val_());
-  }
-  if (has_color) {
-    apply_effect_preset_color(state, call, this->color_preset_r_(),
-                              this->color_preset_g_(), this->color_preset_b_(),
-                              this->color_preset_w_(),
-                              this->color_preset_has_white_());
-  }
-  call.perform();
+    auto call = scheduled_state->make_call();
+    call.set_state(true);
+    call.set_transition_length(0);
+    if (this->has_brightness_preset_()) {
+      call.set_brightness(this->brightness_preset_val_());
+    }
+    if (this->has_color_preset_()) {
+      apply_effect_preset_color(scheduled_state, call, this->color_preset_r_(),
+                                this->color_preset_g_(),
+                                this->color_preset_b_(),
+                                this->color_preset_w_(),
+                                this->color_preset_has_white_());
+    }
+    call.perform();
+  });
 }
 
 CFXAddressableLightEffect::MonochromaticPreset
@@ -1013,7 +1031,9 @@ void CFXAddressableLightEffect::start() {
           (act_->controller && act_->controller->get_intensity())
               ? act_->controller->get_intensity()
               : this->local_intensity_();
-      if (intensity_num != nullptr && intensity_num->has_state()) {
+      if (this->has_intensity_preset_()) {
+        current_speed = this->intensity_preset_val_();
+      } else if (intensity_num != nullptr && intensity_num->has_state()) {
         current_speed = (uint8_t)intensity_num->state;
       }
       uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
@@ -1044,7 +1064,10 @@ void CFXAddressableLightEffect::start() {
           if (speed_num == nullptr && act_->controller != nullptr)
             speed_num = act_->controller->get_speed();
 
-          if (speed_num != nullptr && speed_num->has_state()) {
+          if (this->has_speed_preset_()) {
+            float speed_val = this->speed_preset_val_();
+            duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+          } else if (speed_num != nullptr && speed_num->has_state()) {
             // Map Speed (0-255) to Duration (500ms up to 10000ms)
             float speed_val = speed_num->state;
             duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
@@ -1071,10 +1094,10 @@ void CFXAddressableLightEffect::start() {
 
     number::Number *speed_num =
         (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
-    if (speed_num != nullptr && speed_num->has_state()) {
-      act_->active_intro_speed = (uint8_t)speed_num->state;
-    } else if (this->has_speed_preset_()) {
+    if (this->has_speed_preset_()) {
       act_->active_intro_speed = this->speed_preset_val_();
+    } else if (speed_num != nullptr && speed_num->has_state()) {
+      act_->active_intro_speed = (uint8_t)speed_num->state;
     } else {
       act_->active_intro_speed = this->get_default_speed_(this->effect_id_);
     }
@@ -1082,10 +1105,10 @@ void CFXAddressableLightEffect::start() {
     number::Number *inten_num = (c && c->get_intensity())
                                     ? c->get_intensity()
                                     : this->local_intensity_();
-    if (inten_num != nullptr && inten_num->has_state()) {
-      act_->active_intro_intensity = (uint8_t)inten_num->state;
-    } else if (this->has_intensity_preset_()) {
+    if (this->has_intensity_preset_()) {
       act_->active_intro_intensity = this->intensity_preset_val_();
+    } else if (inten_num != nullptr && inten_num->has_state()) {
+      act_->active_intro_intensity = (uint8_t)inten_num->state;
     } else {
       act_->active_intro_intensity =
           this->get_default_intensity_(this->effect_id_);
@@ -1258,7 +1281,9 @@ void CFXAddressableLightEffect::stop() {
         number::Number *intensity_num = (c && c->get_intensity())
                                             ? c->get_intensity()
                                             : this->local_intensity_();
-        if (intensity_num != nullptr && intensity_num->has_state()) {
+        if (this->has_intensity_preset_()) {
+          current_speed = this->intensity_preset_val_();
+        } else if (intensity_num != nullptr && intensity_num->has_state()) {
           current_speed = (uint8_t)intensity_num->state;
         }
         uint32_t unit_ms = 80 + ((255 - current_speed) * 100 / 255);
@@ -1281,7 +1306,10 @@ void CFXAddressableLightEffect::stop() {
         if (speed_num == nullptr && c != nullptr)
           speed_num = c->get_speed();
 
-        if (speed_num != nullptr && speed_num->has_state()) {
+        if (this->has_speed_preset_()) {
+          float speed_val = this->speed_preset_val_();
+          duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
+        } else if (speed_num != nullptr && speed_num->has_state()) {
           float speed_val = speed_num->state;
           duration_ms = (uint32_t)(500.0f + (speed_val / 255.0f * 9500.0f));
         }
@@ -1306,7 +1334,9 @@ void CFXAddressableLightEffect::stop() {
       if (intensity_num == nullptr && c != nullptr)
         intensity_num = c->get_intensity();
 
-      if (intensity_num != nullptr && intensity_num->has_state()) {
+      if (this->has_intensity_preset_()) {
+        act_->active_outro_intensity = this->intensity_preset_val_();
+      } else if (intensity_num != nullptr && intensity_num->has_state()) {
         act_->active_outro_intensity = (uint8_t)intensity_num->state;
       } else {
         act_->active_outro_intensity =
@@ -1319,7 +1349,9 @@ void CFXAddressableLightEffect::stop() {
       if (speed_num == nullptr && c != nullptr)
         speed_num = c->get_speed();
 
-      if (speed_num != nullptr && speed_num->has_state()) {
+      if (this->has_speed_preset_()) {
+        act_->active_outro_speed = this->speed_preset_val_();
+      } else if (speed_num != nullptr && speed_num->has_state()) {
         act_->active_outro_speed = (uint8_t)speed_num->state;
       } else {
         act_->active_outro_speed = this->get_default_speed_(this->effect_id_);
@@ -3361,8 +3393,13 @@ void CFXAddressableLightEffect::run_controls_() {
 #ifdef USE_CFX_SEQUENCE
       if (act_->sequence_speed.has_value())
         current_speed = act_->sequence_speed.value();
+      else if (this->has_speed_preset_())
+        current_speed = this->speed_preset_val_();
       else
 #endif
+          if (this->has_speed_preset_()) {
+        current_speed = this->speed_preset_val_();
+      } else
           if (!transient_autotune_context && this->local_speed_()) {
         current_speed = (uint8_t)this->local_speed_()->state;
       }
@@ -3373,8 +3410,13 @@ void CFXAddressableLightEffect::run_controls_() {
 #ifdef USE_CFX_SEQUENCE
       if (act_->sequence_intensity.has_value())
         current_intensity = act_->sequence_intensity.value();
+      else if (this->has_intensity_preset_())
+        current_intensity = this->intensity_preset_val_();
       else
 #endif
+          if (this->has_intensity_preset_()) {
+        current_intensity = this->intensity_preset_val_();
+      } else
           if (!transient_autotune_context && this->local_intensity_()) {
         current_intensity = (uint8_t)this->local_intensity_()->state;
       }
@@ -3387,8 +3429,13 @@ void CFXAddressableLightEffect::run_controls_() {
 #ifdef USE_CFX_SEQUENCE
         if (act_->sequence_palette.has_value())
           current_palette = act_->sequence_palette.value();
+        else if (this->has_palette_preset_())
+          current_palette = this->palette_preset_val_();
         else
 #endif
+            if (this->has_palette_preset_()) {
+          current_palette = this->palette_preset_val_();
+        } else
             if (!transient_autotune_context && this->local_palette_()) {
           current_palette = get_pal_idx(this->local_palette_());
         }
@@ -3449,6 +3496,8 @@ void CFXAddressableLightEffect::run_controls_() {
       has_seq_palette = act_->sequence_palette.has_value();
       if (has_seq_speed)
         current_speed = act_->sequence_speed.value();
+      else if (this->has_speed_preset_())
+        current_speed = this->speed_preset_val_();
       else if (!transient_autotune_context)
 #endif
         if (c->get_speed())
@@ -3459,6 +3508,8 @@ void CFXAddressableLightEffect::run_controls_() {
 #ifdef USE_CFX_SEQUENCE
       if (has_seq_intensity)
         current_intensity = act_->sequence_intensity.value();
+      else if (this->has_intensity_preset_())
+        current_intensity = this->intensity_preset_val_();
       else if (!transient_autotune_context)
 #endif
         if (c->get_intensity())
@@ -3471,7 +3522,11 @@ void CFXAddressableLightEffect::run_controls_() {
 #ifdef USE_CFX_SEQUENCE
       else if (has_seq_palette)
         current_palette = act_->sequence_palette.value();
+      else if (this->has_palette_preset_())
+        current_palette = this->palette_preset_val_();
 #endif
+      else if (this->has_palette_preset_())
+        current_palette = this->palette_preset_val_();
       else if (!transient_autotune_context && c->get_palette())
         current_palette = get_pal_idx(c->get_palette());
 
