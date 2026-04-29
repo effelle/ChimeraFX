@@ -56,6 +56,29 @@ static uint32_t rmt_launch_stagger_gap_us() {
 #endif
 }
 
+static light::ColorMode resolve_low_ram_warning_mode(light::LightState *state) {
+  if (state == nullptr) {
+    return light::ColorMode::RGB;
+  }
+
+  const auto traits = state->get_traits();
+  if (traits.supports_color_mode(light::ColorMode::RGB)) {
+    return light::ColorMode::RGB;
+  }
+  if (traits.supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    return light::ColorMode::RGB_WHITE;
+  }
+  if (traits.supports_color_mode(light::ColorMode::WHITE)) {
+    return light::ColorMode::WHITE;
+  }
+
+  auto current_mode = state->remote_values.get_color_mode();
+  if (current_mode != light::ColorMode::UNKNOWN) {
+    return current_mode;
+  }
+  return light::ColorMode::ON_OFF;
+}
+
 void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
   if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
     return;
@@ -207,6 +230,55 @@ void CFXLightOutput::note_show_request() {
   // completed frame, not the oldest pending request, so keeping the newest
   // timestamp gives a truer queue-age measurement and avoids stale outliers.
   this->perf_diag_last_show_request_us_ = micros();
+}
+
+void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  constexpr uint32_t LOW_RAM_WARNING_MS = 5000U;
+  uint32_t hash = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(state)) ^
+                  0xCF044u;
+
+  auto clear_call = state->make_call();
+  clear_call.set_effect("None");
+  clear_call.perform();
+
+  auto on_call = state->make_call();
+  on_call.set_effect("None");
+  on_call.set_state(true);
+  on_call.set_transition_length(0);
+
+  auto color_mode = resolve_low_ram_warning_mode(state);
+  if (color_mode != light::ColorMode::ON_OFF &&
+      color_mode != light::ColorMode::UNKNOWN) {
+    on_call.set_color_mode(color_mode);
+  }
+  if (color_mode == light::ColorMode::RGB ||
+      color_mode == light::ColorMode::RGB_WHITE) {
+    on_call.set_rgb(1.0f, 0.0f, 0.0f);
+  }
+  if (color_mode == light::ColorMode::RGB_WHITE) {
+    on_call.set_white(0.0f);
+  } else if (color_mode == light::ColorMode::WHITE) {
+    on_call.set_white(1.0f);
+  }
+
+  this->applying_turn_on_defaults_ = true;
+  on_call.perform();
+  this->applying_turn_on_defaults_ = false;
+
+  esphome::App.scheduler.set_timeout(this, hash, LOW_RAM_WARNING_MS, [state]() {
+    auto clear_effect = state->make_call();
+    clear_effect.set_effect("None");
+    clear_effect.perform();
+
+    auto off_call = state->make_call();
+    off_call.set_state(false);
+    off_call.set_transition_length(0);
+    off_call.perform();
+  });
 }
 
 // Query the RMT default clock source frequency (varies by chip variant)

@@ -274,7 +274,9 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
 
     auto call = scheduled_state->make_call();
     call.set_state(true);
-    call.set_transition_length(0);
+    if (!this->allow_default_transition_()) {
+      call.set_transition_length(0);
+    }
     if (this->has_brightness_preset_()) {
       call.set_brightness(this->brightness_preset_val_());
     }
@@ -589,6 +591,47 @@ std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
   return pool;
 }
 
+bool CFXAddressableLightEffect::is_architectural_effect_id_(uint8_t effect_id) {
+  switch (effect_id) {
+  case 161:
+  case 162:
+  case 163:
+  case 164:
+  case 165:
+  case 166:
+  case 168:
+  case 169:
+  case 170:
+  case 172:
+  case 173:
+  case 174:
+  case 175:
+  case 176:
+  case 177:
+  case 178:
+  case 179:
+  case 181:
+  case 182:
+  case 183:
+  case 184:
+  case 186:
+  case 187:
+  case 188:
+  case 255:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool CFXAddressableLightEffect::allow_default_transition_() const {
+  if (this->effect_id_ == 158 || this->effect_id_ == 159 ||
+      this->effect_id_ == 185) {
+    return false;
+  }
+  return !this->is_architectural_effect_id_(this->effect_id_);
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
@@ -602,24 +645,26 @@ void CFXAddressableLightEffect::start() {
   // ── CFX-044: Heap floor guard ─────────────────────────────────────────────
   // Refuse to start a new effect if free heap is below the safety floor.
   // The ESP32 radio stack (WiFi / BT / LwIP) needs ~60 kB of contiguous heap
-  // to operate. We keep a 15 kB margin above that floor (75 kB total) to
-  // absorb small runtime allocations and segment data without risking a crash.
+  // to operate. We temporarily keep a larger 100 kB test floor so the visible
+  // low-RAM warning is easier to validate on real hardware.
   //
-  // When the guard fires the strip holds its last valid pixel state — the
-  // effect simply does not start. A LOGW is emitted so the condition is
-  // visible in the ESPHome log without stopping the device.
+  // When the guard fires the effect simply does not start. Instead, the
+  // impacted light shows a native red 5-second warning and is then forced OFF.
   //
   // The guard is skipped when act_ is already allocated (rapid start/stop
   // cycle reusing the existing object) because no new heap is consumed.
   constexpr uint32_t CFX_HEAP_FLOOR =
-      75000U; // 75 kB — 15 kB above radio stack minimum
+      100000U; // Temporary test floor for validating the red warning path
   if (this->act_ == nullptr) {
     uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (free_heap < CFX_HEAP_FLOOR) {
+      if (auto *out = resolve_diag_output(this); out != nullptr) {
+        out->trigger_low_ram_warning(this->get_light_state());
+      }
       ESP_LOGW("cfx_heap",
                "[%s] Heap too low to start effect (%u B free, %u B floor) — "
-               "strip holds last state. Free RAM before adding more "
-               "lights/segments.",
+               "showing a red 5s warning and forcing the impacted light OFF. "
+               "Free RAM before adding more lights/segments.",
                this->get_name().c_str(), free_heap, CFX_HEAP_FLOOR);
       return;
     }
@@ -721,23 +766,25 @@ void CFXAddressableLightEffect::start() {
 #endif
   }
 
-  // Zero the light's default transition length while a CFX effect is running.
-  // ESPHome's transition engine can delay effect-visible turn-on or paint the
-  // ON-state color into the shared buffer before the effect owns rendering.
-  // Keeping the configured value only for solid-color mode preserves normal
-  // fades there while making effect startup immediate. Restored in stop().
+  const bool allow_default_transition = this->allow_default_transition_();
+
+  // Effects with authored power choreography keep suppressing the native
+  // ESPHome transition path. Eligible effects preserve the configured default
+  // transition so power ON/OFF can fade while the effect renders immediately.
 
   // State Machine Init: Check if we are turning ON from OFF BEFORE modifying
   // state
   bool is_fresh_turn_on = false;
   if (auto *state = this->get_light_state()) {
     is_fresh_turn_on = !state->current_values.is_on();
-    uint32_t default_transition_ms = state->get_default_transition_length();
-    if (default_transition_ms > 0) {
-      if (act_->saved_transition_length == 0) {
-        act_->saved_transition_length = default_transition_ms;
+    if (!allow_default_transition) {
+      uint32_t default_transition_ms = state->get_default_transition_length();
+      if (default_transition_ms > 0) {
+        if (act_->saved_transition_length == 0) {
+          act_->saved_transition_length = default_transition_ms;
+        }
+        state->set_default_transition_length(0);
       }
-      state->set_default_transition_length(0);
     }
   }
 
@@ -748,11 +795,15 @@ void CFXAddressableLightEffect::start() {
     is_fresh_turn_on = true;
   }
 
-  // Force bypass transition to avoid the 1s darkness bug on initial render
+  // Only authored power-transition effects bypass the transformer entirely.
+  // Eligible effects keep it alive so default_transition_length can fade the
+  // ON path while the runner already owns the visual content.
   if (auto *ls = this->get_light_state()) {
-    ls->current_values = ls->remote_values;
-    if (chimera_fx::LightStateProxy::has_active_transformer(ls)) {
-      chimera_fx::LightStateProxy::stop_state_transformer(ls);
+    if (!allow_default_transition) {
+      ls->current_values = ls->remote_values;
+      if (chimera_fx::LightStateProxy::has_active_transformer(ls)) {
+        chimera_fx::LightStateProxy::stop_state_transformer(ls);
+      }
     }
   }
 
@@ -2005,7 +2056,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     // While a CFX effect is active, ESPHome's transition transformer must not
     // keep ownership of the state progression. Otherwise a non-zero
     // default_transition_length can behave like a delayed effect start.
-    if (chimera_fx::LightStateProxy::has_active_transformer(state_ptr)) {
+    if (!this->allow_default_transition_() &&
+        chimera_fx::LightStateProxy::has_active_transformer(state_ptr)) {
       state_ptr->current_values = state_ptr->remote_values;
       chimera_fx::LightStateProxy::stop_state_transformer(state_ptr);
     }

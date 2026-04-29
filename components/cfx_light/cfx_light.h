@@ -170,6 +170,7 @@ public:
   void drain_outro_callbacks();
   bool has_outro() const { return !this->outro_cbs_.empty(); }
   void note_show_request();
+  void trigger_low_ram_warning(light::LightState *state);
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.

@@ -109,7 +109,7 @@ These symptoms are **not software bugs** — they are hardware power-rail collap
 ## RAM optimization
 
 Visual effects are computationally expensive, and hardware resources are finite (especially RAM).
-Wi-Fi-connected devices require approximately ~75kB of free RAM for the radio stack; below this threshold, the MCU will start to experience instability, such as spontaneous resets. Every time a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM. If the RAM is too low, it will log a warning and flash a red LED for 5 seconds to indicate an issue.
+Wi-Fi-connected devices require approximately ~75kB of free RAM for the radio stack; below this threshold, the MCU will start to experience instability, such as spontaneous resets. For temporary validation, the current safeguard is intentionally raised to **100kB** so it is easier to trigger on real hardware. Every time a `cfx_light` is turned on to run an effect, **ChimeraFX** checks the available RAM. If the RAM is too low, it logs a warning, forces the impacted light to solid red for 5 seconds, and then turns that same light OFF.
 Fortunately, you can free up RAM with a few minor adjustments. Because every setup is different, please consider the following suggestions as a starting point:
 
 **Webserver**: Unless you are running ESPHome standalone without Home Assistant, the webserver is completely redundant. It is not optimized for modern web standards, and disabling it won't affect your Home Assistant integration at all. Removing it will free ~8 kB.
