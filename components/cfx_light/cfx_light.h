@@ -348,6 +348,8 @@ protected:
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
   void release_outro_callback_storage_();
+  void paint_low_ram_warning_(light::LightState *state, bool on);
+  void restore_low_ram_warning_color_(light::LightState *state);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }

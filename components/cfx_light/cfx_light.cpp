@@ -79,6 +79,23 @@ static light::ColorMode resolve_low_ram_warning_mode(light::LightState *state) {
   return light::ColorMode::ON_OFF;
 }
 
+static bool resolve_low_ram_warning_segment(light::LightState *state,
+                                            const std::vector<light::LightState *> &segment_states,
+                                            const std::vector<CFXSegmentDef> &defs,
+                                            uint16_t &start, uint16_t &stop) {
+  if (state == nullptr) {
+    return false;
+  }
+  for (size_t i = 0; i < segment_states.size() && i < defs.size(); i++) {
+    if (segment_states[i] == state) {
+      start = defs[i].start;
+      stop = defs[i].stop;
+      return true;
+    }
+  }
+  return false;
+}
+
 void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
   if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
     return;
@@ -248,6 +265,8 @@ void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
   clear_call.perform();
 
   esphome::App.scheduler.set_timeout(this, on_hash, 0, [this, state]() {
+    this->paint_low_ram_warning_(state, true);
+
     auto on_call = state->make_call();
     on_call.set_transition_length(0);
     on_call.set_state(true);
@@ -268,13 +287,57 @@ void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
     this->applying_turn_on_defaults_ = false;
   });
 
-  esphome::App.scheduler.set_timeout(this, off_hash, LOW_RAM_WARNING_MS, [state]() {
+  esphome::App.scheduler.set_timeout(this, off_hash, LOW_RAM_WARNING_MS, [this, state]() {
+    this->paint_low_ram_warning_(state, false);
+
     auto off_call = state->make_call();
-    off_call.set_effect("None");
     off_call.set_state(false);
     off_call.set_transition_length(0);
     off_call.perform();
+
+    this->restore_low_ram_warning_color_(state);
   });
+}
+
+void CFXLightOutput::paint_low_ram_warning_(light::LightState *state, bool on) {
+  uint16_t start = 0;
+  uint16_t stop = static_cast<uint16_t>(this->size());
+  resolve_low_ram_warning_segment(state, this->segment_light_states_,
+                                  this->segment_defs_, start, stop);
+
+  const Color warning = on ? Color(255, 0, 0, 0) : Color::BLACK;
+  for (uint16_t i = start; i < stop && i < this->size(); i++) {
+    (*this)[i] = warning;
+  }
+  this->schedule_show();
+}
+
+void CFXLightOutput::restore_low_ram_warning_color_(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  auto call = state->make_call();
+  call.set_transition_length(0);
+  call.set_state(false);
+
+  auto color_mode = resolve_low_ram_warning_mode(state);
+  if (color_mode == light::ColorMode::RGB ||
+      color_mode == light::ColorMode::RGB_WHITE) {
+    if (this->has_white_channel()) {
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_rgb(1.0f, 1.0f, 1.0f);
+      call.set_white(1.0f);
+    } else {
+      call.set_color_mode(light::ColorMode::RGB);
+      call.set_rgb(1.0f, 1.0f, 1.0f);
+    }
+  } else if (color_mode == light::ColorMode::WHITE) {
+    call.set_color_mode(light::ColorMode::WHITE);
+    call.set_white(1.0f);
+  }
+
+  call.perform();
 }
 
 // Query the RMT default clock source frequency (varies by chip variant)
