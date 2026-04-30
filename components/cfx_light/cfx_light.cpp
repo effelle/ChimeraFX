@@ -1531,7 +1531,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<strip>";
-    ESP_LOGI(TAG,
+    ESP_LOGV(TAG,
              "[%s] IO quick | Write: %.2f/%.2fms | Flush: %.2f/%.2fms | Calls:%u",
              light_name,
              (float)(this->io_diag_total_write_us_ / this->io_diag_calls_) /

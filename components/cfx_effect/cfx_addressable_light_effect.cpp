@@ -129,7 +129,7 @@ static void record_segment_batch_diag(SegmentBatchDiagEvent event,
                     segment_batch_diag.hit) /
                 1000.0f
           : 0.0f;
-  ESP_LOGI("chimera_fx",
+  ESP_LOGV("chimera_fx",
            "Segment batch diag: seen=%u hit=%u single=%u reject=%u "
            "rate_skip=%u no_runner=%u seq=%u batch=%.2f/%.2fms",
            static_cast<unsigned>(segment_batch_diag.seen),
