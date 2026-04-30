@@ -528,9 +528,6 @@ protected:
   uint32_t seg_coord_write_skips_{0};
   uint32_t seg_coord_epochs_{0};
   uint32_t seg_coord_rendered_segments_{0};
-  uint32_t seg_coord_loop_sleeps_{0};
-  uint32_t seg_coord_loop_resleeps_{0};
-  uint32_t seg_coord_loop_wakes_{0};
   uint32_t seg_batch_diag_last_log_ms_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};

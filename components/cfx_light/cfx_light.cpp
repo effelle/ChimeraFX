@@ -258,10 +258,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       this->seg_clean_epoch_suppressed_ == 0 &&
       this->seg_coord_apply_skips_ == 0 &&
       this->seg_coord_write_skips_ == 0 &&
-      this->seg_coord_epochs_ == 0 &&
-      this->seg_coord_loop_sleeps_ == 0 &&
-      this->seg_coord_loop_resleeps_ == 0 &&
-      this->seg_coord_loop_wakes_ == 0) {
+      this->seg_coord_epochs_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
@@ -271,18 +268,14 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
                                        : "<strip>";
   ESP_LOGD(TAG,
            "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u "
-           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u "
-           "loop_sleep:%u loop_resleep:%u loop_wake:%u",
+           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u",
            light_name, static_cast<unsigned>(this->seg_partial_frame_suppressed_),
            static_cast<unsigned>(this->seg_missed_epoch_count_),
            static_cast<unsigned>(this->seg_clean_epoch_suppressed_),
            static_cast<unsigned>(this->seg_coord_epochs_),
            static_cast<unsigned>(this->seg_coord_rendered_segments_),
            static_cast<unsigned>(this->seg_coord_apply_skips_),
-           static_cast<unsigned>(this->seg_coord_write_skips_),
-           static_cast<unsigned>(this->seg_coord_loop_sleeps_),
-           static_cast<unsigned>(this->seg_coord_loop_resleeps_),
-           static_cast<unsigned>(this->seg_coord_loop_wakes_));
+           static_cast<unsigned>(this->seg_coord_write_skips_));
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
   this->seg_clean_epoch_suppressed_ = 0;
@@ -290,9 +283,6 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   this->seg_coord_write_skips_ = 0;
   this->seg_coord_epochs_ = 0;
   this->seg_coord_rendered_segments_ = 0;
-  this->seg_coord_loop_sleeps_ = 0;
-  this->seg_coord_loop_resleeps_ = 0;
-  this->seg_coord_loop_wakes_ = 0;
   this->seg_batch_diag_last_log_ms_ = now_ms;
 }
 
@@ -554,15 +544,9 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
       chimera_fx::LightStateProxy::clear_pending_write(seg_state);
       seg_state->disable_loop();
       next_dormant_mask |= bit;
-      if (is_sleeping) {
-        this->seg_coord_loop_resleeps_++;
-      } else {
-        this->seg_coord_loop_sleeps_++;
-      }
     } else if (!should_sleep && is_sleeping) {
       seg_state->enable_loop();
       next_dormant_mask &= static_cast<uint8_t>(~bit);
-      this->seg_coord_loop_wakes_++;
     }
   }
 
