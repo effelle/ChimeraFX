@@ -493,12 +493,6 @@ protected:
   uint32_t perf_diag_max_rmt_reset_starve_count_{0};
   uint32_t perf_diag_max_seg_contrib_{0};
   uint32_t perf_diag_min_rmt_symbols_free_{UINT32_MAX};
-  uint32_t io_diag_last_log_ms_{0};
-  uint32_t io_diag_calls_{0};
-  uint32_t io_diag_max_write_us_{0};
-  uint32_t io_diag_max_flush_us_{0};
-  uint64_t io_diag_total_write_us_{0};
-  uint64_t io_diag_total_flush_us_{0};
   uint64_t perf_diag_total_queue_us_{0};
   uint64_t perf_diag_total_write_us_{0};
   uint64_t perf_diag_total_flush_us_{0};

@@ -54,97 +54,6 @@ const std::vector<CfxOnReachTrigger *>
 static const char *const TAG = "chimera_fx";
 
 namespace {
-struct SegmentBatchDiag {
-  uint32_t seen{0};
-  uint32_t rate_skip{0};
-  uint32_t no_runner{0};
-  uint32_t sequence_bound{0};
-  uint32_t hit{0};
-  uint32_t single{0};
-  uint32_t reject{0};
-  uint32_t max_batch_us{0};
-  uint64_t total_batch_us{0};
-  uint32_t last_log_ms{0};
-};
-
-static SegmentBatchDiag segment_batch_diag;
-
-enum class SegmentBatchDiagEvent {
-  SEEN,
-  RATE_SKIP,
-  NO_RUNNER,
-  SEQUENCE_BOUND,
-  HIT,
-  SINGLE,
-  REJECT,
-};
-
-static void record_segment_batch_diag(SegmentBatchDiagEvent event,
-                                      uint32_t batch_us = 0) {
-  switch (event) {
-  case SegmentBatchDiagEvent::SEEN:
-    segment_batch_diag.seen++;
-    break;
-  case SegmentBatchDiagEvent::RATE_SKIP:
-    segment_batch_diag.rate_skip++;
-    break;
-  case SegmentBatchDiagEvent::NO_RUNNER:
-    segment_batch_diag.no_runner++;
-    break;
-  case SegmentBatchDiagEvent::SEQUENCE_BOUND:
-    segment_batch_diag.sequence_bound++;
-    break;
-  case SegmentBatchDiagEvent::HIT:
-    segment_batch_diag.hit++;
-    segment_batch_diag.total_batch_us += batch_us;
-    if (batch_us > segment_batch_diag.max_batch_us) {
-      segment_batch_diag.max_batch_us = batch_us;
-    }
-    break;
-  case SegmentBatchDiagEvent::SINGLE:
-    segment_batch_diag.single++;
-    break;
-  case SegmentBatchDiagEvent::REJECT:
-    segment_batch_diag.reject++;
-    break;
-  }
-
-  const uint32_t now_ms = esphome::millis();
-  if (segment_batch_diag.last_log_ms == 0) {
-    segment_batch_diag.last_log_ms = now_ms;
-    return;
-  }
-  if ((now_ms - segment_batch_diag.last_log_ms) < 2000) {
-    return;
-  }
-  if (segment_batch_diag.seen == 0 && segment_batch_diag.hit == 0 &&
-      segment_batch_diag.single == 0 &&
-      segment_batch_diag.reject == 0) {
-    segment_batch_diag.last_log_ms = now_ms;
-    return;
-  }
-  const float avg_batch_ms =
-      segment_batch_diag.hit > 0
-          ? (float)(segment_batch_diag.total_batch_us /
-                    segment_batch_diag.hit) /
-                1000.0f
-          : 0.0f;
-  ESP_LOGV("chimera_fx",
-           "Segment batch diag: seen=%u hit=%u single=%u reject=%u "
-           "rate_skip=%u no_runner=%u seq=%u batch=%.2f/%.2fms",
-           static_cast<unsigned>(segment_batch_diag.seen),
-           static_cast<unsigned>(segment_batch_diag.hit),
-           static_cast<unsigned>(segment_batch_diag.single),
-           static_cast<unsigned>(segment_batch_diag.reject),
-           static_cast<unsigned>(segment_batch_diag.rate_skip),
-           static_cast<unsigned>(segment_batch_diag.no_runner),
-           static_cast<unsigned>(segment_batch_diag.sequence_bound),
-           avg_batch_ms,
-           (float)segment_batch_diag.max_batch_us / 1000.0f);
-  segment_batch_diag = SegmentBatchDiag{};
-  segment_batch_diag.last_log_ms = now_ms;
-}
-
 static CFXAddressableLightEffect *
 resolve_active_segment_cfx_effect(light::LightState *state) {
   if (state == nullptr) {
@@ -265,8 +174,10 @@ static SPIDiagCensus collect_spi_diag_census() {
           auto *out = resolve_diag_output(inst);
           if (out != nullptr && out->is_spi_transport())
             census.active_spi_effects++;
+#ifdef USE_CFX_SEQUENCE
           if (inst->get_active_sequence() != nullptr)
             census.bound_sequences++;
+#endif
           census.runner_count += inst->get_runner_count();
 
           // CFX-057: Feed WDT every 64 iterations to prevent stall
@@ -1189,10 +1100,15 @@ void CFXAddressableLightEffect::start() {
         (act_->controller && act_->controller->get_autotune())
             ? act_->controller->get_autotune()
             : this->local_autotune_();
+#ifdef USE_CFX_SEQUENCE
     if (act_->sequence_autotune.has_value())
       autotune_will_run = act_->sequence_autotune.value();
     else if (at_sw != nullptr)
       autotune_will_run = at_sw->state;
+#else
+    if (at_sw != nullptr)
+      autotune_will_run = at_sw->state;
+#endif
   }
   const bool transient_autotune_context =
 #ifdef USE_CFX_SEQUENCE
@@ -1229,10 +1145,15 @@ void CFXAddressableLightEffect::start() {
     bool autotune_enabled = true;
     switch_::Switch *autotune_sw =
         (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
+#ifdef USE_CFX_SEQUENCE
     if (act_->sequence_autotune.has_value())
       autotune_enabled = act_->sequence_autotune.value();
     else if (autotune_sw != nullptr)
       autotune_enabled = autotune_sw->state;
+#else
+    if (autotune_sw != nullptr)
+      autotune_enabled = autotune_sw->state;
+#endif
     act_->autotune_active = autotune_enabled;
     if (autotune_enabled)
       this->apply_autotune_defaults_();
@@ -2125,18 +2046,15 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   return false;
 #else
   if (!this->can_batch_steady_virtual_segment_()) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *my_state = this->get_light_state();
   if (my_state == nullptr) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *my_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       my_state->get_output());
   if (my_seg == nullptr || my_seg->get_parent() == nullptr) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *parent = my_seg->get_parent();
@@ -2166,11 +2084,9 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   }
 
   if (count < 2) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::SINGLE);
     return false;
   }
 
-  const uint32_t batch_start_us = cfx_micros();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
@@ -2199,8 +2115,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     parent->request_segment_flush(state);
   }
 
-  record_segment_batch_diag(SegmentBatchDiagEvent::HIT,
-                            cfx_micros() - batch_start_us);
   return true;
 #endif
 }
@@ -2211,21 +2125,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->act_ == nullptr)
     return;
 
-  const bool diag_virtual_segment =
-      this->is_virtual_segment_ && act_->segment_runners.empty() &&
-      !act_->mono_idle && !act_->intro_active &&
-      act_->state == TRANSITION_NONE && !act_->completion_pending;
-  if (diag_virtual_segment) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::SEEN);
-  }
-
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {
     const uint64_t early_now = millis_64();
     if (early_now - this->last_run_ < this->update_interval_) {
-      if (diag_virtual_segment) {
-        record_segment_batch_diag(SegmentBatchDiagEvent::RATE_SKIP);
-      }
       return;
     }
   }
@@ -2235,9 +2138,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (diag_out != nullptr && diag_out->is_spi_transport() &&
       this->act_->spi_diag_apply_logs < 6) {
     std::string seq_name_storage = "-";
+    void *seq_ptr_storage = nullptr;
 #ifdef USE_CFX_SEQUENCE
     if (this->act_->active_sequence != nullptr) {
       seq_name_storage = this->act_->active_sequence->get_name();
+      seq_ptr_storage = this->act_->active_sequence;
     }
 #endif
     ESP_LOGD("chimera_fx",
@@ -2246,7 +2151,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
              static_cast<unsigned>(this->act_->spi_diag_apply_logs),
              this->act_->cached_runner_name.c_str(),
              this->act_->strip_tag.c_str(), seq_name_storage.c_str(),
-             this->act_->active_sequence, this->act_, this->act_->mono_idle,
+             seq_ptr_storage, this->act_, this->act_->mono_idle,
              this->act_->intro_active, this->act_->outro_active,
              this->act_->completion_pending);
     this->act_->spi_diag_apply_logs++;
@@ -2356,9 +2261,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // --- Ensure Runner(s) ---
   if (act_->runner == nullptr) {
-    if (diag_virtual_segment) {
-      record_segment_batch_diag(SegmentBatchDiagEvent::NO_RUNNER);
-    }
     ESP_LOGE("chimera_fx",
              "[%s] Runner is null in apply()! mono_idle=%d seg_runners=%u",
              act_->cached_runner_name.c_str(), (int)act_->mono_idle,
@@ -2371,11 +2273,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #ifdef USE_CFX_SEQUENCE
   sequence_bound = act_->active_sequence != nullptr;
 #endif
-  if (sequence_bound && this->is_virtual_segment_ && act_->segment_runners.empty() &&
-      !act_->mono_idle && !act_->intro_active &&
-      act_->state == TRANSITION_NONE && !act_->completion_pending) {
-    record_segment_batch_diag(SegmentBatchDiagEvent::SEQUENCE_BOUND);
-  }
   if (this->is_virtual_segment_ && act_->segment_runners.empty() &&
       !act_->mono_idle && !act_->intro_active &&
       act_->state == TRANSITION_NONE && !act_->completion_pending &&
@@ -2903,6 +2800,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         // calls service() again so effect_complete_ would never be set
         // otherwise. Signal completion here when the sequence has a finite
         // iteration count.
+#ifdef USE_CFX_SEQUENCE
         if (act_->active_sequence != nullptr && act_->sequence_iterations > 0) {
           if (!act_->segment_runners.empty()) {
             for (auto *r : act_->segment_runners) {
@@ -2916,6 +2814,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
               act_->runner->effect_complete_ = true;
           }
         }
+#endif
       }
 
       if (trans_dur > 0.0f) {
@@ -3884,11 +3783,17 @@ void CFXAddressableLightEffect::run_controls_() {
       true; // Constraint: No switch = always respect defaults
   switch_::Switch *autotune_sw =
       (c && c->get_autotune()) ? c->get_autotune() : this->local_autotune_();
+#ifdef USE_CFX_SEQUENCE
   if (act_->sequence_autotune.has_value()) {
     current_autotune_state = act_->sequence_autotune.value();
   } else if (autotune_sw != nullptr) {
     current_autotune_state = autotune_sw->state;
   }
+#else
+  if (autotune_sw != nullptr) {
+    current_autotune_state = autotune_sw->state;
+  }
+#endif
 
   // Handle manual OFF -> ON transition
   if (current_autotune_state && !act_->autotune_active) {
@@ -3901,7 +3806,10 @@ void CFXAddressableLightEffect::run_controls_() {
   }
   // Handle expected ON state, but detecting manual UI overrides
   else if (current_autotune_state && act_->autotune_active &&
-           !act_->sequence_autotune.has_value() && autotune_sw != nullptr) {
+#ifdef USE_CFX_SEQUENCE
+           !act_->sequence_autotune.has_value() &&
+#endif
+           autotune_sw != nullptr) {
     bool manual_override = false;
     // In 1:1 mode, this segment IS always the target.
     bool is_currently_target = true;

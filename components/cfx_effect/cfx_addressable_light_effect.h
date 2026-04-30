@@ -481,6 +481,17 @@ protected:
 
 
 public:
+#ifndef USE_CFX_SEQUENCE
+  // Diagnostics and light-output helpers need activation visibility in
+  // non-sequence builds too.
+  CFXActivation *get_act() const { return act_; }
+  size_t get_runner_count() const {
+    if (!act_) return 0;
+    if (!act_->segment_runners.empty()) return act_->segment_runners.size();
+    return act_->runner ? 1U : 0U;
+  }
+#endif
+
 #ifdef USE_CFX_SEQUENCE
   void set_active_sequence(CFXSequence *seq, std::optional<uint8_t> spd,
                            std::optional<uint8_t> iten,

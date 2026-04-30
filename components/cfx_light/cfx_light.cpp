@@ -196,12 +196,6 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
   this->perf_diag_max_seg_contrib_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
-  this->io_diag_last_log_ms_ = 0;
-  this->io_diag_calls_ = 0;
-  this->io_diag_max_write_us_ = 0;
-  this->io_diag_max_flush_us_ = 0;
-  this->io_diag_total_write_us_ = 0;
-  this->io_diag_total_flush_us_ = 0;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
   this->perf_diag_total_flush_us_ = 0;
@@ -1512,42 +1506,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
-
-  const uint32_t io_write_us = micros() - write_start_us;
-  this->io_diag_total_write_us_ += io_write_us;
-  this->io_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
-  this->io_diag_calls_++;
-  if (io_write_us > this->io_diag_max_write_us_) {
-    this->io_diag_max_write_us_ = io_write_us;
-  }
-  if (this->perf_diag_last_flush_total_us_ > this->io_diag_max_flush_us_) {
-    this->io_diag_max_flush_us_ = this->perf_diag_last_flush_total_us_;
-  }
-  const uint32_t io_now_ms = esphome::millis();
-  if (this->io_diag_last_log_ms_ == 0) {
-    this->io_diag_last_log_ms_ = io_now_ms;
-  } else if ((io_now_ms - this->io_diag_last_log_ms_) >= 2000 &&
-             this->io_diag_calls_ > 0) {
-    const char *light_name =
-        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                         : "<strip>";
-    ESP_LOGV(TAG,
-             "[%s] IO quick | Write: %.2f/%.2fms | Flush: %.2f/%.2fms | Calls:%u",
-             light_name,
-             (float)(this->io_diag_total_write_us_ / this->io_diag_calls_) /
-                 1000.0f,
-             (float)this->io_diag_max_write_us_ / 1000.0f,
-             (float)(this->io_diag_total_flush_us_ / this->io_diag_calls_) /
-                 1000.0f,
-             (float)this->io_diag_max_flush_us_ / 1000.0f,
-             static_cast<unsigned>(this->io_diag_calls_));
-    this->io_diag_last_log_ms_ = io_now_ms;
-    this->io_diag_calls_ = 0;
-    this->io_diag_max_write_us_ = 0;
-    this->io_diag_max_flush_us_ = 0;
-    this->io_diag_total_write_us_ = 0;
-    this->io_diag_total_flush_us_ = 0;
-  }
 
   if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
     uint32_t queue_us = 0;
