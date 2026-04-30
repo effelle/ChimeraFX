@@ -147,7 +147,6 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
 void CFXScheduler::flush_pending() {
   const size_t total = pending_runners_.size();
   if (total == 0) return;
-  ESP_LOGD(TAG, "flush_pending: %u runners queued", (unsigned)total);
 
   // Always reset core0_slice_ so the caller's log is never stale.
   core0_slice_.clear();
@@ -227,7 +226,6 @@ void CFXScheduler::service_runner(CFXRunner *r) {
     }
 
     if (is_new_tick) {
-      ESP_LOGD(TAG, "Tick boundary: pending=%u", (unsigned)pending_runners_.size());
       flush_pending();
       pending_runners_.clear();
     }
