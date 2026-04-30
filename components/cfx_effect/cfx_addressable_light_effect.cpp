@@ -1979,7 +1979,8 @@ bool CFXAddressableLightEffect::can_batch_steady_virtual_segment_() const {
   }
 #endif
   auto *state = this->get_light_state();
-  return state != nullptr && state->remote_values.is_on();
+  return state != nullptr && state->remote_values.is_on() &&
+         !chimera_fx::LightStateProxy::has_active_transformer(state);
 }
 
 bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {

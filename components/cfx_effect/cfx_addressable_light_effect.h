@@ -696,6 +696,9 @@ public:
   static bool has_active_transformer(light::LightState *state) {
     return static_cast<LightStateProxy *>(state)->transformer_ != nullptr;
   }
+  static void clear_pending_write(light::LightState *state) {
+    static_cast<LightStateProxy *>(state)->next_write_ = false;
+  }
 };
 
 template <typename... Ts> class PlayEffectAction : public Action<Ts...> {

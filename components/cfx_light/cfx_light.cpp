@@ -258,7 +258,9 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       this->seg_clean_epoch_suppressed_ == 0 &&
       this->seg_coord_apply_skips_ == 0 &&
       this->seg_coord_write_skips_ == 0 &&
-      this->seg_coord_epochs_ == 0) {
+      this->seg_coord_epochs_ == 0 &&
+      this->seg_coord_loop_sleeps_ == 0 &&
+      this->seg_coord_loop_wakes_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
@@ -266,16 +268,19 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   const char *light_name =
       (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                        : "<strip>";
-  ESP_LOGV(TAG,
+  ESP_LOGD(TAG,
            "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u "
-           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u",
+           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u "
+           "loop_sleep:%u loop_wake:%u",
            light_name, static_cast<unsigned>(this->seg_partial_frame_suppressed_),
            static_cast<unsigned>(this->seg_missed_epoch_count_),
            static_cast<unsigned>(this->seg_clean_epoch_suppressed_),
            static_cast<unsigned>(this->seg_coord_epochs_),
            static_cast<unsigned>(this->seg_coord_rendered_segments_),
            static_cast<unsigned>(this->seg_coord_apply_skips_),
-           static_cast<unsigned>(this->seg_coord_write_skips_));
+           static_cast<unsigned>(this->seg_coord_write_skips_),
+           static_cast<unsigned>(this->seg_coord_loop_sleeps_),
+           static_cast<unsigned>(this->seg_coord_loop_wakes_));
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
   this->seg_clean_epoch_suppressed_ = 0;
@@ -283,6 +288,8 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   this->seg_coord_write_skips_ = 0;
   this->seg_coord_epochs_ = 0;
   this->seg_coord_rendered_segments_ = 0;
+  this->seg_coord_loop_sleeps_ = 0;
+  this->seg_coord_loop_wakes_ = 0;
   this->seg_batch_diag_last_log_ms_ = now_ms;
 }
 
@@ -525,6 +532,36 @@ static void mark_committed_mono_idle_outputs(CFXLightOutput *output) {
   }
 }
 
+void CFXLightOutput::apply_segment_coordination_loop_state_(
+    uint8_t owned_mask) {
+  uint8_t next_dormant_mask = this->segment_coord_dormant_mask_;
+
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    auto *seg_state = this->segment_light_states_[i];
+    if (seg_state == nullptr) {
+      continue;
+    }
+
+    const uint8_t bit = static_cast<uint8_t>(1u << i);
+    const bool should_sleep = (owned_mask & bit) != 0;
+    const bool is_sleeping = (this->segment_coord_dormant_mask_ & bit) != 0;
+
+    if (should_sleep && !is_sleeping) {
+      chimera_fx::LightStateProxy::clear_pending_write(seg_state);
+      seg_state->disable_loop();
+      next_dormant_mask |= bit;
+      this->seg_coord_loop_sleeps_++;
+    } else if (!should_sleep && is_sleeping) {
+      seg_state->enable_loop();
+      next_dormant_mask &= static_cast<uint8_t>(~bit);
+      this->seg_coord_loop_wakes_++;
+    }
+  }
+
+  this->segment_coord_dormant_mask_ = next_dormant_mask;
+}
+
 void CFXLightOutput::refresh_segment_coordination_mask_() {
   const uint32_t now_ms = esphome::millis();
   if (this->segment_coord_owned_mask_ms_ == now_ms) {
@@ -553,6 +590,9 @@ void CFXLightOutput::refresh_segment_coordination_mask_() {
     }
     if (effect->is_clean_mono_idle_output()) {
       continue;
+    }
+    if (chimera_fx::LightStateProxy::has_active_transformer(seg_state)) {
+      return;
     }
     if (!effect->can_parent_coordinate_segment()) {
       return;
@@ -588,6 +628,7 @@ void CFXLightOutput::note_segment_coord_write_skip() {
 
 bool CFXLightOutput::service_segment_render_coordinator_() {
   if (!this->has_segments() || this->has_outro()) {
+    this->apply_segment_coordination_loop_state_(0);
     return false;
   }
 
@@ -598,6 +639,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   uint8_t count = 0;
 
   this->refresh_segment_coordination_mask_();
+  this->apply_segment_coordination_loop_state_(this->segment_coord_owned_mask_);
   if (this->segment_coord_owned_mask_ == 0) {
     return false;
   }
