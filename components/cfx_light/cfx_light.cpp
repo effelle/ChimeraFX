@@ -255,7 +255,10 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
     return;
   }
   if (this->seg_partial_frame_suppressed_ == 0 &&
-      this->seg_clean_epoch_suppressed_ == 0) {
+      this->seg_clean_epoch_suppressed_ == 0 &&
+      this->seg_coord_apply_skips_ == 0 &&
+      this->seg_coord_write_skips_ == 0 &&
+      this->seg_coord_epochs_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
@@ -264,13 +267,22 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                        : "<strip>";
   ESP_LOGV(TAG,
-           "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u",
+           "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u "
+           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u",
            light_name, static_cast<unsigned>(this->seg_partial_frame_suppressed_),
            static_cast<unsigned>(this->seg_missed_epoch_count_),
-           static_cast<unsigned>(this->seg_clean_epoch_suppressed_));
+           static_cast<unsigned>(this->seg_clean_epoch_suppressed_),
+           static_cast<unsigned>(this->seg_coord_epochs_),
+           static_cast<unsigned>(this->seg_coord_rendered_segments_),
+           static_cast<unsigned>(this->seg_coord_apply_skips_),
+           static_cast<unsigned>(this->seg_coord_write_skips_));
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
   this->seg_clean_epoch_suppressed_ = 0;
+  this->seg_coord_apply_skips_ = 0;
+  this->seg_coord_write_skips_ = 0;
+  this->seg_coord_epochs_ = 0;
+  this->seg_coord_rendered_segments_ = 0;
   this->seg_batch_diag_last_log_ms_ = now_ms;
 }
 
@@ -566,6 +578,14 @@ bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
   return false;
 }
 
+void CFXLightOutput::note_segment_coord_apply_skip() {
+  this->seg_coord_apply_skips_++;
+}
+
+void CFXLightOutput::note_segment_coord_write_skip() {
+  this->seg_coord_write_skips_++;
+}
+
 bool CFXLightOutput::service_segment_render_coordinator_() {
   if (!this->has_segments() || this->has_outro()) {
     return false;
@@ -640,6 +660,8 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   for (uint8_t i = 0; i < count; i++) {
     effects[i]->get_act()->runner->diagnostics.flush_log();
   }
+  this->seg_coord_epochs_++;
+  this->seg_coord_rendered_segments_ += count;
   this->flush_segment_coordinator_epoch_(mask, count);
   return true;
 }

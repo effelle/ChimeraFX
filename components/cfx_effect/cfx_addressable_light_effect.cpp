@@ -2152,6 +2152,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           state_ptr->get_output());
       if (seg != nullptr && seg->get_parent() != nullptr &&
           seg->get_parent()->segment_coordinator_owns(state_ptr)) {
+        seg->get_parent()->note_segment_coord_apply_skip();
         return;
       }
     }

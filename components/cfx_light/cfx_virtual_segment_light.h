@@ -132,8 +132,10 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
-    if (parent_->segment_coordinator_owns(this->state_parent_))
+    if (parent_->segment_coordinator_owns(this->state_parent_)) {
+      parent_->note_segment_coord_write_skip();
       return;
+    }
     parent_->request_segment_flush(this->state_parent_);
   }
 

@@ -180,6 +180,8 @@ public:
   void note_show_request();
   void trigger_low_ram_warning(light::LightState *state);
   bool segment_coordinator_owns(light::LightState *state);
+  void note_segment_coord_apply_skip();
+  void note_segment_coord_write_skip();
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
@@ -521,6 +523,10 @@ protected:
   uint32_t seg_partial_frame_suppressed_{0};
   uint32_t seg_missed_epoch_count_{0};
   uint32_t seg_clean_epoch_suppressed_{0};
+  uint32_t seg_coord_apply_skips_{0};
+  uint32_t seg_coord_write_skips_{0};
+  uint32_t seg_coord_epochs_{0};
+  uint32_t seg_coord_rendered_segments_{0};
   uint32_t seg_batch_diag_last_log_ms_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
