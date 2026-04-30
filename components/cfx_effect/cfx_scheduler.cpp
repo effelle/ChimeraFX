@@ -154,19 +154,28 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     // runner when counts are odd because there is no scheduling latency for
     // inline work.
 
-    // Build a local sorted copy of runner pointers (pointer copy only, cheap).
-    std::vector<CFXRunner *> sorted(runners.begin(), runners.end());
-    std::sort(sorted.begin(), sorted.end(), [](CFXRunner *a, CFXRunner *b) {
+    // Reuse scheduler-owned scratch vectors to avoid heap churn in the
+    // per-frame hot path. Pointer copies only; runner ownership stays external.
+    if (sorted_slice_.capacity() < total)
+      sorted_slice_.reserve(total);
+    if (core1_slice_.capacity() < total)
+      core1_slice_.reserve(total);
+    if (core0_slice_.capacity() < total)
+      core0_slice_.reserve(total);
+
+    sorted_slice_.clear();
+    sorted_slice_.insert(sorted_slice_.end(), runners.begin(), runners.end());
+    std::sort(sorted_slice_.begin(), sorted_slice_.end(), [](CFXRunner *a, CFXRunner *b) {
       return a->frame_time > b->frame_time;
     });
 
     uint32_t cost_core0 = 0, cost_core1 = 0;
     core0_slice_.clear();
-    std::vector<CFXRunner *> core1_slice;
+    core1_slice_.clear();
 
-    for (auto *r : sorted) {
+    for (auto *r : sorted_slice_) {
       if (cost_core1 <= cost_core0) {
-        core1_slice.push_back(r);
+        core1_slice_.push_back(r);
         cost_core1 += r->frame_time;
       } else {
         core0_slice_.push_back(r);
@@ -191,7 +200,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
 
     // Core 1 services its slice inline while Core 0 runs in parallel.
     // InstanceGuard sets instance_per_core[1] for each runner.
-    for (auto *r : core1_slice) {
+    for (auto *r : core1_slice_) {
       if (r != nullptr) {
         InstanceGuard guard(r);
         r->service();

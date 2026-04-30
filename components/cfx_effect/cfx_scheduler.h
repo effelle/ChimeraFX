@@ -82,6 +82,8 @@ private:
   bool setup_done_{false};
   bool force_sequential_{false};
   bool sequential_diag_logged_{false};
+  std::vector<CFXRunner *> sorted_slice_;
+  std::vector<CFXRunner *> core1_slice_;
 
 #if CFX_DUAL_CORE
   static void core0_task_fn(void *arg);
