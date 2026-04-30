@@ -5,14 +5,10 @@
  *
  * Dispatches CFXRunner::service() calls across FreeRTOS cores.
  *
- * Dual-core ESP32 / ESP32-S3 — Deferred Batch Dispatch:
- *   service_runner() registers runners into a pending list each tick instead
- *   of executing immediately. At the detected tick boundary (when a runner
- *   seen in the previous tick reappears), flush_pending() dispatches the full
- *   list in parallel: Core 0 handles one cost-weighted half, Core 1 the other.
- *   A binary semaphore synchronises completion before DMA write.
- *   Result: all N runners complete in max(Core0_cost, Core1_cost) ≈ N/2 × T
- *   instead of N × T. At 8 runners this is a theoretical ~2× FPS improvement.
+ * Dual-core ESP32 / ESP32-S3:
+ *   Splits the runner list at the midpoint. Core 0 handles the second half
+ *   via a pinned FreeRTOS task; Core 1 (ESPHome main loop) handles the first
+ *   half inline. A binary semaphore synchronises completion before DMA write.
  *
  * Single-core ESP32 variants (C3, S2, H2):
  *   CONFIG_FREERTOS_UNICORE is defined by sdkconfig.
@@ -89,11 +85,6 @@ private:
 #if CFX_DUAL_CORE
   static void core0_task_fn(void *arg);
 
-  // Flush the accumulated pending_runners_ list in parallel across both cores.
-  // Core 0 receives a cost-weighted half via core0_slice_; Core 1 runs the
-  // remainder inline. Blocks until Core 0 signals done (binary semaphore).
-  void flush_pending();
-
   TaskHandle_t      core0_task_{nullptr};
   SemaphoreHandle_t core0_done_{nullptr};
 
@@ -101,10 +92,6 @@ private:
   // Written by Core 1 (before xTaskNotifyGive), read by Core 0 task.
   // Protected by the notification/semaphore handshake — no mutex needed.
   std::vector<CFXRunner *> core0_slice_;
-
-  // Deferred batch: runners registered each tick, flushed at the next tick
-  // boundary (detected when a runner reappears in pending_runners_).
-  std::vector<CFXRunner *> pending_runners_;
 #endif
 };
 

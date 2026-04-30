@@ -110,138 +110,151 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   const size_t total = runners.size();
   if (total == 0) return;
 
-#if CFX_DUAL_CORE
-  // Deferred batch path: register all runners into the shared pending list.
-  // They will be flushed in parallel at the next tick boundary, together with
-  // runners from other lights that also call service_runner/service_runners.
-  // This enables cross-light parallelism (all N runners split N/2 per core)
-  // instead of per-light parallelism (3+3 sequential between lights).
-  if (!force_sequential_ && core0_task_ != nullptr && core0_done_ != nullptr) {
+  if (force_sequential_) {
+    if (!sequential_diag_logged_) {
+      ESP_LOGW(TAG,
+               "Sequential diagnostic mode enabled — dual-core dispatch bypassed");
+      sequential_diag_logged_ = true;
+    }
+
     for (auto *r : runners) {
       if (r != nullptr) {
-        service_runner(r);
+        InstanceGuard guard(r);
+        r->service();
       }
+    }
+
+    // RAM-AUDIT: Sequential path (Main Loop) stack instrumentation.
+    static uint32_t seq_hwm_counter = 0;
+    if (++seq_hwm_counter >= 200) {
+      seq_hwm_counter = 0;
+      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+      ESP_LOGV(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
+               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
     return;
   }
+
+#if CFX_DUAL_CORE
+  // Parallel path: requires ≥2 runners and a live Core 0 task.
+  if (total >= 2 && core0_task_ != nullptr && core0_done_ != nullptr) {
+
+    // ── Cost-weighted greedy bin-packing split ────────────────────────────
+    // Instead of a naive midpoint split, distribute runners by measured frame
+    // cost (frame_time, in ms, updated every frame by CFXRunner::service()).
+    // Runners are sorted heaviest-first so the largest jobs are placed first,
+    // minimising imbalance. Each runner goes to whichever core has less
+    // accumulated cost so far — classic "Longest Processing Time" heuristic.
+    //
+    // On the very first frame frame_time is 0 for all runners, so the sort
+    // is a no-op and runners alternate cores in list order — equivalent to
+    // the old midpoint split, with no warm-up penalty.
+    //
+    // Core 1 is the calling core (ESPHome main loop). It receives the extra
+    // runner when counts are odd because there is no scheduling latency for
+    // inline work.
+
+    // Build a local sorted copy of runner pointers (pointer copy only, cheap).
+    std::vector<CFXRunner *> sorted(runners.begin(), runners.end());
+    std::sort(sorted.begin(), sorted.end(), [](CFXRunner *a, CFXRunner *b) {
+      return a->frame_time > b->frame_time;
+    });
+
+    uint32_t cost_core0 = 0, cost_core1 = 0;
+    core0_slice_.clear();
+    std::vector<CFXRunner *> core1_slice;
+
+    for (auto *r : sorted) {
+      if (cost_core1 <= cost_core0) {
+        core1_slice.push_back(r);
+        cost_core1 += r->frame_time;
+      } else {
+        core0_slice_.push_back(r);
+        cost_core0 += r->frame_time;
+      }
+    }
+
+    // ── Dynamic semaphore timeout ─────────────────────────────────────────
+    // The old hardcoded 20 ms timed out whenever Core 0's runners needed more
+    // than one frame budget (e.g. heavy effects at high strip counts).
+    // Use FRAMETIME + a 12 ms safety margin instead, which covers the worst
+    // observed render times in testing (~28 ms) with headroom to spare.
+    // Minimum of 25 ms so we never regress below the old budget on fast paths.
+    constexpr uint32_t CFX_CORE0_TIMEOUT_MS = (FRAMETIME + 12 > 25) ? (FRAMETIME + 12) : 25;
+
+    // Populate Core 0's slice BEFORE the notification so the task sees
+    // a consistent view the moment it wakes up.
+    // (core0_slice_ is already set above.)
+
+    // Wake Core 0 — it will start processing core0_slice_ immediately.
+    xTaskNotifyGive(core0_task_);
+
+    // Core 1 services its slice inline while Core 0 runs in parallel.
+    // InstanceGuard sets instance_per_core[1] for each runner.
+    for (auto *r : core1_slice) {
+      if (r != nullptr) {
+        InstanceGuard guard(r);
+        r->service();
+      }
+    }
+
+    // Wait for Core 0 to finish before returning to apply().
+    // On timeout the strip retains its last valid pixel values —
+    // graceful degradation, no crash.
+    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) != pdTRUE) {
+      ESP_LOGW(TAG, "Core 0 runner timeout (%u ms) — frame skipped for %u runners",
+               CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
+    }
+
+    // RAM-AUDIT: Parallel path (Main Loop / Core 1) stack instrumentation.
+    static uint32_t main_hwm_counter = 0;
+    if (++main_hwm_counter >= 200) {
+      main_hwm_counter = 0;
+      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+      ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
+    }
+    return;
+  }
+  // Fall through: task not ready yet, or only 1 runner — sequential is fine.
 #endif
 
-  // Sequential fallback: force_sequential, single-core, or task not live.
-  if (force_sequential_ && !sequential_diag_logged_) {
-    ESP_LOGW(TAG,
-             "Sequential diagnostic mode enabled — dual-core dispatch bypassed");
-    sequential_diag_logged_ = true;
-  }
-
+  // Sequential fallthrough: single-core, only 1 runner, or dual-core task not live.
   for (auto *r : runners) {
     if (r != nullptr) {
       InstanceGuard guard(r);
       r->service();
     }
   }
+
+  // RAM-AUDIT: Shared HWM counter — hits whichever path is actually hot.
+  static uint32_t fallthrough_hwm_counter = 0;
+  if (++fallthrough_hwm_counter >= 200) {
+    fallthrough_hwm_counter = 0;
+    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+    ESP_LOGV(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
+             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
+  }
 }
-
-// ── flush_pending ─────────────────────────────────────────────────────────────
-
-#if CFX_DUAL_CORE
-void CFXScheduler::flush_pending() {
-  const size_t total = pending_runners_.size();
-  if (total == 0) return;
-
-  // Always reset core0_slice_ so the caller's log is never stale.
-  core0_slice_.clear();
-
-  if (force_sequential_ || total < 2 || core0_task_ == nullptr || core0_done_ == nullptr) {
-    // Sequential fallback: single runner, no Core 0, or diag mode.
-    for (auto *r : pending_runners_) {
-      if (r != nullptr) {
-        InstanceGuard guard(r);
-        r->service();
-      }
-    }
-    return;
-  }
-
-  // ── Cost-weighted bin-packing split (Longest Processing Time heuristic) ──
-  // Sort runners heaviest-first so largest jobs are placed first,
-  // minimising load imbalance between cores.
-  std::vector<CFXRunner *> sorted(pending_runners_.begin(), pending_runners_.end());
-  std::sort(sorted.begin(), sorted.end(), [](CFXRunner *a, CFXRunner *b) {
-    return a->frame_time > b->frame_time;
-  });
-
-  uint32_t cost0 = 0, cost1 = 0;
-  core0_slice_.clear();
-  std::vector<CFXRunner *> core1_slice;
-
-  for (auto *r : sorted) {
-    if (cost1 <= cost0) {
-      core1_slice.push_back(r);
-      cost1 += r->frame_time;
-    } else {
-      core0_slice_.push_back(r);
-      cost0 += r->frame_time;
-    }
-  }
-
-  constexpr uint32_t TIMEOUT_MS = (FRAMETIME + 12 > 25) ? (FRAMETIME + 12) : 25;
-
-  // Wake Core 0 — it will start servicing core0_slice_ immediately.
-  xTaskNotifyGive(core0_task_);
-
-  // Core 1 services its slice inline in parallel with Core 0.
-  for (auto *r : core1_slice) {
-    if (r != nullptr) {
-      InstanceGuard guard(r);
-      r->service();
-    }
-  }
-
-  // Wait for Core 0 to finish before returning.
-  // On timeout the strip retains its last valid pixel values — graceful degradation.
-  if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(TIMEOUT_MS)) != pdTRUE) {
-    ESP_LOGW(TAG, "Core 0 batch flush timeout (%ums) — %u runners may have stale pixels",
-             TIMEOUT_MS, (unsigned)core0_slice_.size());
-  }
-
-}
-#endif
-
-// ── service_runner ────────────────────────────────────────────────────────────
 
 void CFXScheduler::service_runner(CFXRunner *r) {
   if (r == nullptr) return;
-
-#if CFX_DUAL_CORE
-  if (!force_sequential_ && core0_task_ != nullptr && core0_done_ != nullptr) {
-
-    // ── Tick boundary detection ─────────────────────────────────────────────
-    // pending_runners_ accumulates one entry per runner per tick.
-    // When a runner already in pending_runners_ is presented again, the
-    // ESPHome apply() loop has wrapped around — flush the batch in parallel
-    // and start collecting fresh for the next tick.
-    bool is_new_tick = false;
-    for (auto *p : pending_runners_) {
-      if (p == r) { is_new_tick = true; break; }
-    }
-
-    if (is_new_tick) {
-      flush_pending();
-      pending_runners_.clear();
-    }
-
-    // Register this runner for the upcoming flush — do NOT call service() now.
-    // service() will be called by flush_pending() at the next tick boundary.
-    // The pixel buffer retains last tick's values until the flush runs,
-    // introducing ≤1 frame of visual latency (~28ms at 35 FPS — imperceptible).
-    pending_runners_.push_back(r);
-    return;
-  }
-#endif
-
-  // Sequential path: single-core, force_sequential, or Core 0 not live.
   InstanceGuard guard(r);
   r->service();
+
+  // RAM-AUDIT: HWM instrumentation (VERBOSE — measurement complete).
+  // Data collected 2026-04-29: main loop task ~20 KB free under 8-runner load.
+  // Core 0 task (4 KB) is never woken — inter-effect parallelism requires a
+  // deferred batch dispatch model (future work):
+  //   Activate threshold  >20ms: ≥3 heavy runners, loop over budget
+  //   Deactivate threshold <18ms: ≤2 runners, Core 1 sufficient
+  static uint32_t single_hwm_counter = 0;
+  if (++single_hwm_counter >= 200) {
+    single_hwm_counter = 0;
+    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
+    ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
+             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
+  }
 }
 
 void CFXScheduler::drain_core0() {
