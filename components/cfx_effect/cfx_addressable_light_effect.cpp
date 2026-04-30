@@ -55,6 +55,10 @@ static const char *const TAG = "chimera_fx";
 
 namespace {
 struct SegmentBatchDiag {
+  uint32_t seen{0};
+  uint32_t rate_skip{0};
+  uint32_t no_runner{0};
+  uint32_t sequence_bound{0};
   uint32_t hit{0};
   uint32_t single{0};
   uint32_t reject{0};
@@ -63,13 +67,39 @@ struct SegmentBatchDiag {
 
 static SegmentBatchDiag segment_batch_diag;
 
-static void record_segment_batch_diag(bool hit, bool single = false) {
-  if (hit) {
+enum class SegmentBatchDiagEvent {
+  SEEN,
+  RATE_SKIP,
+  NO_RUNNER,
+  SEQUENCE_BOUND,
+  HIT,
+  SINGLE,
+  REJECT,
+};
+
+static void record_segment_batch_diag(SegmentBatchDiagEvent event) {
+  switch (event) {
+  case SegmentBatchDiagEvent::SEEN:
+    segment_batch_diag.seen++;
+    break;
+  case SegmentBatchDiagEvent::RATE_SKIP:
+    segment_batch_diag.rate_skip++;
+    break;
+  case SegmentBatchDiagEvent::NO_RUNNER:
+    segment_batch_diag.no_runner++;
+    break;
+  case SegmentBatchDiagEvent::SEQUENCE_BOUND:
+    segment_batch_diag.sequence_bound++;
+    break;
+  case SegmentBatchDiagEvent::HIT:
     segment_batch_diag.hit++;
-  } else if (single) {
+    break;
+  case SegmentBatchDiagEvent::SINGLE:
     segment_batch_diag.single++;
-  } else {
+    break;
+  case SegmentBatchDiagEvent::REJECT:
     segment_batch_diag.reject++;
+    break;
   }
 
   const uint32_t now_ms = esphome::millis();
@@ -80,16 +110,22 @@ static void record_segment_batch_diag(bool hit, bool single = false) {
   if ((now_ms - segment_batch_diag.last_log_ms) < 2000) {
     return;
   }
-  if (segment_batch_diag.hit == 0 && segment_batch_diag.single == 0 &&
+  if (segment_batch_diag.seen == 0 && segment_batch_diag.hit == 0 &&
+      segment_batch_diag.single == 0 &&
       segment_batch_diag.reject == 0) {
     segment_batch_diag.last_log_ms = now_ms;
     return;
   }
-  ESP_LOGD("chimera_fx",
-           "Segment batch diag: hit=%u single=%u reject=%u",
+  ESP_LOGI("chimera_fx",
+           "Segment batch diag: seen=%u hit=%u single=%u reject=%u "
+           "rate_skip=%u no_runner=%u seq=%u",
+           static_cast<unsigned>(segment_batch_diag.seen),
            static_cast<unsigned>(segment_batch_diag.hit),
            static_cast<unsigned>(segment_batch_diag.single),
-           static_cast<unsigned>(segment_batch_diag.reject));
+           static_cast<unsigned>(segment_batch_diag.reject),
+           static_cast<unsigned>(segment_batch_diag.rate_skip),
+           static_cast<unsigned>(segment_batch_diag.no_runner),
+           static_cast<unsigned>(segment_batch_diag.sequence_bound));
   segment_batch_diag = SegmentBatchDiag{};
   segment_batch_diag.last_log_ms = now_ms;
 }
@@ -2074,18 +2110,18 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   return false;
 #else
   if (!this->can_batch_steady_virtual_segment_()) {
-    record_segment_batch_diag(false);
+    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *my_state = this->get_light_state();
   if (my_state == nullptr) {
-    record_segment_batch_diag(false);
+    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *my_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       my_state->get_output());
   if (my_seg == nullptr || my_seg->get_parent() == nullptr) {
-    record_segment_batch_diag(false);
+    record_segment_batch_diag(SegmentBatchDiagEvent::REJECT);
     return false;
   }
   auto *parent = my_seg->get_parent();
@@ -2115,7 +2151,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   }
 
   if (count < 2) {
-    record_segment_batch_diag(false, true);
+    record_segment_batch_diag(SegmentBatchDiagEvent::SINGLE);
     return false;
   }
 
@@ -2143,7 +2179,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     parent->request_segment_flush(state);
   }
 
-  record_segment_batch_diag(true);
+  record_segment_batch_diag(SegmentBatchDiagEvent::HIT);
   return true;
 #endif
 }
@@ -2154,10 +2190,21 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->act_ == nullptr)
     return;
 
+  const bool diag_virtual_segment =
+      this->is_virtual_segment_ && act_->segment_runners.empty() &&
+      !act_->mono_idle && !act_->intro_active &&
+      act_->state == TRANSITION_NONE && !act_->completion_pending;
+  if (diag_virtual_segment) {
+    record_segment_batch_diag(SegmentBatchDiagEvent::SEEN);
+  }
+
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {
     const uint64_t early_now = millis_64();
     if (early_now - this->last_run_ < this->update_interval_) {
+      if (diag_virtual_segment) {
+        record_segment_batch_diag(SegmentBatchDiagEvent::RATE_SKIP);
+      }
       return;
     }
   }
@@ -2288,6 +2335,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // --- Ensure Runner(s) ---
   if (act_->runner == nullptr) {
+    if (diag_virtual_segment) {
+      record_segment_batch_diag(SegmentBatchDiagEvent::NO_RUNNER);
+    }
     ESP_LOGE("chimera_fx",
              "[%s] Runner is null in apply()! mono_idle=%d seg_runners=%u",
              act_->cached_runner_name.c_str(), (int)act_->mono_idle,
@@ -2303,7 +2353,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (sequence_bound && this->is_virtual_segment_ && act_->segment_runners.empty() &&
       !act_->mono_idle && !act_->intro_active &&
       act_->state == TRANSITION_NONE && !act_->completion_pending) {
-    record_segment_batch_diag(false);
+    record_segment_batch_diag(SegmentBatchDiagEvent::SEQUENCE_BOUND);
   }
   if (this->is_virtual_segment_ && act_->segment_runners.empty() &&
       !act_->mono_idle && !act_->intro_active &&
