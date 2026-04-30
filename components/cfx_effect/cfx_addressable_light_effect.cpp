@@ -2180,9 +2180,13 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     effect->prepare_steady_virtual_segment_runner_(*seg);
   }
 
+  std::vector<CFXRunner *> dispatch_runners;
+  dispatch_runners.reserve(count);
   for (size_t i = 0; i < count; i++) {
-    CFXScheduler::get().service_runner(runners[i]);
+    dispatch_runners.push_back(runners[i]);
   }
+  CFXScheduler::get().set_force_sequential(parent->is_spi_transport());
+  CFXScheduler::get().service_runners(dispatch_runners);
   esphome::App.feed_wdt();
 
   for (size_t i = 0; i < count; i++) {
