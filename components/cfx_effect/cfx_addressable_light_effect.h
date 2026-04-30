@@ -637,6 +637,9 @@ public:
 
 
   void run_controls_();
+  bool can_batch_steady_virtual_segment_() const;
+  bool try_batch_steady_virtual_segments_(uint64_t now);
+  void prepare_steady_virtual_segment_runner_(light::AddressableLight &it);
 
 
 
