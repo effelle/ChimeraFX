@@ -170,6 +170,8 @@ public:
     // the normal skip_service path already governs dispatch.
     bool mono_idle{false};
     bool mono_dirty{false};
+    bool mono_output_dirty{false};
+    bool mono_output_valid{false};
     uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
     uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
     bool mono_last_force_white{false};
@@ -546,6 +548,26 @@ public:
     for (auto *r : act_->segment_runners) r->sequence_owns_mirror_ = v;
   }
 #endif
+
+  bool is_clean_mono_idle_output() const {
+    return act_ != nullptr && act_->mono_idle && act_->mono_output_valid &&
+           !act_->mono_output_dirty && !act_->intro_active &&
+           act_->state != OUTRO_RUNNING;
+  }
+  bool has_dirty_mono_idle_output() const {
+    return act_ != nullptr && act_->mono_idle && act_->mono_output_dirty;
+  }
+  void mark_mono_output_dirty() {
+    if (act_ != nullptr && act_->mono_idle) {
+      act_->mono_output_dirty = true;
+    }
+  }
+  void mark_mono_output_committed() {
+    if (act_ != nullptr && act_->mono_idle) {
+      act_->mono_output_dirty = false;
+      act_->mono_output_valid = true;
+    }
+  }
 
   // Trigger vectors moved into CFXEffectConfig (accessed via cfg_->on_start_triggers etc.)
   // Empty static vectors returned when cfg_ is null (virtual segments).

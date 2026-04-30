@@ -359,6 +359,7 @@ protected:
   void reset_perf_diag_();
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
+  void log_segment_coordinator_diag_();
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;
@@ -505,8 +506,13 @@ protected:
   uint64_t perf_diag_total_rmt_callback_count_{0};
   uint64_t perf_diag_total_seg_contrib_{0};
   uint8_t seg_flush_pending_mask_{0};
+  uint8_t seg_flush_dirty_mask_{0};
   uint8_t seg_last_flush_mask_{0};
   uint8_t seg_last_flush_count_{0};
+  uint32_t seg_partial_frame_suppressed_{0};
+  uint32_t seg_missed_epoch_count_{0};
+  uint32_t seg_clean_epoch_suppressed_{0};
+  uint32_t seg_batch_diag_last_log_ms_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};

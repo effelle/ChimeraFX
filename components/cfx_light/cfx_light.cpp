@@ -242,6 +242,38 @@ void CFXLightOutput::harvest_rmt_encoder_diag_() {
 #endif
 }
 
+void CFXLightOutput::log_segment_coordinator_diag_() {
+  if (this->segment_light_states_.empty()) {
+    return;
+  }
+  const uint32_t now_ms = esphome::millis();
+  if (this->seg_batch_diag_last_log_ms_ == 0) {
+    this->seg_batch_diag_last_log_ms_ = now_ms;
+    return;
+  }
+  if ((now_ms - this->seg_batch_diag_last_log_ms_) < 2000) {
+    return;
+  }
+  if (this->seg_partial_frame_suppressed_ == 0 &&
+      this->seg_clean_epoch_suppressed_ == 0) {
+    this->seg_batch_diag_last_log_ms_ = now_ms;
+    return;
+  }
+
+  const char *light_name =
+      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                       : "<strip>";
+  ESP_LOGV(TAG,
+           "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u",
+           light_name, static_cast<unsigned>(this->seg_partial_frame_suppressed_),
+           static_cast<unsigned>(this->seg_missed_epoch_count_),
+           static_cast<unsigned>(this->seg_clean_epoch_suppressed_));
+  this->seg_partial_frame_suppressed_ = 0;
+  this->seg_missed_epoch_count_ = 0;
+  this->seg_clean_epoch_suppressed_ = 0;
+  this->seg_batch_diag_last_log_ms_ = now_ms;
+}
+
 void CFXLightOutput::note_show_request() {
   // Track the freshest show request. Coalesced flushes render the latest
   // completed frame, not the oldest pending request, so keeping the newest
@@ -425,7 +457,60 @@ static bool segment_participates_in_barrier(light::LightState *state) {
   if (!state->remote_values.is_on()) {
     return false;
   }
-  return resolve_active_cfx_effect(state) != nullptr;
+  auto *effect = resolve_active_cfx_effect(state);
+  if (effect == nullptr) {
+    return false;
+  }
+  return !effect->is_clean_mono_idle_output();
+}
+
+static bool active_cfx_effect_is_clean_mono_idle(light::LightState *state) {
+  auto *effect = resolve_active_cfx_effect(state);
+  return effect != nullptr && effect->is_clean_mono_idle_output();
+}
+
+static bool all_active_cfx_effects_clean_mono_idle(CFXLightOutput *output) {
+  if (output == nullptr || output->has_outro()) {
+    return false;
+  }
+
+  bool saw_clean_idle = false;
+  auto *master_effect = resolve_active_cfx_effect(output->get_master_light_state());
+  if (master_effect != nullptr) {
+    if (!master_effect->is_clean_mono_idle_output()) {
+      return false;
+    }
+    saw_clean_idle = true;
+  }
+
+  for (auto *seg_state : output->get_segment_light_states()) {
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    if (effect == nullptr) {
+      continue;
+    }
+    if (!effect->is_clean_mono_idle_output()) {
+      return false;
+    }
+    saw_clean_idle = true;
+  }
+
+  return saw_clean_idle;
+}
+
+static void mark_committed_mono_idle_outputs(CFXLightOutput *output) {
+  if (output == nullptr) {
+    return;
+  }
+  auto *master_effect = resolve_active_cfx_effect(output->get_master_light_state());
+  if (master_effect != nullptr && master_effect->has_dirty_mono_idle_output()) {
+    master_effect->mark_mono_output_committed();
+  }
+  for (auto *seg_state : output->get_segment_light_states()) {
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    if (effect != nullptr && effect->has_dirty_mono_idle_output()) {
+      effect->mark_mono_output_committed();
+    }
+  }
 }
 
 // --- Core Control Loop & Initialization ---
@@ -1099,20 +1184,39 @@ void CFXLightOutput::loop() {
       if (active_count > ready_count) {
         const uint32_t missing = static_cast<uint32_t>(active_count - ready_count);
         this->perf_diag_total_partial_flushes_++;
+        this->seg_partial_frame_suppressed_++;
+        this->seg_missed_epoch_count_ += missing;
         if (missing > this->perf_diag_max_partial_missing_) {
           this->perf_diag_max_partial_missing_ = missing;
         }
+        for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
+          this->seg_flushed_generation_[i] = this->seg_request_generation_[i];
+        }
+        this->seg_flush_pending_mask_ = 0;
+        this->seg_flush_dirty_mask_ = 0;
+        this->seg_flush_pending_ = false;
+        this->seg_flush_first_ms_ = 0;
+        this->log_segment_coordinator_diag_();
+        goto segment_flush_done;
       }
       for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
         this->seg_flushed_generation_[i] = this->seg_request_generation_[i];
       }
       this->seg_flush_pending_mask_ = 0;
+      const uint8_t dirty_mask = this->seg_flush_dirty_mask_;
+      this->seg_flush_dirty_mask_ = 0;
       this->seg_flush_pending_ = false;
       this->seg_flush_first_ms_ = 0;
+      if (dirty_mask == 0) {
+        this->seg_clean_epoch_suppressed_++;
+        this->log_segment_coordinator_diag_();
+        goto segment_flush_done;
+      }
       this->write_state(nullptr);
     }
   }
 
+segment_flush_done:
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
 #endif
@@ -1192,10 +1296,17 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // complete buffer. This prevents partial-frame DMA which causes random color
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush(light::LightState *state) {
+  if (active_cfx_effect_is_clean_mono_idle(state)) {
+    this->seg_clean_epoch_suppressed_++;
+    this->log_segment_coordinator_diag_();
+    return;
+  }
+
   if (state != nullptr) {
     for (size_t i = 0; i < this->segment_light_states_.size() && i < 8; i++) {
       if (this->segment_light_states_[i] == state) {
         this->seg_flush_pending_mask_ |= static_cast<uint8_t>(1u << i);
+        this->seg_flush_dirty_mask_ |= static_cast<uint8_t>(1u << i);
         this->seg_generation_counter_++;
         if (this->seg_generation_counter_ == 0) {
           this->seg_generation_counter_ = 1;
@@ -1242,8 +1353,15 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
     this->seg_flushed_generation_[i] = this->seg_request_generation_[i];
   }
   this->seg_flush_pending_mask_ = 0;
+  const uint8_t dirty_mask = this->seg_flush_dirty_mask_;
+  this->seg_flush_dirty_mask_ = 0;
   this->seg_flush_pending_ = false;
   this->seg_flush_first_ms_ = 0;
+  if (dirty_mask == 0) {
+    this->seg_clean_epoch_suppressed_++;
+    this->log_segment_coordinator_diag_();
+    return;
+  }
   this->write_state(nullptr);
 }
 
@@ -1257,6 +1375,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   this->perf_diag_last_flush_valid_ = false;
   this->perf_diag_last_flush_total_us_ = 0;
   this->perf_diag_last_flush_tx_us_ = 0;
+
+  if (!this->has_outro() &&
+      ((state != nullptr && active_cfx_effect_is_clean_mono_idle(state)) ||
+       (state == nullptr && this->seg_last_flush_mask_ == 0 &&
+        all_active_cfx_effects_clean_mono_idle(this)))) {
+    this->seg_clean_epoch_suppressed_++;
+    this->log_segment_coordinator_diag_();
+    return;
+  }
 
   // 1. Master Mute: When segments are active, the Master LightState's
   // rendering pipeline is suppressed. The Master paints the entire strip with
@@ -1377,6 +1504,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
     g_rmt_launch_seq++;
     this->flush_rmt_();
   }
+  mark_committed_mono_idle_outputs(this);
+  this->log_segment_coordinator_diag_();
 
   if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
     uint32_t queue_us = 0;
