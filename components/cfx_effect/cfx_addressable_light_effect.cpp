@@ -54,6 +54,63 @@ const std::vector<CfxOnReachTrigger *>
 static const char *const TAG = "chimera_fx";
 
 namespace {
+struct SegmentBatchDiag {
+  uint32_t hit{0};
+  uint32_t single{0};
+  uint32_t reject{0};
+  uint32_t last_log_ms{0};
+};
+
+static SegmentBatchDiag segment_batch_diag;
+
+static void record_segment_batch_diag(bool hit, bool single = false) {
+  if (hit) {
+    segment_batch_diag.hit++;
+  } else if (single) {
+    segment_batch_diag.single++;
+  } else {
+    segment_batch_diag.reject++;
+  }
+
+  const uint32_t now_ms = esphome::millis();
+  if (segment_batch_diag.last_log_ms == 0) {
+    segment_batch_diag.last_log_ms = now_ms;
+    return;
+  }
+  if ((now_ms - segment_batch_diag.last_log_ms) < 2000) {
+    return;
+  }
+  if (segment_batch_diag.hit == 0 && segment_batch_diag.single == 0 &&
+      segment_batch_diag.reject == 0) {
+    segment_batch_diag.last_log_ms = now_ms;
+    return;
+  }
+  ESP_LOGD("chimera_fx",
+           "Segment batch diag: hit=%u single=%u reject=%u",
+           static_cast<unsigned>(segment_batch_diag.hit),
+           static_cast<unsigned>(segment_batch_diag.single),
+           static_cast<unsigned>(segment_batch_diag.reject));
+  segment_batch_diag = SegmentBatchDiag{};
+  segment_batch_diag.last_log_ms = now_ms;
+}
+
+static CFXAddressableLightEffect *
+resolve_active_segment_cfx_effect(light::LightState *state) {
+  if (state == nullptr) {
+    return nullptr;
+  }
+  auto *active = LightStateProxy::get_active_effect(state);
+  if (active == nullptr) {
+    return nullptr;
+  }
+  for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
+    if (effect == active) {
+      return effect;
+    }
+  }
+  return nullptr;
+}
+
 struct SPIDiagCensus {
   size_t total_effects{0};
   size_t total_segment_effects{0};
@@ -2017,27 +2074,31 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   return false;
 #else
   if (!this->can_batch_steady_virtual_segment_()) {
+    record_segment_batch_diag(false);
     return false;
   }
   auto *my_state = this->get_light_state();
   if (my_state == nullptr) {
+    record_segment_batch_diag(false);
     return false;
   }
   auto *my_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       my_state->get_output());
   if (my_seg == nullptr || my_seg->get_parent() == nullptr) {
+    record_segment_batch_diag(false);
     return false;
   }
   auto *parent = my_seg->get_parent();
 
-  std::vector<CFXAddressableLightEffect *> effects;
-  std::vector<CFXRunner *> runners;
-  for (auto *other : CFXAddressableLightEffect::all_segment_effects) {
-    if (other == nullptr || !other->can_batch_steady_virtual_segment_()) {
+  CFXAddressableLightEffect *effects[MAX_CFX_SEGMENTS]{};
+  CFXRunner *runners[MAX_CFX_SEGMENTS]{};
+  size_t count = 0;
+  for (auto *other_state : parent->get_segment_light_states()) {
+    if (other_state == nullptr) {
       continue;
     }
-    auto *other_state = other->get_light_state();
-    if (other_state == nullptr) {
+    auto *other = resolve_active_segment_cfx_effect(other_state);
+    if (other == nullptr || !other->can_batch_steady_virtual_segment_()) {
       continue;
     }
     auto *other_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
@@ -2045,15 +2106,21 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     if (other_seg == nullptr || other_seg->get_parent() != parent) {
       continue;
     }
-    effects.push_back(other);
-    runners.push_back(other->act_->runner);
+    if (count >= MAX_CFX_SEGMENTS) {
+      break;
+    }
+    effects[count] = other;
+    runners[count] = other->act_->runner;
+    count++;
   }
 
-  if (effects.size() < 2) {
+  if (count < 2) {
+    record_segment_batch_diag(false, true);
     return false;
   }
 
-  for (auto *effect : effects) {
+  for (size_t i = 0; i < count; i++) {
+    auto *effect = effects[i];
     auto *state = effect->get_light_state();
     auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
         state->get_output());
@@ -2061,12 +2128,13 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     effect->prepare_steady_virtual_segment_runner_(*seg);
   }
 
-  for (auto *runner : runners) {
-    CFXScheduler::get().service_runner(runner);
+  for (size_t i = 0; i < count; i++) {
+    CFXScheduler::get().service_runner(runners[i]);
   }
   esphome::App.feed_wdt();
 
-  for (auto *effect : effects) {
+  for (size_t i = 0; i < count; i++) {
+    auto *effect = effects[i];
     auto *state = effect->get_light_state();
     auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
         state->get_output());
@@ -2075,6 +2143,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     parent->request_segment_flush(state);
   }
 
+  record_segment_batch_diag(true);
   return true;
 #endif
 }
@@ -2231,6 +2300,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #ifdef USE_CFX_SEQUENCE
   sequence_bound = act_->active_sequence != nullptr;
 #endif
+  if (sequence_bound && this->is_virtual_segment_ && act_->segment_runners.empty() &&
+      !act_->mono_idle && !act_->intro_active &&
+      act_->state == TRANSITION_NONE && !act_->completion_pending) {
+    record_segment_batch_diag(false);
+  }
   if (this->is_virtual_segment_ && act_->segment_runners.empty() &&
       !act_->mono_idle && !act_->intro_active &&
       act_->state == TRANSITION_NONE && !act_->completion_pending &&
