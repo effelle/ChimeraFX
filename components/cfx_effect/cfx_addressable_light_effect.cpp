@@ -1982,6 +1982,26 @@ bool CFXAddressableLightEffect::can_batch_steady_virtual_segment_() const {
   return state != nullptr && state->remote_values.is_on();
 }
 
+bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
+  return this->can_batch_steady_virtual_segment_();
+}
+
+bool CFXAddressableLightEffect::parent_coordinated_segment_due(
+    uint64_t now) const {
+  return this->can_parent_coordinate_segment() &&
+         (this->last_run_ == 0 ||
+          (now - this->last_run_) >= this->update_interval_);
+}
+
+void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
+    light::AddressableLight &it) {
+  this->prepare_steady_virtual_segment_runner_(it);
+}
+
+void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {
+  this->last_run_ = now;
+}
+
 void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     light::AddressableLight &it) {
   auto *state_ptr = this->get_light_state();
@@ -2124,6 +2144,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // Guard against apply() being called before start() allocates act_.
   if (this->act_ == nullptr)
     return;
+
+  if (this->is_virtual_segment_) {
+    auto *state_ptr = this->get_light_state();
+    if (state_ptr != nullptr) {
+      auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+          state_ptr->get_output());
+      if (seg != nullptr && seg->get_parent() != nullptr &&
+          seg->get_parent()->segment_coordinator_owns(state_ptr)) {
+        return;
+      }
+    }
+  }
 
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {

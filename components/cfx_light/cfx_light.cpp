@@ -513,6 +513,136 @@ static void mark_committed_mono_idle_outputs(CFXLightOutput *output) {
   }
 }
 
+bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
+  if (state == nullptr || !this->has_segments() || this->has_outro()) {
+    return false;
+  }
+  auto *target = resolve_active_cfx_effect(state);
+  if (target == nullptr || !target->can_parent_coordinate_segment()) {
+    return false;
+  }
+
+  for (auto *seg_state : this->segment_light_states_) {
+    if (seg_state == nullptr || !seg_state->remote_values.is_on()) {
+      continue;
+    }
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    if (effect == nullptr) {
+      if (seg_state->get_effect_name() != "None") {
+        return false;
+      }
+      continue;
+    }
+    if (effect->is_clean_mono_idle_output()) {
+      continue;
+    }
+    if (!effect->can_parent_coordinate_segment()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool CFXLightOutput::service_segment_render_coordinator_() {
+  if (!this->has_segments() || this->has_outro()) {
+    return false;
+  }
+
+  const uint64_t now = static_cast<uint64_t>(esphome::millis());
+  chimera_fx::CFXAddressableLightEffect *effects[MAX_CFX_SEGMENTS]{};
+  CFXVirtualSegmentLight *segments[MAX_CFX_SEGMENTS]{};
+  uint8_t mask = 0;
+  uint8_t count = 0;
+
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    auto *state = this->segment_light_states_[i];
+    if (!this->segment_coordinator_owns(state)) {
+      continue;
+    }
+    auto *effect = resolve_active_cfx_effect(state);
+    if (effect == nullptr || !effect->parent_coordinated_segment_due(now)) {
+      continue;
+    }
+    auto *segment =
+        static_cast<CFXVirtualSegmentLight *>(state->get_output());
+    if (segment == nullptr || segment->get_parent() != this ||
+        effect->get_act() == nullptr || effect->get_act()->runner == nullptr) {
+      continue;
+    }
+    effects[count] = effect;
+    segments[count] = segment;
+    mask |= static_cast<uint8_t>(1u << i);
+    count++;
+  }
+
+  if (count == 0) {
+    return false;
+  }
+
+  if (this->segment_coord_runners_.capacity() < MAX_CFX_SEGMENTS) {
+    this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
+  }
+  this->segment_coord_runners_.clear();
+
+  for (uint8_t i = 0; i < count; i++) {
+    auto *effect = effects[i];
+    effect->mark_parent_coordinated_run(now);
+    effect->prepare_parent_coordinated_runner(*segments[i]);
+    this->segment_coord_runners_.push_back(effect->get_act()->runner);
+  }
+
+  chimera_fx::CFXScheduler::get().set_force_sequential(this->is_spi_transport());
+  const bool complete =
+      chimera_fx::CFXScheduler::get().service_runners(this->segment_coord_runners_);
+  esphome::App.feed_wdt();
+
+  if (!complete) {
+    this->perf_diag_total_partial_flushes_++;
+    this->seg_partial_frame_suppressed_++;
+    this->seg_missed_epoch_count_ += count;
+    if (count > this->perf_diag_max_partial_missing_) {
+      this->perf_diag_max_partial_missing_ = count;
+    }
+    this->log_segment_coordinator_diag_();
+    return true;
+  }
+
+  for (uint8_t i = 0; i < count; i++) {
+    effects[i]->get_act()->runner->diagnostics.flush_log();
+  }
+  this->flush_segment_coordinator_epoch_(mask, count);
+  return true;
+}
+
+void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
+                                                     uint8_t count) {
+  if (mask == 0 || count == 0) {
+    return;
+  }
+  this->seg_generation_counter_++;
+  if (this->seg_generation_counter_ == 0) {
+    this->seg_generation_counter_ = 1;
+  }
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    if ((mask & static_cast<uint8_t>(1u << i)) == 0) {
+      continue;
+    }
+    this->seg_request_generation_[i] = this->seg_generation_counter_;
+    this->seg_flushed_generation_[i] = this->seg_generation_counter_;
+  }
+  this->seg_flush_pending_mask_ = 0;
+  this->seg_flush_dirty_mask_ = 0;
+  this->seg_flush_pending_ = false;
+  this->seg_flush_first_ms_ = 0;
+  this->seg_last_flush_mask_ = mask;
+  this->seg_last_flush_count_ = count;
+  this->note_show_request();
+  this->write_state(nullptr);
+}
+
 // --- Core Control Loop & Initialization ---
 
 // CFX-025: Destructor closes the visualizer UDP socket if it was opened.
@@ -681,6 +811,9 @@ void CFXLightOutput::setup() {
     this->flush_rmt_();
   }
   this->reset_perf_diag_();
+  if (!this->segment_light_states_.empty()) {
+    this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
+  }
 
   // --- Phase 2: Set up Event-Driven State Synchronization ---
   // Decoupled from the high-frequency DMA write loop to prevent recursion!
@@ -1149,6 +1282,10 @@ void CFXLightOutput::loop() {
       this->write_state(nullptr);
       this->release_outro_callback_storage_();
     }
+  }
+
+  if (this->service_segment_render_coordinator_()) {
+    goto segment_flush_done;
   }
 
   // Fix-2: Drain the coalesced segment flush.

@@ -106,9 +106,9 @@ void CFXScheduler::core0_task_fn(void *arg) {
 
 // ── Dispatch ─────────────────────────────────────────────────────────────────
 
-void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
+bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
   const size_t total = runners.size();
-  if (total == 0) return;
+  if (total == 0) return true;
 
   if (force_sequential_) {
     if (!sequential_diag_logged_) {
@@ -132,7 +132,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
       ESP_LOGV(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
                (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
-    return;
+    return true;
   }
 
 #if CFX_DUAL_CORE
@@ -201,7 +201,9 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     // Wait for Core 0 to finish before returning to apply().
     // On timeout the strip retains its last valid pixel values —
     // graceful degradation, no crash.
-    if (xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) != pdTRUE) {
+    const bool core0_ok =
+        xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) == pdTRUE;
+    if (!core0_ok) {
       ESP_LOGW(TAG, "Core 0 runner timeout (%u ms) — frame skipped for %u runners",
                CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
     }
@@ -214,7 +216,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
       ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
                (unsigned)hwm_words, (unsigned)(hwm_words * 4));
     }
-    return;
+    return core0_ok;
   }
   // Fall through: task not ready yet, or only 1 runner — sequential is fine.
 #endif
@@ -235,6 +237,7 @@ void CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     ESP_LOGV(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
              (unsigned)hwm_words, (unsigned)(hwm_words * 4));
   }
+  return true;
 }
 
 void CFXScheduler::service_runner(CFXRunner *r) {

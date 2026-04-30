@@ -29,6 +29,11 @@
 
 namespace esphome {
 
+namespace chimera_fx {
+class CFXAddressableLightEffect;
+class CFXRunner;
+}
+
 namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
@@ -174,6 +179,7 @@ public:
   bool has_outro() const { return !this->outro_cbs_.empty(); }
   void note_show_request();
   void trigger_low_ram_warning(light::LightState *state);
+  bool segment_coordinator_owns(light::LightState *state);
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
@@ -353,6 +359,8 @@ protected:
   void release_outro_callback_storage_();
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
+  bool service_segment_render_coordinator_();
+  void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
@@ -516,6 +524,7 @@ protected:
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
+  std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};
   uint8_t perf_diag_last_launch_slot_{0};
   CFXTurnOnDefaults turn_on_defaults_{};

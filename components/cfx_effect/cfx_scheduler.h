@@ -50,10 +50,11 @@ public:
 
   // ── Primary dispatch entry points ────────────────────────────────────────
 
-  // Service a vector of runners.
+  // Service a vector of runners. Returns false only when a parallel slice times
+  // out and the caller should suppress presentation of the partial frame.
   // Dual-core: splits list, Core 0 handles second half in parallel.
   // Single-core / 1 runner: sequential loop, no FreeRTOS overhead.
-  void service_runners(std::vector<CFXRunner *> &runners);
+  bool service_runners(std::vector<CFXRunner *> &runners);
 
   // Convenience wrapper for the single-runner (no-segment) code path.
   void service_runner(CFXRunner *r);

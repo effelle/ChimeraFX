@@ -132,6 +132,8 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
+    if (parent_->segment_coordinator_owns(this->state_parent_))
+      return;
     parent_->request_segment_flush(this->state_parent_);
   }
 
