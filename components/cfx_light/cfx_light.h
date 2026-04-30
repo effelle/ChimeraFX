@@ -359,6 +359,7 @@ protected:
   void release_outro_callback_storage_();
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
+  void refresh_segment_coordination_mask_();
   bool service_segment_render_coordinator_();
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
@@ -524,6 +525,8 @@ protected:
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
+  uint8_t segment_coord_owned_mask_{0};
+  uint32_t segment_coord_owned_mask_ms_{0};
   std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};
   uint8_t perf_diag_last_launch_slot_{0};
