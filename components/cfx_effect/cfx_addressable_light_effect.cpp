@@ -62,6 +62,8 @@ struct SegmentBatchDiag {
   uint32_t hit{0};
   uint32_t single{0};
   uint32_t reject{0};
+  uint32_t max_batch_us{0};
+  uint64_t total_batch_us{0};
   uint32_t last_log_ms{0};
 };
 
@@ -77,7 +79,8 @@ enum class SegmentBatchDiagEvent {
   REJECT,
 };
 
-static void record_segment_batch_diag(SegmentBatchDiagEvent event) {
+static void record_segment_batch_diag(SegmentBatchDiagEvent event,
+                                      uint32_t batch_us = 0) {
   switch (event) {
   case SegmentBatchDiagEvent::SEEN:
     segment_batch_diag.seen++;
@@ -93,6 +96,10 @@ static void record_segment_batch_diag(SegmentBatchDiagEvent event) {
     break;
   case SegmentBatchDiagEvent::HIT:
     segment_batch_diag.hit++;
+    segment_batch_diag.total_batch_us += batch_us;
+    if (batch_us > segment_batch_diag.max_batch_us) {
+      segment_batch_diag.max_batch_us = batch_us;
+    }
     break;
   case SegmentBatchDiagEvent::SINGLE:
     segment_batch_diag.single++;
@@ -116,16 +123,24 @@ static void record_segment_batch_diag(SegmentBatchDiagEvent event) {
     segment_batch_diag.last_log_ms = now_ms;
     return;
   }
+  const float avg_batch_ms =
+      segment_batch_diag.hit > 0
+          ? (float)(segment_batch_diag.total_batch_us /
+                    segment_batch_diag.hit) /
+                1000.0f
+          : 0.0f;
   ESP_LOGI("chimera_fx",
            "Segment batch diag: seen=%u hit=%u single=%u reject=%u "
-           "rate_skip=%u no_runner=%u seq=%u",
+           "rate_skip=%u no_runner=%u seq=%u batch=%.2f/%.2fms",
            static_cast<unsigned>(segment_batch_diag.seen),
            static_cast<unsigned>(segment_batch_diag.hit),
            static_cast<unsigned>(segment_batch_diag.single),
            static_cast<unsigned>(segment_batch_diag.reject),
            static_cast<unsigned>(segment_batch_diag.rate_skip),
            static_cast<unsigned>(segment_batch_diag.no_runner),
-           static_cast<unsigned>(segment_batch_diag.sequence_bound));
+           static_cast<unsigned>(segment_batch_diag.sequence_bound),
+           avg_batch_ms,
+           (float)segment_batch_diag.max_batch_us / 1000.0f);
   segment_batch_diag = SegmentBatchDiag{};
   segment_batch_diag.last_log_ms = now_ms;
 }
@@ -2155,6 +2170,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     return false;
   }
 
+  const uint32_t batch_start_us = cfx_micros();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
@@ -2179,7 +2195,8 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     parent->request_segment_flush(state);
   }
 
-  record_segment_batch_diag(SegmentBatchDiagEvent::HIT);
+  record_segment_batch_diag(SegmentBatchDiagEvent::HIT,
+                            cfx_micros() - batch_start_us);
   return true;
 #endif
 }
