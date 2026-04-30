@@ -227,7 +227,7 @@ void CFXScheduler::service_runner(CFXRunner *r) {
     }
 
     if (is_new_tick) {
-      ESP_LOGD(TAG, "Tick boundary: pending=%u, trigger=%s", (unsigned)pending_runners_.size(), r->get_name().c_str());
+      ESP_LOGD(TAG, "Tick boundary: pending=%u", (unsigned)pending_runners_.size());
       flush_pending();
       pending_runners_.clear();
     }
