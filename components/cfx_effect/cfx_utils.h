@@ -598,8 +598,10 @@ struct FrameDiagnostics {
     last_log_time = now_ms;
   }
 
-  void idle_sleep_log(const char *effect_name, uint32_t frame_count_in,
-                      uint32_t period_start_ms) {
+  void idle_sleep_log(const char *effect_name, const char *mode_name,
+                      uint8_t mode_id, uint32_t frame_count_in,
+                      uint32_t period_start_ms, uint64_t total_frame_us_in,
+                      uint32_t jitter_count_in) {
     if (!enabled) return;
 
     uint32_t now_ms = cfx_millis();
@@ -613,10 +615,21 @@ struct FrameDiagnostics {
     uint32_t sleep_after_ms =
         period_start_ms > 0 ? (now_ms - period_start_ms) : 0;
 
+    float fps = 0.0f;
+    float avg_frame_ms = 0.0f;
+    float jitter_pct = 0.0f;
+    if (frame_count_in > 0 && total_frame_us_in > 0) {
+      fps = (1000000.0f * frame_count_in) / (float)total_frame_us_in;
+      avg_frame_ms = (float)(total_frame_us_in / frame_count_in) / 1000.0f;
+      jitter_pct = (100.0f * jitter_count_in) / (float)frame_count_in;
+    }
+
     ESP_LOGI("chimera_fx",
-             "[%s] IDLE dormant | Frames:%u | Sleep after:%ums | Heap:%ukB [IDLE]",
+             "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
+             "Heap: %ukB [IDLE sleep after %ums, frames:%u]",
              effect_name ? effect_name : "?",
-             frame_count_in, sleep_after_ms, free_heap_kb);
+             mode_name ? mode_name : "Static", mode_id, fps, avg_frame_ms,
+             jitter_pct, free_heap_kb, sleep_after_ms, frame_count_in);
 
     reset_log_window();
   }

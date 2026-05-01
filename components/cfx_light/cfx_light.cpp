@@ -638,52 +638,6 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       this->segment_coord_owned_mask_ | segment_idle_mask);
 }
 
-void CFXLightOutput::log_mono_idle_loop_diag_() {
-  const uint8_t seg_mask = this->segment_mono_idle_dormant_mask_;
-  if (!this->master_mono_idle_dormant_ && seg_mask == 0) {
-    return;
-  }
-
-  const uint32_t now_ms = esphome::millis();
-  if (now_ms - this->mono_idle_diag_last_log_ms_ < 2000) {
-    return;
-  }
-  this->mono_idle_diag_last_log_ms_ = now_ms;
-
-  uint8_t dormant_count = this->master_mono_idle_dormant_ ? 1 : 0;
-  uint32_t oldest_sleep_ms =
-      this->master_mono_idle_dormant_ ? this->master_mono_idle_sleep_ms_ : 0;
-  for (size_t i = 0; i < this->segment_light_states_.size() &&
-                     i < MAX_CFX_SEGMENTS; i++) {
-    const uint8_t bit = static_cast<uint8_t>(1u << i);
-    if ((seg_mask & bit) == 0) {
-      continue;
-    }
-    dormant_count++;
-    const uint32_t started = this->segment_mono_idle_sleep_ms_[i];
-    if (started != 0 && (oldest_sleep_ms == 0 || started < oldest_sleep_ms)) {
-      oldest_sleep_ms = started;
-    }
-  }
-
-  const uint32_t sleep_ms =
-      oldest_sleep_ms != 0 ? (now_ms - oldest_sleep_ms) : 0;
-  uint32_t free_heap = esp_get_free_heap_size();
-  uint32_t free_heap_kb = free_heap / 1024;
-  const char *light_name =
-      this->state_parent_ != nullptr ? this->state_parent_->get_name().c_str()
-                                     : "<cfx>";
-
-  ESP_LOGD(TAG,
-           "[%s] IdleSleep | dormant:%u master:%u seg_mask:0x%02X sleep:%ums "
-           "sleep_count:%u wake_count:%u heap:%ukB",
-           light_name, static_cast<unsigned>(dormant_count),
-           this->master_mono_idle_dormant_ ? 1u : 0u,
-           static_cast<unsigned>(seg_mask), sleep_ms,
-           static_cast<unsigned>(this->mono_idle_sleep_count_),
-           static_cast<unsigned>(this->mono_idle_wake_count_), free_heap_kb);
-}
-
 void CFXLightOutput::apply_segment_coordination_loop_state_(
     uint8_t owned_mask) {
   uint8_t next_dormant_mask = this->segment_coord_dormant_mask_;
@@ -1598,7 +1552,6 @@ void CFXLightOutput::loop() {
   }
 
 segment_flush_done:
-  this->log_mono_idle_loop_diag_();
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
 #endif
