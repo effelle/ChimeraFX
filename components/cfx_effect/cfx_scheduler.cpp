@@ -84,17 +84,6 @@ void CFXScheduler::core0_task_fn(void *arg) {
       }
     }
 
-    // RAM-AUDIT: Stack high-water mark instrumentation.
-    // Reports every ~200 frames (~3s @ 66 FPS) to measure actual stack usage.
-    // Safe to remove once stack size is finalized.
-    static uint32_t hwm_report_counter = 0;
-    if (++hwm_report_counter >= 200) {
-      hwm_report_counter = 0;
-      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGV(TAG, "Core 0 stack HWM: %u words (%u bytes free of 4096)",
-               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-    }
-
     // Signal Core 1 that this frame's slice is complete.
     xSemaphoreGive(self->core0_done_);
   }
@@ -124,14 +113,6 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
       }
     }
 
-    // RAM-AUDIT: Sequential path (Main Loop) stack instrumentation.
-    static uint32_t seq_hwm_counter = 0;
-    if (++seq_hwm_counter >= 200) {
-      seq_hwm_counter = 0;
-      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGV(TAG, "Sequential Loop stack HWM: %u words (%u bytes free)",
-               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-    }
     return true;
   }
 
@@ -217,14 +198,6 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
                CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
     }
 
-    // RAM-AUDIT: Parallel path (Main Loop / Core 1) stack instrumentation.
-    static uint32_t main_hwm_counter = 0;
-    if (++main_hwm_counter >= 200) {
-      main_hwm_counter = 0;
-      const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-      ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
-               (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-    }
     return core0_ok;
   }
   // Fall through: task not ready yet, or only 1 runner — sequential is fine.
@@ -238,14 +211,6 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
     }
   }
 
-  // RAM-AUDIT: Shared HWM counter — hits whichever path is actually hot.
-  static uint32_t fallthrough_hwm_counter = 0;
-  if (++fallthrough_hwm_counter >= 200) {
-    fallthrough_hwm_counter = 0;
-    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-    ESP_LOGV(TAG, "(fallthrough) Main Loop stack HWM: %u words (%u bytes free)",
-             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-  }
   return true;
 }
 
@@ -254,19 +219,6 @@ void CFXScheduler::service_runner(CFXRunner *r) {
   InstanceGuard guard(r);
   r->service();
 
-  // RAM-AUDIT: HWM instrumentation (VERBOSE — measurement complete).
-  // Data collected 2026-04-29: main loop task ~20 KB free under 8-runner load.
-  // Core 0 task (4 KB) is never woken — inter-effect parallelism requires a
-  // deferred batch dispatch model (future work):
-  //   Activate threshold  >20ms: ≥3 heavy runners, loop over budget
-  //   Deactivate threshold <18ms: ≤2 runners, Core 1 sufficient
-  static uint32_t single_hwm_counter = 0;
-  if (++single_hwm_counter >= 200) {
-    single_hwm_counter = 0;
-    const UBaseType_t hwm_words = uxTaskGetStackHighWaterMark(nullptr);
-    ESP_LOGV(TAG, "Main Loop stack HWM: %u words (%u bytes free)",
-             (unsigned)hwm_words, (unsigned)(hwm_words * 4));
-  }
 }
 
 void CFXScheduler::drain_core0() {

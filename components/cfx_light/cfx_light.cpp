@@ -1219,10 +1219,6 @@ void CFXLightOutput::on_master_update() {
     return;
   }
 
-  ESP_LOGV(
-      "cfx_dbg", "[on_master_update] syncing=%d master_remote_on=%d prev=%d",
-      this->is_syncing_, (int)this->master_light_state_->remote_values.is_on(),
-      (int)this->prev_master_state_);
   if (this->is_syncing_)
     return;
   this->is_syncing_ = true; // Lock recursion
@@ -1258,8 +1254,6 @@ void CFXLightOutput::on_master_update() {
       if (bright_changed)
         call.set_brightness(master_brightness);
 
-      ESP_LOGV("chimera_fx", "Sync TOP-DOWN: Master -> %s (ON: %d)",
-               seg_state->get_name().c_str(), master_on);
       call.perform();
     }
   }
@@ -1291,18 +1285,6 @@ void CFXLightOutput::on_segment_update() {
     }
   }
 
-  ESP_LOGV("cfx_dbg",
-           "[on_segment_update] master_on=%d any_on=%d states=[%d,%d,%d]",
-           master_on, is_any_segment_on,
-           (int)this->segment_light_states_.size() > 0
-               ? (int)this->segment_light_states_[0]->remote_values.is_on()
-               : -1,
-           (int)this->segment_light_states_.size() > 1
-               ? (int)this->segment_light_states_[1]->remote_values.is_on()
-               : -1,
-           (int)this->segment_light_states_.size() > 2
-               ? (int)this->segment_light_states_[2]->remote_values.is_on()
-               : -1);
   if (master_on != is_any_segment_on) {
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master
@@ -1315,8 +1297,6 @@ void CFXLightOutput::on_segment_update() {
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
     call.set_transition_length(0);
-    ESP_LOGV("chimera_fx", "Sync BOTTOM-UP: Segments -> Master (ON: %d)",
-             is_any_segment_on);
     call.perform();
   }
 
@@ -1775,88 +1755,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
       this->perf_diag_last_log_ms_ = now_ms;
     } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
                this->perf_diag_flush_count_ > 0) {
-      const char *light_name =
-          (this->state_parent_ != nullptr)
-              ? this->state_parent_->get_name().c_str()
-              : "<strip>";
-      const char *transport_name =
-          this->transport_ == TRANSPORT_SPI ? "SPI" : "RMT";
-      const float avg_write_ms =
-          (float)(this->perf_diag_total_write_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_flush_ms =
-          (float)(this->perf_diag_total_flush_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_tx_ms =
-          (float)(this->perf_diag_total_tx_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_queue_ms =
-          (float)(this->perf_diag_total_queue_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_wait_ms =
-          (float)(this->perf_diag_total_wait_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_gate_ms =
-          (float)(this->perf_diag_total_gate_us_ / this->perf_diag_flush_count_) /
-          1000.0f;
-      const float avg_gate_defers =
-          (float)this->perf_diag_total_gate_defers_ /
-          (float)this->perf_diag_flush_count_;
-      const float avg_partial_flushes =
-          (float)this->perf_diag_total_partial_flushes_ /
-          (float)this->perf_diag_flush_count_;
-      const float avg_rmt_starve =
-          (float)this->perf_diag_total_rmt_starve_count_ /
-          (float)this->perf_diag_flush_count_;
-      const float avg_rmt_reset_starve =
-          (float)this->perf_diag_total_rmt_reset_starve_count_ /
-          (float)this->perf_diag_flush_count_;
-      const float avg_seg_contrib =
-          (float)this->perf_diag_total_seg_contrib_ /
-          (float)this->perf_diag_flush_count_;
-
-      if (this->transport_ == TRANSPORT_RMT) {
-        const uint32_t min_symbols_free =
-            (this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX)
-                ? 0
-                : this->perf_diag_min_rmt_symbols_free_;
-        ESP_LOGV(
-            TAG,
-            "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | Flush: "
-            "%.2f/%.2fms | Wait: %.2f/%.2fms | Gate: %.2f/%.2fms | Def: %.2f/%u | "
-            "Part: %.2f/%u | Slot:%u | Stall: %.2f/%u (R:%.2f/%u) | Seg: %.2f/%u | Free:%u | Calls:%u",
-            light_name, transport_name,
-            avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
-            avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
-            avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
-            avg_wait_ms, (float)this->perf_diag_max_wait_us_ / 1000.0f,
-            avg_gate_ms, (float)this->perf_diag_max_gate_us_ / 1000.0f,
-            avg_gate_defers,
-            static_cast<unsigned>(this->perf_diag_max_gate_defers_),
-            avg_partial_flushes,
-            static_cast<unsigned>(this->perf_diag_max_partial_missing_),
-            static_cast<unsigned>(this->perf_diag_last_launch_slot_),
-            avg_rmt_starve,
-            static_cast<unsigned>(this->perf_diag_max_rmt_starve_count_),
-            avg_rmt_reset_starve,
-            static_cast<unsigned>(
-                this->perf_diag_max_rmt_reset_starve_count_),
-            avg_seg_contrib,
-            static_cast<unsigned>(this->perf_diag_max_seg_contrib_),
-            static_cast<unsigned>(min_symbols_free),
-            static_cast<unsigned>(this->perf_diag_flush_count_));
-      } else {
-        ESP_LOGV(TAG,
-                 "[%s] IO:%s | Queue: %.2f/%.2fms | Write: %.2f/%.2fms | "
-                 "Flush: %.2f/%.2fms | TX: %.2f/%.2fms | Calls:%u",
-                 light_name, transport_name,
-                 avg_queue_ms, (float)this->perf_diag_max_queue_us_ / 1000.0f,
-                 avg_write_ms, (float)this->perf_diag_max_write_us_ / 1000.0f,
-                 avg_flush_ms, (float)this->perf_diag_max_flush_us_ / 1000.0f,
-                 avg_tx_ms, (float)this->perf_diag_max_tx_us_ / 1000.0f,
-                 static_cast<unsigned>(this->perf_diag_flush_count_));
-      }
-
       this->reset_perf_diag_();
       this->perf_diag_last_log_ms_ = now_ms;
     }

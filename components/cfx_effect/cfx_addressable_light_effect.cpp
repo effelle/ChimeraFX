@@ -722,11 +722,6 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
-  // CFX-043: Monitor heap health during start()
-  ESP_LOGV("cfx_heap", "CFX Start [%s]: Free Heap: %u B, Minimum Ever: %u B",
-           this->get_name().c_str(),
-           (uint32_t)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-           (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
   // Initialize/Reset tracking flags cleanly on every start
   this->reset_milestones_();
   this->act_->intro_suppresses_milestones = false;
@@ -959,8 +954,6 @@ void CFXAddressableLightEffect::start() {
           act_->runner = act_->segment_runners[0];
           act_->segments_initialized = true;
         }
-        ESP_LOGV("chimera_fx", "Multi-segment mode: %u runners created for %s",
-                 act_->segment_runners.size(), this->get_name());
       } else {
 #endif
         act_->runner = new CFXRunner(it);
@@ -976,10 +969,6 @@ void CFXAddressableLightEffect::start() {
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
             this->update_interval_);
-        ESP_LOGV("chimera_fx",
-                 "Single-segment mode runner created for %s (Bake: %d)",
-                 this->get_name(), this->is_virtual_segment_);
-
 #ifdef USE_ESP32
       }
 #endif
@@ -1874,11 +1863,6 @@ void CFXAddressableLightEffect::stop() {
 
             if (done) {
               this->restore_preset_runtime_defaults_(50);
-              ESP_LOGV("chimera_fx",
-                       "[T05] outro DONE: effect_id=%u is_mono=%d",
-                       (unsigned)this->effect_id_,
-                       (int)this->get_monochromatic_preset_(this->effect_id_)
-                           .is_active);
 #ifdef USE_CFX_EVENTS
               // Fire cfx_complete when the outro animation finishes.
               // If is_sequence_outro_ is true, the sequence already fired
@@ -2258,9 +2242,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                static_cast<unsigned>(diag_census.runner_count));
       spi_budget_skip_logs++;
     }
-    ESP_LOGV("chimera_fx",
-             "Frame Budget Exceeded (%ums), skipping render for '%s'",
-             budget_elapsed_ms, this->get_name().c_str());
     return;
   }
 
@@ -2585,10 +2566,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       if (master_ls != nullptr &&
           chimera_fx::LightStateProxy::has_active_transformer(master_ls)) {
         act_->mono_dirty = true;
-        ESP_LOGV("chimera_fx",
-                 "[%s] mono_idle: Master Light transformer active — "
-                 "scheduling repaint to shield DMA buffer.",
-                 act_->cached_runner_name.c_str());
       }
 
       skip_service = true;
@@ -3080,25 +3057,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->perf_log_ms = now_ms;
     } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
                act_->perf_apply_count > 0) {
-      const float avg_total_ms =
-          (float)(act_->perf_apply_total_us / act_->perf_apply_count) / 1000.0f;
-      const float avg_prep_ms =
-          (float)(act_->perf_apply_prep_us / act_->perf_apply_count) / 1000.0f;
-      const float avg_dispatch_ms =
-          (float)(act_->perf_apply_dispatch_us / act_->perf_apply_count) /
-          1000.0f;
-      const float avg_post_ms =
-          (float)(act_->perf_apply_post_us / act_->perf_apply_count) / 1000.0f;
-
-      ESP_LOGV("chimera_fx",
-               "[%s] Apply: %.2f/%.2fms | Prep: %.2f/%.2fms | Dispatch: "
-               "%.2f/%.2fms | Post: %.2f/%.2fms",
-               act_->cached_runner_name.c_str(), avg_total_ms,
-               (float)act_->perf_apply_max_total_us / 1000.0f, avg_prep_ms,
-               (float)act_->perf_apply_max_prep_us / 1000.0f, avg_dispatch_ms,
-               (float)act_->perf_apply_max_dispatch_us / 1000.0f, avg_post_ms,
-               (float)act_->perf_apply_max_post_us / 1000.0f);
-
       act_->perf_log_ms = now_ms;
       act_->perf_apply_count = 0;
       act_->perf_apply_total_us = 0;
@@ -7821,8 +7779,6 @@ void CFXAddressableLightEffect::check_positional_triggers(
       }
 
       if (crossed) {
-        ESP_LOGV(TAG, "Effect Instance '%s' (%p): on_reach %.0f%% triggered",
-                 this->get_name(), this, target * 100.0f);
         t->trigger(current_percentage);
       }
       // Feed WDT in long positional loops (16+ strips)
