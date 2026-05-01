@@ -2034,7 +2034,23 @@ bool CFXAddressableLightEffect::parent_coordinated_segment_due(
 
 void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
     light::AddressableLight &it) {
+  auto *state_ptr = this->get_light_state();
+  if (state_ptr == nullptr || this->act_ == nullptr || this->act_->runner == nullptr) {
+    return;
+  }
+
+  auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+      state_ptr->get_output());
+  auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+  if (segment == nullptr || parent == nullptr) {
+    this->prepare_steady_virtual_segment_runner_(it);
+    return;
+  }
+
   this->prepare_steady_virtual_segment_runner_(it);
+  this->act_->runner->target_light = parent;
+  this->act_->runner->_segment.start = segment->get_start();
+  this->act_->runner->_segment.stop = segment->get_stop();
 }
 
 void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {

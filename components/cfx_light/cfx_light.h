@@ -388,6 +388,7 @@ protected:
   void restore_low_ram_warning_color_(light::LightState *state);
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
+  bool has_active_parent_owned_segments_() const;
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   uint8_t collect_clean_mono_idle_segment_mask_() const;

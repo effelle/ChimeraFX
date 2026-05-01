@@ -692,6 +692,20 @@ void CFXLightOutput::clear_segment_runtime_slot_(size_t index) {
   this->segment_runtime_slots_[index] = CFXSegmentRuntimeSlot{};
 }
 
+bool CFXLightOutput::has_active_parent_owned_segments_() const {
+  if (this->has_outro()) {
+    return false;
+  }
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    const auto &slot = this->segment_runtime_slots_[i];
+    if (slot.active && slot.state != nullptr && slot.effect != nullptr &&
+        slot.runner != nullptr && slot.state->remote_values.is_on()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool CFXLightOutput::register_parent_owned_segment(
     light::LightState *state, CFXVirtualSegmentLight *segment,
     chimera_fx::CFXAddressableLightEffect *effect, chimera_fx::CFXRunner *runner) {
@@ -836,7 +850,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
       continue;
     }
     slot.effect->mark_parent_coordinated_run(now);
-    slot.effect->prepare_parent_coordinated_runner(*slot.segment);
+    slot.effect->prepare_parent_coordinated_runner(*this);
     slot.due_at = now + slot.effect->get_update_interval();
     this->segment_coord_runners_.push_back(slot.runner);
     mask |= static_cast<uint8_t>(1u << i);
@@ -1400,6 +1414,9 @@ void CFXLightOutput::on_master_update() {
   if (this->segment_light_states_.empty()) {
     return;
   }
+  if (this->has_active_parent_owned_segments_()) {
+    return;
+  }
 
   if (this->is_syncing_)
     return;
@@ -1450,6 +1467,9 @@ void CFXLightOutput::on_segment_update() {
 
   if (this->master_light_state_ == nullptr ||
       this->segment_light_states_.empty()) {
+    return;
+  }
+  if (this->has_active_parent_owned_segments_()) {
     return;
   }
 
