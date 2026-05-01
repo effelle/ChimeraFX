@@ -59,6 +59,9 @@ public:
   }
 
   void loop() override {
+    if (parent_->segment_coordinator_owns(this->state_parent_)) {
+      return;
+    }
     light::LightState *st = this->state_parent_;
     bool effect_active = false;
     if (st != nullptr) {

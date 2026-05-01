@@ -37,6 +37,7 @@ class CFXRunner;
 namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
+class CFXVirtualSegmentLight;
 
 // --- Segment Infrastructure (Phase 1) ---
 
@@ -115,6 +116,17 @@ struct CFXTurnOnDefaults {
   }
 };
 
+struct CFXSegmentRuntimeSlot {
+  light::LightState *state{nullptr};
+  CFXVirtualSegmentLight *segment{nullptr};
+  chimera_fx::CFXAddressableLightEffect *effect{nullptr};
+  chimera_fx::CFXRunner *runner{nullptr};
+  bool active{false};
+  bool dirty{false};
+  bool fallback{false};
+  uint64_t due_at{0};
+};
+
 // Supported LED chipsets
 enum ChimeraChipset : uint8_t {
   CHIPSET_WS2812X, // WS2812B, WS2812C, WS2813 (compatible timings)
@@ -180,6 +192,13 @@ public:
   void note_show_request();
   void trigger_low_ram_warning(light::LightState *state);
   bool segment_coordinator_owns(light::LightState *state);
+  bool register_parent_owned_segment(
+      light::LightState *state, CFXVirtualSegmentLight *segment,
+      chimera_fx::CFXAddressableLightEffect *effect,
+      chimera_fx::CFXRunner *runner);
+  void unregister_parent_owned_segment(
+      light::LightState *state,
+      chimera_fx::CFXAddressableLightEffect *effect = nullptr);
   void note_segment_coord_apply_skip();
   void note_segment_coord_write_skip();
 
@@ -367,6 +386,8 @@ protected:
   void release_outro_callback_storage_();
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
+  int find_segment_runtime_slot_(light::LightState *state) const;
+  void clear_segment_runtime_slot_(size_t index);
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   uint8_t collect_clean_mono_idle_segment_mask_() const;
@@ -542,6 +563,7 @@ protected:
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
+  CFXSegmentRuntimeSlot segment_runtime_slots_[MAX_CFX_SEGMENTS]{};
   uint8_t segment_coord_owned_mask_{0};
   uint8_t segment_coord_dormant_mask_{0};
   uint8_t segment_mono_idle_dormant_mask_{0};

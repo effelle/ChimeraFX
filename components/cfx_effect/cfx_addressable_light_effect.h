@@ -282,6 +282,7 @@ public:
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
   }
+  uint32_t get_update_interval() const { return this->update_interval_; }
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
   void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
   void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }

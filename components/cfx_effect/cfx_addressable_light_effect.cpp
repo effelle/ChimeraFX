@@ -1178,6 +1178,22 @@ void CFXAddressableLightEffect::start() {
   act_->initial_preset_applied = true;
   esphome::App.feed_wdt();
 
+  if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+    auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+        this->get_addressable_());
+    auto *seg_state = this->get_light_state();
+    auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+    if (parent != nullptr && seg_state != nullptr) {
+      parent->unregister_parent_owned_segment(seg_state, this);
+      if (this->can_parent_coordinate_segment()) {
+        parent->register_parent_owned_segment(seg_state, segment, this,
+                                              act_->runner);
+      }
+    }
+#endif
+  }
+
   // Visualizer: Notify metadata (only for non-virtual segments —
   // get_output() returns CFXVirtualSegmentLight for virtual segments,
   // which is NOT a CFXLightOutput and cannot be static_cast'd safely).
@@ -1456,6 +1472,17 @@ void CFXAddressableLightEffect::stop() {
     ESP_LOGW(TAG, "stop() called with null activation for '%s' — skipping",
              this->get_name().c_str());
     return;
+  }
+
+  if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+    auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+        this->get_addressable_());
+    auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+    if (parent != nullptr) {
+      parent->unregister_parent_owned_segment(this->get_light_state(), this);
+    }
+#endif
   }
 
   if (this->effect_id_ != 185) {
@@ -1971,7 +1998,20 @@ bool CFXAddressableLightEffect::can_batch_steady_virtual_segment_() const {
 }
 
 bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
-  return this->can_batch_steady_virtual_segment_();
+  if (!this->is_virtual_segment_ || this->act_ == nullptr ||
+      this->act_->runner == nullptr) {
+    return false;
+  }
+  auto *state = this->get_light_state();
+  if (state == nullptr || !state->remote_values.is_on()) {
+    return false;
+  }
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    return false;
+  }
+#endif
+  return true;
 }
 
 bool CFXAddressableLightEffect::mono_idle_logging_enabled() const {

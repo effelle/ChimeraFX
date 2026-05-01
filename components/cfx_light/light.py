@@ -789,7 +789,9 @@ async def to_code(config):
             )
         )
 
-        # Phase 2: Create virtual segment light + independent LightState
+        # Phase 2: Create virtual segment light + independent LightState.
+        # The LightState remains the HA/control shell, but active CFX segment
+        # rendering is parent-owned at runtime by CFXLightOutput.
         vl = cg.new_Pvariable(
             seg[CONF_SEGMENT_OUTPUT_ID], var, seg_start, seg_stop, seg_id_str
         )

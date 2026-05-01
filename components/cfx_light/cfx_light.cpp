@@ -672,60 +672,123 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
   this->segment_coord_dormant_mask_ = next_dormant_mask;
 }
 
-void CFXLightOutput::refresh_segment_coordination_mask_() {
-  const uint32_t now_ms = esphome::millis();
-  if (this->segment_coord_owned_mask_ms_ == now_ms) {
-    return;
+int CFXLightOutput::find_segment_runtime_slot_(light::LightState *state) const {
+  if (state == nullptr) {
+    return -1;
   }
-  this->segment_coord_owned_mask_ms_ = now_ms;
-  this->segment_coord_owned_mask_ = 0;
-
-  if (!this->has_segments() || this->has_outro()) {
-    return;
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    if (this->segment_runtime_slots_[i].active &&
+        this->segment_runtime_slots_[i].state == state) {
+      return static_cast<int>(i);
+    }
   }
-
-  uint8_t mask = 0;
-  for (size_t i = 0; i < this->segment_light_states_.size() &&
-                     i < MAX_CFX_SEGMENTS; i++) {
-    auto *seg_state = this->segment_light_states_[i];
-    if (seg_state == nullptr || !seg_state->remote_values.is_on()) {
-      continue;
-    }
-    auto *effect = resolve_active_cfx_effect(seg_state);
-    if (effect == nullptr) {
-      if (seg_state->get_effect_name() != "None") {
-        return;
-      }
-      continue;
-    }
-    if (effect->is_clean_mono_idle_output()) {
-      continue;
-    }
-    if (chimera_fx::LightStateProxy::has_active_transformer(seg_state)) {
-      return;
-    }
-    if (!effect->can_parent_coordinate_segment()) {
-      return;
-    }
-    mask |= static_cast<uint8_t>(1u << i);
-  }
-
-  this->segment_coord_owned_mask_ = mask;
+  return -1;
 }
 
-bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
-  if (state == nullptr) {
+void CFXLightOutput::clear_segment_runtime_slot_(size_t index) {
+  if (index >= MAX_CFX_SEGMENTS) {
+    return;
+  }
+  this->segment_runtime_slots_[index] = CFXSegmentRuntimeSlot{};
+}
+
+bool CFXLightOutput::register_parent_owned_segment(
+    light::LightState *state, CFXVirtualSegmentLight *segment,
+    chimera_fx::CFXAddressableLightEffect *effect, chimera_fx::CFXRunner *runner) {
+  if (state == nullptr || segment == nullptr || effect == nullptr ||
+      runner == nullptr || segment->get_parent() != this) {
     return false;
   }
-  this->refresh_segment_coordination_mask_();
+
+  int slot_index = -1;
   for (size_t i = 0; i < this->segment_light_states_.size() &&
                      i < MAX_CFX_SEGMENTS; i++) {
     if (this->segment_light_states_[i] == state) {
-      return (this->segment_coord_owned_mask_ &
-              static_cast<uint8_t>(1u << i)) != 0;
+      slot_index = static_cast<int>(i);
+      break;
     }
   }
-  return false;
+  if (slot_index < 0) {
+    return false;
+  }
+
+  auto &slot = this->segment_runtime_slots_[slot_index];
+  slot.state = state;
+  slot.segment = segment;
+  slot.effect = effect;
+  slot.runner = runner;
+  slot.active = true;
+  slot.dirty = true;
+  slot.fallback = false;
+  slot.due_at = 0;
+
+  chimera_fx::LightStateProxy::clear_pending_write(state);
+  state->current_values = state->remote_values;
+  if (chimera_fx::LightStateProxy::has_active_transformer(state)) {
+    chimera_fx::LightStateProxy::stop_state_transformer(state);
+  }
+  state->enable_loop();
+
+  const uint8_t bit = static_cast<uint8_t>(1u << slot_index);
+  this->segment_coord_dormant_mask_ &= static_cast<uint8_t>(~bit);
+  this->segment_mono_idle_dormant_mask_ &= static_cast<uint8_t>(~bit);
+  this->segment_mono_idle_sleep_ms_[slot_index] = 0;
+  this->refresh_segment_coordination_mask_();
+  return true;
+}
+
+void CFXLightOutput::unregister_parent_owned_segment(
+    light::LightState *state, chimera_fx::CFXAddressableLightEffect *effect) {
+  if (state == nullptr) {
+    return;
+  }
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    auto &slot = this->segment_runtime_slots_[i];
+    if (!slot.active || slot.state != state) {
+      continue;
+    }
+    if (effect != nullptr && slot.effect != effect) {
+      continue;
+    }
+    const uint8_t bit = static_cast<uint8_t>(1u << i);
+    this->segment_coord_dormant_mask_ &= static_cast<uint8_t>(~bit);
+    this->segment_mono_idle_dormant_mask_ &= static_cast<uint8_t>(~bit);
+    this->segment_mono_idle_sleep_ms_[i] = 0;
+    this->seg_request_generation_[i] = 0;
+    this->seg_flushed_generation_[i] = 0;
+    state->enable_loop();
+    this->clear_segment_runtime_slot_(i);
+  }
+  this->refresh_segment_coordination_mask_();
+}
+
+void CFXLightOutput::refresh_segment_coordination_mask_() {
+  uint8_t mask = 0;
+  if (this->has_segments() && !this->has_outro()) {
+    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+      const auto &slot = this->segment_runtime_slots_[i];
+      if (!slot.active || slot.state == nullptr || slot.effect == nullptr ||
+          slot.runner == nullptr || slot.segment == nullptr) {
+        continue;
+      }
+      if (!slot.state->remote_values.is_on() ||
+          !slot.effect->can_parent_coordinate_segment() ||
+          slot.effect->is_clean_mono_idle_output()) {
+        continue;
+      }
+      mask |= static_cast<uint8_t>(1u << i);
+    }
+  }
+  this->segment_coord_owned_mask_ = mask;
+  this->segment_coord_owned_mask_ms_ = esphome::millis();
+}
+
+bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
+  this->refresh_segment_coordination_mask_();
+  const int slot_index = this->find_segment_runtime_slot_(state);
+  return slot_index >= 0 &&
+         (this->segment_coord_owned_mask_ &
+          static_cast<uint8_t>(1u << slot_index)) != 0;
 }
 
 void CFXLightOutput::note_segment_coord_apply_skip() {
@@ -744,8 +807,6 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
 
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
-  chimera_fx::CFXAddressableLightEffect *effects[MAX_CFX_SEGMENTS]{};
-  CFXVirtualSegmentLight *segments[MAX_CFX_SEGMENTS]{};
   uint8_t mask = 0;
   uint8_t count = 0;
 
@@ -757,43 +818,33 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     return false;
   }
 
-  for (size_t i = 0; i < this->segment_light_states_.size() &&
-                     i < MAX_CFX_SEGMENTS; i++) {
-    auto *state = this->segment_light_states_[i];
-    if ((this->segment_coord_owned_mask_ &
-         static_cast<uint8_t>(1u << i)) == 0) {
+  if (this->segment_coord_runners_.capacity() < MAX_CFX_SEGMENTS) {
+    this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
+  }
+  this->segment_coord_runners_.clear();
+
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    auto &slot = this->segment_runtime_slots_[i];
+    if (!slot.active || slot.state == nullptr || slot.effect == nullptr ||
+        slot.runner == nullptr || slot.segment == nullptr) {
       continue;
     }
-    auto *effect = resolve_active_cfx_effect(state);
-    if (effect == nullptr || !effect->parent_coordinated_segment_due(now)) {
+    if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) == 0) {
       continue;
     }
-    auto *segment =
-        static_cast<CFXVirtualSegmentLight *>(state->get_output());
-    if (segment == nullptr || segment->get_parent() != this ||
-        effect->get_act() == nullptr || effect->get_act()->runner == nullptr) {
+    if (!slot.effect->parent_coordinated_segment_due(now)) {
       continue;
     }
-    effects[count] = effect;
-    segments[count] = segment;
+    slot.effect->mark_parent_coordinated_run(now);
+    slot.effect->prepare_parent_coordinated_runner(*slot.segment);
+    slot.due_at = now + slot.effect->get_update_interval();
+    this->segment_coord_runners_.push_back(slot.runner);
     mask |= static_cast<uint8_t>(1u << i);
     count++;
   }
 
   if (count == 0) {
     return false;
-  }
-
-  if (this->segment_coord_runners_.capacity() < MAX_CFX_SEGMENTS) {
-    this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
-  }
-  this->segment_coord_runners_.clear();
-
-  for (uint8_t i = 0; i < count; i++) {
-    auto *effect = effects[i];
-    effect->mark_parent_coordinated_run(now);
-    effect->prepare_parent_coordinated_runner(*segments[i]);
-    this->segment_coord_runners_.push_back(effect->get_act()->runner);
   }
 
   chimera_fx::CFXScheduler::get().set_force_sequential(this->is_spi_transport());
@@ -812,8 +863,10 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     return true;
   }
 
-  for (uint8_t i = 0; i < count; i++) {
-    effects[i]->get_act()->runner->diagnostics.flush_log();
+  for (auto *runner : this->segment_coord_runners_) {
+    if (runner != nullptr) {
+      runner->diagnostics.flush_log();
+    }
   }
   this->seg_coord_epochs_++;
   this->seg_coord_rendered_segments_ += count;
