@@ -599,7 +599,6 @@ struct FrameDiagnostics {
                       uint8_t mode_id, uint32_t frame_count_in,
                       uint32_t period_start_ms, uint64_t total_frame_us_in,
                       uint32_t jitter_count_in) {
-    if (!enabled) return;
     (void) period_start_ms;
     (void) jitter_count_in;
 
