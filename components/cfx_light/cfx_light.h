@@ -372,6 +372,7 @@ protected:
   uint8_t collect_clean_mono_idle_segment_mask_() const;
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
+  void log_mono_idle_loop_diag_();
   bool service_segment_render_coordinator_();
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
@@ -544,7 +545,13 @@ protected:
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
   uint8_t segment_coord_owned_mask_{0};
   uint8_t segment_coord_dormant_mask_{0};
+  uint8_t segment_mono_idle_dormant_mask_{0};
   bool master_mono_idle_dormant_{false};
+  uint32_t master_mono_idle_sleep_ms_{0};
+  uint32_t segment_mono_idle_sleep_ms_[MAX_CFX_SEGMENTS]{};
+  uint32_t mono_idle_diag_last_log_ms_{0};
+  uint32_t mono_idle_sleep_count_{0};
+  uint32_t mono_idle_wake_count_{0};
   uint32_t segment_coord_owned_mask_ms_{0};
   std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};

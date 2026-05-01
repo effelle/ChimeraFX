@@ -438,6 +438,7 @@ struct FrameDiagnostics {
 
   void reset() {
     frame_count = 0;
+    last_frame_us = 0;
     min_frame_us = UINT32_MAX;
     max_frame_us = 0;
     total_frame_us = 0;
@@ -446,6 +447,12 @@ struct FrameDiagnostics {
     total_service_us = 0;
     jitter_count = 0;
     gap_count = 0;
+  }
+
+  void reset_log_window() {
+    reset();
+    last_log_time = cfx_millis();
+    pending_log_ = false;
   }
 
   // Call at start of effect service - measures time since last call
@@ -589,6 +596,29 @@ struct FrameDiagnostics {
              fps, avg_frame_ms, jitter_pct, free_heap_kb);
 
     last_log_time = now_ms;
+  }
+
+  void idle_sleep_log(const char *effect_name, uint32_t frame_count_in,
+                      uint32_t period_start_ms) {
+    if (!enabled) return;
+
+    uint32_t now_ms = cfx_millis();
+    uint32_t free_heap = 0;
+#ifdef ARDUINO
+    free_heap = ESP.getFreeHeap();
+#else
+    free_heap = esp_get_free_heap_size();
+#endif
+    uint32_t free_heap_kb = free_heap / 1024;
+    uint32_t sleep_after_ms =
+        period_start_ms > 0 ? (now_ms - period_start_ms) : 0;
+
+    ESP_LOGI("chimera_fx",
+             "[%s] IDLE dormant | Frames:%u | Sleep after:%ums | Heap:%ukB [IDLE]",
+             effect_name ? effect_name : "?",
+             frame_count_in, sleep_after_ms, free_heap_kb);
+
+    reset_log_window();
   }
 };
 

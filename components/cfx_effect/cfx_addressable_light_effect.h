@@ -580,7 +580,40 @@ public:
     if (act_ != nullptr && act_->mono_idle) {
       act_->mono_dirty = true;
       act_->mono_output_dirty = true;
+      if (act_->runner != nullptr) {
+        act_->runner->diagnostics.reset_log_window();
+      }
+      for (auto *runner : act_->segment_runners) {
+        if (runner != nullptr) {
+          runner->diagnostics.reset_log_window();
+        }
+      }
     }
+  }
+  void log_mono_idle_sleep() {
+    if (act_ == nullptr || !act_->mono_idle) {
+      return;
+    }
+    const char *idle_name = act_->cached_runner_name.empty()
+                                ? nullptr
+                                : act_->cached_runner_name.c_str();
+    if (act_->runner != nullptr) {
+      act_->runner->diagnostics.idle_sleep_log(
+          idle_name, act_->idle_frame_count, act_->idle_period_start_ms);
+    }
+    for (auto *runner : act_->segment_runners) {
+      if (runner != nullptr) {
+        runner->diagnostics.idle_sleep_log(
+            idle_name, act_->idle_frame_count, act_->idle_period_start_ms);
+      }
+    }
+    act_->idle_frame_count = 0;
+    act_->idle_period_start_ms = 0;
+    act_->idle_last_frame_us = 0;
+    act_->idle_min_frame_us = UINT32_MAX;
+    act_->idle_max_frame_us = 0;
+    act_->idle_total_frame_us = 0;
+    act_->idle_jitter_count = 0;
   }
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {
