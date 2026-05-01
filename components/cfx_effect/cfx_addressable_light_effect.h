@@ -630,9 +630,9 @@ public:
     if (act_ == nullptr || !act_->mono_idle) {
       return;
     }
-    const char *idle_name = act_->cached_runner_name.empty()
-                                ? nullptr
-                                : act_->cached_runner_name.c_str();
+    const char *light_name =
+        act_->cached_runner_name.empty() ? nullptr
+                                         : act_->cached_runner_name.c_str();
     const uint32_t idle_sample_count =
         (act_->idle_probe_valid && act_->idle_probe_total_us > 0) ? 1u
                                                                   : act_->idle_frame_count;
@@ -642,14 +642,14 @@ public:
             : act_->idle_total_frame_us;
     if (act_->runner != nullptr) {
       act_->runner->diagnostics.idle_sleep_log(
-          idle_name, act_->cached_runner_name.c_str(), this->effect_id_,
+          light_name, act_->runner->getModeName(), act_->runner->getMode(),
           idle_sample_count, act_->idle_period_start_ms,
           idle_sample_total_us, act_->idle_jitter_count);
     }
     for (auto *runner : act_->segment_runners) {
       if (runner != nullptr) {
         runner->diagnostics.idle_sleep_log(
-            idle_name, act_->cached_runner_name.c_str(), this->effect_id_,
+            light_name, runner->getModeName(), runner->getMode(),
             idle_sample_count, act_->idle_period_start_ms,
             idle_sample_total_us, act_->idle_jitter_count);
       }
