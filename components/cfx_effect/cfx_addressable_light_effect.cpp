@@ -2047,10 +2047,71 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
     return;
   }
 
-  this->prepare_steady_virtual_segment_runner_(it);
   this->act_->runner->target_light = parent;
   this->act_->runner->_segment.start = segment->get_start();
   this->act_->runner->_segment.stop = segment->get_stop();
+}
+
+void CFXAddressableLightEffect::sync_parent_owned_inputs() {
+  auto *state_ptr = this->get_light_state();
+  if (state_ptr == nullptr || this->act_ == nullptr || this->act_->runner == nullptr) {
+    return;
+  }
+
+  bool debug_active = CFXControl::global_debug_enabled_;
+  if (act_->controller != nullptr && act_->controller->get_debug() != nullptr) {
+    debug_active = act_->controller->get_debug()->state;
+  } else if (this->local_debug_switch_() != nullptr) {
+    debug_active = this->local_debug_switch_()->state;
+  }
+
+  if (!this->allow_default_transition_() &&
+      chimera_fx::LightStateProxy::has_active_transformer(state_ptr)) {
+    state_ptr->current_values = state_ptr->remote_values;
+    chimera_fx::LightStateProxy::stop_state_transformer(state_ptr);
+  }
+
+  float r = state_ptr->remote_values.get_red();
+  float g = state_ptr->remote_values.get_green();
+  float b = state_ptr->remote_values.get_blue();
+  float w = state_ptr->remote_values.get_white();
+  uint32_t color =
+      (uint32_t(roundf(w * 255.0f)) << 24) |
+      (uint32_t(roundf(r * 255.0f)) << 16) |
+      (uint32_t(roundf(g * 255.0f)) << 8) | uint32_t(roundf(b * 255.0f));
+  if (color == 0 && state_ptr->remote_values.is_on()) {
+    color = 0xFFFFFFFF;
+  }
+
+  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  if (!act_->cached_runner_name.empty()) {
+    act_->runner->setName(act_->cached_runner_name.c_str());
+  }
+  act_->runner->setColor(color);
+
+  float current_gamma = state_ptr->get_gamma_correct();
+  if (abs(act_->runner->_gamma - current_gamma) > 0.01f) {
+    act_->runner->setGamma(current_gamma);
+  }
+
+  bool force_white_requested =
+      this->has_force_white_preset_()
+          ? this->force_white_preset_val_()
+          : (act_->controller != nullptr &&
+             act_->controller->get_force_white() != nullptr &&
+             act_->controller->get_force_white()->state);
+  act_->active_force_white = this->resolve_force_white_active_(
+      force_white_requested, act_->runner->getPalette());
+  act_->runner->force_white_active_ = act_->active_force_white;
+
+  float state_bri = state_ptr->current_values.get_brightness();
+  if (state_bri == 0.0f && state_ptr->remote_values.is_on() &&
+      (!this->allow_default_transition_() ||
+       !chimera_fx::LightStateProxy::has_active_transformer(state_ptr))) {
+    state_bri = 1.0f;
+  }
+  act_->runner->global_brightness_ =
+      state_bri * state_ptr->current_values.get_state();
 }
 
 void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {

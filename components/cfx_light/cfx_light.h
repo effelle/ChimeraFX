@@ -123,6 +123,7 @@ struct CFXSegmentRuntimeSlot {
   chimera_fx::CFXRunner *runner{nullptr};
   bool active{false};
   bool dirty{false};
+  bool bound{false};
   bool fallback{false};
   uint64_t due_at{0};
 };
@@ -201,6 +202,7 @@ public:
       chimera_fx::CFXAddressableLightEffect *effect = nullptr);
   void note_segment_coord_apply_skip();
   void note_segment_coord_write_skip();
+  void mark_parent_owned_segment_dirty(light::LightState *state);
 
   // Called by CFXVirtualSegmentLight::write_state() to request a DMA flush
   // that bypasses the Master LightState's rendering pipeline.
@@ -279,6 +281,7 @@ public:
     this->default_transition_length_ms_ = ms;
   }
   void wake_mono_idle(light::LightState *state) {
+    this->mark_parent_owned_segment_dirty(state);
     this->wake_mono_idle_light_state_(state);
   }
 

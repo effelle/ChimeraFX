@@ -733,6 +733,7 @@ bool CFXLightOutput::register_parent_owned_segment(
   slot.runner = runner;
   slot.active = true;
   slot.dirty = true;
+  slot.bound = false;
   slot.fallback = false;
   slot.due_at = 0;
 
@@ -813,6 +814,20 @@ void CFXLightOutput::note_segment_coord_write_skip() {
   this->seg_coord_write_skips_++;
 }
 
+void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    auto &slot = this->segment_runtime_slots_[i];
+    if (!slot.active || slot.state != state) {
+      continue;
+    }
+    slot.dirty = true;
+    return;
+  }
+}
+
 bool CFXLightOutput::service_segment_render_coordinator_() {
   if (!this->has_segments() || this->has_outro()) {
     this->apply_segment_coordination_loop_state_(0);
@@ -849,8 +864,15 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     if (!slot.effect->parent_coordinated_segment_due(now)) {
       continue;
     }
+    if (!slot.bound) {
+      slot.effect->prepare_parent_coordinated_runner(*this);
+      slot.bound = true;
+    }
+    if (slot.dirty) {
+      slot.effect->sync_parent_owned_inputs();
+      slot.dirty = false;
+    }
     slot.effect->mark_parent_coordinated_run(now);
-    slot.effect->prepare_parent_coordinated_runner(*this);
     slot.due_at = now + slot.effect->get_update_interval();
     this->segment_coord_runners_.push_back(slot.runner);
     mask |= static_cast<uint8_t>(1u << i);
@@ -1415,6 +1437,11 @@ void CFXLightOutput::on_master_update() {
     return;
   }
   if (this->has_active_parent_owned_segments_()) {
+    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+      if (this->segment_runtime_slots_[i].active) {
+        this->segment_runtime_slots_[i].dirty = true;
+      }
+    }
     return;
   }
 
@@ -1470,6 +1497,11 @@ void CFXLightOutput::on_segment_update() {
     return;
   }
   if (this->has_active_parent_owned_segments_()) {
+    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+      if (this->segment_runtime_slots_[i].active) {
+        this->segment_runtime_slots_[i].dirty = true;
+      }
+    }
     return;
   }
 
