@@ -172,6 +172,7 @@ public:
     bool mono_dirty{false};
     bool mono_output_dirty{false};
     bool mono_output_valid{false};
+    bool mono_probe_requested{false};
     uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
     uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
     bool mono_last_force_white{false};
@@ -187,6 +188,8 @@ public:
     uint64_t idle_total_frame_us{0};
     uint32_t idle_jitter_count{0};
     uint32_t idle_target_frame_us{16666}; // updated from update_interval_ on first frame
+    uint32_t idle_probe_total_us{0};
+    bool idle_probe_valid{false};
     uint32_t perf_log_ms{0};
     uint32_t perf_apply_count{0};
     uint32_t perf_apply_max_total_us{0};
@@ -576,10 +579,43 @@ public:
   bool is_mono_idle() const {
     return act_ != nullptr && act_->mono_idle;
   }
-  void wake_mono_idle_output() {
+  bool has_pending_mono_idle_probe() const {
+    return act_ != nullptr && act_->mono_probe_requested;
+  }
+  bool mono_idle_probe_due(uint32_t now_ms) const {
+    if (act_ == nullptr || !act_->mono_idle || act_->mono_probe_requested) {
+      return false;
+    }
+    const FrameDiagnostics *diag = nullptr;
+    if (act_->runner != nullptr) {
+      diag = &act_->runner->diagnostics;
+    } else {
+      for (auto *runner : act_->segment_runners) {
+        if (runner != nullptr) {
+          diag = &runner->diagnostics;
+          break;
+        }
+      }
+    }
+    if (diag == nullptr || !diag->enabled) {
+      return false;
+    }
+    return (now_ms - diag->last_log_time) >= FrameDiagnostics::LOG_INTERVAL_MS;
+  }
+  void request_mono_idle_probe() {
     if (act_ != nullptr && act_->mono_idle) {
+      act_->mono_probe_requested = true;
       act_->mono_dirty = true;
       act_->mono_output_dirty = true;
+    }
+  }
+  void wake_mono_idle_output() {
+    if (act_ != nullptr && act_->mono_idle) {
+      act_->mono_probe_requested = false;
+      act_->mono_dirty = true;
+      act_->mono_output_dirty = true;
+      act_->idle_probe_total_us = 0;
+      act_->idle_probe_valid = false;
       if (act_->runner != nullptr) {
         act_->runner->diagnostics.reset_log_window();
       }
@@ -597,18 +633,25 @@ public:
     const char *idle_name = act_->cached_runner_name.empty()
                                 ? nullptr
                                 : act_->cached_runner_name.c_str();
+    const uint32_t idle_sample_count =
+        (act_->idle_probe_valid && act_->idle_probe_total_us > 0) ? 1u
+                                                                  : act_->idle_frame_count;
+    const uint64_t idle_sample_total_us =
+        (act_->idle_probe_valid && act_->idle_probe_total_us > 0)
+            ? static_cast<uint64_t>(act_->idle_probe_total_us)
+            : act_->idle_total_frame_us;
     if (act_->runner != nullptr) {
       act_->runner->diagnostics.idle_sleep_log(
           idle_name, act_->cached_runner_name.c_str(), this->effect_id_,
-          act_->idle_frame_count, act_->idle_period_start_ms,
-          act_->idle_total_frame_us, act_->idle_jitter_count);
+          idle_sample_count, act_->idle_period_start_ms,
+          idle_sample_total_us, act_->idle_jitter_count);
     }
     for (auto *runner : act_->segment_runners) {
       if (runner != nullptr) {
         runner->diagnostics.idle_sleep_log(
             idle_name, act_->cached_runner_name.c_str(), this->effect_id_,
-            act_->idle_frame_count, act_->idle_period_start_ms,
-            act_->idle_total_frame_us, act_->idle_jitter_count);
+            idle_sample_count, act_->idle_period_start_ms,
+            idle_sample_total_us, act_->idle_jitter_count);
       }
     }
   }

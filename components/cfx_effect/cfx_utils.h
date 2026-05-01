@@ -622,7 +622,7 @@ struct FrameDiagnostics {
       const float avg_frame_ms =
           (float) (total_frame_us_in / frame_count_in) / 1000.0f;
       ESP_LOGI("chimera_fx",
-               "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter:- | Heap: "
+               "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter:0%% | Heap: "
                "%ukB [IDLE]",
                effect_name ? effect_name : "?",
                mode_name ? mode_name : "Static", mode_id, fps, avg_frame_ms,
@@ -630,7 +630,7 @@ struct FrameDiagnostics {
     } else {
       ESP_LOGI(
           "chimera_fx",
-          "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+          "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:0%% | Heap: %ukB [IDLE]",
           effect_name ? effect_name : "?",
           mode_name ? mode_name : "Static", mode_id, free_heap_kb);
     }

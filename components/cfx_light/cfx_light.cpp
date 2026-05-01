@@ -589,6 +589,7 @@ void CFXLightOutput::wake_mono_idle_light_state_(light::LightState *state) {
 }
 
 void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
+  const uint32_t now_ms = esphome::millis();
   const bool master_should_sleep =
       !this->has_outro() && this->master_light_state_ != nullptr &&
       active_cfx_effect_is_clean_mono_idle(this->master_light_state_);
@@ -597,8 +598,10 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       (!this->master_mono_idle_dormant_ ||
        this->master_light_state_->is_in_loop_state())) {
     auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr && !this->master_mono_idle_dormant_) {
+    if (effect != nullptr) {
       effect->log_mono_idle_sleep();
+    }
+    if (!this->master_mono_idle_dormant_) {
       this->master_mono_idle_sleep_ms_ = esphome::millis();
       this->mono_idle_sleep_count_++;
     }
@@ -607,8 +610,9 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     this->master_mono_idle_dormant_ = true;
   } else if (master_should_sleep && this->master_mono_idle_dormant_) {
     auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr) {
-      effect->log_mono_idle_sleep();
+    if (effect != nullptr && effect->mono_idle_probe_due(now_ms)) {
+      effect->request_mono_idle_probe();
+      this->master_light_state_->enable_loop();
     }
   } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
     this->master_light_state_->enable_loop();
@@ -619,24 +623,30 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
 
   const uint8_t previous_segment_idle_mask =
       this->segment_mono_idle_dormant_mask_;
-  const uint32_t now_ms = esphome::millis();
   for (size_t i = 0; i < this->segment_light_states_.size() &&
                      i < MAX_CFX_SEGMENTS; i++) {
+    auto *seg_state = this->segment_light_states_[i];
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool now_idle = (segment_idle_mask & bit) != 0;
     const bool was_idle = (previous_segment_idle_mask & bit) != 0;
+    auto *effect = seg_state != nullptr
+                       ? resolve_active_cfx_effect(seg_state)
+                       : nullptr;
     if (now_idle && !was_idle) {
-      auto *effect = resolve_active_cfx_effect(this->segment_light_states_[i]);
       if (effect != nullptr) {
         effect->log_mono_idle_sleep();
       }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
-    } else if (now_idle && was_idle) {
-      auto *effect = resolve_active_cfx_effect(this->segment_light_states_[i]);
+    } else if (now_idle && was_idle && seg_state != nullptr &&
+               seg_state->is_in_loop_state()) {
       if (effect != nullptr) {
         effect->log_mono_idle_sleep();
       }
+    } else if (now_idle && was_idle && effect != nullptr &&
+               effect->mono_idle_probe_due(now_ms) && seg_state != nullptr) {
+      effect->request_mono_idle_probe();
+      seg_state->enable_loop();
     } else if (!now_idle && was_idle) {
       this->segment_mono_idle_sleep_ms_[i] = 0;
       this->mono_idle_wake_count_++;
@@ -662,8 +672,13 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool should_sleep = (owned_mask & bit) != 0;
     const bool is_sleeping = (this->segment_coord_dormant_mask_ & bit) != 0;
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    const bool keep_probe_awake =
+        should_sleep && seg_state->is_in_loop_state() && effect != nullptr &&
+        effect->has_pending_mono_idle_probe();
 
-    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state())) {
+    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state()) &&
+        !keep_probe_awake) {
       chimera_fx::LightStateProxy::clear_pending_write(seg_state);
       seg_state->disable_loop();
       next_dormant_mask |= bit;

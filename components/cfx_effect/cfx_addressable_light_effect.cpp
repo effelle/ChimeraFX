@@ -868,6 +868,7 @@ void CFXAddressableLightEffect::start() {
   act_->mono_dirty = false;
   act_->mono_output_dirty = false;
   act_->mono_output_valid = false;
+  act_->mono_probe_requested = false;
   act_->mono_last_color = 0xFFFFFFFF;
   act_->mono_last_speed = 0xFF;
   act_->mono_last_force_white = false;
@@ -878,6 +879,8 @@ void CFXAddressableLightEffect::start() {
   act_->idle_max_frame_us = 0;
   act_->idle_total_frame_us = 0;
   act_->idle_jitter_count = 0;
+  act_->idle_probe_total_us = 0;
+  act_->idle_probe_valid = false;
 
   // Reset palette sync flag so we enforce the effect's default on the first
   // frame
@@ -2328,7 +2331,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
   }
   const bool apply_perf_enabled = debug_active;
-  const uint32_t apply_start_us = apply_perf_enabled ? cfx_micros() : 0;
+  const bool capture_idle_probe = act_->mono_probe_requested;
+  const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
+  const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
   uint32_t apply_dispatch_us = 0;
   uint32_t apply_post_us = 0;
 
@@ -2638,7 +2643,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       apply_dispatch_us = cfx_micros() - dispatch_start_us;
     }
   }
-  const uint32_t post_start_us = apply_perf_enabled ? cfx_micros() : 0;
+  const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
 
 #ifdef USE_CFX_SEQUENCE
   // CFX-run: Check effect_complete_ regardless of skip_service so that
@@ -2794,6 +2799,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         // always commits regardless of previous state.
         act_->mono_idle = true;
         act_->mono_dirty = true;
+        act_->mono_probe_requested = false;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
         act_->mono_last_force_white = act_->active_force_white;
@@ -2805,6 +2811,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_total_frame_us = 0;
         act_->idle_jitter_count = 0;
         act_->idle_target_frame_us = this->update_interval_ * 1000;
+        act_->idle_probe_total_us = 0;
+        act_->idle_probe_valid = false;
 
         // CFX-run: Monochromatic presets complete when the sweep reaches 100%
         // (i.e. the intro finishes and the effect goes idle). The runner never
@@ -3029,7 +3037,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
-  if (apply_perf_enabled) {
+  if (measure_apply_cost) {
     apply_post_us = cfx_micros() - post_start_us;
     const uint32_t apply_total_us = cfx_micros() - apply_start_us;
     const uint32_t apply_prep_us =
@@ -3037,36 +3045,44 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
             ? (apply_total_us - apply_dispatch_us - apply_post_us)
             : 0;
 
-    act_->perf_apply_total_us += apply_total_us;
-    act_->perf_apply_prep_us += apply_prep_us;
-    act_->perf_apply_dispatch_us += apply_dispatch_us;
-    act_->perf_apply_post_us += apply_post_us;
-    act_->perf_apply_count++;
+    if (capture_idle_probe) {
+      act_->idle_probe_total_us = apply_total_us;
+      act_->idle_probe_valid = true;
+      act_->mono_probe_requested = false;
+    }
 
-    if (apply_total_us > act_->perf_apply_max_total_us)
-      act_->perf_apply_max_total_us = apply_total_us;
-    if (apply_prep_us > act_->perf_apply_max_prep_us)
-      act_->perf_apply_max_prep_us = apply_prep_us;
-    if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
-      act_->perf_apply_max_dispatch_us = apply_dispatch_us;
-    if (apply_post_us > act_->perf_apply_max_post_us)
-      act_->perf_apply_max_post_us = apply_post_us;
+    if (apply_perf_enabled) {
+      act_->perf_apply_total_us += apply_total_us;
+      act_->perf_apply_prep_us += apply_prep_us;
+      act_->perf_apply_dispatch_us += apply_dispatch_us;
+      act_->perf_apply_post_us += apply_post_us;
+      act_->perf_apply_count++;
 
-    const uint32_t now_ms = cfx_millis();
-    if (act_->perf_log_ms == 0) {
-      act_->perf_log_ms = now_ms;
-    } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
-               act_->perf_apply_count > 0) {
-      act_->perf_log_ms = now_ms;
-      act_->perf_apply_count = 0;
-      act_->perf_apply_total_us = 0;
-      act_->perf_apply_prep_us = 0;
-      act_->perf_apply_dispatch_us = 0;
-      act_->perf_apply_post_us = 0;
-      act_->perf_apply_max_total_us = 0;
-      act_->perf_apply_max_prep_us = 0;
-      act_->perf_apply_max_dispatch_us = 0;
-      act_->perf_apply_max_post_us = 0;
+      if (apply_total_us > act_->perf_apply_max_total_us)
+        act_->perf_apply_max_total_us = apply_total_us;
+      if (apply_prep_us > act_->perf_apply_max_prep_us)
+        act_->perf_apply_max_prep_us = apply_prep_us;
+      if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
+        act_->perf_apply_max_dispatch_us = apply_dispatch_us;
+      if (apply_post_us > act_->perf_apply_max_post_us)
+        act_->perf_apply_max_post_us = apply_post_us;
+
+      const uint32_t now_ms = cfx_millis();
+      if (act_->perf_log_ms == 0) {
+        act_->perf_log_ms = now_ms;
+      } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
+                 act_->perf_apply_count > 0) {
+        act_->perf_log_ms = now_ms;
+        act_->perf_apply_count = 0;
+        act_->perf_apply_total_us = 0;
+        act_->perf_apply_prep_us = 0;
+        act_->perf_apply_dispatch_us = 0;
+        act_->perf_apply_post_us = 0;
+        act_->perf_apply_max_total_us = 0;
+        act_->perf_apply_max_prep_us = 0;
+        act_->perf_apply_max_dispatch_us = 0;
+        act_->perf_apply_max_post_us = 0;
+      }
     }
   }
 
