@@ -264,19 +264,6 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
     return;
   }
 
-  const char *light_name =
-      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                       : "<strip>";
-  ESP_LOGD(TAG,
-           "[%s] SegFrame | partial_suppressed:%u missed:%u clean_suppressed:%u "
-           "coord_epochs:%u coord_segments:%u apply_skip:%u write_skip:%u",
-           light_name, static_cast<unsigned>(this->seg_partial_frame_suppressed_),
-           static_cast<unsigned>(this->seg_missed_epoch_count_),
-           static_cast<unsigned>(this->seg_clean_epoch_suppressed_),
-           static_cast<unsigned>(this->seg_coord_epochs_),
-           static_cast<unsigned>(this->seg_coord_rendered_segments_),
-           static_cast<unsigned>(this->seg_coord_apply_skips_),
-           static_cast<unsigned>(this->seg_coord_write_skips_));
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
   this->seg_clean_epoch_suppressed_ = 0;

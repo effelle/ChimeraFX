@@ -615,7 +615,7 @@ struct FrameDiagnostics {
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:0%% | Heap: %ukB [IDLE]",
+             "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
              mode_name ? mode_name : "Static", mode_id, free_heap_kb);
 
