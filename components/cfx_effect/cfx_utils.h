@@ -603,6 +603,8 @@ struct FrameDiagnostics {
                       uint32_t period_start_ms, uint64_t total_frame_us_in,
                       uint32_t jitter_count_in) {
     if (!enabled) return;
+    (void) period_start_ms;
+    (void) jitter_count_in;
 
     uint32_t now_ms = cfx_millis();
     if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
@@ -614,22 +616,24 @@ struct FrameDiagnostics {
     free_heap = esp_get_free_heap_size();
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
-
-    float fps = 0.0f;
-    float avg_frame_ms = 0.0f;
-    float jitter_pct = 0.0f;
     if (frame_count_in > 0 && total_frame_us_in > 0) {
-      fps = (1000000.0f * frame_count_in) / (float)total_frame_us_in;
-      avg_frame_ms = (float)(total_frame_us_in / frame_count_in) / 1000.0f;
-      jitter_pct = (100.0f * jitter_count_in) / (float)frame_count_in;
+      const float fps =
+          (1000000.0f * frame_count_in) / (float) total_frame_us_in;
+      const float avg_frame_ms =
+          (float) (total_frame_us_in / frame_count_in) / 1000.0f;
+      ESP_LOGI("chimera_fx",
+               "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter:- | Heap: "
+               "%ukB [IDLE]",
+               effect_name ? effect_name : "?",
+               mode_name ? mode_name : "Static", mode_id, fps, avg_frame_ms,
+               free_heap_kb);
+    } else {
+      ESP_LOGI(
+          "chimera_fx",
+          "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+          effect_name ? effect_name : "?",
+          mode_name ? mode_name : "Static", mode_id, free_heap_kb);
     }
-
-    ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
-             "Heap: %ukB [IDLE]",
-             effect_name ? effect_name : "?",
-             mode_name ? mode_name : "Static", mode_id, fps, avg_frame_ms,
-             jitter_pct, free_heap_kb);
 
     last_log_time = now_ms;
   }
