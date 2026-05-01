@@ -110,6 +110,7 @@ public:
         for (auto *r : this->runners_)
           if (!r->sequence_owns_speed_)
             r->setSpeed((uint8_t)value);
+        this->wake_mono_idle_output_();
       });
     }
 
@@ -118,6 +119,7 @@ public:
         for (auto *r : this->runners_)
           if (!r->sequence_owns_intensity_)
             r->setIntensity((uint8_t)value);
+        this->wake_mono_idle_output_();
       });
     }
 
@@ -126,6 +128,7 @@ public:
         for (auto *r : this->runners_)
           if (!r->sequence_owns_mirror_)
             r->setMirror(value);
+        this->wake_mono_idle_output_();
       });
     }
 
@@ -155,6 +158,7 @@ public:
               // "Default" is effect-specific. Let the effect resolve and push
               // its own natural palette on the next control pass instead of
               // forcing a generic control-layer palette index here.
+              this->wake_mono_idle_output_();
               return;
             }
 
@@ -163,6 +167,7 @@ public:
               if (!r->sequence_owns_palette_)
                 r->setPalette(r_pal_idx);
             }
+            this->wake_mono_idle_output_();
           });
     }
   }
@@ -257,9 +262,33 @@ protected:
     this->force_white_cb_switch_ = this->force_white_;
     this->force_white_->add_on_state_callback(
         [this](bool) {
+          this->wake_mono_idle_output_();
           this->repaint_force_white_segment_();
           this->schedule_force_white_sync_(25, true);
         });
+  }
+
+  void wake_mono_idle_output_() {
+    if (this->light_ == nullptr) {
+      return;
+    }
+
+    auto *output = this->light_->get_output();
+    if (output == nullptr) {
+      return;
+    }
+
+#ifdef USE_ESP32
+    for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+      if (seg_out == output) {
+        seg_out->get_parent()->wake_mono_idle(this->light_);
+        return;
+      }
+    }
+#endif
+
+    auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+    cfx_out->wake_mono_idle(this->light_);
   }
 
   void schedule_force_white_sync_(uint32_t delay_ms, bool repaint_after) {

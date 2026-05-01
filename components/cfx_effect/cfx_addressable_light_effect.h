@@ -568,10 +568,19 @@ public:
   bool is_clean_mono_idle_output() const {
     return act_ != nullptr && act_->mono_idle && act_->mono_output_valid &&
            !act_->mono_output_dirty && !act_->intro_active &&
-           act_->state != OUTRO_RUNNING;
+           !act_->outro_active && act_->state == TRANSITION_NONE;
   }
   bool has_dirty_mono_idle_output() const {
     return act_ != nullptr && act_->mono_idle && act_->mono_output_dirty;
+  }
+  bool is_mono_idle() const {
+    return act_ != nullptr && act_->mono_idle;
+  }
+  void wake_mono_idle_output() {
+    if (act_ != nullptr && act_->mono_idle) {
+      act_->mono_dirty = true;
+      act_->mono_output_dirty = true;
+    }
   }
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {

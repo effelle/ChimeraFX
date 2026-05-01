@@ -112,6 +112,7 @@ void CFXLightOutput::bind_force_white_switch_() {
 
   this->force_white_cb_sw_ = this->force_white_sw_;
   this->force_white_sw_->add_on_state_callback([this](bool state) {
+    this->wake_mono_idle_light_state_(this->master_light_state_);
     this->repaint_force_white_solid_(state);
   });
 }
@@ -525,6 +526,80 @@ static void mark_committed_mono_idle_outputs(CFXLightOutput *output) {
   }
 }
 
+uint8_t CFXLightOutput::collect_clean_mono_idle_segment_mask_() const {
+  if (!this->has_segments() || this->has_outro()) {
+    return 0;
+  }
+
+  uint8_t mask = 0;
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    auto *seg_state = this->segment_light_states_[i];
+    if (seg_state == nullptr || !seg_state->remote_values.is_on()) {
+      continue;
+    }
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    if (effect != nullptr && effect->is_clean_mono_idle_output()) {
+      mask |= static_cast<uint8_t>(1u << i);
+    }
+  }
+  return mask;
+}
+
+void CFXLightOutput::wake_mono_idle_light_state_(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+
+  auto *effect = resolve_active_cfx_effect(state);
+  if (effect == nullptr || !effect->is_mono_idle()) {
+    return;
+  }
+  effect->wake_mono_idle_output();
+
+  if (state == this->master_light_state_) {
+    if (this->master_mono_idle_dormant_) {
+      state->enable_loop();
+      this->master_mono_idle_dormant_ = false;
+    }
+    return;
+  }
+
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    if (this->segment_light_states_[i] != state) {
+      continue;
+    }
+    const uint8_t bit = static_cast<uint8_t>(1u << i);
+    if ((this->segment_coord_dormant_mask_ & bit) != 0) {
+      state->enable_loop();
+      this->segment_coord_dormant_mask_ &=
+          static_cast<uint8_t>(~bit);
+    }
+    return;
+  }
+}
+
+void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
+  const bool master_should_sleep =
+      !this->has_outro() && this->master_light_state_ != nullptr &&
+      active_cfx_effect_is_clean_mono_idle(this->master_light_state_);
+
+  if (master_should_sleep &&
+      (!this->master_mono_idle_dormant_ ||
+       this->master_light_state_->is_in_loop_state())) {
+    chimera_fx::LightStateProxy::clear_pending_write(this->master_light_state_);
+    this->master_light_state_->disable_loop();
+    this->master_mono_idle_dormant_ = true;
+  } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
+    this->master_light_state_->enable_loop();
+    this->master_mono_idle_dormant_ = false;
+  }
+
+  this->apply_segment_coordination_loop_state_(
+      this->segment_coord_owned_mask_ | segment_idle_mask);
+}
+
 void CFXLightOutput::apply_segment_coordination_loop_state_(
     uint8_t owned_mask) {
   uint8_t next_dormant_mask = this->segment_coord_dormant_mask_;
@@ -620,6 +695,7 @@ void CFXLightOutput::note_segment_coord_write_skip() {
 bool CFXLightOutput::service_segment_render_coordinator_() {
   if (!this->has_segments() || this->has_outro()) {
     this->apply_segment_coordination_loop_state_(0);
+    this->apply_mono_idle_loop_state_(0);
     return false;
   }
 
@@ -630,7 +706,9 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   uint8_t count = 0;
 
   this->refresh_segment_coordination_mask_();
-  this->apply_segment_coordination_loop_state_(this->segment_coord_owned_mask_);
+  const uint8_t segment_idle_mask =
+      this->collect_clean_mono_idle_segment_mask_();
+  this->apply_mono_idle_loop_state_(segment_idle_mask);
   if (this->segment_coord_owned_mask_ == 0) {
     return false;
   }
@@ -901,6 +979,8 @@ void CFXLightOutput::setup() {
   // --- Phase 2: Set up Event-Driven State Synchronization ---
   // Decoupled from the high-frequency DMA write loop to prevent recursion!
   if (this->master_light_state_ != nullptr) {
+    this->master_light_state_->set_default_transition_length(
+        this->default_transition_length_ms_);
     this->master_listener_ = new MasterListener(this);
     this->master_light_state_->add_remote_values_listener(
         this->master_listener_);
@@ -912,6 +992,10 @@ void CFXLightOutput::setup() {
       !this->segment_light_states_.empty()) {
 
     for (auto *seg_state : this->segment_light_states_) {
+      if (seg_state != nullptr) {
+        seg_state->set_default_transition_length(
+            this->default_transition_length_ms_);
+      }
       auto *listener = new SegmentListener(this);
       this->segment_listeners_.push_back(listener);
       seg_state->add_remote_values_listener(listener);
@@ -1211,6 +1295,7 @@ void CFXLightOutput::on_master_update() {
   if (this->master_light_state_ == nullptr) {
     return;
   }
+  this->wake_mono_idle_light_state_(this->master_light_state_);
 
   this->maybe_apply_turn_on_defaults_(this->master_light_state_,
                                       this->prev_master_defaults_state_);
@@ -1244,6 +1329,7 @@ void CFXLightOutput::on_master_update() {
                                    master_brightness) > 0.01f;
 
     if (state_changed || bright_changed) {
+      this->wake_mono_idle_light_state_(seg_state);
       auto call = seg_state->make_call();
       // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer which
       // paints RGB white directly into the pixel buffer during transitions.
@@ -1274,6 +1360,10 @@ void CFXLightOutput::on_segment_update() {
     return;
   this->is_syncing_ = true; // Lock recursion
 
+  for (auto *seg_state : this->segment_light_states_) {
+    this->wake_mono_idle_light_state_(seg_state);
+  }
+
   bool master_on = this->master_light_state_->remote_values.is_on();
 
   // BOTTOM-UP SYNC (A segment changed)
@@ -1286,6 +1376,7 @@ void CFXLightOutput::on_segment_update() {
   }
 
   if (master_on != is_any_segment_on) {
+    this->wake_mono_idle_light_state_(this->master_light_state_);
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master
     // listener callbacks don't overreact and force all segments ON!

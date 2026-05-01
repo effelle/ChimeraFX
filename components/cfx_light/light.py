@@ -742,6 +742,9 @@ async def to_code(config):
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
 
+    default_transition_ms = config[CONF_DEFAULT_TRANSITION_LENGTH].total_milliseconds
+    cg.add(var.set_default_transition_length(default_transition_ms))
+
     if CONF_VISUALIZER_IP in config:
         # Visualizer is an internal dev tool. Gated behind a build flag so
         # it compiles to zero code in production builds. The flag activates

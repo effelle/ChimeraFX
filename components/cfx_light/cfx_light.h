@@ -256,6 +256,12 @@ public:
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
   }
+  void set_default_transition_length(uint32_t ms) {
+    this->default_transition_length_ms_ = ms;
+  }
+  void wake_mono_idle(light::LightState *state) {
+    this->wake_mono_idle_light_state_(state);
+  }
 
   // SPI transport setters
   void set_transport(CFXTransport t) { this->transport_ = t; }
@@ -363,6 +369,9 @@ protected:
   void restore_low_ram_warning_color_(light::LightState *state);
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
+  uint8_t collect_clean_mono_idle_segment_mask_() const;
+  void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
+  void wake_mono_idle_light_state_(light::LightState *state);
   bool service_segment_render_coordinator_();
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
@@ -423,6 +432,7 @@ protected:
   switch_::Switch *force_white_sw_{nullptr};
   switch_::Switch *force_white_cb_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
+  uint32_t default_transition_length_ms_{0};
 
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};
@@ -534,6 +544,7 @@ protected:
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
   uint8_t segment_coord_owned_mask_{0};
   uint8_t segment_coord_dormant_mask_{0};
+  bool master_mono_idle_dormant_{false};
   uint32_t segment_coord_owned_mask_ms_{0};
   std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};
