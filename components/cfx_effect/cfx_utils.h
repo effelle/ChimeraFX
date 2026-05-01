@@ -605,6 +605,8 @@ struct FrameDiagnostics {
     if (!enabled) return;
 
     uint32_t now_ms = cfx_millis();
+    if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
+
     uint32_t free_heap = 0;
 #ifdef ARDUINO
     free_heap = ESP.getFreeHeap();
@@ -612,8 +614,6 @@ struct FrameDiagnostics {
     free_heap = esp_get_free_heap_size();
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
-    uint32_t sleep_after_ms =
-        period_start_ms > 0 ? (now_ms - period_start_ms) : 0;
 
     float fps = 0.0f;
     float avg_frame_ms = 0.0f;
@@ -626,12 +626,12 @@ struct FrameDiagnostics {
 
     ESP_LOGI("chimera_fx",
              "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
-             "Heap: %ukB [IDLE sleep after %ums, frames:%u]",
+             "Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
              mode_name ? mode_name : "Static", mode_id, fps, avg_frame_ms,
-             jitter_pct, free_heap_kb, sleep_after_ms, frame_count_in);
+             jitter_pct, free_heap_kb);
 
-    reset_log_window();
+    last_log_time = now_ms;
   }
 };
 

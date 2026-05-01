@@ -605,6 +605,11 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     chimera_fx::LightStateProxy::clear_pending_write(this->master_light_state_);
     this->master_light_state_->disable_loop();
     this->master_mono_idle_dormant_ = true;
+  } else if (master_should_sleep && this->master_mono_idle_dormant_) {
+    auto *effect = resolve_active_cfx_effect(this->master_light_state_);
+    if (effect != nullptr) {
+      effect->log_mono_idle_sleep();
+    }
   } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
     this->master_light_state_->enable_loop();
     this->master_mono_idle_dormant_ = false;
@@ -627,6 +632,11 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
+    } else if (now_idle && was_idle) {
+      auto *effect = resolve_active_cfx_effect(this->segment_light_states_[i]);
+      if (effect != nullptr) {
+        effect->log_mono_idle_sleep();
+      }
     } else if (!now_idle && was_idle) {
       this->segment_mono_idle_sleep_ms_[i] = 0;
       this->mono_idle_wake_count_++;

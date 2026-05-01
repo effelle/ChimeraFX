@@ -611,13 +611,6 @@ public:
             act_->idle_total_frame_us, act_->idle_jitter_count);
       }
     }
-    act_->idle_frame_count = 0;
-    act_->idle_period_start_ms = 0;
-    act_->idle_last_frame_us = 0;
-    act_->idle_min_frame_us = UINT32_MAX;
-    act_->idle_max_frame_us = 0;
-    act_->idle_total_frame_us = 0;
-    act_->idle_jitter_count = 0;
   }
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {
