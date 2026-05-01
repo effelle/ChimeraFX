@@ -2332,6 +2332,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   const bool apply_perf_enabled = debug_active;
   const bool capture_idle_probe = act_->mono_probe_requested;
+  const bool runner_debug_active = debug_active && !capture_idle_probe;
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
   uint32_t apply_dispatch_us = 0;
@@ -2403,7 +2404,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
       r->target_light = &it; // INJECT: Ensure we write to current buffer
-      r->setDebug(debug_active);
+      r->setDebug(runner_debug_active);
       if (!runner_name.empty())
         r->setName(runner_name.c_str());
       r->setColor(color);
@@ -2411,7 +2412,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   } else if (act_->runner) {
     act_->runner->target_light =
         &it; // INJECT: Ensure we write to current buffer
-    act_->runner->setDebug(debug_active);
+    act_->runner->setDebug(runner_debug_active);
     if (!runner_name.empty())
       act_->runner->setName(runner_name.c_str());
     act_->runner->setColor(color);
@@ -3088,10 +3089,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // CFX-033: Deferred diagnostics — flush pending heap queries AFTER all
   // runners finish but BEFORE DMA fires. Zero cost when debug is off.
-  if (act_->runner)
-    act_->runner->diagnostics.flush_log();
-  for (auto *sr : act_->segment_runners)
-    sr->diagnostics.flush_log();
+  if (!capture_idle_probe) {
+    if (act_->runner)
+      act_->runner->diagnostics.flush_log();
+    for (auto *sr : act_->segment_runners)
+      sr->diagnostics.flush_log();
+  }
 
   if (this->is_clean_mono_idle_output()) {
     chimera_fx::instance = nullptr;
