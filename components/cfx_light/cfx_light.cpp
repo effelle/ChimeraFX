@@ -610,9 +610,8 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     this->master_mono_idle_dormant_ = true;
   } else if (master_should_sleep && this->master_mono_idle_dormant_) {
     auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr && effect->mono_idle_probe_due(now_ms)) {
-      effect->request_mono_idle_probe();
-      this->master_light_state_->enable_loop();
+    if (effect != nullptr) {
+      effect->log_mono_idle_sleep();
     }
   } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
     this->master_light_state_->enable_loop();
@@ -638,15 +637,10 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
-    } else if (now_idle && was_idle && seg_state != nullptr &&
-               seg_state->is_in_loop_state()) {
+    } else if (now_idle && was_idle) {
       if (effect != nullptr) {
         effect->log_mono_idle_sleep();
       }
-    } else if (now_idle && was_idle && effect != nullptr &&
-               effect->mono_idle_probe_due(now_ms) && seg_state != nullptr) {
-      effect->request_mono_idle_probe();
-      seg_state->enable_loop();
     } else if (!now_idle && was_idle) {
       this->segment_mono_idle_sleep_ms_[i] = 0;
       this->mono_idle_wake_count_++;
