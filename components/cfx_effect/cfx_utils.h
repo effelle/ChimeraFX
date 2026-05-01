@@ -512,9 +512,6 @@ struct FrameDiagnostics {
     uint32_t now_ms = cfx_millis();
     if (now_ms - last_log_time >= LOG_INTERVAL_MS) {
       if (frame_count <= 10) {
-        ESP_LOGI("chimera_fx",
-                 "[%s] Debug enabled, but not enough frames: %u frames in %ums",
-                 effect_name, frame_count, now_ms - last_log_time);
         last_log_time = now_ms;
         return;
       }
