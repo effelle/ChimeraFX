@@ -586,10 +586,10 @@ public:
     if (act_ == nullptr || !act_->mono_idle || act_->mono_probe_requested) {
       return false;
     }
-    const FrameDiagnostics *diag = nullptr;
-    if (act_->runner != nullptr) {
-      diag = &act_->runner->diagnostics;
-    } else {
+    static constexpr uint32_t idle_probe_interval_ms = 2000;
+    const auto *diag = act_->runner != nullptr ? &act_->runner->diagnostics
+                                               : nullptr;
+    if (diag == nullptr) {
       for (auto *runner : act_->segment_runners) {
         if (runner != nullptr) {
           diag = &runner->diagnostics;
@@ -600,7 +600,7 @@ public:
     if (diag == nullptr || !diag->enabled) {
       return false;
     }
-    return (now_ms - diag->last_log_time) >= FrameDiagnostics::LOG_INTERVAL_MS;
+    return (now_ms - diag->last_log_time) >= idle_probe_interval_ms;
   }
   void request_mono_idle_probe() {
     if (act_ != nullptr && act_->mono_idle) {
