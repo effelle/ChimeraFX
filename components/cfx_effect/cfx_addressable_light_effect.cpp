@@ -1974,6 +1974,17 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   return this->can_batch_steady_virtual_segment_();
 }
 
+bool CFXAddressableLightEffect::mono_idle_logging_enabled() const {
+  bool debug_active = CFXControl::global_debug_enabled_;
+  if (act_ != nullptr && act_->controller != nullptr &&
+      act_->controller->get_debug() != nullptr) {
+    debug_active = act_->controller->get_debug()->state;
+  } else if (this->local_debug_switch_() != nullptr) {
+    debug_active = this->local_debug_switch_()->state;
+  }
+  return debug_active;
+}
+
 bool CFXAddressableLightEffect::parent_coordinated_segment_due(
     uint64_t now) const {
   return this->can_parent_coordinate_segment() &&

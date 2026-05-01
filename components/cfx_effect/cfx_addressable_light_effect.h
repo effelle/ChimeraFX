@@ -579,16 +579,7 @@ public:
   bool is_mono_idle() const {
     return act_ != nullptr && act_->mono_idle;
   }
-  bool mono_idle_logging_enabled() const {
-    bool debug_active = CFXControl::global_debug_enabled_;
-    if (act_ != nullptr && act_->controller != nullptr &&
-        act_->controller->get_debug() != nullptr) {
-      debug_active = act_->controller->get_debug()->state;
-    } else if (this->local_debug_switch_() != nullptr) {
-      debug_active = this->local_debug_switch_()->state;
-    }
-    return debug_active;
-  }
+  bool mono_idle_logging_enabled() const;
   bool has_pending_mono_idle_probe() const {
     return act_ != nullptr && act_->mono_probe_requested;
   }
