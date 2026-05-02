@@ -400,6 +400,7 @@ protected:
   void refresh_parent_owned_segment_slot_(CFXSegmentRuntimeSlot &slot);
   void refresh_parent_owned_segment_slots_();
   void refresh_segment_coordination_mask_();
+  void invalidate_segment_coord_schedule_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();
   uint8_t collect_clean_mono_idle_segment_mask_() const;
@@ -580,6 +581,8 @@ protected:
   uint8_t segment_coord_owned_mask_{0};
   uint8_t segment_coord_dormant_mask_{0};
   uint8_t segment_mono_idle_dormant_mask_{0};
+  uint64_t segment_coord_next_due_ms_{0};
+  bool segment_coord_schedule_dirty_{true};
   bool master_mono_idle_dormant_{false};
   bool master_segment_coord_dormant_{false};
   uint32_t master_mono_idle_sleep_ms_{0};

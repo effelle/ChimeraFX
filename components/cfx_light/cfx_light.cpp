@@ -556,6 +556,7 @@ void CFXLightOutput::wake_mono_idle_light_state_(light::LightState *state) {
   if (effect == nullptr || !effect->is_mono_idle()) {
     return;
   }
+  this->invalidate_segment_coord_schedule_();
   effect->wake_mono_idle_output();
 
   if (state == this->master_light_state_) {
@@ -810,6 +811,11 @@ void CFXLightOutput::refresh_parent_owned_segment_slots_() {
   }
 }
 
+void CFXLightOutput::invalidate_segment_coord_schedule_() {
+  this->segment_coord_schedule_dirty_ = true;
+  this->segment_coord_next_due_ms_ = 0;
+}
+
 bool CFXLightOutput::register_parent_owned_segment(
     light::LightState *state, CFXVirtualSegmentLight *segment,
     chimera_fx::CFXAddressableLightEffect *effect, chimera_fx::CFXRunner *runner) {
@@ -841,6 +847,7 @@ bool CFXLightOutput::register_parent_owned_segment(
   slot.fallback = false;
   slot.due_at = 0;
   this->refresh_parent_owned_segment_slot_(slot);
+  this->invalidate_segment_coord_schedule_();
 
   chimera_fx::LightStateProxy::clear_pending_write(state);
   state->enable_loop();
@@ -874,6 +881,7 @@ void CFXLightOutput::unregister_parent_owned_segment(
     this->seg_flushed_generation_[i] = 0;
     state->enable_loop();
     this->clear_segment_runtime_slot_(i);
+    this->invalidate_segment_coord_schedule_();
   }
   this->refresh_segment_coordination_mask_();
 }
@@ -897,10 +905,15 @@ void CFXLightOutput::refresh_segment_coordination_mask_() {
   }
   this->segment_coord_owned_mask_ = mask;
   this->segment_coord_owned_mask_ms_ = esphome::millis();
+  if (mask == 0) {
+    this->segment_coord_next_due_ms_ = 0;
+  }
 }
 
 bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
-  this->refresh_segment_coordination_mask_();
+  if (this->segment_coord_schedule_dirty_) {
+    this->refresh_segment_coordination_mask_();
+  }
   const int slot_index = this->find_segment_runtime_slot_(state);
   return slot_index >= 0 &&
          (this->segment_coord_owned_mask_ &
@@ -925,6 +938,7 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
       continue;
     }
     slot.dirty = true;
+    this->invalidate_segment_coord_schedule_();
     return;
   }
 }
@@ -938,8 +952,13 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
 
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
+  if (!this->segment_coord_schedule_dirty_ && this->segment_coord_owned_mask_ != 0 &&
+      this->segment_coord_next_due_ms_ != 0 && now < this->segment_coord_next_due_ms_) {
+    return false;
+  }
   uint8_t mask = 0;
   uint8_t count = 0;
+  uint64_t next_due = 0;
 
   this->refresh_segment_coordination_mask_();
   const uint8_t segment_idle_mask =
@@ -947,6 +966,8 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   this->apply_mono_idle_loop_state_(segment_idle_mask);
   this->apply_master_segment_coordination_loop_state_();
   if (this->segment_coord_owned_mask_ == 0) {
+    this->segment_coord_schedule_dirty_ = false;
+    this->segment_coord_next_due_ms_ = 0;
     return false;
   }
 
@@ -965,6 +986,12 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
       continue;
     }
     if (!slot.effect->parent_coordinated_segment_due(now)) {
+      const uint64_t slot_due = slot.due_at != 0
+                                    ? slot.due_at
+                                    : (slot.effect->get_update_interval() + now);
+      if (next_due == 0 || slot_due < next_due) {
+        next_due = slot_due;
+      }
       continue;
     }
     if (!slot.bound) {
@@ -978,10 +1005,16 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     }
     slot.effect->mark_parent_coordinated_run(now);
     slot.due_at = now + slot.effect->get_update_interval();
+    if (next_due == 0 || slot.due_at < next_due) {
+      next_due = slot.due_at;
+    }
     this->segment_coord_runners_.push_back(slot.runner);
     mask |= static_cast<uint8_t>(1u << i);
     count++;
   }
+
+  this->segment_coord_schedule_dirty_ = false;
+  this->segment_coord_next_due_ms_ = next_due;
 
   if (count == 0) {
     return false;
@@ -1589,8 +1622,7 @@ void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
 }
 
 void CFXLightOutput::on_master_update() {
-  this->segment_coord_owned_mask_ms_ = 0;
-  this->segment_coord_owned_mask_ = 0;
+  this->invalidate_segment_coord_schedule_();
 
   if (this->master_light_state_ == nullptr) {
     return;
@@ -1652,8 +1684,7 @@ void CFXLightOutput::on_master_update() {
 }
 
 void CFXLightOutput::on_segment_update() {
-  this->segment_coord_owned_mask_ms_ = 0;
-  this->segment_coord_owned_mask_ = 0;
+  this->invalidate_segment_coord_schedule_();
 
   if (this->master_light_state_ == nullptr ||
       this->segment_light_states_.empty()) {
