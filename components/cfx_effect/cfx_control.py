@@ -154,12 +154,19 @@ async def to_code(config):
                     "has_white": has_white
                 })
                 
-                # Benchmark path: keep a single parent control tree for
-                # segmented lights instead of auto-generating a synthetic
-                # CFXControl stack for every segment. Segment effects still
-                # resolve back to this parent control through
-                # CFXControl::find(), which lets us measure the real segment
-                # runtime cost without the per-segment control/entity tax.
+                # Add segments
+                if "segments" in lconf:
+                    for seg in lconf["segments"]:
+                        seg_light_id = seg.get("id")
+                        seg_name = str(seg.get(CONF_NAME, f"{master_name} Segment"))
+                        if seg_light_id:
+                            seg_state = await cg.get_variable(seg_light_id)
+                            all_targets.append({
+                                "state": seg_state,
+                                "name": seg_name,
+                                "id": seg_light_id.id,
+                                "has_white": has_white
+                            })
                             
     exclude = [int(x) for x in config[CONF_EXCLUDE]]
     def is_included(id):
