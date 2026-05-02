@@ -49,6 +49,8 @@ public:
         all_segments.end());
   }
 
+  light::LightState *get_state_parent() const { return this->state_parent_; }
+
   // --- AddressableLight interface ---
 
   int32_t size() const override { return stop_ - start_; }
