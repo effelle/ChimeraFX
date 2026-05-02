@@ -417,10 +417,16 @@ def _inject_all_effects(config):
     config[CONF_EFFECTS] = user_effects
     return config
 
+# Patch base schema to drop inherited default_transition_length so our 0ms default wins
+_base_schema = light.ADDRESSABLE_LIGHT_SCHEMA.schema.copy()
+_keys_to_drop = [k for k in _base_schema.keys() if str(k) == CONF_DEFAULT_TRANSITION_LENGTH or getattr(k, "key", None) == CONF_DEFAULT_TRANSITION_LENGTH]
+for k in _keys_to_drop:
+    del _base_schema[k]
+
 CONFIG_SCHEMA = cv.All(
     _normalize_control_aliases,
     _inject_all_effects,
-    light.ADDRESSABLE_LIGHT_SCHEMA.extend(
+    cv.Schema(_base_schema).extend(
         {
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(CFXLightOutput),
             cv.Required(CONF_NUM_LEDS): cv.positive_not_null_int,

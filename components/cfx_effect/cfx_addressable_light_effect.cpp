@@ -728,6 +728,9 @@ void CFXAddressableLightEffect::start() {
 
   // Copy codegen-time fields into the activation context.
   this->act_->controller = this->controller_;
+  if (this->act_->controller == nullptr) {
+    this->act_->controller = CFXControl::find(this->get_light_state());
+  }
 
 #ifdef USE_CFX_SEQUENCE
   // start() may reuse an existing activation during rapid restart/no-op paths.
@@ -1479,6 +1482,10 @@ void CFXAddressableLightEffect::stop() {
     return;
   }
 
+  // Clear intro_active so that rapid OFF->ON cycles properly restart the intro
+  // instead of bypassing it due to stale state.
+  this->act_->intro_active = false;
+
   if (this->is_virtual_segment_) {
 #ifdef USE_ESP32
     auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
@@ -1515,9 +1522,17 @@ void CFXAddressableLightEffect::stop() {
   // so solid-color ON/OFF behavior works again after the effect stops.
   if (act_->saved_transition_length > 0) {
     auto *ls = this->get_light_state();
-    if (ls != nullptr)
-      ls->set_default_transition_length(act_->saved_transition_length);
+    uint32_t saved_len = act_->saved_transition_length;
     act_->saved_transition_length = 0;
+    if (ls != nullptr) {
+      if (act_->controller != nullptr) {
+        act_->controller->set_timeout(50, [ls, saved_len]() {
+          ls->set_default_transition_length(saved_len);
+        });
+      } else {
+        ls->set_default_transition_length(saved_len);
+      }
+    }
   }
 
   CFXControl *c = act_->controller;

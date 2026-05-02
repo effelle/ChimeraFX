@@ -4703,7 +4703,7 @@ const char *CFXRunner::getModeName() const {
   case FX_MODE_JUGGLE:
     return "Juggle";
   case FX_MODE_FIRE_2012:
-    return "Fire 2012";
+    return "Fire";
   case FX_MODE_BPM:
     return "BPM";
   case FX_MODE_COLORTWINKLE:
@@ -4812,6 +4812,8 @@ const char *CFXRunner::getModeName() const {
     return "Tidal Surge";
   case FX_MODE_IMPACT_FLARE:
     return "Impact Flare";
+  case 188:
+    return "Monolith";
   default:
     return "Unknown";
   }
