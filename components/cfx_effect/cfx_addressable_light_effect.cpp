@@ -1518,20 +1518,12 @@ void CFXAddressableLightEffect::stop() {
   release_vector_storage(act_->intro_snapshot);
   release_vector_storage(act_->transition_target_snapshot);
 
-  // Restore the light default transition length that was suppressed in start()
-  // so solid-color ON/OFF behavior works again after the effect stops.
   if (act_->saved_transition_length > 0) {
     auto *ls = this->get_light_state();
     uint32_t saved_len = act_->saved_transition_length;
     act_->saved_transition_length = 0;
     if (ls != nullptr) {
-      if (act_->controller != nullptr) {
-        act_->controller->set_timeout(50, [ls, saved_len]() {
-          ls->set_default_transition_length(saved_len);
-        });
-      } else {
-        ls->set_default_transition_length(saved_len);
-      }
+      ls->set_default_transition_length(saved_len);
     }
   }
 
