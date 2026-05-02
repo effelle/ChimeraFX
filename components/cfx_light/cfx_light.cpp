@@ -1321,9 +1321,7 @@ void CFXLightOutput::setup() {
         this->master_light_state_->remote_values.is_on();
   }
 
-  if (this->master_light_state_ != nullptr &&
-      !this->segment_light_states_.empty()) {
-
+  if (!this->segment_light_states_.empty()) {
     for (auto *seg_state : this->segment_light_states_) {
       if (seg_state != nullptr) {
         seg_state->set_default_transition_length(
@@ -1686,12 +1684,17 @@ void CFXLightOutput::on_master_update() {
 void CFXLightOutput::on_segment_update() {
   this->invalidate_segment_coord_schedule_();
 
-  if (this->master_light_state_ == nullptr ||
-      this->segment_light_states_.empty()) {
+  if (this->segment_light_states_.empty()) {
     return;
   }
   if (this->has_active_parent_owned_segments_()) {
     this->refresh_parent_owned_segment_slots_();
+    return;
+  }
+  if (this->master_light_state_ == nullptr) {
+    for (auto *seg_state : this->segment_light_states_) {
+      this->wake_mono_idle_light_state_(seg_state);
+    }
     return;
   }
 

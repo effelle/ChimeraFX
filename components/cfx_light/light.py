@@ -61,6 +61,7 @@ CONF_SEGMENT_SET_BRIGHTNESS = "set_brightness"
 CONF_SEGMENT_SET_COLOR = "set_color"
 CONF_SEGMENT_OUTPUT_ID = "output_id"
 CONF_SEGMENT_LIGHT_ID = "light_id"
+CONF_SEGMENT_MASTER = "segment_master"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
@@ -456,6 +457,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("controls", default=True): cv.boolean,
             cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
             # Segment definitions (Phase 1)
+            cv.Optional(CONF_SEGMENT_MASTER, default=False): cv.boolean,
             cv.Optional(CONF_SEGMENTS): cv.ensure_list(SEGMENT_SCHEMA),
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -596,15 +598,18 @@ async def to_code(config):
 
     segments = config.get(CONF_SEGMENTS, [])
     light_config = config
+    segment_master_enabled = bool(segments) and config.get(CONF_SEGMENT_MASTER, False)
 
     if segments:
         # --- Phase 2: Per-segment light entities ---
-        # Register parent as master light (no effects, acts as global relay)
-        master_config = dict(light_config)
-        master_config[CONF_EFFECTS] = []  # No effects on master
-        await light.register_light(var, master_config)
-        light_state = await cg.get_variable(config[CONF_ID])
-        cg.add(var.set_master_light_state(light_state))
+        # Optional master shell: disabled by default during segment
+        # performance investigation so the parent can act as a pure output.
+        if segment_master_enabled:
+            master_config = dict(light_config)
+            master_config[CONF_EFFECTS] = []  # No effects on master
+            await light.register_light(var, master_config)
+            light_state = await cg.get_variable(config[CONF_ID])
+            cg.add(var.set_master_light_state(light_state))
         await cg.register_component(var, config)
     else:
         # No segments: original single-light behavior
