@@ -121,6 +121,9 @@ struct CFXSegmentRuntimeSlot {
   CFXVirtualSegmentLight *segment{nullptr};
   chimera_fx::CFXAddressableLightEffect *effect{nullptr};
   chimera_fx::CFXRunner *runner{nullptr};
+  uint32_t color{0xFFFFFFFF};
+  float gamma{2.8f};
+  float global_brightness{1.0f};
   bool active{false};
   bool dirty{false};
   bool bound{false};
@@ -394,6 +397,8 @@ protected:
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
   bool has_active_parent_owned_segments_() const;
+  void refresh_parent_owned_segment_slot_(CFXSegmentRuntimeSlot &slot);
+  void refresh_parent_owned_segment_slots_();
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();

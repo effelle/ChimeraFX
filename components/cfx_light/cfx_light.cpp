@@ -765,6 +765,51 @@ CFXLightOutput::get_parent_owned_segment_effect(light::LightState *state) const 
   return nullptr;
 }
 
+void CFXLightOutput::refresh_parent_owned_segment_slot_(
+    CFXSegmentRuntimeSlot &slot) {
+  if (!slot.active || slot.state == nullptr) {
+    return;
+  }
+
+  auto *state = slot.state;
+  state->current_values = state->remote_values;
+  if (chimera_fx::LightStateProxy::has_active_transformer(state)) {
+    chimera_fx::LightStateProxy::stop_state_transformer(state);
+  }
+
+  float r = state->remote_values.get_red();
+  float g = state->remote_values.get_green();
+  float b = state->remote_values.get_blue();
+  float w = state->remote_values.get_white();
+  slot.color = (uint32_t(roundf(w * 255.0f)) << 24) |
+               (uint32_t(roundf(r * 255.0f)) << 16) |
+               (uint32_t(roundf(g * 255.0f)) << 8) |
+               uint32_t(roundf(b * 255.0f));
+  if (slot.color == 0 && state->remote_values.is_on()) {
+    slot.color = 0xFFFFFFFF;
+  }
+
+  slot.gamma = state->get_gamma_correct();
+
+  float state_bri = state->remote_values.get_brightness();
+  if (state_bri == 0.0f && state->remote_values.is_on()) {
+    state_bri = 1.0f;
+  }
+  slot.global_brightness =
+      state_bri * state->remote_values.get_state();
+}
+
+void CFXLightOutput::refresh_parent_owned_segment_slots_() {
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    auto &slot = this->segment_runtime_slots_[i];
+    if (!slot.active) {
+      continue;
+    }
+    this->refresh_parent_owned_segment_slot_(slot);
+    slot.dirty = true;
+  }
+}
+
 bool CFXLightOutput::register_parent_owned_segment(
     light::LightState *state, CFXVirtualSegmentLight *segment,
     chimera_fx::CFXAddressableLightEffect *effect, chimera_fx::CFXRunner *runner) {
@@ -795,12 +840,9 @@ bool CFXLightOutput::register_parent_owned_segment(
   slot.bound = false;
   slot.fallback = false;
   slot.due_at = 0;
+  this->refresh_parent_owned_segment_slot_(slot);
 
   chimera_fx::LightStateProxy::clear_pending_write(state);
-  state->current_values = state->remote_values;
-  if (chimera_fx::LightStateProxy::has_active_transformer(state)) {
-    chimera_fx::LightStateProxy::stop_state_transformer(state);
-  }
   state->enable_loop();
 
   const uint8_t bit = static_cast<uint8_t>(1u << slot_index);
@@ -930,7 +972,8 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
       slot.bound = true;
     }
     if (slot.dirty) {
-      slot.effect->sync_parent_owned_inputs();
+      slot.effect->sync_parent_owned_inputs(slot.color, slot.gamma,
+                                            slot.global_brightness);
       slot.dirty = false;
     }
     slot.effect->mark_parent_coordinated_run(now);
@@ -1561,11 +1604,7 @@ void CFXLightOutput::on_master_update() {
     return;
   }
   if (this->has_active_parent_owned_segments_()) {
-    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
-      if (this->segment_runtime_slots_[i].active) {
-        this->segment_runtime_slots_[i].dirty = true;
-      }
-    }
+    this->refresh_parent_owned_segment_slots_();
     return;
   }
 
@@ -1621,11 +1660,7 @@ void CFXLightOutput::on_segment_update() {
     return;
   }
   if (this->has_active_parent_owned_segments_()) {
-    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
-      if (this->segment_runtime_slots_[i].active) {
-        this->segment_runtime_slots_[i].dirty = true;
-      }
-    }
+    this->refresh_parent_owned_segment_slots_();
     return;
   }
 

@@ -567,7 +567,8 @@ public:
   bool can_parent_coordinate_segment() const;
   bool parent_coordinated_segment_due(uint64_t now) const;
   void prepare_parent_coordinated_runner(light::AddressableLight &it);
-  void sync_parent_owned_inputs();
+  void sync_parent_owned_inputs(uint32_t color, float gamma,
+                                float global_brightness);
   void mark_parent_coordinated_run(uint64_t now);
 
   bool is_clean_mono_idle_output() const {
