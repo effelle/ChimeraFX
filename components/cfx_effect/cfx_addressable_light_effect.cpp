@@ -2351,6 +2351,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
           state_ptr->get_output());
       if (seg != nullptr && seg->get_parent() != nullptr &&
+          this->can_parent_coordinate_segment() &&
+          !seg->get_parent()->segment_coordinator_owns(state_ptr)) {
+        seg->get_parent()->register_parent_owned_segment(state_ptr, seg, this,
+                                                         act_->runner);
+      }
+      if (seg != nullptr && seg->get_parent() != nullptr &&
           seg->get_parent()->segment_coordinator_owns(state_ptr)) {
         seg->get_parent()->note_segment_coord_apply_skip();
         return;
