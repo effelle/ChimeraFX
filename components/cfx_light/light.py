@@ -836,31 +836,62 @@ async def to_code(config):
                     )
                 )
 
-        # Manually create strictly unique effects and attach them to the segment
+        # ── Stub + Singleton pattern (CFX-058) ──────────────────────────────
+        # Instead of creating 81 full CFXAddressableLightEffect objects per
+        # segment (~60 B each = 4.9 KB), we create ONE real singleton effect
+        # and 81 lightweight CFXEffectStub proxies (~36 B each).
+        # Saves ~2.2 KB per segment (37% heap reduction).
         from esphome.core import ID as CoreID
-        from esphome.components.cfx_effect import cfx_effect_to_code, CFXAddressableLightEffect
+        from esphome.components.cfx_effect import (
+            cfx_effect_to_code, CFXAddressableLightEffect, CFXEffectStub,
+            CFX_EFFECT_NAMES,
+        )
 
         seg_idx = segments.index(seg)
+        parent_id = config[CONF_ID].id
+
+        # Phase 1: Create the singleton — one real effect per segment.
+        # This is the only object that allocates CFXActivation + CFXRunner.
+        singleton_str = f"{parent_id}_cfx_singleton_s{seg_idx}"
+        singleton_id = CoreID(
+            singleton_str, is_declaration=True, type=CFXAddressableLightEffect
+        )
+        singleton_var = cg.new_Pvariable(singleton_id, "CFX Segment Singleton")
+        cg.add(singleton_var.set_virtual_segment(True))
+
+        # Ensure the stub header is included in the generated C++ output
+        cg.add_global(
+            cg.RawExpression(
+                '#include "esphome/components/cfx_effect/cfx_effect_stub.h"'
+            )
+        )
+
+        # Phase 2: Create lightweight stubs for the HA effect dropdown.
         effect_vars = []
         for eff_idx, eff in enumerate(config.get(CONF_EFFECTS, [])):
             if not isinstance(eff, dict):
                 continue
-            if "addressable_cfx" in eff:
-                eff_conf = eff["addressable_cfx"]
-                # Must generate a globally unique ID string so we don't crash new_Pvariable
-                parent_id = config[CONF_ID].id
-                eff_num = eff_conf.get("effect_id", "unk")
-                unique_str = f"{parent_id}_cfx_eff_s{seg_idx}_e{eff_num}_{eff_idx}"
+            if "addressable_cfx" not in eff:
+                continue
 
-                unique_id = CoreID(unique_str, is_declaration=True, type=CFXAddressableLightEffect)
-                
-                # Manually run the effect's codegen
-                effect_var = await cfx_effect_to_code(eff_conf, unique_id, is_virtual_segment=True)
-                effect_vars.append(effect_var)
-                
+            eff_conf = eff["addressable_cfx"]
+            eff_num = eff_conf.get("effect_id", 0)
+
+            # Resolve the display name (same logic as cfx_effect_to_code)
+            name = eff_conf.get(CONF_NAME, "CFX Effect")
+            if name == "CFX Effect" and eff_num in CFX_EFFECT_NAMES:
+                name = CFX_EFFECT_NAMES[eff_num]
+
+            stub_str = f"{parent_id}_cfx_stub_s{seg_idx}_e{eff_num}_{eff_idx}"
+            stub_id = CoreID(
+                stub_str, is_declaration=True, type=CFXEffectStub
+            )
+            stub_var = cg.new_Pvariable(stub_id, name, eff_num, singleton_var)
+            effect_vars.append(stub_var)
+
         if effect_vars:
             cg.add(light_state.add_effects(effect_vars))
-            
+
         # Register the segment with the parent output so it can sync on/off and brightness
         cg.add(var.add_segment_light_state(light_state))
 

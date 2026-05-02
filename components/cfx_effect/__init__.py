@@ -24,6 +24,9 @@ chimera_fx_ns = cg.esphome_ns.namespace("chimera_fx")
 CFXAddressableLightEffect = chimera_fx_ns.class_(
     "CFXAddressableLightEffect", AddressableLightEffect
 )
+CFXEffectStub = chimera_fx_ns.class_(
+    "CFXEffectStub", AddressableLightEffect
+)
 
 from . import cfx_control
 
