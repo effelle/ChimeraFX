@@ -390,6 +390,20 @@ resolve_active_cfx_effect(light::LightState *state) {
     return nullptr;
   }
 
+  auto *output = state->get_output();
+  if (output != nullptr) {
+    for (auto *seg_out : CFXVirtualSegmentLight::all_segments) {
+      if (seg_out != output) {
+        continue;
+      }
+      auto *slot_effect = seg_out->get_parent()->get_parent_owned_segment_effect(state);
+      if (slot_effect != nullptr) {
+        return slot_effect;
+      }
+      break;
+    }
+  }
+
   light::LightEffect *effect = chimera_fx::LightStateProxy::get_active_effect(state);
   if (effect == nullptr) {
     return nullptr;
@@ -734,6 +748,21 @@ bool CFXLightOutput::has_active_parent_owned_segments_() const {
     }
   }
   return false;
+}
+
+chimera_fx::CFXAddressableLightEffect *
+CFXLightOutput::get_parent_owned_segment_effect(light::LightState *state) const {
+  if (state == nullptr) {
+    return nullptr;
+  }
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    const auto &slot = this->segment_runtime_slots_[i];
+    if (!slot.active || slot.state != state) {
+      continue;
+    }
+    return slot.effect;
+  }
+  return nullptr;
 }
 
 bool CFXLightOutput::register_parent_owned_segment(

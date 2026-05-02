@@ -392,6 +392,8 @@ protected:
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
   bool has_active_parent_owned_segments_() const;
+  chimera_fx::CFXAddressableLightEffect *get_parent_owned_segment_effect(
+      light::LightState *state) const;
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();
