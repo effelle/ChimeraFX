@@ -602,13 +602,19 @@ async def to_code(config):
 
     if segments:
         # --- Phase 2: Per-segment light entities ---
-        # Optional master shell: disabled by default during segment
-        # performance investigation so the parent can act as a pure output.
+        # Always register a parent light shell so ESPHome still has a concrete
+        # LightState anchor for the top-level cfx_light config and related
+        # codegen ids. When segment_master is disabled, keep that shell hidden
+        # and detached from runtime master behavior.
+        master_config = dict(light_config)
+        master_config[CONF_EFFECTS] = []  # No effects on master
+        if not segment_master_enabled:
+            master_config["internal"] = True
+            master_config["disabled_by_default"] = True
+            master_config["restore_mode"] = "ALWAYS_OFF"
+        await light.register_light(var, master_config)
+        light_state = await cg.get_variable(config[CONF_ID])
         if segment_master_enabled:
-            master_config = dict(light_config)
-            master_config[CONF_EFFECTS] = []  # No effects on master
-            await light.register_light(var, master_config)
-            light_state = await cg.get_variable(config[CONF_ID])
             cg.add(var.set_master_light_state(light_state))
         await cg.register_component(var, config)
     else:
