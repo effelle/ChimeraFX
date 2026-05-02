@@ -39,15 +39,6 @@ async def to_code(config):
         if lconf.get("platform", "") != "cfx_light":
             continue
 
-        # Temporary performance-investigation mode: segmented cfx_light can run
-        # without registering the parent/master LightState shell. In that mode,
-        # the parent light ID is no longer a real declared LightState, so the
-        # synthetic parent CFXControl tree would create a circular/unresolved
-        # dependency. Skip auto-controls for that specific configuration and let
-        # the segment shells stand alone for benchmarking.
-        if lconf.get("segments") and not lconf.get("segment_master", False):
-            continue
-
         lconf_id = lconf.get(CONF_ID)
         if lconf_id is None:
             continue

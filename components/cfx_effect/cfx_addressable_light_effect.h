@@ -119,7 +119,6 @@ public:
     uint64_t last_metadata_refresh{0};
 
     uint32_t saved_transition_length{0};
-
     std::string strip_tag{};
     uint8_t spi_diag_apply_logs{0};
     uint8_t spi_diag_bind_logs{0};

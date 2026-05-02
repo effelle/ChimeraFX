@@ -2015,9 +2015,6 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
 }
 
 bool CFXAddressableLightEffect::mono_idle_logging_enabled() const {
-  if (this->is_virtual_segment_) {
-    return true;
-  }
   bool debug_active = CFXControl::global_debug_enabled_;
   if (act_ != nullptr && act_->controller != nullptr &&
       act_->controller->get_debug() != nullptr) {
@@ -2067,9 +2064,6 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
   } else if (this->local_debug_switch_() != nullptr) {
     debug_active = this->local_debug_switch_()->state;
   }
-  if (this->is_virtual_segment_) {
-    debug_active = true;
-  }
 
   act_->runner->setDebug(debug_active && !act_->mono_idle);
   if (!act_->cached_runner_name.empty()) {
@@ -2109,9 +2103,6 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     debug_active = act_->controller->get_debug()->state;
   } else if (this->local_debug_switch_()) {
     debug_active = this->local_debug_switch_()->state;
-  }
-  if (this->is_virtual_segment_) {
-    debug_active = true;
   }
 
   float r = state_ptr->remote_values.get_red();
@@ -2439,9 +2430,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     debug_active = act_->controller->get_debug()->state; // Master local state
   } else if (this->local_debug_switch_()) {
     debug_active = this->local_debug_switch_()->state; // Legacy fallback
-  }
-  if (this->is_virtual_segment_) {
-    debug_active = true;
   }
   const bool apply_perf_enabled = debug_active;
   const bool capture_idle_probe = act_->mono_probe_requested;
