@@ -140,6 +140,18 @@ public:
         global_debug_enabled_ = value;
         for (auto *r : this->runners_)
           r->setDebug(value);
+
+#ifdef USE_ESP32
+        // Fix 1: Broadcast globally to all active virtual segments
+        for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+          if (seg_out != nullptr && seg_out->get_parent() != nullptr) {
+            auto *effect = seg_out->get_parent()->get_parent_owned_segment_effect(seg_out->get_state_parent());
+            if (effect != nullptr && effect->get_act() != nullptr && effect->get_act()->runner != nullptr) {
+              effect->get_act()->runner->setDebug(value && !effect->get_act()->mono_idle);
+            }
+          }
+        }
+#endif
       });
     }
 

@@ -2039,6 +2039,26 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
     return;
   }
 
+  if (act_->controller == nullptr) {
+    const uint64_t now = millis_64();
+    if (now - act_->last_controller_lookup_ms > 5000) {
+      act_->last_controller_lookup_ms = now;
+      act_->controller = CFXControl::find(this->get_light_state());
+    }
+  }
+  if (act_->controller != nullptr && !act_->runners_registered_with_controller) {
+    act_->controller->register_runner(act_->runner);
+    act_->runners_registered_with_controller = true;
+  }
+
+  bool debug_active = CFXControl::global_debug_enabled_;
+  if (act_->controller && act_->controller->get_debug()) {
+    debug_active = act_->controller->get_debug()->state;
+  } else if (this->local_debug_switch_()) {
+    debug_active = this->local_debug_switch_()->state;
+  }
+  act_->runner->setDebug(debug_active && !act_->mono_idle);
+
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       state_ptr->get_output());
   auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
