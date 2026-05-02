@@ -117,5 +117,52 @@ ChimeraFX automatically detects dual-core ESP32 variants and enables the paralle
 
 The scheduler is transparent — no YAML configuration needed.
 
+
 !!! note "Core 0 task memory"
     The dual-core scheduler creates a dedicated FreeRTOS task on Core 0 with a **4 KB stack**. This is allocated once at first effect start and never freed. Stack size was validated via high-water mark measurement across all heavy effects.
+
+---
+
+## Memory Math: The Price per LED
+
+Memory (Heap) is the most precious resource in a ChimeraFX setup. Understanding the "byte price" of your configuration helps avoid system brownouts and reboots.
+
+### 1. The Components of Heap Consumption
+
+Your total memory cost is the sum of three distinct layers:
+
+1.  **System Floor (~55 KB)**: Mandatory overhead for ESPHome's Wi-Fi and API stacks.
+2.  **Segment Overhead (~3.6 KB/segment)**: The "Stub + Singleton" architecture cost for each virtual segment entity.
+3.  **Pixel Buffer Cost**: The memory consumed by the actual LEDs, which depends heavily on your **Transport** choice.
+
+### 2. The "Price per LED" Table
+
+| Transport / Hardware | Byte Price per LED | 1000 LED Impact |
+| :--- | :--- | :--- |
+| **SPI** (APA102, SK9822, WS2801) | **~9 Bytes** | ~9 KB |
+| **S3-RMT** (WS2812X on ESP32-S3) | **~9 Bytes** | ~9 KB |
+| **Legacy RMT** (WS2812X on Classic ESP32) | **~100 Bytes** | **~98 KB** |
+
+!!! warning "Classic ESP32 RMT Warning"
+    On a classic ESP32 (Non-S3), the RMT peripheral must expand every bit into a 4-byte hardware symbol. This makes legacy NRZ strips (WS2812B/SK6812) **10x more expensive** in RAM than SPI strips or S3-based setups. For strips over 400 LEDs, an **ESP32-S3** or an **SPI-based strip** is strongly recommended.
+
+### 3. How to calculate your Free Heap
+
+You can estimate your available RAM after ChimeraFX starts using this formula:
+
+**Free Heap ≈ 160KB – [ (N_Segs × 3.6KB) + (N_LEDs × BytePrice) + 55KB ]**
+
+#### Example Scenarios:
+
+*   **Small setup (Classic ESP32)**: 60 LEDs (RMT), 1 Light.
+    *   Cost: 55KB (System) + (60 × 100B) ≈ 61 KB.
+    *   Result: **~100 KB Free Heap** (Ultra Stable).
+*   **Medium setup (Classic ESP32)**: 300 LEDs (RMT), 4 Segments.
+    *   Cost: 55KB + (4 × 3.6KB) + (300 × 100B) ≈ 100 KB.
+    *   Result: **~60 KB Free Heap** (Near Floor Guard).
+*   **Large setup (ESP32-S3)**: 1200 LEDs (RMT), 1 Light.
+    *   Cost: 55KB + (1200 × 9B) ≈ 66 KB.
+    *   Result: **~94 KB Free Heap** (Very Stable despite 1200 LEDs).
+
+### 4. RGB vs RGBW
+Adding a white channel (RGBW/WRGB) adds exactly **1 additional byte per LED** to the pixel buffer cost. It does not affect the RMT/SPI transport cost significantly.
