@@ -862,7 +862,7 @@ async def to_code(config):
         # Ensure the stub header is included in the generated C++ output
         cg.add_global(
             cg.RawExpression(
-                '#include "esphome/components/cfx_effect/cfx_effect_stub.h"'
+                '#include "esphome/components/cfx_effect/cfx_effect_stub.h"\n'
             )
         )
 
