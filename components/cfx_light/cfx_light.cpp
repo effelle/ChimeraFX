@@ -672,6 +672,36 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
   this->segment_coord_dormant_mask_ = next_dormant_mask;
 }
 
+void CFXLightOutput::apply_master_segment_coordination_loop_state_() {
+  if (this->master_light_state_ == nullptr) {
+    return;
+  }
+
+  const bool master_effect_active =
+      this->master_light_state_->get_effect_name() != "None";
+  const bool should_sleep =
+      this->has_active_parent_owned_segments_() && !this->has_outro() &&
+      !master_effect_active;
+
+  if (should_sleep &&
+      (!this->master_segment_coord_dormant_ ||
+       this->master_light_state_->is_in_loop_state())) {
+    chimera_fx::LightStateProxy::clear_pending_write(this->master_light_state_);
+    this->master_light_state_->current_values =
+        this->master_light_state_->remote_values;
+    if (chimera_fx::LightStateProxy::has_active_transformer(
+            this->master_light_state_)) {
+      chimera_fx::LightStateProxy::stop_state_transformer(
+          this->master_light_state_);
+    }
+    this->master_light_state_->disable_loop();
+    this->master_segment_coord_dormant_ = true;
+  } else if (!should_sleep && this->master_segment_coord_dormant_) {
+    this->master_light_state_->enable_loop();
+    this->master_segment_coord_dormant_ = false;
+  }
+}
+
 int CFXLightOutput::find_segment_runtime_slot_(light::LightState *state) const {
   if (state == nullptr) {
     return -1;
@@ -831,6 +861,7 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
 bool CFXLightOutput::service_segment_render_coordinator_() {
   if (!this->has_segments() || this->has_outro()) {
     this->apply_segment_coordination_loop_state_(0);
+    this->apply_master_segment_coordination_loop_state_();
     this->apply_mono_idle_loop_state_(0);
     return false;
   }
@@ -843,6 +874,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   const uint8_t segment_idle_mask =
       this->collect_clean_mono_idle_segment_mask_();
   this->apply_mono_idle_loop_state_(segment_idle_mask);
+  this->apply_master_segment_coordination_loop_state_();
   if (this->segment_coord_owned_mask_ == 0) {
     return false;
   }

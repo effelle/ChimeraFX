@@ -394,6 +394,7 @@ protected:
   bool has_active_parent_owned_segments_() const;
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
+  void apply_master_segment_coordination_loop_state_();
   uint8_t collect_clean_mono_idle_segment_mask_() const;
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
@@ -572,6 +573,7 @@ protected:
   uint8_t segment_coord_dormant_mask_{0};
   uint8_t segment_mono_idle_dormant_mask_{0};
   bool master_mono_idle_dormant_{false};
+  bool master_segment_coord_dormant_{false};
   uint32_t master_mono_idle_sleep_ms_{0};
   uint32_t segment_mono_idle_sleep_ms_[MAX_CFX_SEGMENTS]{};
   uint32_t mono_idle_sleep_count_{0};
