@@ -994,8 +994,71 @@ void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
   this->seg_flush_first_ms_ = 0;
   this->seg_last_flush_mask_ = mask;
   this->seg_last_flush_count_ = count;
-  this->note_show_request();
-  this->write_state(nullptr);
+  this->flush_parent_owned_segment_epoch_direct_(mask, count);
+}
+
+void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
+                                                              uint8_t count) {
+  if (mask == 0 || count == 0) {
+    return;
+  }
+
+  if (!this->outro_cbs_.empty()) {
+    return;
+  }
+
+  // Keep OFF segments scrubbed without routing the whole epoch back through the
+  // generic LightState/effect bookkeeping path.
+  if (!this->segment_light_states_.empty()) {
+    esphome::App.feed_wdt();
+    for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
+      auto *seg_state = this->segment_light_states_[i];
+      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+        continue;
+      }
+      const auto &def = this->segment_defs_[i];
+      for (int p = def.start; p < def.stop; p++) {
+        if (p < this->size()) {
+          (*this)[p] = esphome::Color::BLACK;
+        }
+      }
+    }
+  }
+
+  this->status_clear_warning();
+
+  uint32_t now = micros();
+  if (*this->max_refresh_rate_ != 0 &&
+      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+    this->schedule_show();
+    return;
+  }
+
+  this->last_refresh_ = now;
+  this->mark_shown_();
+
+  if (this->transport_ == TRANSPORT_SPI) {
+    esphome::App.feed_wdt();
+    this->flush_spi_();
+  } else {
+    const uint32_t launch_us = micros();
+    g_last_rmt_launch_us = launch_us;
+    this->perf_diag_last_launch_slot_ =
+        static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
+    g_rmt_launch_seq++;
+    this->flush_rmt_();
+  }
+
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    if ((mask & static_cast<uint8_t>(1u << i)) == 0) {
+      continue;
+    }
+    const auto &slot = this->segment_runtime_slots_[i];
+    if (slot.effect != nullptr && slot.effect->has_dirty_mono_idle_output()) {
+      slot.effect->mark_mono_output_committed();
+    }
+  }
+  this->log_segment_coordinator_diag_();
 }
 
 // --- Core Control Loop & Initialization ---

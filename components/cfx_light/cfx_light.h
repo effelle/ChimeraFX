@@ -402,6 +402,7 @@ protected:
   void wake_mono_idle_light_state_(light::LightState *state);
   bool service_segment_render_coordinator_();
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
+  void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
