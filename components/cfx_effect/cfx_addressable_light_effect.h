@@ -127,19 +127,6 @@ public:
     uint8_t spi_diag_census_logs{0};
     uint8_t spi_diag_heartbeat_logs{0};
     uint32_t spi_diag_last_apply_ms{0};
-    uint32_t seg_steady_prof_last_log_ms{0};
-    uint32_t seg_steady_single_samples{0};
-    uint32_t seg_steady_batch_samples{0};
-    uint32_t seg_steady_prof_max_collect_us{0};
-    uint32_t seg_steady_prof_max_prep_us{0};
-    uint32_t seg_steady_prof_max_run_us{0};
-    uint32_t seg_steady_prof_max_flush_us{0};
-    uint32_t seg_steady_prof_max_total_us{0};
-    uint64_t seg_steady_prof_total_collect_us{0};
-    uint64_t seg_steady_prof_total_prep_us{0};
-    uint64_t seg_steady_prof_total_run_us{0};
-    uint64_t seg_steady_prof_total_flush_us{0};
-    uint64_t seg_steady_prof_total_total_us{0};
     // Cached once in start() — avoids a heap-allocated std::string every frame
     // in apply() (audit 1.1).
     std::string cached_runner_name{};

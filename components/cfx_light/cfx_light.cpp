@@ -214,19 +214,6 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
   this->perf_diag_total_seg_contrib_ = 0;
-  this->seg_coord_prof_samples_ = 0;
-  this->seg_coord_prof_max_mask_us_ = 0;
-  this->seg_coord_prof_max_loop_us_ = 0;
-  this->seg_coord_prof_max_prep_us_ = 0;
-  this->seg_coord_prof_max_service_us_ = 0;
-  this->seg_coord_prof_max_flush_us_ = 0;
-  this->seg_coord_prof_max_total_us_ = 0;
-  this->seg_coord_prof_total_mask_us_ = 0;
-  this->seg_coord_prof_total_loop_us_ = 0;
-  this->seg_coord_prof_total_prep_us_ = 0;
-  this->seg_coord_prof_total_service_us_ = 0;
-  this->seg_coord_prof_total_flush_us_ = 0;
-  this->seg_coord_prof_total_total_us_ = 0;
 }
 
 void CFXLightOutput::reset_rmt_encoder_diag_() {
@@ -277,36 +264,9 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       this->seg_clean_epoch_suppressed_ == 0 &&
       this->seg_coord_apply_skips_ == 0 &&
       this->seg_coord_write_skips_ == 0 &&
-      this->seg_coord_epochs_ == 0 &&
-      this->seg_coord_prof_samples_ == 0) {
+      this->seg_coord_epochs_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
-  }
-
-  if (this->seg_coord_prof_samples_ > 0) {
-    const char *light_name =
-        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                         : "<segments>";
-    const float sample_inv =
-        1.0f / static_cast<float>(this->seg_coord_prof_samples_);
-    ESP_LOGD(TAG,
-             "[%s] SegCoordProf | Epochs:%u | Seg:%u | "
-             "Mask: %.2f/%.2fms | Loop: %.2f/%.2fms | Prep: %.2f/%.2fms | "
-             "Run: %.2f/%.2fms | Flush: %.2f/%.2fms | Total: %.2f/%.2fms",
-             light_name, static_cast<unsigned>(this->seg_coord_epochs_),
-             static_cast<unsigned>(this->seg_coord_rendered_segments_),
-             (this->seg_coord_prof_total_mask_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_mask_us_ / 1000.0f,
-             (this->seg_coord_prof_total_loop_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_loop_us_ / 1000.0f,
-             (this->seg_coord_prof_total_prep_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_prep_us_ / 1000.0f,
-             (this->seg_coord_prof_total_service_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_service_us_ / 1000.0f,
-             (this->seg_coord_prof_total_flush_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_flush_us_ / 1000.0f,
-             (this->seg_coord_prof_total_total_us_ * sample_inv) / 1000.0f,
-             this->seg_coord_prof_max_total_us_ / 1000.0f);
   }
 
   this->seg_partial_frame_suppressed_ = 0;
@@ -316,19 +276,6 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   this->seg_coord_write_skips_ = 0;
   this->seg_coord_epochs_ = 0;
   this->seg_coord_rendered_segments_ = 0;
-  this->seg_coord_prof_samples_ = 0;
-  this->seg_coord_prof_max_mask_us_ = 0;
-  this->seg_coord_prof_max_loop_us_ = 0;
-  this->seg_coord_prof_max_prep_us_ = 0;
-  this->seg_coord_prof_max_service_us_ = 0;
-  this->seg_coord_prof_max_flush_us_ = 0;
-  this->seg_coord_prof_max_total_us_ = 0;
-  this->seg_coord_prof_total_mask_us_ = 0;
-  this->seg_coord_prof_total_loop_us_ = 0;
-  this->seg_coord_prof_total_prep_us_ = 0;
-  this->seg_coord_prof_total_service_us_ = 0;
-  this->seg_coord_prof_total_flush_us_ = 0;
-  this->seg_coord_prof_total_total_us_ = 0;
   this->seg_batch_diag_last_log_ms_ = now_ms;
 }
 
@@ -1017,17 +964,11 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   uint8_t mask = 0;
   uint8_t count = 0;
   uint64_t next_due = 0;
-  const uint32_t coord_start_us = micros();
-
-  const uint32_t mask_start_us = micros();
   this->refresh_segment_coordination_mask_();
-  const uint32_t mask_us = micros() - mask_start_us;
-  const uint32_t loop_start_us = micros();
   const uint8_t segment_idle_mask =
       this->collect_clean_mono_idle_segment_mask_();
   this->apply_mono_idle_loop_state_(segment_idle_mask);
   this->apply_master_segment_coordination_loop_state_();
-  const uint32_t loop_us = micros() - loop_start_us;
   if (this->segment_coord_owned_mask_ == 0) {
     this->segment_coord_schedule_dirty_ = false;
     this->segment_coord_next_due_ms_ = 0;
@@ -1039,7 +980,6 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
   this->segment_coord_runners_.clear();
 
-  const uint32_t prep_start_us = micros();
   for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
     auto &slot = this->segment_runtime_slots_[i];
     if (!slot.active || slot.state == nullptr || slot.effect == nullptr ||
@@ -1076,8 +1016,6 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     mask |= static_cast<uint8_t>(1u << i);
     count++;
   }
-  const uint32_t prep_us = micros() - prep_start_us;
-
   this->segment_coord_schedule_dirty_ = false;
   this->segment_coord_next_due_ms_ = next_due;
 
@@ -1086,31 +1024,11 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
 
   chimera_fx::CFXScheduler::get().set_force_sequential(this->is_spi_transport());
-  const uint32_t service_start_us = micros();
   const bool complete =
       chimera_fx::CFXScheduler::get().service_runners(this->segment_coord_runners_);
-  const uint32_t service_us = micros() - service_start_us;
   esphome::App.feed_wdt();
 
-  this->seg_coord_prof_samples_++;
-  this->seg_coord_prof_total_mask_us_ += mask_us;
-  this->seg_coord_prof_total_loop_us_ += loop_us;
-  this->seg_coord_prof_total_prep_us_ += prep_us;
-  this->seg_coord_prof_total_service_us_ += service_us;
-  if (mask_us > this->seg_coord_prof_max_mask_us_)
-    this->seg_coord_prof_max_mask_us_ = mask_us;
-  if (loop_us > this->seg_coord_prof_max_loop_us_)
-    this->seg_coord_prof_max_loop_us_ = loop_us;
-  if (prep_us > this->seg_coord_prof_max_prep_us_)
-    this->seg_coord_prof_max_prep_us_ = prep_us;
-  if (service_us > this->seg_coord_prof_max_service_us_)
-    this->seg_coord_prof_max_service_us_ = service_us;
-
   if (!complete) {
-    const uint32_t total_us = micros() - coord_start_us;
-    this->seg_coord_prof_total_total_us_ += total_us;
-    if (total_us > this->seg_coord_prof_max_total_us_)
-      this->seg_coord_prof_max_total_us_ = total_us;
     this->perf_diag_total_partial_flushes_++;
     this->seg_partial_frame_suppressed_++;
     this->seg_missed_epoch_count_ += count;
@@ -1128,16 +1046,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
   this->seg_coord_epochs_++;
   this->seg_coord_rendered_segments_ += count;
-  const uint32_t flush_start_us = micros();
   this->flush_segment_coordinator_epoch_(mask, count);
-  const uint32_t flush_us = micros() - flush_start_us;
-  const uint32_t total_us = micros() - coord_start_us;
-  this->seg_coord_prof_total_flush_us_ += flush_us;
-  this->seg_coord_prof_total_total_us_ += total_us;
-  if (flush_us > this->seg_coord_prof_max_flush_us_)
-    this->seg_coord_prof_max_flush_us_ = flush_us;
-  if (total_us > this->seg_coord_prof_max_total_us_)
-    this->seg_coord_prof_max_total_us_ = total_us;
   return true;
 }
 

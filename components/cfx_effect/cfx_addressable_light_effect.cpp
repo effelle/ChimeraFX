@@ -2160,99 +2160,11 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
       state_bri * state_ptr->current_values.get_state();
 }
 
-static void accum_seg_steady_prof_sample(
-    CFXAddressableLightEffect::CFXActivation *act, bool batched,
-    uint32_t collect_us, uint32_t prep_us, uint32_t run_us, uint32_t flush_us,
-    uint32_t total_us) {
-  if (act == nullptr) {
-    return;
-  }
-  if (batched) {
-    act->seg_steady_batch_samples++;
-  } else {
-    act->seg_steady_single_samples++;
-  }
-  act->seg_steady_prof_total_collect_us += collect_us;
-  act->seg_steady_prof_total_prep_us += prep_us;
-  act->seg_steady_prof_total_run_us += run_us;
-  act->seg_steady_prof_total_flush_us += flush_us;
-  act->seg_steady_prof_total_total_us += total_us;
-  if (collect_us > act->seg_steady_prof_max_collect_us)
-    act->seg_steady_prof_max_collect_us = collect_us;
-  if (prep_us > act->seg_steady_prof_max_prep_us)
-    act->seg_steady_prof_max_prep_us = prep_us;
-  if (run_us > act->seg_steady_prof_max_run_us)
-    act->seg_steady_prof_max_run_us = run_us;
-  if (flush_us > act->seg_steady_prof_max_flush_us)
-    act->seg_steady_prof_max_flush_us = flush_us;
-  if (total_us > act->seg_steady_prof_max_total_us)
-    act->seg_steady_prof_max_total_us = total_us;
-}
-
-static void maybe_log_seg_steady_prof(CFXAddressableLightEffect *effect) {
-  if (effect == nullptr) {
-    return;
-  }
-  auto *act = effect->get_act();
-  if (act == nullptr || act->runner == nullptr || !act->runner->getDebug()) {
-    return;
-  }
-  const uint32_t now_ms = esphome::millis();
-  if (act->seg_steady_prof_last_log_ms == 0) {
-    act->seg_steady_prof_last_log_ms = now_ms;
-    return;
-  }
-  const uint32_t sample_count =
-      act->seg_steady_single_samples + act->seg_steady_batch_samples;
-  if (sample_count == 0 ||
-      (now_ms - act->seg_steady_prof_last_log_ms) < 2000) {
-    return;
-  }
-
-  const char *mode = "mixed";
-  if (act->seg_steady_batch_samples == 0) {
-    mode = "single";
-  } else if (act->seg_steady_single_samples == 0) {
-    mode = "batch";
-  }
-  const float inv = 1.0f / static_cast<float>(sample_count);
-  ESP_LOGD("chimera_fx",
-           "[%s] SegSteadyProf(%s) | Samples:%u | Collect: %.2f/%.2fms | "
-           "Prep: %.2f/%.2fms | Run: %.2f/%.2fms | Flush: %.2f/%.2fms | "
-           "Total: %.2f/%.2fms",
-           act->cached_runner_name.c_str(), mode, sample_count,
-           (act->seg_steady_prof_total_collect_us * inv) / 1000.0f,
-           act->seg_steady_prof_max_collect_us / 1000.0f,
-           (act->seg_steady_prof_total_prep_us * inv) / 1000.0f,
-           act->seg_steady_prof_max_prep_us / 1000.0f,
-           (act->seg_steady_prof_total_run_us * inv) / 1000.0f,
-           act->seg_steady_prof_max_run_us / 1000.0f,
-           (act->seg_steady_prof_total_flush_us * inv) / 1000.0f,
-           act->seg_steady_prof_max_flush_us / 1000.0f,
-           (act->seg_steady_prof_total_total_us * inv) / 1000.0f,
-           act->seg_steady_prof_max_total_us / 1000.0f);
-
-  act->seg_steady_prof_last_log_ms = now_ms;
-  act->seg_steady_single_samples = 0;
-  act->seg_steady_batch_samples = 0;
-  act->seg_steady_prof_max_collect_us = 0;
-  act->seg_steady_prof_max_prep_us = 0;
-  act->seg_steady_prof_max_run_us = 0;
-  act->seg_steady_prof_max_flush_us = 0;
-  act->seg_steady_prof_max_total_us = 0;
-  act->seg_steady_prof_total_collect_us = 0;
-  act->seg_steady_prof_total_prep_us = 0;
-  act->seg_steady_prof_total_run_us = 0;
-  act->seg_steady_prof_total_flush_us = 0;
-  act->seg_steady_prof_total_total_us = 0;
-}
-
 bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     uint64_t now) {
 #ifndef USE_ESP32
   return false;
 #else
-  const uint32_t total_start_us = cfx_micros();
   if (!this->can_batch_steady_virtual_segment_()) {
     return false;
   }
@@ -2270,7 +2182,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   CFXAddressableLightEffect *effects[MAX_CFX_SEGMENTS]{};
   CFXRunner *runners[MAX_CFX_SEGMENTS]{};
   size_t count = 0;
-  const uint32_t collect_start_us = cfx_micros();
   for (auto *other_state : parent->get_segment_light_states()) {
     if (other_state == nullptr) {
       continue;
@@ -2291,13 +2202,11 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     runners[count] = other->act_->runner;
     count++;
   }
-  const uint32_t collect_us = cfx_micros() - collect_start_us;
 
   if (count < 2) {
     return false;
   }
 
-  const uint32_t prep_start_us = cfx_micros();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
@@ -2306,7 +2215,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     effect->last_run_ = now;
     effect->prepare_steady_virtual_segment_runner_(*seg);
   }
-  const uint32_t prep_us = cfx_micros() - prep_start_us;
 
   std::vector<CFXRunner *> dispatch_runners;
   dispatch_runners.reserve(count);
@@ -2314,12 +2222,9 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     dispatch_runners.push_back(runners[i]);
   }
   CFXScheduler::get().set_force_sequential(parent->is_spi_transport());
-  const uint32_t run_start_us = cfx_micros();
   CFXScheduler::get().service_runners(dispatch_runners);
-  const uint32_t run_us = cfx_micros() - run_start_us;
   esphome::App.feed_wdt();
 
-  const uint32_t flush_start_us = cfx_micros();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
@@ -2329,11 +2234,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     seg->note_show_request();
     parent->request_segment_flush(state);
   }
-  const uint32_t flush_us = cfx_micros() - flush_start_us;
-  const uint32_t total_us = cfx_micros() - total_start_us;
-  accum_seg_steady_prof_sample(this->act_, true, collect_us, prep_us, run_us,
-                               flush_us, total_us);
-  maybe_log_seg_steady_prof(this);
 
   return true;
 #endif
@@ -2519,22 +2419,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       return;
     }
 
-    const uint32_t total_start_us = cfx_micros();
     if (this->try_batch_steady_virtual_segments_(now)) {
       chimera_fx::instance = nullptr;
       return;
     }
 
-    const uint32_t prep_start_us = cfx_micros();
     this->prepare_steady_virtual_segment_runner_(it);
-    const uint32_t prep_us = cfx_micros() - prep_start_us;
-    const uint32_t run_start_us = cfx_micros();
     CFXScheduler::get().service_runner(act_->runner);
-    const uint32_t run_us = cfx_micros() - run_start_us;
     esphome::App.feed_wdt();
     act_->runner->diagnostics.flush_log();
 
-    const uint32_t flush_start_us = cfx_micros();
     auto *light_output = state_ptr->get_output();
     if (light_output != nullptr) {
       auto *seg_out =
@@ -2542,11 +2436,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       seg_out->note_show_request();
     }
     it.schedule_show();
-    const uint32_t flush_us = cfx_micros() - flush_start_us;
-    const uint32_t total_us = cfx_micros() - total_start_us;
-    accum_seg_steady_prof_sample(act_, false, 0, prep_us, run_us, flush_us,
-                                 total_us);
-    maybe_log_seg_steady_prof(this);
     chimera_fx::instance = nullptr;
     return;
   }
