@@ -803,7 +803,8 @@ async def to_code(config):
             CONF_OUTPUT_ID: seg[CONF_SEGMENT_OUTPUT_ID],
             CONF_EFFECTS: [],  # Skip internal effect registration
             CONF_DEFAULT_TRANSITION_LENGTH: config.get(
-                CONF_DEFAULT_TRANSITION_LENGTH, 0
+                CONF_DEFAULT_TRANSITION_LENGTH,
+                cv.positive_time_period_milliseconds("0ms"),
             ),
             "disabled_by_default": False,
             "internal": False,

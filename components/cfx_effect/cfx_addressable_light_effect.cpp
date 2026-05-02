@@ -1186,7 +1186,12 @@ void CFXAddressableLightEffect::start() {
     auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
     if (parent != nullptr && seg_state != nullptr) {
       parent->unregister_parent_owned_segment(seg_state, this);
-      if (this->can_parent_coordinate_segment()) {
+      // Skip eager coordinator enrollment on a fresh turn-on: apply() will
+      // enroll the effect after intro_active is set and eventually cleared.
+      // Enrolling here would cause apply() to return via the coordinator
+      // early-exit before intro_active is ever set, silently skipping the
+      // intro and rendering the effect as a solid light.
+      if (this->can_parent_coordinate_segment() && !is_fresh_turn_on) {
         parent->register_parent_owned_segment(seg_state, segment, this,
                                               act_->runner);
       }
@@ -2002,6 +2007,13 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
       this->act_->runner == nullptr) {
     return false;
   }
+  // Intro rendering happens exclusively in the full apply() path.
+  // If we let the coordinator own the segment during intro, apply() returns
+  // early and the intro animation never fires — the effect appears as a
+  // solid light. Release coordinator ownership until intro is done.
+  if (this->act_->intro_active) {
+    return false;
+  }
   auto *state = this->get_light_state();
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
@@ -2065,6 +2077,17 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
   if (segment == nullptr || parent == nullptr) {
     this->prepare_steady_virtual_segment_runner_(it);
     return;
+  }
+
+  // Defensive transformer suppression for architectural effects.
+  // The coordinator fast-path in apply() returns early before reaching the
+  // transformer suppressor (~line 2516). For effects that do not allow the
+  // default transition (architectural effects), purge any lingering ESPHome
+  // transformer so it cannot cause a 1-second fade spike on the segment.
+  if (!this->allow_default_transition_() &&
+      chimera_fx::LightStateProxy::has_active_transformer(state_ptr)) {
+    state_ptr->current_values = state_ptr->remote_values;
+    chimera_fx::LightStateProxy::stop_state_transformer(state_ptr);
   }
 
   this->act_->runner->target_light = parent;
