@@ -106,6 +106,8 @@ public:
     uint64_t hydraulics_last_ms{0};
 
     CFXControl *controller{nullptr};
+    bool runners_registered_with_controller{false};
+    uint64_t last_controller_lookup_ms{0};
     bool active_outro_mirror{false};
     bool active_force_white{false};
     bool active_outro_force_white{false};

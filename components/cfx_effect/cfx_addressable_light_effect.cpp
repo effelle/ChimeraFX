@@ -2098,6 +2098,18 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     return;
   }
 
+  if (act_->controller == nullptr) {
+    const uint64_t now = millis_64();
+    if (now - act_->last_controller_lookup_ms > 5000) {
+      act_->last_controller_lookup_ms = now;
+      act_->controller = CFXControl::find(this->get_light_state());
+    }
+  }
+  if (act_->controller != nullptr && !act_->runners_registered_with_controller) {
+    act_->controller->register_runner(act_->runner);
+    act_->runners_registered_with_controller = true;
+  }
+
   bool debug_active = CFXControl::global_debug_enabled_;
   if (act_->controller && act_->controller->get_debug()) {
     debug_active = act_->controller->get_debug()->state;
@@ -2123,7 +2135,6 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
   act_->runner->setColor(color);
-  this->run_controls_();
 
   const float current_gamma = state_ptr->get_gamma_correct();
   if (abs(act_->runner->_gamma - current_gamma) > 0.01f) {
@@ -3965,10 +3976,9 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
 void CFXAddressableLightEffect::run_controls_() {
   // 1. Find controller if not linked (with throttle to prevent log flooding)
   if (act_->controller == nullptr) {
-    static uint64_t last_ctrl_check = 0;
     uint64_t now = millis_64();
-    if (now - last_ctrl_check > 5000) {
-      last_ctrl_check = now;
+    if (now - act_->last_controller_lookup_ms > 5000) {
+      act_->last_controller_lookup_ms = now;
       act_->controller = CFXControl::find(this->get_light_state());
       ESP_LOGD("chimera_fx",
                "CFXAddressableLightEffect: Finding controller for light %p. "
@@ -3979,7 +3989,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
   // 2. Register ALL runners with the controller (segment runners or single
   // runner)
-  if (act_->controller) {
+  if (act_->controller && !act_->runners_registered_with_controller) {
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         act_->controller->register_runner(r);
@@ -3987,6 +3997,7 @@ void CFXAddressableLightEffect::run_controls_() {
     } else if (act_->runner) {
       act_->controller->register_runner(act_->runner);
     }
+    act_->runners_registered_with_controller = true;
   }
 
   CFXControl *c = act_->controller;
