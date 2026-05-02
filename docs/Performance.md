@@ -140,11 +140,10 @@ Your total memory cost is the sum of three distinct layers:
 | Transport / Hardware | Byte Price per LED | 1000 LED Impact |
 | :--- | :--- | :--- |
 | **SPI** (APA102, SK9822, WS2801) | **~9 Bytes** | ~9 KB |
-| **S3-RMT** (WS2812X on ESP32-S3) | **~9 Bytes** | ~9 KB |
-| **Legacy RMT** (WS2812X on Classic ESP32) | **~100 Bytes** | **~98 KB** |
+| **RMT** (WS2812X, All ESP32 variants) | **~9 Bytes** | ~9 KB |
 
-!!! warning "Classic ESP32 RMT Warning"
-    On a classic ESP32 (Non-S3), the RMT peripheral must expand every bit into a 4-byte hardware symbol. This makes legacy NRZ strips (WS2812B/SK6812) **10x more expensive** in RAM than SPI strips or S3-based setups. For strips over 400 LEDs, an **ESP32-S3** or an **SPI-based strip** is strongly recommended.
+!!! tip "ChimeraFX Hybrid DMA"
+    Unlike standard implementations that can consume massive amounts of RAM for RMT symbol expansion, ChimeraFX uses a custom Hybrid DMA to ESP-IDF RMT system. This architecture works efficiently on both ESP-IDF and Arduino platforms, keeping RAM usage minimal. A single classic ESP32 can safely drive up to 2400 LEDs (e.g., 4 strips of 600 LEDs) well within hardware limits.
 
 ### 3. How to calculate your Free Heap
 
@@ -155,14 +154,14 @@ You can estimate your available RAM after ChimeraFX starts using this formula:
 #### Example Scenarios:
 
 *   **Small setup (Classic ESP32)**: 60 LEDs (RMT), 1 Light.
-    *   Cost: 55KB (System) + (60 × 100B) ≈ 61 KB.
-    *   Result: **~100 KB Free Heap** (Ultra Stable).
+    *   Cost: 55KB (System) + (60 × 9B) ≈ 56 KB.
+    *   Result: **~104 KB Free Heap** (Ultra Stable).
 *   **Medium setup (Classic ESP32)**: 300 LEDs (RMT), 4 Segments.
-    *   Cost: 55KB + (4 × 3.6KB) + (300 × 100B) ≈ 100 KB.
-    *   Result: **~60 KB Free Heap** (Near Floor Guard).
-*   **Large setup (ESP32-S3)**: 1200 LEDs (RMT), 1 Light.
-    *   Cost: 55KB + (1200 × 9B) ≈ 66 KB.
-    *   Result: **~94 KB Free Heap** (Very Stable despite 1200 LEDs).
+    *   Cost: 55KB + (4 × 3.6KB) + (300 × 9B) ≈ 72 KB.
+    *   Result: **~88 KB Free Heap** (Very Stable).
+*   **Massive setup (Classic ESP32)**: 2400 LEDs (RMT), 4 Lights.
+    *   Cost: 55KB + (2400 × 9B) ≈ 77 KB.
+    *   Result: **~83 KB Free Heap** (Stable, despite 2400 LEDs).
 
 ### 4. RGB vs RGBW
 Adding a white channel (RGBW/WRGB) adds exactly **1 additional byte per LED** to the pixel buffer cost. It does not affect the RMT/SPI transport cost significantly.
