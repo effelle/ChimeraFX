@@ -611,7 +611,6 @@ async def to_code(config):
         if not segment_master_enabled:
             master_config["internal"] = True
             master_config["disabled_by_default"] = True
-            master_config["restore_mode"] = "ALWAYS_OFF"
         await light.register_light(var, master_config)
         light_state = await cg.get_variable(config[CONF_ID])
         if segment_master_enabled:
@@ -818,8 +817,9 @@ async def to_code(config):
             ),
             "disabled_by_default": False,
             "internal": False,
-            "restore_mode": config.get("restore_mode", "ALWAYS_OFF"),
         }
+        if "restore_mode" in config:
+            seg_light_config["restore_mode"] = config["restore_mode"]
         # Register the LightState (without effects)
         await light.register_light(vl, seg_light_config)
         light_state = await cg.get_variable(seg_id_obj)
