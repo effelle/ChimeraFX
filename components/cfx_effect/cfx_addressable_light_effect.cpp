@@ -1413,8 +1413,7 @@ void CFXAddressableLightEffect::start() {
         }
       } else if (act_->active_intro_mode == INTRO_MODE_FADE) {
         auto *current_state = this->get_light_state();
-        if (current_state != nullptr &&
-            current_state->get_default_transition_length() > 0) {
+        if (current_state != nullptr) {
           duration_ms = current_state->get_default_transition_length();
         }
       }
@@ -1675,8 +1674,7 @@ void CFXAddressableLightEffect::stop() {
         } else {
           // E. Lowest: Light Default Transition
           auto *current_state = this->get_light_state();
-          if (current_state != nullptr &&
-              current_state->get_default_transition_length() > 0) {
+          if (current_state != nullptr) {
             duration_ms = current_state->get_default_transition_length();
           }
         }

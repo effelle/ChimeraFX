@@ -60,6 +60,9 @@ public:
   /// Expose the effect_id for diagnostics and cfx_set routing.
   uint8_t get_effect_id() const { return effect_id_; }
 
+  /// Expose the underlying singleton effect so the coordinator can resolve it.
+  CFXAddressableLightEffect *get_singleton() const { return singleton_; }
+
 private:
   uint8_t effect_id_;
   CFXAddressableLightEffect *singleton_;

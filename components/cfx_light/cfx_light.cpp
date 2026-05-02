@@ -12,6 +12,7 @@
 #include "../cfx_effect/cfx_control.h"
 #include "../cfx_effect/cfx_scheduler.h"
 #include "../cfx_effect/cfx_utils.h"
+#include "../cfx_effect/cfx_effect_stub.h"
 
 #ifdef USE_WIFI
 #include <lwip/inet.h>
@@ -413,6 +414,14 @@ resolve_active_cfx_effect(light::LightState *state) {
   if (effect == nullptr) {
     return nullptr;
   }
+
+  // If the active effect is a Stub (virtual segment), return its underlying singleton
+#if defined(USE_CFX_LIGHT) && defined(USE_ESP32)
+  auto *cfx_stub = dynamic_cast<chimera_fx::CFXEffectStub *>(effect);
+  if (cfx_stub != nullptr) {
+    return cfx_stub->get_singleton();
+  }
+#endif
 
   for (auto *inst : chimera_fx::CFXAddressableLightEffect::all_effects) {
     if (inst == effect) {
