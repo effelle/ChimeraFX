@@ -200,6 +200,8 @@ public:
   void unregister_parent_owned_segment(
       light::LightState *state,
       chimera_fx::CFXAddressableLightEffect *effect = nullptr);
+  chimera_fx::CFXAddressableLightEffect *get_parent_owned_segment_effect(
+      light::LightState *state) const;
   void note_segment_coord_apply_skip();
   void note_segment_coord_write_skip();
   void mark_parent_owned_segment_dirty(light::LightState *state);
@@ -392,8 +394,6 @@ protected:
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
   bool has_active_parent_owned_segments_() const;
-  chimera_fx::CFXAddressableLightEffect *get_parent_owned_segment_effect(
-      light::LightState *state) const;
   void refresh_segment_coordination_mask_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();
