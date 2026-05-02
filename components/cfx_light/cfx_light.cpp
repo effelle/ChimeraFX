@@ -283,9 +283,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
     return;
   }
 
-  auto *diag_effect = resolve_perf_diag_effect(this);
-  if (perf_diag_enabled_for_effect(diag_effect) &&
-      this->seg_coord_prof_samples_ > 0) {
+  if (this->seg_coord_prof_samples_ > 0) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<segments>";
