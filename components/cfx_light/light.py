@@ -626,27 +626,22 @@ async def to_code(config):
     
     is_spi = chipset_name in SPI_CHIPSETS
     
+    # Re-enable ESP-IDF's SPI and RMT drivers unconditionally
+    # because cfx_light.h includes both <driver/spi_master.h> and <driver/rmt_tx.h>
+    try:
+        from esphome.components.esp32 import include_builtin_idf_component
+        include_builtin_idf_component("esp_driver_spi")
+        include_builtin_idf_component("esp_driver_rmt")
+    except ImportError:
+        pass
+
     if is_spi:
-        # Re-enable ESP-IDF's SPI driver
-        try:
-            from esphome.components.esp32 import include_builtin_idf_component
-            include_builtin_idf_component("esp_driver_spi")
-        except ImportError:
-            pass
-            
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
         cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
         cg.add(var.set_spi_host(SPI_HOSTS[config.get(CONF_SPI_HOST, "SPI2_HOST")]))
     else:
-        # Re-enable ESP-IDF's RMT driver
-        try:
-            from esphome.components.esp32 import include_builtin_idf_component
-            include_builtin_idf_component("esp_driver_rmt")
-        except ImportError:
-            pass
-            
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
 
