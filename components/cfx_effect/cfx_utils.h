@@ -591,8 +591,6 @@ struct FrameDiagnostics {
              "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
              fps, avg_frame_ms, jitter_pct, free_heap_kb);
-
-    last_log_time = now_ms;
   }
 
   void idle_sleep_log(const char *effect_name, const char *mode_name,
