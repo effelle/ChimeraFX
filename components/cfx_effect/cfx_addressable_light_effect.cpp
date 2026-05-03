@@ -2709,9 +2709,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                   : act_->cached_runner_name.c_str();
       bool did_log = false;
       if (!act_->segment_runners.empty()) {
-        for (auto *r : act_->segment_runners) {
+        for (size_t i = 0; i < act_->segment_runners.size(); i++) {
+          auto *r = act_->segment_runners[i];
+          const char *seg_name = idle_name;
+          if (i < act_->cached_segment_names.size() && !act_->cached_segment_names[i].empty()) {
+            seg_name = act_->cached_segment_names[i].c_str();
+          }
           r->diagnostics.idle_log(
-              idle_name, act_->idle_frame_count, act_->idle_period_start_ms,
+              seg_name, act_->idle_frame_count, act_->idle_period_start_ms,
               act_->idle_total_frame_us, act_->idle_jitter_count);
           if (r->diagnostics.last_log_time > act_->idle_period_start_ms)
             did_log = true;
