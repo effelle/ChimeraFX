@@ -983,10 +983,20 @@ void CFXAddressableLightEffect::start() {
 
   // Cache the light name once per start() so apply() never allocates a
   // std::string every frame (audit 1.1).
-  if (auto *ls = this->get_light_state())
+  if (auto *ls = this->get_light_state()) {
     act_->cached_runner_name = ls->get_name().str();
-  else
+    if (!this->is_virtual_segment_) {
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(ls->get_output());
+      if (cfx_out != nullptr && cfx_out->has_segments()) {
+        act_->cached_segment_names.clear();
+        for (auto *s : cfx_out->get_segment_light_states()) {
+          act_->cached_segment_names.push_back(s->get_name().str());
+        }
+      }
+    }
+  } else {
     act_->cached_runner_name.clear();
+  }
 
   auto *diag_out = resolve_diag_output(this);
   SPIDiagCensus diag_census = collect_spi_diag_census();
@@ -2958,13 +2968,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
         trans_dur = 0.5f; // v4.1 Smooth Transition
+      }
 
-        // CFX-045: Intro complete — enter idle suppression.
-        // mono_dirty=true schedules one final service() call so the solid
-        // color is committed to the DMA buffer before runners go silent.
-        // mono_last_color/speed sentinels are reset so the first real frame
-        // always commits regardless of previous state.
-        act_->mono_idle = true;
+      // CFX-045 / Segment Idle Fix: Evaluate if ALL runners are monochromatic
+      act_->mono_idle = this->evaluate_mono_idle_();
+      if (act_->mono_idle) {
         act_->mono_dirty = true;
         act_->mono_probe_requested = false;
         act_->mono_last_color = 0xFFFFFFFF;
@@ -8123,6 +8131,62 @@ void CFXAddressableLightEffect::execute_completion() {
     }
   }
 #endif
+}
+
+bool CFXAddressableLightEffect::evaluate_mono_idle_() {
+  if (act_ == nullptr) return false;
+  
+  if (act_->runner != nullptr) {
+    if (!this->get_monochromatic_preset_(act_->runner->getMode()).is_active) {
+      return false;
+    }
+  }
+  for (auto *r : act_->segment_runners) {
+    if (r != nullptr) {
+      if (!this->get_monochromatic_preset_(r->getMode()).is_active) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+void CFXAddressableLightEffect::log_mono_idle_sleep() {
+  if (act_ == nullptr || !act_->mono_idle ||
+      !this->mono_idle_logging_enabled()) {
+    return;
+  }
+  const char *light_name =
+      act_->cached_runner_name.empty() ? nullptr
+                                       : act_->cached_runner_name.c_str();
+  const uint32_t idle_sample_count =
+      (act_->idle_probe_valid && act_->idle_probe_total_us > 0) ? 1u
+                                                                : act_->idle_frame_count;
+  const uint64_t idle_sample_total_us =
+      (act_->idle_probe_valid && act_->idle_probe_total_us > 0)
+          ? static_cast<uint64_t>(act_->idle_probe_total_us)
+          : act_->idle_total_frame_us;
+
+  if (act_->runner != nullptr) {
+    act_->runner->diagnostics.idle_sleep_log(
+        light_name, act_->runner->getModeName(), act_->runner->getMode(),
+        idle_sample_count, act_->idle_period_start_ms,
+        idle_sample_total_us, act_->idle_jitter_count);
+  }
+
+  for (size_t i = 0; i < act_->segment_runners.size(); i++) {
+    auto *runner = act_->segment_runners[i];
+    if (runner != nullptr) {
+      const char *seg_name = light_name;
+      if (i < act_->cached_segment_names.size() && !act_->cached_segment_names[i].empty()) {
+        seg_name = act_->cached_segment_names[i].c_str();
+      }
+      runner->diagnostics.idle_sleep_log(
+          seg_name, runner->getModeName(), runner->getMode(),
+          idle_sample_count, act_->idle_period_start_ms,
+          idle_sample_total_us, act_->idle_jitter_count);
+    }
+  }
 }
 
 } // namespace chimera_fx
