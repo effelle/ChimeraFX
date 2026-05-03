@@ -130,6 +130,7 @@ public:
     // Cached once in start() — avoids a heap-allocated std::string every frame
     // in apply() (audit 1.1).
     std::string cached_runner_name{};
+    std::vector<std::string> cached_segment_names{};
     float last_triggered_percentage{-1.0f};
     int32_t last_triggered_pixel{-1};
     bool last_return_phase{false};
