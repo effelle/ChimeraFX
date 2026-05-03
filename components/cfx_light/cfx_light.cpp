@@ -2078,7 +2078,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGD(TAG,
+    ESP_LOGV(TAG,
              "SPI diag write_state[%u]: light=%s state_ptr=%p effect_active=%d "
              "outro=%u segs=%u in_flight=%d",
              static_cast<unsigned>(this->spi_diag_write_logs_), light_name,
@@ -2317,7 +2317,7 @@ void CFXLightOutput::flush_spi_() {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGD(TAG,
+    ESP_LOGV(TAG,
              "SPI diag flush[%u]: light=%s frame=%u timeout=%" PRIu32
              " in_flight=%d bri=%u",
              static_cast<unsigned>(this->spi_diag_flush_logs_), light_name,
@@ -2379,7 +2379,7 @@ void CFXLightOutput::flush_spi_() {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
-    ESP_LOGD(TAG,
+    ESP_LOGV(TAG,
              "SPI diag timing[%u]: light=%s build=%" PRIu32 "us tx=%" PRIu32
              "us total=%" PRIu32 "us frame=%u err=%d",
              static_cast<unsigned>(this->spi_diag_timing_logs_), light_name,
