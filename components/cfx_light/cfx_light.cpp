@@ -1647,7 +1647,6 @@ void CFXLightOutput::on_master_update() {
   }
   if (this->has_active_parent_owned_segments_()) {
     this->refresh_parent_owned_segment_slots_();
-    return;
   }
 
   if (this->is_syncing_)
@@ -1701,7 +1700,6 @@ void CFXLightOutput::on_segment_update() {
   }
   if (this->has_active_parent_owned_segments_()) {
     this->refresh_parent_owned_segment_slots_();
-    return;
   }
   if (this->master_light_state_ == nullptr) {
     for (auto *seg_state : this->segment_light_states_) {
