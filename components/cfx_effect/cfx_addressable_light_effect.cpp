@@ -1001,7 +1001,7 @@ void CFXAddressableLightEffect::start() {
   auto *diag_out = resolve_diag_output(this);
   SPIDiagCensus diag_census = collect_spi_diag_census();
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
-    ESP_LOGD(
+    ESP_LOGV(
         "cfx_seq",
         "SPI diag census[start]: effect=%s tag=%s act=%p totals(e=%u,se=%u) "
         "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
@@ -1015,7 +1015,7 @@ void CFXAddressableLightEffect::start() {
         static_cast<unsigned>(diag_census.runner_count));
   } else if (diag_census.active_spi_effects > 0 &&
              act_->spi_diag_census_logs < 2) {
-    ESP_LOGD("cfx_seq",
+    ESP_LOGV("cfx_seq",
              "SPI diag census[start-neighbor][%u]: effect=%s act=%p "
              "totals(e=%u,se=%u) "
              "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
@@ -2341,7 +2341,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       seq_ptr_storage = this->act_->active_sequence;
     }
 #endif
-    ESP_LOGD("chimera_fx",
+    ESP_LOGV("chimera_fx",
              "SPI diag apply[%u]: runner=%s tag=%s seq=%s seq_ptr=%p act=%p "
              "mono_idle=%d intro=%d outro=%d completion=%d",
              static_cast<unsigned>(this->act_->spi_diag_apply_logs),
@@ -2388,7 +2388,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (this->act_->spi_diag_heartbeat_logs < 8 &&
         (this->act_->spi_diag_heartbeat_logs == 0 || delta_ms > 25 ||
          this->act_->spi_diag_apply_logs == 6)) {
-      ESP_LOGD(
+      ESP_LOGV(
           "cfx_seq",
           "SPI diag heartbeat[%u]: effect=%s act=%p dt=%ums totals(e=%u,se=%u) "
           "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
@@ -2407,7 +2407,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   uint32_t budget_elapsed_ms = now_ms - frame_budget_window_start_ms;
   if (enforce_frame_budget && !act_->mono_idle && budget_elapsed_ms > 22) {
     if (spi_budget_skip_logs < 8) {
-      ESP_LOGD("cfx_seq",
+      ESP_LOGV("cfx_seq",
                "SPI diag budget-skip[%u]: effect=%s tag=%s elapsed=%ums "
                "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
                static_cast<unsigned>(spi_budget_skip_logs),
@@ -7816,7 +7816,7 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
     suppress_ha_reach =
         diag_census.active_spi_effects > 0 && diag_census.active_effects >= 2;
     if (suppress_ha_reach && spi_reach_suppress_logs < 12) {
-      ESP_LOGD("cfx_seq",
+      ESP_LOGV("cfx_seq",
                "SPI diag reach-suppress[%u]: effect=%s tag=%s active(e=%u,"
                "se=%u,spi=%u) bound=%u runners=%u",
                static_cast<unsigned>(spi_reach_suppress_logs),
@@ -8019,7 +8019,7 @@ void CFXAddressableLightEffect::set_active_sequence(
       this->act_->spi_diag_bind_logs < 10) {
     std::string seq_name_storage = (seq != nullptr) ? seq->get_name() : "-";
     std::string seq_id_storage = (seq != nullptr) ? seq->get_id() : "-";
-    ESP_LOGD(
+    ESP_LOGV(
         "cfx_seq",
         "SPI diag bind[%u]: effect=%s tag=%s seq=%s id=%s seq_ptr=%p "
         "act=%p runner=%p iter=%" PRIu32 " spd=%d int=%d pal=%d mir=%d auto=%d",
