@@ -1302,7 +1302,6 @@ void CFXLightOutput::setup() {
 
   // Transport-specific hardware init
   if (this->transport_ == TRANSPORT_SPI) {
-    this->auto_assign_spi_host_();
     this->setup_spi_();
   } else {
     this->setup_rmt_();
@@ -1480,6 +1479,10 @@ void CFXLightOutput::auto_assign_spi_host_() {
   if (this->transport_ != TRANSPORT_SPI) {
     return;
   }
+  if (this->spi_host_assigned_) {
+    return;
+  }
+  this->spi_host_assigned_ = true;
   int instance_num = ++g_spi_host_use_count;
   if (instance_num % 2 == 1) {
     this->spi_host_ = SPI_HOST_2;
@@ -2506,6 +2509,8 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 // --- Config Dump ---
 
 void CFXLightOutput::dump_config() {
+  this->auto_assign_spi_host_();
+
   const char *chipset_str;
   switch (this->chipset_) {
   case CHIPSET_WS2812X:
