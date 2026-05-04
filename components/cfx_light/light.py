@@ -662,19 +662,20 @@ async def to_code(config):
 
     if is_spi:
         import esphome.core as _core
-        # Find all ChimeraFX SPI strips in the global config to determine our host
+        # Find all SPI strips to compare our pin to others
         all_lights = _core.CORE.config.get("light", [])
-        cfx_spi_lights = [
-            l for l in all_lights 
+        spi_pins = sorted([
+            l[CONF_DATA_PIN][CONF_NUMBER] for l in all_lights 
             if l.get("platform") == "cfx_light" and l.get(CONF_CHIPSET) in SPI_CHIPSETS
-        ]
+            and CONF_DATA_PIN in l
+        ])
         
-        # Find our index in the list of SPI strips
+        # Our identity is our pin
+        my_pin = config[CONF_DATA_PIN][CONF_NUMBER]
+        
         try:
-            # Match by output_id for stability
-            _my_id = config[CONF_ID]
-            _idx = [l[CONF_ID] for l in cfx_spi_lights].index(_my_id)
-        except (ValueError, KeyError):
+            _idx = spi_pins.index(my_pin)
+        except ValueError:
             _idx = 0
             
         _host = "SPI2_HOST" if _idx == 0 else "SPI3_HOST"
