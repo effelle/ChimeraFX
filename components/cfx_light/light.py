@@ -509,60 +509,12 @@ def _validate_transport(config):
                 path=[CONF_CLOCK_PIN],
             )
         if config.get(CONF_RMT_SYMBOLS, 0) != 0:
-            raise cv.Invalid(f"'{CONF_RMT_SYMBOLS}' has no effect on SPI chipsets")
-
-        # ── Auto SPI host assignment ─────────────────────────────────────────
-        # Use CORE.data as the assignment registry so it is reset between
-        # compile runs but survives multiple validation passes within one run.
-        # Registry key: stringified output_id (unique per cfx_light instance).
-        # If the same config is re-validated, the same host is returned
-        # (idempotent) instead of incrementing a counter and hitting the limit.
-        import esphome.core as _core
-        _variant = "ESP32"  # safe default
-        try:
-            _variant = (
-                str(_core.CORE.config.get("esp32", {}).get("variant", "ESP32"))
-                .upper()
-                .replace("-", "")
-                .replace("_", "")
+            raise cv.Invalid(
+                f"'{CONF_RMT_SYMBOLS}' has no effect on SPI. "
+                f"Host assignment is now handled deterministically in to_code "
+                f"based on the light's position in the global config."
             )
-        except Exception:
-            pass
-
-        _single_bus = _variant in _SPI_SINGLE_HOST_VARIANTS
-
-        if _SPI_HOST_REGISTRY_KEY not in _core.CORE.data:
-            _core.CORE.data[_SPI_HOST_REGISTRY_KEY] = {}
-        _registry = _core.CORE.data[_SPI_HOST_REGISTRY_KEY]
-
-        # Use data_pin GPIO number as the stable identity for this light instance.
-        _oid = str(config[CONF_DATA_PIN][CONF_NUMBER])
-
-        if _oid in _registry:
-            # Re-validation pass: reuse the previously assigned host.
-            config[CONF_SPI_HOST] = _registry[_oid]
-            return config
-        else:
-            _idx = len(_registry)
-            if _idx == 0:
-                _host = "SPI2_HOST"
-            elif _idx == 1:
-                if _single_bus:
-                    raise cv.Invalid(
-                        f"Only one SPI LED strip is supported on {_variant} "
-                        f"(SPI3_HOST is not available). "
-                        f"Use a RMT-based chipset (WS2812X, SK6812) for additional strips."
-                    )
-                _host = "SPI3_HOST"
-            else:
-                raise cv.Invalid(
-                    f"ChimeraFX supports a maximum of 2 SPI LED strips per device. "
-                    f"APA102/SK9822 strips cannot share an SPI bus (no CS line). "
-                    f"Use RMT strips (WS2812X, SK6812) for additional outputs."
-                )
-            _registry[_oid] = _host
-            config[CONF_SPI_HOST] = _host
-            return config
+        return config
 
     else:
         # RMT path: ensure no SPI keys were accidentally provided.
@@ -710,9 +662,22 @@ async def to_code(config):
 
     if is_spi:
         import esphome.core as _core
-        _oid = str(config[CONF_DATA_PIN][CONF_NUMBER])
-        _registry = _core.CORE.data.get(_SPI_HOST_REGISTRY_KEY, {})
-        _host = _registry.get(_oid, config.get(CONF_SPI_HOST, "SPI2_HOST"))
+        # Find all ChimeraFX SPI strips in the global config to determine our host
+        all_lights = _core.CORE.config.get("light", [])
+        cfx_spi_lights = [
+            l for l in all_lights 
+            if l.get("platform") == "cfx_light" and l.get(CONF_CHIPSET) in SPI_CHIPSETS
+        ]
+        
+        # Find our index in the list of SPI strips
+        try:
+            # Match by output_id for stability
+            _my_id = config[CONF_ID]
+            _idx = [l[CONF_ID] for l in cfx_spi_lights].index(_my_id)
+        except (ValueError, KeyError):
+            _idx = 0
+            
+        _host = "SPI2_HOST" if _idx == 0 else "SPI3_HOST"
         
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
         cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
