@@ -43,8 +43,6 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
-static int g_spi_host_use_count = 0;
-
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
@@ -1475,26 +1473,6 @@ spi_host_device_t CFXLightOutput::resolve_spi_host_(CFXSPIHost host) {
   }
 }
 
-void CFXLightOutput::auto_assign_spi_host_() {
-  if (this->transport_ != TRANSPORT_SPI) {
-    return;
-  }
-  if (this->spi_host_ != SPI_HOST_2) {
-    ESP_LOGI(TAG, "SPI host already assigned (not default): %d", this->spi_host_);
-    return;
-  }
-  int instance_num = ++g_spi_host_use_count;
-  if (instance_num % 2 == 1) {
-    this->spi_host_ = SPI_HOST_2;
-    ESP_LOGI(TAG, "Auto-assigned SPI2_HOST to light instance %d (global count %d)", instance_num, g_spi_host_use_count);
-  } else {
-    this->spi_host_ = SPI_HOST_3;
-    ESP_LOGI(TAG, "Auto-assigned SPI3_HOST to light instance %d (global count %d)", instance_num, g_spi_host_use_count);
-  }
-  spi_host_device_t resolved = resolve_spi_host_(this->spi_host_);
-  ESP_LOGI(TAG, "  Resolved to ESP-IDF host: %d", resolved);
-}
-
 size_t CFXLightOutput::get_spi_end_frame_size_() const {
   if (this->chipset_ == CHIPSET_SK9822) {
     // SK9822: ceil(num_leds / 2) + 1 bytes of 0x00
@@ -2511,20 +2489,6 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 // --- Config Dump ---
 
 void CFXLightOutput::dump_config() {
-  ESP_LOGI(TAG, "DUMP: transport_=%d spi_host_=%d (default=%d)", 
-          (int)this->transport_, (int)this->spi_host_, (int)SPI_HOST_2);
-  
-  if (this->transport_ == TRANSPORT_SPI && this->spi_host_ == SPI_HOST_2) {
-    int instance_num = ++g_spi_host_use_count;
-    if (instance_num % 2 == 1) {
-      this->spi_host_ = SPI_HOST_2;
-      ESP_LOGI(TAG, "  Assigned SPI2_HOST to instance %d", instance_num);
-    } else {
-      this->spi_host_ = SPI_HOST_3;
-      ESP_LOGI(TAG, "  Assigned SPI3_HOST to instance %d", instance_num);
-    }
-  }
-
   const char *chipset_str;
   switch (this->chipset_) {
   case CHIPSET_WS2812X:
