@@ -2511,8 +2511,19 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 // --- Config Dump ---
 
 void CFXLightOutput::dump_config() {
-  ESP_LOGI(TAG, "Dumping config for CFXLight...");
-  this->auto_assign_spi_host_();
+  ESP_LOGI(TAG, "DUMP: transport_=%d spi_host_=%d (default=%d)", 
+          (int)this->transport_, (int)this->spi_host_, (int)SPI_HOST_2);
+  
+  if (this->transport_ == TRANSPORT_SPI && this->spi_host_ == SPI_HOST_2) {
+    int instance_num = ++g_spi_host_use_count;
+    if (instance_num % 2 == 1) {
+      this->spi_host_ = SPI_HOST_2;
+      ESP_LOGI(TAG, "  Assigned SPI2_HOST to instance %d", instance_num);
+    } else {
+      this->spi_host_ = SPI_HOST_3;
+      ESP_LOGI(TAG, "  Assigned SPI3_HOST to instance %d", instance_num);
+    }
+  }
 
   const char *chipset_str;
   switch (this->chipset_) {
