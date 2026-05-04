@@ -1514,13 +1514,20 @@ bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) 
     return true;
   }
 
+  const uint32_t wait_start_us = micros();
   spi_transaction_t *ret_trans = nullptr;
   esp_err_t err = spi_device_get_trans_result(
       this->spi_device_, &ret_trans, pdMS_TO_TICKS(timeout_ms));
+  const uint32_t wait_us = micros() - wait_start_us;
 
   if (err == ESP_OK) {
     this->spi_tx_in_flight_ = false;
     this->spi_wait_count_++;
+    // Capture actual wire-time for perf diag (time spent waiting = DMA transfer time).
+    if (wait_us > this->perf_diag_max_wait_us_) {
+      this->perf_diag_max_wait_us_ = wait_us;
+    }
+    this->perf_diag_total_wait_us_ += wait_us;
     if (ret_trans != &this->spi_trans_) {
       ESP_LOGW(TAG,
                "SPI TX completion mismatch during %s (expected=%p got=%p)",
@@ -1532,8 +1539,8 @@ bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) 
   if (err == ESP_ERR_TIMEOUT) {
     this->spi_wait_timeout_count_++;
     ESP_LOGW(TAG,
-             "SPI TX wait timeout during %s (%" PRIu32 " ms, waits=%" PRIu32
-             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
+             "SPI TX wait timeout during %s (% " PRIu32 " ms, waits=% " PRIu32
+             ", timeouts=% " PRIu32 ", queue_err=% " PRIu32 ")",
              context, timeout_ms, this->spi_wait_count_,
              this->spi_wait_timeout_count_, this->spi_queue_error_count_);
   } else {
@@ -1588,14 +1595,11 @@ void CFXLightOutput::setup_spi_() {
     return;
   }
 
-  chimera_fx::CFXScheduler::get().set_force_sequential(true);
+  chimera_fx::CFXScheduler::get().set_force_sequential(false);
 
   ESP_LOGI(TAG,
-           "SPI diag build marker: %s %s",
-           __DATE__, __TIME__);
-  ESP_LOGI(TAG,
-           "SPI diagnostic armed: frame=%u bytes, est_tx_timeout=%" PRIu32
-           " ms, blocking_tx=yes, scheduler_sequential=yes",
+           "SPI transport ready: frame=%u bytes, est_tx_timeout=% " PRIu32
+           " ms, mode=async_queue, dual_core=enabled",
            static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
 }
 
@@ -2360,51 +2364,41 @@ void CFXLightOutput::flush_spi_() {
   }
 
 
-  // Normal SPI transmit — safe because active effects < threshold
+  // Async fire-and-forget: queue_trans returns immediately (~5us).
+  // DMA drives the wire in hardware while the CPU is free for the next frame.
+  // The previous transaction was drained by wait_for_spi_tx_() at the top of
+  // this function, guaranteeing spi_frame_buf_ is safe to overwrite.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
   memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
   this->spi_trans_.length = this->get_spi_frame_size_() * 8;
   this->spi_trans_.tx_buffer = this->spi_frame_buf_;
-  esp_err_t err = spi_device_polling_transmit(this->spi_device_, &this->spi_trans_);
+  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, 0);
 
-  const uint32_t tx_end_us = micros();
+  const uint32_t tx_queue_us = micros();
   esphome::App.feed_wdt();
-
-  const uint32_t build_us = tx_start_us - flush_start_us;
-  const uint32_t tx_us = tx_end_us - tx_start_us;
-  const uint32_t total_us = tx_end_us - flush_start_us;
-  if (this->spi_diag_timing_logs_ < 12 || tx_us > 2000 || total_us > 4000) {
-    const char *light_name =
-        (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                         : "<spi>";
-    ESP_LOGV(TAG,
-             "SPI diag timing[%u]: light=%s build=%" PRIu32 "us tx=%" PRIu32
-             "us total=%" PRIu32 "us frame=%u err=%d",
-             static_cast<unsigned>(this->spi_diag_timing_logs_), light_name,
-             build_us, tx_us, total_us,
-             static_cast<unsigned>(this->get_spi_frame_size_()), err);
-    if (this->spi_diag_timing_logs_ < 255) {
-      this->spi_diag_timing_logs_++;
-    }
-  }
 
   if (err != ESP_OK) {
     this->spi_queue_error_count_++;
     ESP_LOGW(TAG,
-             "SPI TX blocking transmit failed (err=%d, frame=%u bytes, waits=%" PRIu32
+             "SPI TX queue failed (err=%d, frame=%u bytes, waits=%" PRIu32
              ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
              err, static_cast<unsigned>(this->get_spi_frame_size_()),
              this->spi_wait_count_, this->spi_wait_timeout_count_,
              this->spi_queue_error_count_);
     this->status_set_warning();
+    // spi_tx_in_flight_ stays false: next flush skips wait and retries.
   } else {
-    this->spi_tx_in_flight_ = false;
+    // Mark in-flight: wait_for_spi_tx_() at next flush start drains the result
+    // and records actual wire time via the DMA completion timestamp.
+    this->spi_tx_in_flight_ = true;
     this->spi_last_flush_ms_ = esphome::millis();
     this->status_clear_warning();
-    this->perf_diag_last_flush_total_us_ = total_us;
-    this->perf_diag_last_flush_tx_us_ = tx_us;
+    // Record queue-submit latency (not wire time — that is in wait_for_spi_tx_).
+    const uint32_t queue_us = tx_queue_us - tx_start_us;
+    this->perf_diag_last_flush_tx_us_ = queue_us;
+    this->perf_diag_last_flush_total_us_ = tx_queue_us - flush_start_us;
     this->perf_diag_last_flush_valid_ = true;
   }
 }
@@ -2539,18 +2533,22 @@ void CFXLightOutput::dump_config() {
   }
   
   if (this->transport_ == TRANSPORT_SPI) {
+    const int spi_host_num =
+        (resolve_spi_host_(this->spi_host_) == SPI2_HOST) ? 2 : 3;
     ESP_LOGCONFIG(TAG,
                   "CFXLight (SPI):\n"
                   "  Data Pin: GPIO%u\n"
                   "  Clock Pin: GPIO%u\n"
+                  "  SPI Host: SPI%d_HOST\n"
                   "  Speed: %" PRIu32 " Hz\n"
                   "  Frame Size: %u bytes\n"
                   "  TX Timeout: %" PRIu32 " ms\n"
-                  "  Blocking TX Diag: yes\n"
+                  "  TX Mode: async queue (GDMA-backed on S3/S2)\n"
                   "  Chipset: %s\n"
                   "  LEDs: %u\n"
                   "  RGB Order: %s",
                   this->spi_data_pin_, this->spi_clock_pin_,
+                  spi_host_num,
                   this->spi_speed_hz_,
                   static_cast<unsigned>(this->get_spi_frame_size_()),
                   this->get_spi_frame_timeout_ms_(), chipset_str,

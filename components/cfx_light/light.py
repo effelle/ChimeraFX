@@ -98,6 +98,15 @@ SPI_HOSTS = {
     "SPI3_HOST": cfx_light_ns.enum("CFXSPIHost").SPI_HOST_3,
 }
 
+# SPI variants that only have SPI2 (no SPI3_HOST available)
+_SPI_SINGLE_HOST_VARIANTS = {"ESP32C3", "ESP32C5", "ESP32C6", "ESP32H2", "ESP32C2"}
+
+# Auto SPI host assignment counter.
+# Tracks how many SPI cfx_light instances have been validated in this compile pass.
+# First SPI strip → SPI2_HOST, second → SPI3_HOST, third → compile error.
+# Using a list so it is mutable from inside nested validator functions.
+_spi_host_assignment_count = [0]
+
 # RGB byte order mapping
 RGB_ORDERS = {
     "RGB": RGBOrder.ORDER_RGB,
@@ -437,7 +446,11 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_DATA_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_SPI_SPEED): cv.frequency,
-            cv.Optional(CONF_SPI_HOST): cv.enum(SPI_HOSTS, upper=True),
+            # spi_host is intentionally NOT exposed in the user schema.
+            # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
+            # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
+            # CONF_SPI_HOST is written into config by _validate_transport and
+            # read back by to_code — it must remain defined as a key constant.
             # General config
             cv.Optional(CONF_RGB_ORDER): cv.enum(RGB_ORDERS, upper=True),
             cv.Optional(CONF_IS_RGBW): cv.boolean,
@@ -470,45 +483,90 @@ CONFIG_SCHEMA = cv.All(
 )
 
 def _validate_transport(config):
-    """Ensure transport-specific configuration maps to the selected chipset."""
+    """Ensure transport-specific configuration maps to the selected chipset.
+
+    For SPI chipsets (APA102, SK9822):
+    - Validates required pins are present.
+    - Auto-assigns SPI host: 1st strip → SPI2_HOST, 2nd → SPI3_HOST.
+    - Raises a clear compile-time error for a 3rd SPI strip or unsupported
+      host on single-bus variants (C3, H2, etc.).
+    """
     chipset = config[CONF_CHIPSET]
     is_spi = chipset in SPI_CHIPSETS
-    
+
     if is_spi:
         if CONF_PIN in config:
             raise cv.Invalid(f"'{CONF_PIN}' cannot be used with SPI chipset {chipset}")
         if CONF_DATA_PIN not in config:
-            raise cv.RequiredFieldInvalid(f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}", path=[CONF_DATA_PIN])
+            raise cv.RequiredFieldInvalid(
+                f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}",
+                path=[CONF_DATA_PIN],
+            )
         if CONF_CLOCK_PIN not in config:
-            raise cv.RequiredFieldInvalid(f"'{CONF_CLOCK_PIN}' is required for SPI chipset {chipset}", path=[CONF_CLOCK_PIN])
+            raise cv.RequiredFieldInvalid(
+                f"'{CONF_CLOCK_PIN}' is required for SPI chipset {chipset}",
+                path=[CONF_CLOCK_PIN],
+            )
         if config.get(CONF_RMT_SYMBOLS, 0) != 0:
             raise cv.Invalid(f"'{CONF_RMT_SYMBOLS}' has no effect on SPI chipsets")
-            
-        # Detect invalid SPI_HOST selection
-        host = config.get(CONF_SPI_HOST, "SPI2_HOST")
-        if host == "SPI3_HOST":
-            import esphome.core as _core
-            try:
-                variant = str(_core.CORE.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
-                if variant in ("ESP32C3", "ESP32C5", "ESP32C6", "ESP32H2"):
-                    raise cv.Invalid(f"SPI3_HOST is not available on {variant}. Use SPI2_HOST or let it default.")
-            except Exception:
-                pass # fallback to compile-time check in C++
+
+        # ── Auto SPI host assignment ─────────────────────────────────────────
+        # Detect the target variant for single-bus checking.
+        import esphome.core as _core
+        _variant = "ESP32"  # safe default
+        try:
+            _variant = (
+                str(_core.CORE.config.get("esp32", {}).get("variant", "ESP32"))
+                .upper()
+                .replace("-", "")
+                .replace("_", "")
+            )
+        except Exception:
+            pass
+
+        _single_bus = _variant in _SPI_SINGLE_HOST_VARIANTS
+        _idx = _spi_host_assignment_count[0]
+        _spi_host_assignment_count[0] += 1
+
+        if _idx == 0:
+            # First SPI strip: always SPI2_HOST.
+            config = dict(config)
+            config[CONF_SPI_HOST] = "SPI2_HOST"
+        elif _idx == 1:
+            # Second SPI strip: SPI3_HOST if available.
+            if _single_bus:
+                raise cv.Invalid(
+                    f"Only one SPI LED strip is supported on {_variant} "
+                    f"(SPI3_HOST is not available). "
+                    f"Use a RMT-based chipset (WS2812X, SK6812) for additional strips."
+                )
+            config = dict(config)
+            config[CONF_SPI_HOST] = "SPI3_HOST"
+        else:
+            raise cv.Invalid(
+                f"ChimeraFX supports a maximum of 2 SPI LED strips per device. "
+                f"APA102/SK9822 strips cannot share an SPI bus (no CS line). "
+                f"Use RMT strips (WS2812X, SK6812) for additional outputs."
+            )
+
     else:
-        # RMT
+        # RMT path: ensure no SPI keys were accidentally provided.
         if CONF_PIN not in config:
-            raise cv.RequiredFieldInvalid(f"'{CONF_PIN}' is required for RMT chipset {chipset}", path=[CONF_PIN])
-        
-        # Ensure no SPI configuration keys were provided
-        invalid_keys = []
-        for key in [CONF_DATA_PIN, CONF_CLOCK_PIN, CONF_SPI_SPEED, CONF_SPI_HOST]:
-            if key in config:
-                invalid_keys.append(key)
-        
+            raise cv.RequiredFieldInvalid(
+                f"'{CONF_PIN}' is required for RMT chipset {chipset}",
+                path=[CONF_PIN],
+            )
+        invalid_keys = [
+            key
+            for key in [CONF_DATA_PIN, CONF_CLOCK_PIN, CONF_SPI_SPEED]
+            if key in config
+        ]
         if invalid_keys:
             joined_keys = ", ".join(invalid_keys)
-            raise cv.Invalid(f"SPI options ({joined_keys}) cannot be used with RMT chipset {chipset}")
-            
+            raise cv.Invalid(
+                f"SPI options ({joined_keys}) cannot be used with RMT chipset {chipset}"
+            )
+
     return config
 
 CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, _validate_transport)
