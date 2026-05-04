@@ -1503,9 +1503,13 @@ uint32_t CFXLightOutput::get_spi_frame_timeout_ms_() const {
         (frame_bits * 1000ULL + this->spi_speed_hz_ - 1) / this->spi_speed_hz_);
   }
 
-  tx_ms += 10; // scheduler / RTOS margin for diagnostic runs
-  if (tx_ms < 20)
-    tx_ms = 20;
+  // Add FRAMETIME + 15 ms of headroom so the DMA completion ISR has time to
+  // fire even when delayed by concurrent RMT interrupt processing on Classic
+  // ESP32. The minimum of 40 ms is well below a 2-frame budget at 25 FPS,
+  // ensuring the timeout never fires during normal mixed-protocol operation.
+  tx_ms += FRAMETIME + 15;
+  if (tx_ms < 40)
+    tx_ms = 40;
   return tx_ms;
 }
 

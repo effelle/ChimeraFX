@@ -101,11 +101,11 @@ SPI_HOSTS = {
 # SPI variants that only have SPI2 (no SPI3_HOST available)
 _SPI_SINGLE_HOST_VARIANTS = {"ESP32C3", "ESP32C5", "ESP32C6", "ESP32H2", "ESP32C2"}
 
-# Auto SPI host assignment counter.
-# Tracks how many SPI cfx_light instances have been validated in this compile pass.
-# First SPI strip → SPI2_HOST, second → SPI3_HOST, third → compile error.
-# Using a list so it is mutable from inside nested validator functions.
-_spi_host_assignment_count = [0]
+# SPI host assignment registry key in CORE.data.
+# Using CORE.data (reset between compile runs) instead of a module-level
+# counter prevents spurious errors when ESPHome validates the same config
+# multiple times within a single compile pass.
+_SPI_HOST_REGISTRY_KEY = "cfx_spi_host_registry"
 
 # RGB byte order mapping
 RGB_ORDERS = {
@@ -511,7 +511,11 @@ def _validate_transport(config):
             raise cv.Invalid(f"'{CONF_RMT_SYMBOLS}' has no effect on SPI chipsets")
 
         # ── Auto SPI host assignment ─────────────────────────────────────────
-        # Detect the target variant for single-bus checking.
+        # Use CORE.data as the assignment registry so it is reset between
+        # compile runs but survives multiple validation passes within one run.
+        # Registry key: stringified output_id (unique per cfx_light instance).
+        # If the same config is re-validated, the same host is returned
+        # (idempotent) instead of incrementing a counter and hitting the limit.
         import esphome.core as _core
         _variant = "ESP32"  # safe default
         try:
@@ -525,29 +529,39 @@ def _validate_transport(config):
             pass
 
         _single_bus = _variant in _SPI_SINGLE_HOST_VARIANTS
-        _idx = _spi_host_assignment_count[0]
-        _spi_host_assignment_count[0] += 1
 
-        if _idx == 0:
-            # First SPI strip: always SPI2_HOST.
+        if _SPI_HOST_REGISTRY_KEY not in _core.CORE.data:
+            _core.CORE.data[_SPI_HOST_REGISTRY_KEY] = {}
+        _registry = _core.CORE.data[_SPI_HOST_REGISTRY_KEY]
+
+        # Use output_id as the stable identity for this light instance.
+        _oid = str(config.get(CONF_OUTPUT_ID, id(config)))
+
+        if _oid in _registry:
+            # Re-validation pass: reuse the previously assigned host.
             config = dict(config)
-            config[CONF_SPI_HOST] = "SPI2_HOST"
-        elif _idx == 1:
-            # Second SPI strip: SPI3_HOST if available.
-            if _single_bus:
-                raise cv.Invalid(
-                    f"Only one SPI LED strip is supported on {_variant} "
-                    f"(SPI3_HOST is not available). "
-                    f"Use a RMT-based chipset (WS2812X, SK6812) for additional strips."
-                )
-            config = dict(config)
-            config[CONF_SPI_HOST] = "SPI3_HOST"
+            config[CONF_SPI_HOST] = _registry[_oid]
         else:
-            raise cv.Invalid(
-                f"ChimeraFX supports a maximum of 2 SPI LED strips per device. "
-                f"APA102/SK9822 strips cannot share an SPI bus (no CS line). "
-                f"Use RMT strips (WS2812X, SK6812) for additional outputs."
-            )
+            _idx = len(_registry)
+            if _idx == 0:
+                _host = "SPI2_HOST"
+            elif _idx == 1:
+                if _single_bus:
+                    raise cv.Invalid(
+                        f"Only one SPI LED strip is supported on {_variant} "
+                        f"(SPI3_HOST is not available). "
+                        f"Use a RMT-based chipset (WS2812X, SK6812) for additional strips."
+                    )
+                _host = "SPI3_HOST"
+            else:
+                raise cv.Invalid(
+                    f"ChimeraFX supports a maximum of 2 SPI LED strips per device. "
+                    f"APA102/SK9822 strips cannot share an SPI bus (no CS line). "
+                    f"Use RMT strips (WS2812X, SK6812) for additional outputs."
+                )
+            _registry[_oid] = _host
+            config = dict(config)
+            config[CONF_SPI_HOST] = _host
 
     else:
         # RMT path: ensure no SPI keys were accidentally provided.
