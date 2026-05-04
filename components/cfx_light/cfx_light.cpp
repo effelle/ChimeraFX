@@ -43,6 +43,8 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
+static int g_spi_host_use_count = 0;
+
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
@@ -1300,6 +1302,7 @@ void CFXLightOutput::setup() {
 
   // Transport-specific hardware init
   if (this->transport_ == TRANSPORT_SPI) {
+    this->auto_assign_spi_host_();
     this->setup_spi_();
   } else {
     this->setup_rmt_();
@@ -1470,6 +1473,20 @@ spi_host_device_t CFXLightOutput::resolve_spi_host_(CFXSPIHost host) {
   case SPI_HOST_2:
   default:
     return SPI2_HOST;
+  }
+}
+
+void CFXLightOutput::auto_assign_spi_host_() {
+  if (this->transport_ != TRANSPORT_SPI) {
+    return;
+  }
+  int instance_num = ++g_spi_host_use_count;
+  if (instance_num % 2 == 1) {
+    this->spi_host_ = SPI_HOST_2;
+    ESP_LOGD(TAG, "Auto-assigned SPI2_HOST to light instance %d", instance_num);
+  } else {
+    this->spi_host_ = SPI_HOST_3;
+    ESP_LOGD(TAG, "Auto-assigned SPI3_HOST to light instance %d", instance_num);
   }
 }
 

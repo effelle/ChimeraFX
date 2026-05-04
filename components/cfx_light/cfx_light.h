@@ -422,6 +422,7 @@ protected:
   size_t get_spi_end_frame_size_() const;
   uint8_t get_spi_end_frame_byte_() const;
   static spi_host_device_t resolve_spi_host_(CFXSPIHost host);
+  void auto_assign_spi_host_();
 
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
