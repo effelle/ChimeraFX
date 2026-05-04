@@ -1514,45 +1514,11 @@ uint32_t CFXLightOutput::get_spi_frame_timeout_ms_() const {
 }
 
 bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) {
-  if (!this->spi_tx_in_flight_ || this->spi_device_ == nullptr) {
-    return true;
-  }
-
-  const uint32_t wait_start_us = micros();
-  spi_transaction_t *ret_trans = nullptr;
-  esp_err_t err = spi_device_get_trans_result(
-      this->spi_device_, &ret_trans, pdMS_TO_TICKS(timeout_ms));
-  const uint32_t wait_us = micros() - wait_start_us;
-
-  if (err == ESP_OK) {
-    this->spi_tx_in_flight_ = false;
-    this->spi_wait_count_++;
-    // Capture actual wire-time for perf diag (time spent waiting = DMA transfer time).
-    if (wait_us > this->perf_diag_max_wait_us_) {
-      this->perf_diag_max_wait_us_ = wait_us;
-    }
-    this->perf_diag_total_wait_us_ += wait_us;
-    if (ret_trans != &this->spi_trans_) {
-      ESP_LOGW(TAG,
-               "SPI TX completion mismatch during %s (expected=%p got=%p)",
-               context, &this->spi_trans_, ret_trans);
-    }
-    return true;
-  }
-
-  if (err == ESP_ERR_TIMEOUT) {
-    this->spi_wait_timeout_count_++;
-    ESP_LOGW(TAG,
-             "SPI TX wait timeout during %s (% " PRIu32 " ms, waits=% " PRIu32
-             ", timeouts=% " PRIu32 ", queue_err=% " PRIu32 ")",
-             context, timeout_ms, this->spi_wait_count_,
-             this->spi_wait_timeout_count_, this->spi_queue_error_count_);
-  } else {
-    ESP_LOGW(TAG, "SPI TX wait failed during %s (err=%d)", context, err);
-  }
-
-  this->status_set_warning();
-  return false;
+  // Async queue_trans is not used because ESP32 hardware fails to generate
+  // DMA completion interrupts when spics_io_num = -1. We use polling_transmit
+  // instead, so there is never an in-flight transaction to wait for here.
+  this->spi_tx_in_flight_ = false;
+  return true;
 }
 
 void CFXLightOutput::setup_spi_() {
@@ -1603,7 +1569,7 @@ void CFXLightOutput::setup_spi_() {
 
   ESP_LOGI(TAG,
            "SPI transport ready: frame=%u bytes, est_tx_timeout=% " PRIu32
-           " ms, mode=async_queue, dual_core=enabled",
+           " ms, mode=polling, dual_core=enabled",
            static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
 }
 
@@ -2319,22 +2285,18 @@ void CFXLightOutput::flush_spi_() {
              (unsigned)esp_get_free_heap_size());
   }
 
-  const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
   if (this->spi_diag_flush_logs_ < 6) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
                                          : "<spi>";
     ESP_LOGV(TAG,
-             "SPI diag flush[%u]: light=%s frame=%u timeout=%" PRIu32
-             " in_flight=%d bri=%u",
+             "SPI diag flush[%u]: light=%s frame=%u "
+             "in_flight=%d bri=%u",
              static_cast<unsigned>(this->spi_diag_flush_logs_), light_name,
-             static_cast<unsigned>(this->get_spi_frame_size_()), timeout_ms,
+             static_cast<unsigned>(this->get_spi_frame_size_()),
              this->spi_tx_in_flight_, static_cast<unsigned>(this->tracked_brightness_));
     this->spi_diag_flush_logs_++;
-  }
-  if (!this->wait_for_spi_tx_(timeout_ms, "flush")) {
-    return;
   }
 
 
@@ -2368,42 +2330,43 @@ void CFXLightOutput::flush_spi_() {
   }
 
 
-  // Async fire-and-forget: queue_trans returns immediately (~5us).
-  // DMA drives the wire in hardware while the CPU is free for the next frame.
-  // The previous transaction was drained by wait_for_spi_tx_() at the top of
-  // this function, guaranteeing spi_frame_buf_ is safe to overwrite.
+  // Synchronous DMA polling.
+  // We use polling_transmit because queue_trans (interrupt-driven) fails to
+  // fire the DMA completion interrupt on ESP32 when spics_io_num = -1.
+  // This blocks the CPU for ~2ms (at 10MHz for 600 LEDs), which is perfectly
+  // acceptable within a 16ms frame budget, especially now that dual-core
+  // scheduling is active and effects are calculated in parallel on Core 0.
   const uint32_t tx_start_us = micros();
   esphome::App.feed_wdt();
 
   memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
   this->spi_trans_.length = this->get_spi_frame_size_() * 8;
   this->spi_trans_.tx_buffer = this->spi_frame_buf_;
-  esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, 0);
+  esp_err_t err = spi_device_polling_transmit(this->spi_device_, &this->spi_trans_);
 
-  const uint32_t tx_queue_us = micros();
+  const uint32_t tx_end_us = micros();
   esphome::App.feed_wdt();
 
   if (err != ESP_OK) {
     this->spi_queue_error_count_++;
-    ESP_LOGW(TAG,
-             "SPI TX queue failed (err=%d, frame=%u bytes, waits=%" PRIu32
-             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
-             err, static_cast<unsigned>(this->get_spi_frame_size_()),
-             this->spi_wait_count_, this->spi_wait_timeout_count_,
-             this->spi_queue_error_count_);
+    ESP_LOGE(TAG,
+             "SPI TX polling failed (err=%d, frame=%u bytes)",
+             err, static_cast<unsigned>(this->get_spi_frame_size_()));
     this->status_set_warning();
-    // spi_tx_in_flight_ stays false: next flush skips wait and retries.
   } else {
-    // Mark in-flight: wait_for_spi_tx_() at next flush start drains the result
-    // and records actual wire time via the DMA completion timestamp.
-    this->spi_tx_in_flight_ = true;
+    this->spi_tx_in_flight_ = false;
     this->spi_last_flush_ms_ = esphome::millis();
     this->status_clear_warning();
-    // Record queue-submit latency (not wire time — that is in wait_for_spi_tx_).
-    const uint32_t queue_us = tx_queue_us - tx_start_us;
-    this->perf_diag_last_flush_tx_us_ = queue_us;
-    this->perf_diag_last_flush_total_us_ = tx_queue_us - flush_start_us;
+    // Record wire time
+    const uint32_t wire_us = tx_end_us - tx_start_us;
+    this->perf_diag_last_flush_tx_us_ = wire_us;
+    this->perf_diag_last_flush_total_us_ = tx_end_us - flush_start_us;
     this->perf_diag_last_flush_valid_ = true;
+    
+    if (wire_us > this->perf_diag_max_tx_us_) {
+        this->perf_diag_max_tx_us_ = wire_us;
+    }
+    this->perf_diag_total_tx_us_ += wire_us;
   }
 }
 
@@ -2546,8 +2509,7 @@ void CFXLightOutput::dump_config() {
                   "  SPI Host: SPI%d_HOST\n"
                   "  Speed: %" PRIu32 " Hz\n"
                   "  Frame Size: %u bytes\n"
-                  "  TX Timeout: %" PRIu32 " ms\n"
-                  "  TX Mode: async queue (GDMA-backed on S3/S2)\n"
+                  "  TX Mode: polling (interrupt-less DMA)\n"
                   "  Chipset: %s\n"
                   "  LEDs: %u\n"
                   "  RGB Order: %s",
