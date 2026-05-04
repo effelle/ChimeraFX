@@ -54,13 +54,21 @@ public:
   // out and the caller should suppress presentation of the partial frame.
   // Dual-core: splits list, Core 0 handles second half in parallel.
   // Single-core / 1 runner: sequential loop, no FreeRTOS overhead.
-  bool service_runners(std::vector<CFXRunner *> &runners);
+  //
+  // force_sequential (per-call): when true this batch runs sequentially on
+  // Core 1 regardless of the global flag. Use for transports that are not
+  // thread-safe across cores (e.g. SPI). Does NOT affect other concurrent
+  // callers — each call site makes its own decision.
+  bool service_runners(std::vector<CFXRunner *> &runners,
+                       bool force_sequential = false);
 
   // Convenience wrapper for the single-runner (no-segment) code path.
   void service_runner(CFXRunner *r);
 
-  // Diagnostic override used when mixed-transport runs need the safest
-  // possible scheduler behavior.
+  // Global diagnostic override: forces ALL service_runners() calls to run
+  // sequentially, regardless of the per-call force_sequential parameter.
+  // Intended for debug/diagnostic use only — prefer the per-call parameter
+  // for transport-specific sequencing (e.g. SPI coordinator batches).
   void set_force_sequential(bool enabled) {
     if (force_sequential_ == enabled)
       return;

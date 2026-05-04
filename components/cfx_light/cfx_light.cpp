@@ -1032,9 +1032,12 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     return false;
   }
 
-  chimera_fx::CFXScheduler::get().set_force_sequential(this->is_spi_transport());
+  // P1: pass the transport constraint directly to the scheduler batch — no
+  // global state mutation. SPI batches run sequentially on Core 1 (SPI driver
+  // is not safe across cores); RMT batches keep the dual-core split.
   const bool complete =
-      chimera_fx::CFXScheduler::get().service_runners(this->segment_coord_runners_);
+      chimera_fx::CFXScheduler::get().service_runners(
+          this->segment_coord_runners_, this->is_spi_transport());
   esphome::App.feed_wdt();
 
   if (!complete) {

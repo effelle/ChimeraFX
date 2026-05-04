@@ -95,12 +95,18 @@ void CFXScheduler::core0_task_fn(void *arg) {
 
 // ── Dispatch ─────────────────────────────────────────────────────────────────
 
-bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners) {
+bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
+                                    bool force_sequential) {
   const size_t total = runners.size();
   if (total == 0) return true;
 
-  if (force_sequential_) {
-    if (!sequential_diag_logged_) {
+  // Global override (diagnostic) takes precedence. Per-call flag (e.g. SPI
+  // coordinator batch) runs the same sequential path without the warning —
+  // it is expected, deliberate behavior for that transport.
+  const bool run_sequential = force_sequential_ || force_sequential;
+
+  if (run_sequential) {
+    if (force_sequential_ && !sequential_diag_logged_) {
       ESP_LOGW(TAG,
                "Sequential diagnostic mode enabled — dual-core dispatch bypassed");
       sequential_diag_logged_ = true;
