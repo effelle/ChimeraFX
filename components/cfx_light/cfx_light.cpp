@@ -2263,6 +2263,10 @@ void CFXLightOutput::flush_rmt_() {
 // --- SPI Transport Flush ---
 
 void CFXLightOutput::flush_spi_() {
+  if (this->spi_device_ == nullptr || this->spi_frame_buf_ == nullptr) {
+    return; // ESPHome might call write_state() during setup before SPI is initialized
+  }
+
   // CFX-057: One-shot crash telemetry — logs reset reason on first flush call.
   // Must be here (not setup) because API isn't connected during setup.
   static bool telemetry_logged = false;
