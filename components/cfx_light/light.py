@@ -535,11 +535,10 @@ def _validate_transport(config):
         _registry = _core.CORE.data[_SPI_HOST_REGISTRY_KEY]
 
         # Use output_id as the stable identity for this light instance.
-        _oid = str(config.get(CONF_OUTPUT_ID, id(config)))
+        _oid = str(config[CONF_OUTPUT_ID])
 
         if _oid in _registry:
             # Re-validation pass: reuse the previously assigned host.
-            config = dict(config)
             config[CONF_SPI_HOST] = _registry[_oid]
         else:
             _idx = len(_registry)
@@ -560,7 +559,6 @@ def _validate_transport(config):
                     f"Use RMT strips (WS2812X, SK6812) for additional outputs."
                 )
             _registry[_oid] = _host
-            config = dict(config)
             config[CONF_SPI_HOST] = _host
 
     else:
