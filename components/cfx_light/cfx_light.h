@@ -476,7 +476,6 @@ protected:
   uint8_t spi_clock_pin_{0};
   uint32_t spi_speed_hz_{10000000};  // 10 MHz default
   CFXSPIHost spi_host_{SPI_HOST_2};
-  bool spi_host_assigned_{false};
   spi_device_handle_t spi_device_{nullptr};
   uint8_t *spi_frame_buf_{nullptr};
   spi_transaction_t spi_trans_{};

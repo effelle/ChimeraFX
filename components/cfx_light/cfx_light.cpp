@@ -1479,18 +1479,20 @@ void CFXLightOutput::auto_assign_spi_host_() {
   if (this->transport_ != TRANSPORT_SPI) {
     return;
   }
-  if (this->spi_host_assigned_) {
+  if (this->spi_host_ != SPI_HOST_2) {
+    ESP_LOGI(TAG, "SPI host already assigned (not default): %d", this->spi_host_);
     return;
   }
-  this->spi_host_assigned_ = true;
   int instance_num = ++g_spi_host_use_count;
   if (instance_num % 2 == 1) {
     this->spi_host_ = SPI_HOST_2;
-    ESP_LOGD(TAG, "Auto-assigned SPI2_HOST to light instance %d", instance_num);
+    ESP_LOGI(TAG, "Auto-assigned SPI2_HOST to light instance %d (global count %d)", instance_num, g_spi_host_use_count);
   } else {
     this->spi_host_ = SPI_HOST_3;
-    ESP_LOGD(TAG, "Auto-assigned SPI3_HOST to light instance %d", instance_num);
+    ESP_LOGI(TAG, "Auto-assigned SPI3_HOST to light instance %d (global count %d)", instance_num, g_spi_host_use_count);
   }
+  spi_host_device_t resolved = resolve_spi_host_(this->spi_host_);
+  ESP_LOGI(TAG, "  Resolved to ESP-IDF host: %d", resolved);
 }
 
 size_t CFXLightOutput::get_spi_end_frame_size_() const {
@@ -2509,6 +2511,7 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 // --- Config Dump ---
 
 void CFXLightOutput::dump_config() {
+  ESP_LOGI(TAG, "Dumping config for CFXLight...");
   this->auto_assign_spi_host_();
 
   const char *chipset_str;
