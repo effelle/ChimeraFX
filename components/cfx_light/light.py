@@ -446,6 +446,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_DATA_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_SPI_SPEED): cv.frequency,
+            cv.Optional(CONF_SPI_HOST): cv.string,
             # spi_host is intentionally NOT exposed in the user schema.
             # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
             # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
