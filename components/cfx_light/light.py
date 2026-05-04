@@ -661,32 +661,11 @@ async def to_code(config):
         pass
 
     if is_spi:
-        import esphome.core as _core
-        # Find all SPI strips by looking for ChimeraFX chipsets (more reliable than platform name)
-        all_lights = _core.CORE.config.get("light", [])
-        spi_pins = sorted([
-            l[CONF_DATA_PIN][CONF_NUMBER] for l in all_lights 
-            if str(l.get(CONF_CHIPSET)) in CHIPSETS and CONF_DATA_PIN in l
-        ])
-        
-        # DEBUG: Add a comment to the C++ file so we can verify detection count
-        cg.add(cg.RawExpression(f"// ChimeraFX SPI Debug: Found {len(spi_pins)} SPI strips, Pins: {spi_pins}"))
-        
-        # Our identity is our pin
-        my_pin = config[CONF_DATA_PIN][CONF_NUMBER]
-        
-        try:
-            _idx = spi_pins.index(my_pin)
-        except ValueError:
-            _idx = 0
-            
-        _host = "SPI2_HOST" if _idx == 0 else "SPI3_HOST"
-        
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
         cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
-        cg.add(var.set_spi_host(SPI_HOSTS[_host]))
+        # Note: spi_host is now auto-assigned in C++ setup() using a global counter
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
