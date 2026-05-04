@@ -2278,7 +2278,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   for (size_t i = 0; i < count; i++) {
     dispatch_runners.push_back(runners[i]);
   }
-  CFXScheduler::get().set_force_sequential(parent->is_spi_transport());
   CFXScheduler::get().service_runners(dispatch_runners);
   esphome::App.feed_wdt();
 
@@ -2727,11 +2726,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!skip_service) {
     const uint32_t dispatch_start_us = apply_perf_enabled ? cfx_micros() : 0;
-    bool force_spi_sequential = false;
-    if (diag_out != nullptr && diag_out->is_spi_transport()) {
-        force_spi_sequential = true;
-    }
-    CFXScheduler::get().set_force_sequential(force_spi_sequential);
 
     if (!act_->segment_runners.empty()) {
       // ── Set per-runner brightness BEFORE dispatch ────────────────────────

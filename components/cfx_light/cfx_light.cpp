@@ -1599,7 +1599,6 @@ void CFXLightOutput::setup_spi_() {
     return;
   }
 
-  chimera_fx::CFXScheduler::get().set_force_sequential(false);
 
   ESP_LOGI(TAG,
            "SPI transport ready: frame=%u bytes, est_tx_timeout=% " PRIu32
