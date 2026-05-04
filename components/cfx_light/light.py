@@ -662,13 +662,15 @@ async def to_code(config):
 
     if is_spi:
         import esphome.core as _core
-        # Find all SPI strips to compare our pin to others
+        # Find all SPI strips by looking for ChimeraFX chipsets (more reliable than platform name)
         all_lights = _core.CORE.config.get("light", [])
         spi_pins = sorted([
             l[CONF_DATA_PIN][CONF_NUMBER] for l in all_lights 
-            if l.get("platform") == "cfx_light" and l.get(CONF_CHIPSET) in SPI_CHIPSETS
-            and CONF_DATA_PIN in l
+            if str(l.get(CONF_CHIPSET)) in CHIPSETS and CONF_DATA_PIN in l
         ])
+        
+        # DEBUG: Add a comment to the C++ file so we can verify detection count
+        cg.add(cg.RawExpression(f"// ChimeraFX SPI Debug: Found {len(spi_pins)} SPI strips, Pins: {spi_pins}"))
         
         # Our identity is our pin
         my_pin = config[CONF_DATA_PIN][CONF_NUMBER]
