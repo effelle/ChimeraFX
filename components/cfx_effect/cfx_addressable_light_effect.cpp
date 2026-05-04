@@ -2358,27 +2358,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // This prevents "strip bleeding" in multi-strip configurations.
   chimera_fx::InstanceGuard apply_guard(act_->runner);
 
-  // CFX-048: Global Frame Budget Guard
-  // Protect the 30ms API heartbeat window. If other strips or components have
-  // already consumed the loop budget, defer this frame to keep the connection
-  // alive. IDLE segments (mono_idle) bypass this guard — they do no computation
-  // and skipping them causes pixel starvation on the DMA buffer (segments go
-  // dark).
-  static uint32_t frame_budget_window_start_ms = 0;
-  static uint8_t spi_budget_skip_logs = 0;
-  uint32_t now_ms = esphome::millis();
-  if (frame_budget_window_start_ms == 0 ||
-      (now_ms - frame_budget_window_start_ms) >= 30) {
-    frame_budget_window_start_ms = now_ms;
-  }
   SPIDiagCensus diag_census{};
-  bool enforce_frame_budget = false;
-  bool force_spi_sequential_dispatch = false;
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
     diag_census = collect_spi_diag_census();
-    enforce_frame_budget = diag_census.active_spi_effects > 0;
-    force_spi_sequential_dispatch = enforce_frame_budget;
-
+    
+    uint32_t now_ms = esphome::millis();
     uint32_t delta_ms = 0;
     if (this->act_->spi_diag_last_apply_ms != 0) {
       delta_ms = now_ms - this->act_->spi_diag_last_apply_ms;
@@ -2403,24 +2387,6 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           static_cast<unsigned>(diag_census.runner_count));
       this->act_->spi_diag_heartbeat_logs++;
     }
-  }
-  uint32_t budget_elapsed_ms = now_ms - frame_budget_window_start_ms;
-  if (enforce_frame_budget && !act_->mono_idle && budget_elapsed_ms > 22) {
-    if (spi_budget_skip_logs < 8) {
-      ESP_LOGV("cfx_seq",
-               "SPI diag budget-skip[%u]: effect=%s tag=%s elapsed=%ums "
-               "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
-               static_cast<unsigned>(spi_budget_skip_logs),
-               this->act_->cached_runner_name.c_str(),
-               this->act_->strip_tag.c_str(), budget_elapsed_ms,
-               static_cast<unsigned>(diag_census.active_effects),
-               static_cast<unsigned>(diag_census.active_segment_effects),
-               static_cast<unsigned>(diag_census.active_spi_effects),
-               static_cast<unsigned>(diag_census.bound_sequences),
-               static_cast<unsigned>(diag_census.runner_count));
-      spi_budget_skip_logs++;
-    }
-    return;
   }
 
   const uint64_t now = millis_64();
@@ -2761,7 +2727,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   if (!skip_service) {
     const uint32_t dispatch_start_us = apply_perf_enabled ? cfx_micros() : 0;
-    CFXScheduler::get().set_force_sequential(force_spi_sequential_dispatch);
+    bool force_spi_sequential = false;
+    if (diag_out != nullptr && diag_out->is_spi_transport()) {
+        force_spi_sequential = true;
+    }
+    CFXScheduler::get().set_force_sequential(force_spi_sequential);
 
     if (!act_->segment_runners.empty()) {
       // ── Set per-runner brightness BEFORE dispatch ────────────────────────
