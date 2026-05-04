@@ -46,9 +46,6 @@ static const char *const TAG = "cfx_light";
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
-static uint32_t g_last_rmt_launch_us = 0;
-static uint32_t g_rmt_launch_seq = 0;
-static uint32_t g_last_spi_launch_us = 0;
 
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -2156,28 +2153,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
 #endif // CFX_VISUALIZER_ENABLED
 
   if (this->transport_ == TRANSPORT_SPI) {
-    // Cross-protocol stagger: Wait for RMT DMA to finish (assume max ~20ms for 600 LEDs)
-    // before launching SPI DMA to prevent internal memory bus saturation.
-    if (g_last_rmt_launch_us != 0) {
-      const uint32_t since_rmt = micros() - g_last_rmt_launch_us;
-      if (since_rmt < 20000) {
-        this->schedule_show();
-        return;
-      }
-    }
     esphome::App.feed_wdt();
     this->flush_spi_();
   } else {
-    // Cross-protocol stagger: Wait for SPI DMA to finish (~3ms) before launching RMT.
-    if (g_last_spi_launch_us != 0) {
-      const uint32_t since_spi = micros() - g_last_spi_launch_us;
-      if (since_spi < 3000) {
-        this->schedule_show();
-        return;
-      }
-    }
-    const uint32_t launch_us = micros();
-    g_last_rmt_launch_us = launch_us;
     this->perf_diag_last_launch_slot_ = static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
     g_rmt_launch_seq++;
     this->flush_rmt_();
