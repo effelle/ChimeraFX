@@ -535,8 +535,8 @@ def _validate_transport(config):
             _core.CORE.data[_SPI_HOST_REGISTRY_KEY] = {}
         _registry = _core.CORE.data[_SPI_HOST_REGISTRY_KEY]
 
-        # Use output_id as the stable identity for this light instance.
-        _oid = str(config[CONF_OUTPUT_ID])
+        # Use data_pin GPIO number as the stable identity for this light instance.
+        _oid = str(config[CONF_DATA_PIN][CONF_NUMBER])
 
         if _oid in _registry:
             # Re-validation pass: reuse the previously assigned host.
