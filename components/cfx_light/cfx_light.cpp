@@ -46,6 +46,8 @@ static const char *const TAG = "cfx_light";
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
+static uint32_t g_last_rmt_launch_us = 0;
+static uint32_t g_rmt_launch_seq = 0;
 
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -2156,6 +2158,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
     esphome::App.feed_wdt();
     this->flush_spi_();
   } else {
+    const uint32_t launch_us = micros();
+    g_last_rmt_launch_us = launch_us;
     this->perf_diag_last_launch_slot_ = static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
     g_rmt_launch_seq++;
     this->flush_rmt_();
@@ -2374,8 +2378,6 @@ void CFXLightOutput::flush_spi_() {
   memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
   this->spi_trans_.length = this->get_spi_frame_size_() * 8;
   this->spi_trans_.tx_buffer = this->spi_frame_buf_;
-  
-  g_last_spi_launch_us = micros();
   esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, 0);
 
   const uint32_t tx_queue_us = micros();
