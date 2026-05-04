@@ -14,6 +14,7 @@ import esphome.codegen as cg
 from esphome.components import light, event
 import esphome.config_validation as cv
 import esphome.core as core
+from esphome.core import CORE
 from esphome.final_validate import full_config
 from esphome import pins
 from esphome.const import (
@@ -668,13 +669,13 @@ async def to_code(config):
         cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
         
         # Get or create SPI host registry counter in CORE.data
-        registry = core.CORE.data.get(_SPI_HOST_REGISTRY_KEY, [])
+        registry = CORE.data.get(_SPI_HOST_REGISTRY_KEY, [])
         # Assign host: 1st SPI strip gets SPI2, 2nd gets SPI3
         host_idx = len(registry)
         spi_host = cfx_light_ns.enum("CFXSPIHost").SPI_HOST_2 if host_idx % 2 == 0 else cfx_light_ns.enum("CFXSPIHost").SPI_HOST_3
         cg.add(var.set_spi_host(spi_host))
         registry.append(spi_host)
-        core.CORE.data[_SPI_HOST_REGISTRY_KEY] = registry
+        CORE.data[_SPI_HOST_REGISTRY_KEY] = registry
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
