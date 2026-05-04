@@ -541,6 +541,7 @@ def _validate_transport(config):
         if _oid in _registry:
             # Re-validation pass: reuse the previously assigned host.
             config[CONF_SPI_HOST] = _registry[_oid]
+            return config
         else:
             _idx = len(_registry)
             if _idx == 0:
@@ -561,6 +562,7 @@ def _validate_transport(config):
                 )
             _registry[_oid] = _host
             config[CONF_SPI_HOST] = _host
+            return config
 
     else:
         # RMT path: ensure no SPI keys were accidentally provided.
@@ -707,11 +709,16 @@ async def to_code(config):
         pass
 
     if is_spi:
+        import esphome.core as _core
+        _oid = str(config[CONF_DATA_PIN][CONF_NUMBER])
+        _registry = _core.CORE.data.get(_SPI_HOST_REGISTRY_KEY, {})
+        _host = _registry.get(_oid, config.get(CONF_SPI_HOST, "SPI2_HOST"))
+        
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
         cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
         cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
-        cg.add(var.set_spi_host(SPI_HOSTS[config.get(CONF_SPI_HOST, "SPI2_HOST")]))
+        cg.add(var.set_spi_host(SPI_HOSTS[_host]))
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
