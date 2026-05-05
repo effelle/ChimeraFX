@@ -388,6 +388,12 @@ protected:
   void setup_spi_();
   void flush_rmt_();
   void flush_spi_();
+  // P2: static member so it can access protected fields from ISR context.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+  static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
+                                         const rmt_tx_done_event_data_t *,
+                                         void *ctx);
+#endif
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);

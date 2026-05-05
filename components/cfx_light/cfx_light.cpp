@@ -1282,23 +1282,16 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 }
 #endif
 
-// --- P2: RMT async-done callback ---
-//
-// Fires from the RMT ISR (IRAM context) when rmt_transmit() completes.
-// Clears rmt_tx_in_flight_ so flush_rmt_() can use a non-blocking poll
-// instead of rmt_tx_wait_all_done().
-//
-// Guard: rmt_tx_register_event_callbacks() / rmt_tx_done_event_data_t require
-// the ESP-IDF 5.x new RMT driver, which is already a prerequisite for the
-// rmt_tx.h API used everywhere else in this file.
+// --- P2: RMT async-done callback (static member — accesses protected field) ---
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t /* channel */,
-                                       const rmt_tx_done_event_data_t * /* edata */,
-                                       void *ctx) {
-  // Cast is safe: ctx is always 'this' from setup_rmt_().
+bool IRAM_ATTR CFXLightOutput::rmt_tx_done_cb_(
+    rmt_channel_handle_t /* channel */,
+    const rmt_tx_done_event_data_t * /* edata */,
+    void *ctx) {
+  // Static member: has full access to protected fields.
+  // ctx is always 'this', registered in setup_rmt_().
   static_cast<CFXLightOutput *>(ctx)->rmt_tx_in_flight_ = false;
-  // Return false: no high-priority task needs waking after LED TX completes.
-  return false;
+  return false; // no high-priority task wakeup needed
 }
 #endif
 
@@ -2352,6 +2345,7 @@ void CFXLightOutput::flush_rmt_() {
   // Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
   rmt_transmit_config_t config;
   memset(&config, 0, sizeof(config));
+  esp_err_t error = ESP_OK;
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
