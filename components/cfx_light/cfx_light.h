@@ -409,6 +409,11 @@ protected:
   bool service_segment_render_coordinator_();
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
+  // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
+  // Returns true when the frame is done (fast path: flag already clear).
+  // Spins in 100µs slices up to timeout_ms, then falls back to the
+  // blocking API as a last-resort recovery.
+  bool wait_for_rmt_tx_(uint32_t timeout_ms, const char *context);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
@@ -443,6 +448,10 @@ protected:
   // RMT hardware handles
   rmt_channel_handle_t channel_{nullptr};
   rmt_encoder_handle_t encoder_{nullptr};
+  // P2: cleared by IRAM on_trans_done callback; read by main loop.
+  // volatile guarantees the compiler re-reads the flag on every poll iteration
+  // rather than caching it in a register across the spin loop.
+  volatile bool rmt_tx_in_flight_{false};
 
   // LED timing parameters
   LedParams params_;
@@ -481,6 +490,8 @@ protected:
   bool spi_tx_in_flight_{false};
   uint32_t spi_wait_count_{0};
   uint32_t spi_wait_timeout_count_{0};
+  uint32_t rmt_wait_count_{0};
+  uint32_t rmt_wait_timeout_count_{0};
   uint32_t spi_queue_error_count_{0};
   uint8_t spi_diag_write_logs_{0};
   uint8_t spi_diag_flush_logs_{0};

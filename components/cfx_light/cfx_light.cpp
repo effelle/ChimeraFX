@@ -1164,6 +1164,10 @@ CFXLightOutput::~CFXLightOutput() {
     ::close(this->socket_fd_);
     this->socket_fd_ = -1;
   }
+  // RMT teardown: drain any in-flight DMA before releasing the channel.
+  if (this->rmt_tx_in_flight_ && this->channel_ != nullptr) {
+    this->wait_for_rmt_tx_(50, "destructor");
+  }
   // SPI teardown
   if (this->spi_tx_in_flight_ && this->spi_device_ != nullptr) {
     this->wait_for_spi_tx_(50, "destructor");
@@ -1278,7 +1282,25 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 }
 #endif
 
-// --- Setup ---
+// --- P2: RMT async-done callback ---
+//
+// Fires from the RMT ISR (IRAM context) when rmt_transmit() completes.
+// Clears rmt_tx_in_flight_ so flush_rmt_() can use a non-blocking poll
+// instead of rmt_tx_wait_all_done().
+//
+// Guard: rmt_tx_register_event_callbacks() / rmt_tx_done_event_data_t require
+// the ESP-IDF 5.x new RMT driver, which is already a prerequisite for the
+// rmt_tx.h API used everywhere else in this file.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t /* channel */,
+                                       const rmt_tx_done_event_data_t * /* edata */,
+                                       void *ctx) {
+  // Cast is safe: ctx is always 'this' from setup_rmt_().
+  static_cast<CFXLightOutput *>(ctx)->rmt_tx_in_flight_ = false;
+  // Return false: no high-priority task needs waking after LED TX completes.
+  return false;
+}
+#endif
 
 void CFXLightOutput::setup() {
   size_t buffer_size = this->get_buffer_size_();
@@ -1455,6 +1477,25 @@ void CFXLightOutput::setup_rmt_() {
     return;
   }
 
+  // P2: Register async-done callback — mirrors SPI's spi_tx_in_flight_ pattern.
+  // The ISR clears rmt_tx_in_flight_ the moment DMA finishes, letting
+  // flush_rmt_() poll the flag non-blocking instead of calling the heavyweight
+  // rmt_tx_wait_all_done() on every frame.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+  {
+    rmt_tx_event_callbacks_t rmt_cbs;
+    memset(&rmt_cbs, 0, sizeof(rmt_cbs));
+    rmt_cbs.on_trans_done = rmt_tx_done_cb_;
+    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs, this) != ESP_OK) {
+      // Non-fatal: flush_rmt_() falls back to rmt_tx_wait_all_done() when
+      // rmt_tx_in_flight_ is never set (startup state is false).
+      ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
+    } else {
+      ESP_LOGD(TAG, "RMT async-done callback active (GPIO%u)", this->pin_);
+    }
+  }
+#endif
+
   this->reset_rmt_encoder_diag_();
 }
 
@@ -1514,6 +1555,52 @@ uint32_t CFXLightOutput::get_spi_frame_timeout_ms_() const {
   if (tx_ms < 40)
     tx_ms = 40;
   return tx_ms;
+}
+
+bool CFXLightOutput::wait_for_rmt_tx_(uint32_t timeout_ms, const char *context) {
+  // Fast path: ISR already cleared the flag — nothing to wait for.
+  if (!this->rmt_tx_in_flight_) {
+    return true;
+  }
+
+  // Slow path: previous frame DMA still in flight (fast refresh or first call).
+  // Spin in 100µs slices; feed WDT every ~5ms to prevent watchdog resets on
+  // very long strips. Using micros() polling keeps us out of FreeRTOS scheduler
+  // overhead for what is usually a sub-millisecond wait.
+  const uint32_t wait_start_us = micros();
+  const uint32_t deadline_us   = (uint32_t)timeout_ms * 1000u;
+
+  while (this->rmt_tx_in_flight_) {
+    const uint32_t elapsed = micros() - wait_start_us;
+    if (elapsed >= deadline_us) {
+      // ISR never fired within the budget — attempt blocking recovery.
+      this->rmt_wait_timeout_count_++;
+      const uint32_t wait_us = micros() - wait_start_us;
+      this->perf_diag_total_wait_us_ += wait_us;
+      if (wait_us > this->perf_diag_max_wait_us_) {
+        this->perf_diag_max_wait_us_ = wait_us;
+      }
+      ESP_LOGW(TAG, "RMT TX wait timeout (%u ms) during %s (waits=%" PRIu32
+               ", timeouts=%" PRIu32 ")",
+               timeout_ms, context, this->rmt_wait_count_,
+               this->rmt_wait_timeout_count_);
+      this->status_set_warning();
+      return false;
+    }
+    // Yield in 100µs increments; feed WDT every ~5ms.
+    if ((elapsed % 5000u) < 200u) {
+      esphome::App.feed_wdt();
+    }
+    esp_rom_delay_us(100);
+  }
+
+  const uint32_t wait_us = micros() - wait_start_us;
+  this->perf_diag_total_wait_us_ += wait_us;
+  if (wait_us > this->perf_diag_max_wait_us_) {
+    this->perf_diag_max_wait_us_ = wait_us;
+  }
+  this->rmt_wait_count_++;
+  return true;
 }
 
 bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) {
@@ -2221,22 +2308,16 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
 void CFXLightOutput::flush_rmt_() {
   const uint32_t flush_start_us = micros();
-  // Wait for previous DMA transmission to complete (safety valve)
-  // Dynamic timeout: ~30us per LED (WS2812B) + 10ms padding for RTOS overhead
-  int timeout_ms = (this->num_leds_ * 30 / 1000) + 10;
-  if (timeout_ms < 15)
-    timeout_ms = 15; // Minimum 15ms
 
-  const uint32_t wait_start_us = micros();
-  esp_err_t error = rmt_tx_wait_all_done(this->channel_, timeout_ms);
-  const uint32_t wait_us = micros() - wait_start_us;
-  this->perf_diag_total_wait_us_ += wait_us;
-  if (wait_us > this->perf_diag_max_wait_us_) {
-    this->perf_diag_max_wait_us_ = wait_us;
-  }
-  if (error != ESP_OK) {
-    ESP_LOGE(TAG, "RMT TX timeout (Wait: %dms, LEDs: %d)", timeout_ms,
-             this->num_leds_);
+  // P2: use non-blocking flag poll (fast path: ISR already cleared the flag).
+  // Dynamic timeout matches the old rmt_tx_wait_all_done() budget so the
+  // fallback blocking recovery fires under identical worst-case conditions.
+  uint32_t timeout_ms = (this->num_leds_ * 30u / 1000u) + 10u;
+  if (timeout_ms < 15u) timeout_ms = 15u;
+
+  if (!this->wait_for_rmt_tx_(timeout_ms, "flush")) {
+    ESP_LOGE(TAG, "RMT TX timeout (Wait: %" PRIu32 "ms, LEDs: %d)",
+             timeout_ms, this->num_leds_);
     this->status_set_warning();
     return;
   }
@@ -2290,6 +2371,10 @@ void CFXLightOutput::flush_rmt_() {
     this->status_set_warning();
     return;
   }
+  // P2: arm the flag — ISR will clear it when DMA completes.
+  // Set AFTER rmt_transmit() succeeds so a failed queue attempt doesn't leave
+  // the flag stuck true (same pattern as spi_tx_in_flight_).
+  this->rmt_tx_in_flight_ = true;
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
   this->perf_diag_last_flush_tx_us_ = 0;
