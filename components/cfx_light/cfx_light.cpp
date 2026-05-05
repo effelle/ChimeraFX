@@ -9,6 +9,7 @@
 
 #include "cfx_light.h"
 #include "cfx_virtual_segment_light.h"
+#include "cfx_transmit_barrier.h"
 #include "../cfx_effect/cfx_control.h"
 #include "../cfx_effect/cfx_scheduler.h"
 #include "../cfx_effect/cfx_utils.h"
@@ -1284,20 +1285,19 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 
 // --- P2: RMT async-done callback ---
 //
-// Fires from the RMT ISR when DMA completes. Clears the in-flight flag so
-// flush_rmt_() can poll non-blocking instead of calling rmt_tx_wait_all_done().
+// Fires from the RMT ISR when DMA completes. Clears the per-instance
+// rmt_tx_in_flight_ flag so flush_rmt_() can poll non-blocking.
 //
-// Design: free static function writing through a file-scoped pointer registered
-// in setup_rmt_(). This avoids any need for class membership or friend
-// declarations — the pointer is set inside a member function (which has full
-// access to protected fields), so no visibility rules are broken.
+// Design: ctx carries &this->rmt_tx_in_flight_ registered in setup_rmt_().
+// This is a member function (has protected access) that stores the address;
+// the free ISR function writes through the void* — no class membership needed,
+// no global pointer, works correctly for any number of RMT instances.
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-static volatile bool *s_rmt_tx_in_flight_ptr = nullptr;
 static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
                                        const rmt_tx_done_event_data_t *,
-                                       void *) {
-  if (s_rmt_tx_in_flight_ptr != nullptr)
-    *s_rmt_tx_in_flight_ptr = false;
+                                       void *ctx) {
+  // ctx = &rmt_tx_in_flight_ set in setup_rmt_() — one per instance.
+  *static_cast<volatile bool *>(ctx) = false;
   return false;
 }
 #endif
@@ -1342,6 +1342,11 @@ void CFXLightOutput::setup() {
     this->flush_rmt_();
   }
   this->reset_perf_diag_();
+
+  // P3: Register with the transmit barrier so coordinated DMA launch is active
+  // once all outputs have completed setup(). Single-output setups are no-ops
+  // (barrier passes through immediately when count_ < 2).
+  CFXTransmitBarrier::get().register_output(this);
   if (!this->segment_light_states_.empty()) {
     this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
   }
@@ -1486,10 +1491,10 @@ void CFXLightOutput::setup_rmt_() {
     rmt_tx_event_callbacks_t rmt_cbs;
     memset(&rmt_cbs, 0, sizeof(rmt_cbs));
     rmt_cbs.on_trans_done = rmt_tx_done_cb_;
-    // Register our protected flag's address so the free ISR function can
-    // reach it without needing class membership.
-    s_rmt_tx_in_flight_ptr = &this->rmt_tx_in_flight_;
-    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs, nullptr) != ESP_OK) {
+    // Pass the address of this instance's flag as ctx.
+    // Each RMT instance gets its own ctx pointer — no shared global state.
+    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs,
+                                        (void *)&this->rmt_tx_in_flight_) != ESP_OK) {
       // Non-fatal: flush_rmt_() falls back to rmt_tx_wait_all_done() when
       // rmt_tx_in_flight_ is never set (startup state is false).
       ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
@@ -1849,6 +1854,9 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
+  // P3: drain any outputs whose barrier window expired before all outputs
+  // arrived (e.g. an inactive output that skipped write_state this tick).
+  CFXTransmitBarrier::get().service(this);
   if (!this->outro_cbs_.empty()) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
@@ -2116,6 +2124,22 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
 
 // --- Write State (Fire-and-Forget DMA) ---
 
+// P3: Called by CFXTransmitBarrier when all registered outputs are ready.
+// Encapsulates the transport-specific DMA fire sequence so the barrier can
+// trigger it on any output without knowing its transport type.
+void CFXLightOutput::commit_transmit_() {
+  if (this->transport_ == TRANSPORT_SPI) {
+    esphome::App.feed_wdt();
+    this->flush_spi_();
+  } else {
+    g_last_rmt_launch_us = micros();
+    this->perf_diag_last_launch_slot_ =
+        static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
+    g_rmt_launch_seq++;
+    this->flush_rmt_();
+  }
+}
+
 void CFXLightOutput::write_state(light::LightState *state) {
   chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
       resolve_perf_diag_effect(this);
@@ -2246,16 +2270,18 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 #endif // CFX_VISUALIZER_ENABLED
 
-  if (this->transport_ == TRANSPORT_SPI) {
-    esphome::App.feed_wdt();
-    this->flush_spi_();
-  } else {
-    const uint32_t launch_us = micros();
-    g_last_rmt_launch_us = launch_us;
-    this->perf_diag_last_launch_slot_ = static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
-    g_rmt_launch_seq++;
-    this->flush_rmt_();
+  // P3: Request coordinated DMA launch. The barrier fires commit_transmit_()
+  // on all registered outputs once they have all requested in this tick window,
+  // or after BARRIER_TIMEOUT_MS if some outputs are inactive. Single-output
+  // setups: request_transmit() returns true immediately (no-op barrier).
+  if (!CFXTransmitBarrier::get().request_transmit(this)) {
+    // Deferred or already fired from inside the barrier — do not double-flush.
+    mark_committed_mono_idle_outputs(this);
+    this->log_segment_coordinator_diag_();
+    return;
   }
+  // Barrier not active (count_ < 2) — fire directly without coordination.
+  this->commit_transmit_();
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
 
