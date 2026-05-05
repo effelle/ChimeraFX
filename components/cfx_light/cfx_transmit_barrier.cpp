@@ -1,6 +1,8 @@
 #include "cfx_transmit_barrier.h"
 #include "cfx_light.h"
 
+#ifdef USE_ESP32
+
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 
@@ -111,3 +113,5 @@ void CFXTransmitBarrier::fire_all_pending_() {
 
 }  // namespace cfx_light
 }  // namespace esphome
+
+#endif  // USE_ESP32
