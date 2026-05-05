@@ -1282,16 +1282,23 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 }
 #endif
 
-// --- P2: RMT async-done callback (static member — accesses protected field) ---
+// --- P2: RMT async-done callback ---
+//
+// Fires from the RMT ISR when DMA completes. Clears the in-flight flag so
+// flush_rmt_() can poll non-blocking instead of calling rmt_tx_wait_all_done().
+//
+// Design: free static function writing through a file-scoped pointer registered
+// in setup_rmt_(). This avoids any need for class membership or friend
+// declarations — the pointer is set inside a member function (which has full
+// access to protected fields), so no visibility rules are broken.
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-bool IRAM_ATTR CFXLightOutput::rmt_tx_done_cb_(
-    rmt_channel_handle_t /* channel */,
-    const rmt_tx_done_event_data_t * /* edata */,
-    void *ctx) {
-  // Static member: has full access to protected fields.
-  // ctx is always 'this', registered in setup_rmt_().
-  static_cast<CFXLightOutput *>(ctx)->rmt_tx_in_flight_ = false;
-  return false; // no high-priority task wakeup needed
+static volatile bool *s_rmt_tx_in_flight_ptr = nullptr;
+static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
+                                       const rmt_tx_done_event_data_t *,
+                                       void *) {
+  if (s_rmt_tx_in_flight_ptr != nullptr)
+    *s_rmt_tx_in_flight_ptr = false;
+  return false;
 }
 #endif
 
@@ -1479,7 +1486,10 @@ void CFXLightOutput::setup_rmt_() {
     rmt_tx_event_callbacks_t rmt_cbs;
     memset(&rmt_cbs, 0, sizeof(rmt_cbs));
     rmt_cbs.on_trans_done = rmt_tx_done_cb_;
-    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs, this) != ESP_OK) {
+    // Register our protected flag's address so the free ISR function can
+    // reach it without needing class membership.
+    s_rmt_tx_in_flight_ptr = &this->rmt_tx_in_flight_;
+    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs, nullptr) != ESP_OK) {
       // Non-fatal: flush_rmt_() falls back to rmt_tx_wait_all_done() when
       // rmt_tx_in_flight_ is never set (startup state is false).
       ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
