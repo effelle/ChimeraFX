@@ -295,6 +295,9 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
+  // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
+  // Must be public — the barrier is an external caller with no class membership.
+  void commit_transmit_();
   void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
@@ -389,9 +392,6 @@ protected:
   void setup_spi_();
   void flush_rmt_();
   void flush_spi_();
-  // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
-  // Public so the barrier singleton can invoke it on any registered output.
-  void commit_transmit_();
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
