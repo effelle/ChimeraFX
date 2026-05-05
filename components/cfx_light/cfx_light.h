@@ -411,8 +411,9 @@ protected:
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
   // Returns true when the frame is done (fast path: flag already clear).
-  // Spins in 100µs slices up to timeout_ms, then falls back to the
-  // blocking API as a last-resort recovery.
+  // Spins in 100µs slices up to timeout_ms, then returns false.
+  // rmt_wait_timeout_count_ increments on each timeout; visible in the
+  // ESP_LOGW that fires only when a timeout actually occurs.
   bool wait_for_rmt_tx_(uint32_t timeout_ms, const char *context);
   bool wait_for_spi_tx_(uint32_t timeout_ms, const char *context);
   uint32_t get_spi_frame_timeout_ms_() const;

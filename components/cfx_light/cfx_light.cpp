@@ -1491,7 +1491,7 @@ void CFXLightOutput::setup_rmt_() {
       // rmt_tx_in_flight_ is never set (startup state is false).
       ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
     } else {
-      ESP_LOGD(TAG, "RMT async-done callback active (GPIO%u)", this->pin_);
+      ESP_LOGI(TAG, "RMT async-done callback active (GPIO%u)", this->pin_);
     }
   }
 #endif
