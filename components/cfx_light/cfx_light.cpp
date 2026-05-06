@@ -102,6 +102,7 @@ static chimera_fx::CFXAddressableLightEffect *
 resolve_perf_diag_effect(CFXLightOutput *output);
 static bool perf_diag_enabled_for_effect(
     chimera_fx::CFXAddressableLightEffect *effect);
+static bool runtime_debug_enabled_for_output(CFXLightOutput *output);
 
 void CFXLightOutput::set_force_white_switch(switch_::Switch *sw) {
   if (this->force_white_sw_ == sw && this->force_white_cb_sw_ == sw)
@@ -226,6 +227,71 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_spi_queue_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
   this->perf_diag_last_spi_flush_start_us_ = 0;
+}
+
+void CFXLightOutput::log_spi_cadence_diag_() {
+  if (!this->is_spi_transport() || !runtime_debug_enabled_for_output(this)) {
+    return;
+  }
+
+  const uint32_t now_ms = esphome::millis();
+  if (this->perf_diag_spi_loop_log_ms_ == 0) {
+    this->perf_diag_spi_loop_log_ms_ = now_ms;
+    return;
+  }
+  if ((now_ms - this->perf_diag_spi_loop_log_ms_) < 2000) {
+    return;
+  }
+  this->perf_diag_spi_loop_log_ms_ = now_ms;
+
+  const char *light_name =
+      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                       : "<spi>";
+  const uint32_t frames = this->perf_diag_flush_count_;
+  const uint32_t safe_frames = frames > 0 ? frames : 1;
+  const uint32_t flush_dt_count =
+      this->perf_diag_spi_flush_interval_count_ > 0
+          ? this->perf_diag_spi_flush_interval_count_
+          : 1;
+  const uint32_t avg_flush_dt_us = static_cast<uint32_t>(
+      this->perf_diag_total_spi_flush_interval_us_ / flush_dt_count);
+  const uint32_t avg_write_us =
+      static_cast<uint32_t>(this->perf_diag_total_write_us_ / safe_frames);
+  const uint32_t avg_flush_us =
+      static_cast<uint32_t>(this->perf_diag_total_flush_us_ / safe_frames);
+  const uint32_t avg_wait_us =
+      static_cast<uint32_t>(this->perf_diag_total_wait_us_ / safe_frames);
+  const uint32_t avg_pack_us =
+      static_cast<uint32_t>(this->perf_diag_total_spi_pack_us_ / safe_frames);
+  const uint32_t avg_queue_us =
+      static_cast<uint32_t>(this->perf_diag_total_spi_queue_us_ / safe_frames);
+  const uint32_t avg_show_queue_us =
+      static_cast<uint32_t>(this->perf_diag_total_queue_us_ / safe_frames);
+
+  ESP_LOGI(TAG,
+           "CFX spi_cad[%s] frames=%" PRIu32
+           " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
+           " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
+           " pack=%" PRIu32 " queue=%" PRIu32 ")"
+           " max_us(dt=%" PRIu32 " show_q=%" PRIu32
+           " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
+           " pack=%" PRIu32 " queue=%" PRIu32 ")"
+           " defers(refresh=%" PRIu64 " gate=%" PRIu64
+           " partial=%" PRIu64 ") spi(wait=%" PRIu32
+           " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
+           light_name, frames, avg_flush_dt_us, avg_show_queue_us,
+           avg_write_us, avg_flush_us, avg_wait_us, avg_pack_us,
+           avg_queue_us, this->perf_diag_max_spi_flush_interval_us_,
+           this->perf_diag_max_queue_us_, this->perf_diag_max_write_us_,
+           this->perf_diag_max_flush_us_, this->perf_diag_max_wait_us_,
+           this->perf_diag_max_spi_pack_us_,
+           this->perf_diag_max_spi_queue_us_,
+           this->perf_diag_total_refresh_defers_,
+           this->perf_diag_total_gate_defers_,
+           this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
+           this->spi_wait_timeout_count_, this->spi_queue_error_count_,
+           this->spi_tx_in_flight_);
+  this->reset_perf_diag_();
 }
 
 void CFXLightOutput::reset_rmt_encoder_diag_() {
@@ -1972,6 +2038,8 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
+  this->log_spi_cadence_diag_();
+
   // P3: drain any outputs whose barrier window expired before all outputs
   // arrived (e.g. an inactive output that skipped write_state this tick).
   CFXTransmitBarrier::get().service(this);
@@ -2453,55 +2521,11 @@ void CFXLightOutput::write_state(light::LightState *state) {
       this->perf_diag_last_log_ms_ = now_ms;
     } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
                this->perf_diag_flush_count_ > 0) {
-      const char *light_name =
-          (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                           : "<cfx>";
-      const uint32_t frames = this->perf_diag_flush_count_;
-      const uint32_t flush_dt_count =
-          this->perf_diag_spi_flush_interval_count_ > 0
-              ? this->perf_diag_spi_flush_interval_count_
-              : 1;
-      const uint32_t avg_flush_dt_us = static_cast<uint32_t>(
-          this->perf_diag_total_spi_flush_interval_us_ / flush_dt_count);
-      const uint32_t avg_write_us =
-          static_cast<uint32_t>(this->perf_diag_total_write_us_ / frames);
-      const uint32_t avg_flush_us =
-          static_cast<uint32_t>(this->perf_diag_total_flush_us_ / frames);
-      const uint32_t avg_wait_us =
-          static_cast<uint32_t>(this->perf_diag_total_wait_us_ / frames);
-      const uint32_t avg_pack_us =
-          static_cast<uint32_t>(this->perf_diag_total_spi_pack_us_ / frames);
-      const uint32_t avg_queue_us =
-          static_cast<uint32_t>(this->perf_diag_total_spi_queue_us_ / frames);
-      const uint32_t avg_show_queue_us =
-          static_cast<uint32_t>(this->perf_diag_total_queue_us_ / frames);
-
       if (spi_cadence_diag_enabled) {
-        ESP_LOGI(TAG,
-                 "CFX spi_cad[%s] frames=%" PRIu32
-                 " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
-                 " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
-                 " pack=%" PRIu32 " queue=%" PRIu32 ")"
-                 " max_us(dt=%" PRIu32 " show_q=%" PRIu32
-                 " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
-                 " pack=%" PRIu32 " queue=%" PRIu32 ")"
-                 " defers(refresh=%" PRIu64 " gate=%" PRIu64
-                 " partial=%" PRIu64 ") spi(wait=%" PRIu32
-                 " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
-                 light_name, frames, avg_flush_dt_us, avg_show_queue_us,
-                 avg_write_us, avg_flush_us, avg_wait_us, avg_pack_us,
-                 avg_queue_us, this->perf_diag_max_spi_flush_interval_us_,
-                 this->perf_diag_max_queue_us_, this->perf_diag_max_write_us_,
-                 this->perf_diag_max_flush_us_, this->perf_diag_max_wait_us_,
-                 this->perf_diag_max_spi_pack_us_,
-                 this->perf_diag_max_spi_queue_us_,
-                 this->perf_diag_total_refresh_defers_,
-                 this->perf_diag_total_gate_defers_,
-                 this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
-                 this->spi_wait_timeout_count_, this->spi_queue_error_count_,
-                 this->spi_tx_in_flight_);
+        this->log_spi_cadence_diag_();
+      } else {
+        this->reset_perf_diag_();
       }
-      this->reset_perf_diag_();
       this->perf_diag_last_log_ms_ = now_ms;
     }
   }

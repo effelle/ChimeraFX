@@ -424,6 +424,7 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
+  void log_spi_cadence_diag_();
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();
@@ -592,6 +593,7 @@ protected:
   uint64_t perf_diag_total_spi_queue_us_{0};
   uint32_t perf_diag_spi_flush_interval_count_{0};
   uint32_t perf_diag_last_spi_flush_start_us_{0};
+  uint32_t perf_diag_spi_loop_log_ms_{0};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};
   uint8_t seg_last_flush_mask_{0};
