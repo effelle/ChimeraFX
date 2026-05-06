@@ -453,6 +453,9 @@ protected:
   // RMT hardware handles
   rmt_channel_handle_t channel_{nullptr};
   rmt_encoder_handle_t encoder_{nullptr};
+  bool rmt_dma_enabled_{false};
+  uint32_t rmt_mem_block_symbols_{0};
+  uint32_t rmt_alloc_index_{0};
   // P2: cleared by IRAM on_trans_done callback; read by main loop.
   // volatile guarantees the compiler re-reads the flag on every poll iteration
   // rather than caching it in a register across the spin loop.

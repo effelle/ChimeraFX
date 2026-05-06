@@ -1385,8 +1385,12 @@ void CFXLightOutput::setup() {
              this->num_leds_, this->spi_data_pin_, this->spi_clock_pin_,
              this->spi_speed_hz_);
   } else {
-    ESP_LOGI(TAG, "CFXLight ready: %u LEDs on GPIO%u (DMA, %u symbols)",
-             this->num_leds_, this->pin_, this->rmt_symbols_);
+    ESP_LOGI(TAG,
+             "CFXLight ready: %u LEDs on GPIO%u (%s, rmt_symbols=%u, "
+             "mem_block_symbols=%u)",
+             this->num_leds_, this->pin_,
+             this->rmt_dma_enabled_ ? "DMA" : "non-DMA",
+             this->rmt_symbols_, this->rmt_mem_block_symbols_);
   }
 }
 
@@ -1394,6 +1398,9 @@ void CFXLightOutput::setup() {
 
 void CFXLightOutput::setup_rmt_() {
   size_t buffer_size = this->get_buffer_size_();
+  this->rmt_dma_enabled_ = false;
+  this->rmt_mem_block_symbols_ = 0;
+  this->rmt_alloc_index_ = 0;
 
   // Allocate RMT transmission buffer
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
@@ -1421,7 +1428,7 @@ void CFXLightOutput::setup_rmt_() {
   // Configure timing from chipset
   this->configure_timing_();
 
-  // Create RMT TX channel — DMA always enabled
+  // Create RMT TX channel.
   rmt_tx_channel_config_t channel;
   memset(&channel, 0, sizeof(channel));
   channel.clk_src = RMT_CLK_SRC_DEFAULT;
@@ -1434,40 +1441,61 @@ void CFXLightOutput::setup_rmt_() {
   // DMA only supported on ESP32-S3 and ESP32-P4
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
   {
-    static int s_rmt_dma_alloc_count = 0;
+    static uint32_t s_rmt_alloc_count = 0;
+    this->rmt_alloc_index_ = ++s_rmt_alloc_count;
     channel.flags.with_dma = true;
     channel.mem_block_symbols = 48;
     ESP_LOGI(TAG,
-             "RMT alloc #%d: pin=%u DMA=true mem_block_symbols=%u "
+             "RMT alloc #%" PRIu32 ": pin=%u DMA=true mem_block_symbols=%u "
              "rmt_symbols=%u hw_tx_slots=%d",
-             ++s_rmt_dma_alloc_count, this->pin_,
+             this->rmt_alloc_index_, this->pin_,
              (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
              SOC_RMT_TX_CANDIDATES_PER_GROUP);
-    if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
+    esp_err_t err = rmt_new_tx_channel(&channel, &this->channel_);
+    if (err == ESP_OK) {
+      this->rmt_dma_enabled_ = true;
+      this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
+    } else {
       ESP_LOGW(TAG,
-               "RMT DMA unavailable for pin=%u (alloc #%d of %d hw slots) "
-               "— falling back to non-DMA (mem_block_symbols=%u). "
+               "RMT DMA unavailable for pin=%u (alloc #%" PRIu32
+               " of %d hw slots, err=%d) - falling back to non-DMA "
+               "(mem_block_symbols=%u). "
                "Check for other RMT consumers (remote_transmitter, "
                "neopixelbus, status_led, ir_transmitter).",
-               this->pin_, s_rmt_dma_alloc_count,
-               SOC_RMT_TX_CANDIDATES_PER_GROUP, this->rmt_symbols_);
+               this->pin_, this->rmt_alloc_index_,
+               SOC_RMT_TX_CANDIDATES_PER_GROUP, (int) err,
+               this->rmt_symbols_);
+      this->channel_ = nullptr;
       channel.flags.with_dma = false;
       channel.mem_block_symbols = this->rmt_symbols_;
-      if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
-        ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
+      err = rmt_new_tx_channel(&channel, &this->channel_);
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "RMT channel creation failed (pin=%u, err=%d)",
+                 this->pin_, (int) err);
         this->mark_failed();
         return;
       }
+      this->rmt_dma_enabled_ = false;
+      this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
+      ESP_LOGI(TAG,
+               "RMT alloc #%" PRIu32
+               ": pin=%u non-DMA fallback OK mem_block_symbols=%u",
+               this->rmt_alloc_index_, this->pin_,
+               this->rmt_mem_block_symbols_);
     }
   }
 #else
   channel.flags.with_dma = false;
   channel.mem_block_symbols = this->rmt_symbols_;
-  if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
-    ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
+  esp_err_t err = rmt_new_tx_channel(&channel, &this->channel_);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "RMT channel creation failed (pin=%u, err=%d)",
+             this->pin_, (int) err);
     this->mark_failed();
     return;
   }
+  this->rmt_dma_enabled_ = false;
+  this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
 #endif
 
   // Create RMT encoder
@@ -2395,7 +2423,7 @@ void CFXLightOutput::flush_rmt_() {
   }
 #endif
 
-  // Fire-and-forget: rmt_transmit returns immediately, DMA handles the rest
+  // Fire-and-forget: rmt_transmit returns immediately; RMT handles the rest.
   rmt_transmit_config_t config;
   memset(&config, 0, sizeof(config));
   esp_err_t error = ESP_OK;
@@ -2699,9 +2727,14 @@ void CFXLightOutput::dump_config() {
                   "  LEDs: %u\n"
                   "  RGBW: %s\n"
                   "  RGB Order: %s\n"
-                  "  RMT Symbols: %" PRIu32,
+                  "  RMT Symbols: %" PRIu32 "\n"
+                  "  RMT TX Mode: %s\n"
+                  "  RMT mem_block_symbols: %" PRIu32,
                   this->pin_, chipset_str, this->num_leds_,
-                  this->is_rgbw_ ? "yes" : "no", order_str, this->rmt_symbols_);
+                  this->is_rgbw_ ? "yes" : "no", order_str,
+                  this->rmt_symbols_,
+                  this->rmt_dma_enabled_ ? "DMA" : "non-DMA",
+                  this->rmt_mem_block_symbols_);
   }
 
   // Segment layout
