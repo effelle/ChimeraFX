@@ -566,13 +566,13 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   }
 
   auto *effect = resolve_active_cfx_effect(output->get_master_light_state());
-  if (perf_diag_enabled_for_effect(effect)) {
+  if (effect != nullptr) {
     return effect;
   }
 
   for (auto *seg_state : output->get_segment_light_states()) {
     effect = resolve_active_cfx_effect(seg_state);
-    if (perf_diag_enabled_for_effect(effect)) {
+    if (effect != nullptr) {
       return effect;
     }
   }
