@@ -981,6 +981,24 @@ void CFXAddressableLightEffect::start() {
     }
   }
 
+  {
+    uint32_t target_interval = this->update_interval_;
+    if (auto *out = this->get_diag_output(); out != nullptr) {
+      const uint32_t transport_min = out->get_min_effect_interval_ms();
+      if (transport_min > target_interval) {
+        target_interval = transport_min;
+      }
+    }
+    if (act_->runner != nullptr) {
+      act_->runner->diagnostics.set_target_interval_ms(target_interval);
+    }
+    for (auto *r : act_->segment_runners) {
+      if (r != nullptr) {
+        r->diagnostics.set_target_interval_ms(target_interval);
+      }
+    }
+  }
+
   // Cache the light name once per start() so apply() never allocates a
   // std::string every frame (audit 1.1).
   if (auto *ls = this->get_light_state()) {
@@ -2053,9 +2071,16 @@ bool CFXAddressableLightEffect::mono_idle_logging_enabled() const {
 
 bool CFXAddressableLightEffect::parent_coordinated_segment_due(
     uint64_t now) const {
+  uint32_t effective_interval = this->update_interval_;
+  if (auto *out = this->get_diag_output(); out != nullptr) {
+    const uint32_t transport_min = out->get_min_effect_interval_ms();
+    if (transport_min > effective_interval) {
+      effective_interval = transport_min;
+    }
+  }
   return this->can_parent_coordinate_segment() &&
          (this->last_run_ == 0 ||
-          (now - this->last_run_) >= this->update_interval_);
+          (now - this->last_run_) >= effective_interval);
 }
 
 void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
@@ -2323,7 +2348,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {
     const uint64_t early_now = millis_64();
-    if (early_now - this->last_run_ < this->update_interval_) {
+    uint32_t early_interval = this->update_interval_;
+    if (auto *out = this->get_diag_output(); out != nullptr) {
+      const uint32_t transport_min = out->get_min_effect_interval_ms();
+      if (transport_min > early_interval) {
+        early_interval = transport_min;
+      }
+    }
+    if (early_now - this->last_run_ < early_interval) {
       return;
     }
   }
@@ -2388,8 +2420,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+  uint32_t effective_interval = this->update_interval_;
+  if (diag_out != nullptr) {
+    const uint32_t transport_min = diag_out->get_min_effect_interval_ms();
+    if (transport_min > effective_interval) {
+      effective_interval = transport_min;
+    }
+  }
+
   const uint64_t now = millis_64();
-  if (now - this->last_run_ < this->update_interval_) {
+  if (now - this->last_run_ < effective_interval) {
     return;
   }
   this->last_run_ = now;
@@ -2410,8 +2450,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_max_frame_us = delta_us;
       act_->idle_total_frame_us += delta_us;
       act_->idle_frame_count++;
-      if (delta_us < act_->idle_target_frame_us / 2 ||
-          delta_us > act_->idle_target_frame_us * 3 / 2)
+      const uint32_t idle_target_us = effective_interval * 1000u;
+      if (delta_us < idle_target_us / 2 ||
+          delta_us > idle_target_us * 3 / 2)
         act_->idle_jitter_count++;
     }
     act_->idle_last_frame_us = now_us;
@@ -2954,7 +2995,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_max_frame_us = 0;
         act_->idle_total_frame_us = 0;
         act_->idle_jitter_count = 0;
-        act_->idle_target_frame_us = this->update_interval_ * 1000;
+        uint32_t idle_interval = this->update_interval_;
+        if (auto *out = this->get_diag_output(); out != nullptr) {
+          const uint32_t transport_min = out->get_min_effect_interval_ms();
+          if (transport_min > idle_interval) {
+            idle_interval = transport_min;
+          }
+        }
+        act_->idle_target_frame_us = idle_interval * 1000;
         act_->idle_probe_total_us = 0;
         act_->idle_probe_valid = false;
 

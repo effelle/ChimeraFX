@@ -1621,6 +1621,19 @@ uint8_t CFXLightOutput::get_spi_end_frame_byte_() const {
   return (this->chipset_ == CHIPSET_SK9822) ? 0x00 : 0xFF;
 }
 
+uint32_t CFXLightOutput::get_min_effect_interval_ms() const {
+  if (this->transport_ != TRANSPORT_RMT) {
+    return 0;
+  }
+  const uint32_t channels = (this->is_rgbw_ || this->is_wrgb_) ? 4u : 3u;
+  const uint32_t bits = static_cast<uint32_t>(this->num_leds_) * channels * 8u;
+  // WS281x/SK6812 one-wire symbols are 1.25 us per bit. Add a conservative
+  // reset/latch margin so the next frame does not enter flush_rmt_() early and
+  // block the main loop waiting for the previous transfer.
+  const uint32_t wire_us = bits + (bits / 4u) + 300u;
+  return (wire_us + 999u) / 1000u;
+}
+
 size_t CFXLightOutput::get_spi_frame_size_() const {
   // Start frame (4) + LED frames (num_leds * 4) + end frame
   size_t raw = 4 + (this->num_leds_ * 4) + this->get_spi_end_frame_size_();
