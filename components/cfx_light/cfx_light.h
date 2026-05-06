@@ -428,7 +428,7 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
-  void log_spi_cadence_diag_();
+  void log_spi_cadence_diag_(bool force = false);
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();

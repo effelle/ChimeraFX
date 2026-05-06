@@ -229,8 +229,9 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_last_spi_flush_start_us_ = 0;
 }
 
-void CFXLightOutput::log_spi_cadence_diag_() {
-  if (!this->is_spi_transport() || !runtime_debug_enabled_for_output(this)) {
+void CFXLightOutput::log_spi_cadence_diag_(bool force) {
+  if (!this->is_spi_transport() ||
+      (!force && !runtime_debug_enabled_for_output(this))) {
     return;
   }
 
@@ -2526,6 +2527,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
                this->perf_diag_flush_count_ > 0) {
       if (spi_cadence_diag_enabled) {
         this->log_spi_cadence_diag_();
+      } else if (this->is_spi_transport()) {
+        this->log_spi_cadence_diag_(true);
       } else {
         this->reset_perf_diag_();
       }
