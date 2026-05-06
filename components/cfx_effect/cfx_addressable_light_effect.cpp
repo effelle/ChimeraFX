@@ -2016,6 +2016,26 @@ bool CFXAddressableLightEffect::can_batch_steady_virtual_segment_() const {
          !chimera_fx::LightStateProxy::has_active_transformer(state);
 }
 
+bool CFXAddressableLightEffect::can_batch_steady_physical_output_() const {
+  if (this->is_virtual_segment_ || this->act_ == nullptr ||
+      this->act_->runner == nullptr || !this->act_->segment_runners.empty()) {
+    return false;
+  }
+  if (this->act_->mono_idle || this->act_->intro_active ||
+      this->act_->outro_active || this->act_->state != TRANSITION_NONE ||
+      this->act_->completion_pending) {
+    return false;
+  }
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    return false;
+  }
+#endif
+  auto *state = this->get_light_state();
+  return state != nullptr && state->remote_values.is_on() &&
+         !chimera_fx::LightStateProxy::has_active_transformer(state);
+}
+
 bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   if (!this->is_virtual_segment_ || this->act_ == nullptr ||
       this->act_->runner == nullptr) {
@@ -2295,6 +2315,72 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
 #endif
 }
 
+bool CFXAddressableLightEffect::try_batch_steady_physical_outputs_(
+    uint64_t now) {
+#ifndef USE_ESP32
+  return false;
+#else
+  if (!this->can_batch_steady_physical_output_()) {
+    return false;
+  }
+
+  static constexpr size_t MAX_PHYSICAL_BATCH = 8;
+  CFXAddressableLightEffect *effects[MAX_PHYSICAL_BATCH]{};
+  CFXRunner *runners[MAX_PHYSICAL_BATCH]{};
+  size_t count = 0;
+
+  for (auto *other : CFXAddressableLightEffect::all_effects) {
+    if (other == nullptr || !other->can_batch_steady_physical_output_()) {
+      continue;
+    }
+    if (other->last_run_ != 0 &&
+        (now - other->last_run_) < other->update_interval_) {
+      continue;
+    }
+    auto *state = other->get_light_state();
+    if (state == nullptr || state->get_output() == nullptr) {
+      continue;
+    }
+    if (count >= MAX_PHYSICAL_BATCH) {
+      break;
+    }
+    effects[count] = other;
+    runners[count] = other->act_->runner;
+    count++;
+  }
+
+  if (count < 2) {
+    return false;
+  }
+
+  static std::vector<CFXRunner *> dispatch_runners;
+  dispatch_runners.clear();
+  dispatch_runners.reserve(count);
+  for (size_t i = 0; i < count; i++) {
+    auto *effect = effects[i];
+    auto *state = effect->get_light_state();
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(state->get_output());
+    effect->last_run_ = now;
+    effect->prepare_steady_virtual_segment_runner_(*out);
+    dispatch_runners.push_back(runners[i]);
+  }
+
+  CFXScheduler::get().service_runners(dispatch_runners);
+  esphome::App.feed_wdt();
+
+  for (size_t i = 0; i < count; i++) {
+    auto *effect = effects[i];
+    auto *state = effect->get_light_state();
+    auto *out = static_cast<cfx_light::CFXLightOutput *>(state->get_output());
+    effect->act_->runner->diagnostics.flush_log();
+    out->note_show_request();
+    out->schedule_show();
+  }
+
+  return true;
+#endif
+}
+
 void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                       const Color &current_color) {
   // Guard against apply() being called before start() allocates act_.
@@ -2390,6 +2476,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   const uint64_t now = millis_64();
   if (now - this->last_run_ < this->update_interval_) {
+    return;
+  }
+  if (this->try_batch_steady_physical_outputs_(now)) {
+    chimera_fx::instance = nullptr;
     return;
   }
   this->last_run_ = now;
