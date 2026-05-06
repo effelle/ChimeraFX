@@ -230,8 +230,7 @@ void CFXLightOutput::reset_perf_diag_() {
 }
 
 void CFXLightOutput::log_spi_cadence_diag_(bool force) {
-  if (!this->is_spi_transport() ||
-      (!force && !runtime_debug_enabled_for_output(this))) {
+  if (!this->is_spi_transport()) {
     return;
   }
 
@@ -2499,7 +2498,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
     this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
     this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
-    this->perf_diag_flush_count_++;
+    if (!this->is_spi_transport()) {
+      this->perf_diag_flush_count_++;
+    }
 
     if (write_us > this->perf_diag_max_write_us_) {
       this->perf_diag_max_write_us_ = write_us;
@@ -2642,6 +2643,7 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
+  this->perf_diag_flush_count_++;
   if (this->perf_diag_last_spi_flush_start_us_ != 0) {
     const uint32_t interval_us =
         flush_start_us - this->perf_diag_last_spi_flush_start_us_;
