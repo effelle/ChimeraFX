@@ -2329,6 +2329,9 @@ void CFXLightOutput::commit_transmit_() {
     } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
                this->perf_diag_flush_count_ > 0) {
       this->log_perf_diag_(this->perf_diag_pending_effect_);
+      if (this->perf_diag_forced_log_windows_ < 4) {
+        this->perf_diag_forced_log_windows_++;
+      }
       this->reset_perf_diag_();
       this->perf_diag_last_log_ms_ = now_ms;
     }
@@ -2338,7 +2341,9 @@ void CFXLightOutput::commit_transmit_() {
 void CFXLightOutput::write_state(light::LightState *state) {
   chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
       resolve_perf_diag_effect(this);
-  const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
+  const bool perf_diag_enabled =
+      perf_diag_enabled_for_effect(active_cfx_effect) ||
+      (active_cfx_effect != nullptr && this->perf_diag_forced_log_windows_ < 4);
   const uint32_t write_start_us = micros();
   this->perf_diag_pending_enabled_ = false;
   this->perf_diag_last_flush_valid_ = false;
