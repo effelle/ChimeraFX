@@ -2389,11 +2389,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   const uint64_t now = millis_64();
-  const bool spi_transport =
-      diag_out != nullptr && diag_out->is_spi_transport();
-  const uint32_t effective_update_interval =
-      spi_transport ? 0u : this->update_interval_;
-  if (now - this->last_run_ < effective_update_interval) {
+  if (now - this->last_run_ < this->update_interval_) {
     return;
   }
   this->last_run_ = now;
