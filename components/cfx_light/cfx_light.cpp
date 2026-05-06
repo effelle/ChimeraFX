@@ -1427,7 +1427,6 @@ void CFXLightOutput::setup_rmt_() {
   channel.clk_src = RMT_CLK_SRC_DEFAULT;
   channel.resolution_hz = rmt_resolution_hz();
   channel.gpio_num = gpio_num_t(this->pin_);
-  channel.mem_block_symbols = this->rmt_symbols_;
   channel.trans_queue_depth = 1;
   channel.flags.invert_out = 0;
   channel.intr_priority = 0;
@@ -1435,9 +1434,16 @@ void CFXLightOutput::setup_rmt_() {
   // DMA only supported on ESP32-S3 and ESP32-P4
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
   channel.flags.with_dma = true;
+  // When DMA is active the SRAM block is only a ping-pong buffer — actual data
+  // streams from RAM. Clamp to the per-channel minimum (48 symbols on S3/P4)
+  // so we never silently consume more than one hardware channel per strip.
+  // Each S3 RMT group has only 4 TX channels; using mem_block_symbols > 48
+  // claims 2 channels per strip and starves subsequent strips.
+  channel.mem_block_symbols = 48;
   if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
     ESP_LOGW(TAG, "DMA channel failed, falling back to non-DMA");
     channel.flags.with_dma = false;
+    channel.mem_block_symbols = this->rmt_symbols_; // restore user value for non-DMA
     if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
       ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
       this->mark_failed();
@@ -1446,6 +1452,7 @@ void CFXLightOutput::setup_rmt_() {
   }
 #else
   channel.flags.with_dma = false;
+  channel.mem_block_symbols = this->rmt_symbols_;
   if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
     ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
     this->mark_failed();
