@@ -34,6 +34,7 @@ from esphome.const import (
     CONF_OUTPUT_ID,
     CONF_PIN,
     CONF_RED,
+    CONF_UPDATE_INTERVAL,
     CONF_WHITE,
 )
 
@@ -365,12 +366,25 @@ def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
+    chipset = str(config.get(CONF_CHIPSET, "")).upper()
+    light_update_interval = config.get(CONF_UPDATE_INTERVAL)
+    if light_update_interval is None and chipset in SPI_CHIPSETS:
+        light_update_interval = "1ms"
+
+    user_effects = list(config.get(CONF_EFFECTS, []))
+
+    for eff in user_effects:
+        if not isinstance(eff, dict):
+            continue
+        eff_cfx = eff.get("addressable_cfx")
+        if isinstance(eff_cfx, dict) and light_update_interval is not None:
+            eff_cfx.setdefault(CONF_UPDATE_INTERVAL, light_update_interval)
+
     if not config.get(CONF_ALL_EFFECTS, True):
+        config[CONF_EFFECTS] = user_effects
         return config
 
     from esphome.components.cfx_effect import CFX_EFFECTS
-
-    user_effects = list(config.get(CONF_EFFECTS, []))
 
     # Collect names already defined by the user (they take priority)
     user_names = set()
@@ -416,6 +430,8 @@ def _inject_all_effects(config):
         if name in user_names:
             continue
         effect_data = {"effect_id": eid, CONF_NAME: name}
+        if light_update_interval is not None:
+            effect_data[CONF_UPDATE_INTERVAL] = light_update_interval
         if cat != "sep" and eid not in [158, 159, 161]:
             if use_intro is not None:
                 effect_data["set_intro"] = use_intro
@@ -471,6 +487,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.positive_time_period_milliseconds
             ),
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
+            cv.Optional(CONF_UPDATE_INTERVAL): cv.update_interval,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
