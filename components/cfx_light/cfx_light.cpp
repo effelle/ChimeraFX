@@ -1433,26 +1433,32 @@ void CFXLightOutput::setup_rmt_() {
 
   // DMA only supported on ESP32-S3 and ESP32-P4
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
-  channel.flags.with_dma = true;
-  // In DMA mode the SRAM block is a ping-pong buffer only — data streams from
-  // DRAM. Use the per-channel minimum (48 symbols) so each strip occupies
-  // exactly 1 hardware TX slot. rmt_symbols_ (set by codegen) drives the
-  // encoder buffer and is not affected by this field.
-  channel.mem_block_symbols = 48;
-  ESP_LOGI(TAG, "RMT alloc: pin=%u DMA=true mem_block_symbols=%u rmt_symbols=%u",
-           this->pin_, (unsigned)channel.mem_block_symbols, this->rmt_symbols_);
-  if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
-    ESP_LOGW(TAG, "DMA channel failed (pin=%u) — falling back to non-DMA (mem_block_symbols=%u)",
-             this->pin_, this->rmt_symbols_);
-    channel.flags.with_dma = false;
-    channel.mem_block_symbols = this->rmt_symbols_;
+  {
+    static int s_rmt_dma_alloc_count = 0;
+    channel.flags.with_dma = true;
+    channel.mem_block_symbols = 48;
+    ESP_LOGI(TAG,
+             "RMT alloc #%d: pin=%u DMA=true mem_block_symbols=%u "
+             "rmt_symbols=%u hw_tx_slots=%d",
+             ++s_rmt_dma_alloc_count, this->pin_,
+             (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
+             SOC_RMT_TX_CANDIDATES_PER_GROUP);
     if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
-      ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
-      this->mark_failed();
-      return;
+      ESP_LOGW(TAG,
+               "RMT DMA unavailable for pin=%u (alloc #%d of %d hw slots) "
+               "— falling back to non-DMA (mem_block_symbols=%u). "
+               "Check for other RMT consumers (remote_transmitter, "
+               "neopixelbus, status_led, ir_transmitter).",
+               this->pin_, s_rmt_dma_alloc_count,
+               SOC_RMT_TX_CANDIDATES_PER_GROUP, this->rmt_symbols_);
+      channel.flags.with_dma = false;
+      channel.mem_block_symbols = this->rmt_symbols_;
+      if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
+        ESP_LOGE(TAG, "RMT channel creation failed (pin=%u)", this->pin_);
+        this->mark_failed();
+        return;
+      }
     }
-    ESP_LOGI(TAG, "RMT alloc: pin=%u non-DMA fallback OK mem_block_symbols=%u",
-             this->pin_, this->rmt_symbols_);
   }
 #else
   channel.flags.with_dma = false;
