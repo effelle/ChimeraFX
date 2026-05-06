@@ -588,7 +588,6 @@ protected:
   uint64_t perf_diag_total_rmt_callback_count_{0};
   uint64_t perf_diag_total_seg_contrib_{0};
   bool perf_diag_pending_enabled_{false};
-  uint8_t perf_diag_forced_log_windows_{0};
   chimera_fx::CFXAddressableLightEffect *perf_diag_pending_effect_{nullptr};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};
