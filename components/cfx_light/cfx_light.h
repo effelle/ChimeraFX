@@ -24,6 +24,7 @@
 #include <esp_idf_version.h>
 #include <cmath>
 #include <functional>
+#include <inttypes.h>
 #include <string>
 #include <vector>
 
@@ -564,10 +565,14 @@ protected:
   uint32_t perf_diag_max_wait_us_{0};
   uint32_t perf_diag_max_gate_us_{0};
   uint32_t perf_diag_max_gate_defers_{0};
+  uint32_t perf_diag_max_refresh_defers_{0};
   uint32_t perf_diag_max_partial_missing_{0};
   uint32_t perf_diag_max_rmt_starve_count_{0};
   uint32_t perf_diag_max_rmt_reset_starve_count_{0};
   uint32_t perf_diag_max_seg_contrib_{0};
+  uint32_t perf_diag_max_spi_flush_interval_us_{0};
+  uint32_t perf_diag_max_spi_pack_us_{0};
+  uint32_t perf_diag_max_spi_queue_us_{0};
   uint32_t perf_diag_min_rmt_symbols_free_{UINT32_MAX};
   uint64_t perf_diag_total_queue_us_{0};
   uint64_t perf_diag_total_write_us_{0};
@@ -576,11 +581,17 @@ protected:
   uint64_t perf_diag_total_wait_us_{0};
   uint64_t perf_diag_total_gate_us_{0};
   uint64_t perf_diag_total_gate_defers_{0};
+  uint64_t perf_diag_total_refresh_defers_{0};
   uint64_t perf_diag_total_partial_flushes_{0};
   uint64_t perf_diag_total_rmt_starve_count_{0};
   uint64_t perf_diag_total_rmt_reset_starve_count_{0};
   uint64_t perf_diag_total_rmt_callback_count_{0};
   uint64_t perf_diag_total_seg_contrib_{0};
+  uint64_t perf_diag_total_spi_flush_interval_us_{0};
+  uint64_t perf_diag_total_spi_pack_us_{0};
+  uint64_t perf_diag_total_spi_queue_us_{0};
+  uint32_t perf_diag_spi_flush_interval_count_{0};
+  uint32_t perf_diag_last_spi_flush_start_us_{0};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};
   uint8_t seg_last_flush_mask_{0};

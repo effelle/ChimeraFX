@@ -199,10 +199,14 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_wait_us_ = 0;
   this->perf_diag_max_gate_us_ = 0;
   this->perf_diag_max_gate_defers_ = 0;
+  this->perf_diag_max_refresh_defers_ = 0;
   this->perf_diag_max_partial_missing_ = 0;
   this->perf_diag_max_rmt_starve_count_ = 0;
   this->perf_diag_max_rmt_reset_starve_count_ = 0;
   this->perf_diag_max_seg_contrib_ = 0;
+  this->perf_diag_max_spi_flush_interval_us_ = 0;
+  this->perf_diag_max_spi_pack_us_ = 0;
+  this->perf_diag_max_spi_queue_us_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
@@ -211,11 +215,17 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_wait_us_ = 0;
   this->perf_diag_total_gate_us_ = 0;
   this->perf_diag_total_gate_defers_ = 0;
+  this->perf_diag_total_refresh_defers_ = 0;
   this->perf_diag_total_partial_flushes_ = 0;
   this->perf_diag_total_rmt_starve_count_ = 0;
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
   this->perf_diag_total_seg_contrib_ = 0;
+  this->perf_diag_total_spi_flush_interval_us_ = 0;
+  this->perf_diag_total_spi_pack_us_ = 0;
+  this->perf_diag_total_spi_queue_us_ = 0;
+  this->perf_diag_spi_flush_interval_count_ = 0;
+  this->perf_diag_last_spi_flush_start_us_ = 0;
 }
 
 void CFXLightOutput::reset_rmt_encoder_diag_() {
@@ -1122,6 +1132,11 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
   uint32_t now = micros();
   if (*this->max_refresh_rate_ != 0 &&
       (now - this->last_refresh_) < *this->max_refresh_rate_) {
+    this->perf_diag_total_refresh_defers_++;
+    if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
+      this->perf_diag_max_refresh_defers_ =
+          static_cast<uint32_t>(this->perf_diag_total_refresh_defers_);
+    }
     this->schedule_show();
     return;
   }
@@ -2301,6 +2316,11 @@ void CFXLightOutput::write_state(light::LightState *state) {
   uint32_t now = micros();
   if (*this->max_refresh_rate_ != 0 &&
       (now - this->last_refresh_) < *this->max_refresh_rate_) {
+    this->perf_diag_total_refresh_defers_++;
+    if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
+      this->perf_diag_max_refresh_defers_ =
+          static_cast<uint32_t>(this->perf_diag_total_refresh_defers_);
+    }
     this->schedule_show();
     return;
   }
@@ -2409,6 +2429,54 @@ void CFXLightOutput::write_state(light::LightState *state) {
       this->perf_diag_last_log_ms_ = now_ms;
     } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
                this->perf_diag_flush_count_ > 0) {
+      const char *light_name =
+          (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                           : "<cfx>";
+      const uint32_t frames = this->perf_diag_flush_count_;
+      const uint32_t flush_dt_count =
+          this->perf_diag_spi_flush_interval_count_ > 0
+              ? this->perf_diag_spi_flush_interval_count_
+              : 1;
+      const uint32_t avg_flush_dt_us = static_cast<uint32_t>(
+          this->perf_diag_total_spi_flush_interval_us_ / flush_dt_count);
+      const uint32_t avg_write_us =
+          static_cast<uint32_t>(this->perf_diag_total_write_us_ / frames);
+      const uint32_t avg_flush_us =
+          static_cast<uint32_t>(this->perf_diag_total_flush_us_ / frames);
+      const uint32_t avg_wait_us =
+          static_cast<uint32_t>(this->perf_diag_total_wait_us_ / frames);
+      const uint32_t avg_pack_us =
+          static_cast<uint32_t>(this->perf_diag_total_spi_pack_us_ / frames);
+      const uint32_t avg_queue_us =
+          static_cast<uint32_t>(this->perf_diag_total_spi_queue_us_ / frames);
+      const uint32_t avg_show_queue_us =
+          static_cast<uint32_t>(this->perf_diag_total_queue_us_ / frames);
+
+      if (this->is_spi_transport()) {
+        ESP_LOGI(TAG,
+                 "CFX spi_cad[%s] frames=%" PRIu32
+                 " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
+                 " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
+                 " pack=%" PRIu32 " queue=%" PRIu32 ")"
+                 " max_us(dt=%" PRIu32 " show_q=%" PRIu32
+                 " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
+                 " pack=%" PRIu32 " queue=%" PRIu32 ")"
+                 " defers(refresh=%" PRIu64 " gate=%" PRIu64
+                 " partial=%" PRIu64 ") spi(wait=%" PRIu32
+                 " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
+                 light_name, frames, avg_flush_dt_us, avg_show_queue_us,
+                 avg_write_us, avg_flush_us, avg_wait_us, avg_pack_us,
+                 avg_queue_us, this->perf_diag_max_spi_flush_interval_us_,
+                 this->perf_diag_max_queue_us_, this->perf_diag_max_write_us_,
+                 this->perf_diag_max_flush_us_, this->perf_diag_max_wait_us_,
+                 this->perf_diag_max_spi_pack_us_,
+                 this->perf_diag_max_spi_queue_us_,
+                 this->perf_diag_total_refresh_defers_,
+                 this->perf_diag_total_gate_defers_,
+                 this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
+                 this->spi_wait_timeout_count_, this->spi_queue_error_count_,
+                 this->spi_tx_in_flight_);
+      }
       this->reset_perf_diag_();
       this->perf_diag_last_log_ms_ = now_ms;
     }
@@ -2520,6 +2588,16 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
+  if (this->perf_diag_last_spi_flush_start_us_ != 0) {
+    const uint32_t interval_us =
+        flush_start_us - this->perf_diag_last_spi_flush_start_us_;
+    this->perf_diag_total_spi_flush_interval_us_ += interval_us;
+    this->perf_diag_spi_flush_interval_count_++;
+    if (interval_us > this->perf_diag_max_spi_flush_interval_us_) {
+      this->perf_diag_max_spi_flush_interval_us_ = interval_us;
+    }
+  }
+  this->perf_diag_last_spi_flush_start_us_ = flush_start_us;
   if (this->spi_diag_flush_logs_ < 6) {
     const char *light_name =
         (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
@@ -2537,6 +2615,7 @@ void CFXLightOutput::flush_spi_() {
   }
 
 
+  const uint32_t pack_start_us = micros();
   uint8_t *ptr = this->spi_frame_buf_;
 
   // 1. Start frame: 32 bits of 0x00
@@ -2564,6 +2643,11 @@ void CFXLightOutput::flush_spi_() {
   uint8_t end_byte = this->get_spi_end_frame_byte_();
   for (size_t i = 0; i < end_size; i++) {
     *ptr++ = end_byte;
+  }
+  const uint32_t pack_us = micros() - pack_start_us;
+  this->perf_diag_total_spi_pack_us_ += pack_us;
+  if (pack_us > this->perf_diag_max_spi_pack_us_) {
+    this->perf_diag_max_spi_pack_us_ = pack_us;
   }
 
 
@@ -2600,6 +2684,10 @@ void CFXLightOutput::flush_spi_() {
     this->status_clear_warning();
     // Record queue-submit latency (not wire time — that is in wait_for_spi_tx_).
     const uint32_t queue_us = tx_queue_us - tx_start_us;
+    this->perf_diag_total_spi_queue_us_ += queue_us;
+    if (queue_us > this->perf_diag_max_spi_queue_us_) {
+      this->perf_diag_max_spi_queue_us_ = queue_us;
+    }
     this->perf_diag_last_flush_tx_us_ = queue_us;
     this->perf_diag_last_flush_total_us_ = tx_queue_us - flush_start_us;
     this->perf_diag_last_flush_valid_ = true;
