@@ -63,7 +63,8 @@ class CFXTransmitBarrier {
   CFXLightOutput *outputs_[MAX_OUTPUTS]{};
   bool pending_[MAX_OUTPUTS]{};
   size_t count_{0};          // total registered outputs
-  size_t pending_count_{0};  // outputs that have requested this tick
+  size_t rmt_count_{0};      // registered outputs that participate in barrier
+  size_t pending_count_{0};  // RMT outputs that have requested this tick
   uint32_t first_req_ms_{0}; // timestamp of the first request this tick
 };
 
