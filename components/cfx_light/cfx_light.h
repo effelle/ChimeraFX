@@ -295,7 +295,6 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
-  void note_barrier_wait_us(uint32_t wait_us);
   // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
   // Must be public — the barrier is an external caller with no class membership.
   void commit_transmit_();
@@ -424,8 +423,6 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
-  void record_perf_diag_after_commit_();
-  void log_perf_diag_(chimera_fx::CFXAddressableLightEffect *effect);
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();
@@ -559,14 +556,12 @@ protected:
   uint32_t perf_diag_last_flush_tx_us_{0};
   uint32_t perf_diag_last_log_ms_{0};
   uint32_t perf_diag_last_show_request_us_{0};
-  uint32_t perf_diag_pending_write_start_us_{0};
   uint32_t perf_diag_flush_count_{0};
   uint32_t perf_diag_max_queue_us_{0};
   uint32_t perf_diag_max_write_us_{0};
   uint32_t perf_diag_max_flush_us_{0};
   uint32_t perf_diag_max_tx_us_{0};
   uint32_t perf_diag_max_wait_us_{0};
-  uint32_t perf_diag_max_barrier_wait_us_{0};
   uint32_t perf_diag_max_gate_us_{0};
   uint32_t perf_diag_max_gate_defers_{0};
   uint32_t perf_diag_max_partial_missing_{0};
@@ -579,7 +574,6 @@ protected:
   uint64_t perf_diag_total_flush_us_{0};
   uint64_t perf_diag_total_tx_us_{0};
   uint64_t perf_diag_total_wait_us_{0};
-  uint64_t perf_diag_total_barrier_wait_us_{0};
   uint64_t perf_diag_total_gate_us_{0};
   uint64_t perf_diag_total_gate_defers_{0};
   uint64_t perf_diag_total_partial_flushes_{0};
@@ -587,8 +581,6 @@ protected:
   uint64_t perf_diag_total_rmt_reset_starve_count_{0};
   uint64_t perf_diag_total_rmt_callback_count_{0};
   uint64_t perf_diag_total_seg_contrib_{0};
-  bool perf_diag_pending_enabled_{false};
-  chimera_fx::CFXAddressableLightEffect *perf_diag_pending_effect_{nullptr};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};
   uint8_t seg_last_flush_mask_{0};

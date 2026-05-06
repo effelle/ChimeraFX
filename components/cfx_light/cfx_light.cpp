@@ -197,7 +197,6 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_flush_us_ = 0;
   this->perf_diag_max_tx_us_ = 0;
   this->perf_diag_max_wait_us_ = 0;
-  this->perf_diag_max_barrier_wait_us_ = 0;
   this->perf_diag_max_gate_us_ = 0;
   this->perf_diag_max_gate_defers_ = 0;
   this->perf_diag_max_partial_missing_ = 0;
@@ -210,7 +209,6 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_flush_us_ = 0;
   this->perf_diag_total_tx_us_ = 0;
   this->perf_diag_total_wait_us_ = 0;
-  this->perf_diag_total_barrier_wait_us_ = 0;
   this->perf_diag_total_gate_us_ = 0;
   this->perf_diag_total_gate_defers_ = 0;
   this->perf_diag_total_partial_flushes_ = 0;
@@ -218,122 +216,6 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
   this->perf_diag_total_seg_contrib_ = 0;
-}
-
-void CFXLightOutput::note_barrier_wait_us(uint32_t wait_us) {
-  if (!this->perf_diag_pending_enabled_) {
-    return;
-  }
-  this->perf_diag_total_barrier_wait_us_ += wait_us;
-  if (wait_us > this->perf_diag_max_barrier_wait_us_) {
-    this->perf_diag_max_barrier_wait_us_ = wait_us;
-  }
-}
-
-void CFXLightOutput::record_perf_diag_after_commit_() {
-  if (!this->perf_diag_pending_enabled_ || !this->perf_diag_last_flush_valid_) {
-    return;
-  }
-
-  uint32_t queue_us = 0;
-  if (this->perf_diag_last_show_request_us_ != 0) {
-    queue_us = this->perf_diag_pending_write_start_us_ -
-               this->perf_diag_last_show_request_us_;
-    this->perf_diag_total_queue_us_ += queue_us;
-    if (queue_us > this->perf_diag_max_queue_us_) {
-      this->perf_diag_max_queue_us_ = queue_us;
-    }
-  }
-  this->perf_diag_last_show_request_us_ = 0;
-
-  const uint32_t write_us = micros() - this->perf_diag_pending_write_start_us_;
-  this->perf_diag_total_write_us_ += write_us;
-  this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
-  this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
-  this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
-  this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
-  this->perf_diag_flush_count_++;
-
-  if (write_us > this->perf_diag_max_write_us_) {
-    this->perf_diag_max_write_us_ = write_us;
-  }
-  if (this->perf_diag_last_flush_total_us_ > this->perf_diag_max_flush_us_) {
-    this->perf_diag_max_flush_us_ = this->perf_diag_last_flush_total_us_;
-  }
-  if (this->perf_diag_last_flush_tx_us_ > this->perf_diag_max_tx_us_) {
-    this->perf_diag_max_tx_us_ = this->perf_diag_last_flush_tx_us_;
-  }
-  if (this->seg_last_flush_count_ > this->perf_diag_max_seg_contrib_) {
-    this->perf_diag_max_seg_contrib_ = this->seg_last_flush_count_;
-  }
-  if (this->perf_diag_pending_gate_defers_ > this->perf_diag_max_gate_defers_) {
-    this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
-  }
-
-  this->perf_diag_pending_gate_defers_ = 0;
-  this->seg_last_flush_count_ = 0;
-  this->seg_last_flush_mask_ = 0;
-}
-
-void CFXLightOutput::log_perf_diag_(chimera_fx::CFXAddressableLightEffect *effect) {
-  if (this->perf_diag_flush_count_ == 0) {
-    return;
-  }
-
-  const uint32_t count = this->perf_diag_flush_count_;
-  const uint32_t avg_queue_us =
-      static_cast<uint32_t>(this->perf_diag_total_queue_us_ / count);
-  const uint32_t avg_write_us =
-      static_cast<uint32_t>(this->perf_diag_total_write_us_ / count);
-  const uint32_t avg_flush_us =
-      static_cast<uint32_t>(this->perf_diag_total_flush_us_ / count);
-  const uint32_t avg_tx_us =
-      static_cast<uint32_t>(this->perf_diag_total_tx_us_ / count);
-  const uint32_t avg_wait_us =
-      static_cast<uint32_t>(this->perf_diag_total_wait_us_ / count);
-  const uint32_t avg_barrier_wait_us =
-      static_cast<uint32_t>(this->perf_diag_total_barrier_wait_us_ / count);
-  const uint32_t avg_gate_us =
-      static_cast<uint32_t>(this->perf_diag_total_gate_us_ / count);
-  const uint32_t avg_gate_defers =
-      static_cast<uint32_t>(this->perf_diag_total_gate_defers_ / count);
-  const uint32_t avg_seg =
-      static_cast<uint32_t>(this->perf_diag_total_seg_contrib_ / count);
-  const uint32_t min_symbols_free =
-      (this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX)
-          ? 0
-          : this->perf_diag_min_rmt_symbols_free_;
-  const char *light_name =
-      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
-                                       : "?";
-  const char *transport =
-      this->transport_ == TRANSPORT_SPI ? "SPI" : "RMT";
-  const char *effect_name = "?";
-  if (effect != nullptr && effect->get_act() != nullptr) {
-    effect_name = effect->get_act()->cached_runner_name.c_str();
-  }
-
-  ESP_LOGI(TAG,
-           "CFX perf[%s:%s] effect=%s frames=%u avg_us(q=%u write=%u flush=%u "
-           "tx=%u wait=%u barrier=%u gate=%u defers=%u seg=%u) max_us(q=%u "
-           "write=%u flush=%u tx=%u wait=%u barrier=%u gate=%u defers=%u "
-           "missing=%u seg=%u) "
-           "rmt(cb=%" PRIu64 " starve=%" PRIu64 "/%u reset=%" PRIu64
-           "/%u min_free=%u)",
-           transport, light_name, effect_name, count, avg_queue_us,
-           avg_write_us, avg_flush_us, avg_tx_us, avg_wait_us,
-           avg_barrier_wait_us, avg_gate_us, avg_gate_defers, avg_seg,
-           this->perf_diag_max_queue_us_,
-           this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
-           this->perf_diag_max_tx_us_, this->perf_diag_max_wait_us_,
-           this->perf_diag_max_barrier_wait_us_, this->perf_diag_max_gate_us_,
-           this->perf_diag_max_gate_defers_, this->perf_diag_max_partial_missing_,
-           this->perf_diag_max_seg_contrib_,
-           this->perf_diag_total_rmt_callback_count_,
-           this->perf_diag_total_rmt_starve_count_,
-           this->perf_diag_max_rmt_starve_count_,
-           this->perf_diag_total_rmt_reset_starve_count_,
-           this->perf_diag_max_rmt_reset_starve_count_, min_symbols_free);
 }
 
 void CFXLightOutput::reset_rmt_encoder_diag_() {
@@ -583,13 +465,13 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   }
 
   auto *effect = resolve_active_cfx_effect(output->get_master_light_state());
-  if (effect != nullptr) {
+  if (perf_diag_enabled_for_effect(effect)) {
     return effect;
   }
 
   for (auto *seg_state : output->get_segment_light_states()) {
     effect = resolve_active_cfx_effect(seg_state);
-    if (effect != nullptr) {
+    if (perf_diag_enabled_for_effect(effect)) {
       return effect;
     }
   }
@@ -2338,27 +2220,13 @@ void CFXLightOutput::commit_transmit_() {
     g_rmt_launch_seq++;
     this->flush_rmt_();
   }
-  this->record_perf_diag_after_commit_();
-  if (this->perf_diag_pending_enabled_) {
-    const uint32_t now_ms = esphome::millis();
-    if (this->perf_diag_last_log_ms_ == 0) {
-      this->perf_diag_last_log_ms_ = now_ms;
-    } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
-               this->perf_diag_flush_count_ > 0) {
-      this->log_perf_diag_(this->perf_diag_pending_effect_);
-      this->reset_perf_diag_();
-      this->perf_diag_last_log_ms_ = now_ms;
-    }
-  }
 }
 
 void CFXLightOutput::write_state(light::LightState *state) {
   chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
       resolve_perf_diag_effect(this);
-  const bool perf_diag_enabled =
-      perf_diag_enabled_for_effect(active_cfx_effect);
+  const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
   const uint32_t write_start_us = micros();
-  this->perf_diag_pending_enabled_ = false;
   this->perf_diag_last_flush_valid_ = false;
   this->perf_diag_last_flush_total_us_ = 0;
   this->perf_diag_last_flush_tx_us_ = 0;
@@ -2458,9 +2326,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   this->last_refresh_ = now;
   this->mark_shown_();
-  this->perf_diag_pending_enabled_ = perf_diag_enabled;
-  this->perf_diag_pending_write_start_us_ = write_start_us;
-  this->perf_diag_pending_effect_ = active_cfx_effect;
 
 #if defined(CFX_VISUALIZER_ENABLED) && defined(USE_WIFI)
   // Visualizer UDP broadcast. Runs BEFORE rmt_tx_wait_all_done so the
@@ -2502,6 +2367,52 @@ void CFXLightOutput::write_state(light::LightState *state) {
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
 
+  if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
+    uint32_t queue_us = 0;
+    if (this->perf_diag_last_show_request_us_ != 0) {
+      queue_us = write_start_us - this->perf_diag_last_show_request_us_;
+      this->perf_diag_total_queue_us_ += queue_us;
+      if (queue_us > this->perf_diag_max_queue_us_) {
+        this->perf_diag_max_queue_us_ = queue_us;
+      }
+    }
+    this->perf_diag_last_show_request_us_ = 0;
+    const uint32_t write_us = micros() - write_start_us;
+    this->perf_diag_total_write_us_ += write_us;
+    this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
+    this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
+    this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
+    this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
+    this->perf_diag_flush_count_++;
+
+    if (write_us > this->perf_diag_max_write_us_) {
+      this->perf_diag_max_write_us_ = write_us;
+    }
+    if (this->perf_diag_last_flush_total_us_ > this->perf_diag_max_flush_us_) {
+      this->perf_diag_max_flush_us_ = this->perf_diag_last_flush_total_us_;
+    }
+    if (this->perf_diag_last_flush_tx_us_ > this->perf_diag_max_tx_us_) {
+      this->perf_diag_max_tx_us_ = this->perf_diag_last_flush_tx_us_;
+    }
+    if (this->seg_last_flush_count_ > this->perf_diag_max_seg_contrib_) {
+      this->perf_diag_max_seg_contrib_ = this->seg_last_flush_count_;
+    }
+    if (this->perf_diag_pending_gate_defers_ > this->perf_diag_max_gate_defers_) {
+      this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
+    }
+    this->perf_diag_pending_gate_defers_ = 0;
+    this->seg_last_flush_count_ = 0;
+    this->seg_last_flush_mask_ = 0;
+
+    const uint32_t now_ms = esphome::millis();
+    if (this->perf_diag_last_log_ms_ == 0) {
+      this->perf_diag_last_log_ms_ = now_ms;
+    } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
+               this->perf_diag_flush_count_ > 0) {
+      this->reset_perf_diag_();
+      this->perf_diag_last_log_ms_ = now_ms;
+    }
+  }
 }
 
 // --- RMT Transport Flush ---

@@ -54,7 +54,6 @@ bool CFXTransmitBarrier::request_transmit(CFXLightOutput *output) {
   // Mark this output as pending for the current tick.
   if (!pending_[slot]) {
     pending_[slot] = true;
-    pending_since_us_[slot] = esphome::micros();
     pending_count_++;
     if (pending_count_ == 1) {
       // First arrival — arm the timeout window.
@@ -104,10 +103,8 @@ void CFXTransmitBarrier::fire_all_pending_() {
       const bool is_rmt = outputs_[i]->is_rmt_transport();
       if ((pass == 0) != is_rmt)
         continue;
-      outputs_[i]->note_barrier_wait_us(esphome::micros() - pending_since_us_[i]);
       outputs_[i]->commit_transmit_();
       pending_[i] = false;
-      pending_since_us_[i] = 0;
     }
   }
   pending_count_ = 0;
