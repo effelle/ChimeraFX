@@ -295,7 +295,6 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
-  uint32_t get_min_effect_interval_ms() const;
   // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
   // Must be public — the barrier is an external caller with no class membership.
   void commit_transmit_();
