@@ -197,6 +197,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_flush_us_ = 0;
   this->perf_diag_max_tx_us_ = 0;
   this->perf_diag_max_wait_us_ = 0;
+  this->perf_diag_max_barrier_wait_us_ = 0;
   this->perf_diag_max_gate_us_ = 0;
   this->perf_diag_max_gate_defers_ = 0;
   this->perf_diag_max_partial_missing_ = 0;
@@ -209,6 +210,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_flush_us_ = 0;
   this->perf_diag_total_tx_us_ = 0;
   this->perf_diag_total_wait_us_ = 0;
+  this->perf_diag_total_barrier_wait_us_ = 0;
   this->perf_diag_total_gate_us_ = 0;
   this->perf_diag_total_gate_defers_ = 0;
   this->perf_diag_total_partial_flushes_ = 0;
@@ -216,6 +218,13 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_rmt_reset_starve_count_ = 0;
   this->perf_diag_total_rmt_callback_count_ = 0;
   this->perf_diag_total_seg_contrib_ = 0;
+}
+
+void CFXLightOutput::note_barrier_wait_us(uint32_t wait_us) {
+  this->perf_diag_total_barrier_wait_us_ += wait_us;
+  if (wait_us > this->perf_diag_max_barrier_wait_us_) {
+    this->perf_diag_max_barrier_wait_us_ = wait_us;
+  }
 }
 
 void CFXLightOutput::record_perf_diag_after_commit_() {
@@ -279,6 +288,8 @@ void CFXLightOutput::log_perf_diag_(chimera_fx::CFXAddressableLightEffect *effec
       static_cast<uint32_t>(this->perf_diag_total_tx_us_ / count);
   const uint32_t avg_wait_us =
       static_cast<uint32_t>(this->perf_diag_total_wait_us_ / count);
+  const uint32_t avg_barrier_wait_us =
+      static_cast<uint32_t>(this->perf_diag_total_barrier_wait_us_ / count);
   const uint32_t avg_gate_us =
       static_cast<uint32_t>(this->perf_diag_total_gate_us_ / count);
   const uint32_t avg_gate_defers =
@@ -301,17 +312,20 @@ void CFXLightOutput::log_perf_diag_(chimera_fx::CFXAddressableLightEffect *effec
 
   ESP_LOGI(TAG,
            "CFX perf[%s:%s] effect=%s frames=%u avg_us(q=%u write=%u flush=%u "
-           "tx=%u wait=%u gate=%u defers=%u seg=%u) max_us(q=%u write=%u "
-           "flush=%u tx=%u wait=%u gate=%u defers=%u missing=%u seg=%u) "
+           "tx=%u wait=%u barrier=%u gate=%u defers=%u seg=%u) max_us(q=%u "
+           "write=%u flush=%u tx=%u wait=%u barrier=%u gate=%u defers=%u "
+           "missing=%u seg=%u) "
            "rmt(cb=%" PRIu64 " starve=%" PRIu64 "/%u reset=%" PRIu64
            "/%u min_free=%u)",
            transport, light_name, effect_name, count, avg_queue_us,
-           avg_write_us, avg_flush_us, avg_tx_us, avg_wait_us, avg_gate_us,
-           avg_gate_defers, avg_seg, this->perf_diag_max_queue_us_,
+           avg_write_us, avg_flush_us, avg_tx_us, avg_wait_us,
+           avg_barrier_wait_us, avg_gate_us, avg_gate_defers, avg_seg,
+           this->perf_diag_max_queue_us_,
            this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
            this->perf_diag_max_tx_us_, this->perf_diag_max_wait_us_,
-           this->perf_diag_max_gate_us_, this->perf_diag_max_gate_defers_,
-           this->perf_diag_max_partial_missing_, this->perf_diag_max_seg_contrib_,
+           this->perf_diag_max_barrier_wait_us_, this->perf_diag_max_gate_us_,
+           this->perf_diag_max_gate_defers_, this->perf_diag_max_partial_missing_,
+           this->perf_diag_max_seg_contrib_,
            this->perf_diag_total_rmt_callback_count_,
            this->perf_diag_total_rmt_starve_count_,
            this->perf_diag_max_rmt_starve_count_,

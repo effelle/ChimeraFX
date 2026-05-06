@@ -295,6 +295,7 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
+  void note_barrier_wait_us(uint32_t wait_us);
   // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
   // Must be public — the barrier is an external caller with no class membership.
   void commit_transmit_();
@@ -565,6 +566,7 @@ protected:
   uint32_t perf_diag_max_flush_us_{0};
   uint32_t perf_diag_max_tx_us_{0};
   uint32_t perf_diag_max_wait_us_{0};
+  uint32_t perf_diag_max_barrier_wait_us_{0};
   uint32_t perf_diag_max_gate_us_{0};
   uint32_t perf_diag_max_gate_defers_{0};
   uint32_t perf_diag_max_partial_missing_{0};
@@ -577,6 +579,7 @@ protected:
   uint64_t perf_diag_total_flush_us_{0};
   uint64_t perf_diag_total_tx_us_{0};
   uint64_t perf_diag_total_wait_us_{0};
+  uint64_t perf_diag_total_barrier_wait_us_{0};
   uint64_t perf_diag_total_gate_us_{0};
   uint64_t perf_diag_total_gate_defers_{0};
   uint64_t perf_diag_total_partial_flushes_{0};
