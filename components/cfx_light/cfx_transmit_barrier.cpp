@@ -92,16 +92,17 @@ void CFXTransmitBarrier::service(CFXLightOutput * /* caller */) {
 // ── fire_all_pending_ ────────────────────────────────────────────────────────
 
 void CFXTransmitBarrier::fire_all_pending_() {
-  // Fire RMT outputs first — they are more timing-sensitive (WS281x protocol
-  // has strict inter-frame silence requirements). SPI outputs follow immediately
-  // after; both DMA engines then run in parallel.
+  // Queue non-RMT transports first. SPI queueing is sub-millisecond, while RMT
+  // may spend several milliseconds waiting for the previous one-wire frame to
+  // finish before queuing the next transfer. Starting SPI first lets its DMA run
+  // in parallel with those RMT waits instead of being held behind them.
   for (size_t pass = 0; pass < 2; pass++) {
     for (size_t i = 0; i < count_; i++) {
       if (!pending_[i])
         continue;
-      // Pass 0 = RMT, pass 1 = SPI (or any non-RMT transport).
+      // Pass 0 = SPI/non-RMT, pass 1 = RMT.
       const bool is_rmt = outputs_[i]->is_rmt_transport();
-      if ((pass == 0) != is_rmt)
+      if ((pass == 0) == is_rmt)
         continue;
       outputs_[i]->commit_transmit_();
       pending_[i] = false;
