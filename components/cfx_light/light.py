@@ -367,9 +367,7 @@ def _inject_all_effects(config):
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
-    light_update_interval = config.get(CONF_UPDATE_INTERVAL)
-    if light_update_interval is None and chipset in SPI_CHIPSETS:
-        light_update_interval = "1ms"
+    light_update_interval = "1ms" if chipset in SPI_CHIPSETS else None
 
     user_effects = list(config.get(CONF_EFFECTS, []))
 
@@ -487,7 +485,6 @@ CONFIG_SCHEMA = cv.All(
                 cv.positive_time_period_milliseconds
             ),
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
-            cv.Optional(CONF_UPDATE_INTERVAL): cv.update_interval,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
