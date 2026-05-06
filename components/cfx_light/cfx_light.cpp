@@ -468,6 +468,27 @@ static bool perf_diag_enabled_for_effect(
   return false;
 }
 
+static bool runtime_debug_enabled_for_output(CFXLightOutput *output) {
+  if (output == nullptr) {
+    return false;
+  }
+  if (chimera_fx::CFXControl::global_debug_enabled_) {
+    return true;
+  }
+  auto *state = output->get_master_light_state();
+  if (state == nullptr) {
+    return false;
+  }
+  for (auto *control : chimera_fx::CFXControl::get_instances()) {
+    if (control == nullptr || control->get_light() != state) {
+      continue;
+    }
+    auto *debug = control->get_debug();
+    return debug != nullptr && debug->has_state() && debug->state;
+  }
+  return false;
+}
+
 static chimera_fx::CFXAddressableLightEffect *
 resolve_perf_diag_effect(CFXLightOutput *output) {
   if (output == nullptr) {
@@ -2241,6 +2262,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   chimera_fx::CFXAddressableLightEffect *active_cfx_effect =
       resolve_perf_diag_effect(this);
   const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
+  const bool spi_cadence_diag_enabled =
+      this->is_spi_transport() && runtime_debug_enabled_for_output(this);
   const uint32_t write_start_us = micros();
   this->perf_diag_last_flush_valid_ = false;
   this->perf_diag_last_flush_total_us_ = 0;
@@ -2387,7 +2410,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
 
-  if (perf_diag_enabled && this->perf_diag_last_flush_valid_) {
+  if ((perf_diag_enabled || spi_cadence_diag_enabled) &&
+      this->perf_diag_last_flush_valid_) {
     uint32_t queue_us = 0;
     if (this->perf_diag_last_show_request_us_ != 0) {
       queue_us = write_start_us - this->perf_diag_last_show_request_us_;
@@ -2452,7 +2476,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
       const uint32_t avg_show_queue_us =
           static_cast<uint32_t>(this->perf_diag_total_queue_us_ / frames);
 
-      if (this->is_spi_transport()) {
+      if (spi_cadence_diag_enabled) {
         ESP_LOGI(TAG,
                  "CFX spi_cad[%s] frames=%" PRIu32
                  " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
