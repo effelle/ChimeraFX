@@ -538,6 +538,9 @@ static bool runtime_debug_enabled_for_output(CFXLightOutput *output) {
   if (output == nullptr) {
     return false;
   }
+  if (output->is_runtime_debug_enabled()) {
+    return true;
+  }
   if (chimera_fx::CFXControl::global_debug_enabled_) {
     return true;
   }

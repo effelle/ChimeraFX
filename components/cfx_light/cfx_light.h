@@ -283,6 +283,10 @@ public:
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
   }
+  void set_runtime_debug_enabled(bool enabled) {
+    this->runtime_debug_enabled_ = enabled;
+  }
+  bool is_runtime_debug_enabled() const { return this->runtime_debug_enabled_; }
   void set_default_transition_length(uint32_t ms) {
     this->default_transition_length_ms_ = ms;
   }
@@ -487,6 +491,7 @@ protected:
   switch_::Switch *force_white_cb_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
   uint32_t default_transition_length_ms_{0};
+  bool runtime_debug_enabled_{false};
 
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};

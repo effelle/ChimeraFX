@@ -101,6 +101,7 @@ public:
   CFXControl() { get_instances().push_back(this); }
 
   void setup() override {
+    this->sync_debug_output_();
     this->bind_force_white_callback_();
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
@@ -140,6 +141,7 @@ public:
         global_debug_enabled_ = value;
         for (auto *r : this->runners_)
           r->setDebug(value);
+        this->sync_debug_output_();
 
 #ifdef USE_ESP32
         // Fix 1: Broadcast globally to all active virtual segments
@@ -214,6 +216,7 @@ public:
   void set_outro_effect(select::Select *s) { outro_effect_ = s; }
   void set_light(esphome::light::LightState *light) {
     light_ = light;
+    this->sync_debug_output_();
     this->sync_force_white_output_();
   }
 
@@ -265,6 +268,38 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  bool debug_enabled_() const {
+    if (this->debug_ != nullptr && this->debug_->has_state()) {
+      return this->debug_->state;
+    }
+    return global_debug_enabled_;
+  }
+
+  void sync_debug_output_() {
+#ifdef USE_ESP32
+    if (this->light_ == nullptr) {
+      return;
+    }
+    auto *output = this->light_->get_output();
+    if (output == nullptr) {
+      return;
+    }
+    cfx_light::CFXLightOutput *cfx_out = nullptr;
+    for (auto *seg_out : cfx_light::CFXVirtualSegmentLight::all_segments) {
+      if (seg_out == output) {
+        cfx_out = seg_out->get_parent();
+        break;
+      }
+    }
+    if (cfx_out == nullptr) {
+      cfx_out = static_cast<cfx_light::CFXLightOutput *>(output);
+    }
+    if (cfx_out != nullptr) {
+      cfx_out->set_runtime_debug_enabled(this->debug_enabled_());
+    }
+#endif
+  }
+
   void bind_force_white_callback_() {
     if (this->force_white_ == nullptr)
       return;
