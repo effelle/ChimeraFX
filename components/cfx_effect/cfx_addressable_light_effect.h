@@ -680,6 +680,7 @@ public:
   // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
   uint32_t update_interval_{16};
+  uint64_t next_run_{0};         // Absolute due-time gate; avoids snapping to caller ticks.
   uint64_t last_run_{0};         // Per-instance rate gate — must NOT be in CFXActivation (shared across virtual segments)
 
   // controller_ is set at codegen time via set_controller(), before start()
@@ -690,6 +691,7 @@ public:
 
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
+  bool rate_gate_due_(uint64_t now);
   bool is_monochromatic_(uint8_t effect_id) const;
   std::vector<uint8_t> get_monochromatic_pool_();
   static bool is_architectural_effect_id_(uint8_t effect_id);

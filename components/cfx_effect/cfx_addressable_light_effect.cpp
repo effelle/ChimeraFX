@@ -662,6 +662,30 @@ bool CFXAddressableLightEffect::allow_default_transition_() const {
   return !this->is_architectural_effect_id_(this->effect_id_);
 }
 
+bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
+  if (this->update_interval_ == 0) {
+    this->last_run_ = now;
+    this->next_run_ = now;
+    return true;
+  }
+
+  if (this->next_run_ == 0) {
+    this->next_run_ = now;
+  }
+  if (now < this->next_run_) {
+    return false;
+  }
+
+  const uint64_t late_ms = now - this->next_run_;
+  const uint64_t reset_threshold =
+      static_cast<uint64_t>(this->update_interval_) * 4U;
+  this->next_run_ = late_ms > reset_threshold
+                        ? (now + this->update_interval_)
+                        : (this->next_run_ + this->update_interval_);
+  this->last_run_ = now;
+  return true;
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
@@ -723,6 +747,8 @@ void CFXAddressableLightEffect::start() {
   }
 
   // Initialize/Reset tracking flags cleanly on every start
+  this->last_run_ = 0;
+  this->next_run_ = 0;
   this->reset_milestones_();
   this->act_->intro_suppresses_milestones = false;
 
@@ -1484,6 +1510,7 @@ void CFXAddressableLightEffect::start() {
 void CFXAddressableLightEffect::stop() {
   light::AddressableLightEffect::stop();
   this->last_run_ = 0; // Reset per-instance rate gate for clean restart
+  this->next_run_ = 0;
 
   // Diagnostic hardening: stop() can be re-entered by ESPHome teardown paths
   // after a prior stop() already released the activation struct. In that case
@@ -2393,10 +2420,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
 
   const uint64_t now = millis_64();
-  if (now - this->last_run_ < this->update_interval_) {
+  if (!this->rate_gate_due_(now)) {
     return;
   }
-  this->last_run_ = now;
   esphome::App.feed_wdt();
 
   // CFX-047: apply()-level frame timing for idle FPS/Time/Jitter measurement.
