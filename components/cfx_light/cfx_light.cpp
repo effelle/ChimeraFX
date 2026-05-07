@@ -2724,16 +2724,18 @@ void CFXLightOutput::flush_rmt_() {
   this->harvest_rmt_encoder_diag_();
   this->reset_rmt_encoder_diag_();
 
-  const uint32_t dma_guard_us =
-      wait_for_dma_counter_idle_(&g_spi_dma_active_count, 6000u);
-  if (dma_guard_us > 0) {
-    this->perf_diag_total_dma_guard_wait_us_ += dma_guard_us;
-    this->perf_diag_total_dma_guard_hits_++;
-    if (dma_guard_us > this->perf_diag_max_dma_guard_wait_us_) {
-      this->perf_diag_max_dma_guard_wait_us_ = dma_guard_us;
-    }
-    if (g_spi_dma_active_count > 0) {
-      this->perf_diag_total_dma_guard_timeouts_++;
+  if (this->rmt_dma_enabled_) {
+    const uint32_t dma_guard_us =
+        wait_for_dma_counter_idle_(&g_spi_dma_active_count, 6000u);
+    if (dma_guard_us > 0) {
+      this->perf_diag_total_dma_guard_wait_us_ += dma_guard_us;
+      this->perf_diag_total_dma_guard_hits_++;
+      if (dma_guard_us > this->perf_diag_max_dma_guard_wait_us_) {
+        this->perf_diag_max_dma_guard_wait_us_ = dma_guard_us;
+      }
+      if (g_spi_dma_active_count > 0) {
+        this->perf_diag_total_dma_guard_timeouts_++;
+      }
     }
   }
 
@@ -2767,7 +2769,9 @@ void CFXLightOutput::flush_rmt_() {
   memset(&config, 0, sizeof(config));
   esp_err_t error = ESP_OK;
   this->rmt_tx_in_flight_ = true;
-  g_rmt_dma_active_count++;
+  if (this->rmt_dma_enabled_) {
+    g_rmt_dma_active_count++;
+  }
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
