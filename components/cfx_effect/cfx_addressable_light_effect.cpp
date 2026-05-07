@@ -1001,6 +1001,10 @@ void CFXAddressableLightEffect::start() {
   auto *diag_out = resolve_diag_output(this);
   SPIDiagCensus diag_census = collect_spi_diag_census();
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
+    ESP_LOGI("chimera_fx",
+             "CFX spi_effect_start[%s] effect_id=%u update_interval=%ums",
+             act_->cached_runner_name.c_str(), this->effect_id_,
+             this->update_interval_);
     ESP_LOGV(
         "cfx_seq",
         "SPI diag census[start]: effect=%s tag=%s act=%p totals(e=%u,se=%u) "
