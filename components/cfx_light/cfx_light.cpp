@@ -1798,12 +1798,17 @@ void CFXLightOutput::setup_rmt_() {
     static uint32_t s_rmt_alloc_count = 0;
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     static bool s_rmt_dma_claimed = false;
+    const bool force_non_dma = true;
     // ESP32-S3 RMT GDMA is effectively a single preferred slot in ESP-IDF's
     // allocator; probing a second DMA channel emits a driver error before
     // returning ESP_ERR_NOT_FOUND, so later strips go straight to non-DMA.
-    const bool skip_dma_probe = s_rmt_dma_claimed;
+    const bool skip_dma_probe = force_non_dma || s_rmt_dma_claimed;
+    const char *skip_dma_reason =
+        force_non_dma ? "diagnostic non-DMA policy"
+                      : "RMT GDMA slot already claimed";
 #else
     const bool skip_dma_probe = false;
+    const char *skip_dma_reason = "";
 #endif
     this->rmt_alloc_index_ = ++s_rmt_alloc_count;
 
@@ -1812,9 +1817,9 @@ void CFXLightOutput::setup_rmt_() {
       channel.mem_block_symbols = rmt_non_dma_symbols(this->rmt_symbols_);
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32
-               ": pin=%u GDMA skipped (RMT GDMA slot already claimed) "
+               ": pin=%u GDMA skipped (%s) "
                "mem_block_symbols=%u rmt_symbols=%u hw_tx_slots=%d",
-               this->rmt_alloc_index_, this->pin_,
+               this->rmt_alloc_index_, this->pin_, skip_dma_reason,
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
       esp_err_t err = rmt_new_tx_channel(&channel, &this->channel_);
