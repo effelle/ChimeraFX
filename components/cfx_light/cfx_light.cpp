@@ -53,7 +53,8 @@ static volatile uint32_t g_rmt_dma_active_count = 0;
 static volatile uint32_t g_spi_dma_active_count = 0;
 
 static uint32_t rmt_launch_stagger_gap_us() {
-#if defined(CONFIG_IDF_TARGET_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
+    defined(CONFIG_IDF_TARGET_ESP32P4)
   return 300;
 #else
   return 0;
