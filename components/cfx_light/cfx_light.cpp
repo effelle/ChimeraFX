@@ -68,6 +68,14 @@ static const char *rmt_dma_backend_label() {
 #endif
 }
 
+static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  return configured_symbols < 128u ? 128u : configured_symbols;
+#else
+  return configured_symbols;
+#endif
+}
+
 static uint32_t wait_for_dma_counter_idle_(volatile uint32_t *counter,
                                            uint32_t timeout_us) {
   if (counter == nullptr || *counter == 0) {
@@ -1800,7 +1808,7 @@ void CFXLightOutput::setup_rmt_() {
 
     if (skip_dma_probe) {
       channel.flags.with_dma = false;
-      channel.mem_block_symbols = this->rmt_symbols_;
+      channel.mem_block_symbols = rmt_non_dma_symbols(this->rmt_symbols_);
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32
                ": pin=%u GDMA skipped (RMT GDMA slot already claimed) "
@@ -1842,13 +1850,13 @@ void CFXLightOutput::setup_rmt_() {
                  "neopixelbus, status_led, ir_transmitter).",
                  rmt_dma_backend_label(), this->pin_, this->rmt_alloc_index_,
                  SOC_RMT_TX_CANDIDATES_PER_GROUP, (int) err,
-                 this->rmt_symbols_);
+                 rmt_non_dma_symbols(this->rmt_symbols_));
         this->channel_ = nullptr;
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
         s_rmt_dma_claimed = true;
 #endif
         channel.flags.with_dma = false;
-        channel.mem_block_symbols = this->rmt_symbols_;
+        channel.mem_block_symbols = rmt_non_dma_symbols(this->rmt_symbols_);
         err = rmt_new_tx_channel(&channel, &this->channel_);
         if (err != ESP_OK) {
           ESP_LOGE(TAG, "RMT channel creation failed (pin=%u, err=%d)",
