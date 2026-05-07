@@ -279,6 +279,70 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_last_rmt_tx_launch_us_ = 0;
 }
 
+void CFXLightOutput::record_perf_diag_flush_(uint32_t write_start_us,
+                                             bool perf_diag_enabled,
+                                             bool spi_cadence_diag_enabled,
+                                             bool rmt_cadence_diag_enabled) {
+  if (!(perf_diag_enabled || spi_cadence_diag_enabled ||
+        rmt_cadence_diag_enabled) ||
+      !this->perf_diag_last_flush_valid_) {
+    return;
+  }
+
+  uint32_t queue_us = 0;
+  if (this->perf_diag_last_show_request_us_ != 0) {
+    queue_us = write_start_us - this->perf_diag_last_show_request_us_;
+    this->perf_diag_total_queue_us_ += queue_us;
+    if (queue_us > this->perf_diag_max_queue_us_) {
+      this->perf_diag_max_queue_us_ = queue_us;
+    }
+  }
+  this->perf_diag_last_show_request_us_ = 0;
+
+  const uint32_t write_us = micros() - write_start_us;
+  this->perf_diag_total_write_us_ += write_us;
+  this->perf_diag_total_flush_us_ += this->perf_diag_last_flush_total_us_;
+  this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
+  this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
+  this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
+
+  if (write_us > this->perf_diag_max_write_us_) {
+    this->perf_diag_max_write_us_ = write_us;
+  }
+  if (this->perf_diag_last_flush_total_us_ > this->perf_diag_max_flush_us_) {
+    this->perf_diag_max_flush_us_ = this->perf_diag_last_flush_total_us_;
+  }
+  if (this->perf_diag_last_flush_tx_us_ > this->perf_diag_max_tx_us_) {
+    this->perf_diag_max_tx_us_ = this->perf_diag_last_flush_tx_us_;
+  }
+  if (this->seg_last_flush_count_ > this->perf_diag_max_seg_contrib_) {
+    this->perf_diag_max_seg_contrib_ = this->seg_last_flush_count_;
+  }
+  if (this->perf_diag_pending_gate_defers_ > this->perf_diag_max_gate_defers_) {
+    this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
+  }
+  this->perf_diag_pending_gate_defers_ = 0;
+  this->seg_last_flush_count_ = 0;
+  this->seg_last_flush_mask_ = 0;
+
+  const uint32_t now_ms = esphome::millis();
+  if (this->perf_diag_last_log_ms_ == 0) {
+    this->perf_diag_last_log_ms_ = now_ms;
+  } else if ((now_ms - this->perf_diag_last_log_ms_) >= 2000 &&
+             this->perf_diag_flush_count_ > 0) {
+    if (spi_cadence_diag_enabled) {
+      this->log_spi_cadence_diag_();
+    } else if (this->is_spi_transport()) {
+      this->log_spi_cadence_diag_(true);
+    } else if (perf_diag_enabled || rmt_cadence_diag_enabled) {
+      this->log_rmt_cadence_diag_();
+    } else {
+      this->reset_perf_diag_();
+    }
+    this->perf_diag_last_log_ms_ = now_ms;
+  }
+}
+
 void CFXLightOutput::log_spi_cadence_diag_(bool force) {
   if (!this->is_spi_transport()) {
     return;
@@ -2209,6 +2273,9 @@ void CFXLightOutput::on_segment_update() {
 
 void CFXLightOutput::loop() {
   this->log_spi_cadence_diag_();
+  if (this->is_rmt_transport() && runtime_debug_enabled_for_output(this)) {
+    this->log_rmt_cadence_diag_();
+  }
 
   if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_ &&
       !this->rmt_tx_in_flight_) {
@@ -2667,6 +2734,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
     // Deferred or already fired from inside the barrier — do not double-flush.
     mark_committed_mono_idle_outputs(this);
     this->log_segment_coordinator_diag_();
+    this->record_perf_diag_flush_(write_start_us, perf_diag_enabled,
+                                  spi_cadence_diag_enabled,
+                                  rmt_cadence_diag_enabled);
     return;
   }
   // Barrier not active (count_ < 2) — fire directly without coordination.
@@ -2692,10 +2762,6 @@ void CFXLightOutput::write_state(light::LightState *state) {
     this->perf_diag_total_tx_us_ += this->perf_diag_last_flush_tx_us_;
     this->perf_diag_total_seg_contrib_ += this->seg_last_flush_count_;
     this->perf_diag_total_gate_defers_ += this->perf_diag_pending_gate_defers_;
-    if (!this->is_spi_transport()) {
-      this->perf_diag_flush_count_++;
-    }
-
     if (write_us > this->perf_diag_max_write_us_) {
       this->perf_diag_max_write_us_ = write_us;
     }
@@ -2846,6 +2912,7 @@ void CFXLightOutput::flush_rmt_() {
   }
   this->perf_diag_last_rmt_tx_launch_us_ = rmt_launch_us;
   this->perf_diag_total_rmt_tx_launches_++;
+  this->perf_diag_flush_count_++;
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
   this->perf_diag_last_flush_tx_us_ = 0;

@@ -433,6 +433,10 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
+  void record_perf_diag_flush_(uint32_t write_start_us,
+                               bool perf_diag_enabled,
+                               bool spi_cadence_diag_enabled,
+                               bool rmt_cadence_diag_enabled);
   void log_spi_cadence_diag_(bool force = false);
   void log_rmt_cadence_diag_();
   void reset_rmt_encoder_diag_();
