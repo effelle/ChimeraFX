@@ -2390,15 +2390,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   const uint64_t now = millis_64();
   if (now - this->last_run_ < this->update_interval_) {
-    if (diag_out != nullptr && diag_out->is_spi_transport()) {
-      diag_out->note_effect_gate_skip(this->update_interval_);
-    }
     return;
   }
   this->last_run_ = now;
-  if (diag_out != nullptr && diag_out->is_spi_transport()) {
-    diag_out->note_effect_frame(this->update_interval_);
-  }
   esphome::App.feed_wdt();
 
   // CFX-047: apply()-level frame timing for idle FPS/Time/Jitter measurement.
