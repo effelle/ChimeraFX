@@ -601,6 +601,7 @@ protected:
   uint64_t perf_diag_total_spi_queue_us_{0};
   uint64_t perf_diag_total_show_request_interval_us_{0};
   uint64_t perf_diag_total_rmt_coalesced_flushes_{0};
+  uint64_t perf_diag_total_rmt_tx_launches_{0};
   uint32_t perf_diag_show_request_interval_count_{0};
   uint32_t perf_diag_last_show_request_interval_us_{0};
   uint32_t perf_diag_spi_flush_interval_count_{0};

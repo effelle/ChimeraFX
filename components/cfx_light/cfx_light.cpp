@@ -236,6 +236,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_spi_queue_us_ = 0;
   this->perf_diag_total_show_request_interval_us_ = 0;
   this->perf_diag_total_rmt_coalesced_flushes_ = 0;
+  this->perf_diag_total_rmt_tx_launches_ = 0;
   this->perf_diag_show_request_interval_count_ = 0;
   this->perf_diag_last_show_request_interval_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
@@ -347,7 +348,7 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            " max_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
-           " rmt(coalesce=%" PRIu64 " wait=%" PRIu32
+           " rmt(tx=%" PRIu64 " coalesce=%" PRIu64 " wait=%" PRIu32
            " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
            "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
            " min_free=%" PRIu32 " in_flight=%d)",
@@ -356,6 +357,7 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
            this->perf_diag_max_wait_us_, avg_show_req_dt_us,
            this->perf_diag_max_show_request_interval_us_,
+           this->perf_diag_total_rmt_tx_launches_,
            this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
            this->rmt_wait_timeout_count_,
            this->perf_diag_total_rmt_callback_count_,
@@ -438,8 +440,7 @@ void CFXLightOutput::note_show_request() {
   // completed frame, not the oldest pending request, so keeping the newest
   // timestamp gives a truer queue-age measurement and avoids stale outliers.
   const uint32_t now_us = micros();
-  if (this->is_spi_transport() &&
-      this->perf_diag_last_show_request_interval_us_ != 0) {
+  if (this->perf_diag_last_show_request_interval_us_ != 0) {
     const uint32_t dt_us =
         now_us - this->perf_diag_last_show_request_interval_us_;
     this->perf_diag_total_show_request_interval_us_ += dt_us;
@@ -2717,6 +2718,7 @@ void CFXLightOutput::flush_rmt_() {
   // Set AFTER rmt_transmit() succeeds so a failed queue attempt doesn't leave
   // the flag stuck true (same pattern as spi_tx_in_flight_).
   this->rmt_tx_in_flight_ = true;
+  this->perf_diag_total_rmt_tx_launches_++;
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
   this->perf_diag_last_flush_tx_us_ = 0;
