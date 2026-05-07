@@ -246,6 +246,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_spi_queue_us_ = 0;
   this->perf_diag_max_show_request_interval_us_ = 0;
   this->perf_diag_max_dma_guard_wait_us_ = 0;
+  this->perf_diag_max_rmt_tx_launch_interval_us_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
@@ -266,6 +267,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_show_request_interval_us_ = 0;
   this->perf_diag_total_rmt_coalesced_flushes_ = 0;
   this->perf_diag_total_rmt_tx_launches_ = 0;
+  this->perf_diag_total_rmt_tx_launch_interval_us_ = 0;
   this->perf_diag_total_dma_guard_wait_us_ = 0;
   this->perf_diag_total_dma_guard_hits_ = 0;
   this->perf_diag_total_dma_guard_timeouts_ = 0;
@@ -273,6 +275,8 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_last_show_request_interval_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
   this->perf_diag_last_spi_flush_start_us_ = 0;
+  this->perf_diag_rmt_tx_launch_interval_count_ = 0;
+  this->perf_diag_last_rmt_tx_launch_us_ = 0;
 }
 
 void CFXLightOutput::log_spi_cadence_diag_(bool force) {
@@ -325,6 +329,12 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
           ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
                                   guard_hits)
           : 0;
+  const uint32_t rmt_tx_dt_count =
+      this->perf_diag_rmt_tx_launch_interval_count_ > 0
+          ? this->perf_diag_rmt_tx_launch_interval_count_
+          : 1;
+  const uint32_t avg_rmt_tx_dt_us = static_cast<uint32_t>(
+      this->perf_diag_total_rmt_tx_launch_interval_us_ / rmt_tx_dt_count);
 
   ESP_LOGI(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
@@ -399,7 +409,8 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
            " guard(avg=%" PRIu32 " max=%" PRIu32
            " hits=%" PRIu64 " timeout=%" PRIu64 ")"
-           " rmt(tx=%" PRIu64 " coalesce=%" PRIu64 " wait=%" PRIu32
+           " rmt(tx=%" PRIu64 " tx_us(avg=%" PRIu32 " max=%" PRIu32
+           ") coalesce=%" PRIu64 " wait=%" PRIu32
            " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
            "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
            " min_free=%" PRIu32 " in_flight=%d)",
@@ -412,6 +423,7 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            this->perf_diag_total_dma_guard_hits_,
            this->perf_diag_total_dma_guard_timeouts_,
            this->perf_diag_total_rmt_tx_launches_,
+           avg_rmt_tx_dt_us, this->perf_diag_max_rmt_tx_launch_interval_us_,
            this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
            this->rmt_wait_timeout_count_,
            this->perf_diag_total_rmt_callback_count_,
@@ -2797,6 +2809,17 @@ void CFXLightOutput::flush_rmt_() {
   }
   // P2: flag was armed before transmit so a short transaction cannot complete
   // before the ISR has valid in-flight state to clear.
+  const uint32_t rmt_launch_us = micros();
+  if (this->perf_diag_last_rmt_tx_launch_us_ != 0) {
+    const uint32_t interval_us =
+        rmt_launch_us - this->perf_diag_last_rmt_tx_launch_us_;
+    this->perf_diag_total_rmt_tx_launch_interval_us_ += interval_us;
+    this->perf_diag_rmt_tx_launch_interval_count_++;
+    if (interval_us > this->perf_diag_max_rmt_tx_launch_interval_us_) {
+      this->perf_diag_max_rmt_tx_launch_interval_us_ = interval_us;
+    }
+  }
+  this->perf_diag_last_rmt_tx_launch_us_ = rmt_launch_us;
   this->perf_diag_total_rmt_tx_launches_++;
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
