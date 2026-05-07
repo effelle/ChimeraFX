@@ -329,13 +329,6 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
           ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
                                   guard_hits)
           : 0;
-  const uint32_t rmt_tx_dt_count =
-      this->perf_diag_rmt_tx_launch_interval_count_ > 0
-          ? this->perf_diag_rmt_tx_launch_interval_count_
-          : 1;
-  const uint32_t avg_rmt_tx_dt_us = static_cast<uint32_t>(
-      this->perf_diag_total_rmt_tx_launch_interval_us_ / rmt_tx_dt_count);
-
   ESP_LOGI(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
            " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
@@ -399,6 +392,12 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
           ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
                                   guard_hits)
           : 0;
+  const uint32_t rmt_tx_dt_count =
+      this->perf_diag_rmt_tx_launch_interval_count_ > 0
+          ? this->perf_diag_rmt_tx_launch_interval_count_
+          : 1;
+  const uint32_t avg_rmt_tx_dt_us = static_cast<uint32_t>(
+      this->perf_diag_total_rmt_tx_launch_interval_us_ / rmt_tx_dt_count);
 
   ESP_LOGI(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
