@@ -208,6 +208,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_spi_flush_interval_us_ = 0;
   this->perf_diag_max_spi_pack_us_ = 0;
   this->perf_diag_max_spi_queue_us_ = 0;
+  this->perf_diag_max_show_request_interval_us_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
@@ -225,6 +226,9 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_spi_flush_interval_us_ = 0;
   this->perf_diag_total_spi_pack_us_ = 0;
   this->perf_diag_total_spi_queue_us_ = 0;
+  this->perf_diag_total_show_request_interval_us_ = 0;
+  this->perf_diag_show_request_interval_count_ = 0;
+  this->perf_diag_last_show_request_interval_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
   this->perf_diag_last_spi_flush_start_us_ = 0;
 }
@@ -267,6 +271,12 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
       static_cast<uint32_t>(this->perf_diag_total_spi_queue_us_ / safe_frames);
   const uint32_t avg_show_queue_us =
       static_cast<uint32_t>(this->perf_diag_total_queue_us_ / safe_frames);
+  const uint32_t show_req_dt_count =
+      this->perf_diag_show_request_interval_count_ > 0
+          ? this->perf_diag_show_request_interval_count_
+          : 1;
+  const uint32_t avg_show_req_dt_us = static_cast<uint32_t>(
+      this->perf_diag_total_show_request_interval_us_ / show_req_dt_count);
 
   ESP_LOGI(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
@@ -276,6 +286,7 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            " max_us(dt=%" PRIu32 " show_q=%" PRIu32
            " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
            " pack=%" PRIu32 " queue=%" PRIu32 ")"
+           " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
            " defers(refresh=%" PRIu64 " gate=%" PRIu64
            " partial=%" PRIu64 ") spi(wait=%" PRIu32
            " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
@@ -286,6 +297,7 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            this->perf_diag_max_flush_us_, this->perf_diag_max_wait_us_,
            this->perf_diag_max_spi_pack_us_,
            this->perf_diag_max_spi_queue_us_,
+           avg_show_req_dt_us, this->perf_diag_max_show_request_interval_us_,
            this->perf_diag_total_refresh_defers_,
            this->perf_diag_total_gate_defers_,
            this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
@@ -361,7 +373,19 @@ void CFXLightOutput::note_show_request() {
   // Track the freshest show request. Coalesced flushes render the latest
   // completed frame, not the oldest pending request, so keeping the newest
   // timestamp gives a truer queue-age measurement and avoids stale outliers.
-  this->perf_diag_last_show_request_us_ = micros();
+  const uint32_t now_us = micros();
+  if (this->is_spi_transport() &&
+      this->perf_diag_last_show_request_interval_us_ != 0) {
+    const uint32_t dt_us =
+        now_us - this->perf_diag_last_show_request_interval_us_;
+    this->perf_diag_total_show_request_interval_us_ += dt_us;
+    this->perf_diag_show_request_interval_count_++;
+    if (dt_us > this->perf_diag_max_show_request_interval_us_) {
+      this->perf_diag_max_show_request_interval_us_ = dt_us;
+    }
+  }
+  this->perf_diag_last_show_request_interval_us_ = now_us;
+  this->perf_diag_last_show_request_us_ = now_us;
 }
 
 void CFXLightOutput::trigger_low_ram_warning(light::LightState *state) {
