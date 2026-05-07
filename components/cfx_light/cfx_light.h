@@ -466,6 +466,7 @@ protected:
   // volatile guarantees the compiler re-reads the flag on every poll iteration
   // rather than caching it in a register across the spin loop.
   volatile bool rmt_tx_in_flight_{false};
+  bool rmt_flush_pending_{false};
 
   // LED timing parameters
   LedParams params_;

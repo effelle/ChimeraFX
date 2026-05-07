@@ -58,6 +58,14 @@ static uint32_t rmt_launch_stagger_gap_us() {
 #endif
 }
 
+static const char *rmt_dma_backend_label() {
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
+  return "GDMA";
+#else
+  return "DMA";
+#endif
+}
+
 static light::ColorMode resolve_low_ram_warning_mode(light::LightState *state) {
   if (state == nullptr) {
     return light::ColorMode::RGB;
@@ -1518,7 +1526,7 @@ void CFXLightOutput::setup() {
              "CFXLight ready: %u LEDs on GPIO%u (%s, rmt_symbols=%u, "
              "mem_block_symbols=%u)",
              this->num_leds_, this->pin_,
-             this->rmt_dma_enabled_ ? "DMA" : "non-DMA",
+             this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
              this->rmt_symbols_, this->rmt_mem_block_symbols_);
   }
 }
@@ -1587,7 +1595,7 @@ void CFXLightOutput::setup_rmt_() {
       channel.mem_block_symbols = this->rmt_symbols_;
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32
-               ": pin=%u DMA skipped (RMT GDMA slot already claimed) "
+               ": pin=%u GDMA skipped (RMT GDMA slot already claimed) "
                "mem_block_symbols=%u rmt_symbols=%u hw_tx_slots=%d",
                this->rmt_alloc_index_, this->pin_,
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
@@ -1605,9 +1613,9 @@ void CFXLightOutput::setup_rmt_() {
       channel.flags.with_dma = true;
       channel.mem_block_symbols = 48;
       ESP_LOGI(TAG,
-               "RMT alloc #%" PRIu32 ": pin=%u DMA=true mem_block_symbols=%u "
+               "RMT alloc #%" PRIu32 ": pin=%u %s=true mem_block_symbols=%u "
                "rmt_symbols=%u hw_tx_slots=%d",
-               this->rmt_alloc_index_, this->pin_,
+               this->rmt_alloc_index_, this->pin_, rmt_dma_backend_label(),
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
       esp_err_t err = rmt_new_tx_channel(&channel, &this->channel_);
@@ -1619,12 +1627,12 @@ void CFXLightOutput::setup_rmt_() {
 #endif
       } else {
         ESP_LOGW(TAG,
-                 "RMT DMA unavailable for pin=%u (alloc #%" PRIu32
+                 "RMT %s unavailable for pin=%u (alloc #%" PRIu32
                  " of %d hw slots, err=%d) - falling back to non-DMA "
                  "(mem_block_symbols=%u). "
                  "Check for other RMT consumers (remote_transmitter, "
                  "neopixelbus, status_led, ir_transmitter).",
-                 this->pin_, this->rmt_alloc_index_,
+                 rmt_dma_backend_label(), this->pin_, this->rmt_alloc_index_,
                  SOC_RMT_TX_CANDIDATES_PER_GROUP, (int) err,
                  this->rmt_symbols_);
         this->channel_ = nullptr;
@@ -2066,6 +2074,16 @@ void CFXLightOutput::on_segment_update() {
 
 void CFXLightOutput::loop() {
   this->log_spi_cadence_diag_();
+
+  if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_ &&
+      !this->rmt_tx_in_flight_) {
+    this->rmt_flush_pending_ = false;
+    g_last_rmt_launch_us = micros();
+    this->perf_diag_last_launch_slot_ =
+        static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
+    g_rmt_launch_seq++;
+    this->flush_rmt_();
+  }
 
   // P3: drain any outputs whose barrier window expired before all outputs
   // arrived (e.g. an inactive output that skipped write_state this tick).
@@ -2567,6 +2585,12 @@ void CFXLightOutput::write_state(light::LightState *state) {
 void CFXLightOutput::flush_rmt_() {
   const uint32_t flush_start_us = micros();
 
+  if (this->rmt_tx_in_flight_) {
+    this->rmt_flush_pending_ = true;
+    this->perf_diag_last_flush_valid_ = false;
+    return;
+  }
+
   // P2: use non-blocking flag poll (fast path: ISR already cleared the flag).
   // Dynamic timeout matches the old rmt_tx_wait_all_done() budget so the
   // fallback blocking recovery fires under identical worst-case conditions.
@@ -2938,7 +2962,7 @@ void CFXLightOutput::dump_config() {
                   this->pin_, chipset_str, this->num_leds_,
                   this->is_rgbw_ ? "yes" : "no", order_str,
                   this->rmt_symbols_,
-                  this->rmt_dma_enabled_ ? "DMA" : "non-DMA",
+                  this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
                   this->rmt_mem_block_symbols_);
   }
 
