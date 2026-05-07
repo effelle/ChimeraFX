@@ -235,6 +235,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_spi_pack_us_ = 0;
   this->perf_diag_total_spi_queue_us_ = 0;
   this->perf_diag_total_show_request_interval_us_ = 0;
+  this->perf_diag_total_rmt_coalesced_flushes_ = 0;
   this->perf_diag_show_request_interval_count_ = 0;
   this->perf_diag_last_show_request_interval_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
@@ -311,6 +312,61 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
            this->spi_wait_timeout_count_, this->spi_queue_error_count_,
            this->spi_tx_in_flight_);
+  this->reset_perf_diag_();
+}
+
+void CFXLightOutput::log_rmt_cadence_diag_() {
+  if (this->is_spi_transport()) {
+    return;
+  }
+
+  const char *light_name =
+      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                       : "<rmt>";
+  const uint32_t frames = this->perf_diag_flush_count_;
+  const uint32_t safe_frames = frames > 0 ? frames : 1;
+  const uint32_t avg_write_us =
+      static_cast<uint32_t>(this->perf_diag_total_write_us_ / safe_frames);
+  const uint32_t avg_flush_us =
+      static_cast<uint32_t>(this->perf_diag_total_flush_us_ / safe_frames);
+  const uint32_t avg_wait_us =
+      static_cast<uint32_t>(this->perf_diag_total_wait_us_ / safe_frames);
+  const uint32_t avg_show_queue_us =
+      static_cast<uint32_t>(this->perf_diag_total_queue_us_ / safe_frames);
+  const uint32_t show_req_dt_count =
+      this->perf_diag_show_request_interval_count_ > 0
+          ? this->perf_diag_show_request_interval_count_
+          : 1;
+  const uint32_t avg_show_req_dt_us = static_cast<uint32_t>(
+      this->perf_diag_total_show_request_interval_us_ / show_req_dt_count);
+
+  ESP_LOGI(TAG,
+           "CFX rmt_cad[%s] frames=%" PRIu32
+           " avg_us(show_q=%" PRIu32 " write=%" PRIu32
+           " flush=%" PRIu32 " wait=%" PRIu32 ")"
+           " max_us(show_q=%" PRIu32 " write=%" PRIu32
+           " flush=%" PRIu32 " wait=%" PRIu32 ")"
+           " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
+           " rmt(coalesce=%" PRIu64 " wait=%" PRIu32
+           " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
+           "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
+           " min_free=%" PRIu32 " in_flight=%d)",
+           light_name, frames, avg_show_queue_us, avg_write_us, avg_flush_us,
+           avg_wait_us, this->perf_diag_max_queue_us_,
+           this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
+           this->perf_diag_max_wait_us_, avg_show_req_dt_us,
+           this->perf_diag_max_show_request_interval_us_,
+           this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
+           this->rmt_wait_timeout_count_,
+           this->perf_diag_total_rmt_callback_count_,
+           this->perf_diag_total_rmt_starve_count_,
+           this->perf_diag_max_rmt_starve_count_,
+           this->perf_diag_total_rmt_reset_starve_count_,
+           this->perf_diag_max_rmt_reset_starve_count_,
+           this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX
+               ? 0
+               : this->perf_diag_min_rmt_symbols_free_,
+           this->rmt_tx_in_flight_);
   this->reset_perf_diag_();
 }
 
@@ -2572,6 +2628,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
         this->log_spi_cadence_diag_();
       } else if (this->is_spi_transport()) {
         this->log_spi_cadence_diag_(true);
+      } else if (perf_diag_enabled) {
+        this->log_rmt_cadence_diag_();
       } else {
         this->reset_perf_diag_();
       }
@@ -2587,6 +2645,7 @@ void CFXLightOutput::flush_rmt_() {
 
   if (this->rmt_tx_in_flight_) {
     this->rmt_flush_pending_ = true;
+    this->perf_diag_total_rmt_coalesced_flushes_++;
     this->perf_diag_last_flush_valid_ = false;
     return;
   }
