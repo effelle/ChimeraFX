@@ -38,6 +38,11 @@ class CFXRunner;
 namespace cfx_light {
 
 using OutroCallback = std::function<bool()>;
+
+struct CFXRMTDoneContext {
+  volatile bool *in_flight{nullptr};
+  bool dma_enabled{false};
+};
 class CFXVirtualSegmentLight;
 
 // --- Segment Infrastructure (Phase 1) ---
@@ -467,6 +472,7 @@ protected:
   // volatile guarantees the compiler re-reads the flag on every poll iteration
   // rather than caching it in a register across the spin loop.
   volatile bool rmt_tx_in_flight_{false};
+  CFXRMTDoneContext rmt_done_ctx_{};
   bool rmt_flush_pending_{false};
 
   // LED timing parameters

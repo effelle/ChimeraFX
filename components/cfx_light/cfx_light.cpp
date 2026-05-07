@@ -55,8 +55,6 @@ static volatile uint32_t g_spi_dma_active_count = 0;
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return 300;
-#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
-  return 1000;
 #else
   return 0;
 #endif
@@ -1558,8 +1556,12 @@ static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
                                        const rmt_tx_done_event_data_t *,
                                        void *ctx) {
   // ctx = &rmt_tx_in_flight_ set in setup_rmt_() — one per instance.
-  *static_cast<volatile bool *>(ctx) = false;
-  if (g_rmt_dma_active_count > 0) {
+  auto *done = static_cast<CFXRMTDoneContext *>(ctx);
+  if (done == nullptr || done->in_flight == nullptr) {
+    return false;
+  }
+  *done->in_flight = false;
+  if (done->dma_enabled && g_rmt_dma_active_count > 0) {
     g_rmt_dma_active_count--;
   }
   return false;
@@ -1839,8 +1841,10 @@ void CFXLightOutput::setup_rmt_() {
     rmt_cbs.on_trans_done = rmt_tx_done_cb_;
     // Pass the address of this instance's flag as ctx.
     // Each RMT instance gets its own ctx pointer — no shared global state.
+    this->rmt_done_ctx_.in_flight = &this->rmt_tx_in_flight_;
+    this->rmt_done_ctx_.dma_enabled = this->rmt_dma_enabled_;
     if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs,
-                                        (void *)&this->rmt_tx_in_flight_) != ESP_OK) {
+                                        (void *)&this->rmt_done_ctx_) != ESP_OK) {
       // Non-fatal: flush_rmt_() falls back to rmt_tx_wait_all_done() when
       // rmt_tx_in_flight_ is never set (startup state is false).
       ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
@@ -2818,7 +2822,7 @@ void CFXLightOutput::flush_rmt_() {
 
   if (error != ESP_OK) {
     this->rmt_tx_in_flight_ = false;
-    if (g_rmt_dma_active_count > 0) {
+    if (this->rmt_dma_enabled_ && g_rmt_dma_active_count > 0) {
       g_rmt_dma_active_count--;
     }
     ESP_LOGE(TAG, "RMT TX error");
