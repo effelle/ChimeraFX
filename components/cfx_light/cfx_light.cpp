@@ -2526,6 +2526,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   const bool perf_diag_enabled = perf_diag_enabled_for_effect(active_cfx_effect);
   const bool spi_cadence_diag_enabled =
       this->is_spi_transport() && runtime_debug_enabled_for_output(this);
+  const bool rmt_cadence_diag_enabled =
+      this->is_rmt_transport() && runtime_debug_enabled_for_output(this);
   const uint32_t write_start_us = micros();
   this->perf_diag_last_flush_valid_ = false;
   this->perf_diag_last_flush_total_us_ = 0;
@@ -2672,7 +2674,8 @@ void CFXLightOutput::write_state(light::LightState *state) {
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
 
-  if ((perf_diag_enabled || spi_cadence_diag_enabled) &&
+  if ((perf_diag_enabled || spi_cadence_diag_enabled ||
+       rmt_cadence_diag_enabled) &&
       this->perf_diag_last_flush_valid_) {
     uint32_t queue_us = 0;
     if (this->perf_diag_last_show_request_us_ != 0) {
@@ -2721,7 +2724,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
         this->log_spi_cadence_diag_();
       } else if (this->is_spi_transport()) {
         this->log_spi_cadence_diag_(true);
-      } else if (perf_diag_enabled) {
+      } else if (perf_diag_enabled || rmt_cadence_diag_enabled) {
         this->log_rmt_cadence_diag_();
       } else {
         this->reset_perf_diag_();
