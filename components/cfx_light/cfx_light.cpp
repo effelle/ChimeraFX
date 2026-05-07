@@ -55,6 +55,8 @@ static volatile uint32_t g_spi_dma_active_count = 0;
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return 300;
+#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
+  return 1000;
 #else
   return 0;
 #endif
@@ -2492,7 +2494,21 @@ void CFXLightOutput::commit_transmit_() {
     esphome::App.feed_wdt();
     this->flush_spi_();
   } else {
-    g_last_rmt_launch_us = micros();
+    const uint32_t stagger_gap_us = rmt_launch_stagger_gap_us();
+    uint32_t launch_us = micros();
+    if (stagger_gap_us > 0 && g_last_rmt_launch_us != 0) {
+      const uint32_t since_last_launch = launch_us - g_last_rmt_launch_us;
+      if (since_last_launch < stagger_gap_us) {
+        const uint32_t gate_us = stagger_gap_us - since_last_launch;
+        this->perf_diag_total_gate_us_ += gate_us;
+        if (gate_us > this->perf_diag_max_gate_us_) {
+          this->perf_diag_max_gate_us_ = gate_us;
+        }
+        esp_rom_delay_us(gate_us);
+        launch_us = micros();
+      }
+    }
+    g_last_rmt_launch_us = launch_us;
     this->perf_diag_last_launch_slot_ =
         static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
     g_rmt_launch_seq++;
