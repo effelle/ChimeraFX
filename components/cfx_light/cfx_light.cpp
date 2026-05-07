@@ -1968,6 +1968,9 @@ bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) 
 
   if (err == ESP_OK) {
     this->spi_tx_in_flight_ = false;
+    if (g_spi_dma_active_count > 0) {
+      g_spi_dma_active_count--;
+    }
     this->spi_wait_count_++;
     // Capture actual wire-time for perf diag (time spent waiting = DMA transfer time).
     if (wait_us > this->perf_diag_max_wait_us_) {
