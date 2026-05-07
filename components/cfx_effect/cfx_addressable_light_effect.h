@@ -282,7 +282,6 @@ public:
   bool uses_default_transition() const { return this->allow_default_transition_(); }
 
   void set_update_interval(uint32_t update_interval) {
-    light::AddressableLightEffect::set_update_interval(update_interval);
     this->update_interval_ = update_interval;
   }
   uint32_t get_update_interval() const { return this->update_interval_; }
