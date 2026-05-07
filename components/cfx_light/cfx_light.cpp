@@ -335,7 +335,7 @@ void CFXLightOutput::record_perf_diag_flush_(uint32_t write_start_us,
     } else if (this->is_spi_transport()) {
       this->log_spi_cadence_diag_(true);
     } else if (perf_diag_enabled || rmt_cadence_diag_enabled) {
-      this->log_rmt_cadence_diag_();
+      this->log_rmt_cadence_diag_(true);
     } else {
       this->reset_perf_diag_();
     }
@@ -426,9 +426,24 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
   this->reset_perf_diag_();
 }
 
-void CFXLightOutput::log_rmt_cadence_diag_() {
+void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   if (this->is_spi_transport()) {
     return;
+  }
+
+  if (this->perf_diag_flush_count_ == 0) {
+    return;
+  }
+  if (!force) {
+    const uint32_t now_ms = esphome::millis();
+    if (this->perf_diag_last_log_ms_ == 0) {
+      this->perf_diag_last_log_ms_ = now_ms;
+      return;
+    }
+    if ((now_ms - this->perf_diag_last_log_ms_) < 2000) {
+      return;
+    }
+    this->perf_diag_last_log_ms_ = now_ms;
   }
 
   const char *light_name =
@@ -2273,9 +2288,7 @@ void CFXLightOutput::on_segment_update() {
 
 void CFXLightOutput::loop() {
   this->log_spi_cadence_diag_();
-  if (this->is_rmt_transport() && runtime_debug_enabled_for_output(this)) {
-    this->log_rmt_cadence_diag_();
-  }
+  this->log_rmt_cadence_diag_();
 
   if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_ &&
       !this->rmt_tx_in_flight_) {
@@ -2791,7 +2804,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
       } else if (this->is_spi_transport()) {
         this->log_spi_cadence_diag_(true);
       } else if (perf_diag_enabled || rmt_cadence_diag_enabled) {
-        this->log_rmt_cadence_diag_();
+        this->log_rmt_cadence_diag_(true);
       } else {
         this->reset_perf_diag_();
       }
