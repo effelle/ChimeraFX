@@ -49,6 +49,8 @@ std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
 static uint32_t g_last_rmt_launch_us = 0;
 static uint32_t g_rmt_launch_seq = 0;
+static volatile uint32_t g_rmt_dma_active_count = 0;
+static volatile uint32_t g_spi_dma_active_count = 0;
 
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -64,6 +66,32 @@ static const char *rmt_dma_backend_label() {
 #else
   return "DMA";
 #endif
+}
+
+static uint32_t wait_for_dma_counter_idle_(volatile uint32_t *counter,
+                                           uint32_t timeout_us) {
+  if (counter == nullptr || *counter == 0) {
+    return 0;
+  }
+
+  const uint32_t wait_start_us = micros();
+  while (*counter > 0) {
+    const uint32_t elapsed = micros() - wait_start_us;
+    if (elapsed >= timeout_us) {
+      return elapsed;
+    }
+    if ((elapsed % 5000u) < 200u) {
+      esphome::App.feed_wdt();
+    }
+    esp_rom_delay_us(100);
+  }
+  return micros() - wait_start_us;
+}
+
+static void IRAM_ATTR spi_tx_done_cb_(spi_transaction_t *) {
+  if (g_spi_dma_active_count > 0) {
+    g_spi_dma_active_count--;
+  }
 }
 
 static light::ColorMode resolve_low_ram_warning_mode(light::LightState *state) {
@@ -217,6 +245,7 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_max_spi_pack_us_ = 0;
   this->perf_diag_max_spi_queue_us_ = 0;
   this->perf_diag_max_show_request_interval_us_ = 0;
+  this->perf_diag_max_dma_guard_wait_us_ = 0;
   this->perf_diag_min_rmt_symbols_free_ = UINT32_MAX;
   this->perf_diag_total_queue_us_ = 0;
   this->perf_diag_total_write_us_ = 0;
@@ -237,6 +266,9 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_total_show_request_interval_us_ = 0;
   this->perf_diag_total_rmt_coalesced_flushes_ = 0;
   this->perf_diag_total_rmt_tx_launches_ = 0;
+  this->perf_diag_total_dma_guard_wait_us_ = 0;
+  this->perf_diag_total_dma_guard_hits_ = 0;
+  this->perf_diag_total_dma_guard_timeouts_ = 0;
   this->perf_diag_show_request_interval_count_ = 0;
   this->perf_diag_last_show_request_interval_us_ = 0;
   this->perf_diag_spi_flush_interval_count_ = 0;
@@ -287,6 +319,12 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
           : 1;
   const uint32_t avg_show_req_dt_us = static_cast<uint32_t>(
       this->perf_diag_total_show_request_interval_us_ / show_req_dt_count);
+  const uint64_t guard_hits = this->perf_diag_total_dma_guard_hits_;
+  const uint32_t avg_guard_us =
+      guard_hits > 0
+          ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
+                                  guard_hits)
+          : 0;
 
   ESP_LOGI(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
@@ -297,6 +335,8 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
            " pack=%" PRIu32 " queue=%" PRIu32 ")"
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
+           " guard(avg=%" PRIu32 " max=%" PRIu32
+           " hits=%" PRIu64 " timeout=%" PRIu64 ")"
            " defers(refresh=%" PRIu64 " gate=%" PRIu64
            " partial=%" PRIu64 ") spi(wait=%" PRIu32
            " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
@@ -308,6 +348,9 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            this->perf_diag_max_spi_pack_us_,
            this->perf_diag_max_spi_queue_us_,
            avg_show_req_dt_us, this->perf_diag_max_show_request_interval_us_,
+           avg_guard_us, this->perf_diag_max_dma_guard_wait_us_,
+           this->perf_diag_total_dma_guard_hits_,
+           this->perf_diag_total_dma_guard_timeouts_,
            this->perf_diag_total_refresh_defers_,
            this->perf_diag_total_gate_defers_,
            this->perf_diag_total_partial_flushes_, this->spi_wait_count_,
@@ -340,6 +383,12 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
           : 1;
   const uint32_t avg_show_req_dt_us = static_cast<uint32_t>(
       this->perf_diag_total_show_request_interval_us_ / show_req_dt_count);
+  const uint64_t guard_hits = this->perf_diag_total_dma_guard_hits_;
+  const uint32_t avg_guard_us =
+      guard_hits > 0
+          ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
+                                  guard_hits)
+          : 0;
 
   ESP_LOGI(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
@@ -348,6 +397,8 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            " max_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
+           " guard(avg=%" PRIu32 " max=%" PRIu32
+           " hits=%" PRIu64 " timeout=%" PRIu64 ")"
            " rmt(tx=%" PRIu64 " coalesce=%" PRIu64 " wait=%" PRIu32
            " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
            "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
@@ -357,6 +408,9 @@ void CFXLightOutput::log_rmt_cadence_diag_() {
            this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
            this->perf_diag_max_wait_us_, avg_show_req_dt_us,
            this->perf_diag_max_show_request_interval_us_,
+           avg_guard_us, this->perf_diag_max_dma_guard_wait_us_,
+           this->perf_diag_total_dma_guard_hits_,
+           this->perf_diag_total_dma_guard_timeouts_,
            this->perf_diag_total_rmt_tx_launches_,
            this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
            this->rmt_wait_timeout_count_,
@@ -1492,6 +1546,9 @@ static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
                                        void *ctx) {
   // ctx = &rmt_tx_in_flight_ set in setup_rmt_() — one per instance.
   *static_cast<volatile bool *>(ctx) = false;
+  if (g_rmt_dma_active_count > 0) {
+    g_rmt_dma_active_count--;
+  }
   return false;
 }
 #endif
@@ -1965,6 +2022,7 @@ void CFXLightOutput::setup_spi_() {
   dev_cfg.spics_io_num = -1;    // APA102/SK9822 have no CS line
   dev_cfg.queue_size = 1;
   dev_cfg.flags = SPI_DEVICE_NO_DUMMY;  // required for long strips
+  dev_cfg.post_cb = spi_tx_done_cb_;
 
   err = spi_bus_add_device(host, &dev_cfg, &this->spi_device_);
   if (err != ESP_OK) {
@@ -2666,6 +2724,19 @@ void CFXLightOutput::flush_rmt_() {
   this->harvest_rmt_encoder_diag_();
   this->reset_rmt_encoder_diag_();
 
+  const uint32_t dma_guard_us =
+      wait_for_dma_counter_idle_(&g_spi_dma_active_count, 6000u);
+  if (dma_guard_us > 0) {
+    this->perf_diag_total_dma_guard_wait_us_ += dma_guard_us;
+    this->perf_diag_total_dma_guard_hits_++;
+    if (dma_guard_us > this->perf_diag_max_dma_guard_wait_us_) {
+      this->perf_diag_max_dma_guard_wait_us_ = dma_guard_us;
+    }
+    if (g_spi_dma_active_count > 0) {
+      this->perf_diag_total_dma_guard_timeouts_++;
+    }
+  }
+
   // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
@@ -2695,6 +2766,8 @@ void CFXLightOutput::flush_rmt_() {
   rmt_transmit_config_t config;
   memset(&config, 0, sizeof(config));
   esp_err_t error = ESP_OK;
+  this->rmt_tx_in_flight_ = true;
+  g_rmt_dma_active_count++;
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
@@ -2710,14 +2783,16 @@ void CFXLightOutput::flush_rmt_() {
 #endif
 
   if (error != ESP_OK) {
+    this->rmt_tx_in_flight_ = false;
+    if (g_rmt_dma_active_count > 0) {
+      g_rmt_dma_active_count--;
+    }
     ESP_LOGE(TAG, "RMT TX error");
     this->status_set_warning();
     return;
   }
-  // P2: arm the flag — ISR will clear it when DMA completes.
-  // Set AFTER rmt_transmit() succeeds so a failed queue attempt doesn't leave
-  // the flag stuck true (same pattern as spi_tx_in_flight_).
-  this->rmt_tx_in_flight_ = true;
+  // P2: flag was armed before transmit so a short transaction cannot complete
+  // before the ISR has valid in-flight state to clear.
   this->perf_diag_total_rmt_tx_launches_++;
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
@@ -2779,6 +2854,18 @@ void CFXLightOutput::flush_spi_() {
     return;
   }
 
+  const uint32_t dma_guard_us =
+      wait_for_dma_counter_idle_(&g_rmt_dma_active_count, 8000u);
+  if (dma_guard_us > 0) {
+    this->perf_diag_total_dma_guard_wait_us_ += dma_guard_us;
+    this->perf_diag_total_dma_guard_hits_++;
+    if (dma_guard_us > this->perf_diag_max_dma_guard_wait_us_) {
+      this->perf_diag_max_dma_guard_wait_us_ = dma_guard_us;
+    }
+    if (g_rmt_dma_active_count > 0) {
+      this->perf_diag_total_dma_guard_timeouts_++;
+    }
+  }
 
   const uint32_t pack_start_us = micros();
   uint8_t *ptr = this->spi_frame_buf_;
@@ -2826,12 +2913,16 @@ void CFXLightOutput::flush_spi_() {
   memset(&this->spi_trans_, 0, sizeof(this->spi_trans_));
   this->spi_trans_.length = this->get_spi_frame_size_() * 8;
   this->spi_trans_.tx_buffer = this->spi_frame_buf_;
+  g_spi_dma_active_count++;
   esp_err_t err = spi_device_queue_trans(this->spi_device_, &this->spi_trans_, 0);
 
   const uint32_t tx_queue_us = micros();
   esphome::App.feed_wdt();
 
   if (err != ESP_OK) {
+    if (g_spi_dma_active_count > 0) {
+      g_spi_dma_active_count--;
+    }
     this->spi_queue_error_count_++;
     ESP_LOGW(TAG,
              "SPI TX queue failed (err=%d, frame=%u bytes, waits=%" PRIu32
