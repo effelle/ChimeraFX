@@ -10,6 +10,10 @@ Drop-in replacement for esp32_rmt_led_strip with:
 - all_effects: true — auto-register all ChimeraFX effects from YAML
 """
 
+# Component schema revision. Keep this near the top so ESPHome external-component
+# caches see a Python-side change when validation behavior must be refreshed.
+CFX_LIGHT_SCHEMA_REV = 2
+
 import esphome.codegen as cg
 from esphome.components import light, event
 import esphome.config_validation as cv
