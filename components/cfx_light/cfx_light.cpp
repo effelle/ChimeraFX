@@ -2912,7 +2912,7 @@ void CFXLightOutput::flush_spi_() {
   // overlap while allowing SPI to proceed during the tail of oversized RMT
   // frames.
   const uint32_t dma_guard_us =
-      wait_for_dma_counter_idle_(&g_rmt_dma_active_count, 4000u);
+      wait_for_dma_counter_idle_(&g_rmt_dma_active_count, 3500u);
   if (dma_guard_us > 0) {
     this->perf_diag_total_dma_guard_wait_us_ += dma_guard_us;
     this->perf_diag_total_dma_guard_hits_++;
