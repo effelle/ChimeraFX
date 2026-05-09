@@ -1798,14 +1798,11 @@ void CFXLightOutput::setup_rmt_() {
     static uint32_t s_rmt_alloc_count = 0;
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     static bool s_rmt_dma_claimed = false;
-    const bool force_non_dma = true;
     // ESP32-S3 RMT GDMA is effectively a single preferred slot in ESP-IDF's
     // allocator; probing a second DMA channel emits a driver error before
     // returning ESP_ERR_NOT_FOUND, so later strips go straight to non-DMA.
-    const bool skip_dma_probe = force_non_dma || s_rmt_dma_claimed;
-    const char *skip_dma_reason =
-        force_non_dma ? "diagnostic non-DMA policy"
-                      : "RMT GDMA slot already claimed";
+    const bool skip_dma_probe = s_rmt_dma_claimed;
+    const char *skip_dma_reason = "RMT GDMA slot already claimed";
 #else
     const bool skip_dma_probe = false;
     const char *skip_dma_reason = "";

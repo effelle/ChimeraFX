@@ -12,12 +12,13 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 2
+CFX_LIGHT_SCHEMA_REV = 3
 
 import esphome.codegen as cg
 from esphome.components import light, event
 import esphome.config_validation as cv
 import esphome.core as core
+import logging
 from esphome.core import CORE
 from esphome.final_validate import full_config
 from esphome import pins
@@ -72,6 +73,7 @@ CONF_SEGMENT_LIGHT_ID = "light_id"
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
 AUTO_LOAD = ["event", "cfx_effect"]
+_LOGGER = logging.getLogger(__name__)
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
@@ -106,7 +108,14 @@ SPI_HOSTS = {
 }
 
 # SPI variants that only have SPI2 (no SPI3_HOST available)
-_SPI_SINGLE_HOST_VARIANTS = {"ESP32C3", "ESP32C5", "ESP32C6", "ESP32H2", "ESP32C2"}
+_SPI_SINGLE_HOST_VARIANTS = {
+    "ESP32C2",
+    "ESP32C3",
+    "ESP32C5",
+    "ESP32C6",
+    "ESP32C61",
+    "ESP32H2",
+}
 
 # SPI host assignment registry key in CORE.data.
 # Using CORE.data (reset between compile runs) instead of a module-level
@@ -171,7 +180,149 @@ SEGMENT_SCHEMA = cv.Schema(
 )
 
 MAX_CFX_SEGMENTS = 4
-MAX_CFX_LIGHTS = 4
+
+
+_CFX_LIGHT_LIMITS_DEFAULT = {"total": 4, "spi": 2, "rmt": 4}
+_CFX_LIGHT_LIMITS = {
+    # Classic ESP32 has two SPI hosts and enough RMT symbol memory for
+    # four 128-symbol RMT outputs in the current legacy driver.
+    "ESP32": {"total": 6, "spi": 2, "rmt": 4},
+    # S3/P4 can run two SPI plus two RMT reliably; three or more RMT outputs
+    # showed visible artifacts in bench testing even when diagnostics were clean.
+    "ESP32S3": {"total": 4, "spi": 2, "rmt": 2},
+    "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
+    # Single-host C-series targets keep the existing two-output budget.
+    "ESP32C3": {"total": 2, "spi": 1, "rmt": 2},
+    "ESP32C5": {"total": 2, "spi": 1, "rmt": 2},
+    "ESP32C6": {"total": 2, "spi": 1, "rmt": 2},
+    "ESP32C61": {"total": 2, "spi": 1, "rmt": 2},
+    "ESP32H2": {"total": 2, "spi": 1, "rmt": 2},
+    "ESP32C2": {"total": 2, "spi": 1, "rmt": 2},
+}
+
+
+_ESP32_VARIANT_MATCH_ORDER = (
+    "ESP32C61",
+    "ESP32C6",
+    "ESP32C5",
+    "ESP32C3",
+    "ESP32C2",
+    "ESP32H2",
+    "ESP32P4",
+    "ESP32S3",
+    "ESP32S2",
+    "ESP32",
+)
+
+
+def _normalize_esp32_token(value):
+    return "".join(ch for ch in str(value).upper() if ch.isalnum())
+
+
+def _canonical_esp32_variant(value, *, allow_short_tokens=False):
+    token = _normalize_esp32_token(value)
+    if not token:
+        return None
+
+    for variant in _ESP32_VARIANT_MATCH_ORDER:
+        if token == variant or token.startswith(variant):
+            return variant
+
+    if allow_short_tokens:
+        short_map = (
+            ("C61", "ESP32C61"),
+            ("C6", "ESP32C6"),
+            ("C5", "ESP32C5"),
+            ("C3", "ESP32C3"),
+            ("C2", "ESP32C2"),
+            ("H2", "ESP32H2"),
+            ("P4", "ESP32P4"),
+            ("S3", "ESP32S3"),
+            ("S2", "ESP32S2"),
+        )
+        for needle, variant in short_map:
+            if needle in token:
+                return variant
+
+    return None
+
+
+def _variant_from_board_id(board):
+    if board is None:
+        return None
+
+    try:
+        from esphome.components.esp32.boards import BOARDS
+
+        board_id = str(board)
+        board_info = BOARDS.get(board_id)
+        seen = set()
+        while isinstance(board_info, str) and board_info not in seen:
+            seen.add(board_info)
+            board_info = BOARDS.get(board_info)
+        if isinstance(board_info, dict):
+            variant = _canonical_esp32_variant(board_info.get("variant"))
+            if variant is not None:
+                return variant
+    except Exception:
+        pass
+
+    return _canonical_esp32_variant(board, allow_short_tokens=True)
+
+
+def _get_esp32_variant():
+    try:
+        from esphome.components.esp32 import get_esp32_variant
+
+        variant = _canonical_esp32_variant(get_esp32_variant())
+        if variant is not None:
+            return variant
+    except Exception:
+        pass
+
+    try:
+        from esphome.components.esp32 import get_board
+
+        variant = _variant_from_board_id(get_board())
+        if variant is not None:
+            return variant
+    except Exception:
+        pass
+
+    try:
+        esp32_conf = CORE.config.get("esp32", {})
+        variant = _canonical_esp32_variant(esp32_conf.get("variant"))
+        if variant is not None:
+            return variant
+        variant = _variant_from_board_id(esp32_conf.get("board"))
+        if variant is not None:
+            return variant
+    except Exception:
+        pass
+
+    try:
+        esp32_conf = full_config.get().get_config_for_path(["esp32"])
+        variant = _canonical_esp32_variant(esp32_conf.get("variant"))
+        if variant is not None:
+            return variant
+        variant = _variant_from_board_id(esp32_conf.get("board"))
+        if variant is not None:
+            return variant
+    except Exception:
+        pass
+
+    return "ESP32"
+
+
+def _get_cfx_light_limits(variant=None):
+    variant = _canonical_esp32_variant(variant) if variant is not None else _get_esp32_variant()
+    if variant in _CFX_LIGHT_LIMITS:
+        return _CFX_LIGHT_LIMITS[variant]
+    return _CFX_LIGHT_LIMITS_DEFAULT
+
+
+def _is_spi_cfx_light(config):
+    return str(config.get(CONF_CHIPSET, "")).upper() in SPI_CHIPSETS
 
 
 def _coalesce_alias(config, canonical_key, alias_keys, *, scope):
@@ -308,9 +459,35 @@ def _final_validate(config):
     cfx_lights = [
         lconf for lconf in all_lights if lconf.get("platform", "") == "cfx_light"
     ]
-    if len(cfx_lights) > MAX_CFX_LIGHTS:
+    variant = _get_esp32_variant()
+    limits = _get_cfx_light_limits(variant)
+    spi_count = sum(1 for lconf in cfx_lights if _is_spi_cfx_light(lconf))
+    rmt_count = len(cfx_lights) - spi_count
+    _LOGGER.info(
+        "CFXLight limits: variant=%s total=%d/%d spi=%d/%d rmt=%d/%d",
+        variant,
+        len(cfx_lights),
+        limits["total"],
+        spi_count,
+        limits["spi"],
+        rmt_count,
+        limits["rmt"],
+    )
+
+    if len(cfx_lights) > limits["total"]:
         raise cv.Invalid(
-            f"Too many cfx_light entries: {len(cfx_lights)} (max {MAX_CFX_LIGHTS} per node)"
+            f"Too many cfx_light entries for {variant}: {len(cfx_lights)} "
+            f"(max {limits['total']} total: {limits['spi']} SPI + {limits['rmt']} RMT)"
+        )
+    if spi_count > limits["spi"]:
+        raise cv.Invalid(
+            f"Too many SPI cfx_light entries for {variant}: {spi_count} "
+            f"(max {limits['spi']})"
+        )
+    if rmt_count > limits["rmt"]:
+        raise cv.Invalid(
+            f"Too many RMT cfx_light entries for {variant}: {rmt_count} "
+            f"(max {limits['rmt']})"
         )
     return config
 
@@ -572,28 +749,10 @@ _RMT_BUDGET = {
     "ESP32C3": {"total":  96, "block": 48},
     "ESP32C5": {"total":  96, "block": 48},
     "ESP32C6": {"total":  96, "block": 48},
+    "ESP32C61": {"total":  96, "block": 48},
     "ESP32H2": {"total":  96, "block": 48},
 }
 _RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
-
-# Maximum CFXLight instances per ESP32 variant.
-# Derived from RMT channel count and practical CPU headroom.
-#   ESP32 classic : 8 RMT TX channels, 4 lights @ 2 blocks each
-#   ESP32-S2      : 4 RMT TX channels, 4 lights @ 1 block each
-#   ESP32-S3/P4   : 4 RMT TX channels, 4 lights @ 1 block each
-#   ESP32-C3/C5/C6/H2 : 2 RMT TX channels, 2 lights @ 1 block each
-_MAX_LIGHTS = {
-    "ESP32":   4,
-    "ESP32S2": 4,
-    "ESP32S3": 4,
-    "ESP32P4": 4,
-    "ESP32C3": 2,
-    "ESP32C5": 2,
-    "ESP32C6": 2,
-    "ESP32H2": 2,
-}
-_MAX_LIGHTS_DEFAULT = 4  # conservative fallback
-
 
 def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     """Compute the per-strip RMT symbol count for auto-configured strips.
@@ -601,15 +760,7 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     floors to the nearest block boundary, and enforces a one-block minimum.
     Emits a compile-time error if the total allocation exceeds hardware capacity."""
     import logging as _log
-    import esphome.core as _core
-    variant = "ESP32"  # safe default
-    try:
-        esp32_conf = _core.CORE.config.get("esp32", {})
-        variant_raw = esp32_conf.get("variant", "ESP32")
-        # ESPHome stores variant as e.g. "esp32s3" or "ESP32S3" — normalise
-        variant = str(variant_raw).upper().replace("-", "").replace("_", "")
-    except Exception:
-        pass
+    variant = _get_esp32_variant()
 
     budget   = _RMT_BUDGET.get(variant, _RMT_DEFAULT_BUDGET)
     total    = budget["total"]
@@ -749,28 +900,23 @@ async def to_code(config):
                     for lconf in _core_rmt.CORE.config.get("light", [])
                     if lconf.get("platform", "") == "cfx_light"
                        and lconf.get(CONF_RMT_SYMBOLS, 0) != 0
-                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
+                       and not _is_spi_cfx_light(lconf)
                 )
                 n_auto = sum(
                     1 for lconf in _core_rmt.CORE.config.get("light", [])
                     if lconf.get("platform", "") == "cfx_light"
                        and lconf.get(CONF_RMT_SYMBOLS, 0) == 0
-                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
+                       and not _is_spi_cfx_light(lconf)
                 )
                 n_total_lights = n_auto + (1 if manual_total > 0 else 0)
                 # Enforce per-chip light limit (RMT only)
-                _esp32_variant = "ESP32"
-                try:
-                    from esphome.core import CORE as _c
-                    _esp32_variant = str(_c.config.get("esp32", {}).get("variant", "ESP32")).upper().replace("-", "").replace("_", "")
-                except Exception:
-                    pass
+                _esp32_variant = _get_esp32_variant()
                 _n_all_rmt_lights = sum(
                     1 for lconf in _core_rmt.CORE.config.get("light", [])
                     if lconf.get("platform", "") == "cfx_light"
-                       and lconf.get(CONF_CHIPSET, "") not in SPI_CHIPSETS
+                       and not _is_spi_cfx_light(lconf)
                 )
-                _max_lights = _MAX_LIGHTS.get(_esp32_variant, _MAX_LIGHTS_DEFAULT)
+                _max_lights = _get_cfx_light_limits(_esp32_variant)["rmt"]
                 if _n_all_rmt_lights > _max_lights:
                     _log_rmt.getLogger(__name__).error(
                         "CFXLight: %s supports max %d RMT light(s) but %d are declared. "
