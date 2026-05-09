@@ -332,17 +332,17 @@ def _classic_native_spi_host(data_pin, clock_pin):
     # The GPIO matrix can route either host to many pins, but native routing is
     # materially cleaner for high-rate clocked LED output on real wiring.
     if data_pin == 13 and clock_pin == 14:
-        return "SPI_HOST_2"
+        return "SPI2_HOST"
     if data_pin == 23 and clock_pin == 18:
-        return "SPI_HOST_3"
+        return "SPI3_HOST"
     return None
 
 
 def _choose_spi_host_name(data_pin, clock_pin, used_hosts):
     variant = _get_esp32_variant()
-    available_hosts = ["SPI_HOST_2"]
+    available_hosts = ["SPI2_HOST"]
     if variant not in _SPI_SINGLE_HOST_VARIANTS:
-        available_hosts.append("SPI_HOST_3")
+        available_hosts.append("SPI3_HOST")
 
     preferred = None
     if variant == "ESP32":
