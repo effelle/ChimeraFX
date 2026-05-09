@@ -2141,11 +2141,15 @@ void CFXLightOutput::setup_spi_() {
     return;
   }
 
+  const int spi_host_num = (host == SPI2_HOST) ? 2 : 3;
 
   ESP_LOGI(TAG,
-           "SPI transport ready: frame=%u bytes, est_tx_timeout=% " PRIu32
-           " ms, mode=async_queue, dual_core=enabled",
-           static_cast<unsigned>(frame_size), this->get_spi_frame_timeout_ms_());
+           "SPI transport ready: host=SPI%d data=GPIO%u clock=GPIO%u "
+           "speed=%" PRIu32 " Hz frame=%u bytes est_tx_timeout=%" PRIu32
+           " ms mode=async_queue",
+           spi_host_num, this->spi_data_pin_, this->spi_clock_pin_,
+           this->spi_speed_hz_, static_cast<unsigned>(frame_size),
+           this->get_spi_frame_timeout_ms_());
 }
 
 // --- Dynamic State Synchronization ---

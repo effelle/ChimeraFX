@@ -325,6 +325,39 @@ def _is_spi_cfx_light(config):
     return str(config.get(CONF_CHIPSET, "")).upper() in SPI_CHIPSETS
 
 
+def _classic_native_spi_host(data_pin, clock_pin):
+    # ESP32 Classic native pin groups:
+    #   HSPI / SPI2: MOSI=GPIO13, SCLK=GPIO14
+    #   VSPI / SPI3: MOSI=GPIO23, SCLK=GPIO18
+    # The GPIO matrix can route either host to many pins, but native routing is
+    # materially cleaner for high-rate clocked LED output on real wiring.
+    if data_pin == 13 and clock_pin == 14:
+        return "SPI_HOST_2"
+    if data_pin == 23 and clock_pin == 18:
+        return "SPI_HOST_3"
+    return None
+
+
+def _choose_spi_host_name(data_pin, clock_pin, used_hosts):
+    variant = _get_esp32_variant()
+    available_hosts = ["SPI_HOST_2"]
+    if variant not in _SPI_SINGLE_HOST_VARIANTS:
+        available_hosts.append("SPI_HOST_3")
+
+    preferred = None
+    if variant == "ESP32":
+        preferred = _classic_native_spi_host(data_pin, clock_pin)
+
+    if preferred in available_hosts and preferred not in used_hosts:
+        return preferred
+
+    for host in available_hosts:
+        if host not in used_hosts:
+            return host
+
+    return available_hosts[0]
+
+
 def _coalesce_alias(config, canonical_key, alias_keys, *, scope):
     present = [key for key in [canonical_key, *alias_keys] if key in config]
     if not present:
@@ -833,17 +866,17 @@ async def to_code(config):
 
     if is_spi:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_SPI))
-        cg.add(var.set_spi_data_pin(config[CONF_DATA_PIN][CONF_NUMBER]))
-        cg.add(var.set_spi_clock_pin(config[CONF_CLOCK_PIN][CONF_NUMBER]))
+        data_pin = config[CONF_DATA_PIN][CONF_NUMBER]
+        clock_pin = config[CONF_CLOCK_PIN][CONF_NUMBER]
+        cg.add(var.set_spi_data_pin(data_pin))
+        cg.add(var.set_spi_clock_pin(clock_pin))
         cg.add(var.set_spi_speed_hz(config.get(CONF_SPI_SPEED, 10000000)))
         
         # Get or create SPI host registry counter in CORE.data
         registry = CORE.data.get(_SPI_HOST_REGISTRY_KEY, [])
-        # Assign host: 1st SPI strip gets SPI2, 2nd gets SPI3
-        host_idx = len(registry)
-        spi_host = cfx_light_ns.enum("CFXSPIHost").SPI_HOST_2 if host_idx % 2 == 0 else cfx_light_ns.enum("CFXSPIHost").SPI_HOST_3
-        cg.add(var.set_spi_host(spi_host))
-        registry.append(spi_host)
+        host_name = _choose_spi_host_name(data_pin, clock_pin, registry)
+        cg.add(var.set_spi_host(SPI_HOSTS[host_name]))
+        registry.append(host_name)
         CORE.data[_SPI_HOST_REGISTRY_KEY] = registry
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
