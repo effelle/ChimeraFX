@@ -237,11 +237,17 @@ void CFXPowerManager::sample_() {
   }
   if (this->budget_status_sensor_ != nullptr) {
     if (this->psu_current_limit_ma_ <= 0.0f) {
-      this->budget_status_sensor_->publish_state("No PSU limit configured");
-    } else if (total_demand_ma > this->psu_current_limit_ma_) {
-      this->budget_status_sensor_->publish_state("Above configured PSU");
+      this->budget_status_sensor_->publish_state("No PSU limit");
     } else {
-      this->budget_status_sensor_->publish_state("Within configured PSU");
+      const float psu_load_percent =
+          (total_demand_ma / this->psu_current_limit_ma_) * 100.0f;
+      if (psu_load_percent >= 100.0f) {
+        this->budget_status_sensor_->publish_state("Exceeds PSU model");
+      } else if (psu_load_percent >= 85.0f) {
+        this->budget_status_sensor_->publish_state("Near PSU limit");
+      } else {
+        this->budget_status_sensor_->publish_state("Comfortable");
+      }
     }
   }
 }
