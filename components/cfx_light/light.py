@@ -204,7 +204,6 @@ _ESTIMATED_CURRENT_SENSOR_SCHEMA = sensor.sensor_schema(
     accuracy_decimals=3,
     device_class="current",
     state_class="measurement",
-    entity_category="diagnostic",
 )
 
 _ESTIMATED_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -213,7 +212,6 @@ _ESTIMATED_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
     accuracy_decimals=1,
     device_class="power",
     state_class="measurement",
-    entity_category="diagnostic",
 )
 
 _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -222,7 +220,6 @@ _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
     accuracy_decimals=1,
     device_class="apparent_power",
     state_class="measurement",
-    entity_category="diagnostic",
 )
 
 _ESTIMATED_ENERGY_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -238,12 +235,10 @@ _ESTIMATED_PSU_LOAD_SENSOR_SCHEMA = sensor.sensor_schema(
     icon="mdi:gauge",
     accuracy_decimals=0,
     state_class="measurement",
-    entity_category="diagnostic",
 )
 
 _ESTIMATED_BUDGET_STATUS_SCHEMA = text_sensor.text_sensor_schema(
     icon="mdi:power-plug-battery",
-    entity_category="diagnostic",
 )
 
 POWER_SENSORS_SCHEMA = cv.Schema(
@@ -280,7 +275,7 @@ POWER_MONITOR_SCHEMA = cv.Schema(
 
 POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
     {
-        cv.Optional(CONF_NAME, default="CFX Estimated Power Reduction"): cv.string,
+        cv.Optional(CONF_NAME, default="Power Reduction"): cv.string,
     }
 )
 
@@ -1187,7 +1182,7 @@ async def _ensure_power_manager():
             dc_current = await _new_power_sensor(
                 dc_current_conf,
                 "cfx_estimated_dc_current",
-                "CFX Estimated LED Current Demand",
+                "CFX LED DC Current Demand",
             )
         dc_power = cg.nullptr
         dc_power_conf = _first_node_power_sensor_config(CONF_DC_POWER)
@@ -1195,7 +1190,7 @@ async def _ensure_power_manager():
             dc_power = await _new_power_sensor(
                 dc_power_conf,
                 "cfx_estimated_dc_power",
-                "CFX Estimated LED Power Demand",
+                "CFX LED DC Power Demand",
             )
         ac_power = cg.nullptr
         ac_power_conf = _first_node_power_sensor_config(CONF_AC_POWER)
@@ -1203,7 +1198,7 @@ async def _ensure_power_manager():
             ac_power = await _new_power_sensor(
                 ac_power_conf,
                 "cfx_estimated_ac_power",
-                "CFX Estimated AC Power Demand",
+                "CFX AC Power Demand",
             )
         apparent_power = cg.nullptr
         apparent_power_conf = _first_node_power_sensor_config(CONF_APPARENT_POWER)
@@ -1211,7 +1206,7 @@ async def _ensure_power_manager():
             apparent_power = await _new_power_sensor(
                 apparent_power_conf,
                 "cfx_estimated_apparent_power",
-                "CFX Estimated Apparent Power",
+                "CFX Apparent Power Demand",
             )
         ac_current = cg.nullptr
         ac_current_conf = _first_node_power_sensor_config(CONF_AC_CURRENT)
@@ -1219,7 +1214,7 @@ async def _ensure_power_manager():
             ac_current = await _new_power_sensor(
                 ac_current_conf,
                 "cfx_estimated_ac_current",
-                "CFX Estimated AC Current",
+                "CFX AC Current Demand",
             )
         energy = cg.nullptr
         energy_conf = _first_node_power_sensor_config(CONF_ENERGY)
@@ -1227,7 +1222,7 @@ async def _ensure_power_manager():
             energy = await _new_power_sensor(
                 energy_conf,
                 "cfx_estimated_energy",
-                "CFX Estimated Energy",
+                "CFX Energy",
             )
         psu_load = cg.nullptr
         psu_load_conf = _first_node_power_sensor_config(CONF_PSU_LOAD)
@@ -1235,7 +1230,7 @@ async def _ensure_power_manager():
             psu_load = await _new_power_sensor(
                 psu_load_conf,
                 "cfx_estimated_psu_load",
-                "CFX Estimated PSU Load",
+                "CFX PSU Load",
             )
         budget_status = cg.nullptr
         budget_status_conf = _first_node_power_sensor_config(CONF_BUDGET_STATUS)
@@ -1243,7 +1238,7 @@ async def _ensure_power_manager():
             budget_status = await _new_power_text_sensor(
                 budget_status_conf,
                 "cfx_estimated_budget_status",
-                "CFX Estimated Power Budget Status",
+                "CFX Power Budget Status",
             )
         cg.add(
             manager.set_node_sensors(
@@ -1269,7 +1264,7 @@ async def _ensure_power_manager():
             CONF_ID: reduction_id,
             CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
             "icon": "mdi:flash-percent",
-            "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
+            "entity_category": cv.ENTITY_CATEGORIES["config"],
             "disabled_by_default": False,
         }
         await select.register_select(
@@ -1292,14 +1287,14 @@ async def _register_power_output(var, config):
         strip_dc_current = await _new_power_sensor(
             sensors_conf[CONF_STRIP_DC_CURRENT],
             f"{config[CONF_ID].id}_estimated_dc_current",
-            f"{config.get(CONF_NAME, config[CONF_ID].id)} Estimated DC Current",
+            f"{config.get(CONF_NAME, config[CONF_ID].id)} LED DC Current Demand",
         )
     strip_dc_power = cg.nullptr
     if CONF_STRIP_DC_POWER in sensors_conf:
         strip_dc_power = await _new_power_sensor(
             sensors_conf[CONF_STRIP_DC_POWER],
             f"{config[CONF_ID].id}_estimated_dc_power",
-            f"{config.get(CONF_NAME, config[CONF_ID].id)} Estimated DC Power",
+            f"{config.get(CONF_NAME, config[CONF_ID].id)} LED DC Power Demand",
         )
 
     cg.add(
