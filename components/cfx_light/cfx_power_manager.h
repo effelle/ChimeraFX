@@ -3,8 +3,9 @@
 #ifdef USE_ESP32
 
 #include "cfx_light.h"
-#include "esphome/components/number/number.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/select/select.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include <vector>
@@ -14,10 +15,10 @@ namespace cfx_light {
 
 class CFXPowerManager;
 
-class CFXPowerReductionNumber : public number::Number {
+class CFXPowerReductionSelect : public select::Select {
  public:
   void set_manager(CFXPowerManager *manager) { this->manager_ = manager; }
-  void control(float value) override;
+  void control(size_t index) override;
 
  protected:
   CFXPowerManager *manager_{nullptr};
@@ -33,14 +34,15 @@ class CFXPowerManager : public Component {
   float get_setup_priority() const override { return setup_priority::DATA; }
 
   void configure_monitor(uint32_t update_interval_ms, float supply_voltage,
-                         float psu_efficiency, float power_factor,
-                         float mains_voltage);
+                         float psu_current_limit_ma, float psu_efficiency,
+                         float power_factor, float mains_voltage);
   void configure_reduction(bool restore, uint32_t ramp_time_ms);
   void set_node_sensors(sensor::Sensor *dc_current, sensor::Sensor *dc_power,
                         sensor::Sensor *ac_power,
                         sensor::Sensor *apparent_power,
-                        sensor::Sensor *ac_current);
-  void set_reduction_number(CFXPowerReductionNumber *number);
+                        sensor::Sensor *ac_current, sensor::Sensor *psu_load,
+                        text_sensor::TextSensor *budget_status);
+  void set_reduction_select(CFXPowerReductionSelect *select);
   void register_output(CFXLightOutput *output, const char *name, float idle_ma,
                        float rgb_channel_ma, float white_channel_ma,
                        sensor::Sensor *strip_dc_current,
@@ -59,6 +61,7 @@ class CFXPowerManager : public Component {
     CFXPowerModel model{};
     sensor::Sensor *strip_dc_current{nullptr};
     sensor::Sensor *strip_dc_power{nullptr};
+    float estimated_dc_current_ma{0.0f};
   };
 
   void sample_();
@@ -75,6 +78,7 @@ class CFXPowerManager : public Component {
   uint32_t last_sample_ms_{0};
   uint32_t ramp_last_ms_{0};
   float supply_voltage_{5.0f};
+  float psu_current_limit_ma_{0.0f};
   float psu_efficiency_{0.85f};
   float power_factor_{0.90f};
   float mains_voltage_{120.0f};
@@ -86,7 +90,9 @@ class CFXPowerManager : public Component {
   sensor::Sensor *ac_power_sensor_{nullptr};
   sensor::Sensor *apparent_power_sensor_{nullptr};
   sensor::Sensor *ac_current_sensor_{nullptr};
-  CFXPowerReductionNumber *reduction_number_{nullptr};
+  sensor::Sensor *psu_load_sensor_{nullptr};
+  text_sensor::TextSensor *budget_status_sensor_{nullptr};
+  CFXPowerReductionSelect *reduction_select_{nullptr};
 };
 
 }  // namespace cfx_light

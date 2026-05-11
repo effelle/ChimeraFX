@@ -15,7 +15,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 CFX_LIGHT_SCHEMA_REV = 4
 
 import esphome.codegen as cg
-from esphome.components import light, event, sensor, number
+from esphome.components import light, event, sensor, select, text_sensor
 import esphome.config_validation as cv
 import esphome.core as core
 import logging
@@ -54,6 +54,7 @@ CONF_VISUALIZER_PORT = "visualizer_port"
 CONF_POWER_MONITOR = "power_monitor"
 CONF_POWER_LIMIT = "power_limit"
 CONF_SUPPLY_VOLTAGE = "supply_voltage"
+CONF_PSU_CURRENT_LIMIT = "psu_current_limit"
 CONF_PSU_EFFICIENCY = "psu_efficiency"
 CONF_POWER_FACTOR = "power_factor"
 CONF_MAINS_VOLTAGE = "mains_voltage"
@@ -66,6 +67,8 @@ CONF_DC_POWER = "dc_power"
 CONF_AC_POWER = "ac_power"
 CONF_APPARENT_POWER = "apparent_power"
 CONF_AC_CURRENT = "ac_current"
+CONF_PSU_LOAD = "psu_load"
+CONF_BUDGET_STATUS = "budget_status"
 CONF_STRIP_DC_CURRENT = "strip_dc_current"
 CONF_STRIP_DC_POWER = "strip_dc_power"
 CONF_RESTORE = "restore"
@@ -92,7 +95,7 @@ CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
-AUTO_LOAD = ["event", "cfx_effect", "sensor", "number"]
+AUTO_LOAD = ["event", "cfx_effect", "sensor", "select", "text_sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
@@ -103,8 +106,8 @@ CFXVirtualSegmentLight = cfx_light_ns.class_(
     "CFXVirtualSegmentLight", light.AddressableLight, cg.Component
 )
 CFXPowerManager = cfx_light_ns.class_("CFXPowerManager", cg.Component)
-CFXPowerReductionNumber = cfx_light_ns.class_(
-    "CFXPowerReductionNumber", number.Number
+CFXPowerReductionSelect = cfx_light_ns.class_(
+    "CFXPowerReductionSelect", select.Select
 )
 
 ChimeraChipset = cfx_light_ns.enum("ChimeraChipset")
@@ -188,6 +191,10 @@ def _current_ma(value):
     return float(cv.current(value)) * 1000.0
 
 
+def _current_to_ma(value):
+    return float(cv.current(value)) * 1000.0
+
+
 _ESTIMATED_CURRENT_SENSOR_SCHEMA = sensor.sensor_schema(
     unit_of_measurement="A",
     icon="mdi:current-dc",
@@ -215,6 +222,19 @@ _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
     entity_category="diagnostic",
 )
 
+_ESTIMATED_PSU_LOAD_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="%",
+    icon="mdi:gauge",
+    accuracy_decimals=0,
+    state_class="measurement",
+    entity_category="diagnostic",
+)
+
+_ESTIMATED_BUDGET_STATUS_SCHEMA = text_sensor.text_sensor_schema(
+    icon="mdi:power-plug-battery",
+    entity_category="diagnostic",
+)
+
 POWER_SENSORS_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
@@ -222,6 +242,8 @@ POWER_SENSORS_SCHEMA = cv.Schema(
         cv.Optional(CONF_AC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_APPARENT_POWER): _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_AC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_PSU_LOAD): _ESTIMATED_PSU_LOAD_SENSOR_SCHEMA,
+        cv.Optional(CONF_BUDGET_STATUS): _ESTIMATED_BUDGET_STATUS_SCHEMA,
         cv.Optional(CONF_STRIP_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
         cv.Optional(CONF_STRIP_DC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
     }
@@ -231,6 +253,7 @@ POWER_MONITOR_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_SUPPLY_VOLTAGE, default=5.0): cv.float_range(min=0.1),
+        cv.Optional(CONF_PSU_CURRENT_LIMIT, default="0A"): _current_to_ma,
         cv.Optional(CONF_PSU_EFFICIENCY, default=0.85): cv.float_range(min=0.01, max=1.0),
         cv.Optional(CONF_POWER_FACTOR, default=0.90): cv.float_range(min=0.01, max=1.0),
         cv.Optional(CONF_MAINS_VOLTAGE, default=120.0): cv.float_range(min=1.0),
@@ -696,6 +719,7 @@ def _validate_power_global_conflicts(cfx_lights):
     monitor_fields = (
         CONF_UPDATE_INTERVAL,
         CONF_SUPPLY_VOLTAGE,
+        CONF_PSU_CURRENT_LIMIT,
         CONF_PSU_EFFICIENCY,
         CONF_POWER_FACTOR,
         CONF_MAINS_VOLTAGE,
@@ -728,6 +752,8 @@ def _validate_power_global_conflicts(cfx_lights):
             CONF_AC_POWER,
             CONF_APPARENT_POWER,
             CONF_AC_CURRENT,
+            CONF_PSU_LOAD,
+            CONF_BUDGET_STATUS,
         ):
             if key not in sensors_conf:
                 continue
@@ -1090,6 +1116,20 @@ async def _new_power_sensor(user_conf, default_id, default_name):
     return var
 
 
+async def _new_power_text_sensor(user_conf, default_id, default_name):
+    conf = {
+        CONF_ID: cv.declare_id(text_sensor.TextSensor)(default_id),
+        CONF_NAME: default_name,
+        "disabled_by_default": False,
+    }
+    if user_conf:
+        conf.update(user_conf)
+    var = cg.new_Pvariable(conf[CONF_ID])
+    core.CORE.component_ids.add(conf[CONF_ID].id)
+    await text_sensor.register_text_sensor(var, conf)
+    return var
+
+
 async def _ensure_power_manager():
     manager = CORE.data.get(_POWER_MANAGER_DATA_KEY)
     if manager is not None:
@@ -1106,6 +1146,7 @@ async def _ensure_power_manager():
             manager.configure_monitor(
                 monitor_conf[CONF_UPDATE_INTERVAL].total_milliseconds,
                 monitor_conf[CONF_SUPPLY_VOLTAGE],
+                monitor_conf[CONF_PSU_CURRENT_LIMIT],
                 monitor_conf[CONF_PSU_EFFICIENCY],
                 monitor_conf[CONF_POWER_FACTOR],
                 monitor_conf[CONF_MAINS_VOLTAGE],
@@ -1117,7 +1158,7 @@ async def _ensure_power_manager():
             dc_current = await _new_power_sensor(
                 dc_current_conf,
                 "cfx_estimated_dc_current",
-                "CFX Estimated DC Current",
+                "CFX Estimated LED Current Demand",
             )
         dc_power = cg.nullptr
         dc_power_conf = _first_node_power_sensor_config(CONF_DC_POWER)
@@ -1125,7 +1166,7 @@ async def _ensure_power_manager():
             dc_power = await _new_power_sensor(
                 dc_power_conf,
                 "cfx_estimated_dc_power",
-                "CFX Estimated DC Power",
+                "CFX Estimated LED Power Demand",
             )
         ac_power = cg.nullptr
         ac_power_conf = _first_node_power_sensor_config(CONF_AC_POWER)
@@ -1133,7 +1174,7 @@ async def _ensure_power_manager():
             ac_power = await _new_power_sensor(
                 ac_power_conf,
                 "cfx_estimated_ac_power",
-                "CFX Estimated AC Power",
+                "CFX Estimated AC Power Demand",
             )
         apparent_power = cg.nullptr
         apparent_power_conf = _first_node_power_sensor_config(CONF_APPARENT_POWER)
@@ -1151,9 +1192,26 @@ async def _ensure_power_manager():
                 "cfx_estimated_ac_current",
                 "CFX Estimated AC Current",
             )
+        psu_load = cg.nullptr
+        psu_load_conf = _first_node_power_sensor_config(CONF_PSU_LOAD)
+        if psu_load_conf is not None:
+            psu_load = await _new_power_sensor(
+                psu_load_conf,
+                "cfx_estimated_psu_load",
+                "CFX Estimated PSU Load",
+            )
+        budget_status = cg.nullptr
+        budget_status_conf = _first_node_power_sensor_config(CONF_BUDGET_STATUS)
+        if budget_status_conf is not None:
+            budget_status = await _new_power_text_sensor(
+                budget_status_conf,
+                "cfx_estimated_budget_status",
+                "CFX Estimated Power Budget Status",
+            )
         cg.add(
             manager.set_node_sensors(
-                dc_current, dc_power, ac_power, apparent_power, ac_current
+                dc_current, dc_power, ac_power, apparent_power, ac_current,
+                psu_load, budget_status
             )
         )
 
@@ -1166,23 +1224,21 @@ async def _ensure_power_manager():
             )
         )
         reduction_id = core.ID(
-            "cfx_power_reduction", is_declaration=True, type=CFXPowerReductionNumber
+            "cfx_power_reduction", is_declaration=True, type=CFXPowerReductionSelect
         )
         reduction_var = cg.new_Pvariable(reduction_id)
         core.CORE.component_ids.add("cfx_power_reduction")
         reduction_conf = {
             CONF_ID: reduction_id,
             CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
-            "unit_of_measurement": "%",
             "icon": "mdi:flash-percent",
-            "entity_category": cv.ENTITY_CATEGORIES["config"],
+            "entity_category": cv.ENTITY_CATEGORIES["diagnostic"],
             "disabled_by_default": False,
-            "mode": number.NumberMode.NUMBER_MODE_AUTO,
         }
-        await number.register_number(
-            reduction_var, reduction_conf, min_value=0, max_value=30, step=10
+        await select.register_select(
+            reduction_var, reduction_conf, options=["0%", "10%", "20%", "30%"]
         )
-        cg.add(manager.set_reduction_number(reduction_var))
+        cg.add(manager.set_reduction_select(reduction_var))
 
     CORE.data[_POWER_MANAGER_DATA_KEY] = manager
     return manager

@@ -15,9 +15,10 @@ static const char *const TAG_POWER = "cfx_power";
 
 CFXPowerManager *CFXPowerManager::active_{nullptr};
 
-void CFXPowerReductionNumber::control(float value) {
+void CFXPowerReductionSelect::control(size_t index) {
   if (this->manager_ != nullptr) {
-    this->manager_->set_target_reduction_percent(value, true);
+    this->manager_->set_target_reduction_percent(static_cast<float>(index * 10),
+                                                 true);
   }
 }
 
@@ -85,12 +86,20 @@ void CFXPowerManager::loop() {
 
 void CFXPowerManager::configure_monitor(uint32_t update_interval_ms,
                                         float supply_voltage,
+                                        float psu_current_limit_ma,
                                         float psu_efficiency,
                                         float power_factor,
                                         float mains_voltage) {
   this->monitor_enabled_ = true;
   this->update_interval_ms_ = update_interval_ms;
   this->supply_voltage_ = supply_voltage;
+  this->psu_current_limit_ma_ =
+      psu_current_limit_ma > 0.0f ? psu_current_limit_ma : 0.0f;
+  if (this->psu_current_limit_ma_ <= 0.0f) {
+    ESP_LOGW(TAG_POWER,
+             "No psu_current_limit configured; power monitor will report "
+             "uncapped estimated LED demand.");
+  }
   this->psu_efficiency_ = psu_efficiency > 0.0f ? psu_efficiency : 1.0f;
   this->power_factor_ = power_factor > 0.0f ? power_factor : 1.0f;
   this->mains_voltage_ = mains_voltage > 0.0f ? mains_voltage : 120.0f;
@@ -107,18 +116,22 @@ void CFXPowerManager::set_node_sensors(sensor::Sensor *dc_current,
                                        sensor::Sensor *dc_power,
                                        sensor::Sensor *ac_power,
                                        sensor::Sensor *apparent_power,
-                                       sensor::Sensor *ac_current) {
+                                       sensor::Sensor *ac_current,
+                                       sensor::Sensor *psu_load,
+                                       text_sensor::TextSensor *budget_status) {
   this->dc_current_sensor_ = dc_current;
   this->dc_power_sensor_ = dc_power;
   this->ac_power_sensor_ = ac_power;
   this->apparent_power_sensor_ = apparent_power;
   this->ac_current_sensor_ = ac_current;
+  this->psu_load_sensor_ = psu_load;
+  this->budget_status_sensor_ = budget_status;
 }
 
-void CFXPowerManager::set_reduction_number(CFXPowerReductionNumber *number) {
-  this->reduction_number_ = number;
-  if (number != nullptr) {
-    number->set_manager(this);
+void CFXPowerManager::set_reduction_select(CFXPowerReductionSelect *select) {
+  this->reduction_select_ = select;
+  if (select != nullptr) {
+    select->set_manager(this);
   }
 }
 
@@ -168,15 +181,19 @@ void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
 void CFXPowerManager::sample_() {
   const float dynamic_scale =
       static_cast<float>(this->get_transmit_scale()) / 255.0f;
-  float total_dc_current_ma = 0.0f;
+  float total_demand_ma = 0.0f;
 
   for (auto &entry : this->outputs_) {
     if (entry.output == nullptr) {
       continue;
     }
-    const float current_ma =
+    entry.estimated_dc_current_ma =
         entry.output->estimate_power_current_ma(entry.model, dynamic_scale);
-    total_dc_current_ma += current_ma;
+    total_demand_ma += entry.estimated_dc_current_ma;
+  }
+
+  for (auto &entry : this->outputs_) {
+    const float current_ma = entry.estimated_dc_current_ma;
     const float dc_power_w = this->supply_voltage_ * current_ma / 1000.0f;
     if (entry.strip_dc_current != nullptr) {
       entry.strip_dc_current->publish_state(current_ma / 1000.0f);
@@ -187,13 +204,13 @@ void CFXPowerManager::sample_() {
   }
 
   const float dc_power_w =
-      this->supply_voltage_ * total_dc_current_ma / 1000.0f;
+      this->supply_voltage_ * total_demand_ma / 1000.0f;
   const float ac_power_w = dc_power_w / this->psu_efficiency_;
   const float apparent_power_va = ac_power_w / this->power_factor_;
   const float ac_current_a = apparent_power_va / this->mains_voltage_;
 
   if (this->dc_current_sensor_ != nullptr) {
-    this->dc_current_sensor_->publish_state(total_dc_current_ma / 1000.0f);
+    this->dc_current_sensor_->publish_state(total_demand_ma / 1000.0f);
   }
   if (this->dc_power_sensor_ != nullptr) {
     this->dc_power_sensor_->publish_state(dc_power_w);
@@ -207,12 +224,32 @@ void CFXPowerManager::sample_() {
   if (this->ac_current_sensor_ != nullptr) {
     this->ac_current_sensor_->publish_state(ac_current_a);
   }
+  if (this->psu_load_sensor_ != nullptr) {
+    if (this->psu_current_limit_ma_ > 0.0f) {
+      float psu_load = (total_demand_ma / this->psu_current_limit_ma_) * 100.0f;
+      if (psu_load > 100.0f) {
+        psu_load = 100.0f;
+      }
+      this->psu_load_sensor_->publish_state(psu_load);
+    } else {
+      this->psu_load_sensor_->publish_state(std::nanf(""));
+    }
+  }
+  if (this->budget_status_sensor_ != nullptr) {
+    if (this->psu_current_limit_ma_ <= 0.0f) {
+      this->budget_status_sensor_->publish_state("No PSU limit configured");
+    } else if (total_demand_ma > this->psu_current_limit_ma_) {
+      this->budget_status_sensor_->publish_state("Above configured PSU");
+    } else {
+      this->budget_status_sensor_->publish_state("Within configured PSU");
+    }
+  }
 }
 
 void CFXPowerManager::publish_reduction_state_() {
-  if (this->reduction_number_ != nullptr) {
-    this->reduction_number_->publish_state(
-        static_cast<float>(this->target_reduction_percent_));
+  if (this->reduction_select_ != nullptr) {
+    this->reduction_select_->publish_state(
+        static_cast<size_t>(this->target_reduction_percent_ / 10));
   }
 }
 

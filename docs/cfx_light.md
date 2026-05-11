@@ -95,7 +95,7 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
 * **power_monitor** (*mapping*, Optional): Enables low-rate estimated power reporting for this node. Sensors are generated only for entries explicitly listed under `power_monitor.sensors`.
-* **power_limit** (*mapping*, Optional): Generates a persistent node-wide manual power reduction control with fixed `0%`, `10%`, `20%`, and `30%` steps. The reduction ramps and is applied only while packing/transmitting LED data; effect buffers are not modified.
+* **power_limit** (*mapping*, Optional): Generates a persistent node-wide manual power reduction dropdown with fixed `0%`, `10%`, `20%`, and `30%` steps. The reduction ramps and is applied only while packing/transmitting LED data; effect buffers are not modified.
 * **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
 
 --- 
@@ -115,6 +115,7 @@ light:
 
     power_monitor:
       supply_voltage: 5.0
+      psu_current_limit: 12A
       psu_efficiency: 0.85
       power_factor: 0.90
       mains_voltage: 120.0
@@ -123,11 +124,13 @@ light:
       white_channel_current_ma: 20.0
       sensors:
         dc_current:
-          name: "Estimated DC Current"
+          name: "Estimated LED Current Demand"
         dc_power:
-          name: "Estimated DC Power"
-        ac_power:
-          name: "Estimated AC Power"
+          name: "Estimated LED Power Demand"
+        psu_load:
+          name: "Estimated PSU Load"
+        budget_status:
+          name: "Estimated Power Budget Status"
 
     power_limit:
       restore: true
@@ -136,7 +139,7 @@ light:
         name: "Estimated Power Reduction"
 ```
 
-`dc_current`, `dc_power`, and `ac_power` are node-wide totals across registered `cfx_light` outputs. `apparent_power` and `ac_current` are available but should normally be disabled or omitted unless you need VA/line-current estimates. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
+`dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Within configured PSU`, `Above configured PSU`, or `No PSU limit configured`. `ac_power`, `apparent_power`, and `ac_current` are available for advanced AC-side demand estimates. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
 
 For WS2811, the defaults are only a fallback. Current varies by voltage, grouping, resistor design, and strip density, so calibrate `rgb_channel_current_ma` and `supply_voltage` against your actual strip.
 
