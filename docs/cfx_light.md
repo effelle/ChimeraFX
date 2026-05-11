@@ -94,9 +94,53 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
+* **power_monitor** (*mapping*, Optional): Enables low-rate estimated power reporting for this node. Sensors are generated only for entries explicitly listed under `power_monitor.sensors`.
+* **power_limit** (*mapping*, Optional): Generates a persistent node-wide manual power reduction control with fixed `0%`, `10%`, `20%`, and `30%` steps. The reduction ramps and is applied only while packing/transmitting LED data; effect buffers are not modified.
 * **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
 
 --- 
+
+## Estimated Power Monitor
+
+`power_monitor` is estimate-first. ChimeraFX samples the final composed LED buffer at `update_interval` (default `10s`) and publishes only the sensors you configure. It does not perform per-frame automatic brightness limiting.
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "Main Strip"
+    id: main_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: SK6812
+
+    power_monitor:
+      supply_voltage: 5.0
+      psu_efficiency: 0.85
+      power_factor: 0.90
+      mains_voltage: 120.0
+      idle_current_ma: 1.0
+      rgb_channel_current_ma: 20.0
+      white_channel_current_ma: 20.0
+      sensors:
+        dc_current:
+          name: "Estimated DC Current"
+        dc_power:
+          name: "Estimated DC Power"
+        ac_power:
+          name: "Estimated AC Power"
+
+    power_limit:
+      restore: true
+      ramp_time: 800ms
+      reduction:
+        name: "Estimated Power Reduction"
+```
+
+`dc_current`, `dc_power`, and `ac_power` are node-wide totals across registered `cfx_light` outputs. `apparent_power` and `ac_current` are available but should normally be disabled or omitted unless you need VA/line-current estimates. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
+
+For WS2811, the defaults are only a fallback. Current varies by voltage, grouping, resistor design, and strip density, so calibrate `rgb_channel_current_ma` and `supply_voltage` against your actual strip.
+
+---
 
 ## Segments (Multi-Zone Control)
 

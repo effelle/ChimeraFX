@@ -12,10 +12,10 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 3
+CFX_LIGHT_SCHEMA_REV = 4
 
 import esphome.codegen as cg
-from esphome.components import light, event
+from esphome.components import light, event, sensor, number
 import esphome.config_validation as cv
 import esphome.core as core
 import logging
@@ -51,6 +51,26 @@ CONF_DEFAULT_TRANSITION_LENGTH = "default_transition_length"
 CONF_ALL_EFFECTS = "all_effects"
 CONF_VISUALIZER_IP = "visualizer_ip"
 CONF_VISUALIZER_PORT = "visualizer_port"
+CONF_POWER_MONITOR = "power_monitor"
+CONF_POWER_LIMIT = "power_limit"
+CONF_SUPPLY_VOLTAGE = "supply_voltage"
+CONF_PSU_EFFICIENCY = "psu_efficiency"
+CONF_POWER_FACTOR = "power_factor"
+CONF_MAINS_VOLTAGE = "mains_voltage"
+CONF_IDLE_CURRENT_MA = "idle_current_ma"
+CONF_RGB_CHANNEL_CURRENT_MA = "rgb_channel_current_ma"
+CONF_WHITE_CHANNEL_CURRENT_MA = "white_channel_current_ma"
+CONF_SENSORS = "sensors"
+CONF_DC_CURRENT = "dc_current"
+CONF_DC_POWER = "dc_power"
+CONF_AC_POWER = "ac_power"
+CONF_APPARENT_POWER = "apparent_power"
+CONF_AC_CURRENT = "ac_current"
+CONF_STRIP_DC_CURRENT = "strip_dc_current"
+CONF_STRIP_DC_POWER = "strip_dc_power"
+CONF_RESTORE = "restore"
+CONF_RAMP_TIME = "ramp_time"
+CONF_REDUCTION = "reduction"
 
 # Segment configuration keys (Phase 1)
 CONF_SEGMENTS = "segments"
@@ -72,7 +92,7 @@ CONF_SEGMENT_LIGHT_ID = "light_id"
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
-AUTO_LOAD = ["event", "cfx_effect"]
+AUTO_LOAD = ["event", "cfx_effect", "sensor", "number"]
 _LOGGER = logging.getLogger(__name__)
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
@@ -81,6 +101,10 @@ CFXLightOutput = cfx_light_ns.class_(
 )
 CFXVirtualSegmentLight = cfx_light_ns.class_(
     "CFXVirtualSegmentLight", light.AddressableLight, cg.Component
+)
+CFXPowerManager = cfx_light_ns.class_("CFXPowerManager", cg.Component)
+CFXPowerReductionNumber = cfx_light_ns.class_(
+    "CFXPowerReductionNumber", number.Number
 )
 
 ChimeraChipset = cfx_light_ns.enum("ChimeraChipset")
@@ -156,6 +180,79 @@ CONF_SET_COLOR = "set_color"
 SET_COLOR_SCHEMA = cv.All(
     cv.ensure_list(cv.int_range(min=0, max=100)),
     cv.Length(min=3, max=4),
+)
+
+def _current_ma(value):
+    if isinstance(value, (int, float)):
+        return float(value)
+    return float(cv.current(value)) * 1000.0
+
+
+_ESTIMATED_CURRENT_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="A",
+    icon="mdi:current-dc",
+    accuracy_decimals=3,
+    device_class="current",
+    state_class="measurement",
+    entity_category="diagnostic",
+)
+
+_ESTIMATED_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="W",
+    icon="mdi:flash",
+    accuracy_decimals=1,
+    device_class="power",
+    state_class="measurement",
+    entity_category="diagnostic",
+)
+
+_ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="VA",
+    icon="mdi:flash-triangle",
+    accuracy_decimals=1,
+    device_class="apparent_power",
+    state_class="measurement",
+    entity_category="diagnostic",
+)
+
+POWER_SENSORS_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_DC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
+        cv.Optional(CONF_AC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
+        cv.Optional(CONF_APPARENT_POWER): _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA,
+        cv.Optional(CONF_AC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_STRIP_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_STRIP_DC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
+    }
+)
+
+POWER_MONITOR_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_SUPPLY_VOLTAGE, default=5.0): cv.float_range(min=0.1),
+        cv.Optional(CONF_PSU_EFFICIENCY, default=0.85): cv.float_range(min=0.01, max=1.0),
+        cv.Optional(CONF_POWER_FACTOR, default=0.90): cv.float_range(min=0.01, max=1.0),
+        cv.Optional(CONF_MAINS_VOLTAGE, default=120.0): cv.float_range(min=1.0),
+        cv.Optional(CONF_IDLE_CURRENT_MA, default=1.0): _current_ma,
+        cv.Optional(CONF_RGB_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
+        cv.Optional(CONF_WHITE_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
+        cv.Optional(CONF_SENSORS, default={}): POWER_SENSORS_SCHEMA,
+    }
+)
+
+POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_NAME, default="CFX Estimated Power Reduction"): cv.string,
+    }
+)
+
+POWER_LIMIT_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_RESTORE, default=True): cv.boolean,
+        cv.Optional(CONF_RAMP_TIME, default="800ms"): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_REDUCTION, default={}): POWER_LIMIT_REDUCTION_SCHEMA,
+    }
 )
 
 # --- Segment Schema & Validation (Phase 1) ---
@@ -522,6 +619,7 @@ def _final_validate(config):
             f"Too many RMT cfx_light entries for {variant}: {rmt_count} "
             f"(max {limits['rmt']})"
         )
+    _validate_power_global_conflicts(cfx_lights)
     return config
 
 
@@ -575,6 +673,100 @@ def _validate_set_color(config):
             )
 
     return config
+
+def _normalized_power_value(value):
+    if hasattr(value, "total_milliseconds"):
+        return value.total_milliseconds
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
+
+
+def _strip_generated_ids(conf):
+    if not isinstance(conf, dict):
+        return conf
+    return {
+        key: _normalized_power_value(value)
+        for key, value in conf.items()
+        if key != CONF_ID
+    }
+
+
+def _validate_power_global_conflicts(cfx_lights):
+    monitor_fields = (
+        CONF_UPDATE_INTERVAL,
+        CONF_SUPPLY_VOLTAGE,
+        CONF_PSU_EFFICIENCY,
+        CONF_POWER_FACTOR,
+        CONF_MAINS_VOLTAGE,
+    )
+    monitor_owner = {}
+    monitor_values = {}
+    node_sensor_owner = {}
+    node_sensor_values = {}
+
+    for lconf in cfx_lights:
+        monitor = lconf.get(CONF_POWER_MONITOR)
+        if monitor is None:
+            continue
+        label = lconf.get(CONF_NAME, lconf.get(CONF_ID, "<cfx_light>"))
+        for key in monitor_fields:
+            value = _normalized_power_value(monitor.get(key))
+            if key in monitor_values and monitor_values[key] != value:
+                raise cv.Invalid(
+                    f"Conflicting cfx_light power_monitor.{key}: "
+                    f"{monitor_owner[key]}={monitor_values[key]} but {label}={value}. "
+                    "Use one node-wide power model."
+                )
+            monitor_values[key] = value
+            monitor_owner[key] = label
+
+        sensors_conf = monitor.get(CONF_SENSORS, {})
+        for key in (
+            CONF_DC_CURRENT,
+            CONF_DC_POWER,
+            CONF_AC_POWER,
+            CONF_APPARENT_POWER,
+            CONF_AC_CURRENT,
+        ):
+            if key not in sensors_conf:
+                continue
+            value = _strip_generated_ids(sensors_conf[key])
+            if key in node_sensor_values and node_sensor_values[key] != value:
+                raise cv.Invalid(
+                    f"Conflicting cfx_light power_monitor.sensors.{key}: "
+                    f"declared differently by {node_sensor_owner[key]} and {label}."
+                )
+            node_sensor_values[key] = value
+            node_sensor_owner[key] = label
+
+    limit_owner = {}
+    limit_values = {}
+    for lconf in cfx_lights:
+        limit = lconf.get(CONF_POWER_LIMIT)
+        if limit is None:
+            continue
+        label = lconf.get(CONF_NAME, lconf.get(CONF_ID, "<cfx_light>"))
+        for key in (CONF_RESTORE, CONF_RAMP_TIME):
+            value = _normalized_power_value(limit.get(key))
+            if key in limit_values and limit_values[key] != value:
+                raise cv.Invalid(
+                    f"Conflicting cfx_light power_limit.{key}: "
+                    f"{limit_owner[key]}={limit_values[key]} but {label}={value}. "
+                    "Manual power reduction is node-wide."
+                )
+            limit_values[key] = value
+            limit_owner[key] = label
+        reduction_name = limit.get(CONF_REDUCTION, {}).get(CONF_NAME)
+        if CONF_REDUCTION in limit_values and limit_values[CONF_REDUCTION] != reduction_name:
+            raise cv.Invalid(
+                f"Conflicting cfx_light power_limit.reduction.name: "
+                f"{limit_owner[CONF_REDUCTION]}='{limit_values[CONF_REDUCTION]}' "
+                f"but {label}='{reduction_name}'."
+            )
+        limit_values[CONF_REDUCTION] = reduction_name
+        limit_owner[CONF_REDUCTION] = label
+
 
 def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
@@ -702,6 +894,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
+            cv.Optional(CONF_POWER_MONITOR): POWER_MONITOR_SCHEMA,
+            cv.Optional(CONF_POWER_LIMIT): POWER_LIMIT_SCHEMA,
             # Auto-controls (cfx_control entities generated from cfx_light)
             cv.Optional("controls", default=True): cv.boolean,
             cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
@@ -824,6 +1018,209 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     # Never less than one block — hardware minimum
     per_strip = max(per_strip, block)
     return per_strip
+
+
+_POWER_MANAGER_DATA_KEY = "cfx_power_manager_var"
+
+
+def _cfx_light_configs():
+    return [
+        lconf
+        for lconf in CORE.config.get("light", [])
+        if lconf.get("platform", "") == "cfx_light"
+    ]
+
+
+def _first_power_monitor_config():
+    for lconf in _cfx_light_configs():
+        if CONF_POWER_MONITOR in lconf:
+            return lconf[CONF_POWER_MONITOR]
+    return None
+
+
+def _first_power_limit_config():
+    for lconf in _cfx_light_configs():
+        if CONF_POWER_LIMIT in lconf:
+            return lconf[CONF_POWER_LIMIT]
+    return None
+
+
+def _power_sensor_configured():
+    for lconf in _cfx_light_configs():
+        monitor = lconf.get(CONF_POWER_MONITOR)
+        if not monitor:
+            continue
+        if monitor.get(CONF_SENSORS):
+            return True
+    return False
+
+
+def _first_node_power_sensor_config(key):
+    for lconf in _cfx_light_configs():
+        monitor = lconf.get(CONF_POWER_MONITOR)
+        if not monitor:
+            continue
+        sensors_conf = monitor.get(CONF_SENSORS, {})
+        if key in sensors_conf:
+            return sensors_conf[key]
+    return None
+
+
+def _power_manager_needed():
+    return _power_sensor_configured() or _first_power_limit_config() is not None
+
+
+def _with_sensor_defaults(user_conf, default_id, default_name):
+    conf = {
+        CONF_ID: cv.declare_id(sensor.Sensor)(default_id),
+        CONF_NAME: default_name,
+        "disabled_by_default": False,
+        "force_update": False,
+    }
+    if user_conf:
+        conf.update(user_conf)
+    return conf
+
+
+async def _new_power_sensor(user_conf, default_id, default_name):
+    conf = _with_sensor_defaults(user_conf, default_id, default_name)
+    var = cg.new_Pvariable(conf[CONF_ID])
+    core.CORE.component_ids.add(conf[CONF_ID].id)
+    await sensor.register_sensor(var, conf)
+    return var
+
+
+async def _ensure_power_manager():
+    manager = CORE.data.get(_POWER_MANAGER_DATA_KEY)
+    if manager is not None:
+        return manager
+
+    manager_id = core.ID("cfx_power_manager", is_declaration=True, type=CFXPowerManager)
+    manager = cg.new_Pvariable(manager_id)
+    core.CORE.component_ids.add("cfx_power_manager")
+    await cg.register_component(manager, {CONF_ID: manager_id})
+
+    monitor_conf = _first_power_monitor_config()
+    if monitor_conf is not None and _power_sensor_configured():
+        cg.add(
+            manager.configure_monitor(
+                monitor_conf[CONF_UPDATE_INTERVAL].total_milliseconds,
+                monitor_conf[CONF_SUPPLY_VOLTAGE],
+                monitor_conf[CONF_PSU_EFFICIENCY],
+                monitor_conf[CONF_POWER_FACTOR],
+                monitor_conf[CONF_MAINS_VOLTAGE],
+            )
+        )
+        dc_current = cg.nullptr
+        dc_current_conf = _first_node_power_sensor_config(CONF_DC_CURRENT)
+        if dc_current_conf is not None:
+            dc_current = await _new_power_sensor(
+                dc_current_conf,
+                "cfx_estimated_dc_current",
+                "CFX Estimated DC Current",
+            )
+        dc_power = cg.nullptr
+        dc_power_conf = _first_node_power_sensor_config(CONF_DC_POWER)
+        if dc_power_conf is not None:
+            dc_power = await _new_power_sensor(
+                dc_power_conf,
+                "cfx_estimated_dc_power",
+                "CFX Estimated DC Power",
+            )
+        ac_power = cg.nullptr
+        ac_power_conf = _first_node_power_sensor_config(CONF_AC_POWER)
+        if ac_power_conf is not None:
+            ac_power = await _new_power_sensor(
+                ac_power_conf,
+                "cfx_estimated_ac_power",
+                "CFX Estimated AC Power",
+            )
+        apparent_power = cg.nullptr
+        apparent_power_conf = _first_node_power_sensor_config(CONF_APPARENT_POWER)
+        if apparent_power_conf is not None:
+            apparent_power = await _new_power_sensor(
+                apparent_power_conf,
+                "cfx_estimated_apparent_power",
+                "CFX Estimated Apparent Power",
+            )
+        ac_current = cg.nullptr
+        ac_current_conf = _first_node_power_sensor_config(CONF_AC_CURRENT)
+        if ac_current_conf is not None:
+            ac_current = await _new_power_sensor(
+                ac_current_conf,
+                "cfx_estimated_ac_current",
+                "CFX Estimated AC Current",
+            )
+        cg.add(
+            manager.set_node_sensors(
+                dc_current, dc_power, ac_power, apparent_power, ac_current
+            )
+        )
+
+    limit_conf = _first_power_limit_config()
+    if limit_conf is not None:
+        cg.add(
+            manager.configure_reduction(
+                limit_conf[CONF_RESTORE],
+                limit_conf[CONF_RAMP_TIME].total_milliseconds,
+            )
+        )
+        reduction_id = core.ID(
+            "cfx_power_reduction", is_declaration=True, type=CFXPowerReductionNumber
+        )
+        reduction_var = cg.new_Pvariable(reduction_id)
+        core.CORE.component_ids.add("cfx_power_reduction")
+        reduction_conf = {
+            CONF_ID: reduction_id,
+            CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
+            "unit_of_measurement": "%",
+            "icon": "mdi:flash-percent",
+            "entity_category": cv.ENTITY_CATEGORIES["config"],
+            "disabled_by_default": False,
+            "mode": number.NumberMode.NUMBER_MODE_AUTO,
+        }
+        await number.register_number(
+            reduction_var, reduction_conf, min_value=0, max_value=30, step=10
+        )
+        cg.add(manager.set_reduction_number(reduction_var))
+
+    CORE.data[_POWER_MANAGER_DATA_KEY] = manager
+    return manager
+
+
+async def _register_power_output(var, config):
+    if not _power_manager_needed():
+        return
+
+    manager = await _ensure_power_manager()
+    monitor_conf = config.get(CONF_POWER_MONITOR, {})
+    sensors_conf = monitor_conf.get(CONF_SENSORS, {}) if monitor_conf else {}
+    strip_dc_current = cg.nullptr
+    if CONF_STRIP_DC_CURRENT in sensors_conf:
+        strip_dc_current = await _new_power_sensor(
+            sensors_conf[CONF_STRIP_DC_CURRENT],
+            f"{config[CONF_ID].id}_estimated_dc_current",
+            f"{config.get(CONF_NAME, config[CONF_ID].id)} Estimated DC Current",
+        )
+    strip_dc_power = cg.nullptr
+    if CONF_STRIP_DC_POWER in sensors_conf:
+        strip_dc_power = await _new_power_sensor(
+            sensors_conf[CONF_STRIP_DC_POWER],
+            f"{config[CONF_ID].id}_estimated_dc_power",
+            f"{config.get(CONF_NAME, config[CONF_ID].id)} Estimated DC Power",
+        )
+
+    cg.add(
+        manager.register_output(
+            var,
+            config.get(CONF_NAME, config[CONF_ID].id),
+            monitor_conf.get(CONF_IDLE_CURRENT_MA, 1.0),
+            monitor_conf.get(CONF_RGB_CHANNEL_CURRENT_MA, 20.0),
+            monitor_conf.get(CONF_WHITE_CHANNEL_CURRENT_MA, 20.0),
+            strip_dc_current,
+            strip_dc_power,
+        )
+    )
 
 
 async def to_code(config):
@@ -974,6 +1371,8 @@ async def to_code(config):
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
+
+    await _register_power_output(var, config)
 
     default_transition_ms = config[CONF_DEFAULT_TRANSITION_LENGTH].total_milliseconds
     cg.add(var.set_default_transition_length(default_transition_ms))

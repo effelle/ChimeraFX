@@ -8,6 +8,7 @@
  */
 
 #include "cfx_light.h"
+#include "cfx_power_manager.h"
 #include "cfx_virtual_segment_light.h"
 #include "cfx_transmit_barrier.h"
 #include "../cfx_effect/cfx_control.h"
@@ -2440,6 +2441,64 @@ segment_flush_done:
 #endif
 }
 
+// --- Power Estimation / Manual Reduction ---
+
+float CFXLightOutput::estimate_power_current_ma(
+    const CFXPowerModel &model, float dynamic_scale) const {
+  if (this->buf_ == nullptr || this->num_leds_ == 0) {
+    return 0.0f;
+  }
+
+  const bool has_white = this->has_white_channel();
+  const uint8_t stride = has_white ? 4 : 3;
+  const uint8_t *src = this->buf_;
+  float dynamic_ma = 0.0f;
+
+  for (uint16_t i = 0; i < this->num_leds_; i++) {
+    const uint8_t rgb_offset = this->is_wrgb_ ? 1 : 0;
+    dynamic_ma +=
+        model.rgb_channel_ma *
+        (static_cast<float>(src[rgb_offset]) +
+         static_cast<float>(src[rgb_offset + 1]) +
+         static_cast<float>(src[rgb_offset + 2])) /
+        255.0f;
+    if (has_white) {
+      const uint8_t white_offset = this->is_wrgb_ ? 0 : 3;
+      dynamic_ma += model.white_channel_ma *
+                    static_cast<float>(src[white_offset]) / 255.0f;
+    }
+    src += stride;
+  }
+
+  if (dynamic_scale < 0.0f) {
+    dynamic_scale = 0.0f;
+  } else if (dynamic_scale > 1.0f) {
+    dynamic_scale = 1.0f;
+  }
+  return (model.idle_ma * static_cast<float>(this->num_leds_)) +
+         (dynamic_ma * dynamic_scale);
+}
+
+uint8_t CFXLightOutput::get_power_transmit_scale_() const {
+  if (this->power_manager_ == nullptr) {
+    return 255;
+  }
+  return this->power_manager_->get_transmit_scale();
+}
+
+void CFXLightOutput::apply_power_scale_to_buffer_(uint8_t *data,
+                                                  size_t len) const {
+  const uint8_t scale = this->get_power_transmit_scale_();
+  if (data == nullptr || len == 0 || scale >= 255) {
+    return;
+  }
+  for (size_t i = 0; i < len; i++) {
+    data[i] =
+        static_cast<uint8_t>((static_cast<uint16_t>(data[i]) * scale + 127u) /
+                             255u);
+  }
+}
+
 // --- Update State (Handles Brightness & Solid Colors) ---
 
 void CFXLightOutput::update_state(light::LightState *state) {
@@ -2873,14 +2932,22 @@ void CFXLightOutput::flush_rmt_() {
   // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
+  this->apply_power_scale_to_buffer_(this->rmt_buf_, this->get_buffer_size_());
 #else
   // Pre-5.3: encode bytes → RMT symbols manually
   size_t buffer_size = this->get_buffer_size_();
   size_t sz = 0;
   uint8_t *psrc = this->buf_;
   rmt_symbol_word_t *pdest = this->rmt_buf_;
+  const uint8_t power_scale = this->get_power_transmit_scale_();
   while (sz < buffer_size) {
     uint8_t b = *psrc;
+    if (power_scale < 255) {
+      b = static_cast<uint8_t>((static_cast<uint16_t>(b) *
+                                    power_scale +
+                                127u) /
+                               255u);
+    }
     for (int i = 0; i < 8; i++) {
       pdest->val = (b & (1 << (7 - i))) ? this->params_.bit1.val
                                         : this->params_.bit0.val;
@@ -3021,6 +3088,7 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t pack_start_us = micros();
   uint8_t *ptr = this->spi_frame_buf_;
+  const uint8_t power_scale = this->get_power_transmit_scale_();
 
   // 1. Start frame: 32 bits of 0x00
   *ptr++ = 0x00;
@@ -3037,9 +3105,16 @@ void CFXLightOutput::flush_spi_() {
     // (handled by get_view_internal / ESPColorView).
     // For APA102/SK9822 matching fastled behavior, we default to BGR order
     // in light.py, so buf_[0] is B, buf_[1] is G, buf_[2] is R.
-    *ptr++ = *src++;
-    *ptr++ = *src++;
-    *ptr++ = *src++;
+    for (uint8_t c = 0; c < 3; c++) {
+      uint8_t value = *src++;
+      if (power_scale < 255) {
+        value = static_cast<uint8_t>((static_cast<uint16_t>(value) *
+                                          power_scale +
+                                      127u) /
+                                     255u);
+      }
+      *ptr++ = value;
+    }
   }
 
   // 3. End frame

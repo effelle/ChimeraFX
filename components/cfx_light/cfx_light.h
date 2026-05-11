@@ -44,6 +44,7 @@ struct CFXRMTDoneContext {
   bool dma_enabled{false};
 };
 class CFXVirtualSegmentLight;
+class CFXPowerManager;
 
 // --- Segment Infrastructure (Phase 1) ---
 
@@ -156,6 +157,12 @@ enum CFXTransport : uint8_t {
 enum CFXSPIHost : uint8_t {
   SPI_HOST_2,  // SPI2_HOST — available on all ESP32 variants
   SPI_HOST_3,  // SPI3_HOST — ESP32/S2/S3/P4 only
+};
+
+struct CFXPowerModel {
+  float idle_ma{1.0f};
+  float rgb_channel_ma{20.0f};
+  float white_channel_ma{20.0f};
 };
 
 // RGB byte order in the protocol
@@ -312,6 +319,11 @@ public:
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
   void set_spi_host(CFXSPIHost host) { this->spi_host_ = host; }
+  void set_power_manager(CFXPowerManager *manager) {
+    this->power_manager_ = manager;
+  }
+  float estimate_power_current_ma(const CFXPowerModel &model,
+                                  float dynamic_scale = 1.0f) const;
 
   // --- Segment configuration (codegen setters) ---
   void add_segment_def(const std::string &id, uint16_t start, uint16_t stop,
@@ -442,6 +454,8 @@ protected:
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();
+  void apply_power_scale_to_buffer_(uint8_t *data, size_t len) const;
+  uint8_t get_power_transmit_scale_() const;
 
   // SPI frame geometry helpers
   size_t get_spi_frame_size_() const;
@@ -525,6 +539,8 @@ protected:
   uint8_t spi_diag_timing_logs_{0};
   uint8_t spi_diag_throttle_logs_{0};
   uint32_t spi_last_flush_ms_{0};
+
+  CFXPowerManager *power_manager_{nullptr};
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};
@@ -661,5 +677,7 @@ protected:
 
 } // namespace cfx_light
 } // namespace esphome
+
+#include "cfx_power_manager.h"
 
 #endif // USE_ESP32
