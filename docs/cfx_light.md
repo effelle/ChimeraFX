@@ -127,6 +127,10 @@ light:
           name: "Estimated LED Current Demand"
         dc_power:
           name: "Estimated LED Power Demand"
+        ac_power:
+          name: "Estimated AC Power Demand"
+        energy:
+          name: "Estimated Energy"
         psu_load:
           name: "Estimated PSU Load"
         budget_status:
@@ -139,7 +143,7 @@ light:
         name: "Estimated Power Reduction"
 ```
 
-`dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `ac_power`, `apparent_power`, and `ac_current` are available for advanced AC-side demand estimates. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
+`dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `ac_power`, `apparent_power`, and `ac_current` are available for advanced AC-side demand estimates. `energy` integrates estimated AC power over time in `kWh`; it is useful for trend tracking, but it is still an estimate, not a calibrated meter. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
 
 For WS2811, the defaults are only a fallback. Current varies by voltage, grouping, resistor design, and strip density, so calibrate `rgb_channel_current_ma` and `supply_voltage` against your actual strip.
 

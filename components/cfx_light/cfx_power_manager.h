@@ -40,7 +40,8 @@ class CFXPowerManager : public Component {
   void set_node_sensors(sensor::Sensor *dc_current, sensor::Sensor *dc_power,
                         sensor::Sensor *ac_power,
                         sensor::Sensor *apparent_power,
-                        sensor::Sensor *ac_current, sensor::Sensor *psu_load,
+                        sensor::Sensor *ac_current, sensor::Sensor *energy,
+                        sensor::Sensor *psu_load,
                         text_sensor::TextSensor *budget_status);
   void set_reduction_select(CFXPowerReductionSelect *select);
   void register_output(CFXLightOutput *output, const char *name, float idle_ma,
@@ -85,11 +86,17 @@ class CFXPowerManager : public Component {
   float current_reduction_percent_{0.0f};
   uint8_t target_reduction_percent_{0};
   ESPPreferenceObject pref_{};
+  ESPPreferenceObject energy_pref_{};
+  bool energy_pref_ready_{false};
+  float energy_kwh_{0.0f};
+  uint32_t last_energy_sample_ms_{0};
+  uint32_t last_energy_save_ms_{0};
   sensor::Sensor *dc_current_sensor_{nullptr};
   sensor::Sensor *dc_power_sensor_{nullptr};
   sensor::Sensor *ac_power_sensor_{nullptr};
   sensor::Sensor *apparent_power_sensor_{nullptr};
   sensor::Sensor *ac_current_sensor_{nullptr};
+  sensor::Sensor *energy_sensor_{nullptr};
   sensor::Sensor *psu_load_sensor_{nullptr};
   text_sensor::TextSensor *budget_status_sensor_{nullptr};
   CFXPowerReductionSelect *reduction_select_{nullptr};

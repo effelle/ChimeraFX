@@ -36,6 +36,13 @@ void CFXPowerManager::setup() {
           static_cast<float>(this->target_reduction_percent_);
     }
   }
+  if (this->energy_sensor_ != nullptr && global_preferences != nullptr) {
+    this->energy_pref_ = global_preferences->make_preference<float>(
+        fnv1a_hash("cfx_estimated_energy_kwh"), true);
+    this->energy_pref_ready_ = true;
+    this->energy_pref_.load(&this->energy_kwh_);
+    this->energy_sensor_->publish_state(this->energy_kwh_);
+  }
   this->publish_reduction_state_();
 }
 
@@ -117,6 +124,7 @@ void CFXPowerManager::set_node_sensors(sensor::Sensor *dc_current,
                                        sensor::Sensor *ac_power,
                                        sensor::Sensor *apparent_power,
                                        sensor::Sensor *ac_current,
+                                       sensor::Sensor *energy,
                                        sensor::Sensor *psu_load,
                                        text_sensor::TextSensor *budget_status) {
   this->dc_current_sensor_ = dc_current;
@@ -124,6 +132,7 @@ void CFXPowerManager::set_node_sensors(sensor::Sensor *dc_current,
   this->ac_power_sensor_ = ac_power;
   this->apparent_power_sensor_ = apparent_power;
   this->ac_current_sensor_ = ac_current;
+  this->energy_sensor_ = energy;
   this->psu_load_sensor_ = psu_load;
   this->budget_status_sensor_ = budget_status;
 }
@@ -208,6 +217,7 @@ void CFXPowerManager::sample_() {
   const float ac_power_w = dc_power_w / this->psu_efficiency_;
   const float apparent_power_va = ac_power_w / this->power_factor_;
   const float ac_current_a = apparent_power_va / this->mains_voltage_;
+  const uint32_t now_ms = millis();
 
   if (this->dc_current_sensor_ != nullptr) {
     this->dc_current_sensor_->publish_state(total_demand_ma / 1000.0f);
@@ -223,6 +233,23 @@ void CFXPowerManager::sample_() {
   }
   if (this->ac_current_sensor_ != nullptr) {
     this->ac_current_sensor_->publish_state(ac_current_a);
+  }
+  if (this->energy_sensor_ != nullptr) {
+    if (this->last_energy_sample_ms_ == 0) {
+      this->last_energy_sample_ms_ = now_ms;
+    } else {
+      const uint32_t dt_ms = now_ms - this->last_energy_sample_ms_;
+      this->last_energy_sample_ms_ = now_ms;
+      this->energy_kwh_ +=
+          ac_power_w * static_cast<float>(dt_ms) / 3600000000.0f;
+    }
+    this->energy_sensor_->publish_state(this->energy_kwh_);
+    if (this->energy_pref_ready_ &&
+        (this->last_energy_save_ms_ == 0 ||
+         (now_ms - this->last_energy_save_ms_) >= 300000u)) {
+      this->energy_pref_.save(&this->energy_kwh_);
+      this->last_energy_save_ms_ = now_ms;
+    }
   }
   if (this->psu_load_sensor_ != nullptr) {
     if (this->psu_current_limit_ma_ > 0.0f) {

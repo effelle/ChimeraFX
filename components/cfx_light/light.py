@@ -67,6 +67,7 @@ CONF_DC_POWER = "dc_power"
 CONF_AC_POWER = "ac_power"
 CONF_APPARENT_POWER = "apparent_power"
 CONF_AC_CURRENT = "ac_current"
+CONF_ENERGY = "energy"
 CONF_PSU_LOAD = "psu_load"
 CONF_BUDGET_STATUS = "budget_status"
 CONF_STRIP_DC_CURRENT = "strip_dc_current"
@@ -222,6 +223,14 @@ _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
     entity_category="diagnostic",
 )
 
+_ESTIMATED_ENERGY_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="kWh",
+    icon="mdi:counter",
+    accuracy_decimals=3,
+    device_class="energy",
+    state_class="total_increasing",
+)
+
 _ESTIMATED_PSU_LOAD_SENSOR_SCHEMA = sensor.sensor_schema(
     unit_of_measurement="%",
     icon="mdi:gauge",
@@ -242,6 +251,7 @@ POWER_SENSORS_SCHEMA = cv.Schema(
         cv.Optional(CONF_AC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_APPARENT_POWER): _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_AC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_ENERGY): _ESTIMATED_ENERGY_SENSOR_SCHEMA,
         cv.Optional(CONF_PSU_LOAD): _ESTIMATED_PSU_LOAD_SENSOR_SCHEMA,
         cv.Optional(CONF_BUDGET_STATUS): _ESTIMATED_BUDGET_STATUS_SCHEMA,
         cv.Optional(CONF_STRIP_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
@@ -752,6 +762,7 @@ def _validate_power_global_conflicts(cfx_lights):
             CONF_AC_POWER,
             CONF_APPARENT_POWER,
             CONF_AC_CURRENT,
+            CONF_ENERGY,
             CONF_PSU_LOAD,
             CONF_BUDGET_STATUS,
         ):
@@ -1192,6 +1203,14 @@ async def _ensure_power_manager():
                 "cfx_estimated_ac_current",
                 "CFX Estimated AC Current",
             )
+        energy = cg.nullptr
+        energy_conf = _first_node_power_sensor_config(CONF_ENERGY)
+        if energy_conf is not None:
+            energy = await _new_power_sensor(
+                energy_conf,
+                "cfx_estimated_energy",
+                "CFX Estimated Energy",
+            )
         psu_load = cg.nullptr
         psu_load_conf = _first_node_power_sensor_config(CONF_PSU_LOAD)
         if psu_load_conf is not None:
@@ -1211,7 +1230,7 @@ async def _ensure_power_manager():
         cg.add(
             manager.set_node_sensors(
                 dc_current, dc_power, ac_power, apparent_power, ac_current,
-                psu_load, budget_status
+                energy, psu_load, budget_status
             )
         )
 
