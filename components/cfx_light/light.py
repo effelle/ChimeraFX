@@ -241,6 +241,15 @@ _ESTIMATED_BUDGET_STATUS_SCHEMA = text_sensor.text_sensor_schema(
     icon="mdi:power-plug-battery",
 )
 
+DEFAULT_POWER_NODE_SENSORS = {
+    CONF_DC_CURRENT: {CONF_NAME: "LED DC Current Demand"},
+    CONF_DC_POWER: {CONF_NAME: "LED DC Power Demand"},
+    CONF_AC_POWER: {CONF_NAME: "AC Power Demand"},
+    CONF_ENERGY: {CONF_NAME: "Energy"},
+    CONF_PSU_LOAD: {CONF_NAME: "PSU Load"},
+    CONF_BUDGET_STATUS: {CONF_NAME: "Power Budget Status"},
+}
+
 POWER_SENSORS_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
@@ -256,6 +265,15 @@ POWER_SENSORS_SCHEMA = cv.Schema(
     }
 )
 
+
+def _power_sensors_schema(config):
+    if config is None:
+        config = {}
+    config = dict(config)
+    for key, default_value in DEFAULT_POWER_NODE_SENSORS.items():
+        config.setdefault(key, dict(default_value))
+    return POWER_SENSORS_SCHEMA(config)
+
 POWER_MONITOR_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
@@ -263,13 +281,13 @@ POWER_MONITOR_SCHEMA = cv.Schema(
         cv.Optional(CONF_PSU_CURRENT_LIMIT, default="0A"): _current_to_ma,
         cv.Optional(CONF_PSU_EFFICIENCY, default=0.85): cv.float_range(min=0.01, max=1.0),
         cv.Optional(CONF_POWER_FACTOR, default=0.90): cv.float_range(min=0.01, max=1.0),
-        cv.Optional(CONF_MAINS_VOLTAGE, default=120.0): cv.float_range(min=1.0),
+        cv.Required(CONF_MAINS_VOLTAGE): cv.float_range(min=1.0),
         cv.Optional(CONF_POWER_FACTOR_SENSOR): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_MAINS_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_IDLE_CURRENT_MA, default=1.0): _current_ma,
         cv.Optional(CONF_RGB_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
         cv.Optional(CONF_WHITE_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
-        cv.Optional(CONF_SENSORS, default={}): POWER_SENSORS_SCHEMA,
+        cv.Optional(CONF_SENSORS, default={}): _power_sensors_schema,
     }
 )
 
@@ -1085,10 +1103,7 @@ def _first_power_limit_config():
 
 def _power_sensor_configured():
     for lconf in _cfx_light_configs():
-        monitor = lconf.get(CONF_POWER_MONITOR)
-        if not monitor:
-            continue
-        if monitor.get(CONF_SENSORS):
+        if CONF_POWER_MONITOR in lconf:
             return True
     return False
 
@@ -1264,13 +1279,11 @@ async def _ensure_power_manager():
             CONF_ID: reduction_id,
             CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
             "icon": "mdi:flash-percent",
-            "entity_category": cv.ENTITY_CATEGORIES["config"],
             "disabled_by_default": False,
         }
         await select.register_select(
             reduction_var, reduction_conf, options=["0%", "10%", "20%", "30%"]
         )
-        cg.add(reduction_var.set_entity_category(cv.ENTITY_CATEGORIES["config"]))
         cg.add(manager.set_reduction_select(reduction_var))
 
     return manager

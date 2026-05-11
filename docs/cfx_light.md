@@ -94,15 +94,15 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
-* **power_monitor** (*mapping*, Optional): Enables low-rate estimated power reporting for this node. Sensors are generated only for entries explicitly listed under `power_monitor.sensors`.
+* **power_monitor** (*mapping*, Optional): Enables low-rate power-demand reporting for this node. Standard node sensors are generated automatically; advanced sensors and custom names can be configured under `power_monitor.sensors`.
 * **power_limit** (*mapping*, Optional): Generates a persistent node-wide manual power reduction dropdown with fixed `0%`, `10%`, `20%`, and `30%` steps. The reduction ramps and is applied only while packing/transmitting LED data; effect buffers are not modified.
 * **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
 
 --- 
 
-## Estimated Power Monitor
+## Power Monitor
 
-`power_monitor` is estimate-first. ChimeraFX samples the final composed LED buffer at `update_interval` (default `10s`) and publishes only the sensors you configure. It does not perform per-frame automatic brightness limiting.
+`power_monitor` is estimate-first on the LED side. ChimeraFX samples the final composed LED buffer at `update_interval` (default `10s`) and generates the standard node sensors automatically. It does not perform per-frame automatic brightness limiting.
 
 ```yaml
 light:
@@ -114,41 +114,40 @@ light:
     chipset: SK6812
 
     power_monitor:
-      supply_voltage: 5.0
+      mains_voltage: 230.0
       psu_current_limit: 12A
-      psu_efficiency: 0.85
-      power_factor: 0.90
-      mains_voltage: 120.0
-      # Optional live calibration inputs. These can point to Home Assistant
-      # imported sensors or local ESPHome sensors and fall back to the static
-      # values above until valid readings are available.
-      # power_factor_sensor: grid_power_factor
-      # mains_voltage_sensor: grid_voltage
-      idle_current_ma: 1.0
-      rgb_channel_current_ma: 20.0
-      white_channel_current_ma: 20.0
-      sensors:
-        dc_current:
-          name: "LED DC Current Demand"
-        dc_power:
-          name: "LED DC Power Demand"
-        ac_power:
-          name: "AC Power Demand"
-        energy:
-          name: "Energy"
-        psu_load:
-          name: "PSU Load"
-        budget_status:
-          name: "Power Budget Status"
 
-    power_limit:
-      restore: true
-      ramp_time: 800ms
-      reduction:
-        name: "Power Reduction"
+    power_limit: {}
 ```
 
-`dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `ac_power`, `apparent_power`, and `ac_current` are available for advanced AC-side demand estimates. `energy` integrates estimated AC power over time in `kWh`; it is useful for trend tracking, but it is still an estimate, not a calibrated meter. If `mains_voltage_sensor` or `power_factor_sensor` is configured, valid live readings are used for `apparent_power` and `ac_current`; the static `mains_voltage` and `power_factor` values remain the fallback. Per-strip sensors can be added with `strip_dc_current` and `strip_dc_power` under that strip's `power_monitor.sensors`.
+The required value is `mains_voltage`, because ChimeraFX ships worldwide and there is no safe universal AC voltage default. `psu_current_limit` is strongly recommended because it makes `PSU Load` and `Power Budget Status` meaningful. Everything else has defaults: `supply_voltage: 5.0`, `psu_efficiency: 0.85`, `power_factor: 0.90`, `idle_current_ma: 1.0`, `rgb_channel_current_ma: 20.0`, and `white_channel_current_ma: 20.0`.
+
+Standard generated sensors are `LED DC Current Demand`, `LED DC Power Demand`, `AC Power Demand`, `Energy`, `PSU Load`, and `Power Budget Status`. `dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `energy` integrates AC power demand over time in `kWh`.
+
+Optional live AC calibration inputs can point to Home Assistant imported sensors or local ESPHome sensors. Valid readings are used for `apparent_power` and `ac_current`; the static `mains_voltage` and `power_factor` values remain the fallback.
+
+```yaml
+sensor:
+  - platform: homeassistant
+    entity_id: sensor.energy_meter_140_fase2_tensao
+    id: grid_voltage_f2
+
+  - platform: homeassistant
+    entity_id: sensor.energy_meter_140_fase2_fator
+    id: grid_power_factor_f2
+
+light:
+  - platform: cfx_light
+    # ...
+    power_monitor:
+      mains_voltage: 126.3
+      psu_current_limit: 12A
+      power_factor: 0.95
+      mains_voltage_sensor: grid_voltage_f2
+      power_factor_sensor: grid_power_factor_f2
+```
+
+Advanced sensors can be explicitly added or renamed under `power_monitor.sensors`. `apparent_power`, `ac_current`, `strip_dc_current`, and `strip_dc_power` are not generated by default to keep the UI compact.
 
 For WS2811, the defaults are only a fallback. Current varies by voltage, grouping, resistor design, and strip density, so calibrate `rgb_channel_current_ma` and `supply_voltage` against your actual strip.
 
