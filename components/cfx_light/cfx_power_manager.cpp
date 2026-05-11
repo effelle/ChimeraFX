@@ -112,6 +112,12 @@ void CFXPowerManager::configure_monitor(uint32_t update_interval_ms,
   this->mains_voltage_ = mains_voltage > 0.0f ? mains_voltage : 120.0f;
 }
 
+void CFXPowerManager::set_meter_sensors(sensor::Sensor *mains_voltage_sensor,
+                                        sensor::Sensor *power_factor_sensor) {
+  this->mains_voltage_sensor_ = mains_voltage_sensor;
+  this->power_factor_sensor_ = power_factor_sensor;
+}
+
 void CFXPowerManager::configure_reduction(bool restore,
                                           uint32_t ramp_time_ms) {
   this->reduction_enabled_ = true;
@@ -214,9 +220,15 @@ void CFXPowerManager::sample_() {
 
   const float dc_power_w =
       this->supply_voltage_ * total_demand_ma / 1000.0f;
+  const float power_factor =
+      live_sensor_or_(this->power_factor_sensor_, this->power_factor_, 0.01f,
+                      1.0f);
+  const float mains_voltage =
+      live_sensor_or_(this->mains_voltage_sensor_, this->mains_voltage_, 1.0f,
+                      1000.0f);
   const float ac_power_w = dc_power_w / this->psu_efficiency_;
-  const float apparent_power_va = ac_power_w / this->power_factor_;
-  const float ac_current_a = apparent_power_va / this->mains_voltage_;
+  const float apparent_power_va = ac_power_w / power_factor;
+  const float ac_current_a = apparent_power_va / mains_voltage;
   const uint32_t now_ms = millis();
 
   if (this->dc_current_sensor_ != nullptr) {
@@ -284,6 +296,18 @@ void CFXPowerManager::publish_reduction_state_() {
     this->reduction_select_->publish_state(
         static_cast<size_t>(this->target_reduction_percent_ / 10));
   }
+}
+
+float CFXPowerManager::live_sensor_or_(sensor::Sensor *sensor, float fallback,
+                                       float min_value, float max_value) {
+  if (sensor == nullptr || !sensor->has_state()) {
+    return fallback;
+  }
+  const float value = sensor->state;
+  if (!std::isfinite(value) || value < min_value || value > max_value) {
+    return fallback;
+  }
+  return value;
 }
 
 uint8_t CFXPowerManager::normalize_reduction_(float value) {

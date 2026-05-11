@@ -58,6 +58,8 @@ CONF_PSU_CURRENT_LIMIT = "psu_current_limit"
 CONF_PSU_EFFICIENCY = "psu_efficiency"
 CONF_POWER_FACTOR = "power_factor"
 CONF_MAINS_VOLTAGE = "mains_voltage"
+CONF_POWER_FACTOR_SENSOR = "power_factor_sensor"
+CONF_MAINS_VOLTAGE_SENSOR = "mains_voltage_sensor"
 CONF_IDLE_CURRENT_MA = "idle_current_ma"
 CONF_RGB_CHANNEL_CURRENT_MA = "rgb_channel_current_ma"
 CONF_WHITE_CHANNEL_CURRENT_MA = "white_channel_current_ma"
@@ -267,6 +269,8 @@ POWER_MONITOR_SCHEMA = cv.Schema(
         cv.Optional(CONF_PSU_EFFICIENCY, default=0.85): cv.float_range(min=0.01, max=1.0),
         cv.Optional(CONF_POWER_FACTOR, default=0.90): cv.float_range(min=0.01, max=1.0),
         cv.Optional(CONF_MAINS_VOLTAGE, default=120.0): cv.float_range(min=1.0),
+        cv.Optional(CONF_POWER_FACTOR_SENSOR): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_MAINS_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_IDLE_CURRENT_MA, default=1.0): _current_ma,
         cv.Optional(CONF_RGB_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
         cv.Optional(CONF_WHITE_CHANNEL_CURRENT_MA, default=20.0): _current_ma,
@@ -733,6 +737,8 @@ def _validate_power_global_conflicts(cfx_lights):
         CONF_PSU_EFFICIENCY,
         CONF_POWER_FACTOR,
         CONF_MAINS_VOLTAGE,
+        CONF_POWER_FACTOR_SENSOR,
+        CONF_MAINS_VOLTAGE_SENSOR,
     )
     monitor_owner = {}
     monitor_values = {}
@@ -1163,6 +1169,17 @@ async def _ensure_power_manager():
                 monitor_conf[CONF_MAINS_VOLTAGE],
             )
         )
+        mains_voltage_sensor = cg.nullptr
+        if CONF_MAINS_VOLTAGE_SENSOR in monitor_conf:
+            mains_voltage_sensor = await cg.get_variable(
+                monitor_conf[CONF_MAINS_VOLTAGE_SENSOR]
+            )
+        power_factor_sensor = cg.nullptr
+        if CONF_POWER_FACTOR_SENSOR in monitor_conf:
+            power_factor_sensor = await cg.get_variable(
+                monitor_conf[CONF_POWER_FACTOR_SENSOR]
+            )
+        cg.add(manager.set_meter_sensors(mains_voltage_sensor, power_factor_sensor))
         dc_current = cg.nullptr
         dc_current_conf = _first_node_power_sensor_config(CONF_DC_CURRENT)
         if dc_current_conf is not None:

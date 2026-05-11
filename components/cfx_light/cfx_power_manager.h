@@ -36,6 +36,8 @@ class CFXPowerManager : public Component {
   void configure_monitor(uint32_t update_interval_ms, float supply_voltage,
                          float psu_current_limit_ma, float psu_efficiency,
                          float power_factor, float mains_voltage);
+  void set_meter_sensors(sensor::Sensor *mains_voltage_sensor,
+                         sensor::Sensor *power_factor_sensor);
   void configure_reduction(bool restore, uint32_t ramp_time_ms);
   void set_node_sensors(sensor::Sensor *dc_current, sensor::Sensor *dc_power,
                         sensor::Sensor *ac_power,
@@ -67,6 +69,8 @@ class CFXPowerManager : public Component {
 
   void sample_();
   void publish_reduction_state_();
+  static float live_sensor_or_(sensor::Sensor *sensor, float fallback,
+                               float min_value, float max_value);
   static uint8_t normalize_reduction_(float value);
 
   static CFXPowerManager *active_;
@@ -98,6 +102,8 @@ class CFXPowerManager : public Component {
   sensor::Sensor *ac_current_sensor_{nullptr};
   sensor::Sensor *energy_sensor_{nullptr};
   sensor::Sensor *psu_load_sensor_{nullptr};
+  sensor::Sensor *mains_voltage_sensor_{nullptr};
+  sensor::Sensor *power_factor_sensor_{nullptr};
   text_sensor::TextSensor *budget_status_sensor_{nullptr};
   CFXPowerReductionSelect *reduction_select_{nullptr};
 };
