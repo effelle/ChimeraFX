@@ -1270,6 +1270,7 @@ async def _ensure_power_manager():
         await select.register_select(
             reduction_var, reduction_conf, options=["0%", "10%", "20%", "30%"]
         )
+        cg.add(reduction_var.set_entity_category(cv.ENTITY_CATEGORIES["config"]))
         cg.add(manager.set_reduction_select(reduction_var))
 
     return manager
