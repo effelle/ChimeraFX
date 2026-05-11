@@ -1155,6 +1155,7 @@ async def _ensure_power_manager():
     manager_id = core.ID("cfx_power_manager", is_declaration=True, type=CFXPowerManager)
     manager = cg.new_Pvariable(manager_id)
     CORE.data[_POWER_MANAGER_DATA_KEY] = manager
+    core.CORE.component_ids.add("cfx_power_manager")
     await cg.register_component(manager, {CONF_ID: manager_id})
 
     monitor_conf = _first_power_monitor_config()
