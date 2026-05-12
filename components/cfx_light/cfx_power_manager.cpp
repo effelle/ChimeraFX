@@ -96,7 +96,8 @@ void CFXPowerManager::configure_monitor(uint32_t update_interval_ms,
                                         float psu_current_limit_ma,
                                         float psu_efficiency,
                                         float power_factor,
-                                        float mains_voltage) {
+                                        float mains_voltage,
+                                        float controller_current_ma) {
   this->monitor_enabled_ = true;
   this->update_interval_ms_ = update_interval_ms;
   this->supply_voltage_ = supply_voltage;
@@ -109,7 +110,9 @@ void CFXPowerManager::configure_monitor(uint32_t update_interval_ms,
   }
   this->psu_efficiency_ = psu_efficiency > 0.0f ? psu_efficiency : 1.0f;
   this->power_factor_ = power_factor > 0.0f ? power_factor : 1.0f;
-  this->mains_voltage_ = mains_voltage > 0.0f ? mains_voltage : 120.0f;
+  this->mains_voltage_ = mains_voltage;
+  this->controller_current_ma_ =
+      controller_current_ma > 0.0f ? controller_current_ma : 0.0f;
 }
 
 void CFXPowerManager::set_meter_sensors(sensor::Sensor *mains_voltage_sensor,
@@ -152,17 +155,34 @@ void CFXPowerManager::set_reduction_select(CFXPowerReductionSelect *select) {
 
 void CFXPowerManager::register_output(CFXLightOutput *output, const char *name,
                                       float idle_ma, float rgb_channel_ma,
-                                      float white_channel_ma,
-                                      sensor::Sensor *strip_dc_current,
-                                      sensor::Sensor *strip_dc_power) {
+                                      float white_channel_ma) {
   CFXPowerModel model;
   model.idle_ma = idle_ma;
   model.rgb_channel_ma = rgb_channel_ma;
   model.white_channel_ma = white_channel_ma;
-  this->outputs_.push_back(
-      {output, name, model, strip_dc_current, strip_dc_power});
+  this->outputs_.push_back({output, name, model});
   if (output != nullptr) {
     output->set_power_manager(this);
+  }
+}
+
+void CFXPowerManager::record_output_frame(CFXLightOutput *output) {
+  if (!this->monitor_enabled_ || output == nullptr) {
+    return;
+  }
+
+  const float dynamic_scale =
+      static_cast<float>(this->get_transmit_scale()) / 255.0f;
+  for (auto &entry : this->outputs_) {
+    if (entry.output != output) {
+      continue;
+    }
+    const float current_ma =
+        output->estimate_power_current_ma(entry.model, dynamic_scale);
+    entry.estimated_dc_current_ma = current_ma;
+    entry.accumulated_dc_current_ma += current_ma;
+    entry.accumulated_frames++;
+    return;
   }
 }
 
@@ -196,26 +216,23 @@ void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
 void CFXPowerManager::sample_() {
   const float dynamic_scale =
       static_cast<float>(this->get_transmit_scale()) / 255.0f;
-  float total_demand_ma = 0.0f;
+  float total_demand_ma = this->controller_current_ma_;
 
   for (auto &entry : this->outputs_) {
     if (entry.output == nullptr) {
       continue;
     }
-    entry.estimated_dc_current_ma =
-        entry.output->estimate_power_current_ma(entry.model, dynamic_scale);
+    if (entry.accumulated_frames > 0) {
+      entry.estimated_dc_current_ma =
+          entry.accumulated_dc_current_ma /
+          static_cast<float>(entry.accumulated_frames);
+    } else {
+      entry.estimated_dc_current_ma =
+          entry.output->estimate_power_current_ma(entry.model, dynamic_scale);
+    }
+    entry.accumulated_dc_current_ma = 0.0f;
+    entry.accumulated_frames = 0;
     total_demand_ma += entry.estimated_dc_current_ma;
-  }
-
-  for (auto &entry : this->outputs_) {
-    const float current_ma = entry.estimated_dc_current_ma;
-    const float dc_power_w = this->supply_voltage_ * current_ma / 1000.0f;
-    if (entry.strip_dc_current != nullptr) {
-      entry.strip_dc_current->publish_state(current_ma / 1000.0f);
-    }
-    if (entry.strip_dc_power != nullptr) {
-      entry.strip_dc_power->publish_state(dc_power_w);
-    }
   }
 
   const float dc_power_w =

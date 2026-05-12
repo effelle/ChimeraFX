@@ -94,17 +94,21 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
-* **power_monitor** (*mapping*, Optional): Enables low-rate power-demand reporting for this node. Standard node sensors are generated automatically; advanced sensors and custom names can be configured under `power_monitor.sensors`.
-* **power_limit** (*mapping*, Optional): Generates a persistent node-wide manual power reduction dropdown with fixed `0%`, `10%`, `20%`, and `30%` steps. The reduction ramps and is applied only while packing/transmitting LED data; effect buffers are not modified.
 * **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
 
 --- 
 
-## Power Monitor
+## Global Power Monitor
 
-`power_monitor` is estimate-first on the LED side. ChimeraFX samples the final composed LED buffer at `update_interval` (default `10s`) and generates the standard node sensors automatically. It does not perform per-frame automatic brightness limiting.
+`cfx_power` is a node-wide, estimate-first power monitor and manual limiter. ChimeraFX records cheap demand estimates when frames are actually transmitted, then publishes the average demand for each `update_interval` window. It does not perform dynamic automatic brightness limiting.
 
 ```yaml
+cfx_power:
+  monitor:
+    mains_voltage: 230.0
+    psu_current_limit: 12A
+  limit: {}
+
 light:
   - platform: cfx_light
     name: "Main Strip"
@@ -112,17 +116,13 @@ light:
     pin: GPIO16
     num_leds: 120
     chipset: SK6812
-
-    power_monitor:
-      mains_voltage: 230.0
-      psu_current_limit: 12A
-
-    power_limit: {}
 ```
 
-The required value is `mains_voltage`, because ChimeraFX ships worldwide and there is no safe universal AC voltage default. `psu_current_limit` is strongly recommended because it makes `PSU Load` and `Power Budget Status` meaningful. Everything else has defaults: `supply_voltage: 5.0`, `psu_efficiency: 0.85`, `power_factor: 0.90`, `idle_current_ma: 1.0`, `rgb_channel_current_ma: 20.0`, and `white_channel_current_ma: 20.0`.
+The required value is `mains_voltage`, because ChimeraFX ships worldwide and there is no safe universal AC voltage default. `psu_current_limit` is strongly recommended because it makes `PSU Load` and `Power Budget Status` meaningful. Everything else has defaults: `update_interval: 10s`, `supply_voltage: 5.0`, `psu_efficiency: 0.85`, `power_factor: 0.90`, `controller_current_ma: 120.0`, `idle_current_ma: 1.0`, `rgb_channel_current_ma: 20.0`, and `white_channel_current_ma: 20.0`.
 
-Standard generated sensors are `LED DC Current Demand`, `LED DC Power Demand`, `AC Power Demand`, `Energy`, `PSU Load`, and `Power Budget Status`. `dc_current` and `dc_power` are node-wide theoretical LED demand estimates from the rendered frame. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget that theoretical demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `energy` integrates AC power demand over time in `kWh`.
+Standard generated sensors are `DC Current` and `DC Power`. These are node-wide demand estimates and include the configured controller current. Optional sensors can be explicitly added or renamed under `cfx_power.monitor.sensors`: `ac_power`, `energy`, `psu_load`, `budget_status`, `apparent_power`, and `ac_current`. If `psu_current_limit` is set, `psu_load` reports how much of the configured PSU budget the demand would use, capped at `100%`, and `budget_status` reports `Comfortable`, `Near PSU limit`, `Exceeds PSU model`, or `No PSU limit`. `energy` integrates interval-average AC power demand over time in `kWh`.
+
+`cfx_power.limit` generates one global `Power Reduction` dropdown with fixed `0%`, `10%`, `20%`, and `30%` steps. The selected reduction is restored by default, ramps over `800ms`, and scales only the transmit copy/packing path so effect buffers stay untouched.
 
 Optional live AC calibration inputs can point to Home Assistant imported sensors or local ESPHome sensors. Valid readings are used for `apparent_power` and `ac_current`; the static `mains_voltage` and `power_factor` values remain the fallback.
 
@@ -136,18 +136,19 @@ sensor:
     entity_id: sensor.energy_meter_140_fase2_fator
     id: grid_power_factor_f2
 
-light:
-  - platform: cfx_light
-    # ...
-    power_monitor:
-      mains_voltage: 126.3
-      psu_current_limit: 12A
-      power_factor: 0.95
-      mains_voltage_sensor: grid_voltage_f2
-      power_factor_sensor: grid_power_factor_f2
+cfx_power:
+  monitor:
+    mains_voltage: 126.3
+    psu_current_limit: 12A
+    power_factor: 0.95
+    mains_voltage_sensor: grid_voltage_f2
+    power_factor_sensor: grid_power_factor_f2
+    sensors:
+      ac_power:
+        name: "AC Power"
+      energy:
+        name: "Energy"
 ```
-
-Advanced sensors can be explicitly added or renamed under `power_monitor.sensors`. `apparent_power`, `ac_current`, `strip_dc_current`, and `strip_dc_power` are not generated by default to keep the UI compact.
 
 For WS2811, the defaults are only a fallback. Current varies by voltage, grouping, resistor design, and strip density, so calibrate `rgb_channel_current_ma` and `supply_voltage` against your actual strip.
 

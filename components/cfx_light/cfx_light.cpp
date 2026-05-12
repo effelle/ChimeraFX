@@ -3008,6 +3008,9 @@ void CFXLightOutput::flush_rmt_() {
   this->perf_diag_last_rmt_tx_launch_us_ = rmt_launch_us;
   this->perf_diag_total_rmt_tx_launches_++;
   this->perf_diag_flush_count_++;
+  if (this->power_manager_ != nullptr) {
+    this->power_manager_->record_output_frame(this);
+  }
   this->status_clear_warning();
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
   this->perf_diag_last_flush_tx_us_ = 0;
@@ -3164,6 +3167,9 @@ void CFXLightOutput::flush_spi_() {
     // and records actual wire time via the DMA completion timestamp.
     this->spi_tx_in_flight_ = true;
     this->spi_last_flush_ms_ = esphome::millis();
+    if (this->power_manager_ != nullptr) {
+      this->power_manager_->record_output_frame(this);
+    }
     this->status_clear_warning();
     // Record queue-submit latency (not wire time — that is in wait_for_spi_tx_).
     const uint32_t queue_us = tx_queue_us - tx_start_us;

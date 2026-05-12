@@ -35,7 +35,8 @@ class CFXPowerManager : public Component {
 
   void configure_monitor(uint32_t update_interval_ms, float supply_voltage,
                          float psu_current_limit_ma, float psu_efficiency,
-                         float power_factor, float mains_voltage);
+                         float power_factor, float mains_voltage,
+                         float controller_current_ma);
   void set_meter_sensors(sensor::Sensor *mains_voltage_sensor,
                          sensor::Sensor *power_factor_sensor);
   void configure_reduction(bool restore, uint32_t ramp_time_ms);
@@ -47,9 +48,8 @@ class CFXPowerManager : public Component {
                         text_sensor::TextSensor *budget_status);
   void set_reduction_select(CFXPowerReductionSelect *select);
   void register_output(CFXLightOutput *output, const char *name, float idle_ma,
-                       float rgb_channel_ma, float white_channel_ma,
-                       sensor::Sensor *strip_dc_current,
-                       sensor::Sensor *strip_dc_power);
+                       float rgb_channel_ma, float white_channel_ma);
+  void record_output_frame(CFXLightOutput *output);
 
   uint8_t get_transmit_scale() const;
   float get_current_reduction_percent() const {
@@ -62,9 +62,9 @@ class CFXPowerManager : public Component {
     CFXLightOutput *output{nullptr};
     const char *name{nullptr};
     CFXPowerModel model{};
-    sensor::Sensor *strip_dc_current{nullptr};
-    sensor::Sensor *strip_dc_power{nullptr};
     float estimated_dc_current_ma{0.0f};
+    float accumulated_dc_current_ma{0.0f};
+    uint32_t accumulated_frames{0};
   };
 
   void sample_();
@@ -86,7 +86,8 @@ class CFXPowerManager : public Component {
   float psu_current_limit_ma_{0.0f};
   float psu_efficiency_{0.85f};
   float power_factor_{0.90f};
-  float mains_voltage_{120.0f};
+  float mains_voltage_{0.0f};
+  float controller_current_ma_{120.0f};
   float current_reduction_percent_{0.0f};
   uint8_t target_reduction_percent_{0};
   ESPPreferenceObject pref_{};
