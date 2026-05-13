@@ -36,6 +36,16 @@ light:
     num_leds: 120
     chipset: WS2812X
 
+# RMT strip with one extra physical sacrificial pixel near the controller:
+light:
+  - platform: cfx_light
+    name: "LED Strip With Sacrificial Pixel"
+    id: led_strip_signal
+    pin: GPIO16
+    num_leds: 60              # Visible LEDs only; physical strip has 61 LEDs
+    chipset: WS2812X
+    sacrificial_pixel: true   # First physical LED stays off and boosts signal
+
 # Example config for 2-wire SPI strips (APA102, SK9822):
 light:
   - platform: cfx_light
@@ -54,7 +64,7 @@ light:
 * **id** (*ID*): The ID of the light component.
 * **pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
 * **chipset** (*string*): The type of LED strip you are using.
-* **num_leds** (*int*): The total number of LEDs in your strip.
+* **num_leds** (*int*): The number of visible, controllable LEDs in your strip. If `sacrificial_pixel` is enabled, do not include the sacrificial LED in this count.
 #### For 2-wire SPI chipsets:
 * **name** (*string*): The name of the light in Home Assistant.
 * **id** (*ID*): The ID of the light component.
@@ -85,6 +95,7 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the *front* of the data packet rather than the end. Required for some rare SK6812 variant clones.
 * **rmt_symbols** (*int*, default: `0`): The number of RMT symbols to allocate. If left at `0`, `cfx_light` will dynamically allocate the maximum safe bounds based on your specific ESP32 processor variant.
+* **sacrificial_pixel** (*boolean*, default: `false`): RMT-only option for long data-line runs. When enabled, `cfx_light` transmits one extra black pixel before logical LED `0`. Place this extra physical LED close to the controller; it stays off, boosts the signal, and is not counted in `num_leds` or segment indexes.
 * **spi_speed** (*Frequency*, Optional): The SPI clock speed for `APA102` and `SK9822` strips. If omitted, `cfx_light` uses a sensible default.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration for solid-color mode and for eligible ChimeraFX effect power `OFF -> ON -> OFF` transitions. Architectural effects and the signature effects `Energy` and `Chaos Theory` intentionally ignore this setting so their authored intros/outros stay untouched.
 * **set_intro** (*int*, Optional): Force a specific global Intro Animation for all effects.

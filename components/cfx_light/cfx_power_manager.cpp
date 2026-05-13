@@ -12,6 +12,7 @@ namespace esphome {
 namespace cfx_light {
 
 static const char *const TAG_POWER = "cfx_power";
+static constexpr uint32_t ENERGY_SAVE_INTERVAL_MS = 3600000u;
 
 CFXPowerManager *CFXPowerManager::active_{nullptr};
 
@@ -311,9 +312,11 @@ void CFXPowerManager::sample_() {
     }
     this->energy_sensor_->publish_state(this->energy_kwh_);
     if (this->energy_pref_ready_ &&
-        (this->last_energy_save_ms_ == 0 ||
-         (now_ms - this->last_energy_save_ms_) >= 300000u)) {
+        (this->last_energy_save_ms_ != 0 &&
+         (now_ms - this->last_energy_save_ms_) >= ENERGY_SAVE_INTERVAL_MS)) {
       this->energy_pref_.save(&this->energy_kwh_);
+      this->last_energy_save_ms_ = now_ms;
+    } else if (this->last_energy_save_ms_ == 0) {
       this->last_energy_save_ms_ = now_ms;
     }
   }

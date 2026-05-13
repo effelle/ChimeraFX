@@ -46,7 +46,7 @@ This is almost always related to power, grounding, or signal timing.
 
 *   **Common Ground**: Ensure your LED strip ground is connected to the ESP32 ground. Without a shared ground reference, the data signal becomes unstable and noisy.
 *   **Use a Level Shifter**: The ESP32 outputs 3.3V, but 5V strips (like the WS2812B) expect a 5V signal. While short strips might work at 3.3V, a level shifter is highly recommended for stability on any serious build.
-*   **Data Line Length**: Keep the wire between the ESP32 and the first LED as short as possible (ideally under 10cm). For longer runs, you can use a **"Sacrifice Pixel"** (a single LED placed close to the controller to boost the signal) or a pair of RS485 to TTL converters. It is a dirt-cheap and highly effective solution.
+*   **Data Line Length**: Keep the wire between the ESP32 and the first LED as short as possible (ideally under 10cm). For longer runs, you can use a **"Sacrifice Pixel"** (a single LED placed close to the controller to boost the signal) or a pair of RS485 to TTL converters. For RMT strips, enable `sacrificial_pixel: true` in [`cfx_light`](cfx_light.md#optional-parameters) and keep `num_leds` set to the number of visible LEDs only. It is a dirt-cheap and highly effective solution.
 *   **Power Injection**: Long strips suffer from voltage drop, which causes flickering or "browning out" (colors turning orange/dim). Inject power at the beginning, the end, and every few meters for consistent performance.
 *   **RMT Light Buffer**: You can try to set or increase the RMT buffer size to avoid the flicker issue. It can be set under `cfx_light` component, using `rmt_symbols` option.
 

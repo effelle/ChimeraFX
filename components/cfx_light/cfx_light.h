@@ -267,6 +267,9 @@ public:
   void set_rgb_order(RGBOrder order) { this->rgb_order_ = order; }
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
   void set_is_wrgb(bool is_wrgb) { this->is_wrgb_ = is_wrgb; }
+  void set_sacrificial_pixel(bool enabled) {
+    this->sacrificial_pixel_ = enabled;
+  }
   bool has_white_channel() const { return this->is_rgbw_ || this->is_wrgb_; }
   void set_turn_on_brightness(float brightness) {
     this->turn_on_defaults_.has_brightness = true;
@@ -405,6 +408,16 @@ protected:
   size_t get_buffer_size_() const {
     return this->num_leds_ * ((this->is_rgbw_ || this->is_wrgb_) ? 4 : 3);
   }
+  uint8_t get_pixel_stride_() const {
+    return (this->is_rgbw_ || this->is_wrgb_) ? 4 : 3;
+  }
+  uint32_t get_rmt_physical_led_count_() const {
+    return this->num_leds_ + (this->sacrificial_pixel_ ? 1 : 0);
+  }
+  size_t get_rmt_transmit_buffer_size_() const {
+    return static_cast<size_t>(this->get_rmt_physical_led_count_()) *
+           this->get_pixel_stride_();
+  }
 
   // Compute timing parameters from chipset (RMT only)
   void configure_timing_();
@@ -513,6 +526,7 @@ protected:
 
   bool is_rgbw_{false};
   bool is_wrgb_{false};
+  bool sacrificial_pixel_{false};
   switch_::Switch *force_white_sw_{nullptr};
   switch_::Switch *force_white_cb_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant

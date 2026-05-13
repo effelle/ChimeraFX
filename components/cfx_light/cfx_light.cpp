@@ -1741,18 +1741,19 @@ void CFXLightOutput::setup() {
              this->spi_speed_hz_);
   } else {
     ESP_LOGI(TAG,
-             "CFXLight ready: %u LEDs on GPIO%u (%s, rmt_symbols=%u, "
-             "mem_block_symbols=%u)",
+             "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%u, "
+             "mem_block_symbols=%u, physical_leds=%" PRIu32 ")",
              this->num_leds_, this->pin_,
              this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
-             this->rmt_symbols_, this->rmt_mem_block_symbols_);
+             this->rmt_symbols_, this->rmt_mem_block_symbols_,
+             this->get_rmt_physical_led_count_());
   }
 }
 
 // --- RMT Transport Setup (extracted from setup()) ---
 
 void CFXLightOutput::setup_rmt_() {
-  size_t buffer_size = this->get_buffer_size_();
+  size_t buffer_size = this->get_rmt_transmit_buffer_size_();
   this->rmt_dma_enabled_ = false;
   this->rmt_mem_block_symbols_ = 0;
   this->rmt_alloc_index_ = 0;
@@ -2902,12 +2903,13 @@ void CFXLightOutput::flush_rmt_() {
   // P2: use non-blocking flag poll (fast path: ISR already cleared the flag).
   // Dynamic timeout matches the old rmt_tx_wait_all_done() budget so the
   // fallback blocking recovery fires under identical worst-case conditions.
-  uint32_t timeout_ms = (this->num_leds_ * 30u / 1000u) + 10u;
+  const uint32_t physical_leds = this->get_rmt_physical_led_count_();
+  uint32_t timeout_ms = (physical_leds * 30u / 1000u) + 10u;
   if (timeout_ms < 15u) timeout_ms = 15u;
 
   if (!this->wait_for_rmt_tx_(timeout_ms, "flush")) {
-    ESP_LOGE(TAG, "RMT TX timeout (Wait: %" PRIu32 "ms, LEDs: %d)",
-             timeout_ms, this->num_leds_);
+    ESP_LOGE(TAG, "RMT TX timeout (Wait: %" PRIu32 "ms, physical LEDs: %" PRIu32 ")",
+             timeout_ms, physical_leds);
     this->status_set_warning();
     return;
   }
@@ -2931,16 +2933,32 @@ void CFXLightOutput::flush_rmt_() {
 
   // Copy pixel buffer → RMT buffer and fire
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  memcpy(this->rmt_buf_, this->buf_, this->get_buffer_size_());
-  this->apply_power_scale_to_buffer_(this->rmt_buf_, this->get_buffer_size_());
+  const size_t logical_buffer_size = this->get_buffer_size_();
+  const size_t transmit_buffer_size = this->get_rmt_transmit_buffer_size_();
+  const uint8_t pixel_stride = this->get_pixel_stride_();
+  uint8_t *rmt_dest = this->rmt_buf_;
+  if (this->sacrificial_pixel_) {
+    memset(rmt_dest, 0, pixel_stride);
+    rmt_dest += pixel_stride;
+  }
+  memcpy(rmt_dest, this->buf_, logical_buffer_size);
+  this->apply_power_scale_to_buffer_(this->rmt_buf_, transmit_buffer_size);
 #else
   // Pre-5.3: encode bytes → RMT symbols manually
-  size_t buffer_size = this->get_buffer_size_();
+  const size_t transmit_buffer_size = this->get_rmt_transmit_buffer_size_();
+  const uint8_t pixel_stride = this->get_pixel_stride_();
   size_t sz = 0;
   uint8_t *psrc = this->buf_;
   rmt_symbol_word_t *pdest = this->rmt_buf_;
   const uint8_t power_scale = this->get_power_transmit_scale_();
-  while (sz < buffer_size) {
+  while (this->sacrificial_pixel_ && sz < pixel_stride) {
+    for (int i = 0; i < 8; i++) {
+      pdest->val = this->params_.bit0.val;
+      pdest++;
+    }
+    sz++;
+  }
+  while (sz < transmit_buffer_size) {
     uint8_t b = *psrc;
     if (power_scale < 255) {
       b = static_cast<uint8_t>((static_cast<uint16_t>(b) *
@@ -2973,10 +2991,10 @@ void CFXLightOutput::flush_rmt_() {
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   error = rmt_transmit(this->channel_, this->encoder_, this->rmt_buf_,
-                       this->get_buffer_size_(), &config);
+                       transmit_buffer_size, &config);
 #else
   size_t len =
-      this->get_buffer_size_() * 8 +
+      transmit_buffer_size * 8 +
       ((this->params_.reset.duration0 > 0 || this->params_.reset.duration1 > 0)
            ? 1
            : 0);
@@ -3338,13 +3356,17 @@ void CFXLightOutput::dump_config() {
                   "CFXLight (RMT):\n"
                   "  Pin: GPIO%u\n"
                   "  Chipset: %s\n"
-                  "  LEDs: %u\n"
+                  "  Visible LEDs: %u\n"
+                  "  Physical LEDs: %" PRIu32 "\n"
+                  "  Sacrificial Pixel: %s\n"
                   "  RGBW: %s\n"
                   "  RGB Order: %s\n"
                   "  RMT Symbols: %" PRIu32 "\n"
                   "  RMT TX Mode: %s\n"
                   "  RMT mem_block_symbols: %" PRIu32,
                   this->pin_, chipset_str, this->num_leds_,
+                  this->get_rmt_physical_led_count_(),
+                  this->sacrificial_pixel_ ? "yes" : "no",
                   this->is_rgbw_ ? "yes" : "no", order_str,
                   this->rmt_symbols_,
                   this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",

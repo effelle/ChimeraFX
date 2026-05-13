@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 5
+CFX_LIGHT_SCHEMA_REV = 6
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -47,6 +47,7 @@ from esphome.const import (
 # Constants not present in all ESPHome versions — define locally
 CONF_RGB_ORDER = "rgb_order"
 CONF_RMT_SYMBOLS = "rmt_symbols"
+CONF_SACRIFICIAL_PIXEL = "sacrificial_pixel"
 CONF_IS_WRGB = "is_wrgb"
 CONF_DEFAULT_TRANSITION_LENGTH = "default_transition_length"
 CONF_ALL_EFFECTS = "all_effects"
@@ -906,6 +907,7 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_MAX_REFRESH_RATE): cv.positive_time_period_microseconds,
             cv.Optional(CONF_RMT_SYMBOLS, default=0): cv.uint32_t,
+            cv.Optional(CONF_SACRIFICIAL_PIXEL, default=False): cv.boolean,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
             # Auto-controls (cfx_control entities generated from cfx_light)
@@ -949,6 +951,11 @@ def _validate_transport(config):
                 f"'{CONF_RMT_SYMBOLS}' has no effect on SPI. "
                 f"Host assignment is now handled deterministically in to_code "
                 f"based on the light's position in the global config."
+            )
+        if config.get(CONF_SACRIFICIAL_PIXEL, False):
+            raise cv.Invalid(
+                f"'{CONF_SACRIFICIAL_PIXEL}' is only supported by RMT chipsets "
+                f"(WS2812X, SK6812, WS2811)."
             )
         return config
 
@@ -1302,6 +1309,7 @@ async def to_code(config):
 
     # --- Hardware configuration (always) ---
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
+    cg.add(var.set_sacrificial_pixel(config[CONF_SACRIFICIAL_PIXEL]))
     chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
     
