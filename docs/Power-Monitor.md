@@ -183,7 +183,8 @@ Auto mode behavior:
 - Repeated `OVERBUDGET` safety checks escalate by 10% per check, up to 90%
 - The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s) and the pre-auto manual reduction would also be safe
 - Manual reduction is still respected; the effective reduction is the larger of the manual and auto values
-- Manual changes made while auto reduction is active are treated as temporary overrides and the pre-auto manual value is restored when auto releases
+- While auto reduction is active, lower manual selections are ignored for safety; stronger manual selections are temporary overrides
+- The pre-auto manual value is restored when auto releases
 
 ---
 

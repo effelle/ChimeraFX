@@ -218,6 +218,13 @@ uint8_t CFXPowerManager::get_transmit_scale() const {
 void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
   const uint8_t normalized = normalize_reduction_(value);
   if (this->auto_reduction_enabled_ && this->auto_restore_pending_) {
+    if (normalized <= this->auto_reduction_percent_) {
+      this->publish_reduction_state_();
+      ESP_LOGI(TAG_POWER,
+               "Auto power reduction holding %u%%; ignored lower request %u%%",
+               this->auto_reduction_percent_, normalized);
+      return;
+    }
     this->auto_user_override_percent_ = normalized;
     this->update_effective_reduction_();
     this->publish_reduction_state_();
