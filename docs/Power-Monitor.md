@@ -12,7 +12,7 @@ The power monitor is **estimate-first**, not measurement-first:
 
 This approach is efficient because it piggybacks on the existing frame transmission cycle without adding dedicated ADC measurements.
 
-> **Important**: The power monitor does **not** perform automatic brightness limiting. When monitoring is enabled, ChimeraFX automatically exposes a manual **Power Reduction** control as an emergency fallback. Use the optional `limit` section only to customize that control.
+> **Important**: The power monitor does **not** perform automatic brightness limiting unless you explicitly enable `limit.auto`. When monitoring is enabled, ChimeraFX automatically exposes a manual **Power Reduction** control as an emergency fallback or global day/night cap. Use the optional `limit` section to customize that control.
 
 ---
 
@@ -52,6 +52,7 @@ The limit control is generated automatically when `monitor` is present. Add `lim
 | restore | boolean | `true` | Restore last power reduction on reboot |
 | ramp_time | time | `800ms` | Smooth transition duration for changes |
 | reduction.name | string | `"Power Reduction"` | Display name for the dropdown entity |
+| auto.safe_hold_time | time | `30s` | Optional auto-release delay after demand returns to `SAFE` |
 
 ---
 
@@ -131,12 +132,42 @@ cfx_power:
 | 30% | 30% | Significant dim |
 | 40% | 40% | Heavy reduction |
 | 50% | 50% | Emergency reduction |
+| 60% | 60% | Strong emergency reduction |
+| 70% | 70% | Very strong emergency reduction |
+| 80% | 80% | Near-minimum output |
+| 90% | 90% | Night cap / last-resort emergency output |
 
 ### How It Works
 
 - **Smooth transitions**: When you change the reduction level, ChimeraFX smoothly ramps to the new level over `ramp_time` (default 800ms)
 - **Buffer preservation**: The reduction applies only to the transmit/packing path, leaving effect buffers untouched
 - **Persistence**: By default, the selected reduction survives reboots. Set `restore: false` to reset to 0% on startup
+- **Manual use**: High reductions such as 80-90% are valid for whole-node night caps without creating per-light scenes
+
+### Optional Auto Reduction
+
+Auto reduction is disabled by default. Enable it only when you want ChimeraFX to temporarily raise the global reduction based on `psu_current_limit`:
+
+```yaml
+cfx_power:
+  monitor:
+    mains_voltage: 230.0
+    psu_current_limit: 12A
+    sensors:
+      budget_status:
+      psu_load:
+  limit:
+    auto:
+      safe_hold_time: 30s
+```
+
+Auto mode behavior:
+
+- `WARNING` requests at least 20% reduction
+- `OVERBUDGET` requests at least 50% reduction
+- Repeated `OVERBUDGET` samples escalate by 10% per update interval, up to 90%
+- The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time`
+- Manual reduction is still respected; the effective reduction is the larger of the manual and auto values
 
 ---
 

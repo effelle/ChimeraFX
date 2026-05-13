@@ -79,6 +79,8 @@ CONF_BUDGET_STATUS = "budget_status"
 CONF_RESTORE = "restore"
 CONF_RAMP_TIME = "ramp_time"
 CONF_REDUCTION = "reduction"
+CONF_AUTO = "auto"
+CONF_SAFE_HOLD_TIME = "safe_hold_time"
 
 # Segment configuration keys (Phase 1)
 CONF_SEGMENTS = "segments"
@@ -323,11 +325,25 @@ def POWER_LIMIT_REDUCTION_SCHEMA(config):
     return _POWER_LIMIT_REDUCTION_SCHEMA(config)
 
 
+_POWER_LIMIT_AUTO_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_SAFE_HOLD_TIME, default="30s"): cv.positive_time_period_milliseconds,
+    }
+)
+
+
+def POWER_LIMIT_AUTO_SCHEMA(config):
+    if config is None:
+        config = {}
+    return _POWER_LIMIT_AUTO_SCHEMA(config)
+
+
 _POWER_LIMIT_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_RAMP_TIME, default="800ms"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_REDUCTION, default={}): POWER_LIMIT_REDUCTION_SCHEMA,
+        cv.Optional(CONF_AUTO): POWER_LIMIT_AUTO_SCHEMA,
     }
 )
 
@@ -1219,6 +1235,12 @@ async def _ensure_power_manager():
                 limit_conf[CONF_RAMP_TIME].total_milliseconds,
             )
         )
+        if CONF_AUTO in limit_conf:
+            cg.add(
+                manager.configure_auto_reduction(
+                    limit_conf[CONF_AUTO][CONF_SAFE_HOLD_TIME].total_milliseconds,
+                )
+            )
         reduction_id = core.ID(
             "cfx_power_reduction", is_declaration=True, type=CFXPowerReductionSelect
         )
@@ -1232,7 +1254,10 @@ async def _ensure_power_manager():
         }
         await select.register_select(
             reduction_var, reduction_conf,
-            options=["0%", "10%", "20%", "30%", "40%", "50%"]
+            options=[
+                "0%", "10%", "20%", "30%", "40%",
+                "50%", "60%", "70%", "80%", "90%"
+            ]
         )
         cg.add(manager.set_reduction_select(reduction_var))
 

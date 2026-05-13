@@ -40,6 +40,7 @@ class CFXPowerManager : public Component {
   void set_meter_sensors(sensor::Sensor *mains_voltage_sensor,
                          sensor::Sensor *power_factor_sensor);
   void configure_reduction(bool restore, uint32_t ramp_time_ms);
+  void configure_auto_reduction(uint32_t safe_hold_ms);
   void set_node_sensors(sensor::Sensor *dc_current, sensor::Sensor *dc_power,
                         sensor::Sensor *ac_power,
                         sensor::Sensor *apparent_power,
@@ -68,6 +69,10 @@ class CFXPowerManager : public Component {
   };
 
   void sample_();
+  void apply_auto_reduction_(float psu_load_percent, bool outputs_idle,
+                             uint32_t now_ms);
+  void set_auto_reduction_percent_(uint8_t value);
+  void update_effective_reduction_();
   void publish_reduction_state_();
   static float live_sensor_or_(sensor::Sensor *sensor, float fallback,
                                float min_value, float max_value);
@@ -77,11 +82,14 @@ class CFXPowerManager : public Component {
   std::vector<OutputEntry> outputs_;
   bool monitor_enabled_{false};
   bool reduction_enabled_{false};
+  bool auto_reduction_enabled_{false};
   bool restore_reduction_{true};
   uint32_t update_interval_ms_{10000};
   uint32_t ramp_time_ms_{800};
+  uint32_t auto_safe_hold_ms_{30000};
   uint32_t last_sample_ms_{0};
   uint32_t ramp_last_ms_{0};
+  uint32_t auto_safe_since_ms_{0};
   float supply_voltage_{5.0f};
   float psu_current_limit_ma_{0.0f};
   float psu_efficiency_{0.85f};
@@ -89,6 +97,8 @@ class CFXPowerManager : public Component {
   float mains_voltage_{0.0f};
   float controller_current_ma_{120.0f};
   float current_reduction_percent_{0.0f};
+  uint8_t manual_reduction_percent_{0};
+  uint8_t auto_reduction_percent_{0};
   uint8_t target_reduction_percent_{0};
   ESPPreferenceObject pref_{};
   ESPPreferenceObject energy_pref_{};

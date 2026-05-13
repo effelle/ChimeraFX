@@ -31,7 +31,8 @@ void CFXPowerManager::setup() {
         fnv1a_hash("cfx_power_reduction"), true);
     uint8_t restored = 0;
     if (this->pref_.load(&restored)) {
-      this->target_reduction_percent_ = normalize_reduction_(restored);
+      this->manual_reduction_percent_ = normalize_reduction_(restored);
+      this->update_effective_reduction_();
       this->current_reduction_percent_ =
           static_cast<float>(this->target_reduction_percent_);
     }
@@ -61,7 +62,7 @@ void CFXPowerManager::loop() {
     if (this->ramp_time_ms_ == 0 || dt >= this->ramp_time_ms_) {
       this->current_reduction_percent_ = target;
     } else {
-      const float max_step = 30.0f * static_cast<float>(dt) /
+      const float max_step = 90.0f * static_cast<float>(dt) /
                              static_cast<float>(this->ramp_time_ms_);
       if (this->current_reduction_percent_ < target) {
         this->current_reduction_percent_ =
@@ -126,6 +127,14 @@ void CFXPowerManager::configure_reduction(bool restore,
   this->reduction_enabled_ = true;
   this->restore_reduction_ = restore;
   this->ramp_time_ms_ = ramp_time_ms;
+}
+
+void CFXPowerManager::configure_auto_reduction(uint32_t safe_hold_ms) {
+  this->auto_reduction_enabled_ = true;
+  this->auto_safe_hold_ms_ = safe_hold_ms;
+  if (this->auto_safe_hold_ms_ == 0) {
+    this->auto_safe_hold_ms_ = this->update_interval_ms_;
+  }
 }
 
 void CFXPowerManager::set_node_sensors(sensor::Sensor *dc_current,
@@ -202,9 +211,11 @@ uint8_t CFXPowerManager::get_transmit_scale() const {
 
 void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
   const uint8_t normalized = normalize_reduction_(value);
-  this->target_reduction_percent_ = normalized;
+  this->manual_reduction_percent_ = normalized;
+  this->update_effective_reduction_();
   if (!this->reduction_enabled_) {
-    this->current_reduction_percent_ = static_cast<float>(normalized);
+    this->current_reduction_percent_ =
+        static_cast<float>(this->target_reduction_percent_);
   }
   if (persist && this->restore_reduction_) {
     this->pref_.save(&normalized);
@@ -217,6 +228,7 @@ void CFXPowerManager::sample_() {
   const float dynamic_scale =
       static_cast<float>(this->get_transmit_scale()) / 255.0f;
   float total_demand_ma = this->controller_current_ma_;
+  bool outputs_idle = true;
 
   for (auto &entry : this->outputs_) {
     if (entry.output == nullptr) {
@@ -232,6 +244,11 @@ void CFXPowerManager::sample_() {
     }
     entry.accumulated_dc_current_ma = 0.0f;
     entry.accumulated_frames = 0;
+    if (entry.estimated_dc_current_ma >
+        (entry.model.idle_ma * static_cast<float>(entry.output->size()) +
+         1.0f)) {
+      outputs_idle = false;
+    }
     total_demand_ma += entry.estimated_dc_current_ma;
   }
 
@@ -247,6 +264,12 @@ void CFXPowerManager::sample_() {
   const float apparent_power_va = ac_power_w / power_factor;
   const float ac_current_a = apparent_power_va / mains_voltage;
   const uint32_t now_ms = millis();
+  const float psu_load_percent =
+      this->psu_current_limit_ma_ > 0.0f
+          ? (total_demand_ma / this->psu_current_limit_ma_) * 100.0f
+          : std::nanf("");
+
+  this->apply_auto_reduction_(psu_load_percent, outputs_idle, now_ms);
 
   if (this->dc_current_sensor_ != nullptr) {
     this->dc_current_sensor_->publish_state(total_demand_ma / 1000.0f);
@@ -282,7 +305,7 @@ void CFXPowerManager::sample_() {
   }
   if (this->psu_load_sensor_ != nullptr) {
     if (this->psu_current_limit_ma_ > 0.0f) {
-      float psu_load = (total_demand_ma / this->psu_current_limit_ma_) * 100.0f;
+      float psu_load = psu_load_percent;
       if (psu_load > 100.0f) {
         psu_load = 100.0f;
       }
@@ -295,8 +318,6 @@ void CFXPowerManager::sample_() {
     if (this->psu_current_limit_ma_ <= 0.0f) {
       this->budget_status_sensor_->publish_state("NO_LIMIT");
     } else {
-      const float psu_load_percent =
-          (total_demand_ma / this->psu_current_limit_ma_) * 100.0f;
       if (psu_load_percent > 100.0f) {
         this->budget_status_sensor_->publish_state("OVERBUDGET");
       } else if (psu_load_percent >= 85.0f) {
@@ -306,6 +327,73 @@ void CFXPowerManager::sample_() {
       }
     }
   }
+}
+
+void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,
+                                            bool outputs_idle,
+                                            uint32_t now_ms) {
+  if (!this->auto_reduction_enabled_ || !this->reduction_enabled_ ||
+      this->psu_current_limit_ma_ <= 0.0f) {
+    return;
+  }
+
+  if (outputs_idle) {
+    this->auto_safe_since_ms_ = 0;
+    this->set_auto_reduction_percent_(0);
+    return;
+  }
+
+  if (!std::isfinite(psu_load_percent)) {
+    this->auto_safe_since_ms_ = 0;
+    return;
+  }
+
+  if (psu_load_percent > 100.0f) {
+    this->auto_safe_since_ms_ = 0;
+    const uint8_t next =
+        this->auto_reduction_percent_ >= 50
+            ? normalize_reduction_(this->auto_reduction_percent_ + 10)
+            : 50;
+    this->set_auto_reduction_percent_(next);
+    return;
+  }
+
+  if (psu_load_percent >= 85.0f) {
+    this->auto_safe_since_ms_ = 0;
+    if (this->auto_reduction_percent_ < 20) {
+      this->set_auto_reduction_percent_(20);
+    }
+    return;
+  }
+
+  if (this->auto_reduction_percent_ == 0) {
+    this->auto_safe_since_ms_ = 0;
+    return;
+  }
+  if (this->auto_safe_since_ms_ == 0) {
+    this->auto_safe_since_ms_ = now_ms;
+    return;
+  }
+  if ((now_ms - this->auto_safe_since_ms_) >= this->auto_safe_hold_ms_) {
+    this->auto_safe_since_ms_ = 0;
+    this->set_auto_reduction_percent_(0);
+  }
+}
+
+void CFXPowerManager::set_auto_reduction_percent_(uint8_t value) {
+  const uint8_t normalized = normalize_reduction_(value);
+  if (normalized == this->auto_reduction_percent_) {
+    return;
+  }
+  this->auto_reduction_percent_ = normalized;
+  this->update_effective_reduction_();
+  this->publish_reduction_state_();
+  ESP_LOGI(TAG_POWER, "Auto power reduction: %u%%", normalized);
+}
+
+void CFXPowerManager::update_effective_reduction_() {
+  this->target_reduction_percent_ =
+      std::max(this->manual_reduction_percent_, this->auto_reduction_percent_);
 }
 
 void CFXPowerManager::publish_reduction_state_() {
@@ -331,8 +419,8 @@ uint8_t CFXPowerManager::normalize_reduction_(float value) {
   if (value <= 0.0f) {
     return 0;
   }
-  if (value >= 50.0f) {
-    return 50;
+  if (value >= 90.0f) {
+    return 90;
   }
   return static_cast<uint8_t>(std::round(value / 10.0f) * 10.0f);
 }
