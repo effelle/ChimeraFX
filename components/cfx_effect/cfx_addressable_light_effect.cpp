@@ -609,6 +609,17 @@ bool CFXAddressableLightEffect::is_monochromatic_(uint8_t effect_id) const {
   }
 }
 
+bool CFXAddressableLightEffect::is_animated_monochromatic_hold_(
+    uint8_t effect_id) const {
+  switch (effect_id) {
+  case 181: // Eclipse
+  case 184: // Lithograph
+    return true;
+  default:
+    return false;
+  }
+}
+
 std::vector<uint8_t> CFXAddressableLightEffect::get_monochromatic_pool_() {
   // Automatically builds the pool from all effects registered as monochromatic
   std::vector<uint8_t> pool;
@@ -6294,16 +6305,26 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   if (progress > 1.0f)
     progress = 1.0f;
 
+  bool outro_done = (progress >= 1.0f);
   float fade_scaler = 1.0f - progress;
   uint8_t mode = act_->active_outro_mode;
   const bool freeze_outro_frame =
       (mode == INTRO_MODE_NONE || mode == INTRO_MODE_FADE);
+  const bool original_bake_brightness = runner->bake_brightness_;
+  const float original_runner_brightness = runner->global_brightness_;
+  const bool original_runner_force_white = runner->force_white_active_;
+  runner->bake_brightness_ = false;
+  runner->global_brightness_ = 1.0f;
+  runner->force_white_active_ = false;
 
   // 1. Advance the underlying effect in the background only for authored
   // outros. Plain fade-to-black should freeze the exact last visible frame.
   if (!freeze_outro_frame) {
     runner->service();
   }
+  runner->bake_brightness_ = original_bake_brightness;
+  runner->global_brightness_ = original_runner_brightness;
+  runner->force_white_active_ = original_runner_force_white;
 
   // 1b. CRITICAL: Stop ESPHome's internal transition from dimming our
   // pixels! Non-segmented: ESPHome is actively fading brightness to 0.0f.
@@ -6328,11 +6349,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     }
   }
 
-  // 2. Render background frame onto the output buffer (scaled by user
-  // brightness)
+  // 2. Render the authored outro at full logical intensity. User brightness is
+  // applied once at the end so custom outro cases cannot bypass it.
   int seg_len = runner->_segment.length();
   int seg_start = (it.size() == seg_len) ? 0 : runner->_segment.start;
-  int seg_stop = seg_start + seg_len;
 
   // Define helper lambdas at function scope to avoid redeclaration issues and
   // fix missing symbol errors in newer cases like Interference.
@@ -6348,6 +6368,19 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
                  (uint8_t)((int)col.b + b > 255 ? 255 : col.b + b),
                  (uint8_t)((int)col.w + b > 255 ? 255 : col.w + b));
   };
+  auto apply_outro_brightness = [&]() {
+    if (user_brightness >= 0.999f)
+      return;
+    for (int i = 0; i < seg_len; i++) {
+      int global_idx = seg_start + i;
+      Color c = it[global_idx].get();
+      it[global_idx] =
+          Color((uint8_t)(c.r * user_brightness),
+                (uint8_t)(c.g * user_brightness),
+                (uint8_t)(c.b * user_brightness),
+                (uint8_t)(c.w * user_brightness));
+    }
+  };
 
   if (freeze_outro_frame &&
       act_->transition_target_snapshot.size() == static_cast<size_t>(it.size())) {
@@ -6362,10 +6395,10 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     for (int i = 0; i < seg_len; i++) {
       int global_idx = seg_start + i;
       uint32_t c = runner->_segment.getPixelColor(i);
-      uint8_t r = (uint8_t)(((c >> 16) & 0xFF) * user_brightness);
-      uint8_t g = (uint8_t)(((c >> 8) & 0xFF) * user_brightness);
-      uint8_t b = (uint8_t)((c & 0xFF) * user_brightness);
-      uint8_t w = (uint8_t)(((c >> 24) & 0xFF) * user_brightness);
+      uint8_t r = (uint8_t)((c >> 16) & 0xFF);
+      uint8_t g = (uint8_t)((c >> 8) & 0xFF);
+      uint8_t b = (uint8_t)(c & 0xFF);
+      uint8_t w = (uint8_t)((c >> 24) & 0xFF);
 
       // BUG 13 FIX: Apply force_white to Outro transitions
       if (act_->active_outro_force_white)
@@ -6382,7 +6415,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
   }
 
   if (freeze_outro_frame) {
-    return (progress >= 1.0f);
+    apply_outro_brightness();
+    return outro_done;
   }
 
   bool reverse = act_->active_outro_mirror;
@@ -6736,7 +6770,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
           brightness = 1.0f;
         uint8_t b = (uint8_t)(255 * brightness);
         uint8_t r = b, g = b, b_val = b, w = b;
-        if (act_->active_force_white)
+        if (act_->active_outro_force_white)
           cfx::apply_force_white(r, g, b_val, w);
         it[seg_start + i] = Color(r, g, b_val, w);
       }
@@ -6745,7 +6779,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       float fraction = act_->hydraulics_fluid_level - floor_level;
       uint8_t b = (uint8_t)(255 * (0.75f + fraction * 0.25f));
       uint8_t r = b, g = b, b_val = b, w = b;
-      if (act_->active_force_white)
+      if (act_->active_outro_force_white)
         cfx::apply_force_white(r, g, b_val, w);
       it[seg_start + floor_level] = Color(r, g, b_val, w);
     }
@@ -6769,7 +6803,7 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
       int p_idx = (int)p.pos;
       if (p_idx >= 0 && p_idx < seg_len) {
         uint8_t r = 255, g = 255, b_val = 255, w = 255;
-        if (act_->active_force_white)
+        if (act_->active_outro_force_white)
           cfx::apply_force_white(r, g, b_val, w);
         it[seg_start + p_idx] = Color(r, g, b_val, w);
       }
@@ -6788,15 +6822,16 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         act_->hydraulics_particle_count == 0) { // audit 3.3
       for (int i = 0; i < seg_len; i++)
         it[seg_start + i] = Color::BLACK;
-      return true;
-    }
-    if (millis_64() - act_->outro_start_time >
-        act_->active_outro_duration_ms + 2000) {
+      outro_done = true;
+    } else if (millis_64() - act_->outro_start_time >
+               act_->active_outro_duration_ms + 2000) {
       for (int i = 0; i < seg_len; i++)
         it[seg_start + i] = Color::BLACK;
-      return true;
+      outro_done = true;
+    } else {
+      outro_done = false;
     }
-    return false;
+    break;
   }
   case INTRO_MODE_TIDAL_SURGE: {
     // Outro: reversed waypoints — mirrored personality of the intro.
@@ -7692,7 +7727,8 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
     break;
   }
 
-  return (progress >= 1.0f);
+  apply_outro_brightness();
+  return outro_done;
 }
 
 // --- Autotune Auto-Disable Implementation ---
@@ -8140,13 +8176,17 @@ bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   if (act_ == nullptr) return false;
   
   if (act_->runner != nullptr) {
-    if (!this->get_monochromatic_preset_(act_->runner->getMode()).is_active) {
+    uint8_t mode = act_->runner->getMode();
+    if (!this->get_monochromatic_preset_(mode).is_active ||
+        this->is_animated_monochromatic_hold_(mode)) {
       return false;
     }
   }
   for (auto *r : act_->segment_runners) {
     if (r != nullptr) {
-      if (!this->get_monochromatic_preset_(r->getMode()).is_active) {
+      uint8_t mode = r->getMode();
+      if (!this->get_monochromatic_preset_(mode).is_active ||
+          this->is_animated_monochromatic_hold_(mode)) {
         return false;
       }
     }

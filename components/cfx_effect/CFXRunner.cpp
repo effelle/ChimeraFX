@@ -7585,11 +7585,14 @@ uint16_t mode_lithograph(void) {
   }
   if (pattern_total == 0) pattern_total = 1;
 
-  // Intensity repositions the barcode map without turning Lithograph into a
-  // permanently animated hold. Changing intensity wakes mono_idle for one
-  // frame, so users can "move" the dark spots interactively.
-  uint32_t scroll =
+  // Intensity repositions the barcode map; speed adds a slow architectural
+  // drift so the hold stays alive after the print intro completes.
+  uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
+  uint32_t drift_px_per_sec =
+      1u + (((uint32_t)instance->_segment.speed * 23u) / 255u);
+  uint32_t scroll =
+      pattern_offset + (((uint32_t)instance->now * drift_px_per_sec) / 1000u);
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];

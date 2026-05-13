@@ -693,6 +693,7 @@ public:
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool rate_gate_due_(uint64_t now);
   bool is_monochromatic_(uint8_t effect_id) const;
+  bool is_animated_monochromatic_hold_(uint8_t effect_id) const;
   std::vector<uint8_t> get_monochromatic_pool_();
   static bool is_architectural_effect_id_(uint8_t effect_id);
   bool allow_default_transition_() const;
