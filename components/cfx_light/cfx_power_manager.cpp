@@ -407,9 +407,11 @@ void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,
 
   if (psu_load_percent >= 85.0f) {
     this->auto_safe_since_ms_ = 0;
-    if (this->auto_reduction_percent_ < 20) {
-      this->set_auto_reduction_percent_(20);
-    }
+    const uint8_t next =
+        this->auto_reduction_percent_ >= 20
+            ? normalize_reduction_(this->auto_reduction_percent_ + 10)
+            : 20;
+    this->set_auto_reduction_percent_(next);
     return;
   }
 

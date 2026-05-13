@@ -178,7 +178,7 @@ cfx_power:
 Auto mode behavior:
 
 - Auto safety checks run every 2 seconds, independently from the slower sensor publish interval
-- `WARNING` requests at least 20% reduction
+- `WARNING` requests at least 20% reduction, then keeps stepping up until the load reaches `SAFE`
 - `OVERBUDGET` requests at least 50% reduction
 - Repeated `OVERBUDGET` safety checks escalate by 10% per check, up to 90%
 - The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s) and the pre-auto manual reduction would also be safe
