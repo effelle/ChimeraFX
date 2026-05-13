@@ -84,6 +84,12 @@ void CFXPowerManager::loop() {
   if (!this->monitor_enabled_ || this->update_interval_ms_ == 0) {
     return;
   }
+  if (this->auto_reduction_enabled_ &&
+      (this->last_auto_check_ms_ == 0 ||
+       (now - this->last_auto_check_ms_) >= this->auto_check_interval_ms_)) {
+    this->last_auto_check_ms_ = now;
+    this->check_auto_reduction_(now);
+  }
   if (this->last_sample_ms_ != 0 &&
       (now - this->last_sample_ms_) < this->update_interval_ms_) {
     return;
@@ -133,7 +139,7 @@ void CFXPowerManager::configure_auto_reduction(uint32_t safe_hold_ms) {
   this->auto_reduction_enabled_ = true;
   this->auto_safe_hold_ms_ = safe_hold_ms;
   if (this->auto_safe_hold_ms_ == 0) {
-    this->auto_safe_hold_ms_ = this->update_interval_ms_;
+    this->auto_safe_hold_ms_ = 30000u;
   }
 }
 
@@ -269,8 +275,6 @@ void CFXPowerManager::sample_() {
           ? (total_demand_ma / this->psu_current_limit_ma_) * 100.0f
           : std::nanf("");
 
-  this->apply_auto_reduction_(psu_load_percent, outputs_idle, now_ms);
-
   if (this->dc_current_sensor_ != nullptr) {
     this->dc_current_sensor_->publish_state(total_demand_ma / 1000.0f);
   }
@@ -327,6 +331,33 @@ void CFXPowerManager::sample_() {
       }
     }
   }
+}
+
+void CFXPowerManager::check_auto_reduction_(uint32_t now_ms) {
+  const float dynamic_scale =
+      static_cast<float>(this->get_transmit_scale()) / 255.0f;
+  float total_demand_ma = this->controller_current_ma_;
+  bool outputs_idle = true;
+
+  for (auto &entry : this->outputs_) {
+    if (entry.output == nullptr) {
+      continue;
+    }
+    const float current_ma =
+        entry.output->estimate_power_current_ma(entry.model, dynamic_scale);
+    if (current_ma >
+        (entry.model.idle_ma * static_cast<float>(entry.output->size()) +
+         1.0f)) {
+      outputs_idle = false;
+    }
+    total_demand_ma += current_ma;
+  }
+
+  const float psu_load_percent =
+      this->psu_current_limit_ma_ > 0.0f
+          ? (total_demand_ma / this->psu_current_limit_ma_) * 100.0f
+          : std::nanf("");
+  this->apply_auto_reduction_(psu_load_percent, outputs_idle, now_ms);
 }
 
 void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,

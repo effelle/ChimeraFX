@@ -69,6 +69,7 @@ class CFXPowerManager : public Component {
   };
 
   void sample_();
+  void check_auto_reduction_(uint32_t now_ms);
   void apply_auto_reduction_(float psu_load_percent, bool outputs_idle,
                              uint32_t now_ms);
   void set_auto_reduction_percent_(uint8_t value);
@@ -87,7 +88,9 @@ class CFXPowerManager : public Component {
   uint32_t update_interval_ms_{10000};
   uint32_t ramp_time_ms_{800};
   uint32_t auto_safe_hold_ms_{30000};
+  uint32_t auto_check_interval_ms_{2000};
   uint32_t last_sample_ms_{0};
+  uint32_t last_auto_check_ms_{0};
   uint32_t ramp_last_ms_{0};
   uint32_t auto_safe_since_ms_{0};
   float supply_voltage_{5.0f};

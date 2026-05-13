@@ -50,8 +50,8 @@ The limit control is generated automatically when `monitor` is present. Add `lim
 | Parameter | Type | Default | Description |
 |:---|:---|:---|:---|
 | restore | boolean | `true` | Restore last power reduction on reboot |
-| ramp_time | time | `800ms` | Smooth transition duration for changes |
 | reduction.name | string | `"Power Reduction"` | Display name for the dropdown entity |
+| reduction.icon | icon | `mdi:brightness-percent` | Icon for the dropdown entity |
 | auto.safe_hold_time | time | `30s` | Optional auto-release delay after demand returns to `SAFE` |
 
 ---
@@ -83,6 +83,21 @@ cfx_power:
       budget_status:
       apparent_power:
       ac_current:
+```
+
+Each optional entity can also be customized with `name:` and `id:` for Home Assistant organization and automations:
+
+```yaml
+cfx_power:
+  monitor:
+    mains_voltage: 230.0
+    sensors:
+      ac_power:
+        id: cfx_ac_power
+        name: "LED AC Power"
+      budget_status:
+        id: cfx_budget_status
+        name: "LED Budget Status"
 ```
 
 | Sensor | Unit | Description |
@@ -117,7 +132,6 @@ cfx_power:
     mains_voltage: 230.0
   limit:       # Optional; generated automatically when monitor is enabled
     restore: true
-    ramp_time: 800ms
     reduction:
       name: "Power Reduction"
 ```
@@ -139,7 +153,7 @@ cfx_power:
 
 ### How It Works
 
-- **Smooth transitions**: When you change the reduction level, ChimeraFX smoothly ramps to the new level over `ramp_time` (default 800ms)
+- **Smooth transitions**: When you change the reduction level, ChimeraFX smoothly ramps over a fixed 800ms safety window
 - **Buffer preservation**: The reduction applies only to the transmit/packing path, leaving effect buffers untouched
 - **Persistence**: By default, the selected reduction survives reboots. Set `restore: false` to reset to 0% on startup
 - **Manual use**: High reductions such as 80-90% are valid for whole-node night caps without creating per-light scenes
@@ -158,15 +172,15 @@ cfx_power:
       psu_load:
   limit:
     auto:
-      safe_hold_time: 30s
 ```
 
 Auto mode behavior:
 
+- Auto safety checks run every 2 seconds, independently from the slower sensor publish interval
 - `WARNING` requests at least 20% reduction
 - `OVERBUDGET` requests at least 50% reduction
-- Repeated `OVERBUDGET` samples escalate by 10% per update interval, up to 90%
-- The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time`
+- Repeated `OVERBUDGET` safety checks escalate by 10% per check, up to 90%
+- The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s)
 - Manual reduction is still respected; the effective reduction is the larger of the manual and auto values
 
 ---
@@ -302,7 +316,6 @@ cfx_power:
         name: "Power Budget"
   limit:
     restore: true
-    ramp_time: 1s
     reduction:
       name: "Brightness Limit"
 ```

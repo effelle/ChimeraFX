@@ -29,6 +29,7 @@ from esphome.const import (
     CONF_COLOR_MODE,
     CONF_EFFECTS,
     CONF_GREEN,
+    CONF_ICON,
     CONF_ID,
     CONF_INITIAL_STATE,
     CONF_IS_RGBW,
@@ -77,7 +78,6 @@ CONF_ENERGY = "energy"
 CONF_PSU_LOAD = "psu_load"
 CONF_BUDGET_STATUS = "budget_status"
 CONF_RESTORE = "restore"
-CONF_RAMP_TIME = "ramp_time"
 CONF_REDUCTION = "reduction"
 CONF_AUTO = "auto"
 CONF_SAFE_HOLD_TIME = "safe_hold_time"
@@ -316,6 +316,7 @@ POWER_MONITOR_SCHEMA = cv.Schema(
 _POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_NAME, default="Power Reduction"): cv.string,
+        cv.Optional(CONF_ICON, default="mdi:brightness-percent"): cv.icon,
     }
 )
 
@@ -341,7 +342,6 @@ def POWER_LIMIT_AUTO_SCHEMA(config):
 _POWER_LIMIT_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
-        cv.Optional(CONF_RAMP_TIME, default="800ms"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_REDUCTION, default={}): POWER_LIMIT_REDUCTION_SCHEMA,
         cv.Optional(CONF_AUTO): POWER_LIMIT_AUTO_SCHEMA,
     }
@@ -1232,7 +1232,7 @@ async def _ensure_power_manager():
         cg.add(
             manager.configure_reduction(
                 limit_conf[CONF_RESTORE],
-                limit_conf[CONF_RAMP_TIME].total_milliseconds,
+                800,
             )
         )
         if CONF_AUTO in limit_conf:
@@ -1249,7 +1249,7 @@ async def _ensure_power_manager():
         reduction_conf = {
             CONF_ID: reduction_id,
             CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
-            "icon": "mdi:flash-percent",
+            CONF_ICON: limit_conf[CONF_REDUCTION][CONF_ICON],
             "disabled_by_default": False,
         }
         await select.register_select(
