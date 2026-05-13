@@ -217,6 +217,15 @@ uint8_t CFXPowerManager::get_transmit_scale() const {
 
 void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
   const uint8_t normalized = normalize_reduction_(value);
+  if (this->auto_reduction_enabled_ && this->auto_restore_pending_) {
+    this->auto_user_override_percent_ = normalized;
+    this->update_effective_reduction_();
+    this->publish_reduction_state_();
+    ESP_LOGI(TAG_POWER, "Temporary power reduction override: %u%%",
+             normalized);
+    return;
+  }
+
   this->manual_reduction_percent_ = normalized;
   this->update_effective_reduction_();
   if (!this->reduction_enabled_) {
@@ -234,7 +243,6 @@ void CFXPowerManager::sample_() {
   const float dynamic_scale =
       static_cast<float>(this->get_transmit_scale()) / 255.0f;
   float total_demand_ma = this->controller_current_ma_;
-  bool outputs_idle = true;
 
   for (auto &entry : this->outputs_) {
     if (entry.output == nullptr) {
@@ -250,11 +258,6 @@ void CFXPowerManager::sample_() {
     }
     entry.accumulated_dc_current_ma = 0.0f;
     entry.accumulated_frames = 0;
-    if (entry.estimated_dc_current_ma >
-        (entry.model.idle_ma * static_cast<float>(entry.output->size()) +
-         1.0f)) {
-      outputs_idle = false;
-    }
     total_demand_ma += entry.estimated_dc_current_ma;
   }
 
@@ -413,6 +416,24 @@ void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,
 
 void CFXPowerManager::set_auto_reduction_percent_(uint8_t value) {
   const uint8_t normalized = normalize_reduction_(value);
+  if (normalized == 0 && this->auto_restore_pending_) {
+    this->auto_reduction_percent_ = 0;
+    this->auto_user_override_percent_ = 0;
+    this->manual_reduction_percent_ = this->auto_restore_manual_percent_;
+    this->auto_restore_pending_ = false;
+    this->update_effective_reduction_();
+    this->publish_reduction_state_();
+    ESP_LOGI(TAG_POWER, "Auto power reduction released; restored %u%%",
+             this->manual_reduction_percent_);
+    return;
+  }
+
+  if (normalized > 0 && !this->auto_restore_pending_) {
+    this->auto_restore_manual_percent_ = this->manual_reduction_percent_;
+    this->auto_user_override_percent_ = 0;
+    this->auto_restore_pending_ = true;
+  }
+
   if (normalized == this->auto_reduction_percent_) {
     return;
   }
@@ -424,7 +445,9 @@ void CFXPowerManager::set_auto_reduction_percent_(uint8_t value) {
 
 void CFXPowerManager::update_effective_reduction_() {
   this->target_reduction_percent_ =
-      std::max(this->manual_reduction_percent_, this->auto_reduction_percent_);
+      std::max(std::max(this->manual_reduction_percent_,
+                        this->auto_reduction_percent_),
+               this->auto_user_override_percent_);
 }
 
 void CFXPowerManager::publish_reduction_state_() {

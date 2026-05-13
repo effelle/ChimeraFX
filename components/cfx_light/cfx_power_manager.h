@@ -85,7 +85,7 @@ class CFXPowerManager : public Component {
   bool reduction_enabled_{false};
   bool auto_reduction_enabled_{false};
   bool restore_reduction_{true};
-  uint32_t update_interval_ms_{10000};
+  uint32_t update_interval_ms_{5000};
   uint32_t ramp_time_ms_{800};
   uint32_t auto_safe_hold_ms_{30000};
   uint32_t auto_check_interval_ms_{2000};
@@ -102,7 +102,10 @@ class CFXPowerManager : public Component {
   float current_reduction_percent_{0.0f};
   uint8_t manual_reduction_percent_{0};
   uint8_t auto_reduction_percent_{0};
+  uint8_t auto_user_override_percent_{0};
+  uint8_t auto_restore_manual_percent_{0};
   uint8_t target_reduction_percent_{0};
+  bool auto_restore_pending_{false};
   ESPPreferenceObject pref_{};
   ESPPreferenceObject energy_pref_{};
   bool energy_pref_ready_{false};

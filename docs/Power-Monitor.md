@@ -7,7 +7,7 @@ The ChimeraFX Power Monitor (`cfx_power`) provides real-time power consumption e
 The power monitor is **estimate-first**, not measurement-first:
 
 1. **Frame-based sampling**: Each time ChimeraFX transmits a frame to the LEDs, it records an instantaneous power estimate based on the current pixel colors
-2. **Rolling average**: Over each `update_interval` window (default: 10 seconds), ChimeraFX averages all frame estimates
+2. **Rolling average**: Over each `update_interval` window (default: 5 seconds), ChimeraFX averages all frame estimates
 3. **Published sensors**: The averaged values are published to Home Assistant as sensors
 
 This approach is efficient because it piggybacks on the existing frame transmission cycle without adding dedicated ADC measurements.
@@ -21,8 +21,8 @@ This approach is efficient because it piggybacks on the existing frame transmiss
 ```yaml
 cfx_power:
   monitor:
-    mains_voltage: 230.0    # Required - your AC mains voltage
-    psu_current_limit: 12A   # Strongly recommended
+    mains_voltage: 230.0       # Required - your AC mains voltage
+    psu_current_limit: 12A     # Strongly recommended
 ```
 
 ### Monitor Parameters
@@ -31,7 +31,7 @@ cfx_power:
 |:---|:---|:---|:---|
 | **mains_voltage** | float | *(required)* | Your AC mains voltage (e.g., 120.0 for US, 230.0 for EU/UK) |
 | **psu_current_limit** | current | `0A` | Your PSU's maximum current output |
-| update_interval | time | `10s` | How often to publish sensor updates |
+| update_interval | time | `5s` | How often to publish sensor updates |
 | supply_voltage | float | `5.0` | LED strip supply voltage (usually 5V) |
 | psu_efficiency | float | `0.85` | PSU efficiency factor (0.01-1.0) |
 | power_factor | float | `0.90` | Power factor for AC calculations (0.01-1.0) |
@@ -151,6 +151,8 @@ cfx_power:
 | 80% | 80% | Near-minimum output |
 | 90% | 90% | Night cap / last-resort emergency output |
 
+> **[TIP]** You could use your lights without reduction during the day, and enable 50% reduction (or more) at night using a simple automation. This could save power without creating a new scene!
+
 ### How It Works
 
 - **Smooth transitions**: When you change the reduction level, ChimeraFX smoothly ramps over a fixed 800ms safety window
@@ -182,6 +184,7 @@ Auto mode behavior:
 - Repeated `OVERBUDGET` safety checks escalate by 10% per check, up to 90%
 - The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s)
 - Manual reduction is still respected; the effective reduction is the larger of the manual and auto values
+- Manual changes made while auto reduction is active are treated as temporary overrides and the pre-auto manual value is restored when auto releases
 
 ---
 

@@ -297,7 +297,7 @@ def _power_sensors_schema(config):
 
 POWER_MONITOR_SCHEMA = cv.Schema(
     {
-        cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_UPDATE_INTERVAL, default="5s"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_SUPPLY_VOLTAGE, default=5.0): cv.float_range(min=0.1),
         cv.Optional(CONF_PSU_CURRENT_LIMIT, default="0A"): _current_to_ma,
         cv.Optional(CONF_PSU_EFFICIENCY, default=0.85): cv.float_range(min=0.01, max=1.0),
