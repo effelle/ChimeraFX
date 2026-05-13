@@ -339,7 +339,12 @@ void CFXPowerManager::sample_() {
 void CFXPowerManager::check_auto_reduction_(uint32_t now_ms) {
   const float dynamic_scale =
       static_cast<float>(this->get_transmit_scale()) / 255.0f;
+  const uint8_t restore_reduction =
+      this->auto_restore_pending_ ? this->auto_restore_manual_percent_
+                                  : this->manual_reduction_percent_;
+  const float restore_scale = reduction_scale_(restore_reduction);
   float total_demand_ma = this->controller_current_ma_;
+  float restore_demand_ma = this->controller_current_ma_;
   bool outputs_idle = true;
 
   for (auto &entry : this->outputs_) {
@@ -354,16 +359,24 @@ void CFXPowerManager::check_auto_reduction_(uint32_t now_ms) {
       outputs_idle = false;
     }
     total_demand_ma += current_ma;
+    restore_demand_ma +=
+        entry.output->estimate_power_current_ma(entry.model, restore_scale);
   }
 
   const float psu_load_percent =
       this->psu_current_limit_ma_ > 0.0f
           ? (total_demand_ma / this->psu_current_limit_ma_) * 100.0f
           : std::nanf("");
-  this->apply_auto_reduction_(psu_load_percent, outputs_idle, now_ms);
+  const float restore_psu_load_percent =
+      this->psu_current_limit_ma_ > 0.0f
+          ? (restore_demand_ma / this->psu_current_limit_ma_) * 100.0f
+          : std::nanf("");
+  this->apply_auto_reduction_(psu_load_percent, restore_psu_load_percent,
+                              outputs_idle, now_ms);
 }
 
 void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,
+                                            float restore_psu_load_percent,
                                             bool outputs_idle,
                                             uint32_t now_ms) {
   if (!this->auto_reduction_enabled_ || !this->reduction_enabled_ ||
@@ -401,6 +414,11 @@ void CFXPowerManager::apply_auto_reduction_(float psu_load_percent,
   }
 
   if (this->auto_reduction_percent_ == 0) {
+    this->auto_safe_since_ms_ = 0;
+    return;
+  }
+  if (!std::isfinite(restore_psu_load_percent) ||
+      restore_psu_load_percent >= 85.0f) {
     this->auto_safe_since_ms_ = 0;
     return;
   }
@@ -467,6 +485,13 @@ float CFXPowerManager::live_sensor_or_(sensor::Sensor *sensor, float fallback,
     return fallback;
   }
   return value;
+}
+
+float CFXPowerManager::reduction_scale_(uint8_t reduction_percent) {
+  if (reduction_percent >= 100) {
+    return 0.0f;
+  }
+  return 1.0f - (static_cast<float>(reduction_percent) / 100.0f);
 }
 
 uint8_t CFXPowerManager::normalize_reduction_(float value) {

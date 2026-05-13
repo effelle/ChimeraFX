@@ -158,7 +158,6 @@ cfx_power:
 - **Smooth transitions**: When you change the reduction level, ChimeraFX smoothly ramps over a fixed 800ms safety window
 - **Buffer preservation**: The reduction applies only to the transmit/packing path, leaving effect buffers untouched
 - **Persistence**: By default, the selected reduction survives reboots. Set `restore: false` to reset to 0% on startup
-- **Manual use**: High reductions such as 80-90% are valid for whole-node night caps without creating per-light scenes
 
 ### Optional Auto Reduction
 
@@ -182,7 +181,7 @@ Auto mode behavior:
 - `WARNING` requests at least 20% reduction
 - `OVERBUDGET` requests at least 50% reduction
 - Repeated `OVERBUDGET` safety checks escalate by 10% per check, up to 90%
-- The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s)
+- The auto reduction is released when the lights are off, or after demand stays `SAFE` for `safe_hold_time` (default 30s) and the pre-auto manual reduction would also be safe
 - Manual reduction is still respected; the effective reduction is the larger of the manual and auto values
 - Manual changes made while auto reduction is active are treated as temporary overrides and the pre-auto manual value is restored when auto releases
 

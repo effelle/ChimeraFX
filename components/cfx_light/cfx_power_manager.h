@@ -70,13 +70,15 @@ class CFXPowerManager : public Component {
 
   void sample_();
   void check_auto_reduction_(uint32_t now_ms);
-  void apply_auto_reduction_(float psu_load_percent, bool outputs_idle,
-                             uint32_t now_ms);
+  void apply_auto_reduction_(float psu_load_percent,
+                             float restore_psu_load_percent,
+                             bool outputs_idle, uint32_t now_ms);
   void set_auto_reduction_percent_(uint8_t value);
   void update_effective_reduction_();
   void publish_reduction_state_();
   static float live_sensor_or_(sensor::Sensor *sensor, float fallback,
                                float min_value, float max_value);
+  static float reduction_scale_(uint8_t reduction_percent);
   static uint8_t normalize_reduction_(float value);
 
   static CFXPowerManager *active_;
