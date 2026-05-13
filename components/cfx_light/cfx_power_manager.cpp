@@ -293,16 +293,16 @@ void CFXPowerManager::sample_() {
   }
   if (this->budget_status_sensor_ != nullptr) {
     if (this->psu_current_limit_ma_ <= 0.0f) {
-      this->budget_status_sensor_->publish_state("No PSU limit");
+      this->budget_status_sensor_->publish_state("NO_LIMIT");
     } else {
       const float psu_load_percent =
           (total_demand_ma / this->psu_current_limit_ma_) * 100.0f;
-      if (psu_load_percent >= 100.0f) {
-        this->budget_status_sensor_->publish_state("Exceeds PSU model");
+      if (psu_load_percent > 100.0f) {
+        this->budget_status_sensor_->publish_state("OVERBUDGET");
       } else if (psu_load_percent >= 85.0f) {
-        this->budget_status_sensor_->publish_state("Near PSU limit");
+        this->budget_status_sensor_->publish_state("WARNING");
       } else {
-        this->budget_status_sensor_->publish_state("Comfortable");
+        this->budget_status_sensor_->publish_state("SAFE");
       }
     }
   }
@@ -331,8 +331,8 @@ uint8_t CFXPowerManager::normalize_reduction_(float value) {
   if (value <= 0.0f) {
     return 0;
   }
-  if (value >= 30.0f) {
-    return 30;
+  if (value >= 50.0f) {
+    return 50;
   }
   return static_cast<uint8_t>(std::round(value / 10.0f) * 10.0f);
 }

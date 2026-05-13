@@ -42,6 +42,7 @@ nav:
   - Guide:
     - Installation: Installation.md
     - ChimeraFX light: cfx_light.md
+    - Power Monitor: Power-Monitor.md
     - Controls: Controls.md
     - Effect Library: Effects-Library.md
     - Effect Presets: Effect-Presets.md

@@ -208,6 +208,14 @@ _ESTIMATED_CURRENT_SENSOR_SCHEMA = sensor.sensor_schema(
     state_class="measurement",
 )
 
+_ESTIMATED_AC_CURRENT_SENSOR_SCHEMA = sensor.sensor_schema(
+    unit_of_measurement="A",
+    icon="mdi:current-ac",
+    accuracy_decimals=3,
+    device_class="current",
+    state_class="measurement",
+)
+
 _ESTIMATED_POWER_SENSOR_SCHEMA = sensor.sensor_schema(
     unit_of_measurement="W",
     icon="mdi:flash",
@@ -248,13 +256,22 @@ DEFAULT_POWER_NODE_SENSORS = {
     CONF_DC_POWER: {CONF_NAME: "DC Power"},
 }
 
+OPTIONAL_POWER_SENSOR_DEFAULTS = {
+    CONF_AC_POWER: {CONF_NAME: "AC Power"},
+    CONF_APPARENT_POWER: {CONF_NAME: "Apparent Power"},
+    CONF_AC_CURRENT: {CONF_NAME: "AC Current"},
+    CONF_ENERGY: {CONF_NAME: "Energy"},
+    CONF_PSU_LOAD: {CONF_NAME: "PSU Load"},
+    CONF_BUDGET_STATUS: {CONF_NAME: "Budget Status"},
+}
+
 POWER_SENSORS_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_DC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
         cv.Optional(CONF_DC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_AC_POWER): _ESTIMATED_POWER_SENSOR_SCHEMA,
         cv.Optional(CONF_APPARENT_POWER): _ESTIMATED_APPARENT_POWER_SENSOR_SCHEMA,
-        cv.Optional(CONF_AC_CURRENT): _ESTIMATED_CURRENT_SENSOR_SCHEMA,
+        cv.Optional(CONF_AC_CURRENT): _ESTIMATED_AC_CURRENT_SENSOR_SCHEMA,
         cv.Optional(CONF_ENERGY): _ESTIMATED_ENERGY_SENSOR_SCHEMA,
         cv.Optional(CONF_PSU_LOAD): _ESTIMATED_PSU_LOAD_SENSOR_SCHEMA,
         cv.Optional(CONF_BUDGET_STATUS): _ESTIMATED_BUDGET_STATUS_SCHEMA,
@@ -268,6 +285,12 @@ def _power_sensors_schema(config):
     config = dict(config)
     for key, default_value in DEFAULT_POWER_NODE_SENSORS.items():
         config.setdefault(key, dict(default_value))
+    for key, default_value in OPTIONAL_POWER_SENSOR_DEFAULTS.items():
+        if key in config:
+            sensor_conf = {} if config[key] is None else dict(config[key])
+            merged = dict(default_value)
+            merged.update(sensor_conf)
+            config[key] = merged
     return POWER_SENSORS_SCHEMA(config)
 
 POWER_MONITOR_SCHEMA = cv.Schema(
@@ -288,19 +311,31 @@ POWER_MONITOR_SCHEMA = cv.Schema(
     }
 )
 
-POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
+_POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_NAME, default="Power Reduction"): cv.string,
     }
 )
 
-POWER_LIMIT_SCHEMA = cv.Schema(
+def POWER_LIMIT_REDUCTION_SCHEMA(config):
+    if config is None:
+        config = {}
+    return _POWER_LIMIT_REDUCTION_SCHEMA(config)
+
+
+_POWER_LIMIT_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
         cv.Optional(CONF_RAMP_TIME, default="800ms"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_REDUCTION, default={}): POWER_LIMIT_REDUCTION_SCHEMA,
     }
 )
+
+def POWER_LIMIT_SCHEMA(config):
+    if config is None:
+        config = {}
+    return _POWER_LIMIT_SCHEMA(config)
+
 
 # --- Segment Schema & Validation (Phase 1) ---
 
@@ -997,7 +1032,12 @@ def _power_monitor_config():
 
 
 def _power_limit_config():
-    return _cfx_power_config().get(CONF_LIMIT)
+    power_conf = _cfx_power_config()
+    if CONF_LIMIT in power_conf:
+        return power_conf[CONF_LIMIT]
+    if CONF_MONITOR in power_conf:
+        return POWER_LIMIT_SCHEMA({})
+    return None
 
 
 def _cfx_light_configs():
@@ -1191,7 +1231,8 @@ async def _ensure_power_manager():
             "disabled_by_default": False,
         }
         await select.register_select(
-            reduction_var, reduction_conf, options=["0%", "10%", "20%", "30%"]
+            reduction_var, reduction_conf,
+            options=["0%", "10%", "20%", "30%", "40%", "50%"]
         )
         cg.add(manager.set_reduction_select(reduction_var))
 
