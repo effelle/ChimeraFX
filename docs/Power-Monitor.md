@@ -50,8 +50,8 @@ The limit control is generated automatically when `monitor` is present. Add `lim
 | Parameter | Type | Default | Description |
 |:---|:---|:---|:---|
 | restore | boolean | `true` | Restore last power reduction on reboot |
-| reduction.name | string | `"Power Reduction"` | Display name for the dropdown entity |
-| reduction.icon | icon | `mdi:brightness-percent` | Icon for the dropdown entity |
+| name | string | `"Power Reduction"` | Display name for the dropdown entity |
+| icon | icon | `mdi:brightness-percent` | Icon for the dropdown entity |
 | auto.safe_hold_time | time | `30s` | Optional auto-release delay after demand returns to `SAFE` |
 
 ---
@@ -132,8 +132,8 @@ cfx_power:
     mains_voltage: 230.0
   limit:       # Optional; generated automatically when monitor is enabled
     restore: true
-    reduction:
-      name: "Power Reduction"
+    name: "Power Reduction"
+    icon: mdi:brightness-percent
 ```
 
 ### Reduction Steps
@@ -319,8 +319,8 @@ cfx_power:
         name: "Power Budget"
   limit:
     restore: true
-    reduction:
-      name: "Brightness Limit"
+    name: "Brightness Limit"
+    icon: mdi:brightness-percent
 ```
 
 ---

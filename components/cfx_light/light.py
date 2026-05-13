@@ -313,19 +313,6 @@ POWER_MONITOR_SCHEMA = cv.Schema(
     }
 )
 
-_POWER_LIMIT_REDUCTION_SCHEMA = cv.Schema(
-    {
-        cv.Optional(CONF_NAME, default="Power Reduction"): cv.string,
-        cv.Optional(CONF_ICON, default="mdi:brightness-percent"): cv.icon,
-    }
-)
-
-def POWER_LIMIT_REDUCTION_SCHEMA(config):
-    if config is None:
-        config = {}
-    return _POWER_LIMIT_REDUCTION_SCHEMA(config)
-
-
 _POWER_LIMIT_AUTO_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_SAFE_HOLD_TIME, default="30s"): cv.positive_time_period_milliseconds,
@@ -342,7 +329,8 @@ def POWER_LIMIT_AUTO_SCHEMA(config):
 _POWER_LIMIT_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_RESTORE, default=True): cv.boolean,
-        cv.Optional(CONF_REDUCTION, default={}): POWER_LIMIT_REDUCTION_SCHEMA,
+        cv.Optional(CONF_NAME, default="Power Reduction"): cv.string,
+        cv.Optional(CONF_ICON, default="mdi:brightness-percent"): cv.icon,
         cv.Optional(CONF_AUTO): POWER_LIMIT_AUTO_SCHEMA,
     }
 )
@@ -350,6 +338,14 @@ _POWER_LIMIT_SCHEMA = cv.Schema(
 def POWER_LIMIT_SCHEMA(config):
     if config is None:
         config = {}
+    config = dict(config)
+    legacy_reduction = config.pop(CONF_REDUCTION, None)
+    if legacy_reduction is not None:
+        legacy_reduction = {} if legacy_reduction is None else dict(legacy_reduction)
+        config.setdefault(CONF_NAME, legacy_reduction.get(CONF_NAME, "Power Reduction"))
+        config.setdefault(
+            CONF_ICON, legacy_reduction.get(CONF_ICON, "mdi:brightness-percent")
+        )
     return _POWER_LIMIT_SCHEMA(config)
 
 
@@ -1248,8 +1244,8 @@ async def _ensure_power_manager():
         core.CORE.component_ids.add("cfx_power_reduction")
         reduction_conf = {
             CONF_ID: reduction_id,
-            CONF_NAME: limit_conf[CONF_REDUCTION][CONF_NAME],
-            CONF_ICON: limit_conf[CONF_REDUCTION][CONF_ICON],
+            CONF_NAME: limit_conf[CONF_NAME],
+            CONF_ICON: limit_conf[CONF_ICON],
             "disabled_by_default": False,
         }
         await select.register_select(
