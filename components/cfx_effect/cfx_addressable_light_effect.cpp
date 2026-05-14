@@ -2981,7 +2981,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       MonochromaticPreset preset =
           this->get_monochromatic_preset_(this->effect_id_);
       if (preset.is_active) {
-        trans_dur = 0.5f; // v4.1 Smooth Transition
+        trans_dur = this->is_animated_monochromatic_hold_(this->effect_id_)
+                        ? 0.0f
+                        : 0.5f; // v4.1 Smooth Transition
       }
 
       // CFX-045 / Segment Idle Fix: Evaluate if ALL runners are monochromatic
@@ -3932,6 +3934,8 @@ uint8_t CFXAddressableLightEffect::get_default_intensity_(uint8_t effect_id) {
     return 170; // Collider (Default Intensity)
   case 180:
     return 180; // Interference (Default Intensity)
+  case 159:
+    return 170; // Chaos Theory (Default Peak Chaos)
   default:
     return 128; // WLED default
   }

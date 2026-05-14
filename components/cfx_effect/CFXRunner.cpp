@@ -758,57 +758,20 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
 }
 
 void CFXRunner::generateRandomPalette() {
-  // Use cfx namespace for random helpers
   uint8_t baseHue = cfx::hw_random8();
-  // Select Strategy: 0=Analogous, 1=Neon, 2=Texture
-  uint8_t strategy = cfx::hw_random8(3); // 0, 1, 2
+  uint8_t step = 37u + cfx::hw_random8(31);
+  uint8_t wobble = 9u + cfx::hw_random8(18);
 
-  DEBUGFX_PRINTF("Generating Random Palette: BaseHue=%d Strategy=%d", baseHue,
-                 strategy);
+  DEBUGFX_PRINTF("Generating Smart Palette: BaseHue=%d Step=%d", baseHue,
+                 step);
 
   for (int i = 0; i < 16; i++) {
-    CHSV color;
-    // For offset calculations
-    int16_t h_calc;
-
-    if (strategy == 0) {
-      // Mode A: Analogous (Nature)
-      // BaseHue +/- 20 drift
-      // random 0-40 -> -20 to +20
-      int16_t drift = (int16_t)cfx::hw_random8(41) - 20;
-      h_calc = baseHue + drift;
-      // Wrap hue to 0-255
-      uint8_t h = (uint8_t)(h_calc & 0xFF);
-
-      // Saturation high but vary slightly for organic feel
-      uint8_t s = cfx::hw_random8(200, 255); // 200-254
-      uint8_t v = 255;
-      color = CHSV(h, s, v);
-
-    } else if (strategy == 1) {
-      // Mode B: Neon (Vaporwave)
-      // High Saturation. Base Hue + complementary accent (180 deg) at specific
-      // indices. Complementary at 0, 4, 8, 12? Or random. Let's make it 25%
-      // chance of accent
-      if ((i % 4) == 0) {
-        // Accent: Complementary + High Sat
-        color = CHSV(baseHue + 128, 255, 255);
-      } else {
-        // Base: BaseHue +/- 15
-        int16_t drift = (int16_t)cfx::hw_random8(31) - 15;
-        h_calc = baseHue + drift;
-        color = CHSV((uint8_t)(h_calc & 0xFF), 245, 255);
-      }
-
-    } else {
-      // Mode C: Texture (Monochromatic)
-      // Hue fixed. Vary Value and Saturation heavily.
-      // Good for metallic, plasma, fire-like single color.
-      uint8_t h = baseHue;
-      uint8_t s = cfx::hw_random8(100, 255); // 100-254
-      uint8_t v = cfx::hw_random8(50, 255);  // 50-254
-      color = CHSV(h, s, v);
-    }
+    int16_t drift = (int16_t)cfx::hw_random8((uint8_t)(wobble * 2u + 1u)) -
+                    (int16_t)wobble;
+    uint8_t h = (uint8_t)(baseHue + (uint8_t)(i * step) + drift);
+    uint8_t s = (uint8_t)(210u + cfx::hw_random8(46));
+    uint8_t v = (uint8_t)(224u + cfx::hw_random8(32));
+    CHSV color(h, s, v);
 
     // Convert to RGB
     CRGB rgb;
@@ -3708,6 +3671,8 @@ uint16_t mode_chaos_theory(void) {
     for (int s = 0; s < MAX_ENERGY_SPARKS; s++)
       data->sparks[s].level = 0;
 
+    instance->generateRandomPalette();
+
     // On reset, fill black to start fresh for intro
     instance->_segment.fill(0);
     instance->_segment.reset = false;
@@ -3725,34 +3690,45 @@ uint16_t mode_chaos_theory(void) {
     uint32_t elapsed = instance->now - data->intro_start;
     if (elapsed > intro_duration_ms) {
       data->intro_done = true;
-      // Start Phase 2 on a clean slate
-      instance->_segment.fill(0);
     } else {
-      // 1. Fade existing sparks out slowly
-      instance->_segment.fadeToBlackBy(40);
+      const uint32_t *intro_palette = instance->_currentRandomPaletteBuffer;
+      uint8_t progress = (uint8_t)((elapsed * 255u) / intro_duration_ms);
+      uint8_t env = cfx::scale8(progress, progress);
+      if (env < 36)
+        env = 36;
 
-      // 2. Spawn new sparks. Density peaks at beginning, tapers to zero.
-      // Progress: 255 (start) -> 0 (end)
-      uint8_t progress = 255 - ((elapsed * 255) / intro_duration_ms);
+      uint16_t spatial_mult = 20 + ((uint16_t)instance->_segment.intensity * 8);
+      uint8_t counter = (uint8_t)(elapsed >> 2);
+      uint8_t turbulence = cfx::inoise8(elapsed >> 2, 91);
+      uint8_t scatter_range = 12 + cfx::scale8(turbulence, 72);
 
-      // Calculate max sparks per frame based on strip length and progress
-      // Limit to max 2% of LEDs per frame at absolute peak to prevent power
-      // spikes
-      uint16_t max_sparks_frame = (len > 50) ? (len / 50) : 1;
-      if (max_sparks_frame > 5)
-        max_sparks_frame = 5; // Hard cap
+      for (int i = 0; i < len; i++) {
+        uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+        index += cfx::sin8((uint8_t)(i * 17u) + (uint8_t)(elapsed >> 3)) >> 2;
+        if (scatter_range > 0)
+          index += cfx::hw_random8(scatter_range) - (scatter_range >> 1);
 
-      // Scale spawn probability by progress
-      uint8_t spawn_chance = cfx::scale8(180, progress); // High initial density
+        uint8_t pulse = cfx::sin8((uint8_t)(i * 9u) + (uint8_t)(elapsed >> 1));
+        int bri_i = (int)env + cfx::scale8(pulse, (uint8_t)(255u - env));
+        if (bri_i < 96)
+          bri_i = 96;
+        if (bri_i > 255)
+          bri_i = 255;
+        uint8_t bri = (uint8_t)bri_i;
 
-      if (cfx::hw_random8() < spawn_chance) {
-        uint8_t sparks_to_spawn = (cfx::hw_random8() % max_sparks_frame) + 1;
-        for (uint8_t s = 0; s < sparks_to_spawn; s++) {
-          uint16_t pos = cfx::hw_random16() % (len ? len : 1);
-          // Modulate brightness slightly
-          uint8_t bri = 180 + cfx::hw_random8(75);
-          instance->_segment.setPixelColor(pos, RGBW32(bri, bri, bri, bri));
-        }
+        CRGBW c = ColorFromPalette(intro_palette, index, bri);
+        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+      }
+
+      uint8_t sparks_to_spawn = 1 + (len / 45);
+      if (sparks_to_spawn > 8)
+        sparks_to_spawn = 8;
+      for (uint8_t s = 0; s < sparks_to_spawn; s++) {
+        uint16_t pos = cfx::hw_random16() % (len ? len : 1);
+        uint8_t bri = 180 + cfx::hw_random8(76);
+        uint32_t existing = instance->_segment.getPixelColor(pos);
+        uint32_t flare = RGBW32(bri, bri, bri, 0);
+        instance->_segment.setPixelColor(pos, color_blend(existing, flare, 180));
       }
       return FRAMETIME; // Yield rendering here during intro
     }
@@ -7564,17 +7540,33 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
-  // Rebuild pattern — same hash as intro/outro
-  const int PATTERN_SLOTS = 128;
+  // Rebuild the lithographic mask. The hold uses the same deterministic hash
+  // language as the intro/outro, but with softer, intensity-shaped gaps so it
+  // can move continuously instead of stepping as a binary barcode.
+  const int PATTERN_SLOTS = 192;
   uint16_t seg_start_arr[PATTERN_SLOTS];
   bool seg_lit[PATTERN_SLOTS];
   int pattern_total = 0;
   int n_segs = 0;
+  uint8_t intensity = instance->_segment.intensity;
+
+  uint8_t dark_threshold =
+      (uint8_t)(72u - (((uint16_t)intensity * 64u) / 255u));
+  uint8_t dark_floor =
+      (uint8_t)(48u + (((uint16_t)intensity * 96u) / 255u));
+  uint8_t dark_width_span =
+      (uint8_t)(3u - (((uint16_t)intensity * 2u) / 255u));
+  if (dark_width_span < 1)
+    dark_width_span = 1;
+  uint8_t lit_width_span =
+      (uint8_t)(4u + (((uint16_t)intensity * 4u) / 255u));
 
   for (int s = 0; s < PATTERN_SLOTS; s++) {
     uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
-    int width = (int)(h >> 29) + 1;
-    bool lit = (h >> 28) & 1u;
+    uint8_t coin = (uint8_t)(h >> 24);
+    bool lit = coin >= dark_threshold;
+    int width = lit ? (2 + (int)((h >> 28) % lit_width_span))
+                    : (1 + (int)((h >> 28) % dark_width_span));
 
     seg_start_arr[s] = (uint16_t)pattern_total;
     seg_lit[s] = lit;
@@ -7585,14 +7577,29 @@ uint16_t mode_lithograph(void) {
   }
   if (pattern_total == 0) pattern_total = 1;
 
-  // Intensity repositions the barcode map; speed adds a slow architectural
-  // drift so the hold stays alive after the print intro completes.
+  auto sample_mask = [&](uint32_t pos) -> uint8_t {
+    pos %= (uint32_t)pattern_total;
+    bool is_lit = false;
+    for (int s = 0; s < n_segs - 1; s++) {
+      if (pos >= seg_start_arr[s] && pos < seg_start_arr[s + 1]) {
+        is_lit = seg_lit[s];
+        break;
+      }
+    }
+    if (pos >= (uint32_t)seg_start_arr[n_segs - 1])
+      is_lit = seg_lit[n_segs - 1];
+    return is_lit ? 255 : dark_floor;
+  };
+
+  // Intensity repositions and reshapes the mask; speed adds a sub-pixel drift
+  // so the hold glides instead of advancing one whole LED at a time.
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
-  uint32_t drift_px_per_sec =
-      1u + (((uint32_t)instance->_segment.speed * 23u) / 255u);
-  uint32_t scroll =
-      pattern_offset + (((uint32_t)instance->now * drift_px_per_sec) / 1000u);
+  uint32_t drift_fp_per_sec =
+      128u + (((uint32_t)instance->_segment.speed * 1408u) / 255u);
+  uint32_t scroll_fp =
+      (pattern_offset << 8) +
+      (((uint32_t)instance->now * drift_fp_per_sec) / 1000u);
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];
@@ -7600,23 +7607,32 @@ uint16_t mode_lithograph(void) {
                            base_col & 0xFF, (base_col >> 24) & 0xFF);
 
   for (int i = 0; i < len; i++) {
-    uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
-    bool is_lit = false;
-    for (int s = 0; s < n_segs - 1; s++) {
-      if (vpos >= seg_start_arr[s] && vpos < seg_start_arr[s + 1]) {
-        is_lit = seg_lit[s];
-        break;
-      }
-    }
-    if (vpos >= (uint32_t)seg_start_arr[n_segs - 1]) is_lit = seg_lit[n_segs - 1];
+    uint32_t sample_fp = ((uint32_t)i << 8) + scroll_fp;
+    uint32_t pos0 = (sample_fp >> 8) % (uint32_t)pattern_total;
+    uint8_t frac = (uint8_t)(sample_fp & 0xFF);
+    uint8_t b0 = (uint8_t)(((uint16_t)sample_mask(pos0) +
+                            sample_mask(pos0 + pattern_total - 1)) >> 1);
+    uint8_t b1 = (uint8_t)(((uint16_t)sample_mask(pos0 + 1) +
+                            sample_mask(pos0 + 2)) >> 1);
+    uint8_t mask_b =
+        (uint8_t)((((uint16_t)b0 * (256u - frac)) +
+                   ((uint16_t)b1 * frac)) >> 8);
 
-    if (is_lit) {
-      // Full brightness (255)
-      instance->_segment.setPixelColor(
-          i, RGBW32(base_color.r, base_color.g, base_color.b, base_color.w));
-    } else {
-      instance->_segment.setPixelColor(i, 0);  // Black
-    }
+    uint8_t grain = cfx::sin8((uint8_t)(i * 11u) +
+                              (uint8_t)(instance->now >> 4));
+    uint8_t wave = cfx::sin8((uint8_t)(i * 5u) +
+                             (uint8_t)(instance->now >> 5));
+    int texture = ((((int)grain - 128) * (8 + (intensity >> 5))) +
+                   (((int)wave - 128) * 10)) /
+                  255;
+    int final_b = (int)mask_b + texture;
+    if (final_b < (int)dark_floor)
+      final_b = dark_floor;
+    if (final_b > 255)
+      final_b = 255;
+
+    Color out = cfx::dim(base_color, (uint8_t)final_b);
+    instance->_segment.setPixelColor(i, RGBW32(out.r, out.g, out.b, out.w));
   }
   return FRAMETIME;
 }
