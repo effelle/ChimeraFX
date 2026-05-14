@@ -7544,6 +7544,12 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
+  struct LithographData {
+    uint32_t phase_fp;
+    uint32_t last_ms;
+    uint8_t last_intensity;
+  };
+
   // Keep the hold faithful to the authored intro: hash-derived barcode
   // segments, true black voids, and a single forward scanner phase.
   const int PATTERN_SLOTS = 128;
@@ -7584,17 +7590,62 @@ uint16_t mode_lithograph(void) {
   // forward drift rate, with no oscillating texture layered on top.
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
-  uint32_t drift_px_per_sec =
-      (((uint32_t)instance->_segment.speed * 12u) / 255u);
-  uint32_t scroll =
-      pattern_offset + (((uint32_t)instance->now * drift_px_per_sec) / 1000u);
+
+  LithographData *data = (LithographData *)instance->_segment.data;
+  if (!data || instance->_segment.reset) {
+    if (!instance->_segment.allocateData(sizeof(LithographData))) {
+      ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__,
+               sizeof(LithographData));
+      return FRAMETIME;
+    }
+    data = (LithographData *)instance->_segment.data;
+    data->phase_fp = pattern_offset << 8;
+    data->last_ms = instance->now;
+    data->last_intensity = instance->_segment.intensity;
+    instance->_segment.reset = false;
+  }
+
+  if (data->last_intensity != instance->_segment.intensity) {
+    uint32_t old_offset =
+        ((uint32_t)data->last_intensity * (uint32_t)pattern_total) >> 8;
+    int32_t offset_delta = (int32_t)pattern_offset - (int32_t)old_offset;
+    data->phase_fp =
+        (uint32_t)((int64_t)data->phase_fp + ((int64_t)offset_delta * 256));
+    data->last_intensity = instance->_segment.intensity;
+  }
+
+  uint32_t dt = instance->now - data->last_ms;
+  data->last_ms = instance->now;
+  if (dt > 250)
+    dt = 250;
+
+  uint32_t drift_fp_per_sec =
+      (((uint32_t)instance->_segment.speed * 3072u) / 255u);
+  data->phase_fp += (uint32_t)(((uint64_t)dt * drift_fp_per_sec) / 1000u);
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];
+  auto scale_base = [&](uint8_t amount) -> uint32_t {
+    if (amount == 0)
+      return 0;
+    if (amount == 255)
+      return base_col;
+    uint8_t w = (uint8_t)(((uint16_t)CFX_W(base_col) * amount + 127u) / 255u);
+    uint8_t r = (uint8_t)(((uint16_t)CFX_R(base_col) * amount + 127u) / 255u);
+    uint8_t g = (uint8_t)(((uint16_t)CFX_G(base_col) * amount + 127u) / 255u);
+    uint8_t b = (uint8_t)(((uint16_t)CFX_B(base_col) * amount + 127u) / 255u);
+    return RGBW32(r, g, b, w);
+  };
 
   for (int i = 0; i < len; i++) {
-    uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
-    instance->_segment.setPixelColor(i, sample_lit(vpos) ? base_col : 0);
+    uint32_t sample_fp = ((uint32_t)i << 8) + data->phase_fp;
+    uint32_t pos0 = (sample_fp >> 8) % (uint32_t)pattern_total;
+    uint8_t frac = (uint8_t)(sample_fp & 0xFF);
+    uint8_t a = sample_lit(pos0) ? 255 : 0;
+    uint8_t b = sample_lit(pos0 + 1) ? 255 : 0;
+    uint8_t amount =
+        (uint8_t)((((uint16_t)a * (256u - frac)) + ((uint16_t)b * frac)) >> 8);
+    instance->_segment.setPixelColor(i, scale_base(amount));
   }
   return FRAMETIME;
 }
