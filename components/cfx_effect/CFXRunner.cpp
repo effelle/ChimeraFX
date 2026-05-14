@@ -6047,9 +6047,9 @@ uint16_t mode_saw(void) { return running_base(true); }
 // Helper for Wipe/Sweep
 // Helper for Wipe/Sweep
 static inline uint8_t cfx_clean_edge_amount(uint8_t amount) {
-  if (amount < 24)
+  if (amount < 32)
     return 0;
-  if (amount > 231)
+  if (amount > 223)
     return 255;
   return amount;
 }
