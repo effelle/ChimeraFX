@@ -7549,60 +7549,12 @@ uint16_t mode_eclipse(void) {
 }
 
 uint16_t mode_lithograph(void) {
-  if (!instance) return FRAMETIME;
-  uint16_t len = instance->_segment.length();
-  if (len <= 1) return mode_static();
+  if (!instance)
+    return FRAMETIME;
 
-  // Keep the hold faithful to the authored intro: hash-derived barcode
-  // segments and true black voids. The intro/outro carry the motion; the
-  // steady-state hold is static to avoid transport-visible barcode artifacts.
-  const int PATTERN_SLOTS = 128;
-  uint16_t seg_start_arr[PATTERN_SLOTS];
-  bool seg_lit[PATTERN_SLOTS];
-  int pattern_total = 0;
-  int n_segs = 0;
-
-  for (int s = 0; s < PATTERN_SLOTS; s++) {
-    uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
-    int width = (int)(h >> 29) + 1; // 1-8 px, same as intro/outro
-    bool lit = (h >> 28) & 1u;      // 50/50 lit vs dark
-
-    seg_start_arr[s] = (uint16_t)pattern_total;
-    seg_lit[s] = lit;
-    pattern_total += width;
-    n_segs = s + 1;
-
-    if (pattern_total >= (int)len * 3) break;
-  }
-  if (pattern_total == 0) pattern_total = 1;
-
-  auto sample_lit = [&](uint32_t pos) -> bool {
-    pos %= (uint32_t)pattern_total;
-    bool is_lit = false;
-    for (int s = 0; s < n_segs - 1; s++) {
-      if (pos >= seg_start_arr[s] && pos < seg_start_arr[s + 1]) {
-        is_lit = seg_lit[s];
-        break;
-      }
-    }
-    if (pos >= (uint32_t)seg_start_arr[n_segs - 1])
-      is_lit = seg_lit[n_segs - 1];
-    return is_lit;
-  };
-
-  // Intensity keeps the intro's phase/offset behavior. Speed is intentionally
-  // ignored in the static hold; the animated print/retract lives in intro/outro.
-  uint32_t pattern_offset =
-      ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
-  instance->_segment.reset = false;
-
-  // Get base color (monochromatic, full brightness)
-  uint32_t base_col = instance->_segment.colors[0];
-
-  for (int i = 0; i < len; i++) {
-    uint32_t vpos = ((uint32_t)i + pattern_offset) % (uint32_t)pattern_total;
-    instance->_segment.setPixelColor(i, sample_lit(vpos) ? base_col : 0);
-  }
+  // Lithograph keeps its authored print/retract intro/outro, but the running
+  // hold is intentionally the plain static monochrome fill.
+  instance->_segment.fill(instance->_segment.colors[0]);
   return FRAMETIME;
 }
 
