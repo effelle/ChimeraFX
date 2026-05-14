@@ -1489,7 +1489,12 @@ void CFXAddressableLightEffect::start() {
 
     number::Number *speed_num =
         (c && c->get_speed()) ? c->get_speed() : this->local_speed_();
-    if (this->has_speed_preset_()) {
+#ifdef USE_CFX_SEQUENCE
+    if (act_->sequence_speed.has_value()) {
+      act_->active_intro_speed = act_->sequence_speed.value();
+    } else
+#endif
+        if (this->has_speed_preset_()) {
       act_->active_intro_speed = this->speed_preset_val_();
     } else if (speed_num != nullptr && speed_num->has_state()) {
       act_->active_intro_speed = (uint8_t)speed_num->state;
@@ -1500,7 +1505,12 @@ void CFXAddressableLightEffect::start() {
     number::Number *inten_num = (c && c->get_intensity())
                                     ? c->get_intensity()
                                     : this->local_intensity_();
-    if (this->has_intensity_preset_()) {
+#ifdef USE_CFX_SEQUENCE
+    if (act_->sequence_intensity.has_value()) {
+      act_->active_intro_intensity = act_->sequence_intensity.value();
+    } else
+#endif
+        if (this->has_intensity_preset_()) {
       act_->active_intro_intensity = this->intensity_preset_val_();
     } else if (inten_num != nullptr && inten_num->has_state()) {
       act_->active_intro_intensity = (uint8_t)inten_num->state;
@@ -1753,7 +1763,12 @@ void CFXAddressableLightEffect::stop() {
       if (intensity_num == nullptr && c != nullptr)
         intensity_num = c->get_intensity();
 
-      if (this->has_intensity_preset_()) {
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_intensity.has_value()) {
+        act_->active_outro_intensity = act_->sequence_intensity.value();
+      } else
+#endif
+          if (this->has_intensity_preset_()) {
         act_->active_outro_intensity = this->intensity_preset_val_();
       } else if (intensity_num != nullptr && intensity_num->has_state()) {
         act_->active_outro_intensity = (uint8_t)intensity_num->state;
@@ -1768,7 +1783,12 @@ void CFXAddressableLightEffect::stop() {
       if (speed_num == nullptr && c != nullptr)
         speed_num = c->get_speed();
 
-      if (this->has_speed_preset_()) {
+#ifdef USE_CFX_SEQUENCE
+      if (act_->sequence_speed.has_value()) {
+        act_->active_outro_speed = act_->sequence_speed.value();
+      } else
+#endif
+          if (this->has_speed_preset_()) {
         act_->active_outro_speed = this->speed_preset_val_();
       } else if (speed_num != nullptr && speed_num->has_state()) {
         act_->active_outro_speed = (uint8_t)speed_num->state;
@@ -8114,10 +8134,26 @@ void CFXAddressableLightEffect::set_active_sequence(
     if (!act_->segment_runners.empty()) {
       for (auto *r : act_->segment_runners) {
         r->reset();
+        if (spd.has_value())
+          r->setSpeed(spd.value());
+        if (iten.has_value())
+          r->setIntensity(iten.value());
+        if (pal.has_value())
+          r->setPalette(pal.value());
+        if (mir.has_value())
+          r->setMirror(mir.value());
         r->target_iterations_ = itr;
       }
     } else if (act_->runner) {
       act_->runner->reset();
+      if (spd.has_value())
+        act_->runner->setSpeed(spd.value());
+      if (iten.has_value())
+        act_->runner->setIntensity(iten.value());
+      if (pal.has_value())
+        act_->runner->setPalette(pal.value());
+      if (mir.has_value())
+        act_->runner->setMirror(mir.value());
       act_->runner->target_iterations_ = itr;
     }
   }

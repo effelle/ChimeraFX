@@ -532,22 +532,46 @@ public:
   void set_sequence_speed(uint8_t v) {
     ensure_cfg_();
     cfg_->pending_sequence_speed = v;
-    if (act_) act_->sequence_speed = v;
+    if (act_) {
+      act_->sequence_speed = v;
+      if (act_->runner)
+        act_->runner->setSpeed(v);
+      for (auto *r : act_->segment_runners)
+        r->setSpeed(v);
+    }
   }
   void set_sequence_intensity(uint8_t v) {
     ensure_cfg_();
     cfg_->pending_sequence_intensity = v;
-    if (act_) act_->sequence_intensity = v;
+    if (act_) {
+      act_->sequence_intensity = v;
+      if (act_->runner)
+        act_->runner->setIntensity(v);
+      for (auto *r : act_->segment_runners)
+        r->setIntensity(v);
+    }
   }
   void set_sequence_palette(uint8_t v) {
     ensure_cfg_();
     cfg_->pending_sequence_palette = v;
-    if (act_) act_->sequence_palette = v;
+    if (act_) {
+      act_->sequence_palette = v;
+      if (act_->runner)
+        act_->runner->setPalette(v);
+      for (auto *r : act_->segment_runners)
+        r->setPalette(v);
+    }
   }
   void set_sequence_mirror(bool v) {
     ensure_cfg_();
     cfg_->pending_sequence_mirror = v;
-    if (act_) act_->sequence_mirror = v;
+    if (act_) {
+      act_->sequence_mirror = v;
+      if (act_->runner)
+        act_->runner->setMirror(v);
+      for (auto *r : act_->segment_runners)
+        r->setMirror(v);
+    }
   }
   void set_sequence_autotune(bool v) {
     ensure_cfg_();
