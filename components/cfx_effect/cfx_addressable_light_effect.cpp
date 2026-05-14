@@ -613,7 +613,6 @@ bool CFXAddressableLightEffect::is_animated_monochromatic_hold_(
     uint8_t effect_id) const {
   switch (effect_id) {
   case 181: // Eclipse
-  case 184: // Lithograph
     return true;
   default:
     return false;
