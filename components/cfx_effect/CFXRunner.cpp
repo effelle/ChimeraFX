@@ -6046,6 +6046,14 @@ uint16_t mode_saw(void) { return running_base(true); }
 
 // Helper for Wipe/Sweep
 // Helper for Wipe/Sweep
+static inline uint8_t cfx_clean_edge_amount(uint8_t amount) {
+  if (amount < 24)
+    return 0;
+  if (amount > 231)
+    return 255;
+  return amount;
+}
+
 uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (!instance)
     return 350;
@@ -6175,6 +6183,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
     } else {
       blendVal = (uint8_t)((dist * 255) / fadeWidth);
     }
+    blendVal = cfx_clean_edge_amount(blendVal);
 
     // Applying Blend
     // Logic: Always wipe 'fillCol' over 'baseCol'.
@@ -7645,6 +7654,7 @@ uint16_t mode_lithograph(void) {
     uint8_t b = sample_lit(pos0 + 1) ? 255 : 0;
     uint8_t amount =
         (uint8_t)((((uint16_t)a * (256u - frac)) + ((uint16_t)b * frac)) >> 8);
+    amount = cfx_clean_edge_amount(amount);
     instance->_segment.setPixelColor(i, scale_base(amount));
   }
   return FRAMETIME;
