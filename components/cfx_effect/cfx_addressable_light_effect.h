@@ -496,6 +496,12 @@ public:
     if (!act_->segment_runners.empty()) return act_->segment_runners.size();
     return act_->runner ? 1U : 0U;
   }
+  void apply_live_autotune_state(bool enabled) {
+    if (!act_) return;
+    act_->autotune_active = enabled;
+    if (enabled)
+      this->apply_autotune_defaults_();
+  }
 #endif
 
 #ifdef USE_CFX_SEQUENCE
@@ -516,6 +522,13 @@ public:
 
   // cfx_set action setters — override sequence params on the active effect.
   // Persist until the next start() call resets them via set_active_sequence().
+  void apply_live_autotune_state(bool enabled) {
+    if (!act_) return;
+    act_->autotune_active = enabled;
+    if (enabled)
+      this->apply_autotune_defaults_();
+  }
+
   void set_sequence_speed(uint8_t v) {
     ensure_cfg_();
     cfg_->pending_sequence_speed = v;

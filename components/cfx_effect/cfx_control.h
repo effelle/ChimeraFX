@@ -106,6 +106,7 @@ public:
     this->bind_intensity_callback_();
     this->bind_mirror_callback_();
     this->bind_palette_callback_();
+    this->bind_autotune_callback_();
     this->bind_force_white_callback_();
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
@@ -166,7 +167,10 @@ public:
     mirror_ = s;
     this->bind_mirror_callback_();
   }
-  void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
+  void set_autotune(esphome::switch_::Switch *s) {
+    autotune_ = s;
+    this->bind_autotune_callback_();
+  }
   void set_force_white(esphome::switch_::Switch *s) {
     force_white_ = s;
     this->bind_force_white_callback_();
@@ -303,6 +307,43 @@ protected:
         });
   }
 
+  void bind_autotune_callback_() {
+    if (this->autotune_ == nullptr ||
+        this->autotune_cb_switch_ == this->autotune_) {
+      return;
+    }
+    this->autotune_cb_switch_ = this->autotune_;
+    this->autotune_->add_on_state_callback([this](bool value) {
+      this->apply_to_live_effects_([value](CFXAddressableLightEffect *effect) {
+        effect->apply_live_autotune_state(value);
+      });
+      this->wake_mono_idle_output_();
+    });
+  }
+
+  template <typename Fn> void apply_to_live_effects_(Fn fn) {
+    std::vector<CFXAddressableLightEffect *> seen;
+    seen.reserve(2);
+
+    auto apply_once = [this, &seen, &fn](CFXAddressableLightEffect *effect) {
+      if (effect == nullptr || effect->get_light_state() != this->light_) {
+        return;
+      }
+      if (std::find(seen.begin(), seen.end(), effect) != seen.end()) {
+        return;
+      }
+      seen.push_back(effect);
+      fn(effect);
+    };
+
+    for (auto *effect : CFXAddressableLightEffect::all_effects) {
+      apply_once(effect);
+    }
+    for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
+      apply_once(effect);
+    }
+  }
+
   template <typename Fn> void apply_to_live_runners_(Fn fn) {
     std::vector<CFXRunner *> seen;
     seen.reserve(this->runners_.size() + 2);
@@ -338,12 +379,9 @@ protected:
       }
     };
 
-    for (auto *effect : CFXAddressableLightEffect::all_effects) {
+    this->apply_to_live_effects_([&apply_effect](CFXAddressableLightEffect *effect) {
       apply_effect(effect);
-    }
-    for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
-      apply_effect(effect);
-    }
+    });
   }
 
   bool debug_enabled_() const {
@@ -495,6 +533,7 @@ protected:
   number::Number *intensity_cb_number_{nullptr};
   select::Select *palette_cb_select_{nullptr};
   esphome::switch_::Switch *mirror_cb_switch_{nullptr};
+  esphome::switch_::Switch *autotune_cb_switch_{nullptr};
   esphome::switch_::Switch *force_white_cb_switch_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
