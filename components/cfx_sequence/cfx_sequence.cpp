@@ -11,6 +11,7 @@
 
 #include "cfx_sequence.h"
 #include "../cfx_effect/cfx_addressable_light_effect.h"
+#include "../cfx_effect/cfx_effect_stub.h"
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "esphome/components/light/light_effect.h"
 #include "esphome/components/light/light_call.h"
@@ -74,6 +75,31 @@ static std::string resolve_light_tag_(light::LightState *state) {
   char id_buf[128] = {};
   state->get_object_id_to(std::span(id_buf));
   return std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
+}
+
+static chimera_fx::CFXAddressableLightEffect *resolve_segment_stub_singleton_(
+    light::LightState *state, const std::string &effect_name,
+    bool require_active) {
+  if (state == nullptr) {
+    return nullptr;
+  }
+
+  light::LightEffect *active =
+      require_active ? chimera_fx::LightStateProxy::get_active_effect(state)
+                     : nullptr;
+  for (auto *stub : chimera_fx::CFXEffectStub::all_stubs()) {
+    if (stub == nullptr || stub->get_light_state() != state) {
+      continue;
+    }
+    if (!effect_name.empty() && stub->get_name() != effect_name) {
+      continue;
+    }
+    if (require_active && active != stub) {
+      continue;
+    }
+    return stub->get_singleton();
+  }
+  return nullptr;
 }
 }  // namespace
 
@@ -398,12 +424,16 @@ void CfxSetActionBase::do_play_() {
             return inst;
           if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_segment_effects, false))
             return inst;
+          if (auto *inst = resolve_segment_stub_singleton_(this->light_, this->effect_, false))
+            return inst;
         }
 
         // Otherwise target only the currently active effect on this light.
         if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_effects, true))
           return inst;
         if (auto *inst = find_inst(chimera_fx::CFXAddressableLightEffect::all_segment_effects, true))
+          return inst;
+        if (auto *inst = resolve_segment_stub_singleton_(this->light_, this->effect_, true))
           return inst;
 
         return nullptr;
@@ -800,6 +830,10 @@ void CFXSequence::start() {
             break;
           }
         }
+      }
+
+      if (target_inst == nullptr && !this->effect_.empty()) {
+        target_inst = resolve_segment_stub_singleton_(l, this->effect_, false);
       }
 
       if (target_inst == nullptr) {

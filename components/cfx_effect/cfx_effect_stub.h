@@ -20,17 +20,25 @@
 #include "cfx_addressable_light_effect.h"
 #include "esphome/components/light/addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
+#include <vector>
 
 namespace esphome {
 namespace chimera_fx {
 
 class CFXEffectStub : public light::AddressableLightEffect {
 public:
+  static std::vector<CFXEffectStub *> &all_stubs() {
+    static std::vector<CFXEffectStub *> stubs;
+    return stubs;
+  }
+
   CFXEffectStub(const char *name, uint8_t effect_id,
                 CFXAddressableLightEffect *singleton)
       : AddressableLightEffect(name),
         effect_id_(effect_id),
-        singleton_(singleton) {}
+        singleton_(singleton) {
+    all_stubs().push_back(this);
+  }
 
   /// Called by ESPHome when this stub is selected from the HA effect dropdown.
   /// ESPHome guarantees: old_effect.stop() completes before new_effect.start().
