@@ -758,19 +758,50 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
 }
 
 void CFXRunner::generateRandomPalette() {
-  uint8_t baseHue = cfx::hw_random8();
-  uint8_t step = 37u + cfx::hw_random8(31);
-  uint8_t wobble = 9u + cfx::hw_random8(18);
+  uint8_t entropy = (uint8_t)cfx_millis() ^ (uint8_t)(cfx_micros() >> 4) ^
+                    cfx::hw_random8();
+  uint8_t baseHue = (uint8_t)(cfx::hw_random8() + entropy);
+  uint8_t strategy = (uint8_t)((cfx::hw_random8() ^ (entropy >> 2)) & 0x03);
+  uint8_t step = (strategy == 0) ? (uint8_t)(39u + cfx::hw_random8(28))
+                 : (strategy == 1) ? (uint8_t)(91u + cfx::hw_random8(22))
+                 : (strategy == 2) ? (uint8_t)(137u + cfx::hw_random8(24))
+                                   : (uint8_t)(53u + cfx::hw_random8(44));
+  uint8_t wobble = (uint8_t)(12u + cfx::hw_random8(26));
 
-  DEBUGFX_PRINTF("Generating Smart Palette: BaseHue=%d Step=%d", baseHue,
-                 step);
+  DEBUGFX_PRINTF("Generating Smart Palette: BaseHue=%d Strategy=%d Step=%d",
+                 baseHue, strategy, step);
 
   for (int i = 0; i < 16; i++) {
-    int16_t drift = (int16_t)cfx::hw_random8((uint8_t)(wobble * 2u + 1u)) -
-                    (int16_t)wobble;
-    uint8_t h = (uint8_t)(baseHue + (uint8_t)(i * step) + drift);
-    uint8_t s = (uint8_t)(210u + cfx::hw_random8(46));
-    uint8_t v = (uint8_t)(224u + cfx::hw_random8(32));
+    int16_t drift =
+        (int16_t)cfx::hw_random8((uint8_t)(wobble * 2u + 1u)) -
+        (int16_t)wobble;
+    uint8_t h;
+
+    switch (strategy) {
+    case 0:
+      h = (uint8_t)(baseHue + (uint8_t)(i * step) + drift);
+      break;
+    case 1: {
+      uint8_t lane = (uint8_t)(i & 0x03);
+      uint8_t anchor =
+          (lane == 0) ? 0 : (lane == 1) ? 112 : (lane == 2) ? 172 : 48;
+      h = (uint8_t)(baseHue + anchor + (uint8_t)(i * 7u) + drift);
+      break;
+    }
+    case 2:
+      h = (uint8_t)(baseHue + (uint8_t)(i * step) +
+                    (uint8_t)((i & 1) ? 31 : 0) + drift);
+      break;
+    default: {
+      uint8_t family = (uint8_t)(((i * 5) & 0x0F) * 11u);
+      uint8_t accent = (uint8_t)((i & 1) ? 96 : 0);
+      h = (uint8_t)(baseHue + family + accent + drift);
+      break;
+    }
+    }
+
+    uint8_t s = (uint8_t)(196u + cfx::hw_random8(60));
+    uint8_t v = (uint8_t)(218u + cfx::hw_random8(38));
     CHSV color(h, s, v);
 
     // Convert to RGB
@@ -3690,28 +3721,46 @@ uint16_t mode_chaos_theory(void) {
     uint32_t elapsed = instance->now - data->intro_start;
     if (elapsed > intro_duration_ms) {
       data->intro_done = true;
+      data->accumulator = (elapsed * 96u);
     } else {
       const uint32_t *intro_palette = instance->_currentRandomPaletteBuffer;
       uint8_t progress = (uint8_t)((elapsed * 255u) / intro_duration_ms);
-      uint8_t env = cfx::scale8(progress, progress);
-      if (env < 36)
-        env = 36;
+      uint8_t reveal = cfx::scale8(progress, progress);
+      uint8_t energy = (uint8_t)(96u + (progress >> 1));
 
-      uint16_t spatial_mult = 20 + ((uint16_t)instance->_segment.intensity * 8);
+      uint16_t spatial_mult =
+          24 + (((uint16_t)instance->_segment.intensity * 10u) >> 1);
       uint8_t counter = (uint8_t)(elapsed >> 2);
-      uint8_t turbulence = cfx::inoise8(elapsed >> 2, 91);
-      uint8_t scatter_range = 12 + cfx::scale8(turbulence, 72);
+      uint8_t turbulence =
+          cfx::inoise8((uint8_t)(elapsed >> 2), (uint8_t)(elapsed >> 5));
+      uint8_t active_cutoff =
+          (uint8_t)(214u - (((uint16_t)reveal * 172u) / 255u));
 
       for (int i = 0; i < len; i++) {
-        uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
-        index += cfx::sin8((uint8_t)(i * 17u) + (uint8_t)(elapsed >> 3)) >> 2;
-        if (scatter_range > 0)
-          index += cfx::hw_random8(scatter_range) - (scatter_range >> 1);
+        uint8_t gate = cfx::inoise8((uint8_t)(i * 29u),
+                                    (uint8_t)(elapsed >> 3));
+        gate ^= cfx::sin8((uint8_t)(i * 17u) + (uint8_t)(elapsed >> 1));
 
-        uint8_t pulse = cfx::sin8((uint8_t)(i * 9u) + (uint8_t)(elapsed >> 1));
-        int bri_i = (int)env + cfx::scale8(pulse, (uint8_t)(255u - env));
-        if (bri_i < 96)
-          bri_i = 96;
+        uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
+        index += cfx::sin8((uint8_t)(i * 11u) + (uint8_t)(elapsed >> 2)) >> 1;
+        index += cfx::scale8(turbulence, 48);
+
+        if (gate < active_cutoff) {
+          if (progress < 150) {
+            instance->_segment.setPixelColor(i, 0);
+            continue;
+          }
+          uint8_t dim = (uint8_t)(24u + ((uint16_t)(progress - 150u) * 72u) /
+                                           105u);
+          CRGBW c = ColorFromPalette(intro_palette, index, dim);
+          instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+          continue;
+        }
+
+        uint8_t pulse =
+            cfx::sin8((uint8_t)(i * 23u) + (uint8_t)(elapsed >> 1));
+        int bri_i = (int)energy + cfx::scale8(pulse, (uint8_t)(255u - energy));
+        bri_i += (int)cfx::scale8(gate, 42);
         if (bri_i > 255)
           bri_i = 255;
         uint8_t bri = (uint8_t)bri_i;
@@ -3720,7 +3769,7 @@ uint16_t mode_chaos_theory(void) {
         instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
       }
 
-      uint8_t sparks_to_spawn = 1 + (len / 45);
+      uint8_t sparks_to_spawn = 2 + (len / 36);
       if (sparks_to_spawn > 8)
         sparks_to_spawn = 8;
       for (uint8_t s = 0; s < sparks_to_spawn; s++) {
@@ -7551,22 +7600,22 @@ uint16_t mode_lithograph(void) {
   uint8_t intensity = instance->_segment.intensity;
 
   uint8_t dark_threshold =
-      (uint8_t)(72u - (((uint16_t)intensity * 64u) / 255u));
+      (uint8_t)(82u - (((uint16_t)intensity * 44u) / 255u));
   uint8_t dark_floor =
-      (uint8_t)(48u + (((uint16_t)intensity * 96u) / 255u));
+      (uint8_t)(38u + (((uint16_t)intensity * 94u) / 255u));
   uint8_t dark_width_span =
-      (uint8_t)(3u - (((uint16_t)intensity * 2u) / 255u));
-  if (dark_width_span < 1)
-    dark_width_span = 1;
+      (uint8_t)(4u - (((uint16_t)intensity * 2u) / 255u));
+  if (dark_width_span < 2)
+    dark_width_span = 2;
   uint8_t lit_width_span =
-      (uint8_t)(4u + (((uint16_t)intensity * 4u) / 255u));
+      (uint8_t)(5u + (((uint16_t)intensity * 5u) / 255u));
 
   for (int s = 0; s < PATTERN_SLOTS; s++) {
     uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
     uint8_t coin = (uint8_t)(h >> 24);
     bool lit = coin >= dark_threshold;
     int width = lit ? (2 + (int)((h >> 28) % lit_width_span))
-                    : (1 + (int)((h >> 28) % dark_width_span));
+                    : (2 + (int)((h >> 28) % dark_width_span));
 
     seg_start_arr[s] = (uint16_t)pattern_total;
     seg_lit[s] = lit;
@@ -7618,12 +7667,11 @@ uint16_t mode_lithograph(void) {
         (uint8_t)((((uint16_t)b0 * (256u - frac)) +
                    ((uint16_t)b1 * frac)) >> 8);
 
-    uint8_t grain = cfx::sin8((uint8_t)(i * 11u) +
-                              (uint8_t)(instance->now >> 4));
-    uint8_t wave = cfx::sin8((uint8_t)(i * 5u) +
-                             (uint8_t)(instance->now >> 5));
-    int texture = ((((int)grain - 128) * (8 + (intensity >> 5))) +
-                   (((int)wave - 128) * 10)) /
+    uint8_t advected = (uint8_t)(sample_fp >> 4);
+    uint8_t grain = cfx::sin8(advected + (uint8_t)(pos0 * 7u));
+    uint8_t wave = cfx::sin8((uint8_t)(advected >> 1) + (uint8_t)(pos0 * 3u));
+    int texture = ((((int)grain - 128) * (6 + (intensity >> 6))) +
+                   (((int)wave - 128) * 5)) /
                   255;
     int final_b = (int)mask_b + texture;
     if (final_b < (int)dark_floor)

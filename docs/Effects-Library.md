@@ -97,7 +97,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         | :--- | :--: | :--- |
         | **Intensity** | `170` | **Peak Chaos**: adjusts the frequency of twinkling eruptions. |
         | **Speed** | `128` | **Flow speed**: controls the velocity of the underlying color bands. |
-        | **Palette** | — | **Smart Random**: uses a generated 16-color high-energy palette. |
+        | **Palette** | — | **Smart Random**: generates a fresh structured 16-color high-energy palette. |
         | **Orchestrator Triggers** | — | **Not Supported**: Only `on_start` and `on_complete` are available. |
 
     === "💻 Config"
@@ -918,7 +918,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
     === "⚙️ Controls"
         | Parameter | Autotune | Function Description |
         | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Mask density**: reduces dark-gap width and lifts the shadow floor as it increases. |
+        | **Intensity** | `128` | **Mask density**: higher values narrow and lift the dark islands; lower values make them wider and deeper. |
         | **Speed** | `128` | **Hold drift**: controls the smooth post-intro motion of the printed mask. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
