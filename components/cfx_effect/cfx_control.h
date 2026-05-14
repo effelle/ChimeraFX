@@ -102,42 +102,13 @@ public:
 
   void setup() override {
     this->sync_debug_output_();
+    this->bind_speed_callback_();
+    this->bind_intensity_callback_();
+    this->bind_mirror_callback_();
+    this->bind_palette_callback_();
     this->bind_force_white_callback_();
     this->sync_force_white_output_();
     this->schedule_force_white_sync_(25, false);
-
-    if (this->speed_) {
-      this->speed_->add_on_state_callback([this](float value) {
-        this->apply_to_live_runners_([value](CFXRunner *r) {
-          if (!r->sequence_owns_speed_) {
-            r->setSpeed((uint8_t)value);
-          }
-        });
-        this->wake_mono_idle_output_();
-      });
-    }
-
-    if (this->intensity_) {
-      this->intensity_->add_on_state_callback([this](float value) {
-        this->apply_to_live_runners_([value](CFXRunner *r) {
-          if (!r->sequence_owns_intensity_) {
-            r->setIntensity((uint8_t)value);
-          }
-        });
-        this->wake_mono_idle_output_();
-      });
-    }
-
-    if (this->mirror_) {
-      this->mirror_->add_on_state_callback([this](bool value) {
-        this->apply_to_live_runners_([value](CFXRunner *r) {
-          if (!r->sequence_owns_mirror_) {
-            r->setMirror(value);
-          }
-        });
-        this->wake_mono_idle_output_();
-      });
-    }
 
     if (this->debug_) {
       this->debug_->add_on_state_callback([this](bool value) {
@@ -163,34 +134,6 @@ public:
       });
     }
 
-    if (this->palette_) {
-      for (auto &opt : this->palette_->traits.get_options()) {
-        this->palette_mapping_.push_back(this->get_palette_index_(opt));
-      }
-
-      this->palette_->add_on_state_callback(
-          [this](size_t index) {
-            if (index >= this->palette_mapping_.size())
-              return;
-
-            const char *opt_ptr = this->palette_->current_option().c_str();
-            if (opt_ptr != nullptr && strcmp(opt_ptr, "Default") == 0) {
-              // "Default" is effect-specific. Let the effect resolve and push
-              // its own natural palette on the next control pass instead of
-              // forcing a generic control-layer palette index here.
-              this->wake_mono_idle_output_();
-              return;
-            }
-
-            uint8_t r_pal_idx = this->palette_mapping_[index];
-            this->apply_to_live_runners_([r_pal_idx](CFXRunner *r) {
-              if (!r->sequence_owns_palette_) {
-                r->setPalette(r_pal_idx);
-              }
-            });
-            this->wake_mono_idle_output_();
-          });
-    }
   }
 
   void loop() override {
@@ -207,10 +150,22 @@ public:
 #endif
   }
 
-  void set_speed(number::Number *n) { speed_ = n; }
-  void set_intensity(number::Number *n) { intensity_ = n; }
-  void set_palette(select::Select *s) { palette_ = s; }
-  void set_mirror(esphome::switch_::Switch *s) { mirror_ = s; }
+  void set_speed(number::Number *n) {
+    speed_ = n;
+    this->bind_speed_callback_();
+  }
+  void set_intensity(number::Number *n) {
+    intensity_ = n;
+    this->bind_intensity_callback_();
+  }
+  void set_palette(select::Select *s) {
+    palette_ = s;
+    this->bind_palette_callback_();
+  }
+  void set_mirror(esphome::switch_::Switch *s) {
+    mirror_ = s;
+    this->bind_mirror_callback_();
+  }
   void set_autotune(esphome::switch_::Switch *s) { autotune_ = s; }
   void set_force_white(esphome::switch_::Switch *s) {
     force_white_ = s;
@@ -275,6 +230,79 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  void bind_speed_callback_() {
+    if (this->speed_ == nullptr || this->speed_cb_number_ == this->speed_) {
+      return;
+    }
+    this->speed_cb_number_ = this->speed_;
+    this->speed_->add_on_state_callback([this](float value) {
+      this->apply_to_live_runners_([value](CFXRunner *r) {
+        if (!r->sequence_owns_speed_) {
+          r->setSpeed((uint8_t)value);
+        }
+      });
+      this->wake_mono_idle_output_();
+    });
+  }
+
+  void bind_intensity_callback_() {
+    if (this->intensity_ == nullptr ||
+        this->intensity_cb_number_ == this->intensity_) {
+      return;
+    }
+    this->intensity_cb_number_ = this->intensity_;
+    this->intensity_->add_on_state_callback([this](float value) {
+      this->apply_to_live_runners_([value](CFXRunner *r) {
+        if (!r->sequence_owns_intensity_) {
+          r->setIntensity((uint8_t)value);
+        }
+      });
+      this->wake_mono_idle_output_();
+    });
+  }
+
+  void bind_mirror_callback_() {
+    if (this->mirror_ == nullptr || this->mirror_cb_switch_ == this->mirror_) {
+      return;
+    }
+    this->mirror_cb_switch_ = this->mirror_;
+    this->mirror_->add_on_state_callback([this](bool value) {
+      this->apply_to_live_runners_([value](CFXRunner *r) {
+        if (!r->sequence_owns_mirror_) {
+          r->setMirror(value);
+        }
+      });
+      this->wake_mono_idle_output_();
+    });
+  }
+
+  void bind_palette_callback_() {
+    if (this->palette_ == nullptr ||
+        this->palette_cb_select_ == this->palette_) {
+      return;
+    }
+    this->palette_cb_select_ = this->palette_;
+    this->palette_->add_on_state_callback(
+        [this](size_t) {
+          const char *opt_ptr = this->palette_->current_option().c_str();
+          if (opt_ptr == nullptr || strcmp(opt_ptr, "Default") == 0) {
+            // "Default" is effect-specific. Let the effect resolve and push
+            // its own natural palette on the next control pass instead of
+            // forcing a generic control-layer palette index here.
+            this->wake_mono_idle_output_();
+            return;
+          }
+
+          uint8_t r_pal_idx = this->get_palette_index_(opt_ptr);
+          this->apply_to_live_runners_([r_pal_idx](CFXRunner *r) {
+            if (!r->sequence_owns_palette_) {
+              r->setPalette(r_pal_idx);
+            }
+          });
+          this->wake_mono_idle_output_();
+        });
+  }
+
   template <typename Fn> void apply_to_live_runners_(Fn fn) {
     std::vector<CFXRunner *> seen;
     seen.reserve(this->runners_.size() + 2);
@@ -463,6 +491,10 @@ protected:
   esphome::switch_::Switch *mirror_{nullptr};
   esphome::switch_::Switch *autotune_{nullptr};
   esphome::switch_::Switch *force_white_{nullptr};
+  number::Number *speed_cb_number_{nullptr};
+  number::Number *intensity_cb_number_{nullptr};
+  select::Select *palette_cb_select_{nullptr};
+  esphome::switch_::Switch *mirror_cb_switch_{nullptr};
   esphome::switch_::Switch *force_white_cb_switch_{nullptr};
   esphome::switch_::Switch *debug_{nullptr};
   select::Select *intro_effect_{nullptr};
@@ -472,7 +504,6 @@ protected:
   esphome::light::LightState *light_{nullptr};
   std::vector<CFXRunner *> runners_;
   bool was_on_{false};
-  std::vector<uint8_t> palette_mapping_;
 
 
   // audit 2.1: accept const char* directly to avoid std::string comparisons.
