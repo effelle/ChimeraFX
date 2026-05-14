@@ -6055,9 +6055,9 @@ static inline uint8_t cfx_clean_edge_amount(uint8_t amount) {
 }
 
 static inline uint8_t cfx_clean_lithograph_edge_amount(uint8_t amount) {
-  if (amount < 64)
+  if (amount < 96)
     return 0;
-  if (amount > 191)
+  if (amount > 159)
     return 255;
   return amount;
 }
