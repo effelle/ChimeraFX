@@ -758,50 +758,17 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
 }
 
 void CFXRunner::generateRandomPalette() {
+  static uint8_t palette_nonce = 0;
+  palette_nonce += 73;
   uint8_t entropy = (uint8_t)cfx_millis() ^ (uint8_t)(cfx_micros() >> 4) ^
-                    cfx::hw_random8();
-  uint8_t baseHue = (uint8_t)(cfx::hw_random8() + entropy);
-  uint8_t strategy = (uint8_t)((cfx::hw_random8() ^ (entropy >> 2)) & 0x03);
-  uint8_t step = (strategy == 0) ? (uint8_t)(39u + cfx::hw_random8(28))
-                 : (strategy == 1) ? (uint8_t)(91u + cfx::hw_random8(22))
-                 : (strategy == 2) ? (uint8_t)(137u + cfx::hw_random8(24))
-                                   : (uint8_t)(53u + cfx::hw_random8(44));
-  uint8_t wobble = (uint8_t)(12u + cfx::hw_random8(26));
-
-  DEBUGFX_PRINTF("Generating Smart Palette: BaseHue=%d Strategy=%d Step=%d",
-                 baseHue, strategy, step);
+                    palette_nonce;
+  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%d", entropy);
 
   for (int i = 0; i < 16; i++) {
-    int16_t drift =
-        (int16_t)cfx::hw_random8((uint8_t)(wobble * 2u + 1u)) -
-        (int16_t)wobble;
-    uint8_t h;
-
-    switch (strategy) {
-    case 0:
-      h = (uint8_t)(baseHue + (uint8_t)(i * step) + drift);
-      break;
-    case 1: {
-      uint8_t lane = (uint8_t)(i & 0x03);
-      uint8_t anchor =
-          (lane == 0) ? 0 : (lane == 1) ? 112 : (lane == 2) ? 172 : 48;
-      h = (uint8_t)(baseHue + anchor + (uint8_t)(i * 7u) + drift);
-      break;
-    }
-    case 2:
-      h = (uint8_t)(baseHue + (uint8_t)(i * step) +
-                    (uint8_t)((i & 1) ? 31 : 0) + drift);
-      break;
-    default: {
-      uint8_t family = (uint8_t)(((i * 5) & 0x0F) * 11u);
-      uint8_t accent = (uint8_t)((i & 1) ? 96 : 0);
-      h = (uint8_t)(baseHue + family + accent + drift);
-      break;
-    }
-    }
-
-    uint8_t s = (uint8_t)(196u + cfx::hw_random8(60));
-    uint8_t v = (uint8_t)(218u + cfx::hw_random8(38));
+    uint8_t h = (uint8_t)(cfx::hw_random8() ^ entropy ^
+                          (uint8_t)cfx::hw_random16());
+    uint8_t s = (uint8_t)(184u + cfx::hw_random8(72));
+    uint8_t v = (uint8_t)(216u + cfx::hw_random8(40));
     CHSV color(h, s, v);
 
     // Convert to RGB
@@ -3713,7 +3680,7 @@ uint16_t mode_chaos_theory(void) {
   data->last_millis = instance->now;
 
   // --- Phase 1: Embedded Glitter Intro ---
-  // A controlled explosion of white sparks that fade to reveal the chaos
+  // A controlled explosion of palette-colored sparks that reveal the chaos
   // underneath. Power Limit: We only spawn a few sparks per frame to avoid
   // current transients.
   const uint32_t intro_duration_ms = 4000;
@@ -3774,9 +3741,13 @@ uint16_t mode_chaos_theory(void) {
         sparks_to_spawn = 8;
       for (uint8_t s = 0; s < sparks_to_spawn; s++) {
         uint16_t pos = cfx::hw_random16() % (len ? len : 1);
-        uint8_t bri = 180 + cfx::hw_random8(76);
+        uint8_t bri = 190 + cfx::hw_random8(66);
+        uint8_t flare_index =
+            (uint8_t)(counter + cfx::hw_random8() + (uint8_t)(pos * 13u));
+        CRGBW flare_color = ColorFromPalette(intro_palette, flare_index, bri);
         uint32_t existing = instance->_segment.getPixelColor(pos);
-        uint32_t flare = RGBW32(bri, bri, bri, 0);
+        uint32_t flare =
+            RGBW32(flare_color.r, flare_color.g, flare_color.b, flare_color.w);
         instance->_segment.setPixelColor(pos, color_blend(existing, flare, 180));
       }
       return FRAMETIME; // Yield rendering here during intro
@@ -7589,33 +7560,18 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
-  // Rebuild the lithographic mask. The hold uses the same deterministic hash
-  // language as the intro/outro, but with softer, intensity-shaped gaps so it
-  // can move continuously instead of stepping as a binary barcode.
-  const int PATTERN_SLOTS = 192;
+  // Keep the hold faithful to the authored intro: hash-derived barcode
+  // segments, true black voids, and a single forward scanner phase.
+  const int PATTERN_SLOTS = 128;
   uint16_t seg_start_arr[PATTERN_SLOTS];
   bool seg_lit[PATTERN_SLOTS];
   int pattern_total = 0;
   int n_segs = 0;
-  uint8_t intensity = instance->_segment.intensity;
-
-  uint8_t dark_threshold =
-      (uint8_t)(82u - (((uint16_t)intensity * 44u) / 255u));
-  uint8_t dark_floor =
-      (uint8_t)(38u + (((uint16_t)intensity * 94u) / 255u));
-  uint8_t dark_width_span =
-      (uint8_t)(4u - (((uint16_t)intensity * 2u) / 255u));
-  if (dark_width_span < 2)
-    dark_width_span = 2;
-  uint8_t lit_width_span =
-      (uint8_t)(5u + (((uint16_t)intensity * 5u) / 255u));
 
   for (int s = 0; s < PATTERN_SLOTS; s++) {
     uint32_t h = cfx::knuth32((uint32_t)s * 31u + 7u);
-    uint8_t coin = (uint8_t)(h >> 24);
-    bool lit = coin >= dark_threshold;
-    int width = lit ? (2 + (int)((h >> 28) % lit_width_span))
-                    : (2 + (int)((h >> 28) % dark_width_span));
+    int width = (int)(h >> 29) + 1; // 1-8 px, same as intro/outro
+    bool lit = (h >> 28) & 1u;      // 50/50 lit vs dark
 
     seg_start_arr[s] = (uint16_t)pattern_total;
     seg_lit[s] = lit;
@@ -7626,7 +7582,7 @@ uint16_t mode_lithograph(void) {
   }
   if (pattern_total == 0) pattern_total = 1;
 
-  auto sample_mask = [&](uint32_t pos) -> uint8_t {
+  auto sample_lit = [&](uint32_t pos) -> bool {
     pos %= (uint32_t)pattern_total;
     bool is_lit = false;
     for (int s = 0; s < n_segs - 1; s++) {
@@ -7637,50 +7593,24 @@ uint16_t mode_lithograph(void) {
     }
     if (pos >= (uint32_t)seg_start_arr[n_segs - 1])
       is_lit = seg_lit[n_segs - 1];
-    return is_lit ? 255 : dark_floor;
+    return is_lit;
   };
 
-  // Intensity repositions and reshapes the mask; speed adds a sub-pixel drift
-  // so the hold glides instead of advancing one whole LED at a time.
+  // Intensity keeps the intro's phase/offset behavior. Speed controls only the
+  // forward drift rate, with no oscillating texture layered on top.
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
-  uint32_t drift_fp_per_sec =
-      128u + (((uint32_t)instance->_segment.speed * 1408u) / 255u);
-  uint32_t scroll_fp =
-      (pattern_offset << 8) +
-      (((uint32_t)instance->now * drift_fp_per_sec) / 1000u);
+  uint32_t drift_px_per_sec =
+      24u + (((uint32_t)instance->_segment.speed * 202u) / 255u);
+  uint32_t scroll =
+      pattern_offset + (((uint32_t)instance->now * drift_px_per_sec) / 1000u);
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];
-  Color base_color = Color((base_col >> 16) & 0xFF, (base_col >> 8) & 0xFF,
-                           base_col & 0xFF, (base_col >> 24) & 0xFF);
 
   for (int i = 0; i < len; i++) {
-    uint32_t sample_fp = ((uint32_t)i << 8) + scroll_fp;
-    uint32_t pos0 = (sample_fp >> 8) % (uint32_t)pattern_total;
-    uint8_t frac = (uint8_t)(sample_fp & 0xFF);
-    uint8_t b0 = (uint8_t)(((uint16_t)sample_mask(pos0) +
-                            sample_mask(pos0 + pattern_total - 1)) >> 1);
-    uint8_t b1 = (uint8_t)(((uint16_t)sample_mask(pos0 + 1) +
-                            sample_mask(pos0 + 2)) >> 1);
-    uint8_t mask_b =
-        (uint8_t)((((uint16_t)b0 * (256u - frac)) +
-                   ((uint16_t)b1 * frac)) >> 8);
-
-    uint8_t advected = (uint8_t)(sample_fp >> 4);
-    uint8_t grain = cfx::sin8(advected + (uint8_t)(pos0 * 7u));
-    uint8_t wave = cfx::sin8((uint8_t)(advected >> 1) + (uint8_t)(pos0 * 3u));
-    int texture = ((((int)grain - 128) * (6 + (intensity >> 6))) +
-                   (((int)wave - 128) * 5)) /
-                  255;
-    int final_b = (int)mask_b + texture;
-    if (final_b < (int)dark_floor)
-      final_b = dark_floor;
-    if (final_b > 255)
-      final_b = 255;
-
-    Color out = cfx::dim(base_color, (uint8_t)final_b);
-    instance->_segment.setPixelColor(i, RGBW32(out.r, out.g, out.b, out.w));
+    uint32_t vpos = ((uint32_t)i + scroll) % (uint32_t)pattern_total;
+    instance->_segment.setPixelColor(i, sample_lit(vpos) ? base_col : 0);
   }
   return FRAMETIME;
 }
