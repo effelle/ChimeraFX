@@ -401,6 +401,74 @@ void CFXAddressableLightEffect::apply_startup_control_presets_() {
   }
 }
 
+void CFXAddressableLightEffect::sync_sequence_control_state() {
+  auto *state = this->get_light_state();
+  if (state == nullptr) {
+    return;
+  }
+
+  CFXControl *c = this->act_ != nullptr ? this->act_->controller : nullptr;
+  if (c == nullptr) {
+    c = CFXControl::find(state);
+  }
+  if (c == nullptr) {
+    return;
+  }
+
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_ != nullptr) {
+    if (this->act_->sequence_speed.has_value()) {
+      auto *speed_num = c->get_speed();
+      if (speed_num != nullptr)
+        speed_num->publish_state((float)this->act_->sequence_speed.value());
+    }
+    if (this->act_->sequence_intensity.has_value()) {
+      auto *intensity_num = c->get_intensity();
+      if (intensity_num != nullptr)
+        intensity_num->publish_state(
+            (float)this->act_->sequence_intensity.value());
+    }
+    if (this->act_->sequence_palette.has_value()) {
+      auto *palette_sel = c->get_palette();
+      if (palette_sel != nullptr)
+        palette_sel->publish_state(
+            this->get_palette_name_(this->act_->sequence_palette.value()));
+    }
+    if (this->act_->sequence_mirror.has_value()) {
+      auto *mirror_sw = c->get_mirror();
+      if (mirror_sw != nullptr)
+        mirror_sw->publish_state(this->act_->sequence_mirror.value());
+    }
+    if (this->act_->sequence_autotune.has_value()) {
+      auto *autotune_sw = c->get_autotune();
+      if (autotune_sw != nullptr)
+        autotune_sw->publish_state(this->act_->sequence_autotune.value());
+    }
+  }
+#endif
+
+  if (this->has_inout_duration_preset_()) {
+    auto *inout_num = c->get_intro_duration();
+    if (inout_num != nullptr)
+      inout_num->publish_state(this->inout_duration_preset_val_());
+  }
+  if (this->has_intro_preset_()) {
+    auto *intro_sel = c->get_intro_effect();
+    if (intro_sel != nullptr)
+      intro_sel->publish_state(this->get_intro_name_(this->intro_preset_val_()));
+  }
+  if (this->has_outro_preset_()) {
+    auto *outro_sel = c->get_outro_effect();
+    if (outro_sel != nullptr)
+      outro_sel->publish_state(this->get_outro_name_(this->outro_preset_val_()));
+  }
+  if (this->has_force_white_preset_()) {
+    auto *force_white_sw = c->get_force_white();
+    if (force_white_sw != nullptr)
+      force_white_sw->publish_state(this->force_white_preset_val_());
+  }
+}
+
 void CFXAddressableLightEffect::restore_preset_runtime_defaults_(
     uint32_t delay_ms) {
   if (!this->has_speed_preset_() && !this->has_intensity_preset_() &&
@@ -1119,6 +1187,7 @@ void CFXAddressableLightEffect::start() {
       act_->sequence_autotune = cfg_->pending_sequence_autotune;
       cfg_->pending_sequence_autotune.reset();
     }
+    this->sync_sequence_control_state();
   }
 
   const bool owns_speed = act_->sequence_speed.has_value();
@@ -8157,6 +8226,7 @@ void CFXAddressableLightEffect::set_active_sequence(
       act_->runner->target_iterations_ = itr;
     }
   }
+  this->sync_sequence_control_state();
 }
 #endif
 

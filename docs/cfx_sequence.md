@@ -84,7 +84,12 @@ That's it. The effect runs indefinitely until you call `cfx_sequence.stop` or tu
 
 ### Parameter overrides
 
-These values apply only while the sequence is running. They do not rewrite the Home Assistant control entities.
+These values apply only while the sequence is running. When a sequence, `cfx_set`,
+or `cfx_run` sends one of these overrides, ChimeraFX reflects the value into the
+matching Home Assistant control so the UI shows what is actually driving the
+effect. During that run, the parameter is owned by the sequence/runtime action:
+manual changes to the same control may be ignored until the effect is restarted
+or the sequence ownership is cleared.
 
 | Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Range | Description |
 |--------|---|-------------|
@@ -101,7 +106,10 @@ These values apply only while the sequence is running. They do not rewrite the H
 | `set_outro` | 0-27 | Overrides the Outro animation by index. |
 | `set_inout_dur` | float `>= 0.0` | Overrides intro/outro duration in seconds. |
 
-Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` resets them.
+Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start`
+resets them. Omitting a parameter leaves that control live; for example, if a
+sequence does not include `set_mirror`, the Mirror switch remains manually
+controllable.
 
 ### Completion control
 
@@ -109,7 +117,7 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 |---|---|---|---|
 | `iterations` | integer | `0` | Stop after N complete animation cycles. `0` = loop forever. |
 | `duration` | time | `null` | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
-| `restore` | boolean | `true` | Restore the strip's pre-sequence light state when the sequence stops. This includes ON/OFF state, effect, brightness, colour, and colour mode snapshot. Runtime-only overrides such as `set_speed`, `set_intensity`, `set_palette`, `set_mirror`, and `set_autotune` are not persisted back to HA controls. |
+| `restore` | boolean | `true` | Restore the strip's pre-sequence light state when the sequence stops. This includes ON/OFF state, effect, brightness, colour, and colour mode snapshot. Runtime-only overrides such as `set_speed`, `set_intensity`, `set_palette`, `set_mirror`, and `set_autotune` are temporary control ownership, not permanent user defaults. |
 
 ### Restore behavior
 
@@ -630,6 +638,10 @@ manipulating the dropdown state first.
 
 `cfx_set` applies temporary parameters to a light without declaring a full sequence. It is useful inside `on_cfx_reach` when one strip should cue another strip at a specific point.
 
+Values supplied by `cfx_set` are reflected in the target light's controls and
+own those controls while the injected effect is active. To keep a control
+manually adjustable, omit that `set_*` option from the action.
+
 ```yaml
 on_cfx_reach:
   - position: 25%
@@ -665,6 +677,9 @@ on_cfx_reach:
 
 `cfx_run` starts a self-contained, pool-backed sequence at runtime. It supports the same `set_*` overrides as `cfx_set`, plus iterations and lifecycle triggers on the spawned run.
 
+Like root sequences and `cfx_set`, supplied `set_*` values are reflected in the
+target controls and own those controls for the lifetime of the spawned run.
+
 ```yaml
 on_cfx_reach:
   - position: 50%
@@ -672,7 +687,7 @@ on_cfx_reach:
       - cfx_run:
           id: led_strip
           effect: "Gas Discharge"
-          set_speed: 180
+          set_inout_dur: 5
           set_force_white: true
           iterations: 1
 ```

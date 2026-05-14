@@ -278,6 +278,7 @@ public:
   void set_autotune(switch_::Switch *v) { ensure_cfg_(); cfg_->autotune = v; }
   // CFX-044: Stack bypass evaluation
   bool has_pending_completion() const { return this->act_ != nullptr && this->act_->completion_pending; }
+  void sync_sequence_control_state();
   void execute_completion();
   bool uses_default_transition() const { return this->allow_default_transition_(); }
 

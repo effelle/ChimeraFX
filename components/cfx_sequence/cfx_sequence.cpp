@@ -399,6 +399,7 @@ void CfxSetActionBase::do_play_() {
           inst->set_inout_duration_preset(this->inout_duration_.value());
         if (this->force_white_.has_value())
           inst->set_force_white_preset(this->force_white_.value());
+        inst->sync_sequence_control_state();
       };
 
   auto resolve_target_inst =
@@ -1089,6 +1090,7 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
     inst->set_inout_duration_preset(this->inout_duration_.value());
   if (this->force_white_.has_value())
     inst->set_force_white_preset(this->force_white_.value());
+  inst->sync_sequence_control_state();
 }
 
 void CFXSequence::begin_teardown_(TeardownMode mode) {
