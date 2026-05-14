@@ -6054,24 +6054,6 @@ static inline uint8_t cfx_clean_edge_amount(uint8_t amount) {
   return amount;
 }
 
-static inline uint8_t cfx_clean_lithograph_edge_amount(uint8_t amount) {
-  if (amount < 96)
-    return 0;
-  if (amount > 159)
-    return 255;
-  return amount;
-}
-
-static inline uint32_t cfx_wrap_phase_fp(int64_t phase_fp,
-                                         uint32_t period_fp) {
-  if (period_fp == 0)
-    return 0;
-  phase_fp %= (int64_t)period_fp;
-  if (phase_fp < 0)
-    phase_fp += period_fp;
-  return (uint32_t)phase_fp;
-}
-
 uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (!instance)
     return 350;
@@ -7571,14 +7553,9 @@ uint16_t mode_lithograph(void) {
   uint16_t len = instance->_segment.length();
   if (len <= 1) return mode_static();
 
-  struct LithographData {
-    uint32_t phase_fp;
-    uint32_t last_ms;
-    uint8_t last_intensity;
-  };
-
   // Keep the hold faithful to the authored intro: hash-derived barcode
-  // segments, true black voids, and a single forward scanner phase.
+  // segments and true black voids. The intro/outro carry the motion; the
+  // steady-state hold is static to avoid transport-visible barcode artifacts.
   const int PATTERN_SLOTS = 128;
   uint16_t seg_start_arr[PATTERN_SLOTS];
   bool seg_lit[PATTERN_SLOTS];
@@ -7613,73 +7590,18 @@ uint16_t mode_lithograph(void) {
     return is_lit;
   };
 
-  // Intensity keeps the intro's phase/offset behavior. Speed controls only the
-  // forward drift rate, with no oscillating texture layered on top.
+  // Intensity keeps the intro's phase/offset behavior. Speed is intentionally
+  // ignored in the static hold; the animated print/retract lives in intro/outro.
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
-  uint32_t pattern_period_fp = ((uint32_t)pattern_total) << 8;
-
-  LithographData *data = (LithographData *)instance->_segment.data;
-  if (!data || instance->_segment.reset) {
-    if (!instance->_segment.allocateData(sizeof(LithographData))) {
-      ESP_LOGW("CFX", "%s: allocateData(%zu) failed", __func__,
-               sizeof(LithographData));
-      return FRAMETIME;
-    }
-    data = (LithographData *)instance->_segment.data;
-    data->phase_fp = cfx_wrap_phase_fp((int64_t)pattern_offset * 256,
-                                       pattern_period_fp);
-    data->last_ms = instance->now;
-    data->last_intensity = instance->_segment.intensity;
-    instance->_segment.reset = false;
-  }
-
-  if (data->last_intensity != instance->_segment.intensity) {
-    uint32_t old_offset =
-        ((uint32_t)data->last_intensity * (uint32_t)pattern_total) >> 8;
-    int32_t offset_delta = (int32_t)pattern_offset - (int32_t)old_offset;
-    data->phase_fp = cfx_wrap_phase_fp(
-        (int64_t)data->phase_fp + ((int64_t)offset_delta * 256),
-        pattern_period_fp);
-    data->last_intensity = instance->_segment.intensity;
-  }
-
-  uint32_t dt = instance->now - data->last_ms;
-  data->last_ms = instance->now;
-  if (dt > 250)
-    dt = 250;
-
-  uint32_t drift_fp_per_sec =
-      (((uint32_t)instance->_segment.speed * 3072u) / 255u);
-  data->phase_fp = cfx_wrap_phase_fp(
-      (int64_t)data->phase_fp +
-          (int64_t)(((uint64_t)dt * drift_fp_per_sec) / 1000u),
-      pattern_period_fp);
+  instance->_segment.reset = false;
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];
-  auto scale_base = [&](uint8_t amount) -> uint32_t {
-    if (amount == 0)
-      return 0;
-    if (amount == 255)
-      return base_col;
-    uint8_t w = (uint8_t)(((uint16_t)CFX_W(base_col) * amount + 127u) / 255u);
-    uint8_t r = (uint8_t)(((uint16_t)CFX_R(base_col) * amount + 127u) / 255u);
-    uint8_t g = (uint8_t)(((uint16_t)CFX_G(base_col) * amount + 127u) / 255u);
-    uint8_t b = (uint8_t)(((uint16_t)CFX_B(base_col) * amount + 127u) / 255u);
-    return RGBW32(r, g, b, w);
-  };
 
   for (int i = 0; i < len; i++) {
-    uint32_t sample_fp = ((uint32_t)i << 8) + data->phase_fp;
-    uint32_t pos0 = (sample_fp >> 8) % (uint32_t)pattern_total;
-    uint8_t frac = (uint8_t)(sample_fp & 0xFF);
-    uint8_t a = sample_lit(pos0) ? 255 : 0;
-    uint8_t b = sample_lit(pos0 + 1) ? 255 : 0;
-    uint8_t amount =
-        (uint8_t)((((uint16_t)a * (256u - frac)) + ((uint16_t)b * frac)) >> 8);
-    amount = cfx_clean_lithograph_edge_amount(amount);
-    instance->_segment.setPixelColor(i, scale_base(amount));
+    uint32_t vpos = ((uint32_t)i + pattern_offset) % (uint32_t)pattern_total;
+    instance->_segment.setPixelColor(i, sample_lit(vpos) ? base_col : 0);
   }
   return FRAMETIME;
 }

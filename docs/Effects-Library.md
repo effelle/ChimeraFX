@@ -913,13 +913,13 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Lithograph.webm" type="video/webm">
         </video>
-        *A precise, machine-like drawing process. A bright, sharp cursor prints the light onto the strip line by line, then the lithographic mask keeps drifting as a subtle architectural hold.*
+        *A precise, machine-like drawing process. A bright, sharp cursor prints the light onto the strip line by line, then the lithographic mask rests as a static architectural hold.*
 
     === "⚙️ Controls"
         | Parameter | Autotune | Function Description |
         | :--- | :--: | :--- |
         | **Intensity** | `128` | **Pattern phase**: offsets the barcode mask while preserving the intro's true black voids. |
-        | **Speed** | `128` | **Hold drift**: controls the slow one-way post-intro motion of the printed mask; `0` holds still. |
+        | **Speed** | `128` | **Not used in hold**: motion is provided by the intro/outro print sweep. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
@@ -2205,7 +2205,7 @@ These short animations play once when the light is turned ON or OFF.
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/lithograph.webm" type="video/webm">
         </video>
-    *A precise, technical construction. A razor-sharp bright cursor prints the light onto the strip line by line, then the printed mask continues as a slow drifting architectural hold.*
+    *A precise, technical construction. A razor-sharp bright cursor prints the light onto the strip line by line, then the printed mask rests as a static architectural hold.*
 
 ??? abstract "16 | Moiré Shift / Moiré Fade | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
     <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
