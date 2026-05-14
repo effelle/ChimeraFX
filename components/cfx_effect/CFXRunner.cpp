@@ -6054,6 +6054,24 @@ static inline uint8_t cfx_clean_edge_amount(uint8_t amount) {
   return amount;
 }
 
+static inline uint8_t cfx_clean_lithograph_edge_amount(uint8_t amount) {
+  if (amount < 64)
+    return 0;
+  if (amount > 191)
+    return 255;
+  return amount;
+}
+
+static inline uint32_t cfx_wrap_phase_fp(int64_t phase_fp,
+                                         uint32_t period_fp) {
+  if (period_fp == 0)
+    return 0;
+  phase_fp %= (int64_t)period_fp;
+  if (phase_fp < 0)
+    phase_fp += period_fp;
+  return (uint32_t)phase_fp;
+}
+
 uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (!instance)
     return 350;
@@ -7599,6 +7617,7 @@ uint16_t mode_lithograph(void) {
   // forward drift rate, with no oscillating texture layered on top.
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
+  uint32_t pattern_period_fp = ((uint32_t)pattern_total) << 8;
 
   LithographData *data = (LithographData *)instance->_segment.data;
   if (!data || instance->_segment.reset) {
@@ -7608,7 +7627,8 @@ uint16_t mode_lithograph(void) {
       return FRAMETIME;
     }
     data = (LithographData *)instance->_segment.data;
-    data->phase_fp = pattern_offset << 8;
+    data->phase_fp = cfx_wrap_phase_fp((int64_t)pattern_offset * 256,
+                                       pattern_period_fp);
     data->last_ms = instance->now;
     data->last_intensity = instance->_segment.intensity;
     instance->_segment.reset = false;
@@ -7618,8 +7638,9 @@ uint16_t mode_lithograph(void) {
     uint32_t old_offset =
         ((uint32_t)data->last_intensity * (uint32_t)pattern_total) >> 8;
     int32_t offset_delta = (int32_t)pattern_offset - (int32_t)old_offset;
-    data->phase_fp =
-        (uint32_t)((int64_t)data->phase_fp + ((int64_t)offset_delta * 256));
+    data->phase_fp = cfx_wrap_phase_fp(
+        (int64_t)data->phase_fp + ((int64_t)offset_delta * 256),
+        pattern_period_fp);
     data->last_intensity = instance->_segment.intensity;
   }
 
@@ -7630,7 +7651,10 @@ uint16_t mode_lithograph(void) {
 
   uint32_t drift_fp_per_sec =
       (((uint32_t)instance->_segment.speed * 3072u) / 255u);
-  data->phase_fp += (uint32_t)(((uint64_t)dt * drift_fp_per_sec) / 1000u);
+  data->phase_fp = cfx_wrap_phase_fp(
+      (int64_t)data->phase_fp +
+          (int64_t)(((uint64_t)dt * drift_fp_per_sec) / 1000u),
+      pattern_period_fp);
 
   // Get base color (monochromatic, full brightness)
   uint32_t base_col = instance->_segment.colors[0];
@@ -7654,7 +7678,7 @@ uint16_t mode_lithograph(void) {
     uint8_t b = sample_lit(pos0 + 1) ? 255 : 0;
     uint8_t amount =
         (uint8_t)((((uint16_t)a * (256u - frac)) + ((uint16_t)b * frac)) >> 8);
-    amount = cfx_clean_edge_amount(amount);
+    amount = cfx_clean_lithograph_edge_amount(amount);
     instance->_segment.setPixelColor(i, scale_base(amount));
   }
   return FRAMETIME;
