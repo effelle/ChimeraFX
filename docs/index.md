@@ -26,17 +26,32 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 For detailed FPS targets, RMT limits, RAM budgets, and power planning, see [Performance & Troubleshooting](Troubleshooting.md).
 
 ---
+## The "Good Citizen" Philosophy
+
+ChimeraFX is built as a **transparent tool** designed to coexist peacefully with the rest of your ESPHome node. Unlike "greedy" implementations that sequester system resources, ChimeraFX operates under a "Good Citizen" principle: it respects the MCU's ability to handle multiple critical tasks simultaneously.
+
+* **System Integrity:** It never overwrites core ESPHome components, ensuring compatibility with future updates.
+* **Intelligent Resource Sharing:**
+    * **Memory Safety:** It employs a dynamic **"Heap Floor"** to ensure critical stacks (Wi-Fi, API, Bluetooth) always have the memory they need to function safely.
+    * **Power Awareness:** Includes integrated **Power Monitoring & Reduction** to estimate LED strip current and PSU load, with optional automatic brightness reduction to prevent hardware strain.
+* **Resource Awareness:** It avoids "hijacking" the CPU, allowing your sensors, climate controls, and security features to remain responsive and reliable.
+* **Active Transparency:** Through a built-in runtime debugger, the engine reports real-time CPU and memory usage, empowering you to optimize your configuration based on hard data.
+
+This philosophy distinguishes ChimeraFX as a lighting engine that prioritizes the stability of your entire smart home ecosystem over just "showing pretty lights".
+
+---
 
 ## Key Features
 
 *   **Native Performance**: Optimized for ESP-IDF and dual-core ESP32s.
 *   **ChimeraFX Light Platform**: A custom ESPHome light platform that support segments, allows you to run parallel complex RGB LED effects on ESP32 devices.
 *   **ChimeraFX Sequencer**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
+*   **Power Monitoring & Reduction**: Estimate LED strip current, power, PSU load, and energy usage, with optional manual or automatic brightness reduction.
 *   **Zero-Lambda Config**: Uses a clean `external_components` setup.
 *   **Rich Effect Library**: Ports of complex effects that were previously impossible or slow in pure YAML using `addressable_lambda`.
 *   **Custom Palettes**: A curated selection of palettes to choose from plus a smart palette generator.
 *   **Intro and Outro Effects**: Run a special effect when the light turns on or off.
-*   **Presets**: Create your own effect configurations.
+* **Presets**: Capture and recall custom configurations from a near-infinite matrix of possibilities—layering specific intro/outro transitions, granular speed and intensity settings, and dynamic palettes into a single, cohesive lighting state.
 *   **Full Control**: Support for Speed, Intensity, Palettes, and Mirroring in real time or through presets.
 *   **Autotuning**: Automatically load default parameters and tune the effect for you .
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
@@ -45,6 +60,7 @@ For detailed FPS targets, RMT limits, RAM budgets, and power planning, see [Perf
 
 *   **[Installation Guide](Installation.md)** - Get up and running in minutes.
 *   **[Controls Guide](Controls.md)** - How to set up inputs and switches.
+*   **[Power Monitor](Power-Monitor.md)** - Estimate LED power use and manage brightness reduction.
 *   **[Effect Library](Effects-Library.md)** - Browse available effects and palettes.
 *   **[ChimeraFX Sequencer](cfx_sequence.md)** - Logic, events, and reactive automations.
 *   **[Troubleshooting](Troubleshooting.md)** - Fix common issues (flickering, memory).
@@ -59,6 +75,6 @@ Donations are never expected, but always appreciated. If you find ChimeraFX usef
 
 **ChimeraFX** is an independent project. It is not affiliated with, maintained by, or endorsed by the WLED project, the ESPHome project, or Nabu Casa. WLED, ESPHome, and Nabu Casa are trademarks of their respective owners.
 
-This work incorporates code and logic derived from WLED and is licensed under the **European Union Public Licence v1.2 (EUPL-1.2)**.
+This work incorporates some code and logic derived from WLED and is licensed under the **European Union Public Licence v1.2 (EUPL-1.2)**.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

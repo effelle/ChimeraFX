@@ -1,6 +1,8 @@
-# Effect Presets (Hardcoded Defaults)
+# Effect Presets: Orchestrating the Perfect State
 
-You can hardcode specific settings for each effect directly in the YAML. This is useful if you want an effect to always start with a specific speed, color palette, or intensity, regardless of the global controls. 
+While global controls offer real-time flexibility, Presets allow you to master the near-infinite combinations possible within the ChimeraFX engine. A preset isn't just a saved setting; it is a curated "lighting scene" that synchronizes specific effect behaviors, granular speed and intensity levels, and dynamic palettes into a single, cohesive state.
+
+By hardcoding these defaults directly in your YAML, you ensure your lighting always starts with your exact vision—perfectly balancing specific intro/outro transitions and effect parameters regardless of previous global adjustments.
 
 Use the `set_*` parameters (e.g., `set_speed`, `set_palette`) to enforce these values.
 
@@ -26,7 +28,8 @@ If you use the same name as an existing effect, it will be overridden with the n
 
 While you could use a script or a scene in Home Assistant to achieve the same result, this gives you the freedom to choose the method that works best for you.
 
-**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`. 
+**Note:** Effect presets intentionally do not support `set_autotune`. Hard presets already prevent [autotune](Controls.md#id-7-autotune) from overwriting those same parameters, and runtime autotune overrides belong on orchestration surfaces like `cfx_set`, `cfx_sequence`, and `cfx_run`.
+
 ⚠️ **Important:** When a preset effect is turned OFF, all the parameters reset to their defaults values.
 
 ## Parameters

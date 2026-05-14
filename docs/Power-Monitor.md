@@ -12,7 +12,7 @@ The power monitor is **estimate-first**, not measurement-first:
 
 This approach is efficient because it piggybacks on the existing frame transmission cycle without requiring extra ADC (Analog-to-Digital Converter) hardware or wiring to measure the electrical current.
 
-> **Important**: The power monitor does **not** perform automatic brightness limiting unless you explicitly enable `limit.auto`. When monitoring is enabled, ChimeraFX automatically exposes a manual **Power Reduction** control as an emergency fallback or global day/night cap. Use the optional `limit` section to customize that control.
+> **Important**:  When monitoring is enabled, ChimeraFX automatically exposes a manual **Power Reduction** control as an emergency fallback or global day/night cap. Use the optional `limit` section to customize that control. The power monitor does **not** perform automatic brightness limiting unless you explicitly enable **Auto Reduction** in the `limit` section.
 
 ---
 
@@ -73,7 +73,7 @@ These are created automatically when `cfx_power` is configured:
 
 ### Optional Sensors
 
-Enable these under `cfx_power.monitor.sensors:`:
+Enable these under `cfx_power.monitor.sensors`:
 
 ```yaml
 cfx_power:

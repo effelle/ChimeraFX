@@ -2,14 +2,28 @@
 
 ## Prerequisites
 
-*   **ESPHome Version**: The minimal version to run ChimeraFX for ESPHome is **2026.3.0**
+*   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
 *   **Supported Hardware**:
       *   **ESP32 (Classic)**: Fully supported and can control up to 4 strips.
       *   **ESP32-S3**: Fully supported (and recommended for new builds). Up to 4 strips.
-      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside WiFi on a single core can cause stuttering and stability issues. Up to 2 strips.
+      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside Wi-Fi on a single core can cause stuttering and stability issues. Up to 2 strips.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
+
+---
+
+## Before You Flash
+
+ChimeraFX does not need special ESPHome knowledge, but addressable LEDs are picky about wiring and power. Before your first compile and flash:
+
+*   Connect the LED strip ground and ESP32 ground together.
+*   Use a power supply sized for your LED count and expected brightness.
+*   Use a level shifter for serious 5V strip builds; ESP32 data pins are 3.3V.
+*   Keep the data wire from the ESP32 to the first LED short.
+*   Plan power injection for longer strips instead of feeding everything from one end.
+
+For flicker, random colors, resets, SPI inrush, and memory pressure, see [Performance & Troubleshooting](Troubleshooting.md).
 
 ---
 
@@ -39,7 +53,7 @@ Once you have a working setup, it is safer to remove `refresh: always` or pin to
 
 ## 2. Advanced Manual Installation
 
-If you are developing or need to modify the code locally, or simply you don't like to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
+If you are developing, need to modify the code locally, or prefer not to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
 
 1.  Download the `components/` folder from the repository.
 2.  Place it in your ESPHome config directory (e.g., `config/components/cfx_effect`).
@@ -52,6 +66,48 @@ external_components:
 ```
 
 ---
+## Complete Minimal Example
+
+If you already have a working ESPHome device YAML, you only need the `external_components` block and the `light` block shown below. This complete example is here as a known-good starting point for a new ESP32 node:
+
+```yaml
+esphome:
+  name: chimera_led_demo
+  friendly_name: Chimera LED Demo
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+external_components:
+  - source: github://effelle/ChimeraFX@main
+    refresh: always
+
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 60
+    chipset: WS2812X
+```
+
+After the first successful compile, consider removing `refresh: always` or pinning to a known working commit for a more stable production device.
+
+---
+
 ## Quick Light Configuration
 
 ChimeraFX introduces its own high-performance, asynchronous DMA LED driver called `cfx_light`. This component automatically detects your ESP32 model and allocates the optimal memory blocks for flawless, jitter-free animation.

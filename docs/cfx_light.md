@@ -98,14 +98,14 @@ To use a specific chipset, use the `chipset` variable in your YAML:
 * **sacrificial_pixel** (*boolean*, default: `false`): RMT-only option for long data-line runs. When enabled, `cfx_light` transmits one extra black pixel before logical LED `0`. Place this extra physical LED close to the controller; it stays off, boosts the signal, and is not counted in `num_leds` or segment indexes.
 * **spi_speed** (*Frequency*, Optional): The SPI clock speed for `APA102` and `SK9822` strips. If omitted, `cfx_light` uses a sensible default.
 * **default_transition_length** (*Time*, default: `0s`): The standard ESPHome transition duration for solid-color mode and for eligible ChimeraFX effect power `OFF -> ON -> OFF` transitions. Architectural effects and the signature effects `Energy` and `Chaos Theory` intentionally ignore this setting so their authored intros/outros stay untouched.
-* **set_intro** (*int*, Optional): Force a specific global Intro Animation for all effects.
-* **set_outro** (*int*, Optional): Force a specific global Outro Animation for all effects.
+* **set_intro** (*int*, Optional): Force a global Intro Animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros.
+* **set_outro** (*int*, Optional): Force a global Outro Animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros.
 * **set_inout_dur** (*Time*, Optional): Sets the duration for both global intros and outros.
 * **set_brightness** (*percentage*, Optional): Applies a brightness default every time the light turns on, using the same `0-100%` style as ESPHome light brightness values.
 * **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages (`w` requires a white-channel strip). This also affects single-tone effects that derive their color from the current light state. It does not force palette-driven multicolor effects to a single color.
 * **controls** (*boolean*, default: `true`): Automatically generate the ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md) for the control ID list.
-* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **3** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
+* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **4** per `cfx_light`. See the next chapter [Segments](#segments-multi-zone-control) for more details.
 
 ---
 
@@ -149,8 +149,8 @@ light:
 * **start** (*int*, Required): The starting pixel index (inclusive).
 * **stop** (*int*, Required): The stopping pixel index (exclusive).
 * **mirror** (*boolean*, default: `false`): If true, calculations are reversed for this segment (useful for symmetrical setups).
-* **set_intro** (*int*, Optional): Override the global intro mode for this specific segment.
-* **set_outro** (*int*, Optional): Override the global outro mode for this specific segment.
+* **set_intro** (*int*, Optional): Override the global intro mode for this segment on eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros.
+* **set_outro** (*int*, Optional): Override the global outro mode for this segment on eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros.
 * **set_inout_dur** (*Time*, Optional): Override the global intro/outro duration for this specific segment.
 * **set_brightness** (*percentage*, Optional): Applies a brightness default every time the segment turns on, using the same `0-100%` style as ESPHome light brightness values.
 * **set_color** (*list[int]*, Optional): Defines the default color applied when the segment turns on. Accepts `[r, g, b]` or `[r, g, b, w]` values (where `w` requires a white-channel strip) using `0-100` channel percentages. This setting affects solid-color mode and single-tone effects. Values can be validated via the light logs.
@@ -161,7 +161,7 @@ When segments are defined:
 
 1.  The "Master" light entity (e.g., "Main TV Strip") acts as a global power and brightness control. It does **not** have its own effects. Turning off the Master turns off all segments.
 
-2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (unless `all_effects: false` is set on the parent).
+2.  Each segment light entity (e.g., "TV Left Side") has the **full suite of ChimeraFX effects** injected into it (unless `all_effects: false` is set on the main/master light).
 
 3.  Each light segment operates on its own dedicated runner instance. This ensures that every single parameter is completely independent, allowing users to configure each segment exactly as they want.
 

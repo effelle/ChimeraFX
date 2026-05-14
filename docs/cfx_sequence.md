@@ -1,35 +1,54 @@
 # Sequencer (`cfx_sequence`)
 
-A **sequence** is ChimeraFX's optional scripting layer. You pick an effect, point it at one or more strips, and optionally tell it what to do at specific moments — when the animation starts, when it reaches a certain point, when it stops. Effects run perfectly well without sequences; use them when you need precise event timing, multi-strip coordination, or reactive Home Assistant automations.
+A **sequence** is ChimeraFX's optional on-device orchestration layer. It starts one effect on one or more `cfx_light` entities, applies temporary settings, and can run actions at exact moments in the animation.
 
-Everything runs directly on the ESP32. No round-trip to Home Assistant, no network lag.
+You do not need sequences for normal lighting. Effects run perfectly well from the Home Assistant light effect dropdown. Use a sequence when timing matters: starting a second strip halfway through a sweep, stopping several strips in order, reacting to an animation milestone, or building a local show that should keep working without a Home Assistant round-trip.
 
-> Already know the basics? Jump to the [full configuration reference](#configuration-reference) or the [examples](#examples).
+> Already know the basics? Jump to the [configuration reference](#configuration-reference), [starting and stopping](#starting-and-stopping-sequences), or [examples](#examples).
+
+---
+
+## When to Use It
+
+| Need | Use |
+|---|---|
+| Pick an effect manually in Home Assistant | Normal `cfx_light` effect dropdown |
+| Save hardcoded defaults for one effect | [Effect Presets](Effect-Presets.md) |
+| Start one named lighting routine from a button, sensor, HA dropdown, or HA service | `cfx_sequence` |
+| Change another light at a sequence milestone without declaring a new sequence | `cfx_set` |
+| Spawn a temporary child run with its own lifetime and triggers | `cfx_run` |
+
+The short version: use `cfx_sequence` when an effect becomes a small routine.
 
 ---
 
 ## The Lifecycle
 
-Every sequence goes through five stages. Understanding these is the key to wiring up anything non-trivial.
+Every sequence goes through five stages. You can ignore these for a simple start/stop sequence, but they are the key to synchronized multi-strip effects.
 
 
 ![ChimeraFX Lifecycle](assets/cfx_lifecycle.svg)
 
-| Stage | Trigger &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | When it fires |
-|---|-------|---|
-| **Begin** | `on_cfx_begin` | The instant `cfx_sequence.start` is called. Nothing is visible yet. |
-| **Start** | `on_cfx_start` | The effect is actually rendering. If there's an intro animation, this fires *after* it finishes. |
-| **Reach** | `on_cfx_reach` | The effect's leading pixel crosses a threshold you define (e.g. `50%`). |
-| **Stop** | `on_cfx_stop` | The outro animation begins (triggered by `cfx_sequence.stop` or `light.turn_off`). |
+| Stage | YAML trigger &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; | When it fires |
+|---|---|---|
+| **Begin** | `on_cfx_begin` | Immediately when `cfx_sequence.start` is called. Nothing is visible yet. |
+| **Start** | `on_cfx_start` | The effect starts rendering. If there is an intro, this fires after the intro. |
+| **Reach** | `on_cfx_reach` | The leading pixel crosses a threshold you define, such as `50%`. |
+| **Stop** | `on_cfx_stop` | The outro begins, usually from `cfx_sequence.stop` or `light.turn_off`. |
 | **Complete** | `on_cfx_complete` | The outro finishes and the strip is fully dark. |
 
-> **`on_cfx_stop` vs `on_cfx_complete`** - Stop fires when the fade-out *starts*. Complete fires when the strip goes fully dark. Use `on_cfx_stop` to stagger other strips in sync; use `on_cfx_complete` to know when everything is done.
+> **Stop vs complete:** `on_cfx_stop` fires when the fade-out starts. `on_cfx_complete` fires when the strip is actually dark. Use `on_cfx_stop` to stagger other strips; use `on_cfx_complete` when you need a final done signal.
 
 ---
 
 ## Your First Sequence
 
-The minimum you need: an `id`, a `name`, a light, and an effect.
+A sequence has two parts:
+
+1. A definition under `cfx_sequence:`.
+2. An action that starts it.
+
+The minimum definition needs an `id`, a `name`, a target light, and an effect:
 
 ```yaml
 cfx_sequence:
@@ -65,15 +84,15 @@ That's it. The effect runs indefinitely until you call `cfx_sequence.stop` or tu
 
 ### Parameter overrides
 
-These let you lock in specific values for the duration of the sequence, overriding the HA UI sliders.
+These values apply only while the sequence is running. They do not rewrite the Home Assistant control entities.
 
 | Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| Range | Description |
 |--------|---|-------------|
-| `set_speed` | 0-255 | Runtime-only Speed override for the active run. Does not persist to the HA slider. |
-| `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
-| `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
+| `set_speed` | 0-255 | Runtime-only Speed override. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override. |
+| `set_palette` | 0-255 | Runtime-only Palette override by index. Monochromatic effects ignore palette. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
-| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. Values match ESPHome's logged color percentages. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color using `0-100` channel percentages. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for this sequence. `auto` is the default and behaves like `true` on root `cfx_sequence` entries. |
@@ -92,12 +111,16 @@ Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start` re
 | `duration` | time | `null` | Stop after a fixed wall-clock time (e.g. `10s`, `2min`). Takes priority over `iterations`. |
 | `restore` | boolean | `true` | Restore the strip's pre-sequence light state when the sequence stops. This includes ON/OFF state, effect, brightness, colour, and colour mode snapshot. Runtime-only overrides such as `set_speed`, `set_intensity`, `set_palette`, `set_mirror`, and `set_autotune` are not persisted back to HA controls. |
 
+### Restore behavior
+
 `restore` is intentionally light-state oriented, not control-state oriented.
 
 - If the light was already ON before the sequence started, `restore: true` returns it to that previous effect/colour/brightness snapshot.
 - If the light was OFF before the sequence started, `restore: true` returns it to OFF.
 - If a child light is adopted mid-sequence via `cfx_set`, its restore baseline is treated as OFF unless explicitly designed otherwise, so stopping the parent sequence cleans the adopted child up without leaving it running.
 - `restore: false` skips the saved-state return and the teardown path forces the sequence lights OFF.
+
+### Home Assistant event traffic
 
 `ha_events` only affects Home Assistant event emission. It does not disable on-device YAML triggers such as `on_cfx_reach` and it exists to keep Home Assistant event traffic useful and scalable.
 In multi-strip sequences, child effects can emit large bursts of `cfx_reach`,
@@ -211,12 +234,12 @@ Fires when the effect is actually rendering its first frame. If the effect has a
 === "On-Device YAML"
       ```yaml
         cfx_sequence:
-          - name: "Sequence Begin"
-            id: seq_begin
+          - name: "Sequence Start"
+            id: seq_start
             lights: 
               - led_strip
             effect: "Sonar Reveal"
-            on_cfx_begin:
+            on_cfx_start:
               - light.toggle:
                   id: ws_strip
       ```
@@ -257,13 +280,18 @@ Fires when the animation's leading pixel crosses a percentage threshold. You can
 === "On-Device YAML"
       ```yaml
         cfx_sequence:
-          on_cfx_reach:
-            - position: 25%
-              then:
-                - logger.log: "Quarter way through"
-            - position: 50%
-              then:
-                - logger.log: "Halfway"
+          - name: "Sequence Reach"
+            id: seq_reach
+            lights:
+              - led_strip
+            effect: "Horizon Sweep"
+            on_cfx_reach:
+              - position: 25%
+                then:
+                  - logger.log: "Quarter way through"
+              - position: 50%
+                then:
+                  - logger.log: "Halfway"
       ```
 
 === "Home Assistant YAML"
@@ -274,33 +302,33 @@ Fires when the animation's leading pixel crosses a percentage threshold. You can
           - trigger: state
             entity_id:
               - event.esp32_test_cfx_events
-              attribute: event_type
-              to:
-                - cfx_start:rgb_light
-          actions:
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.esp32_test_cfx_events
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rgb_light:25
-            - action: persistent_notification.create
-              metadata: {}
-              data:
-                message: Quarter way through
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.esp32_test_cfx_events
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rgb_light:50
-            - action: persistent_notification.create
-              metadata: {}
-              data:
-                message: Halfway
-          mode: single
+            attribute: event_type
+            to:
+              - cfx_start:rgb_light
+        actions:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id:
+                  - event.esp32_test_cfx_events
+                attribute: event_type
+                to:
+                  - cfx_reach:rgb_light:25
+          - action: persistent_notification.create
+            metadata: {}
+            data:
+              message: Quarter way through
+          - wait_for_trigger:
+              - trigger: state
+                entity_id:
+                  - event.esp32_test_cfx_events
+                attribute: event_type
+                to:
+                  - cfx_reach:rgb_light:50
+          - action: persistent_notification.create
+            metadata: {}
+            data:
+              message: Halfway
+        mode: single
       ```
 
 > **Looping effects** - For continuous effects like Wipe or Chase, `on_cfx_reach` fires on *every* cycle. If you need a one-shot reaction, set `iterations: 1` or use a flag in your HA automation.
@@ -598,8 +626,10 @@ manipulating the dropdown state first.
 
 ---
 
-## cfx_set - Quick Parameter Injection
-cfx_set is a lightweight action for applying parameters to a light *without* declaring a full sequence. It's designed to be used inside on_cfx_reach to kick off secondary strips on cue.
+## `cfx_set` - Quick Parameter Injection
+
+`cfx_set` applies temporary parameters to a light without declaring a full sequence. It is useful inside `on_cfx_reach` when one strip should cue another strip at a specific point.
+
 ```yaml
 on_cfx_reach:
   - position: 25%
@@ -616,11 +646,11 @@ on_cfx_reach:
 |---|---|---|
 | `id` | light ID | Target light (required). |
 | `effect` | string | Effect name. If set, calls light.turn_on with this effect. Omit to only change parameters without touching the current effect. |
-| `set_speed` | 0-255 | Runtime-only Speed override for the active run. Does not persist to the HA slider. |
-| `set_intensity` | 0-255 | Runtime-only Intensity override for the active run. Does not persist to the HA slider. |
-| `set_palette` | 0-255 | Runtime-only Palette override (by index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
+| `set_speed` | 0-255 | Runtime-only Speed override. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override. |
+| `set_palette` | 0-255 | Runtime-only Palette override by index. Monochromatic effects ignore palette. |
 | `set_brightness` | 0-100% | Overrides the light brightness. |
-| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Overrides the effect color. Use 3 channels for RGB, 4 for RGBW. Values match ESPHome's logged color percentages. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Overrides the effect color using `0-100` channel percentages. |
 | `set_mirror` | `true` / `false` | Overrides the Mirror switch. |
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the injected child effect. `auto` is the default and resolves to `false` for `cfx_set`. |
@@ -630,8 +660,11 @@ on_cfx_reach:
 | `set_inout_dur` | float `>= 0.0` | Overrides intro/outro duration in seconds. |
 
 ---
-## cfx_run - Spawn a Runtime Sequence
-cfx_run starts a self-contained, pool-backed sequence at runtime. It supports the same set_* overrides as cfx_set, plus iterations and lifecycle triggers on the spawned run.
+
+## `cfx_run` - Spawn a Runtime Sequence
+
+`cfx_run` starts a self-contained, pool-backed sequence at runtime. It supports the same `set_*` overrides as `cfx_set`, plus iterations and lifecycle triggers on the spawned run.
+
 ```yaml
 on_cfx_reach:
   - position: 50%
@@ -648,11 +681,11 @@ on_cfx_reach:
 |---|---|---|
 | `id` | light ID | Target light (required). |
 | `effect` | string | Effect name to spawn (required). |
-| `set_speed` | 0-255 | Runtime-only Speed override for the spawned run. Does not persist to the HA slider. |
-| `set_intensity` | 0-255 | Runtime-only Intensity override for the spawned run. Does not persist to the HA slider. |
-| `set_palette` | 0-255 | Runtime-only Palette override (index). Does not persist to the HA selector. Monochromatic effects ignore palette and force their solid-color path. |
+| `set_speed` | 0-255 | Runtime-only Speed override. |
+| `set_intensity` | 0-255 | Runtime-only Intensity override. |
+| `set_palette` | 0-255 | Runtime-only Palette override by index. Monochromatic effects ignore palette. |
 | `set_brightness` | 0-100% | Brightness override. |
-| `set_color` | `[r,g,b]` or `[r,g,b,w]`, channels `0-100` | Color override. Values match ESPHome's logged color percentages. |
+| `set_color` | `[r,g,b]` or `[r,g,b,w]` | Color override using `0-100` channel percentages. |
 | `set_mirror` | true / false | Mirror override. |
 | `set_autotune` | true / false | Autotune override. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the spawned run. `auto` is the default and resolves to `false` for `cfx_run`. |
@@ -677,7 +710,7 @@ Events use the strip's slug as a tag. A light named `RGB Light` becomes the tag 
 
 | Event | When it fires |
 |---|---|
-| `cfx_begin:<tag>` | The instant a sequence or a single effet is called. |
+| `cfx_begin:<tag>` | The instant a sequence or a single effect is called. |
 | `cfx_start:<tag>` | Effect begins rendering. |
 | `cfx_reach:<tag>:<pct>` | Milestone crossed - fires at **fixed 10% steps** (10, 20, 30 ... 100). |
 | `cfx_stop:<tag>` | Outro begins. |
@@ -712,9 +745,10 @@ Use the HA API start/stop calls when Home Assistant needs to target a specific
 sequence directly by name.
 
 ---
-### Examples
 
-## Cascade with Staggered Stop
+## Examples
+
+### Cascade with Staggered Stop
 
 Three strips start one after another as the primary strip sweeps forward. When the primary stops, all three outros start in a staggered fade.
 
@@ -732,26 +766,26 @@ Three strips start one after another as the primary strip sweeps forward. When t
           - id: seq_strip1
             name: "Cascade with staggered stop"
             lights:
-              - ws_strip0
+              - rmt2
             effect: "Horizon Sweep"
             on_cfx_reach:
               - position: 10%
                 then:
                   - light.turn_on:
-                      id: ws_strip1
+                      id: rmt3
                       effect: "Horizon Sweep"
               - position: 20%
                 then:
                   - light.turn_on:
-                      id: ws_strip2
+                      id: rmt4
                       effect: "Horizon Sweep"
             on_cfx_stop:
               - delay: 100ms
               - light.turn_off:
-                  id: ws_strip1           # starts outro 100ms later
+                  id: rmt3           # starts outro 100ms later
               - delay: 100ms
               - light.turn_off:
-                  id: ws_strip2          # starts outro 100ms later
+                  id: rmt4           # starts outro 100ms later
         ```
 
     === "Home Assistant YAML"
@@ -761,46 +795,39 @@ Three strips start one after another as the primary strip sweeps forward. When t
           triggers:
             - trigger: state
               entity_id:
-                - event.YOUR_DEVICE_cfx_events
+                - event.chimerafx_cfx_events_rmt2
               attribute: event_type
               to:
-                - cfx_start:ws_strip0
+                - cfx_reach:rmt2:10
           actions:
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.YOUR_DEVICE_cfx_events
-                  attribute: event_type
-                  to:
-                    - cfx_reach:ws_strip0:10
-                  enabled: true
             - action: light.turn_on
               metadata: {}
               data:
                 effect: Horizon Sweep
               target:
-                entity_id: light.YOUR_DEVICE_ws_strip1
+                entity_id: light.chimerafx_rmt3
             - wait_for_trigger:
                 - trigger: state
                   entity_id:
-                    - event.YOUR_DEVICE_cfx_events
+                    - event.chimerafx_cfx_events_rmt2
                   attribute: event_type
                   to:
-                    - cfx_reach:ws_strip0:20
-                  enabled: true
+                    - cfx_reach:rmt2:20
             - action: light.turn_on
               metadata: {}
               data:
                 effect: Horizon Sweep
               target:
-                entity_id: light.YOUR_DEVICE_ws_strip2
+                entity_id: light.chimerafx_rmt4
             - wait_for_trigger:
                 - trigger: state
                   entity_id:
-                    - event.YOUR_DEVICE_cfx_events
+                    - event.chimerafx_cfx_events_rmt2
                   attribute: event_type
                   to:
-                    - cfx_stop:ws_strip0
+                    - cfx_stop:rgb_light
+                    - cfx_stop:rmt2
+                  enabled: true
             - delay:
                 hours: 0
                 minutes: 0
@@ -810,7 +837,7 @@ Three strips start one after another as the primary strip sweeps forward. When t
               metadata: {}
               data: {}
               target:
-                entity_id: light.YOUR_DEVICE_ws_strip1
+                entity_id: light.chimerafx_rmt3
             - delay:
                 hours: 0
                 minutes: 0
@@ -820,16 +847,18 @@ Three strips start one after another as the primary strip sweeps forward. When t
               metadata: {}
               data: {}
               target:
-                entity_id: light.YOUR_DEVICE_ws_strip2
+                entity_id: light.chimerafx_rmt4
           mode: single
+          max_exceeded: silent
+          conditions: []
         ```
 
-## Gas Discarge under the Curtains
+### Gas Discharge under the Curtains
 
-Two strips start together, and when they reach 90% the third strip starts bulding a Gas Discharge effect.
+Two strips start together, and when they reach 90% the third strip starts building a Gas Discharge effect.
 
 
-??? abstract "Gas Discarge under the Curtains"
+??? abstract "Gas Discharge under the Curtains"
 
     === "Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
@@ -853,7 +882,7 @@ Two strips start together, and when they reach 90% the third strip starts buldin
 
     === "Home Assistant YAML"
         ```yaml
-          alias: ChimeraFX — Gas Discarge under the Curtains
+          alias: ChimeraFX — Gas Discharge under the Curtains
           description: ""
           triggers:
             - trigger: state
@@ -886,4 +915,3 @@ Two strips start together, and when they reach 90% the third strip starts buldin
                 effect: Gas Discharge
           mode: single
         ```
-

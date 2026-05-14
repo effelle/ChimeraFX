@@ -2172,6 +2172,7 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
   act_->runner->setColor(color);
+  this->run_controls_();
 
   if (abs(act_->runner->_gamma - gamma) > 0.01f) {
     act_->runner->setGamma(gamma);
@@ -2237,6 +2238,7 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
   act_->runner->setColor(color);
+  this->run_controls_();
 
   const float current_gamma = state_ptr->get_gamma_correct();
   if (abs(act_->runner->_gamma - current_gamma) > 0.01f) {
@@ -4251,10 +4253,12 @@ void CFXAddressableLightEffect::run_controls_() {
       bool has_seq_speed = false;
       bool has_seq_intensity = false;
       bool has_seq_palette = false;
+      bool has_seq_mirror = false;
 #ifdef USE_CFX_SEQUENCE
       has_seq_speed = act_->sequence_speed.has_value();
       has_seq_intensity = act_->sequence_intensity.has_value();
       has_seq_palette = act_->sequence_palette.has_value();
+      has_seq_mirror = act_->sequence_mirror.has_value();
       if (has_seq_speed)
         current_speed = act_->sequence_speed.value();
       else if (!transient_autotune_context)
@@ -4306,7 +4310,7 @@ void CFXAddressableLightEffect::run_controls_() {
 
       bool sequence_override_active =
           (has_seq_speed || has_seq_intensity || has_seq_palette ||
-           transient_autotune_context);
+           has_seq_mirror || transient_autotune_context);
 
       // Apply UI/sequence overrides to ALL physical segment runners.
       // segment_runners is only non-empty for master (non-virtual) effects, so

@@ -2,26 +2,6 @@
 
 ## Debug Logger
 
-**Warning**: Please do not enable debug logging on a production device unless necessary. High-level logging increases CPU usage and can slow down your device. If you need to troubleshoot the component, you can toggle the **Debug Switch** found in the **Diagnostics** section of the device in Home Assistant. For safety, this switch automatically reverts to the Off state after a reboot, though it can also be disabled manually at any time. Every light registered through `cfx_control` will have its own dedicated debug switch.
-
-Example:
-```bash
-[16:13:17.440][I][chimera_fx:550]: [WS_Strip] FX:Interference(180) | FPS:58.6 | Time: 17.1ms | Jitter: 0% | Heap: 95kB [ACTV]
-```
-
-### Understanding the Log Output
-*   **[WS_Strip]**: The strip name in YAML configuration.
-*   **FX:Interference(180)**: The current effect running on the strip. (In the example, 'Interference' is the effect name and '180' is the ID of the effect)
-*   **FPS (Frames Per Second)**: Ideally, this stays around **55-60 FPS**. If it consistently drops below 30, your ESP32 is struggling to keep up.
-*   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. For example, 17ms corresponds to ~59 FPS.
-*   **Jitter**: The percentage of variation in frame timing. **0-8% is excellent**. Consistently high jitter (>30%) means other components (like WiFi, heavy sensors or multiple light effects running at the same time) are interrupting the LED driver, which can cause visible stuttering and low frame rate.
-*   **Heap**: The available RAM on your chip. More is better. If you fall under the **Heap Floor**, you should rethink your configuration, especially if you are running the firmware on a WiFi device. More information about Heap Floor can be found on [Memory Management & Stability](#memory-management-stability) chapter.
-
----
-
-
-## Debug Logger
-
 **Warning**: Please do not enable debug logging on a production device unless necessary. Continuous debug logging increases CPU usage and can slow down your device. If you need to troubleshoot the component, you can toggle the **Debug Switch** found in the **Diagnostics** section of the device in Home Assistant. For safety, this switch automatically reverts to the Off state after a reboot, though it can also be disabled manually at any time. Every `cfx_light` strip will have its own dedicated debug switch unless explicitly excluded in the YAML configuration.
 
 Example:

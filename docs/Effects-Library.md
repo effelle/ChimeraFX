@@ -72,7 +72,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         | **Intensity** | `128` | **Percent fill**: determines how much of the strip is occupied. |
         | **Speed** | `128` | **Smoothness**: controls the transition speed of the fill. |
         | **Palette** | — | **Supported**: Affects the color of the gauge bars. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -150,7 +150,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         | **Intensity** | `128` | **Not used**: Reserved for future visual refinements. |
         | **Speed** | `15` | **Timer Duration**: controls how long it takes to fill the strip. |
         | **Palette** | — | **Supported**: Defaults to **Ocean** (11). |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -226,7 +226,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         | **Intensity** | `40` | **Fade rate**: determines how quickly the trail vanishes. |
         | **Speed** | `140` | **Cursor speed**: controls the velocity of the running dot. |
         | **Palette** | — | **Not Supported**: Uses the primary selected color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -252,7 +252,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         | **Intensity** | `128` | **Distance**: adjusts the spacing between the three cursors. |
         | **Speed** | `128` | **Velocity**: controls the combined speed of the cursors. |
         | **Palette** | — | **Not Supported**: Uses the primary selected color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -639,6 +639,9 @@ Best for modern interiors and architectural lighting. These effects focus on ele
 ??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
 
     === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
+        </video>
         *A dense monochromatic interference field. Fine wave collisions shimmer across the strip during the build, then settle into a solid architectural floor before dissolving back into patterned noise on shutdown.*
 
     === "⚙️ Controls"
@@ -1133,7 +1136,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `40` | **Trail length**: determines how long the tail persists. |
         | **Speed** | `110` | **Chase speed**: controls the velocity of the moving dot. |
         | **Palette** | — | **Supported**: Sets the color of the chase and trail. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1159,7 +1162,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `70` | **Spacing**: adjusts the distance between the chase segments. |
         | **Speed** | `60` | **Chase speed**: controls the velocity of the triple-chase. |
         | **Palette** | — | **Supported**: Defines the colors of the different segments. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1471,7 +1474,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the particle persistence. |
         | **Speed** | `128` | **Fall speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Colors the meteor and its tail. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1704,7 +1707,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Spacing**: adjusts the distance between trails. |
         | **Speed** | `128` | **Run speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Defaults to **Sakura** (13). |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1730,7 +1733,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail spacing**: adjusts the density of the light peaks. |
         | **Speed** | `128` | **Run speed**: controls the motion velocity. |
         | **Palette** | — | **Supported**: Sets the color of the trails. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1782,7 +1785,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the persisting trail depth. |
         | **Speed** | `128` | **Scan speed**: controls the movement frequency. |
         | **Palette** | — | **Supported**: Sets the scanner color. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -1808,7 +1811,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | `128` | **Trail length**: determines the trail persistence. |
         | **Speed** | `128` | **Scan speed**: controls the meeting frequency. |
         | **Palette** | — | **Supported**: Sets the color of the dual scanners. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -2016,7 +2019,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Sweep speed**: controls the movement velocity. |
         | **Palette** | — | **Supported**: Colors the sweeping light. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -2042,7 +2045,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Wipe speed**: controls the transition velocity. |
         | **Palette** | — | **Supported**: Colors the wipe animation. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
@@ -2068,7 +2071,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         | **Intensity** | — | **Not used**: Reserved for future refinements. |
         | **Speed** | `128` | **Wipe speed**: controls the transition velocity. |
         | **Palette** | — | **Supported**: Defines the random color range. |
-        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`, `on_cfx_pixel`). |
+        | **Orchestrator Triggers** | — | **Supported**: Position-based triggers (`on_cfx_reach`). |
 
     === "💻 Config"
         **YAML Setup / Custom Preset:**
