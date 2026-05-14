@@ -108,27 +108,33 @@ public:
 
     if (this->speed_) {
       this->speed_->add_on_state_callback([this](float value) {
-        for (auto *r : this->runners_)
-          if (!r->sequence_owns_speed_)
+        this->apply_to_live_runners_([value](CFXRunner *r) {
+          if (!r->sequence_owns_speed_) {
             r->setSpeed((uint8_t)value);
+          }
+        });
         this->wake_mono_idle_output_();
       });
     }
 
     if (this->intensity_) {
       this->intensity_->add_on_state_callback([this](float value) {
-        for (auto *r : this->runners_)
-          if (!r->sequence_owns_intensity_)
+        this->apply_to_live_runners_([value](CFXRunner *r) {
+          if (!r->sequence_owns_intensity_) {
             r->setIntensity((uint8_t)value);
+          }
+        });
         this->wake_mono_idle_output_();
       });
     }
 
     if (this->mirror_) {
       this->mirror_->add_on_state_callback([this](bool value) {
-        for (auto *r : this->runners_)
-          if (!r->sequence_owns_mirror_)
+        this->apply_to_live_runners_([value](CFXRunner *r) {
+          if (!r->sequence_owns_mirror_) {
             r->setMirror(value);
+          }
+        });
         this->wake_mono_idle_output_();
       });
     }
@@ -177,10 +183,11 @@ public:
             }
 
             uint8_t r_pal_idx = this->palette_mapping_[index];
-            for (auto *r : this->runners_) {
-              if (!r->sequence_owns_palette_)
+            this->apply_to_live_runners_([r_pal_idx](CFXRunner *r) {
+              if (!r->sequence_owns_palette_) {
                 r->setPalette(r_pal_idx);
-            }
+              }
+            });
             this->wake_mono_idle_output_();
           });
     }
@@ -268,6 +275,49 @@ public:
   number::Number *get_outro_duration() { return inout_duration_; }
 
 protected:
+  template <typename Fn> void apply_to_live_runners_(Fn fn) {
+    std::vector<CFXRunner *> seen;
+    seen.reserve(this->runners_.size() + 2);
+
+    auto apply_once = [&seen, &fn](CFXRunner *runner) {
+      if (runner == nullptr)
+        return;
+      if (std::find(seen.begin(), seen.end(), runner) != seen.end())
+        return;
+      seen.push_back(runner);
+      fn(runner);
+    };
+
+    for (auto *r : this->runners_) {
+      apply_once(r);
+    }
+
+    auto apply_effect = [this, &apply_once](
+                            CFXAddressableLightEffect *effect) {
+      if (effect == nullptr || effect->get_light_state() != this->light_) {
+        return;
+      }
+      auto *act = effect->get_act();
+      if (act == nullptr) {
+        return;
+      }
+      if (!act->segment_runners.empty()) {
+        for (auto *r : act->segment_runners) {
+          apply_once(r);
+        }
+      } else {
+        apply_once(act->runner);
+      }
+    };
+
+    for (auto *effect : CFXAddressableLightEffect::all_effects) {
+      apply_effect(effect);
+    }
+    for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
+      apply_effect(effect);
+    }
+  }
+
   bool debug_enabled_() const {
     if (this->debug_ != nullptr && this->debug_->has_state()) {
       return this->debug_->state;
