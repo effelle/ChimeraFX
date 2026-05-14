@@ -919,7 +919,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | Parameter | Autotune | Function Description |
         | :--- | :--: | :--- |
         | **Intensity** | `128` | **Pattern phase**: offsets the barcode mask while preserving the intro's true black voids. |
-        | **Speed** | `128` | **Hold drift**: controls the one-way post-intro motion of the printed mask. |
+        | **Speed** | `128` | **Hold drift**: controls the slow one-way post-intro motion of the printed mask; `0` holds still. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 

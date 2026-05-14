@@ -3680,9 +3680,9 @@ uint16_t mode_chaos_theory(void) {
   data->last_millis = instance->now;
 
   // --- Phase 1: Embedded Glitter Intro ---
-  // A controlled explosion of palette-colored sparks that reveal the chaos
-  // underneath. Power Limit: We only spawn a few sparks per frame to avoid
-  // current transients.
+  // A controlled explosion of white sparks that reveal the chaos underneath.
+  // Power Limit: We only spawn a few sparks per frame to avoid current
+  // transients.
   const uint32_t intro_duration_ms = 4000;
   if (!data->intro_done) {
     uint32_t elapsed = instance->now - data->intro_start;
@@ -3690,16 +3690,10 @@ uint16_t mode_chaos_theory(void) {
       data->intro_done = true;
       data->accumulator = (elapsed * 96u);
     } else {
-      const uint32_t *intro_palette = instance->_currentRandomPaletteBuffer;
       uint8_t progress = (uint8_t)((elapsed * 255u) / intro_duration_ms);
       uint8_t reveal = cfx::scale8(progress, progress);
       uint8_t energy = (uint8_t)(96u + (progress >> 1));
 
-      uint16_t spatial_mult =
-          24 + (((uint16_t)instance->_segment.intensity * 10u) >> 1);
-      uint8_t counter = (uint8_t)(elapsed >> 2);
-      uint8_t turbulence =
-          cfx::inoise8((uint8_t)(elapsed >> 2), (uint8_t)(elapsed >> 5));
       uint8_t active_cutoff =
           (uint8_t)(214u - (((uint16_t)reveal * 172u) / 255u));
 
@@ -3708,10 +3702,6 @@ uint16_t mode_chaos_theory(void) {
                                     (uint8_t)(elapsed >> 3));
         gate ^= cfx::sin8((uint8_t)(i * 17u) + (uint8_t)(elapsed >> 1));
 
-        uint8_t index = ((i * spatial_mult) / (len ? len : 1)) + counter;
-        index += cfx::sin8((uint8_t)(i * 11u) + (uint8_t)(elapsed >> 2)) >> 1;
-        index += cfx::scale8(turbulence, 48);
-
         if (gate < active_cutoff) {
           if (progress < 150) {
             instance->_segment.setPixelColor(i, 0);
@@ -3719,8 +3709,7 @@ uint16_t mode_chaos_theory(void) {
           }
           uint8_t dim = (uint8_t)(24u + ((uint16_t)(progress - 150u) * 72u) /
                                            105u);
-          CRGBW c = ColorFromPalette(intro_palette, index, dim);
-          instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+          instance->_segment.setPixelColor(i, RGBW32(dim, dim, dim, 0));
           continue;
         }
 
@@ -3732,8 +3721,7 @@ uint16_t mode_chaos_theory(void) {
           bri_i = 255;
         uint8_t bri = (uint8_t)bri_i;
 
-        CRGBW c = ColorFromPalette(intro_palette, index, bri);
-        instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, c.w));
+        instance->_segment.setPixelColor(i, RGBW32(bri, bri, bri, 0));
       }
 
       uint8_t sparks_to_spawn = 2 + (len / 36);
@@ -3742,12 +3730,8 @@ uint16_t mode_chaos_theory(void) {
       for (uint8_t s = 0; s < sparks_to_spawn; s++) {
         uint16_t pos = cfx::hw_random16() % (len ? len : 1);
         uint8_t bri = 190 + cfx::hw_random8(66);
-        uint8_t flare_index =
-            (uint8_t)(counter + cfx::hw_random8() + (uint8_t)(pos * 13u));
-        CRGBW flare_color = ColorFromPalette(intro_palette, flare_index, bri);
         uint32_t existing = instance->_segment.getPixelColor(pos);
-        uint32_t flare =
-            RGBW32(flare_color.r, flare_color.g, flare_color.b, flare_color.w);
+        uint32_t flare = RGBW32(bri, bri, bri, 0);
         instance->_segment.setPixelColor(pos, color_blend(existing, flare, 180));
       }
       return FRAMETIME; // Yield rendering here during intro
@@ -7601,7 +7585,7 @@ uint16_t mode_lithograph(void) {
   uint32_t pattern_offset =
       ((uint32_t)instance->_segment.intensity * (uint32_t)pattern_total) >> 8;
   uint32_t drift_px_per_sec =
-      24u + (((uint32_t)instance->_segment.speed * 202u) / 255u);
+      (((uint32_t)instance->_segment.speed * 12u) / 255u);
   uint32_t scroll =
       pattern_offset + (((uint32_t)instance->now * drift_px_per_sec) / 1000u);
 
