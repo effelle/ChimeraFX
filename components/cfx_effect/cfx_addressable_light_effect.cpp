@@ -8038,8 +8038,7 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
   static uint8_t spi_reach_suppress_logs = 0;
   bool suppress_ha_reach = false;
 #ifdef USE_CFX_EVENTS
-#ifdef USE_CFX_SEQUENCE
-  if (!act_->suppress_reach_event && act_->active_sequence != nullptr) {
+  if (!act_->suppress_reach_event) {
     SPIDiagCensus diag_census = collect_spi_diag_census();
     suppress_ha_reach =
         diag_census.active_spi_effects > 0 && diag_census.active_effects >= 2;
@@ -8057,7 +8056,6 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
       spi_reach_suppress_logs++;
     }
   }
-#endif
 #endif
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
   while (current_pct >= next && next <= 100) {
