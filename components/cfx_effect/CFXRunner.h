@@ -385,6 +385,7 @@ public:
   // Smart Random Palette Storage
   CRGBPalette16 _currentRandomPalette;
   uint32_t _currentRandomPaletteBuffer[16];
+  uint32_t random_palette_nonce_{0};
 
   bool force_white_active_{false};
   float global_brightness_ = 1.0f;

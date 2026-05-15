@@ -1,6 +1,6 @@
 <style>
   /* Target the first column (ID) */
-  .md-typeset table th:nth-child(1), 
+  .md-typeset table th:nth-child(1),
   .md-typeset table td:nth-child(1) {
     width: 40px !important;       /* Force a small width */
     min-width: 40px !important;   /* Prevent theme from expanding it */
@@ -18,9 +18,9 @@
       padding-bottom: 0.4rem !important;
       /* font-size: 0.65rem !important;   Slightly smaller text */
     }
-    
+
     /* 2. Reduce the gap between your custom icons/labels */
-    .md-typeset details summary ::marker, 
+    .md-typeset details summary ::marker,
     /* .md-typeset details summary {
       letter-spacing: -0.02em; Tighten character spacing slightly */
     }
@@ -63,7 +63,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Center_Gauge.webm" type="video/webm">
         </video>
-        
+
         *A symmetrical progress bar expanding smoothly from the middle to the edges.*
 
     === "⚙️ Controls"
@@ -89,7 +89,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Chaos_Theory.webm" type="video/webm">
         </video>
-        
+
         *Scrolling color bands with noise-driven organic shifts between calm flow and twinkling chaos.*
 
     === "⚙️ Controls"
@@ -115,7 +115,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Collider.webm" type="video/webm">
         </video>
-        
+
         *Chromatic liquid nodes that expand from drifting origins. Collisions trigger a "sticky" bridge with additive color mixing.*
 
     === "⚙️ Controls"
@@ -141,7 +141,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Dropping_Time.webm" type="video/webm">
         </video>
-        
+
         *Falling drops filling a bucket. A visual timer that physically fills the strip over time.*
 
     === "⚙️ Controls"
@@ -167,7 +167,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Energy.webm" type="video/webm">
         </video>
-        
+
         *Rainbow flow with chaotic agitation and white-hot eruptions.*
 
     === "⚙️ Controls"
@@ -192,7 +192,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Fluid_Rain.webm" type="video/webm">
         </video>
-        
+
         *A realistic liquid simulation. Raindrops hit the strip, creating organic ripples that travel, collide, and bounce off the edges.*
 
     === "⚙️ Controls"
@@ -217,7 +217,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Follow_Me.webm" type="video/webm">
         </video>
-        
+
         *Single cursor running from one side to another with a persisting trail.*
 
     === "⚙️ Controls"
@@ -243,7 +243,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Follow_Us.webm" type="video/webm">
         </video>
-        
+
         *Three cursors running from one side to another in a coordinated sequence.*
 
     === "⚙️ Controls"
@@ -293,7 +293,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Kaleidos.webm" type="video/webm">
         </video>
-        
+
         *Symmetrical mirroring of animations. Creates rhythmic, geometric patterns that fold over the strip.*
 
     === "⚙️ Controls"
@@ -318,7 +318,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Reactor_Beat.webm" type="video/webm">
         </video>
-        
+
         *A rhythmic, high-energy heartbeat pushing outward from the center.*
 
     === "⚙️ Controls"
@@ -344,7 +344,7 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Twin_Flames.webm" type="video/webm">
         </video>
-        
+
         *A symmetric variation of the classic Fire simulation. Two flames ignite and burn towards the center.*
 
     === "⚙️ Controls"
@@ -370,447 +370,6 @@ Original animations featuring advanced fluid simulations, chaos theory, and cust
 
 Best for modern interiors and architectural lighting. These effects focus on elegant brightness modulation rather than color cycling, and feature integrated "Horizon Sweep" transitions for seamless power-on/off sequences.
 
-??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Assembly.webm" type="video/webm">
-        </video>
-        *A kinetic, gravity-based transition. Blocks of varying sizes free-fall and stack to physically construct the strip, and systematically peel away to collapse into darkness when turning off.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
-        | **Speed** | `128` | **Gravity**: controls the velocity of falling and peeling blocks. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Assembly"
-              effect_id: 170
-        ```
-
-
-??? abstract "162 | Curtain Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Curtain_Sweep.webm" type="video/webm">
-        </video>
-        
-        *A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
-        | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Curtain Sweep"
-              effect_id: 162
-        ```
-??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
-        </video>
-        
-        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
-        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
-        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Hydro-Pulse"
-              effect_id: 168
-        ```
-??? abstract "161 | Horizon Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Horizon_Sweep.webm" type="video/webm">
-        </video>
-        
-        *A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
-        | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Horizon Sweep"
-              effect_id: 161
-        ```
-
-??? abstract "163 | Stardust Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Stardust_Sweep.webm" type="video/webm">
-        </video>
-        
-        *A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
-        | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Stardust Sweep"
-              effect_id: 163
-        ```
-
-??? abstract "165 | Twin Pulse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Twin_Pulse_Sweep.webm" type="video/webm">
-        </video>
-        
-        *A cinematic monochromatic reveal. Dual light pulses race across the strip to lead the entry, and return to eat the light during the exit.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
-        | **Speed** | `1` | **Sweep duration**: controls the speed of the architectural transition. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Twin Pulse Sweep"
-              effect_id: 165
-        ```
-
-??? abstract "166 | Morse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Transmission.webm" type="video/webm">
-        </video>
-        
-        *A "hidden in plain sight" reveal. Flashes the words "ON" and "OFF" in Morse code using the current solid color.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | — | **Not used**: Reserved for future refinements. |
-        | **Speed** | `128` | **Morse speed**: controls the playback speed of the Morse sequence. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Morse Sweep"
-              effect_id: 166
-        ```
-
-??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
-        </video>
-        
-        *Falling droplets that accumulate at the bottom of the strip. Similar to Dropping Time but with a monochromatic focus and physics-based accumulation.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
-        | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Dropping Fill"
-              effect_id: 169
-        ```
-
-
-??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
-        </video>
-        *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Crystallize"
-              effect_id: 174
-        ```
-
-??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Deep_Breathe.webm" type="video/webm">
-        </video>
-        *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
-
-    === "⚙️ Controls"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
-        </video>
-        
-        *Falling droplets that accumulate at the bottom of the strip. Similar to Dropping Time but with a monochromatic focus and physics-based accumulation.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
-        | **Speed** | `1` | **Duration**: controls the frequency of droplets and total fill time. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Dropping Fill"
-              effect_id: 169
-        ```
-
-??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
-        </video>
-        *A dense monochromatic interference field. Fine wave collisions shimmer across the strip during the build, then settle into a solid architectural floor before dissolving back into patterned noise on shutdown.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Wave Density**: controls how tightly packed the interference bands feel. |
-        | **Speed** | `128` | **Phase Drift**: controls how quickly the moiré field evolves during intro and outro. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Moiré Shift"
-              effect_id: 176
-        ```
-
-??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Sonar_Reveal.webm" type="video/webm">
-        </video>
-        *A radar-like scanning beam sweeps back and forth four times, each pass permanently lifting the brightness floor — like sonar gradually resolving a picture from nothing to full presence.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Sonar Reveal"
-              effect_id: 172
-        ```
-
-??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Venetian.webm" type="video/webm">
-        </video>
-        *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `1` | **Duration**: slider maps to intro/outro duration. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Venetian"
-              effect_id: 173
-        ```
-
-??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Resonance_Fill.webm" type="video/webm">
-        </video>
-        *A liquid-reactive fill sequence. Light surges across the strip with a decaying ripple effect, resonating at the leading edge. The "Resonance" intro features a high-impact surge, while the "Resonance Fade" outro provides a rhythmic, decaying drain.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Ripple Decadence**: controls the frequency and decay of the feedback ripples. |
-        | **Speed** | `100` | **Flow Pressure**: controls the velocity of the fill surge. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Resonance Fill"
-              effect_id: 177
-        ```
-
-??? abstract "178 | Telemetry | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Telemetry.webm" type="video/webm">
-        </video>
-        *A digital, block-based construction sequence. Dashes of light "transmit" across the strip to build the solid floor. Features a "Telemetry" intro with sharp data-bursts and a refined "Telemetry Fade" outro with softened trail-retraction.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Data Density**: adjusts the length and spacing of the telemetry dashes. |
-        | **Speed** | `128` | **Baud Rate**: controls the transmission speed across the strip. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Telemetry"
-              effect_id: 178
-        ```
-
-??? abstract "179 | Stellar Dust | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Stellar_Dust.webm" type="video/webm">
-        </video>
-        *The strip awakens through a flurry of distant, breathing stars. Each pixel enters with a randomized phase-shifted pulse, creating a deep field of light that eventually stabilizes into a solid floor. Fixed in 1.4.1 for instant response.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Star Density**: adjusts the contrast between breathing pixels. |
-        | **Speed** | `128` | **Blink Rate**: controls the frequency of the stellar breathing. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Stellar Dust"
-              effect_id: 179
-        ```
-
-??? abstract "186 | Tidal Surge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
-
-    === "🎬 Preview"
-        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Tidal_Surge.webm" type="video/webm">
-        </video>
-        *A rhythmic, multi-waypoint oscillating sweep. The light surges forward and retreats in an organic sequence, creating a fluid, breathing personality before settling into a solid colored floor.*
-
-    === "⚙️ Controls"
-        | Parameter | Autotune | Function Description |
-        | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Not used**: Monochromatic — no blur. |
-        | **Speed** | `128` | **Surge Rate**: controls the transition time between waypoints. |
-        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
-        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-
-    === "💻 Config"
-        **YAML Setup / Custom Preset:**
-        *(Optional if `all_effects: true`)*
-        ```yaml
-          - addressable_cfx:
-              name: "Tidal Surge"
-              effect_id: 186
-        ```
-
 ??? abstract "255 | Ambient Roulette | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low</span>"
 
 
@@ -824,7 +383,7 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         | **Speed** | — | **Delegated**: Passed to the randomly selected monochromatic effect. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
-        
+
     === "💻 Config"
         **YAML Setup / Custom Preset:**
         *(Optional if `all_effects: true`)*
@@ -834,6 +393,131 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 255
         ```
 
+??? abstract "170 | Assembly | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Assembly.webm" type="video/webm">
+        </video>
+        *A kinetic, gravity-based transition. Blocks of varying sizes free-fall and stack to physically construct the strip, and systematically peel away to collapse into darkness when turning off.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used**: Reserved for future layout variations. |
+        | **Speed** | — | **Not used**: assembly timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Assembly"
+              effect_id: 170
+        ```
+
+??? abstract "174 | Crystallize | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Crystallize.webm" type="video/webm">
+        </video>
+        *Four crystallization seeds simultaneously nucleate and grow outward, their edges sharp and luminous. A formation sequence that feels geological — ancient and precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Crystallize"
+              effect_id: 174
+        ```
+
+??? abstract "162 | Curtain Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Curtain_Sweep.webm" type="video/webm">
+        </video>
+
+        *A mirrored on/off transition. Converges from the sides to fill the center, then expands outward from the middle to clear the strip.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Curtain Sweep"
+              effect_id: 162
+        ```
+
+??? abstract "175 | Deep Breathe | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Deep_Breathe.webm" type="video/webm">
+        </video>
+        *The strip awakens like a slow, deep breath — gamma-corrected brightness rises from absolute darkness to full presence, with a subtle triangular shimmer that gives it warmth and depth.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Not used**: this monochromatic transition does not use intensity. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Deep Breathe"
+              effect_id: 175
+        ```
+??? abstract "169 | Dropping Fill | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low  </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Dropping_Fill.webm" type="video/webm">
+        </video>
+
+        *Falling droplets that accumulate at the bottom of the strip. Similar to Dropping Time but with a monochromatic focus and physics-based accumulation.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Reserved for future visual refinements. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Dropping Fill"
+              effect_id: 169
+        ```
 
 ??? abstract "181 | Eclipse | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
@@ -910,19 +594,20 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 183
         ```
 
-??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+??? abstract "161 | Horizon Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
 
     === "🎬 Preview"
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
-            <source src="/ChimeraFX/assets/effects/Lithograph.webm" type="video/webm">
+            <source src="/ChimeraFX/assets/effects/Horizon_Sweep.webm" type="video/webm">
         </video>
-        *A precise, machine-like drawing process. A bright, sharp cursor prints the light onto the strip line by line, then the effect settles into a static solid architectural hold.*
+
+        *A smooth, directional on/off transition for solid colors. Sweeps the light across the strip from a snappy 0.5s zip to a luxurious 10s reveal.*
 
     === "⚙️ Controls"
         | Parameter | Autotune | Function Description |
         | :--- | :--: | :--- |
-        | **Intensity** | `128` | **Not used in hold**: reserved for the authored intro/outro print sweep. |
-        | **Speed** | `128` | **Not used in hold**: motion is provided only by the intro/outro print sweep. |
+        | **Intensity** | `1` | **Edge blur radius**: controls the softness of the sweep edge. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
         | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
         | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
 
@@ -931,8 +616,34 @@ Best for modern interiors and architectural lighting. These effects focus on ele
         *(Optional if `all_effects: true`)*
         ```yaml
           - addressable_cfx:
-              name: "Lithograph"
-              effect_id: 184
+              name: "Horizon Sweep"
+              effect_id: 161
+        ```
+
+??? abstract "168 | Hydro-Pulse | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Mid </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Hydro-Pulse.webm" type="video/webm">
+        </video>
+
+        *A high-pressure fluid dynamic flow simulation. Features a turbulent "Pressurize" intro and a "Drain" outro that leaves realistic droplets succumbing to gravity.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Viscosity**: determines the fluid dampening and drop cling. |
+        | **Speed** | `128` | **Pressure**: controls the surge velocity and impact force. |
+        | **Palette** | — | **Not Supported**: Features a dedicated monochromatic fluid engine. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Hydro-Pulse"
+              effect_id: 168
         ```
 
 ??? abstract "187 | Impact Flare | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
@@ -960,6 +671,56 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 187
         ```
 
+??? abstract "184 | Lithograph | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Lithograph.webm" type="video/webm">
+        </video>
+        *A precise, machine-like drawing process. A bright, sharp cursor prints the light onto the strip line by line, then the effect settles into a static solid architectural hold.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used in hold**: reserved for the authored intro/outro print sweep. |
+        | **Speed** | `128` | **Not used in hold**: motion is provided only by the intro/outro print sweep. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Lithograph"
+              effect_id: 184
+        ```
+
+??? abstract "176 | Moiré Shift | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Mid</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Moiré_Shift.webm" type="video/webm">
+        </video>
+        *A dense monochromatic interference field. Fine wave collisions shimmer across the strip during the build, then settle into a solid architectural floor before dissolving back into patterned noise on shutdown.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Wave Density**: controls how tightly packed the interference bands feel. |
+        | **Speed** | `128` | **Phase Drift**: controls how quickly the moiré field evolves during intro and outro. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Moiré Shift"
+              effect_id: 176
+        ```
+
 ??? abstract "188 | Monolith | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
 
     === "🎬 Preview"
@@ -985,6 +746,234 @@ Best for modern interiors and architectural lighting. These effects focus on ele
               effect_id: 188
         ```
 
+??? abstract "166 | Morse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Transmission.webm" type="video/webm">
+        </video>
+
+        *A "hidden in plain sight" reveal. Flashes the words "ON" and "OFF" in Morse code using the current solid color.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Not used**: Reserved for future refinements. |
+        | **Speed** | `128` | **Morse speed**: controls the playback speed of the Morse sequence. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Morse Sweep"
+              effect_id: 166
+        ```
+
+??? abstract "177 | Resonance Fill | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Resonance_Fill.webm" type="video/webm">
+        </video>
+        *A liquid-reactive fill sequence. Light surges across the strip with a decaying ripple effect, resonating at the leading edge. The "Resonance" intro features a high-impact surge, while the "Resonance Fade" outro provides a rhythmic, decaying drain.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Ripple Decadence**: controls the frequency and decay of the feedback ripples. |
+        | **Speed** | `100` | **Flow Pressure**: controls the velocity of the fill surge. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Resonance Fill"
+              effect_id: 177
+        ```
+
+??? abstract "172 | Sonar Reveal | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Sonar_Reveal.webm" type="video/webm">
+        </video>
+        *A radar-like scanning beam sweeps back and forth four times, each pass permanently lifting the brightness floor — like sonar gradually resolving a picture from nothing to full presence.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Sonar Reveal"
+              effect_id: 172
+        ```
+
+??? abstract "163 | Stardust Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Stardust_Sweep.webm" type="video/webm">
+        </video>
+
+        *A sparkling on/off transition. Builds a solid color through a flurry of twinkling lights, and dissolves back into shimmering glitter on exit.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Not used**: this monochromatic transition does not use intensity. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Stardust Sweep"
+              effect_id: 163
+        ```
+
+??? abstract "179 | Stellar Dust | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Stellar_Dust.webm" type="video/webm">
+        </video>
+        *The strip awakens through a flurry of distant, breathing stars. Each pixel enters with a randomized phase-shifted pulse, creating a deep field of light that eventually stabilizes into a solid floor. Fixed in 1.4.1 for instant response.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Star Density**: adjusts the contrast between breathing pixels. |
+        | **Speed** | `128` | **Blink Rate**: controls the frequency of the stellar breathing. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Stellar Dust"
+              effect_id: 179
+        ```
+
+??? abstract "178 | Telemetry | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Telemetry.webm" type="video/webm">
+        </video>
+        *A digital, block-based construction sequence. Dashes of light "transmit" across the strip to build the solid floor. Features a "Telemetry" intro with sharp data-bursts and a refined "Telemetry Fade" outro with softened trail-retraction.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Data Density**: adjusts the length and spacing of the telemetry dashes. |
+        | **Speed** | `128` | **Baud Rate**: controls the transmission speed across the strip. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Telemetry"
+              effect_id: 178
+        ```
+
+??? abstract "186 | Tidal Surge | <span class='extra-info'>:material-tag-outline: 1.4.1 | :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Tidal_Surge.webm" type="video/webm">
+        </video>
+        *A rhythmic, multi-waypoint oscillating sweep. The light surges forward and retreats in an organic sequence, creating a fluid, breathing personality before settling into a solid colored floor.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `128` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Tidal Surge"
+              effect_id: 186
+        ```
+
+??? abstract "165 | Twin Pulse Sweep | <span class='extra-info'>:material-tag-outline: 1.3.1 | :material-speedometer: Low </span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Twin_Pulse_Sweep.webm" type="video/webm">
+        </video>
+
+        *A cinematic monochromatic reveal. Dual light pulses race across the strip to lead the entry, and return to eat the light during the exit.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | — | **Not used**: this monochromatic transition does not use intensity. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Twin Pulse Sweep"
+              effect_id: 165
+        ```
+
+??? abstract "173 | Venetian | <span class='extra-info'>:material-tag-outline: 1.4.1| :material-speedometer: Low</span>"
+
+    === "🎬 Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Venetian.webm" type="video/webm">
+        </video>
+        *Like venetian blinds opening in two stages — even pixels rotate into light first, then odd pixels follow in a second sweep. Clean, architectural, precise.*
+
+    === "⚙️ Controls"
+        | Parameter | Autotune | Function Description |
+        | :--- | :--: | :--- |
+        | **Intensity** | `1` | **Not used**: Monochromatic — no blur. |
+        | **Speed** | — | **Not used**: timing is driven by the authored intro/outro duration or `set_inout_dur`. |
+        | **Palette** | — | **Not Supported**: Forced to the primary solid color. |
+        | **Triggers** | — | `cfx_begin`, `cfx_start`, `cfx_reach`, `cfx_stop`, `cfx_complete`. |
+
+    === "💻 Config"
+        **YAML Setup / Custom Preset:**
+        *(Optional if `all_effects: true`)*
+        ```yaml
+          - addressable_cfx:
+              name: "Venetian"
+              effect_id: 173
+        ```
+
 ---
 ## 3. WLED Classics (Remastered)
 **The definitive collection of open-source favorites.**
@@ -997,7 +986,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Aurora.webm" type="video/webm">
         </video>
-        
+
         *Northern lights animation with drifting waves and horizontal color movements.*
 
     === "⚙️ Controls"
@@ -1023,7 +1012,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Blink.webm" type="video/webm">
         </video>
-        
+
         *Simple on/off blinking of the entire strip.*
 
     === "⚙️ Controls"
@@ -1049,7 +1038,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Blink_Rainbow.webm" type="video/webm">
         </video>
-        
+
         *Blinking with color cycling across the selected palette.*
 
     === "⚙️ Controls"
@@ -1075,7 +1064,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Bouncing_Balls.webm" type="video/webm">
         </video>
-        
+
         *Real gravity physics with multiple balls bouncing off the strip's edges.*
 
     === "⚙️ Controls"
@@ -1101,7 +1090,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Breathe.webm" type="video/webm">
         </video>
-        
+
         *Classic standby breathing LED effect with smooth brightness pulsing.*
 
     === "⚙️ Controls"
@@ -1127,7 +1116,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Chase.webm" type="video/webm">
         </video>
-        
+
         *Moving dot with a fading trail that sweeps across the strip.*
 
     === "⚙️ Controls"
@@ -1153,7 +1142,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Chase_multi.webm" type="video/webm">
         </video>
-        
+
         *Three-color chase animation with sub-pixel anti-aliasing for smooth motion.*
 
     === "⚙️ Controls"
@@ -1179,7 +1168,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Colorloop.webm" type="video/webm">
         </video>
-        
+
         *Solid color cycling smoothly through the selected palette.*
 
     === "⚙️ Controls"
@@ -1205,7 +1194,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Colortwinkle.webm" type="video/webm">
         </video>
-        
+
         *Magical fairy-dust twinkles that pop in and out across the strip.*
 
     === "⚙️ Controls"
@@ -1231,7 +1220,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Colorwaves.webm" type="video/webm">
         </video>
-        
+
         *Pride-style color waves with smooth breathing motion across the strip.*
 
     === "⚙️ Controls"
@@ -1257,7 +1246,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Dissolve.webm" type="video/webm">
         </video>
-        
+
         *Sequential random pixel fill and clear, creating a dissolve transition.*
 
     === "⚙️ Controls"
@@ -1283,7 +1272,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Drip.webm" type="video/webm">
         </video>
-        
+
         *Falling water drop physics with splashes and gravity-driven motion.*
 
     === "⚙️ Controls"
@@ -1309,7 +1298,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Fire.webm" type="video/webm">
         </video>
-        
+
         *Realistic 1D fire simulation with heat tracking and spark generation.*
 
     === "⚙️ Controls"
@@ -1335,7 +1324,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Fireworks.webm" type="video/webm">
         </video>
-        
+
         *Exploding rocket simulation with launch and burst phases.*
 
     === "⚙️ Controls"
@@ -1361,7 +1350,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Flow.webm" type="video/webm">
         </video>
-        
+
         *Smooth moving color zones that overlap for fluid transitions.*
 
     === "⚙️ Controls"
@@ -1387,7 +1376,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Glitter.webm" type="video/webm">
         </video>
-        
+
         *Moving rainbow pattern with randomly spawning white sparkles.*
 
     === "⚙️ Controls"
@@ -1413,7 +1402,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/HeartBeat.webm" type="video/webm">
         </video>
-        
+
         *Anatomical heartbeat simulation with dual-beat rhythmic pulsing.*
 
     === "⚙️ Controls"
@@ -1439,7 +1428,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Juggle.webm" type="video/webm">
         </video>
-        
+
         *Eight bouncing dots with trails that weave in and out of each other.*
 
     === "⚙️ Controls"
@@ -1465,7 +1454,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Meteor.webm" type="video/webm">
         </video>
-        
+
         *Meteor with random decay trail that sweeps across the strip.*
 
     === "⚙️ Controls"
@@ -1491,7 +1480,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Multi_Strobe.webm" type="video/webm">
         </video>
-        
+
         *Multiple strobe pulses in rapid sequence for high-intensity visuals.*
 
     === "⚙️ Controls"
@@ -1516,7 +1505,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Noise_Pal.webm" type="video/webm">
         </video>
-        
+
         *Perlin noise driven color movement that creates organic, flowing light patterns.*
 
     === "⚙️ Controls"
@@ -1542,7 +1531,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Ocean.webm" type="video/webm">
         </video>
-        
+
         *Gentle ocean waves (Pacifica simulation) with overlapping light layers.*
 
     === "⚙️ Controls"
@@ -1568,7 +1557,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Percent.webm" type="video/webm">
         </video>
-        
+
         *Percent-based fill (Progress Bar) for visual status tracking.*
 
     === "⚙️ Controls"
@@ -1594,7 +1583,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Plasma.webm" type="video/webm">
         </video>
-        
+
         *Multi-layer Perlin noise plasma that generates complex, morphing light fields.*
 
     === "⚙️ Controls"
@@ -1620,7 +1609,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Popcorn.webm" type="video/webm">
         </video>
-        
+
         *Bouncing particles simulation with energy dissipation and floor collisions.*
 
     === "⚙️ Controls"
@@ -1646,7 +1635,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Rainbow.webm" type="video/webm">
         </video>
-        
+
         *Classic full HSV spectrum moving across the strip for a vibrant light flow.*
 
     === "⚙️ Controls"
@@ -1672,7 +1661,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Ripple.webm" type="video/webm">
         </video>
-        
+
         *Expanding ripple waves that propagate from random origins across the strip.*
 
     === "⚙️ Controls"
@@ -1698,7 +1687,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Running_Dual.webm" type="video/webm">
         </video>
-        
+
         *Two running light trails originating from the center and sweeping outward.*
 
     === "⚙️ Controls"
@@ -1724,7 +1713,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Running_lights.webm" type="video/webm">
         </video>
-        
+
         *Moving light trails with subtle decay, creating a flowing rhythmic effect.*
 
     === "⚙️ Controls"
@@ -1750,7 +1739,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Saw.webm" type="video/webm">
         </video>
-        
+
         *Sawtooth wave color movement with sharp ramps and snappy transitions.*
 
     === "⚙️ Controls"
@@ -1776,7 +1765,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Scanner.webm" type="video/webm">
         </video>
-        
+
         *Classic Larson Scanner (Cylon Eye) ping-ponging across the strip.*
 
     === "⚙️ Controls"
@@ -1802,7 +1791,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Scanner_Dual.webm" type="video/webm">
         </video>
-        
+
         *Two scanners synchronizing and meeting in the center of the strip.*
 
     === "⚙️ Controls"
@@ -1828,7 +1817,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Sparkle.webm" type="video/webm">
         </video>
-        
+
         *Randomly flashing pixels that pop in and out across the solid strip.*
 
     === "⚙️ Controls"
@@ -1854,7 +1843,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Sparkle_Plus.webm" type="video/webm">
         </video>
-        
+
         *Intense high-frequency sparkles with overlapping flash cycles.*
 
     === "⚙️ Controls"
@@ -1880,7 +1869,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Sparkle_Dark.webm" type="video/webm">
         </video>
-        
+
         *Inverse sparkling where random pixels turn off briefly against a solid background.*
 
     === "⚙️ Controls"
@@ -1906,7 +1895,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Static.webm" type="video/webm">
         </video>
-        
+
         *Solid color or stationary palette mapping for constant illumination.*
 
     === "⚙️ Controls"
@@ -1932,7 +1921,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Strobe.webm" type="video/webm">
         </video>
-        
+
         *Rapid full-strip high-frequency flashing for stroboscopic effects.*
 
     === "⚙️ Controls"
@@ -1958,7 +1947,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Strobe_Rainbow.webm" type="video/webm">
         </video>
-        
+
         *Strobe flashing with automatic color cycling across the palette.*
 
     === "⚙️ Controls"
@@ -1984,7 +1973,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Sunrise.webm" type="video/webm">
         </video>
-        
+
         *Gradual brightness and color increase simulation for alarm/wake-up light.*
 
     === "⚙️ Controls"
@@ -2010,7 +1999,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Sweep.webm" type="video/webm">
         </video>
-        
+
         *Ping-pong wipe animation that bounces the light front and back.*
 
     === "⚙️ Controls"
@@ -2036,7 +2025,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Wipe.webm" type="video/webm">
         </video>
-        
+
         *Linear color wipe from start to end of the strip.*
 
     === "⚙️ Controls"
@@ -2062,7 +2051,7 @@ A hand-picked selection of the community's best effects, meticulously optimized 
         <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
             <source src="/ChimeraFX/assets/effects/Wipe_Random.webm" type="video/webm">
         </video>
-        
+
         *Linear wipe with random color changes on every pass.*
 
     === "⚙️ Controls"

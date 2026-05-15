@@ -177,6 +177,7 @@ public:
     bool mono_probe_requested{false};
     uint32_t mono_last_color{0xFFFFFFFF}; // sentinel: differs from any real color on first frame
     uint8_t  mono_last_speed{0xFF};       // sentinel: differs from any real speed on first frame
+    uint8_t mono_last_palette{0xFF};      // sentinel: differs from any real palette on first frame
     bool mono_last_force_white{false};
     // CFX-047: apply()-level frame counter for idle FPS reporting.
     // Incremented every frame that passes the rate gate regardless of whether
@@ -610,6 +611,7 @@ public:
   void sync_parent_owned_inputs(uint32_t color, float gamma,
                                 float global_brightness);
   void mark_parent_coordinated_run(uint64_t now);
+  bool runner_mode_can_idle_(uint8_t mode) const;
   bool evaluate_mono_idle_();
 
   bool is_clean_mono_idle_output() const {

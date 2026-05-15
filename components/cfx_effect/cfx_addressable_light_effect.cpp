@@ -982,6 +982,7 @@ void CFXAddressableLightEffect::start() {
   act_->mono_probe_requested = false;
   act_->mono_last_color = 0xFFFFFFFF;
   act_->mono_last_speed = 0xFF;
+  act_->mono_last_palette = 0xFF;
   act_->mono_last_force_white = false;
   act_->idle_frame_count = 0;
   act_->idle_period_start_ms = 0;
@@ -2765,6 +2766,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // MUST RUN before intro/outro masks!
   bool is_mono_preset =
       this->get_monochromatic_preset_(this->effect_id_).is_active;
+  const bool supports_idle_output =
+      is_mono_preset || this->effect_id_ == FX_MODE_STATIC;
 
   // ── CFX-045: Monochromatic idle suppression ──────────────────────────────
   // Phase 1 — intro/outro skip (existing behaviour, preserved as-is).
@@ -2774,7 +2777,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   bool skip_service =
       is_mono_preset && (act_->intro_active || act_->state == OUTRO_RUNNING);
 
-  if (is_mono_preset && act_->mono_idle && !act_->intro_active &&
+  if (supports_idle_output && act_->mono_idle && !act_->intro_active &&
       act_->state != OUTRO_RUNNING) {
 
     // Detect color change: compare the color already pushed to the runner(s)
@@ -2784,15 +2787,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     uint32_t current_color =
         act_->runner ? act_->runner->_segment.colors[0] : 0;
     uint8_t current_speed = act_->runner ? act_->runner->getSpeed() : 128;
+    uint8_t current_palette = act_->runner ? act_->runner->getPalette() : 0;
     bool current_force_white = act_->active_force_white;
 
     if (current_color != act_->mono_last_color ||
         current_speed != act_->mono_last_speed ||
+        current_palette != act_->mono_last_palette ||
         current_force_white != act_->mono_last_force_white) {
       // Parameter changed — wake for one frame.
       act_->mono_dirty = true;
       act_->mono_last_color = current_color;
       act_->mono_last_speed = current_speed;
+      act_->mono_last_palette = current_palette;
       act_->mono_last_force_white = current_force_white;
     }
 
@@ -2923,6 +2929,32 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (apply_perf_enabled) {
       apply_dispatch_us = cfx_micros() - dispatch_start_us;
     }
+  }
+
+  if (supports_idle_output && !act_->mono_idle && !act_->intro_active &&
+      act_->state != OUTRO_RUNNING && this->evaluate_mono_idle_()) {
+    act_->mono_idle = true;
+    act_->mono_dirty = false;
+    act_->mono_output_dirty = true;
+    act_->mono_output_valid = false;
+    act_->mono_probe_requested = false;
+    act_->mono_last_color =
+        act_->runner != nullptr ? act_->runner->_segment.colors[0] : 0;
+    act_->mono_last_speed =
+        act_->runner != nullptr ? act_->runner->getSpeed() : 128;
+    act_->mono_last_palette =
+        act_->runner != nullptr ? act_->runner->getPalette() : 0;
+    act_->mono_last_force_white = act_->active_force_white;
+    act_->idle_frame_count = 0;
+    act_->idle_period_start_ms = 0;
+    act_->idle_last_frame_us = 0;
+    act_->idle_min_frame_us = UINT32_MAX;
+    act_->idle_max_frame_us = 0;
+    act_->idle_total_frame_us = 0;
+    act_->idle_jitter_count = 0;
+    act_->idle_target_frame_us = this->update_interval_ * 1000;
+    act_->idle_probe_total_us = 0;
+    act_->idle_probe_valid = false;
   }
   const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
 
@@ -3083,6 +3115,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->mono_probe_requested = false;
         act_->mono_last_color = 0xFFFFFFFF;
         act_->mono_last_speed = 0xFF;
+        act_->mono_last_palette = 0xFF;
         act_->mono_last_force_white = act_->active_force_white;
         act_->idle_frame_count = 0;
         act_->idle_period_start_ms = 0;
@@ -8285,26 +8318,35 @@ void CFXAddressableLightEffect::execute_completion() {
 #endif
 }
 
+bool CFXAddressableLightEffect::runner_mode_can_idle_(uint8_t mode) const {
+  if (mode == FX_MODE_STATIC) {
+    return true;
+  }
+  return this->get_monochromatic_preset_(mode).is_active &&
+         !this->is_animated_monochromatic_hold_(mode);
+}
+
 bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   if (act_ == nullptr) return false;
+  bool saw_runner = false;
   
   if (act_->runner != nullptr) {
+    saw_runner = true;
     uint8_t mode = act_->runner->getMode();
-    if (!this->get_monochromatic_preset_(mode).is_active ||
-        this->is_animated_monochromatic_hold_(mode)) {
+    if (!this->runner_mode_can_idle_(mode)) {
       return false;
     }
   }
   for (auto *r : act_->segment_runners) {
     if (r != nullptr) {
+      saw_runner = true;
       uint8_t mode = r->getMode();
-      if (!this->get_monochromatic_preset_(mode).is_active ||
-          this->is_animated_monochromatic_hold_(mode)) {
+      if (!this->runner_mode_can_idle_(mode)) {
         return false;
       }
     }
   }
-  return true;
+  return saw_runner;
 }
 
 void CFXAddressableLightEffect::log_mono_idle_sleep() {

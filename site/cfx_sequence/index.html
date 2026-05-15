@@ -1,0 +1,2758 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://effelle.github.io/ChimeraFX/cfx_sequence/">
+      
+      
+        <link rel="prev" href="../Effect-Presets/">
+      
+      
+        <link rel="next" href="../Troubleshooting/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/ChimeraFX_mono_white_vector.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>The Sequencer - ChimeraFX</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sequencer-cfx_sequence" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ChimeraFX" class="md-header__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
+      
+  <img src="../assets/ChimeraFX_rgb_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ChimeraFX
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The Sequencer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/effelle/ChimeraFX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ChimeraFX
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ChimeraFX" class="md-nav__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
+      
+  <img src="../assets/ChimeraFX_rgb_logo.png" alt="logo">
+
+    </a>
+    ChimeraFX
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/effelle/ChimeraFX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ChimeraFX
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cfx_light/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ChimeraFX light
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Power-Monitor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Power Monitor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Controls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Effects-Library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Effect-Presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Sequencer
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Sequencer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use It
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-first-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your First Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameter-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#completion-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restore behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-event-traffic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant event traffic
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#triggers-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Triggers in Detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Triggers in Detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_begin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_begin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#starting-and-stopping-sequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting and Stopping Sequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Starting and Stopping Sequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-device-esphome-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-device ESPHome Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Entities
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-direct-api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Direct API Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cfx_set-quick-parameter-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfx_set - Quick Parameter Injection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cfx_run-spawn-a-runtime-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfx_run - Spawn a Runtime Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home Assistant Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#event-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-device-vs-ha-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-device vs HA precision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#effect-types-and-cfx_reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effect types and cfx_reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop All
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cascade-with-staggered-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cascade with Staggered Stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gas-discharge-under-the-curtains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gas Discharge under the Curtains
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../The-Story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Story
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://www.buymeacoffee.com/effelle" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buy Me a Coffee!
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use It
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-first-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your First Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameter-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#completion-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restore behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-event-traffic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant event traffic
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#triggers-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Triggers in Detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Triggers in Detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_begin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_begin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on_cfx_complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_cfx_complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#starting-and-stopping-sequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting and Stopping Sequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Starting and Stopping Sequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-device-esphome-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-device ESPHome Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Entities
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-direct-api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Direct API Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cfx_set-quick-parameter-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfx_set - Quick Parameter Injection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cfx_run-spawn-a-runtime-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfx_run - Spawn a Runtime Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home Assistant Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#event-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-device-vs-ha-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-device vs HA precision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#effect-types-and-cfx_reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effect types and cfx_reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop All
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cascade-with-staggered-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cascade with Staggered Stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gas-discharge-under-the-curtains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gas Discharge under the Curtains
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="sequencer-cfx_sequence">Sequencer (<code>cfx_sequence</code>)</h1>
+<p>A <strong>sequence</strong> is ChimeraFX's optional on-device orchestration layer. It starts one effect on one or more <code>cfx_light</code> entities, applies temporary settings, and can run actions at exact moments in the animation.</p>
+<p>You do not need sequences for normal lighting. Effects run perfectly well from the Home Assistant light effect dropdown. Use a sequence when timing matters: starting a second strip halfway through a sweep, stopping several strips in order, reacting to an animation milestone, or building a local show that should keep working without a Home Assistant round-trip.</p>
+<blockquote>
+<p>Already know the basics? Jump to the <a href="#configuration-reference">configuration reference</a>, <a href="#starting-and-stopping-sequences">starting and stopping</a>, or <a href="#examples">examples</a>.</p>
+</blockquote>
+<hr />
+<h2 id="when-to-use-it">When to Use It</h2>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pick an effect manually in Home Assistant</td>
+<td>Normal <code>cfx_light</code> effect dropdown</td>
+</tr>
+<tr>
+<td>Save hardcoded defaults for one effect</td>
+<td><a href="../Effect-Presets/">Effect Presets</a></td>
+</tr>
+<tr>
+<td>Start one named lighting routine from a button, sensor, HA dropdown, or HA service</td>
+<td><code>cfx_sequence</code></td>
+</tr>
+<tr>
+<td>Change another light at a sequence milestone without declaring a new sequence</td>
+<td><code>cfx_set</code></td>
+</tr>
+<tr>
+<td>Spawn a temporary child run with its own lifetime and triggers</td>
+<td><code>cfx_run</code></td>
+</tr>
+</tbody>
+</table>
+<p>The short version: use <code>cfx_sequence</code> when an effect becomes a small routine.</p>
+<hr />
+<h2 id="the-lifecycle">The Lifecycle</h2>
+<p>Every sequence goes through five stages. You can ignore these for a simple start/stop sequence, but they are the key to synchronized multi-strip effects.</p>
+<p><img alt="ChimeraFX Lifecycle" src="../assets/cfx_lifecycle.svg" /></p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>YAML trigger &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>When it fires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Begin</strong></td>
+<td><code>on_cfx_begin</code></td>
+<td>Immediately when <code>cfx_sequence.start</code> is called. Nothing is visible yet.</td>
+</tr>
+<tr>
+<td><strong>Start</strong></td>
+<td><code>on_cfx_start</code></td>
+<td>The effect starts rendering. If there is an intro, this fires after the intro.</td>
+</tr>
+<tr>
+<td><strong>Reach</strong></td>
+<td><code>on_cfx_reach</code></td>
+<td>The leading pixel crosses a threshold you define, such as <code>50%</code>.</td>
+</tr>
+<tr>
+<td><strong>Stop</strong></td>
+<td><code>on_cfx_stop</code></td>
+<td>The outro begins, usually from <code>cfx_sequence.stop</code> or <code>light.turn_off</code>.</td>
+</tr>
+<tr>
+<td><strong>Complete</strong></td>
+<td><code>on_cfx_complete</code></td>
+<td>The outro finishes and the strip is fully dark.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Stop vs complete:</strong> <code>on_cfx_stop</code> fires when the fade-out starts. <code>on_cfx_complete</code> fires when the strip is actually dark. Use <code>on_cfx_stop</code> to stagger other strips; use <code>on_cfx_complete</code> when you need a final done signal.</p>
+</blockquote>
+<hr />
+<h2 id="your-first-sequence">Your First Sequence</h2>
+<p>A sequence has two parts:</p>
+<ol>
+<li>A definition under <code>cfx_sequence:</code>.</li>
+<li>An action that starts it.</li>
+</ol>
+<p>The minimum definition needs an <code>id</code>, a <code>name</code>, a target light, and an effect:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Sequence&quot;</span>
+<span class="w">    </span><span class="nt">lights</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_strip</span>
+<span class="w">    </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+</code></pre></div>
+<p>Then start it from a button, automation, or anything that runs ESPHome actions:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">on_press</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+</code></pre></div>
+<p>That's it. The effect runs indefinitely until you call <code>cfx_sequence.stop</code> or turn off the light.</p>
+<hr />
+<h2 id="configuration-reference">Configuration Reference</h2>
+<h3 id="core-options">Core options</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Yes</td>
+<td>ID</td>
+<td>Unique identifier. Used by <code>cfx_sequence.start</code> / <code>.stop</code>.</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>Yes</td>
+<td>string</td>
+<td>Display name shown in the Home Assistant dropdown.</td>
+</tr>
+<tr>
+<td><code>lights</code></td>
+<td>Yes</td>
+<td>list</td>
+<td>One or more target light IDs (must be registered under <code>cfx_light</code>).</td>
+</tr>
+<tr>
+<td><code>effect</code></td>
+<td>Yes</td>
+<td>string</td>
+<td>CFX effect name.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="parameter-overrides">Parameter overrides</h3>
+<p>These values apply only while the sequence is running. When a sequence, <code>cfx_set</code>,
+or <code>cfx_run</code> sends one of these overrides, ChimeraFX reflects the value into the
+matching Home Assistant control so the UI shows what is actually driving the
+effect. During that run, the parameter is owned by the sequence/runtime action:
+manual changes to the same control may be ignored until the effect is restarted
+or the sequence ownership is cleared.</p>
+<table>
+<thead>
+<tr>
+<th>Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>set_speed</code></td>
+<td>0-255</td>
+<td>Runtime-only Speed override.</td>
+</tr>
+<tr>
+<td><code>set_intensity</code></td>
+<td>0-255</td>
+<td>Runtime-only Intensity override.</td>
+</tr>
+<tr>
+<td><code>set_palette</code></td>
+<td>0-255</td>
+<td>Runtime-only Palette override by index. Monochromatic effects ignore palette.</td>
+</tr>
+<tr>
+<td><code>set_brightness</code></td>
+<td>0-100%</td>
+<td>Overrides the light brightness.</td>
+</tr>
+<tr>
+<td><code>set_color</code></td>
+<td><code>[r,g,b]</code> or <code>[r,g,b,w]</code></td>
+<td>Overrides the effect color using <code>0-100</code> channel percentages.</td>
+</tr>
+<tr>
+<td><code>set_mirror</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Overrides the Mirror switch.</td>
+</tr>
+<tr>
+<td><code>set_autotune</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Overrides the Autotune switch.</td>
+</tr>
+<tr>
+<td><code>ha_events</code></td>
+<td><code>auto</code> / <code>true</code> / <code>false</code></td>
+<td>Controls Home Assistant event emission for this sequence. <code>auto</code> is the default and behaves like <code>true</code> on root <code>cfx_sequence</code> entries.</td>
+</tr>
+<tr>
+<td><code>set_force_white</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups.</td>
+</tr>
+<tr>
+<td><code>set_intro</code></td>
+<td>0-27</td>
+<td>Override the global intro mode for this segment on eligible effects. Architectural effects, <code>Energy</code>, and <code>Chaos Theory</code> keep their authored intros.</td>
+</tr>
+<tr>
+<td><code>set_outro</code></td>
+<td>0-27</td>
+<td>Force a global Outro Animation for eligible effects. Architectural effects, <code>Energy</code>, and <code>Chaos Theory</code> keep their authored outros.</td>
+</tr>
+<tr>
+<td><code>set_inout_dur</code></td>
+<td>float <code>&gt;= 0.0</code></td>
+<td>Overrides intro/outro duration in seconds.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Speed vs duration:</strong> <code>set_speed</code> only controls an effect's 0-255 speed
+parameter when that effect uses one. For static monochromatic architectural
+holds, the visible fade/reveal timing is driven by <code>set_inout_dur</code> instead.
+Animated monochromatic/architectural effects, such as Eclipse or
+Collider-style effects, can still use speed and intensity normally.</p>
+</blockquote>
+<p>Parameters stay locked until the next <code>light.turn_on</code> or <code>cfx_sequence.start</code>
+resets them. Omitting a parameter leaves that control live; for example, if a
+sequence does not include <code>set_mirror</code>, the Mirror switch remains manually
+controllable.</p>
+<h3 id="completion-control">Completion control</h3>
+<table>
+<thead>
+<tr>
+<th>Key &nbsp; &nbsp; &nbsp;  &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>iterations</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>Stop after N complete animation cycles. <code>0</code> = loop forever.</td>
+</tr>
+<tr>
+<td><code>duration</code></td>
+<td>time</td>
+<td><code>null</code></td>
+<td>Stop after a fixed wall-clock time (e.g. <code>10s</code>, <code>2min</code>). Takes priority over <code>iterations</code>.</td>
+</tr>
+<tr>
+<td><code>restore</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Restore the strip's pre-sequence light state when the sequence stops. This includes ON/OFF state, effect, brightness, colour, and colour mode snapshot. Runtime-only overrides such as <code>set_speed</code>, <code>set_intensity</code>, <code>set_palette</code>, <code>set_mirror</code>, and <code>set_autotune</code> are temporary control ownership, not permanent user defaults.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="restore-behavior">Restore behavior</h3>
+<p><code>restore</code> is intentionally light-state oriented, not control-state oriented.</p>
+<ul>
+<li>If the light was already ON before the sequence started, <code>restore: true</code> returns it to that previous effect/colour/brightness snapshot.</li>
+<li>If the light was OFF before the sequence started, <code>restore: true</code> returns it to OFF.</li>
+<li>If a child light is adopted mid-sequence via <code>cfx_set</code>, its restore baseline is treated as OFF unless explicitly designed otherwise, so stopping the parent sequence cleans the adopted child up without leaving it running.</li>
+<li><code>restore: false</code> skips the saved-state return and the teardown path forces the sequence lights OFF.</li>
+</ul>
+<h3 id="home-assistant-event-traffic">Home Assistant event traffic</h3>
+<p><code>ha_events</code> only affects Home Assistant event emission. It does not disable on-device YAML triggers such as <code>on_cfx_reach</code> and it exists to keep Home Assistant event traffic useful and scalable.
+In multi-strip sequences, child effects can emit large bursts of <code>cfx_reach</code>,
+<code>cfx_stop</code>, and <code>cfx_complete</code> events when several strips are active at once.
+That traffic is often redundant because the parent sequence is the real
+orchestration unit. For that reason, root <code>cfx_sequence</code> entries default to HA
+events enabled, while child <code>cfx_set</code> and <code>cfx_run</code> actions default to HA
+events disabled. If a child effect is intentionally being used as a public
+event source, set <code>ha_events: true</code> to opt back in.</p>
+<details class="abstract">
+<summary>Full annotated example</summary>
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_id</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Name&quot;</span>
+<span class="w">    </span><span class="nt">lights</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light_id</span>
+<span class="w">    </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Wipe&quot;</span>
+
+<span class="w">    </span><span class="c1"># Parameter overrides</span>
+<span class="w">    </span><span class="nt">set_speed</span><span class="p">:</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">200</span>
+<span class="w">    </span><span class="nt">set_intensity</span><span class="p">:</span><span class="w">   </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">    </span><span class="nt">set_palette</span><span class="p">:</span><span class="w">     </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<span class="w">    </span><span class="nt">set_brightness</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">80%</span>
+<span class="w">    </span><span class="nt">set_color</span><span class="p">:</span><span class="w">       </span><span class="p p-Indicator">[</span><span class="nv">100</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">70</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">31</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">set_mirror</span><span class="p">:</span><span class="w">      </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">set_autotune</span><span class="p">:</span><span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">set_force_white</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">set_intro</span><span class="p">:</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">12</span>
+<span class="w">    </span><span class="nt">set_outro</span><span class="p">:</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">22</span>
+<span class="w">    </span><span class="nt">set_inout_dur</span><span class="p">:</span><span class="w">   </span><span class="l l-Scalar l-Scalar-Plain">1.5</span>
+
+<span class="w">    </span><span class="c1"># Completion</span>
+<span class="w">    </span><span class="nt">iterations</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">    </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">    </span><span class="nt">restore</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="w">    </span><span class="c1"># Triggers</span>
+<span class="w">    </span><span class="nt">on_cfx_start</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">logger.log</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Effect</span><span class="nv"> </span><span class="s">started&quot;</span>
+
+<span class="w">    </span><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10%</span>
+<span class="w">        </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_set</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">another_strip</span>
+<span class="w">              </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+
+<span class="w">    </span><span class="nt">on_cfx_stop</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300ms</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.turn_off</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">another_strip</span>
+
+<span class="w">    </span><span class="nt">on_cfx_complete</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">logger.log</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Outro</span><span class="nv"> </span><span class="s">finished,</span><span class="nv"> </span><span class="s">strip</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">dark&quot;</span>
+</code></pre></div>
+</details>
+<hr />
+<h2 id="triggers-in-detail">Triggers in Detail</h2>
+<h3 id="on_cfx_begin"><code>on_cfx_begin</code></h3>
+<p>Fires the moment <code>start()</code> is invoked — before any intro animation or rendering. Good for pre-arming other hardware.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">On-Device YAML</label><label for="__tabbed_1_2">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Begin&quot;</span>
+<span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_begin</span>
+<span class="w">      </span><span class="nt">lights</span><span class="p">:</span><span class="w"> </span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">      </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sonar</span><span class="nv"> </span><span class="s">Reveal&quot;</span>
+<span class="w">      </span><span class="nt">on_cfx_begin</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.toggle</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws_strip</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CFX_Begin</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_rgb_light</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">effect</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sonar Reveal</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_begin:rgb_light</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.toggle</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_ws_strip</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="on_cfx_start"><code>on_cfx_start</code></h3>
+<p>Fires when the effect is actually rendering its first frame. If the effect has an intro animation, this fires <em>after</em> the intro completes.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">On-Device YAML</label><label for="__tabbed_2_2">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Start&quot;</span>
+<span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_start</span>
+<span class="w">      </span><span class="nt">lights</span><span class="p">:</span><span class="w"> </span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">      </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sonar</span><span class="nv"> </span><span class="s">Reveal&quot;</span>
+<span class="w">      </span><span class="nt">on_cfx_start</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.toggle</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws_strip</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CFX_Start</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_rgb_light</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">effect</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collider</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_start:rgb_light</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.toggle</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_ws_strip</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="on_cfx_reach"><code>on_cfx_reach</code></h3>
+<p>Fires when the animation's leading pixel crosses a percentage threshold. You can define as many thresholds as you need.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">On-Device YAML</label><label for="__tabbed_3_2">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Reach&quot;</span>
+<span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_reach</span>
+<span class="w">      </span><span class="nt">lights</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">      </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">      </span><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25%</span>
+<span class="w">          </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">logger.log</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Quarter</span><span class="nv"> </span><span class="s">way</span><span class="nv"> </span><span class="s">through&quot;</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50%</span>
+<span class="w">          </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">logger.log</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Halfway&quot;</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ChimeraFX — Logger</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_start:rgb_light</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_reach:rgb_light:25</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">persistent_notification.create</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">message</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Quarter way through</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_reach:rgb_light:50</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">persistent_notification.create</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">message</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Halfway</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<blockquote>
+<p><strong>Looping effects</strong> - For continuous effects like Wipe or Chase, <code>on_cfx_reach</code> fires on <em>every</em> cycle. If you need a one-shot reaction, set <code>iterations: 1</code> or use a flag in your HA automation.</p>
+<p><strong>Ambient effects</strong> - Effects without a sweep direction (Aurora, Fire, Ocean, Plasma) never fire <code>on_cfx_reach</code>. See <a href="#effect-types-and-cfx_reach">Effect types</a> below.</p>
+</blockquote>
+<h3 id="on_cfx_stop"><code>on_cfx_stop</code></h3>
+<p>Fires the instant the outro animation begins. This is the best trigger to coordinate multiple strips - start their outros here so everything fades in sync (or staggered with a <code>delay</code>).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">On-Device YAML</label><label for="__tabbed_4_2">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Stop&quot;</span>
+<span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_stop</span>
+<span class="w">      </span><span class="nt">lights</span><span class="p">:</span><span class="w"> </span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">      </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Venetian&quot;</span>
+<span class="w">      </span><span class="nt">on_cfx_stop</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.toggle</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws_strip</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CFX_Stop</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_rgb_light</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">effect</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Venetian</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_stop:rgb_light</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.toggle</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_ws_strip</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="on_cfx_complete"><code>on_cfx_complete</code></h3>
+<p>Fires when the outro finishes and the strip is completely dark.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">On-Device YAML</label><label for="__tabbed_5_2">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sequence</span><span class="nv"> </span><span class="s">Complete&quot;</span>
+<span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_complete</span>
+<span class="w">      </span><span class="nt">lights</span><span class="p">:</span><span class="w"> </span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">      </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Curtain</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">      </span><span class="nt">on_cfx_complete</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.toggle</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws_strip</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CFX_Complete</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_rgb_light</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">effect</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Curtain Sweep</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.esp32_test_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_complete:rgb_light</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.toggle</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.esp32_test_ws_strip</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<blockquote>
+<p><strong>Heads up</strong> - <code>on_cfx_complete</code> only fires when a real outro runs: when <code>duration:</code> expires or a monochromatic effect finishes fading. It does <strong>not</strong> fire on a plain <code>light.turn_off</code>. If your automation needs a "done" signal for all cases, listen to the <code>light.turn_off</code> entity state in HA instead.</p>
+</blockquote>
+<hr />
+<h2 id="starting-and-stopping-sequences">Starting and Stopping Sequences</h2>
+<p><code>cfx_sequence.start</code> and <code>cfx_sequence.stop</code> exist because sequences are meant to
+be orchestration primitives, not just effect presets.</p>
+<p>They give you a clean way to:</p>
+<ul>
+<li>start a named sequence from on-device YAML with no HA round-trip,</li>
+<li>stop that sequence while preserving normal outro / restore semantics,</li>
+<li>stop an entire runtime branch when that sequence has spawned children via
+  <code>cfx_run</code>,</li>
+<li>bind sequence control to real hardware and local automation sources such as
+  buttons, switches, PIR sensors, mmWave presence sensors, intervals, scripts,
+  template logic, and other ESPHome triggers,</li>
+<li>and still expose a simple control surface to Home Assistant for dashboards and
+  automations.</li>
+</ul>
+<p>There are three practical ways to control sequences:</p>
+<ol>
+<li>On-device ESPHome actions, for low-latency orchestration and full sequence semantics.</li>
+<li>Home Assistant entities, for manual control and simple automations.</li>
+<li>Home Assistant API calls, for direct scripted control from HA.</li>
+</ol>
+<h3 id="on-device-esphome-actions">On-device ESPHome Actions</h3>
+<p>This is the native sequence control path. Use it when your logic lives in the
+ESPHome node and you want intros, outros, restore, and trigger timing to remain
+fully local.</p>
+<p>This is also what makes sequences especially powerful: <code>cfx_sequence.start</code> and
+<code>cfx_sequence.stop</code> are ordinary ESPHome actions, so they can be attached to
+almost any trigger source the node supports.</p>
+<p>In practice, that means a sequence can be started or stopped by:</p>
+<ul>
+<li>a hardware button or touch input,</li>
+<li>a template switch,</li>
+<li>a PIR or presence sensor,</li>
+<li>a reed switch, door contact, or limit switch,</li>
+<li>a timer, interval, sunrise/sunset rule, or script,</li>
+<li>or a Home Assistant automation when you do want remote orchestration.</li>
+</ul>
+<p>So while Home Assistant integration is important, the sequence engine is not
+dependent on Home Assistant. It can operate as a fully local choreography layer
+inside the ESP node itself.</p>
+<p>Starting uses the sequence <code>id</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+</code></pre></div>
+<p>Stopping also uses the sequence <code>id</code> and supports two modes:</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.stop</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+</code></pre></div>
+<p>This is shorthand for:</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.stop</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">self</span>
+</code></pre></div>
+<p><code>mode: self</code> stops only the addressed sequence.</p>
+<p>If that sequence spawned runtime children via <code>cfx_run</code>, you can stop the whole
+runtime branch gracefully:</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.stop</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tree</span>
+</code></pre></div>
+<p><code>mode: tree</code> walks the <code>cfx_run</code> ancestry created by that sequence, stopping
+descendants first and then the addressed parent. This is a <strong>graceful</strong>
+sequence-aware stop, not a panic kill:</p>
+<ul>
+<li>Each sequence in the tree keeps its own outro behaviour.</li>
+<li>Each sequence in the tree keeps its own <code>restore</code> handling.</li>
+<li>Tree membership is based on runtime parent/child spawn ancestry, not on which
+  lights happen to overlap.</li>
+</ul>
+<p>This makes <code>mode: tree</code> useful for cascade-style orchestrations where one
+sequence launches other sequences internally and you want one stop command to
+unwind the whole branch cleanly.</p>
+<p>Use <code>mode: self</code> for normal targeted stops.
+Use <code>mode: tree</code> when the addressed sequence has launched child runs that should
+be unwound with it.</p>
+<p>Simple hardware-bound examples:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">binary_sensor</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO0</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Start</span><span class="nv"> </span><span class="s">Button&quot;</span>
+<span class="w">    </span><span class="nt">on_press</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO4</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Stop</span><span class="nv"> </span><span class="s">Button&quot;</span>
+<span class="w">    </span><span class="nt">on_press</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.stop</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_sequence</span>
+<span class="w">            </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">self</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpio</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO12</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Hall</span><span class="nv"> </span><span class="s">PIR&quot;</span>
+<span class="w">    </span><span class="nt">device_class</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">motion</span>
+<span class="w">    </span><span class="nt">on_press</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hallway_alert</span>
+<span class="w">    </span><span class="nt">on_release</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_sequence.stop</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hallway_alert</span>
+<span class="w">            </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tree</span>
+</code></pre></div>
+<h3 id="home-assistant-entities">Home Assistant Entities</h3>
+<p>When at least one <code>cfx_sequence</code> is defined, ChimeraFX creates two HA-facing
+control entities automatically:</p>
+<ul>
+<li><strong>Internal Sequences</strong>: a select dropdown that starts a sequence when you pick
+  its name.</li>
+<li><strong>Stop All</strong>: a panic-stop button that force-stops all known sequences and
+  forces their lights off.</li>
+</ul>
+<p>The dropdown is the friendliest way to operate sequences from dashboards:</p>
+<ul>
+<li>choose a sequence name to start it,</li>
+<li>choose <code>None</code> to stop the currently selected sequence.</li>
+</ul>
+<p>This path is intentionally simple and human-friendly. It is a good fit for UI
+control, quick testing, and HA automations that just need “start this” or
+“stop the active one”.</p>
+<h3 id="home-assistant-direct-api-calls">Home Assistant Direct API Calls</h3>
+<p>If the node has <code>api:</code> enabled, the component also registers two custom ESPHome
+API services:</p>
+<ul>
+<li><code>cfx_sequence_start</code></li>
+<li><code>cfx_sequence_stop</code></li>
+</ul>
+<p>These are meant for Home Assistant scripts and automations that want to call a
+sequence directly instead of driving the dropdown.</p>
+<p>Important differences from the on-device actions:</p>
+<ul>
+<li>The API calls match by sequence <code>name</code>, not by sequence <code>id</code>.</li>
+<li><code>cfx_sequence_start</code> starts the first sequence whose <strong>name</strong> matches the
+  provided string.</li>
+<li><code>cfx_sequence_stop</code> currently performs a normal sequence stop equivalent to
+  <code>mode: self</code>.</li>
+<li><code>mode: tree</code> is currently available in the on-device ESPHome action path, not
+  in the HA API service path.</li>
+</ul>
+<p>In Home Assistant, the exact service/action name exposed by ESPHome depends on
+your device slug. The easiest way to find it is to open <strong>Developer Tools -&gt;
+Actions</strong> and search for:</p>
+<ul>
+<li><code>cfx_sequence_start</code></li>
+<li><code>cfx_sequence_stop</code></li>
+</ul>
+<p>A typical call looks like this:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esphome.your_device_cfx_sequence_start</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sequence</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Sequence&quot;</span>
+</code></pre></div>
+<p>And the corresponding stop call:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esphome.your_device_cfx_sequence_stop</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sequence</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;My</span><span class="nv"> </span><span class="s">Sequence&quot;</span>
+</code></pre></div>
+<p>Use the direct API path when you want HA to target a sequence by name without
+manipulating the dropdown state first.</p>
+<hr />
+<h2 id="cfx_set-quick-parameter-injection"><code>cfx_set</code> - Quick Parameter Injection</h2>
+<p><code>cfx_set</code> applies temporary parameters to a light without declaring a full sequence. It is useful inside <code>on_cfx_reach</code> when one strip should cue another strip at a specific point.</p>
+<p>Values supplied by <code>cfx_set</code> are reflected in the target light's controls and
+own those controls while the injected effect is active. To keep a control
+manually adjustable, omit that <code>set_*</code> option from the action.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25%</span>
+<span class="w">    </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_set</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">          </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Wipe&quot;</span>
+<span class="w">          </span><span class="nt">set_speed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">255</span>
+<span class="w">          </span><span class="nt">set_intensity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">          </span><span class="nt">set_palette</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Type &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>light ID</td>
+<td>Target light (required).</td>
+</tr>
+<tr>
+<td><code>effect</code></td>
+<td>string</td>
+<td>Effect name. If set, calls light.turn_on with this effect. Omit to only change parameters without touching the current effect.</td>
+</tr>
+<tr>
+<td><code>set_speed</code></td>
+<td>0-255</td>
+<td>Runtime-only Speed override.</td>
+</tr>
+<tr>
+<td><code>set_intensity</code></td>
+<td>0-255</td>
+<td>Runtime-only Intensity override.</td>
+</tr>
+<tr>
+<td><code>set_palette</code></td>
+<td>0-255</td>
+<td>Runtime-only Palette override by index. Monochromatic effects ignore palette.</td>
+</tr>
+<tr>
+<td><code>set_brightness</code></td>
+<td>0-100%</td>
+<td>Overrides the light brightness.</td>
+</tr>
+<tr>
+<td><code>set_color</code></td>
+<td><code>[r,g,b]</code> or <code>[r,g,b,w]</code></td>
+<td>Overrides the effect color using <code>0-100</code> channel percentages.</td>
+</tr>
+<tr>
+<td><code>set_mirror</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Overrides the Mirror switch.</td>
+</tr>
+<tr>
+<td><code>set_autotune</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Overrides the Autotune switch.</td>
+</tr>
+<tr>
+<td><code>ha_events</code></td>
+<td><code>auto</code> / <code>true</code> / <code>false</code></td>
+<td>Controls Home Assistant event emission for the injected child effect. <code>auto</code> is the default and resolves to <code>false</code> for <code>cfx_set</code>.</td>
+</tr>
+<tr>
+<td><code>set_force_white</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups.</td>
+</tr>
+<tr>
+<td><code>set_intro</code></td>
+<td>0-27</td>
+<td>Override the global intro mode for this segment on eligible effects. Architectural effects, <code>Energy</code>, and <code>Chaos Theory</code> keep their authored intros.</td>
+</tr>
+<tr>
+<td><code>set_outro</code></td>
+<td>0-27</td>
+<td>Force a global Outro Animation for eligible effects. Architectural effects, <code>Energy</code>, and <code>Chaos Theory</code> keep their authored outros.</td>
+</tr>
+<tr>
+<td><code>set_inout_dur</code></td>
+<td>float <code>&gt;= 0.0</code></td>
+<td>Overrides intro/outro duration in seconds.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Speed vs duration:</strong> <code>set_speed</code> is not an alias for <code>set_inout_dur</code>.
+If the target effect is a static monochromatic hold, use <code>set_inout_dur</code> to
+control the authored intro/outro timing.</p>
+</blockquote>
+<hr />
+<h2 id="cfx_run-spawn-a-runtime-sequence"><code>cfx_run</code> - Spawn a Runtime Sequence</h2>
+<p><code>cfx_run</code> starts a self-contained, pool-backed sequence at runtime. It supports the same <code>set_*</code> overrides as <code>cfx_set</code>, plus iterations and lifecycle triggers on the spawned run.</p>
+<p>Like root sequences and <code>cfx_set</code>, supplied <code>set_*</code> values are reflected in the
+target controls and own those controls for the lifetime of the spawned run.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50%</span>
+<span class="w">    </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_run</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">          </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Gas</span><span class="nv"> </span><span class="s">Discharge&quot;</span>
+<span class="w">          </span><span class="nt">set_inout_dur</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">          </span><span class="nt">set_force_white</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">          </span><span class="nt">iterations</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Type &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>light ID</td>
+<td>Target light (required).</td>
+</tr>
+<tr>
+<td><code>effect</code></td>
+<td>string</td>
+<td>Effect name to spawn (required).</td>
+</tr>
+<tr>
+<td><code>set_speed</code></td>
+<td>0-255</td>
+<td>Runtime-only Speed override.</td>
+</tr>
+<tr>
+<td><code>set_intensity</code></td>
+<td>0-255</td>
+<td>Runtime-only Intensity override.</td>
+</tr>
+<tr>
+<td><code>set_palette</code></td>
+<td>0-255</td>
+<td>Runtime-only Palette override by index. Monochromatic effects ignore palette.</td>
+</tr>
+<tr>
+<td><code>set_brightness</code></td>
+<td>0-100%</td>
+<td>Brightness override.</td>
+</tr>
+<tr>
+<td><code>set_color</code></td>
+<td><code>[r,g,b]</code> or <code>[r,g,b,w]</code></td>
+<td>Color override using <code>0-100</code> channel percentages.</td>
+</tr>
+<tr>
+<td><code>set_mirror</code></td>
+<td>true / false</td>
+<td>Mirror override.</td>
+</tr>
+<tr>
+<td><code>set_autotune</code></td>
+<td>true / false</td>
+<td>Autotune override.</td>
+</tr>
+<tr>
+<td><code>ha_events</code></td>
+<td><code>auto</code> / <code>true</code> / <code>false</code></td>
+<td>Controls Home Assistant event emission for the spawned run. <code>auto</code> is the default and resolves to <code>false</code> for <code>cfx_run</code>.</td>
+</tr>
+<tr>
+<td><code>set_force_white</code></td>
+<td>true / false</td>
+<td>Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups.</td>
+</tr>
+<tr>
+<td><code>set_intro</code></td>
+<td>0-27</td>
+<td>Intro override.</td>
+</tr>
+<tr>
+<td><code>set_outro</code></td>
+<td>0-27</td>
+<td>Outro override.</td>
+</tr>
+<tr>
+<td><code>set_inout_dur</code></td>
+<td>float &gt;= 0.0</td>
+<td>Intro/outro duration override in seconds.</td>
+</tr>
+<tr>
+<td><code>iterations</code></td>
+<td>integer</td>
+<td>Number of cycles to run. Default is 1.</td>
+</tr>
+<tr>
+<td><code>on_cfx_start</code></td>
+<td>automation</td>
+<td>Fires when the spawned effect starts rendering.</td>
+</tr>
+<tr>
+<td><code>on_cfx_stop</code></td>
+<td>automation</td>
+<td>Fires when the spawned outro begins.</td>
+</tr>
+<tr>
+<td><code>on_cfx_complete</code></td>
+<td>automation</td>
+<td>Fires when the spawned outro finishes.</td>
+</tr>
+<tr>
+<td><code>on_cfx_reach</code></td>
+<td>automation</td>
+<td>Positional triggers for the spawned run.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Speed vs duration:</strong> <code>set_speed</code> remains the effect speed parameter. Use
+<code>set_inout_dur</code> for intro/outro duration, especially on static
+monochromatic architectural effects where speed may not visibly change the
+hold.</p>
+</blockquote>
+<hr />
+<h2 id="home-assistant-integration">Home Assistant Integration</h2>
+<p>When any <code>cfx_sequence</code> is defined, ESPHome automatically creates a <strong>CFX Events</strong> entity. It fires named events into HA that your automations can listen to.</p>
+<h3 id="event-format">Event format</h3>
+<p>Events use the strip's slug as a tag. A light named <code>RGB Light</code> becomes the tag <code>rgb_light</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>When it fires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cfx_begin:&lt;tag&gt;</code></td>
+<td>The instant a sequence or a single effect is called.</td>
+</tr>
+<tr>
+<td><code>cfx_start:&lt;tag&gt;</code></td>
+<td>Effect begins rendering.</td>
+</tr>
+<tr>
+<td><code>cfx_reach:&lt;tag&gt;:&lt;pct&gt;</code></td>
+<td>Milestone crossed - fires at <strong>fixed 10% steps</strong> (10, 20, 30 ... 100).</td>
+</tr>
+<tr>
+<td><code>cfx_stop:&lt;tag&gt;</code></td>
+<td>Outro begins.</td>
+</tr>
+<tr>
+<td><code>cfx_complete:&lt;tag&gt;</code></td>
+<td>Duration expired or monochromatic outro finished.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-device-vs-ha-precision">On-device vs HA precision</h3>
+<p>Triggers written directly in ESPHome YAML (<code>on_cfx_reach</code>) are evaluated every frame and fire at <em>any</em> threshold you define, including sub-10% ones like <code>33%</code>.</p>
+<p>HA events are intentionally quantized to 10% steps to avoid flooding the event queue at high animation speeds. If you need sub-10% precision, use on-device triggers.</p>
+<blockquote>
+<p><strong>Don't set <code>batch_delay: 0ms</code></strong> in your <code>api:</code> block. It will cause <code>cfx_reach</code> events to drop at high effect speeds, regardless of <code>max_send_queue</code>. The default <code>batch_delay: 200ms</code> is the safe value.</p>
+</blockquote>
+<h3 id="effect-types-and-cfx_reach">Effect types and <code>cfx_reach</code></h3>
+<p>Not every effect sweeps in a direction, so <code>cfx_reach</code> doesn't behave the same for all of them:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Examples</th>
+<th><code>cfx_reach</code> behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Progressive</strong></td>
+<td>Scanner, Chase, Sunrise, Dissolve...</td>
+<td>Sweeps 0-100% and loops. Milestones fire reliably every cycle.</td>
+</tr>
+<tr>
+<td><strong>Wipe-type</strong></td>
+<td>Wipe, Color Sweep...</td>
+<td>Has a <em>fill</em> pass (0-100%) and an <em>erase</em> pass (0-100%). Milestones fire on <strong>both</strong> passes. Use <code>mode: single</code> in HA if you only want to react to the fill.</td>
+</tr>
+<tr>
+<td><strong>Ambient</strong></td>
+<td>Aurora, Fire, Ocean, Plasma...</td>
+<td>No directional sweep. <code>cfx_reach</code> <strong>never fires</strong> for these effects.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stop-all">Stop All</h3>
+<p>A <strong>Stop All</strong> button entity is created automatically in HA whenever sequences are defined. Useful for dashboards or emergency "kill everything" automations.</p>
+<p>Use <strong>Stop All</strong> for a hard, global panic stop.
+Use <code>cfx_sequence.stop</code> with <code>mode: self</code> or <code>mode: tree</code> when you want a
+targeted, sequence-aware shutdown that still respects normal sequence teardown.
+Use the HA API start/stop calls when Home Assistant needs to target a specific
+sequence directly by name.</p>
+<hr />
+<h2 id="examples">Examples</h2>
+<h3 id="cascade-with-staggered-stop">Cascade with Staggered Stop</h3>
+<p>Three strips start one after another as the primary strip sweeps forward. When the primary stops, all three outros start in a staggered fade.</p>
+<details class="abstract">
+<summary>Cascade with staggered stop</summary>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:3"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><input id="__tabbed_6_3" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Preview</label><label for="__tabbed_6_2">On-Device YAML</label><label for="__tabbed_6_3">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+    <source src="/ChimeraFX/assets/effects/Cascade.webm" type="video/webm">
+</video></p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq_strip1</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Cascade</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">staggered</span><span class="nv"> </span><span class="s">stop&quot;</span>
+<span class="w">    </span><span class="nt">lights</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rmt2</span>
+<span class="w">    </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">    </span><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10%</span>
+<span class="w">        </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.turn_on</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rmt3</span>
+<span class="w">              </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20%</span>
+<span class="w">        </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.turn_on</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rmt4</span>
+<span class="w">              </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Horizon</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">    </span><span class="nt">on_cfx_stop</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100ms</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.turn_off</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rmt3</span><span class="w">           </span><span class="c1"># starts outro 100ms later</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100ms</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">light.turn_off</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rmt4</span><span class="w">           </span><span class="c1"># starts outro 100ms later</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ChimeraFX — Cascade with staggered stop</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.chimerafx_cfx_events_rmt2</span>
+<span class="w">      </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_reach:rmt2:10</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_on</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Horizon Sweep</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.chimerafx_rmt3</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.chimerafx_cfx_events_rmt2</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_reach:rmt2:20</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_on</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Horizon Sweep</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.chimerafx_rmt4</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.chimerafx_cfx_events_rmt2</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_stop:rgb_light</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_stop:rmt2</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">delay</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">minutes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">milliseconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_off</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.chimerafx_rmt3</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">delay</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">minutes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">milliseconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_off</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.chimerafx_rmt4</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+<span class="w">  </span><span class="nt">max_exceeded</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">silent</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+</details>
+<h3 id="gas-discharge-under-the-curtains">Gas Discharge under the Curtains</h3>
+<p>Two strips start together, and when they reach 90% the third strip starts building a Gas Discharge effect.</p>
+<details class="abstract">
+<summary>Gas Discharge under the Curtains</summary>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:3"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><input id="__tabbed_7_3" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Preview</label><label for="__tabbed_7_2">On-Device YAML</label><label for="__tabbed_7_3">Home Assistant YAML</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+    <source src="/ChimeraFX/assets/effects/Gas_curtains.webm" type="video/webm">
+</video></p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nt">cfx_sequence</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gas_curtain_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Gas</span><span class="nv"> </span><span class="s">Discharge</span><span class="nv"> </span><span class="s">under</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">Curtains&quot;</span>
+<span class="w">    </span><span class="nt">lights</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ws_strip</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ws_strip2</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Curtain</span><span class="nv"> </span><span class="s">Sweep&quot;</span>
+<span class="w">    </span><span class="nt">on_cfx_reach</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">position</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90%</span>
+<span class="w">        </span><span class="nt">then</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cfx_set</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">              </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Gas</span><span class="nv"> </span><span class="s">Discharge&quot;</span><span class="w"> </span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">alias</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ChimeraFX — Gas Discharge under the Curtains</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<span class="w">  </span><span class="nt">triggers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">      </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">button.chimerafx_button</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">  </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_on</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.YOUR_DEVICE_ws_strip</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.YOUR_DEVICE_ws_strip2</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Curtain Sweep</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">wait_for_trigger</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">trigger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">state</span>
+<span class="w">          </span><span class="nt">entity_id</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event.YOUR_DEVICE_cfx_events</span>
+<span class="w">          </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">event_type</span>
+<span class="w">          </span><span class="nt">to</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_reach:ws_strip:90</span>
+<span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.turn_on</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">light.YOUR_DEVICE_rgb_light</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Gas Discharge</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+</details>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/effelle/ChimeraFX" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://www.buymeacoffee.com/effelle" target="_blank" rel="noopener" title="www.buymeacoffee.com" class="md-social__link">
+      <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Buy Me A Coffee</title><path d="M20.216 6.415l-.132-.666c-.119-.598-.388-1.163-1.001-1.379-.197-.069-.42-.098-.57-.241-.152-.143-.196-.366-.231-.572-.065-.378-.125-.756-.192-1.133-.057-.325-.102-.69-.25-.987-.195-.4-.597-.634-.996-.788a5.723 5.723 0 00-.626-.194c-1-.263-2.05-.36-3.077-.416a25.834 25.834 0 00-3.7.062c-.915.083-1.88.184-2.75.5-.318.116-.646.256-.888.501-.297.302-.393.77-.177 1.146.154.267.415.456.692.58.36.162.737.284 1.123.366 1.075.238 2.189.331 3.287.37 1.218.05 2.437.01 3.65-.118.299-.033.598-.073.896-.119.352-.054.578-.513.474-.834-.124-.383-.457-.531-.834-.473-.466.074-.96.108-1.382.146-1.177.08-2.358.082-3.536.006a22.228 22.228 0 01-1.157-.107c-.086-.01-.18-.025-.258-.036-.243-.036-.484-.08-.724-.13-.111-.027-.111-.185 0-.212h.005c.277-.06.557-.108.838-.147h.002c.131-.009.263-.032.394-.048a25.076 25.076 0 013.426-.12c.674.019 1.347.067 2.017.144l.228.031c.267.04.533.088.798.145.392.085.895.113 1.07.542.055.137.08.288.111.431l.319 1.484a.237.237 0 01-.199.284h-.003c-.037.006-.075.01-.112.015a36.704 36.704 0 01-4.743.295 37.059 37.059 0 01-4.699-.304c-.14-.017-.293-.042-.417-.06-.326-.048-.649-.108-.973-.161-.393-.065-.768-.032-1.123.161-.29.16-.527.404-.675.701-.154.316-.199.66-.267 1-.069.34-.176.707-.135 1.056.087.753.613 1.365 1.37 1.502a39.69 39.69 0 0011.343.376.483.483 0 01.535.53l-.071.697-1.018 9.907c-.041.41-.047.832-.125 1.237-.122.637-.553 1.028-1.182 1.171-.577.131-1.165.2-1.756.205-.656.004-1.31-.025-1.966-.022-.699.004-1.556-.06-2.095-.58-.475-.458-.54-1.174-.605-1.793l-.731-7.013-.322-3.094c-.037-.351-.286-.695-.678-.678-.336.015-.718.3-.678.679l.228 2.185.949 9.112c.147 1.344 1.174 2.068 2.446 2.272.742.12 1.503.144 2.257.156.966.016 1.942.053 2.892-.122 1.408-.258 2.465-1.198 2.616-2.657.34-3.332.683-6.663 1.024-9.995l.215-2.087a.484.484 0 01.39-.426c.402-.078.787-.212 1.074-.518.455-.488.546-1.124.385-1.766zm-1.478.772c-.145.137-.363.201-.578.233-2.416.359-4.866.54-7.308.46-1.748-.06-3.477-.254-5.207-.498-.17-.024-.353-.055-.47-.18-.22-.236-.111-.71-.054-.995.052-.26.152-.609.463-.646.484-.057 1.046.148 1.526.22.577.088 1.156.159 1.737.212 2.48.226 5.002.19 7.472-.14.45-.06.899-.13 1.345-.21.399-.072.84-.206 1.08.206.166.281.188.657.162.974a.544.544 0 01-.169.364zm-6.159 3.9c-.862.37-1.84.788-3.109.788a5.884 5.884 0 01-1.569-.217l.877 9.004c.065.78.717 1.38 1.5 1.38 0 0 1.243.065 1.658.065.447 0 1.786-.065 1.786-.065.783 0 1.434-.6 1.499-1.38l.94-9.95a3.996 3.996 0 00-1.322-.238c-.826 0-1.491.284-2.26.613z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../assets/js/lazy_accordion.js"></script>
+      
+    
+  </body>
+</html>

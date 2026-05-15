@@ -102,9 +102,15 @@ or the sequence ownership is cleared.
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for this sequence. `auto` is the default and behaves like `true` on root `cfx_sequence` entries. |
 | `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
-| `set_intro` | 0-27 | Overrides the Intro animation by index. |
-| `set_outro` | 0-27 | Overrides the Outro animation by index. |
+| `set_intro` | 0-27 | Override the global intro mode for this segment on eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros. |
+| `set_outro` | 0-27 | Force a global Outro Animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros. |
 | `set_inout_dur` | float `>= 0.0` | Overrides intro/outro duration in seconds. |
+
+> **Speed vs duration:** `set_speed` only controls an effect's 0-255 speed
+> parameter when that effect uses one. For static monochromatic architectural
+> holds, the visible fade/reveal timing is driven by `set_inout_dur` instead.
+> Animated monochromatic/architectural effects, such as Eclipse or
+> Collider-style effects, can still use speed and intensity normally.
 
 Parameters stay locked until the next `light.turn_on` or `cfx_sequence.start`
 resets them. Omitting a parameter leaves that control live; for example, if a
@@ -667,9 +673,13 @@ on_cfx_reach:
 | `set_autotune` | `true` / `false` | Overrides the Autotune switch. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the injected child effect. `auto` is the default and resolves to `false` for `cfx_set`. |
 | `set_force_white` | `true` / `false` | Forces the white channel on eligible RGBW / WRGB strips and SK6812-based setups. |
-| `set_intro` | 0-27 | Overrides the Intro animation by index. |
-| `set_outro` | 0-27 | Overrides the Outro animation by index. |
+| `set_intro` | 0-27 | Override the global intro mode for this segment on eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros. |
+| `set_outro` | 0-27 | Force a global Outro Animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros. |
 | `set_inout_dur` | float `>= 0.0` | Overrides intro/outro duration in seconds. |
+
+> **Speed vs duration:** `set_speed` is not an alias for `set_inout_dur`.
+> If the target effect is a static monochromatic hold, use `set_inout_dur` to
+> control the authored intro/outro timing.
 
 ---
 
@@ -705,14 +715,19 @@ on_cfx_reach:
 | `set_autotune` | true / false | Autotune override. |
 | `ha_events` | `auto` / `true` / `false` | Controls Home Assistant event emission for the spawned run. `auto` is the default and resolves to `false` for `cfx_run`. |
 | `set_force_white` | true / false | Force white-channel rendering on eligible RGBW / WRGB strips and SK6812-based setups. |
-| `set_intro` | 0-27 | Intro override. |
-| `set_outro` | 0-27 | Outro override. |
-| `set_inout_dur` | float >= 0.0 | Intro/outro duration override in seconds. |
+| `set_intro` | 0-27 | Override the global intro mode for this segment on eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros. |
+| `set_outro` | 0-27 | Force a global Outro Animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros. |
+| `set_inout_dur` | float `>= 0.0` | Intro/outro duration override in seconds. |
 | `iterations` | integer | Number of cycles to run. Default is 1. |
 | `on_cfx_start` | automation | Fires when the spawned effect starts rendering. |
 | `on_cfx_stop` | automation | Fires when the spawned outro begins. |
 | `on_cfx_complete` | automation | Fires when the spawned outro finishes. |
 | `on_cfx_reach` | automation | Positional triggers for the spawned run. |
+
+> **Speed vs duration:** `set_speed` remains the effect speed parameter. Use
+> `set_inout_dur` for intro/outro duration, especially on static
+> monochromatic architectural effects where speed may not visibly change the
+> hold.
 
 ---
 ## Home Assistant Integration

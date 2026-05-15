@@ -113,6 +113,10 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
   // Default to 2.8 (WLED standard) so effects look correct out of the box
   _gamma = 2.8f;
   setGamma(_gamma);
+
+  for (auto &entry : _currentRandomPaletteBuffer) {
+    entry = 0;
+  }
 }
 
 // === Gamma Correction Helpers ===
@@ -758,14 +762,21 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
 }
 
 void CFXRunner::generateRandomPalette() {
-  static uint8_t palette_nonce = 0;
-  palette_nonce += 73;
-  uint8_t entropy = (uint8_t)cfx_millis() ^ (uint8_t)(cfx_micros() >> 4) ^
-                    palette_nonce;
-  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%d", entropy);
+  random_palette_nonce_ += 0x9E3779B9u;
+  uint32_t entropy =
+      random_palette_nonce_ ^ cfx_millis() ^ (cfx_micros() << 7) ^
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(target_light)) ^
+      (static_cast<uint32_t>(_segment.start) << 16) ^
+      static_cast<uint32_t>(_segment.stop) ^
+      (static_cast<uint32_t>(_mode) << 24);
+  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
 
   for (int i = 0; i < 16; i++) {
-    uint8_t h = (uint8_t)(cfx::hw_random8() ^ entropy ^
+    entropy ^= entropy << 13;
+    entropy ^= entropy >> 17;
+    entropy ^= entropy << 5;
+    uint8_t h = (uint8_t)(cfx::hw_random8() ^ (entropy >> 8) ^
                           (uint8_t)cfx::hw_random16());
     uint8_t s = (uint8_t)(184u + cfx::hw_random8(72));
     uint8_t v = (uint8_t)(216u + cfx::hw_random8(40));
