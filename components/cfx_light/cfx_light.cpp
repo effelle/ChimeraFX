@@ -78,6 +78,19 @@ static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 #endif
 }
 
+static size_t rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+  if (mem_block_symbols >= 96u) {
+    return 48u;
+  }
+  if (mem_block_symbols >= 48u) {
+    return 24u;
+  }
+#endif
+  (void) mem_block_symbols;
+  return RMT_SYMBOLS_PER_BYTE;
+}
+
 static uint32_t wait_for_dma_counter_idle_(volatile uint32_t *counter,
                                            uint32_t timeout_us) {
   if (counter == nullptr || *counter == 0) {
@@ -1836,7 +1849,11 @@ void CFXLightOutput::setup_rmt_() {
   channel.gpio_num = gpio_num_t(this->pin_);
   channel.trans_queue_depth = 1;
   channel.flags.invert_out = 0;
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+  channel.intr_priority = 2;
+#else
   channel.intr_priority = 0;
+#endif
 
   // DMA only supported on ESP32-S3 and ESP32-P4
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32P4)
@@ -1943,7 +1960,10 @@ void CFXLightOutput::setup_rmt_() {
   memset(&encoder, 0, sizeof(encoder));
   encoder.callback = encoder_callback;
   encoder.arg = &this->params_;
-  encoder.min_chunk_size = RMT_SYMBOLS_PER_BYTE;
+  encoder.min_chunk_size =
+      rmt_encoder_min_chunk_size(this->rmt_mem_block_symbols_);
+  ESP_LOGI(TAG, "RMT encoder: pin=%u min_chunk_size=%u", this->pin_,
+           (unsigned) encoder.min_chunk_size);
   if (rmt_new_simple_encoder(&encoder, &this->encoder_) != ESP_OK) {
     ESP_LOGE(TAG, "Simple encoder creation failed");
     this->mark_failed();

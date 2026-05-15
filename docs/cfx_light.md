@@ -13,7 +13,7 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 
 If your strip uses standard 800 kbps NRZ timing but is not on the supported list, `WS2812X` is a reliable drop-in. For unlisted SPI strips, try `APA102`.
 
-> **Node limits for V1.41:** A ChimeraFX node must be either **RMT-only** or **SPI-only**. Mixed RMT + SPI `cfx_light` entries are rejected at compile time because sustained SPI transfers can disturb RMT timing on tested ESP32 Classic hardware. ESP32 Classic supports up to **4 RMT outputs** or **2 SPI outputs** per node; ESP32-S3 supports up to **2 RMT outputs** or **2 SPI outputs**; ESP32-C3 supports up to **2 RMT outputs** or **1 SPI output**. Each `cfx_light` can define up to **4** segments.
+> **Node limits for V1.41:** A ChimeraFX node must be either **RMT-only** or **SPI-only**. Mixed RMT + SPI `cfx_light` entries are rejected at compile time because sustained SPI transfers can disturb RMT timing on tested ESP32 Classic hardware. ESP32 Classic supports up to **4 RMT outputs** or **2 SPI outputs** per node; ESP32-S3 supports up to **2 RMT outputs** or **2 SPI outputs**; ESP32-C3 supports up to **2 experimental RMT outputs** or **1 experimental SPI output**. Each `cfx_light` can define up to **4** segments.
 
 ### Tested LED Limits
 
@@ -23,7 +23,8 @@ The limits below are based on physical testing for ChimeraFX V1.41 using the `En
 |:---|:---|:---|:---|:---|
 | ESP32 Classic | RMT / 1-wire NRZ | 360 LEDs per GPIO for near-60 `LedFPS` | 600 LEDs per GPIO for 30+ `LedFPS`, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 `LedFPS` |
 | ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
-| ESP32-C3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
+| ESP32-C3 | RMT / 1-wire NRZ | Experimental, pending retest | Pending retest with C3 RMT tuning | Earlier 1x360, 1x600, and 2x600 Energy tests showed artifacts |
+| ESP32-C3 | SPI / APA102-SK9822 | 1 SPI output, experimental | 2000 virtual LEDs at ~58-60 `LedFPS` with Energy defaults | Long physical strip pending; only short physical strip verified |
 | ESP32-S3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
 
 For 60 LED/m strips, the tested ESP32 Classic RMT guidance translates to about **24 meters total** at near-60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs.

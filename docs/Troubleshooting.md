@@ -63,7 +63,11 @@ For common 60 LED/m strips, this means an ESP32 Classic RMT-only node can drive 
 
 The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue rendering the effect above 30 `RenderFPS`, but the 800 kHz strip still needs about 33 ms or more to transmit one full RGB frame per 1100-LED output. In practice, `LedFPS` is the value that reflects what the strip can visibly receive once transport coalescing is included.
 
-ESP32-C3 and ESP32-S3 limits will be updated after fresh physical tests.
+ESP32-S3 limits will be updated after fresh physical tests.
+
+**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. Physical tests with the `Energy` effect at default values showed visible artifacts on 1x360, 1x600, and 2x600 RMT configurations even when `LedFPS` stayed stable and wiring/level shifting matched the ESP32 Classic test rig. A C3-specific RMT encoder tuning path is under validation; use ESP32 Classic/S3-class hardware when RMT stability matters.
+
+**ESP32-C3 SPI status:** A single C3 SPI output sustained 2000 virtual LEDs at roughly 58-60 `LedFPS` with the `Energy` effect at default values. This validates render load, SPI frame packing, and bus cadence, but it does not fully validate long physical APA102/SK9822 runs because the current physical SPI test strips are short.
 
 ---
 
@@ -73,9 +77,9 @@ ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the b
 
 - **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
 - **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
-- **ESP32-C3**: 96 Total Symbols - Block size 48 symbols 
+- **ESP32-C3**: 96 Total Symbols - Block size 48 symbols, RMT experimental in V1.41 after physical artifact testing
 
-**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 maxes out at 2 TX channels. Declaring 3 or more `cfx_light` strips on a C3 is a **compile-time error**.
+**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 RMT backend is not Classic-class. Keep C3 RMT installs small and validate with `LedFPS` plus visual inspection.
 
 Example configuration:
 
