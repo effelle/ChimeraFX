@@ -552,7 +552,7 @@ struct FrameDiagnostics {
     uint32_t free_heap_kb = free_heap / 1024;
 
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
+             "[%s] FX:%s(%u) | RenderFPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
              "Heap: %ukB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              pending_mode_name_ ? pending_mode_name_ : "?",
@@ -588,7 +588,7 @@ struct FrameDiagnostics {
     }
 
     ESP_LOGI("chimera_fx",
-             "[%s] FPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
+             "[%s] RenderFPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
              fps, avg_frame_ms, jitter_pct, free_heap_kb);
   }
@@ -613,7 +613,7 @@ struct FrameDiagnostics {
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | FPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+             "[%s] FX:%s(%u) | RenderFPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
              mode_name ? mode_name : "Static", mode_id, free_heap_kb);
 

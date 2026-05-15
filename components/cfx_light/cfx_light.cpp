@@ -497,7 +497,7 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
            " guard(avg=%" PRIu32 " max=%" PRIu32
            " hits=%" PRIu64 " timeout=%" PRIu64 ")"
-           " rmt(tx=%" PRIu64 " tx_us(avg=%" PRIu32 " max=%" PRIu32
+           " rmt(tx=%" PRIu64 " launch_us(avg=%" PRIu32 " max=%" PRIu32
            ") coalesce=%" PRIu64 " wait=%" PRIu32
            " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
            "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
