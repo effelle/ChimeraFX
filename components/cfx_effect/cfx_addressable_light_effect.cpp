@@ -8318,7 +8318,7 @@ void CFXAddressableLightEffect::execute_completion() {
 #endif
 }
 
-bool CFXAddressableLightEffect::runner_mode_can_idle_(uint8_t mode) const {
+bool CFXAddressableLightEffect::runner_mode_can_idle_(uint8_t mode) {
   if (mode == FX_MODE_STATIC) {
     return true;
   }
