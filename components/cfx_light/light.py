@@ -376,11 +376,12 @@ MAX_CFX_SEGMENTS = 4
 
 _CFX_LIGHT_LIMITS_DEFAULT = {"total": 4, "spi": 2, "rmt": 4}
 _CFX_LIGHT_LIMITS = {
-    # Classic ESP32 has two SPI hosts and enough RMT symbol memory for
-    # four 128-symbol RMT outputs in the current legacy driver.
-    "ESP32": {"total": 6, "spi": 2, "rmt": 4},
-    # S3/P4 can run two SPI plus two RMT reliably; three or more RMT outputs
-    # showed visible artifacts in bench testing even when diagnostics were clean.
+    # Classic ESP32 can expose two SPI hosts and four RMT outputs electrically,
+    # but bench testing showed mixed transport timing is not release-grade.
+    # ChimeraFX nodes are validated as either RMT-only or SPI-only.
+    "ESP32": {"total": 4, "spi": 2, "rmt": 4},
+    # S3/P4 keep the four-output budget, but still cannot mix SPI and RMT in
+    # one ChimeraFX node for this release.
     "ESP32S3": {"total": 4, "spi": 2, "rmt": 2},
     "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
     # Single-host C-series targets keep the existing two-output budget.
@@ -699,6 +700,12 @@ def _final_validate(config):
         limits["rmt"],
     )
 
+    if spi_count > 0 and rmt_count > 0:
+        raise cv.Invalid(
+            "Mixed SPI and RMT cfx_light entries are not supported in this "
+            "ChimeraFX release. Use either SPI-only or RMT-only per ESP32 node; "
+            "move the other transport to a second controller."
+        )
     if len(cfx_lights) > limits["total"]:
         raise cv.Invalid(
             f"Too many cfx_light entries for {variant}: {len(cfx_lights)} "
