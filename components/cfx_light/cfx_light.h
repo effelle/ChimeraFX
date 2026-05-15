@@ -302,6 +302,7 @@ public:
     this->runtime_debug_enabled_ = enabled;
   }
   bool is_runtime_debug_enabled() const { return this->runtime_debug_enabled_; }
+  float get_led_fps() const { return this->led_fps_valid_ ? this->led_fps_ : -1.0f; }
   void set_default_transition_length(uint32_t ms) {
     this->default_transition_length_ms_ = ms;
   }
@@ -458,6 +459,7 @@ protected:
   uint32_t get_spi_frame_timeout_ms_() const;
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
+  void record_led_frame_();
   void record_perf_diag_flush_(uint32_t write_start_us,
                                bool perf_diag_enabled,
                                bool spi_cadence_diag_enabled,
@@ -600,6 +602,11 @@ protected:
   bool prev_master_state_{false};
   bool prev_master_defaults_state_{false};
   uint8_t tracked_brightness_{0};
+  float led_fps_{0.0f};
+  bool led_fps_valid_{false};
+  uint32_t led_fps_window_start_us_{0};
+  uint32_t led_fps_last_frame_us_{0};
+  uint32_t led_fps_window_intervals_{0};
   bool perf_diag_last_flush_valid_{false};
   uint32_t perf_diag_last_flush_total_us_{0};
   uint32_t perf_diag_last_flush_tx_us_{0};

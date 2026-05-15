@@ -19,11 +19,14 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 **Your mileage may vary.** Visual effects are computationally expensive.
 
 *   **Use a dual-core ESP32.** Single-core devices (C3, S2) can run ChimeraFX, but may stutter under load — see the [hardware compatibility table](Installation.md#prerequisites).
-*   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. As a rule of thumb, target **60–70% of theoretical maximums** of 1101 LEDs at 800kHz to leave breathing room for Wi-Fi and other tasks. To mantain a stable 30 FPS on a dual core you should target ~650 LEDs per GPIO.
-*   **SPI strips (APA102, SK9822) shift the bottleneck to the CPU**, not the wire. More LEDs = more math per frame.
+*   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. For smooth installs on ESP32 Classic, target roughly **512-600 LEDs per GPIO**; higher counts can run, but physical refresh drops as RMT wire time takes over.
+*   **Do not mix RMT and SPI on the same V1.41 node.** Physical testing showed that sustained SPI traffic can disturb RMT timing on ESP32 Classic. Use RMT-only or SPI-only nodes, or split the transports across separate controllers.
+*   **SPI strips (APA102, SK9822) shift the bottleneck to the CPU**, not the wire. The current ESP32 Classic test rig ran 2x2000 SPI LEDs smoothly, but power delivery and inrush still matter.
 *   **Heavy co-residents hurt.** Running ChimeraFX alongside *Bluetooth Proxy* or *Camera* components will likely cause instability.
 
 For detailed FPS targets, RMT limits, RAM budgets, and power planning, see [Performance & Troubleshooting](Troubleshooting.md).
+
+When testing performance, use `LedFPS` as the visible strip-refresh metric. `RenderFPS` shows how fast ChimeraFX calculates frames, which is useful for diagnosis but can be higher than the true LED output rate on long RMT strips.
 
 ---
 ## The "Good Citizen" Philosophy

@@ -289,6 +289,29 @@ void CFXLightOutput::reset_perf_diag_() {
   this->perf_diag_last_rmt_tx_launch_us_ = 0;
 }
 
+void CFXLightOutput::record_led_frame_() {
+  const uint32_t now_us = micros();
+  if (this->led_fps_last_frame_us_ == 0 ||
+      now_us - this->led_fps_last_frame_us_ > 1500000u) {
+    this->led_fps_window_start_us_ = now_us;
+    this->led_fps_last_frame_us_ = now_us;
+    this->led_fps_window_intervals_ = 0;
+    this->led_fps_valid_ = false;
+    return;
+  }
+
+  this->led_fps_last_frame_us_ = now_us;
+  this->led_fps_window_intervals_++;
+  const uint32_t elapsed_us = now_us - this->led_fps_window_start_us_;
+  if (elapsed_us >= 1000000u) {
+    this->led_fps_ =
+        (1000000.0f * this->led_fps_window_intervals_) / elapsed_us;
+    this->led_fps_valid_ = true;
+    this->led_fps_window_start_us_ = now_us;
+    this->led_fps_window_intervals_ = 0;
+  }
+}
+
 void CFXLightOutput::record_perf_diag_flush_(uint32_t write_start_us,
                                              bool perf_diag_enabled,
                                              bool spi_cadence_diag_enabled,
@@ -403,9 +426,12 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
           ? static_cast<uint32_t>(this->perf_diag_total_dma_guard_wait_us_ /
                                   guard_hits)
           : 0;
+  char led_fps_text[16];
+  cfx::FrameDiagnostics::format_led_fps(this->get_led_fps(), led_fps_text,
+                                        sizeof(led_fps_text));
   ESP_LOGI(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
-           " avg_us(dt=%" PRIu32 " show_q=%" PRIu32
+           " LedFPS=%s avg_us(dt=%" PRIu32 " show_q=%" PRIu32
            " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
            " pack=%" PRIu32 " queue=%" PRIu32 ")"
            " max_us(dt=%" PRIu32 " show_q=%" PRIu32
@@ -417,7 +443,7 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
            " defers(refresh=%" PRIu64 " gate=%" PRIu64
            " partial=%" PRIu64 ") spi(wait=%" PRIu32
            " timeout=%" PRIu32 " qerr=%" PRIu32 " in_flight=%d)",
-           light_name, frames, avg_flush_dt_us, avg_show_queue_us,
+           light_name, frames, led_fps_text, avg_flush_dt_us, avg_show_queue_us,
            avg_write_us, avg_flush_us, avg_wait_us, avg_pack_us,
            avg_queue_us, this->perf_diag_max_spi_flush_interval_us_,
            this->perf_diag_max_queue_us_, this->perf_diag_max_write_us_,
@@ -487,10 +513,13 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
           : 1;
   const uint32_t avg_rmt_tx_dt_us = static_cast<uint32_t>(
       this->perf_diag_total_rmt_tx_launch_interval_us_ / rmt_tx_dt_count);
+  char led_fps_text[16];
+  cfx::FrameDiagnostics::format_led_fps(this->get_led_fps(), led_fps_text,
+                                        sizeof(led_fps_text));
 
   ESP_LOGI(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
-           " avg_us(show_q=%" PRIu32 " write=%" PRIu32
+           " LedFPS=%s avg_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
            " max_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
@@ -502,8 +531,8 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
            "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
            " min_free=%" PRIu32 " in_flight=%d)",
-           light_name, frames, avg_show_queue_us, avg_write_us, avg_flush_us,
-           avg_wait_us, this->perf_diag_max_queue_us_,
+           light_name, frames, led_fps_text, avg_show_queue_us, avg_write_us,
+           avg_flush_us, avg_wait_us, this->perf_diag_max_queue_us_,
            this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
            this->perf_diag_max_wait_us_, avg_show_req_dt_us,
            this->perf_diag_max_show_request_interval_us_,
@@ -1397,7 +1426,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
 
   for (auto *runner : this->segment_coord_runners_) {
     if (runner != nullptr) {
-      runner->diagnostics.flush_log();
+      runner->diagnostics.flush_log(this->get_led_fps());
     }
   }
   this->seg_coord_epochs_++;
@@ -3026,6 +3055,7 @@ void CFXLightOutput::flush_rmt_() {
   this->perf_diag_last_rmt_tx_launch_us_ = rmt_launch_us;
   this->perf_diag_total_rmt_tx_launches_++;
   this->perf_diag_flush_count_++;
+  this->record_led_frame_();
   if (this->power_manager_ != nullptr) {
     this->power_manager_->record_output_frame(this);
   }
@@ -3185,6 +3215,7 @@ void CFXLightOutput::flush_spi_() {
     // and records actual wire time via the DMA completion timestamp.
     this->spi_tx_in_flight_ = true;
     this->spi_last_flush_ms_ = esphome::millis();
+    this->record_led_frame_();
     if (this->power_manager_ != nullptr) {
       this->power_manager_->record_output_frame(this);
     }

@@ -6,13 +6,14 @@
 
 Example:
 ```c
-[16:13:17.440][I][chimera_fx:550]:[WS_Strip] FX:Interference(180) | FPS:58.6 | Time: 17.1ms | Jitter: 0% | Heap: 95kB [ACTV]
+[16:13:17.440][I][chimera_fx:550]:[WS_Strip] FX:Interference(180) | RenderFPS:58.6 | LedFPS:57.9 | Time: 17.1ms | Jitter: 0% | Heap: 95kB [ACTV]
 ```
 
 ### Understanding the Log Output
 *   **[WS_Strip]**: The strip name in the YAML configuration.
 *   **FX:Interference(180)**: The current effect running on the strip. (In the example, 'Interference' is the effect name and '180' is the ID of the effect.)
-*   **FPS (Frames Per Second)**: Ideally, this stays around **55-60 FPS**. If it consistently drops below 30, your ESP32 is struggling to keep up.
+*   **RenderFPS**: How often ChimeraFX is able to calculate new frames for the effect. Ideally, this stays around **55-60 FPS**. If it consistently drops below 30, your ESP32 is struggling to keep up.
+*   **LedFPS**: The measured strip-output cadence from successful RMT launches or SPI frame queues. This is the number to trust for visible LED refresh. On very long RMT strips, `RenderFPS` can look healthy while `LedFPS` falls below 30 because the 800 kHz wire time becomes the real limit.
 *   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. For example, 17ms corresponds to ~59 FPS.
 *   **Jitter**: The percentage of variation in frame timing. **0-8% is excellent**. Consistently high jitter (>50%) means other components (like Wi-Fi, heavy sensors, or multiple light effects running at the same time) are interrupting the LED driver, which can cause visible stuttering and low frame rates.
 *   **Heap**: The available RAM on your chip. More is better. If you fall under the **Heap Floor**, you should rethink your configuration, especially if you are running the firmware on a Wi-Fi device. More information about the Heap Floor can be found in the [Memory Management & Stability](#memory-management-stability) section.
@@ -39,6 +40,28 @@ Check your `rgb_order` in the YAML.
 *   WS2812B usually uses `GRB`.
 *   WS2811 usually uses `RGB`.
 *   SK9822 usually uses `BGR`.
+
+---
+
+## Performance Limits and Real FPS
+
+ChimeraFX reports render performance and LED output cadence separately. This distinction matters when the strip is very long:
+
+- **RenderFPS** is the effect engine rate. It tells you how quickly the ESP32 can calculate new frames.
+- **LedFPS** is the practical LED refresh rate. It tells you how often complete frames are actually being launched toward the strip.
+- **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
+- **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
+
+For V1.41, physical testing on ESP32 Classic confirmed the following guidance:
+
+| Transport | Recommended smooth limit | Tested stable limit | Stress result |
+|:---|:---|:---|:---|
+| RMT / 1-wire NRZ | ~512-600 LEDs per GPIO | 600 LEDs per GPIO, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh is roughly 16-18 FPS |
+| SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
+
+The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue rendering the effect above 30 `RenderFPS`, but the 800 kHz strip still needs about 33 ms or more to transmit one full RGB frame per 1100-LED output. In practice, `LedFPS` is the value that reflects what the strip can visibly receive once transport coalescing is included.
+
+ESP32-C3 and ESP32-S3 limits will be updated after fresh physical tests.
 
 ---
 
@@ -94,7 +117,19 @@ When the SPI inrush current exceeds your power supply's headroom:
 
 These symptoms are **not software bugs** — they are hardware power-rail collapses.
 
-### Best Practices for Mixed SPI + NRZ Installations
+### Using SPI and RMT Together
+
+For ChimeraFX V1.41, do **not** mix SPI and RMT `cfx_light` entries on the same ESP32 node. Testing on ESP32 Classic showed that sustained SPI bus traffic can disturb RMT timing and create visible artifacts on 1-wire strips. This is a transport-level interaction, not an effect-specific bug.
+
+Use one of these layouts instead:
+
+1. **RMT-only node.** Use this for WS2812X, SK6812, WS2811, and other 1-wire NRZ strips.
+
+2. **SPI-only node.** Use this for APA102 and SK9822 strips.
+
+3. **Separate controllers when both transports are needed.** Put RMT strips on one ESP32 and SPI strips on another ESP32. Keep power injection sized correctly and share ground only where required by the electrical layout.
+
+The SPI power guidance below still applies to SPI-only nodes and to shared PSU planning across separate controllers.
 
 1. **Budget for inrush, not steady-state.** A 60-LED SPI strip at full white draws ~3.6A steady but can spike to 9A+ at latch. Size your PSU for the peak, not the average.
 
@@ -106,7 +141,7 @@ These symptoms are **not software bugs** — they are hardware power-rail collap
 
 5. **Test with all strips at max brightness.** The worst case is all strips set to full white simultaneously. If your setup survives that, it will handle any effect sequence.
 
-6. **Consider the PSU's current rating.** A 10A / 5V PSU (50W) can be insufficient for a setup with multiple NRZ strips + one SPI strip. A 20A / 5V PSU (100W) provides the necessary headroom.
+6. **Consider the PSU's current rating.** A 10A / 5V PSU (50W) can be insufficient for a setup with several large strips. A 20A / 5V PSU (100W) provides the necessary headroom.
 
 ## Memory Management & Stability
 

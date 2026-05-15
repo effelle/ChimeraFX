@@ -88,6 +88,11 @@ resolve_diag_output(CFXAddressableLightEffect *effect) {
   return effect->get_diag_output();
 }
 
+static float resolve_led_fps(CFXAddressableLightEffect *effect) {
+  auto *out = resolve_diag_output(effect);
+  return out != nullptr ? out->get_led_fps() : -1.0f;
+}
+
 static light::ColorMode resolve_effect_call_color_mode(light::LightState *light,
                                                        bool prefer_white) {
   if (prefer_white &&
@@ -2488,7 +2493,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     auto *state = effect->get_light_state();
     auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
         state->get_output());
-    effect->act_->runner->diagnostics.flush_log();
+    effect->act_->runner->diagnostics.flush_log(parent->get_led_fps());
     seg->note_show_request();
     parent->request_segment_flush(state);
   }
@@ -2650,7 +2655,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     this->prepare_steady_virtual_segment_runner_(it);
     CFXScheduler::get().service_runner(act_->runner);
     esphome::App.feed_wdt();
-    act_->runner->diagnostics.flush_log();
+    act_->runner->diagnostics.flush_log(resolve_led_fps(this));
 
     auto *light_output = state_ptr->get_output();
     if (light_output != nullptr) {
@@ -2888,14 +2893,16 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           }
           r->diagnostics.idle_log(
               seg_name, act_->idle_frame_count, act_->idle_period_start_ms,
-              act_->idle_total_frame_us, act_->idle_jitter_count);
+              act_->idle_total_frame_us, act_->idle_jitter_count,
+              resolve_led_fps(this));
           if (r->diagnostics.last_log_time > act_->idle_period_start_ms)
             did_log = true;
         }
       } else if (act_->runner) {
         act_->runner->diagnostics.idle_log(
             idle_name, act_->idle_frame_count, act_->idle_period_start_ms,
-            act_->idle_total_frame_us, act_->idle_jitter_count);
+            act_->idle_total_frame_us, act_->idle_jitter_count,
+            resolve_led_fps(this));
         if (act_->runner->diagnostics.last_log_time >
             act_->idle_period_start_ms)
           did_log = true;
@@ -3469,9 +3476,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   // runners finish but BEFORE DMA fires. Zero cost when debug is off.
   if (!capture_idle_probe) {
     if (act_->runner)
-      act_->runner->diagnostics.flush_log();
+      act_->runner->diagnostics.flush_log(resolve_led_fps(this));
     for (auto *sr : act_->segment_runners)
-      sr->diagnostics.flush_log();
+      sr->diagnostics.flush_log(resolve_led_fps(this));
   }
 
   if (this->is_clean_mono_idle_output()) {
@@ -8434,7 +8441,7 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
     act_->runner->diagnostics.idle_sleep_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
         idle_sample_count, act_->idle_period_start_ms,
-        idle_sample_total_us, act_->idle_jitter_count);
+        idle_sample_total_us, act_->idle_jitter_count, resolve_led_fps(this));
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
@@ -8447,7 +8454,8 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
       runner->diagnostics.idle_sleep_log(
           seg_name, runner->getModeName(), runner->getMode(),
           idle_sample_count, act_->idle_period_start_ms,
-          idle_sample_total_us, act_->idle_jitter_count);
+          idle_sample_total_us, act_->idle_jitter_count,
+          resolve_led_fps(this));
     }
   }
 }

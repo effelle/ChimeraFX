@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <vector>
 
@@ -432,6 +433,17 @@ struct FrameDiagnostics {
       16666; // Default 60fps, updated from update_interval
   static constexpr uint32_t LOG_INTERVAL_MS = 2000; // Log every 2 seconds
 
+  static const char *format_led_fps(float led_fps, char *buf, size_t len) {
+    if (led_fps >= 0.0f) {
+      snprintf(buf, len, "%.1f", led_fps);
+    } else if (len > 0) {
+      buf[0] = '-';
+      if (len > 1)
+        buf[1] = '\0';
+    }
+    return buf;
+  }
+
   void set_target_interval_ms(uint32_t interval_ms) {
     target_frame_us = interval_ms * 1000;
   }
@@ -524,7 +536,7 @@ struct FrameDiagnostics {
 
   // Call from apply() AFTER runners finish — safely outside the DMA window.
   // Performs the expensive heap queries and full log output. (CFX-033)
-  void flush_log() {
+  void flush_log(float led_fps = -1.0f) {
     if (!pending_log_)
       return;
     pending_log_ = false;
@@ -550,13 +562,16 @@ struct FrameDiagnostics {
 
     float avg_frame_ms = (float)avg_frame_us / 1000.0f;
     uint32_t free_heap_kb = free_heap / 1024;
+    char led_fps_text[16];
+    format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
 
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | RenderFPS:%.1f | Time: %.1fms | Jitter: %.0f%% | "
-             "Heap: %ukB [ACTV]",
+             "[%s] FX:%s(%u) | RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | "
+             "Jitter: %.0f%% | Heap: %ukB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              pending_mode_name_ ? pending_mode_name_ : "?",
-             pending_mode_id_, fps, avg_frame_ms, jitter_pct, free_heap_kb);
+             pending_mode_id_, fps, led_fps_text, avg_frame_ms, jitter_pct,
+             free_heap_kb);
 
     reset();
     last_log_time = cfx_millis();
@@ -564,7 +579,7 @@ struct FrameDiagnostics {
 
   void idle_log(const char *effect_name, uint32_t frame_count_in,
                 uint32_t period_start_ms, uint64_t total_frame_us_in,
-                uint32_t jitter_count_in) {
+                uint32_t jitter_count_in, float led_fps = -1.0f) {
     if (!enabled) return;
     uint32_t now_ms = cfx_millis();
     if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
@@ -586,17 +601,19 @@ struct FrameDiagnostics {
       avg_frame_ms = (float)(total_frame_us_in / frame_count_in) / 1000.0f;
       jitter_pct   = (100.0f * jitter_count_in) / (float)frame_count_in;
     }
+    char led_fps_text[16];
+    format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
 
     ESP_LOGI("chimera_fx",
-             "[%s] RenderFPS:%.1f | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
+             "[%s] RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?",
-             fps, avg_frame_ms, jitter_pct, free_heap_kb);
+             fps, led_fps_text, avg_frame_ms, jitter_pct, free_heap_kb);
   }
 
   void idle_sleep_log(const char *effect_name, const char *mode_name,
                       uint8_t mode_id, uint32_t frame_count_in,
                       uint32_t period_start_ms, uint64_t total_frame_us_in,
-                      uint32_t jitter_count_in) {
+                      uint32_t jitter_count_in, float led_fps = -1.0f) {
     (void) frame_count_in;
     (void) period_start_ms;
     (void) total_frame_us_in;
@@ -612,10 +629,12 @@ struct FrameDiagnostics {
     free_heap = esp_get_free_heap_size();
 #endif
     uint32_t free_heap_kb = free_heap / 1024;
+    char led_fps_text[16];
+    format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | RenderFPS:- | Time:- | Jitter:- | Heap: %ukB [IDLE]",
-             effect_name ? effect_name : "?",
-             mode_name ? mode_name : "Static", mode_id, free_heap_kb);
+             "[%s] FX:%s(%u) | RenderFPS:- | LedFPS:%s | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+             effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
+             mode_id, led_fps_text, free_heap_kb);
 
     last_log_time = now_ms;
   }

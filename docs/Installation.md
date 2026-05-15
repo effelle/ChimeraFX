@@ -4,9 +4,9 @@
 
 *   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
 *   **Supported Hardware**:
-      *   **ESP32 (Classic)**: Fully supported and can control up to 4 strips.
-      *   **ESP32-S3**: Fully supported (and recommended for new builds). Up to 4 strips.
-      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside Wi-Fi on a single core can cause stuttering and stability issues. Up to 2 strips.
+      *   **ESP32 (Classic)**: Fully supported. V1.41 supports up to 4 RMT strips or 2 SPI strips per node.
+      *   **ESP32-S3**: Fully supported and recommended for new builds. V1.41 supports up to 2 RMT strips or 2 SPI strips per node.
+      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside Wi-Fi on a single core can cause stuttering and stability issues. V1.41 supports up to 2 RMT strips or 1 SPI strip per node.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
@@ -24,6 +24,8 @@ ChimeraFX does not need special ESPHome knowledge, but addressable LEDs are pick
 *   Plan power injection for longer strips instead of feeding everything from one end.
 
 For flicker, random colors, resets, SPI inrush, and memory pressure, see [Performance & Troubleshooting](Troubleshooting.md).
+
+For ChimeraFX V1.41, keep each node **RMT-only** or **SPI-only**. Mixed RMT + SPI `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs both transports.
 
 ---
 

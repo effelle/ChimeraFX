@@ -13,7 +13,20 @@ The ChimeraFX Light Platform (`cfx_light`) is a custom, high-performance ESPHome
 
 If your strip uses standard 800 kbps NRZ timing but is not on the supported list, `WS2812X` is a reliable drop-in. For unlisted SPI strips, try `APA102`.
 
-> **Limits:** ChimeraFX currently supports up to **4** `cfx_light` instances per node (**2** on ESP32-C3), in any mix of RMT and SPI lights. Each `cfx_light` can define up to **4** segments.
+> **Node limits for V1.41:** A ChimeraFX node must be either **RMT-only** or **SPI-only**. Mixed RMT + SPI `cfx_light` entries are rejected at compile time because sustained SPI transfers can disturb RMT timing on tested ESP32 Classic hardware. ESP32 Classic supports up to **4 RMT outputs** or **2 SPI outputs** per node; ESP32-S3 supports up to **2 RMT outputs** or **2 SPI outputs**; ESP32-C3 supports up to **2 RMT outputs** or **1 SPI output**. Each `cfx_light` can define up to **4** segments.
+
+### Tested LED Limits
+
+The limits below are based on physical testing for ChimeraFX V1.41. Treat the recommended range as the target for smooth real-world installations, the tested range as validated on the current rig, and the stress range as useful engineering data rather than a deployment target. When validating your own rig, use `LedFPS` as the visible strip-refresh metric; `RenderFPS` only measures effect calculation speed.
+
+| Platform | Transport | Recommended smooth limit | Tested stable limit | Stress result |
+|:---|:---|:---|:---|:---|
+| ESP32 Classic | RMT / 1-wire NRZ | ~512-600 LEDs per GPIO | 600 LEDs per GPIO, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 FPS |
+| ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
+| ESP32-C3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
+| ESP32-S3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
+
+For the timing details behind these numbers, see [Performance & Troubleshooting](Troubleshooting.md#performance-limits-and-real-fps).
 
 ## Why use `cfx_light`?
 
