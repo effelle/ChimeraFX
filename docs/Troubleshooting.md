@@ -52,12 +52,14 @@ ChimeraFX reports render performance and LED output cadence separately. This dis
 - **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
 - **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
 
-For V1.41, physical testing on ESP32 Classic confirmed the following guidance:
+For V1.41, physical testing on ESP32 Classic confirmed the following guidance. RMT values were tested with 4 outputs running the `Energy` effect at default values, because it is one of the heavier calculation loads in the library.
 
-| Transport | Recommended smooth limit | Tested stable limit | Stress result |
+| Transport | Near-60 FPS target | 30 FPS target | Stress result |
 |:---|:---|:---|:---|
-| RMT / 1-wire NRZ | ~512-600 LEDs per GPIO | 600 LEDs per GPIO, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh is roughly 16-18 FPS |
+| RMT / 1-wire NRZ | 360 LEDs per GPIO, 4 outputs, near-60 `LedFPS` | 600 LEDs per GPIO, 4 outputs, 30+ `LedFPS` | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh is roughly 16-18 `LedFPS` |
 | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
+
+For common 60 LED/m strips, this means an ESP32 Classic RMT-only node can drive about **24 meters total** at near-60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs. The intermediate 4x400 test also held roughly 57-59 `LedFPS` on the test rig.
 
 The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue rendering the effect above 30 `RenderFPS`, but the 800 kHz strip still needs about 33 ms or more to transmit one full RGB frame per 1100-LED output. In practice, `LedFPS` is the value that reflects what the strip can visibly receive once transport coalescing is included.
 

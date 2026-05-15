@@ -19,7 +19,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 **Your mileage may vary.** Visual effects are computationally expensive.
 
 *   **Use a dual-core ESP32.** Single-core devices (C3, S2) can run ChimeraFX, but may stutter under load — see the [hardware compatibility table](Installation.md#prerequisites).
-*   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. For smooth installs on ESP32 Classic, target roughly **512-600 LEDs per GPIO**; higher counts can run, but physical refresh drops as RMT wire time takes over.
+*   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. On ESP32 Classic, V1.41 testing with the heavy `Energy` effect at default values showed **360 LEDs per GPIO** as the near-60 `LedFPS` target and **600 LEDs per GPIO** as the 30+ `LedFPS` target.
 *   **Do not mix RMT and SPI on the same V1.41 node.** Physical testing showed that sustained SPI traffic can disturb RMT timing on ESP32 Classic. Use RMT-only or SPI-only nodes, or split the transports across separate controllers.
 *   **SPI strips (APA102, SK9822) shift the bottleneck to the CPU**, not the wire. The current ESP32 Classic test rig ran 2x2000 SPI LEDs smoothly, but power delivery and inrush still matter.
 *   **Heavy co-residents hurt.** Running ChimeraFX alongside *Bluetooth Proxy* or *Camera* components will likely cause instability.

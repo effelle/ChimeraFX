@@ -17,14 +17,16 @@ If your strip uses standard 800 kbps NRZ timing but is not on the supported list
 
 ### Tested LED Limits
 
-The limits below are based on physical testing for ChimeraFX V1.41. Treat the recommended range as the target for smooth real-world installations, the tested range as validated on the current rig, and the stress range as useful engineering data rather than a deployment target. When validating your own rig, use `LedFPS` as the visible strip-refresh metric; `RenderFPS` only measures effect calculation speed.
+The limits below are based on physical testing for ChimeraFX V1.41 using the `Energy` effect at default values, chosen because it is one of the heavier calculation loads in the library. Treat the recommended range as the target for smooth real-world installations, the tested range as validated on the current rig, and the stress range as useful engineering data rather than a deployment target. When validating your own rig, use `LedFPS` as the visible strip-refresh metric; `RenderFPS` only measures effect calculation speed.
 
 | Platform | Transport | Recommended smooth limit | Tested stable limit | Stress result |
 |:---|:---|:---|:---|:---|
-| ESP32 Classic | RMT / 1-wire NRZ | ~512-600 LEDs per GPIO | 600 LEDs per GPIO, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 FPS |
+| ESP32 Classic | RMT / 1-wire NRZ | 360 LEDs per GPIO for near-60 `LedFPS` | 600 LEDs per GPIO for 30+ `LedFPS`, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 `LedFPS` |
 | ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
 | ESP32-C3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
 | ESP32-S3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
+
+For 60 LED/m strips, the tested ESP32 Classic RMT guidance translates to about **24 meters total** at near-60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs.
 
 For the timing details behind these numbers, see [Performance & Troubleshooting](Troubleshooting.md#performance-limits-and-real-fps).
 

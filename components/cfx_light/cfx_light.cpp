@@ -1635,21 +1635,36 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
       params->diag_starve_count++;
       return 0;
     }
-    for (size_t i = 0; i < RMT_SYMBOLS_PER_BYTE; i++) {
-      symbols[i] =
-          (bytes[index] & (1 << (7 - i))) ? params->bit1 : params->bit0;
+    size_t out = 0;
+    while (index < size &&
+           (symbols_free - out) >= RMT_SYMBOLS_PER_BYTE) {
+      const uint8_t b = bytes[index++];
+      for (size_t i = 0; i < RMT_SYMBOLS_PER_BYTE; i++) {
+        symbols[out + i] = (b & (1 << (7 - i))) ? params->bit1 : params->bit0;
+      }
+      out += RMT_SYMBOLS_PER_BYTE;
     }
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 1)
-    if ((index + 1) >= size && params->reset.duration0 == 0 &&
+    if (index >= size && params->reset.duration0 == 0 &&
         params->reset.duration1 == 0) {
       *done = true;
     }
 #endif
-    return RMT_SYMBOLS_PER_BYTE;
+    if (index >= size &&
+        (params->reset.duration0 > 0 || params->reset.duration1 > 0) &&
+        out < symbols_free) {
+      symbols[out++] = params->reset;
+      *done = true;
+    }
+    return out;
   }
 
   // Send reset pulse
+  if (params->reset.duration0 == 0 && params->reset.duration1 == 0) {
+    *done = true;
+    return 0;
+  }
   if (symbols_free < 1) {
     params->diag_reset_starve_count++;
     return 0;
