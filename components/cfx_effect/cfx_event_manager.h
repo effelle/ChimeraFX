@@ -150,36 +150,23 @@ public:
     this->deferred_write_ = next;
   }
 
-  // Drain queued events per ESPHome loop() tick.
-  // Adaptive batching: delivers more events per loop when the queue is backed
-  // up, reducing the number of loop cycles needed to drain a large burst
-  // (e.g. 8 lights × 24 milestones = 192 events from a single effect run).
-  //
-  // Batch size scales with queue occupancy:
-  //   < 25% full  →  1 event  (light load, conservative)
-  //   25–50% full →  2 events (moderate backlog)
-  //   > 50% full  →  3 events (heavy backlog, drain faster)
-  //
-  // Three back-to-back trigger() calls are well within the 30ms API heartbeat
-  // window — each is a short string delivery costing a few microseconds.
+  // Drain queued events conservatively. This can be called by both sequence and
+  // light loops, so the cadence gate prevents fast reach-producing effects from
+  // flushing many HA events inside one render window.
   void flush_pending() {
     if (this->deferred_read_ == this->deferred_write_)
       return;
 
-    // Compute current queue occupancy and pick batch size.
-    uint8_t queue_count = (this->deferred_write_ + DEFERRED_QUEUE_SIZE - this->deferred_read_) % DEFERRED_QUEUE_SIZE;
-    uint8_t max_this_loop;
-    if (queue_count >= (DEFERRED_QUEUE_SIZE * 3) / 4)
-      max_this_loop = 6; // > 75% full — wipe/milestone bursts need faster drain
-    else if (queue_count >= DEFERRED_QUEUE_SIZE / 2)
-      max_this_loop = 4; // > 50% full — drain aggressively
-    else if (queue_count >= DEFERRED_QUEUE_SIZE / 4)
-      max_this_loop = 2; // 25–50% full — moderate pace
-    else
-      max_this_loop = 1; // < 25% full — conservative, API-safe
-
+    // Keep event delivery outside the LED frame's hot path.
+    const uint32_t now = esphome::millis();
+    if (this->last_flush_ms_ != 0 &&
+        (now - this->last_flush_ms_) < EVENT_FLUSH_MIN_INTERVAL_MS) {
+      return;
+    }
+    this->last_flush_ms_ = now;
     uint8_t flushed_this_loop = 0;
-    while (this->deferred_read_ != this->deferred_write_ && flushed_this_loop < max_this_loop) {
+    while (this->deferred_read_ != this->deferred_write_ &&
+           flushed_this_loop < MAX_EVENTS_PER_FLUSH) {
       const uint8_t idx = this->deferred_read_;
       const DeferredKind kind = this->deferred_kind_[idx];
       std::string evt;
@@ -272,6 +259,9 @@ protected:
   std::vector<std::string> disabled_tags_;
 
   static constexpr uint8_t DEFERRED_QUEUE_SIZE = 128;
+  static constexpr uint8_t MAX_EVENTS_PER_FLUSH = 1;
+  static constexpr uint32_t EVENT_FLUSH_MIN_INTERVAL_MS = 12;
+  uint32_t last_flush_ms_{0};
   DeferredKind deferred_kind_[DEFERRED_QUEUE_SIZE]{};
   std::string deferred_queue_[DEFERRED_QUEUE_SIZE];
   esphome::event::Event *deferred_targets_[DEFERRED_QUEUE_SIZE]{};

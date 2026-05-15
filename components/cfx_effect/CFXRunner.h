@@ -303,6 +303,7 @@ public:
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }
   void setName(const char *name) { _name = name; }
+  void setPaletteSeedSalt(uint32_t salt) { palette_seed_salt_ = salt; }
   const char *getModeName() const;
 
   void service();
@@ -386,6 +387,7 @@ public:
   CRGBPalette16 _currentRandomPalette;
   uint32_t _currentRandomPaletteBuffer[16];
   uint32_t random_palette_nonce_{0};
+  uint32_t palette_seed_salt_{0};
 
   bool force_white_active_{false};
   float global_brightness_ = 1.0f;

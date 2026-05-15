@@ -761,25 +761,36 @@ static CRGBW ColorFromPalette(const uint32_t *palette, uint8_t index,
   return CRGBW(r, g, b, w);
 }
 
+static uint32_t mix32(uint32_t x) {
+  x ^= x >> 16;
+  x *= 0x7FEB352Du;
+  x ^= x >> 15;
+  x *= 0x846CA68Bu;
+  x ^= x >> 16;
+  return x;
+}
+
 void CFXRunner::generateRandomPalette() {
   random_palette_nonce_ += 0x9E3779B9u;
   uint32_t entropy =
-      random_palette_nonce_ ^ cfx_millis() ^ (cfx_micros() << 7) ^
+      random_palette_nonce_ ^ palette_seed_salt_ ^ cfx_millis() ^
+      (cfx_micros() << 7) ^
       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^
       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(target_light)) ^
       (static_cast<uint32_t>(_segment.start) << 16) ^
       static_cast<uint32_t>(_segment.stop) ^
       (static_cast<uint32_t>(_mode) << 24);
+  entropy = mix32(entropy);
+  if (entropy == 0) {
+    entropy = 0xA5A5A5A5u;
+  }
   DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
 
   for (int i = 0; i < 16; i++) {
-    entropy ^= entropy << 13;
-    entropy ^= entropy >> 17;
-    entropy ^= entropy << 5;
-    uint8_t h = (uint8_t)(cfx::hw_random8() ^ (entropy >> 8) ^
-                          (uint8_t)cfx::hw_random16());
-    uint8_t s = (uint8_t)(184u + cfx::hw_random8(72));
-    uint8_t v = (uint8_t)(216u + cfx::hw_random8(40));
+    entropy = mix32(entropy + 0x9E3779B9u + static_cast<uint32_t>(i * 97));
+    uint8_t h = static_cast<uint8_t>(entropy >> 24);
+    uint8_t s = static_cast<uint8_t>(184u + ((entropy >> 12) % 72u));
+    uint8_t v = static_cast<uint8_t>(216u + ((entropy >> 4) % 40u));
     CHSV color(h, s, v);
 
     // Convert to RGB

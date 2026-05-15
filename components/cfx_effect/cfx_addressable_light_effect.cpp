@@ -197,6 +197,69 @@ static SPIDiagCensus collect_spi_diag_census() {
 template <typename T> static void release_vector_storage(std::vector<T> &v) {
   std::vector<T>().swap(v);
 }
+
+static uint32_t palette_salt_hash(const char *text,
+                                  uint32_t seed = 2166136261u) {
+  uint32_t h = seed;
+  if (text != nullptr) {
+    while (*text != '\0') {
+      h ^= static_cast<uint8_t>(*text++);
+      h *= 16777619u;
+    }
+  }
+  return h;
+}
+
+static uint32_t palette_salt_mix(uint32_t h, uint32_t value) {
+  h ^= value + 0x9E3779B9u + (h << 6) + (h >> 2);
+  return h != 0 ? h : 0x811C9DC5u;
+}
+
+static void assign_palette_seed_salts(
+    CFXAddressableLightEffect::CFXActivation *act, uint8_t configured_effect_id,
+    uint8_t effect_id) {
+  if (act == nullptr) {
+    return;
+  }
+
+  uint32_t base_salt = palette_salt_hash(act->cached_runner_name.c_str());
+  base_salt = palette_salt_hash(act->strip_tag.c_str(), base_salt);
+  base_salt = palette_salt_mix(base_salt, configured_effect_id);
+  base_salt = palette_salt_mix(base_salt, effect_id);
+
+  if (!act->segment_runners.empty()) {
+    for (size_t i = 0; i < act->segment_runners.size(); i++) {
+      auto *runner = act->segment_runners[i];
+      if (runner == nullptr) {
+        continue;
+      }
+      uint32_t salt = palette_salt_mix(base_salt, static_cast<uint32_t>(i + 1));
+      salt =
+          palette_salt_mix(salt, static_cast<uint32_t>(runner->_segment.start));
+      salt =
+          palette_salt_mix(salt, static_cast<uint32_t>(runner->_segment.stop));
+      if (i < act->cached_segment_names.size()) {
+        salt = palette_salt_hash(act->cached_segment_names[i].c_str(), salt);
+      }
+      salt = palette_salt_hash(runner->get_segment_id().c_str(), salt);
+      runner->setPaletteSeedSalt(salt);
+    }
+    return;
+  }
+
+  if (act->runner == nullptr) {
+    return;
+  }
+  uint32_t salt = palette_salt_mix(
+      base_salt,
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(act->runner)));
+  salt =
+      palette_salt_mix(salt, static_cast<uint32_t>(act->runner->_segment.start));
+  salt =
+      palette_salt_mix(salt, static_cast<uint32_t>(act->runner->_segment.stop));
+  salt = palette_salt_hash(act->runner->get_segment_id().c_str(), salt);
+  act->runner->setPaletteSeedSalt(salt);
+}
 } // namespace
 
 CFXAddressableLightEffect::CFXAddressableLightEffect(const char *name)
@@ -1106,6 +1169,8 @@ void CFXAddressableLightEffect::start() {
   } else {
     act_->cached_runner_name.clear();
   }
+
+  assign_palette_seed_salts(act_, this->configured_effect_id_, this->effect_id_);
 
   auto *diag_out = resolve_diag_output(this);
   SPIDiagCensus diag_census = collect_spi_diag_census();
