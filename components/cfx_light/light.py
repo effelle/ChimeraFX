@@ -380,9 +380,10 @@ _CFX_LIGHT_LIMITS = {
     # but bench testing showed mixed transport timing is not release-grade.
     # ChimeraFX nodes are validated as either RMT-only or SPI-only.
     "ESP32": {"total": 4, "spi": 2, "rmt": 4},
-    # S3/P4 keep the four-output budget, but still cannot mix SPI and RMT in
-    # one ChimeraFX node for this release.
-    "ESP32S3": {"total": 4, "spi": 2, "rmt": 2},
+    # S3 keeps the four-output RMT test budget, but still cannot mix SPI and
+    # RMT in one ChimeraFX node for this release.
+    "ESP32S3": {"total": 4, "spi": 2, "rmt": 4},
+    # P4 stays conservative until physically validated.
     "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
     # Single-host C-series targets keep the existing two-output budget.
     # ESP32-C3 RMT is experimental for V1.41. It has only 96 RMT symbols and
