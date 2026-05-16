@@ -65,9 +65,9 @@ The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue 
 
 ESP32-S3 limits will be updated after fresh physical tests.
 
-**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. After C3-specific RMT tuning, a single RMT output reached ~54-56 `LedFPS` at 360 LEDs and ~35 `LedFPS` at 600 LEDs with the `Energy` effect at default values. The callback load dropped from roughly 140k+ callbacks per diagnostic window to roughly 26k-29k, and the visible failure mode improved from heavy flashing to sparse pixel artifacts on the most demanding/problematic effects. Use ESP32 Classic/S3-class hardware when RMT stability matters.
+**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. After C3-specific RMT tuning plus Energy optimization, a single RMT output reached ~57-59 `LedFPS` at 360 LEDs and ~30-33 `LedFPS` at 600 LEDs with the `Energy` effect at default values. The callback load dropped from roughly 140k+ callbacks per diagnostic window to roughly 24k-28k, and the reference Energy effect is clean in single-output tests. Use ESP32 Classic/S3-class hardware when multi-output RMT stability matters.
 
-The problematic C3 RMT effects observed at 600 LEDs were `Energy`, `Running Dual`, `Running Lights`, `Aurora`, `Dissolve`, and `Noise Pal`. Most other effects tested cleanly, including all Architectural effects and Interference. The documented C3 RMT status remains experimental because the stress/reference effect is still not perfectly clean.
+Two 600-LED RMT outputs on C3 are not recommended. That configuration split the available RMT buffer down to 48 symbols per strip, raised callback load to roughly 56k-58k per diagnostic window per strip, and remained unstable.
 
 **ESP32-C3 SPI status:** A single C3 SPI output sustained 2000 virtual LEDs at roughly 58-60 `LedFPS` with the `Energy` effect at default values. This validates render load, SPI frame packing, and bus cadence, but it does not fully validate long physical APA102/SK9822 runs because the current physical SPI test strips are short.
 
@@ -81,7 +81,7 @@ ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the b
 - **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
 - **ESP32-C3**: 96 Total Symbols - Block size 48 symbols, RMT experimental in V1.41 after physical artifact testing
 
-**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 RMT backend is not Classic-class. Keep C3 RMT installs small and validate with `LedFPS` plus visual inspection.
+**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 RMT backend is not Classic-class. Keep C3 RMT to one output for V1.41 and validate with `LedFPS` plus visual inspection.
 
 Example configuration:
 

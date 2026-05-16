@@ -386,9 +386,9 @@ _CFX_LIGHT_LIMITS = {
     "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
     # Single-host C-series targets keep the existing two-output budget.
     # ESP32-C3 RMT is experimental for V1.41. It has only 96 RMT symbols and
-    # is not Classic-class, but a C3-specific encoder chunk/IRQ tuning path is
-    # available for physical validation.
-    "ESP32C3": {"total": 2, "spi": 1, "rmt": 2},
+    # is not Classic-class; physical validation showed one tuned RMT output is
+    # useful, while two 600-LED RMT outputs remain unstable.
+    "ESP32C3": {"total": 1, "spi": 1, "rmt": 1},
     "ESP32C5": {"total": 2, "spi": 1, "rmt": 2},
     "ESP32C6": {"total": 2, "spi": 1, "rmt": 2},
     "ESP32C61": {"total": 2, "spi": 1, "rmt": 2},

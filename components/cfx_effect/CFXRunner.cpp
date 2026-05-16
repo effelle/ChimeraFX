@@ -1065,6 +1065,9 @@ uint16_t mode_aurora(void) {
   }
 
   waves = reinterpret_cast<AuroraWave *>(instance->_segment.data);
+  const uint32_t *active_palette = getPaletteByIndex(instance->_segment.palette);
+  uint8_t alive_indexes[W_MAX_COUNT];
+  uint8_t alive_count = 0;
 
   // Service Waves - Loop through ALL potential waves for smooth transitions
   for (int i = 0; i < W_MAX_COUNT; i++) {
@@ -1090,8 +1093,6 @@ uint16_t mode_aurora(void) {
         // threshold
         if (i < active_count) {
           uint8_t colorIndex = hw_random8();
-          const uint32_t *active_palette =
-              getPaletteByIndex(instance->_segment.palette);
           CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
           waves[i].init(instance->_segment.length(), color);
         }
@@ -1100,8 +1101,6 @@ uint16_t mode_aurora(void) {
       // Dead slot. If it's within the active_count, start a new wave
       if (i < active_count) {
         uint8_t colorIndex = hw_random8();
-        const uint32_t *active_palette =
-            getPaletteByIndex(instance->_segment.palette);
         CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
         waves[i].init(instance->_segment.length(), color);
       }
@@ -1109,6 +1108,7 @@ uint16_t mode_aurora(void) {
 
     if (waves[i].alive) {
       waves[i].updateCachedValues();
+      alive_indexes[alive_count++] = i;
     }
   }
 
@@ -1117,11 +1117,9 @@ uint16_t mode_aurora(void) {
 
   for (int i = 0; i < instance->_segment.length(); i++) {
     CRGBW mixedRgb = background;
-    for (int j = 0; j < W_MAX_COUNT; j++) {
-      if (waves[j].alive) {
-        CRGBW rgb = waves[j].getColorForLED(i);
-        mixedRgb = color_add(mixedRgb, rgb);
-      }
+    for (uint8_t j = 0; j < alive_count; j++) {
+      CRGBW rgb = waves[alive_indexes[j]].getColorForLED(i);
+      mixedRgb = color_add(mixedRgb, rgb);
     }
 
     // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep
@@ -2068,20 +2066,29 @@ uint16_t mode_dissolve(void) {
       // Linear Fallback for Dead Pixels
       int target = hw_random16() % len;
       if (SHADOW_GET(target)) {
-        // Random hit an ON pixel - linear scan to find next OFF
+        // Random hit an ON pixel - bounded bidirectional scan to find nearby OFF.
         bool found = false;
-        for (int scan = 0; scan < len; scan++) {
-          int scan_idx = (target + scan) % len;
-          if (!SHADOW_GET(scan_idx)) {
-            target = scan_idx;
+        const int max_scan = std::min<int>(len, 64);
+        for (int scan = 1; scan <= max_scan; scan++) {
+          int forward = target + scan;
+          if (forward >= len)
+            forward -= len;
+          if (!SHADOW_GET(forward)) {
+            target = forward;
+            found = true;
+            break;
+          }
+          int backward = target - scan;
+          if (backward < 0)
+            backward += len;
+          if (!SHADOW_GET(backward)) {
+            target = backward;
             found = true;
             break;
           }
         }
         if (!found) {
-          // Strip is completely full
-          pixel_count = len;
-          break;
+          continue;
         }
       }
       SHADOW_SET(target);
@@ -2117,20 +2124,29 @@ uint16_t mode_dissolve(void) {
       // Linear Fallback for Dead Pixels
       int target = hw_random16() % len;
       if (!SHADOW_GET(target)) {
-        // Random hit an OFF pixel - linear scan to find next ON
+        // Random hit an OFF pixel - bounded bidirectional scan to find nearby ON.
         bool found = false;
-        for (int scan = 0; scan < len; scan++) {
-          int scan_idx = (target + scan) % len;
-          if (SHADOW_GET(scan_idx)) {
-            target = scan_idx;
+        const int max_scan = std::min<int>(len, 64);
+        for (int scan = 1; scan <= max_scan; scan++) {
+          int forward = target + scan;
+          if (forward >= len)
+            forward -= len;
+          if (SHADOW_GET(forward)) {
+            target = forward;
+            found = true;
+            break;
+          }
+          int backward = target - scan;
+          if (backward < 0)
+            backward += len;
+          if (SHADOW_GET(backward)) {
+            target = backward;
             found = true;
             break;
           }
         }
         if (!found) {
-          // Strip is completely empty
-          pixel_count = 0;
-          break;
+          continue;
         }
       }
       SHADOW_CLR(target);
@@ -2828,10 +2844,14 @@ uint16_t mode_noisepal(void) {
   }
 
   // Render: Perlin noise mapped to palette â€” WLED exact
+  uint16_t noise_x = 0;
+  uint16_t noise_y = instance->_segment.aux0;
   for (int i = 0; i < len; i++) {
-    uint8_t index = inoise8(i * scale, instance->_segment.aux0 + i * scale);
+    uint8_t index = inoise8(noise_x, noise_y);
     CRGB c = ColorFromPalette(palettes[0], index, 255, LINEARBLEND);
     instance->_segment.setPixelColor(i, RGBW32(c.r, c.g, c.b, 0));
+    noise_x += scale;
+    noise_y += scale;
   }
 
   // Organic Y-axis drift â€” WLED exact
@@ -6009,6 +6029,12 @@ static uint16_t running_base(bool saw, bool dual = false) {
   uint16_t len = instance->_segment.length();
   unsigned x_scale = instance->_segment.intensity >> 2;
   uint32_t counter = (instance->now * instance->_segment.speed) >> 9;
+  const bool use_palette =
+      instance->_segment.palette != 0 && instance->_segment.palette != 255;
+  const uint32_t *active_palette =
+      use_palette ? getPaletteByIndex(instance->_segment.palette) : nullptr;
+  const uint32_t color1 = instance->_segment.colors[1];
+  const uint32_t solid_color = instance->_segment.colors[0];
 
   for (unsigned i = 0; i < len; i++) {
     unsigned a = i * x_scale - counter;
@@ -6026,16 +6052,14 @@ static uint16_t running_base(bool saw, bool dual = false) {
 
     // Logic: Blend between Background (colors[1]) and Target
     // (Palette/Color) SEGCOLOR(1) is background in WLED.
-    uint32_t color1 = instance->_segment.colors[1];
-
+    uint8_t palette_index = 0;
     uint32_t color2;
-    if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
-      color2 = instance->_segment.colors[0];
+    if (!use_palette) {
+      color2 = solid_color;
     } else {
       // Palette mode: use palette color for 'i'
-      const uint32_t *active_palette =
-          getPaletteByIndex(instance->_segment.palette);
-      CRGBW c = ColorFromPalette(active_palette, (i * 255) / len, 255);
+      palette_index = (i * 255) / len;
+      CRGBW c = ColorFromPalette(active_palette, palette_index, 255);
       color2 = RGBW32(c.r, c.g, c.b, c.w);
     }
 
@@ -6046,14 +6070,10 @@ static uint16_t running_base(bool saw, bool dual = false) {
       unsigned b = i * x_scale + counter;
       uint8_t s2 = cfx::sin_gap(b);
       uint32_t color3;
-      if (instance->_segment.palette == 0 ||
-          instance->_segment.palette == 255) {
-        color3 = instance->_segment
-                     .colors[0]; // Use Primary color (fix solid palette hole)
+      if (!use_palette) {
+        color3 = solid_color; // Use Primary color (fix solid palette hole)
       } else {
-        const uint32_t *active_palette =
-            getPaletteByIndex(instance->_segment.palette);
-        CRGBW c = ColorFromPalette(active_palette, (i * 255) / len + 128, 255);
+        CRGBW c = ColorFromPalette(active_palette, palette_index + 128, 255);
         color3 = RGBW32(c.r, c.g, c.b, c.w);
       }
       ca = color_blend(ca, color3, s2);
