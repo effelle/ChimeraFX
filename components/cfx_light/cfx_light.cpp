@@ -1881,8 +1881,13 @@ void CFXLightOutput::setup_rmt_() {
     // ESP32-S3 RMT GDMA is effectively a single preferred slot in ESP-IDF's
     // allocator; probing a second DMA channel emits a driver error before
     // returning ESP_ERR_NOT_FOUND, so later strips go straight to non-DMA.
-    const bool skip_dma_probe = s_rmt_dma_claimed;
-    const char *skip_dma_reason = "RMT GDMA slot already claimed";
+    //
+    // For V1.41 multi-RMT validation, keep S3 on uniform non-DMA RMT. The old
+    // 4-output S3 configuration used this resource model, and mixing one GDMA
+    // output with several non-DMA outputs has exposed failed/dark later
+    // channels on real hardware.
+    const bool skip_dma_probe = true;
+    const char *skip_dma_reason = "S3 multi-RMT validation uses non-DMA";
 #else
     const bool skip_dma_probe = false;
     const char *skip_dma_reason = "";
@@ -3405,6 +3410,14 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
 
   if (this->buf_ == nullptr || this->effect_data_ == nullptr || index < 0 ||
       index >= this->size()) {
+    if (!this->unsafe_view_logged_) {
+      ESP_LOGW(TAG,
+               "Unsafe pixel view redirected to dummy pixel "
+               "(pin=%u, idx=%d, size=%d, buf=%p, effect=%p, failed=%d)",
+               this->pin_, index, this->size(), this->buf_,
+               this->effect_data_, this->is_failed());
+      this->unsafe_view_logged_ = true;
+    }
     return {&dummy_r, &dummy_g, &dummy_b, &dummy_w, &dummy_effect,
             &this->correction_};
   }

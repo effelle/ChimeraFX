@@ -537,6 +537,7 @@ protected:
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
   uint32_t default_transition_length_ms_{0};
   bool runtime_debug_enabled_{false};
+  mutable bool unsafe_view_logged_{false};
 
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};
