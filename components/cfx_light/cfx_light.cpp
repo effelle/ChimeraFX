@@ -1719,7 +1719,7 @@ static size_t cfx_rmt_led_encode(rmt_encoder_t *encoder,
       led_encoder->state = 1;
     }
     if (session_state & RMT_ENCODING_MEM_FULL) {
-      state |= RMT_ENCODING_MEM_FULL;
+      state = static_cast<rmt_encode_state_t>(state | RMT_ENCODING_MEM_FULL);
       goto out;
     }
   }
@@ -1730,10 +1730,10 @@ static size_t cfx_rmt_led_encode(rmt_encoder_t *encoder,
         sizeof(led_encoder->reset_symbol), &session_state);
     if (session_state & RMT_ENCODING_COMPLETE) {
       led_encoder->state = 0;
-      state |= RMT_ENCODING_COMPLETE;
+      state = static_cast<rmt_encode_state_t>(state | RMT_ENCODING_COMPLETE);
     }
     if (session_state & RMT_ENCODING_MEM_FULL) {
-      state |= RMT_ENCODING_MEM_FULL;
+      state = static_cast<rmt_encode_state_t>(state | RMT_ENCODING_MEM_FULL);
       goto out;
     }
   }
