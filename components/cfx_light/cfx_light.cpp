@@ -1720,6 +1720,12 @@ static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
 
 void CFXLightOutput::setup() {
   size_t buffer_size = this->get_buffer_size_();
+  ESP_LOGI(TAG,
+           "CFXLight setup begin: this=%p transport=%s pin=%u leds=%u "
+           "buffer=%u stride=%u",
+           this, this->is_spi_transport() ? "SPI" : "RMT", this->pin_,
+           this->num_leds_, static_cast<unsigned>(buffer_size),
+           static_cast<unsigned>(this->get_pixel_stride_()));
 
   // Allocate pixel buffer (internal RAM)
   RAMAllocator<uint8_t> allocator(RAMAllocator<uint8_t>::ALLOC_INTERNAL);
