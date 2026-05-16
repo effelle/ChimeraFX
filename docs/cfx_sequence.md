@@ -989,7 +989,7 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                       effect: "Interference"
                       set_autotune: true
                       set_intro: 12
-                      set_inout_dur: 2
+                      set_inout_dur: 4
                       set_color: [65, 35, 100, 0]
                       ha_events: true
                   - cfx_set:
@@ -997,7 +997,7 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                       effect: "Interference"
                       set_autotune: true
                       set_intro: 12
-                      set_inout_dur: 2
+                      set_inout_dur: 4
                       set_color: [65, 35, 100, 0]
                       ha_events: true
         ```
@@ -1137,7 +1137,7 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                   - number.chimerafx_rmt2_in_out_duration
                   - number.chimerafx_rmt3_in_out_duration
               data:
-                value: 2
+                value: 4
             - action: light.turn_on
               metadata: {}
               target:
