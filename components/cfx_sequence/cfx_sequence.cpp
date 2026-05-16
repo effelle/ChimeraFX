@@ -391,11 +391,8 @@ void CfxSetActionBase::do_play_() {
         }
         if (this->autotune_.has_value())
           inst->set_sequence_autotune(this->autotune_.value());
-        if (this->intro_.has_value()) {
+        if (this->intro_.has_value())
           inst->set_intro_preset(this->intro_.value());
-          if (!this->effect_.empty())
-            inst->request_runtime_intro();
-        }
         if (this->outro_.has_value())
           inst->set_outro_preset(this->outro_.value());
         if (this->inout_duration_.has_value())
@@ -1085,10 +1082,8 @@ void CFXSequence::apply_binding_to_effect_(chimera_fx::CFXAddressableLightEffect
   // report_event_complete) — it does not need to propagate its tag into
   // individual effect instances.
 
-  if (this->intro_.has_value()) {
+  if (this->intro_.has_value())
     inst->set_intro_preset(this->intro_.value());
-    inst->request_runtime_intro();
-  }
   if (this->outro_.has_value())
     inst->set_outro_preset(this->outro_.value());
   if (this->inout_duration_.has_value())

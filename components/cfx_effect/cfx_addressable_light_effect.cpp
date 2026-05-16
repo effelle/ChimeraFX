@@ -1009,10 +1009,6 @@ void CFXAddressableLightEffect::start() {
   if (this->get_monochromatic_preset_(this->effect_id_).is_active) {
     is_fresh_turn_on = true;
   }
-  if (cfg_ != nullptr && cfg_->force_intro_on_next_start) {
-    cfg_->force_intro_on_next_start = false;
-    is_fresh_turn_on = true;
-  }
 
   // Only authored power-transition effects bypass the transformer entirely.
   // Eligible effects keep it alive so default_transition_length can fade the
@@ -1263,10 +1259,6 @@ void CFXAddressableLightEffect::start() {
       cfg_->pending_sequence_autotune.reset();
     }
     this->sync_sequence_control_state();
-  }
-  if (cfg_ != nullptr && cfg_->force_intro_on_next_start) {
-    cfg_->force_intro_on_next_start = false;
-    is_fresh_turn_on = true;
   }
 
   const bool owns_speed = act_->sequence_speed.has_value();

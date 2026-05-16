@@ -239,7 +239,6 @@ public:
     std::optional<uint8_t> intro_preset{};
     std::optional<float> inout_duration_preset{};
     std::optional<uint8_t> outro_preset{};
-    bool force_intro_on_next_start{false};
 
     // One-shot overrides injected by cfx_set before an effect has allocated
     // act_. start() consumes and clears them so they affect only the next run.
@@ -336,7 +335,6 @@ public:
   // ── Preset setters — lazily allocate cfg_ ─────────────────────────────────
   void set_speed_preset(uint8_t v) { ensure_cfg_(); cfg_->speed_preset = v; }
   void set_intro_preset(uint8_t v) { ensure_cfg_(); cfg_->intro_preset = v; }
-  void request_runtime_intro() { ensure_cfg_(); cfg_->force_intro_on_next_start = true; }
   void set_inout_duration_preset(float v) { ensure_cfg_(); cfg_->inout_duration_preset = v; }
   void set_outro_preset(uint8_t v) { ensure_cfg_(); cfg_->outro_preset = v; }
   void set_outro_duration_preset(float v) { ensure_cfg_(); cfg_->inout_duration_preset = v; }

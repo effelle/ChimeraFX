@@ -925,7 +925,7 @@ Two strips start together, and when they reach 90% the third strip starts buildi
 
 ### Interference Takeover
 
-Two mirrored strips open the scene with the same slow monochromatic sweep. At the midpoint, the center pair enters with `Venetian`. Ten seconds later the opening pair fades away and the center pair transforms into `Interference` with a `Sonar Reveal` intro.
+Two mirrored strips open the scene with the same slow monochromatic sweep. At the midpoint, the center pair enters with `Venetian`. Ten seconds later the opening pair fades away and the center pair takes over with `Interference`.
 
 
 ??? abstract "Interference Takeover"
@@ -988,16 +988,12 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                       id: rmt2
                       effect: "Interference"
                       set_autotune: true
-                      set_intro: 12
-                      set_inout_dur: 4
                       set_color: [65, 35, 100, 0]
                       ha_events: true
                   - cfx_set:
                       id: rmt3
                       effect: "Interference"
                       set_autotune: true
-                      set_intro: 12
-                      set_inout_dur: 4
                       set_color: [65, 35, 100, 0]
                       ha_events: true
         ```
@@ -1124,20 +1120,6 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                 entity_id:
                   - switch.chimerafx_rmt2_autotune
                   - switch.chimerafx_rmt3_autotune
-            - action: select.select_option
-              target:
-                entity_id:
-                  - select.chimerafx_rmt2_intro
-                  - select.chimerafx_rmt3_intro
-              data:
-                option: Sonar Reveal
-            - action: number.set_value
-              target:
-                entity_id:
-                  - number.chimerafx_rmt2_in_out_duration
-                  - number.chimerafx_rmt3_in_out_duration
-              data:
-                value: 4
             - action: light.turn_on
               metadata: {}
               target:
