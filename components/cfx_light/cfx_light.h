@@ -470,6 +470,7 @@ protected:
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();
   void apply_power_scale_to_buffer_(uint8_t *data, size_t len) const;
+  void fill_buffer_solid_(const Color &color);
   uint8_t get_power_transmit_scale_() const;
 
   // SPI frame geometry helpers

@@ -2573,9 +2573,77 @@ void CFXLightOutput::apply_power_scale_to_buffer_(uint8_t *data,
   }
 }
 
+void CFXLightOutput::fill_buffer_solid_(const Color &color) {
+  if (this->buf_ == nullptr || this->effect_data_ == nullptr ||
+      this->num_leds_ == 0) {
+    return;
+  }
+
+  int32_t r = 0, g = 0, b = 0;
+  switch (this->rgb_order_) {
+  case ORDER_RGB:
+    r = 0;
+    g = 1;
+    b = 2;
+    break;
+  case ORDER_RBG:
+    r = 0;
+    g = 2;
+    b = 1;
+    break;
+  case ORDER_GRB:
+    r = 1;
+    g = 0;
+    b = 2;
+    break;
+  case ORDER_GBR:
+    r = 2;
+    g = 0;
+    b = 1;
+    break;
+  case ORDER_BGR:
+    r = 2;
+    g = 1;
+    b = 0;
+    break;
+  case ORDER_BRG:
+    r = 1;
+    g = 2;
+    b = 0;
+    break;
+  }
+
+  const bool has_white = this->has_white_channel();
+  const uint8_t multiplier = has_white ? 4 : 3;
+  const uint8_t offset = this->is_wrgb_ ? 1 : 0;
+  const uint8_t white = this->is_wrgb_ ? 0 : 3;
+  const uint8_t cr = this->correction_.color_correct_red(color.r);
+  const uint8_t cg = this->correction_.color_correct_green(color.g);
+  const uint8_t cb = this->correction_.color_correct_blue(color.b);
+  const uint8_t cw = this->correction_.color_correct_white(color.w);
+
+  for (uint16_t i = 0; i < this->num_leds_; i++) {
+    uint8_t *base = this->buf_ + (static_cast<size_t>(i) * multiplier);
+    base[r + offset] = cr;
+    base[g + offset] = cg;
+    base[b + offset] = cb;
+    if (has_white) {
+      base[white] = cw;
+    }
+    this->effect_data_[i] = 0;
+  }
+}
+
 // --- Update State (Handles Brightness & Solid Colors) ---
 
 void CFXLightOutput::update_state(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  if (this->buf_ == nullptr || this->effect_data_ == nullptr ||
+      this->num_leds_ == 0) {
+    return;
+  }
   auto val = state->current_values;
 
   if (this->has_segments()) {
@@ -2634,7 +2702,7 @@ void CFXLightOutput::update_state(light::LightState *state) {
   if (this->is_force_white_active_for(state))
     cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
-  this->all() = c;
+  this->fill_buffer_solid_(c);
   this->schedule_show();
 }
 
