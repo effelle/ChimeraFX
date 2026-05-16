@@ -925,7 +925,7 @@ Two strips start together, and when they reach 90% the third strip starts buildi
 
 ### Interference Takeover
 
-Two mirrored strips open the scene with the same slow monochromatic sweep. At the midpoint, a `Venetian` strip takes over the visual focus. When that strip reaches the end, `Interference` enters on RMT3, then spreads to RMT2 after the opening pair fades out.
+Two mirrored strips open the scene with the same slow monochromatic sweep. At the midpoint, the center pair enters with `Venetian`. Ten seconds later the opening pair fades away and the center pair transforms into `Interference` with a `Sonar Reveal` intro.
 
 
 ??? abstract "Interference Takeover"
@@ -960,7 +960,7 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
             on_cfx_reach:
               - position: 50%
                 then:
-                  - cfx_run:
+                  - cfx_set:
                       id: rmt2
                       effect: "Venetian"
                       set_speed: 128
@@ -969,25 +969,37 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
                       set_autotune: false
                       set_inout_dur: 4
                       ha_events: true
-                      iterations: 1
-                      on_cfx_reach:
-                        - position: 100%
-                          then:
-                            - cfx_set:
-                                id: rmt3
-                                effect: "Interference"
-                                set_autotune: true
-                                ha_events: true
-                            - delay: 10s
-                            - light.turn_off:
-                                id: rmt1
-                            - light.turn_off:
-                                id: rmt4
-                            - cfx_set:
-                                id: rmt2
-                                effect: "Interference"
-                                set_autotune: true
-                                ha_events: true
+                  - cfx_set:
+                      id: rmt3
+                      effect: "Venetian"
+                      set_speed: 128
+                      set_brightness: 75%
+                      set_color: [100, 45, 0, 0]
+                      set_mirror: true
+                      set_autotune: false
+                      set_inout_dur: 4
+                      ha_events: true
+                  - delay: 10s
+                  - light.turn_off:
+                      id: rmt1
+                  - light.turn_off:
+                      id: rmt4
+                  - cfx_set:
+                      id: rmt2
+                      effect: "Interference"
+                      set_autotune: true
+                      set_intro: 12
+                      set_inout_dur: 2
+                      set_color: [65, 35, 100, 0]
+                      ha_events: true
+                  - cfx_set:
+                      id: rmt3
+                      effect: "Interference"
+                      set_autotune: true
+                      set_intro: 12
+                      set_inout_dur: 2
+                      set_color: [65, 35, 100, 0]
+                      ha_events: true
         ```
 
     === "Home Assistant YAML"
@@ -1065,43 +1077,39 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
             - action: switch.turn_off
               target:
                 entity_id: switch.chimerafx_rmt2_autotune
+            - action: switch.turn_on
+              target:
+                entity_id: switch.chimerafx_rmt3_ha_events
+            - action: switch.turn_off
+              target:
+                entity_id: switch.chimerafx_rmt3_autotune
+            - action: switch.turn_on
+              target:
+                entity_id: switch.chimerafx_rmt3_mirror
             - action: number.set_value
               target:
-                entity_id: number.chimerafx_rmt2_speed
+                entity_id:
+                  - number.chimerafx_rmt2_speed
+                  - number.chimerafx_rmt3_speed
               data:
                 value: 128
             - action: number.set_value
               target:
-                entity_id: number.chimerafx_rmt2_in_out_duration
+                entity_id:
+                  - number.chimerafx_rmt2_in_out_duration
+                  - number.chimerafx_rmt3_in_out_duration
               data:
                 value: 4
             - action: light.turn_on
               metadata: {}
               target:
-                entity_id: light.chimerafx_rmt2
+                entity_id:
+                  - light.chimerafx_rmt2
+                  - light.chimerafx_rmt3
               data:
                 effect: Venetian
                 brightness_pct: 75
                 rgbw_color: [255, 115, 0, 0]
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt2
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rmt2:100
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt3_ha_events
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt3_autotune
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt3
-              data:
-                effect: Interference
             - delay:
                 seconds: 10
             - action: light.turn_off
@@ -1113,13 +1121,32 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
               data: {}
             - action: switch.turn_on
               target:
-                entity_id: switch.chimerafx_rmt2_autotune
+                entity_id:
+                  - switch.chimerafx_rmt2_autotune
+                  - switch.chimerafx_rmt3_autotune
+            - action: select.select_option
+              target:
+                entity_id:
+                  - select.chimerafx_rmt2_intro
+                  - select.chimerafx_rmt3_intro
+              data:
+                option: Sonar Reveal
+            - action: number.set_value
+              target:
+                entity_id:
+                  - number.chimerafx_rmt2_in_out_duration
+                  - number.chimerafx_rmt3_in_out_duration
+              data:
+                value: 2
             - action: light.turn_on
               metadata: {}
               target:
-                entity_id: light.chimerafx_rmt2
+                entity_id:
+                  - light.chimerafx_rmt2
+                  - light.chimerafx_rmt3
               data:
                 effect: Interference
+                rgbw_color: [166, 89, 255, 0]
           mode: single
           max_exceeded: silent
         ```
