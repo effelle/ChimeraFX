@@ -1823,10 +1823,22 @@ void CFXLightOutput::setup_rmt_() {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
   RAMAllocator<uint8_t> rmt_alloc(RAMAllocator<uint8_t>::ALLOC_INTERNAL);
   this->rmt_buf_ = rmt_alloc.allocate(buffer_size);
+  if (this->rmt_buf_ == nullptr) {
+    ESP_LOGE(TAG, "Cannot allocate RMT transmit buffer (%u bytes)!",
+             static_cast<unsigned>(buffer_size));
+    this->mark_failed();
+    return;
+  }
 #else
   RAMAllocator<rmt_symbol_word_t> rmt_allocator(
       RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
   this->rmt_buf_ = rmt_allocator.allocate(buffer_size * 8 + 1);
+  if (this->rmt_buf_ == nullptr) {
+    ESP_LOGE(TAG, "Cannot allocate RMT transmit buffer (%u symbols)!",
+             static_cast<unsigned>(buffer_size * 8 + 1));
+    this->mark_failed();
+    return;
+  }
 #endif
 
   // Auto-detect RMT symbol buffer size from chip variant
@@ -3033,6 +3045,13 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
 void CFXLightOutput::flush_rmt_() {
   const uint32_t flush_start_us = micros();
+
+  if (this->is_failed() || this->buf_ == nullptr || this->rmt_buf_ == nullptr ||
+      this->channel_ == nullptr || this->encoder_ == nullptr ||
+      this->num_leds_ == 0) {
+    this->perf_diag_last_flush_valid_ = false;
+    return;
+  }
 
   if (this->rmt_tx_in_flight_) {
     this->rmt_flush_pending_ = true;
