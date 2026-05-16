@@ -945,3 +945,294 @@ Two strips start together, and when they reach 90% the third strip starts buildi
                 effect: Gas Discharge
           mode: single
         ```
+
+### Pulse Relay with Runtime Sparks
+
+RMT1 acts as the timing rail. RMT2 is adopted with `cfx_set`, RMT3 runs a one-shot child sequence with its own milestone trigger, and RMT4 changes character when that child reaches the middle of the strip.
+
+
+??? abstract "Pulse Relay with Runtime Sparks"
+
+    === "On-Device YAML"
+        ```yaml
+        cfx_sequence:
+          - id: seq_pulse_relay
+            name: "Pulse Relay with Runtime Sparks"
+            lights:
+              - rmt1
+            effect: "Wipe"
+            set_speed: 190
+            set_intensity: 160
+            set_palette: 4
+            set_brightness: 75%
+            set_mirror: false
+            set_autotune: false
+            iterations: 1
+            restore: true
+
+            on_cfx_begin:
+              - cfx_set:
+                  id: rmt4
+                  effect: "Aurora"
+                  set_speed: 90
+                  set_intensity: 110
+                  set_palette: 7
+                  set_brightness: 25%
+                  set_autotune: false
+                  ha_events: true
+
+            on_cfx_reach:
+              - position: 20%
+                then:
+                  - cfx_set:
+                      id: rmt2
+                      effect: "Running Lights"
+                      set_speed: 210
+                      set_intensity: 190
+                      set_palette: 5
+                      set_brightness: 65%
+                      set_color: [100, 45, 10, 0]
+                      set_mirror: true
+                      set_autotune: false
+                      set_intro: 3
+                      set_outro: 8
+                      set_inout_dur: 0.8
+                      ha_events: true
+
+              - position: 50%
+                then:
+                  - cfx_run:
+                      id: rmt3
+                      effect: "Dissolve"
+                      set_speed: 180
+                      set_intensity: 220
+                      set_palette: 9
+                      set_brightness: 80%
+                      set_mirror: false
+                      set_autotune: false
+                      set_intro: 12
+                      set_outro: 18
+                      set_inout_dur: 1.2
+                      ha_events: true
+                      iterations: 1
+                      on_cfx_reach:
+                        - position: 50%
+                          then:
+                            - cfx_set:
+                                id: rmt4
+                                effect: "Noise Pal"
+                                set_speed: 160
+                                set_intensity: 210
+                                set_palette: 12
+                                set_brightness: 55%
+                                set_mirror: true
+                                set_autotune: false
+                      on_cfx_complete:
+                        - light.turn_off:
+                            id: rmt4
+
+            on_cfx_stop:
+              - delay: 120ms
+              - light.turn_off:
+                  id: rmt2
+              - delay: 120ms
+              - light.turn_off:
+                  id: rmt3
+        ```
+
+    === "Home Assistant YAML"
+        ```yaml
+          alias: ChimeraFX — Pulse Relay with Runtime Sparks
+          description: ""
+          triggers:
+            - trigger: state
+              entity_id:
+                - button.chimerafx_button
+              to: null
+          conditions: []
+          actions:
+            - action: esphome.chimerafx_cfx_sequence_start
+              data:
+                sequence: Pulse Relay with Runtime Sparks
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt1
+                  attribute: event_type
+                  to:
+                    - cfx_reach:rmt1:20
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt1
+                  attribute: event_type
+                  to:
+                    - cfx_reach:rmt1:50
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt3
+                  attribute: event_type
+                  to:
+                    - cfx_reach:rmt3:50
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt3
+                  attribute: event_type
+                  to:
+                    - cfx_complete:rmt3
+          mode: single
+          max_exceeded: silent
+        ```
+
+### Four Strip Signal Split
+
+RMT1 carries the timing sweep, RMT4 joins immediately as the counter-motion layer, RMT2 becomes a mirrored side chase, and RMT3 fires a short Gas Discharge child run with white-channel emphasis for RGBW strips.
+
+
+??? abstract "Four Strip Signal Split"
+
+    === "On-Device YAML"
+        ```yaml
+        cfx_sequence:
+          - id: seq_signal_split
+            name: "Four Strip Signal Split"
+            lights:
+              - rmt1
+            effect: "Horizon Sweep"
+            set_speed: 170
+            set_intensity: 200
+            set_palette: 6
+            set_brightness: 70%
+            set_autotune: false
+            duration: 12s
+            restore: true
+
+            on_cfx_begin:
+              - cfx_set:
+                  id: rmt4
+                  effect: "Running Dual"
+                  set_speed: 175
+                  set_intensity: 210
+                  set_palette: 6
+                  set_brightness: 70%
+                  set_mirror: true
+                  set_autotune: false
+                  ha_events: true
+
+            on_cfx_start:
+              - cfx_set:
+                  id: rmt2
+                  effect: "Running Lights"
+                  set_speed: 190
+                  set_intensity: 180
+                  set_palette: 6
+                  set_brightness: 60%
+                  set_mirror: true
+                  set_intro: 5
+                  set_outro: 5
+                  set_inout_dur: 0.7
+                  ha_events: true
+
+            on_cfx_reach:
+              - position: 40%
+                then:
+                  - cfx_run:
+                      id: rmt3
+                      effect: "Gas Discharge"
+                      set_speed: 120
+                      set_intensity: 255
+                      set_brightness: 90%
+                      set_color: [65, 85, 100, 100]
+                      set_force_white: true
+                      set_intro: 14
+                      set_outro: 21
+                      set_inout_dur: 1.5
+                      ha_events: true
+                      iterations: 1
+                      on_cfx_start:
+                        - cfx_set:
+                            id: rmt4
+                            effect: "Interference"
+                            set_speed: 140
+                            set_intensity: 180
+                            set_palette: 10
+                            set_brightness: 65%
+                            set_mirror: true
+                            set_autotune: false
+                      on_cfx_complete:
+                        - cfx_set:
+                            id: rmt2
+                            effect: "Horizon Sweep"
+                            set_speed: 220
+                            set_intensity: 140
+                            set_palette: 3
+                            set_brightness: 50%
+                            set_mirror: false
+                            set_outro: 9
+                            set_inout_dur: 0.9
+
+            on_cfx_stop:
+              - light.turn_off:
+                  id: rmt2
+              - delay: 100ms
+              - light.turn_off:
+                  id: rmt3
+              - delay: 100ms
+              - light.turn_off:
+                  id: rmt4
+        ```
+
+    === "Home Assistant YAML"
+        ```yaml
+          alias: ChimeraFX — Four Strip Signal Split
+          description: ""
+          triggers:
+            - trigger: state
+              entity_id:
+                - button.chimerafx_button
+              to: null
+          conditions: []
+          actions:
+            - action: esphome.chimerafx_cfx_sequence_start
+              data:
+                sequence: Four Strip Signal Split
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt1
+                  attribute: event_type
+                  to:
+                    - cfx_start:rmt1
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt1
+                  attribute: event_type
+                  to:
+                    - cfx_reach:rmt1:40
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt3
+                  attribute: event_type
+                  to:
+                    - cfx_start:rmt3
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt3
+                  attribute: event_type
+                  to:
+                    - cfx_complete:rmt3
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt1
+                  attribute: event_type
+                  to:
+                    - cfx_stop:rmt1
+          mode: single
+          max_exceeded: silent
+        ```
