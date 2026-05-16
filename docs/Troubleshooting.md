@@ -65,7 +65,9 @@ The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue 
 
 ESP32-S3 limits will be updated after fresh physical tests.
 
-**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. Physical tests with the `Energy` effect at default values showed visible artifacts on 1x360, 1x600, and 2x600 RMT configurations even when `LedFPS` stayed stable and wiring/level shifting matched the ESP32 Classic test rig. A C3-specific RMT encoder tuning path is under validation; use ESP32 Classic/S3-class hardware when RMT stability matters.
+**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. After C3-specific RMT tuning, a single RMT output reached ~54-56 `LedFPS` at 360 LEDs and ~35 `LedFPS` at 600 LEDs with the `Energy` effect at default values. The callback load dropped from roughly 140k+ callbacks per diagnostic window to roughly 26k-29k, and the visible failure mode improved from heavy flashing to sparse pixel artifacts on the most demanding/problematic effects. Use ESP32 Classic/S3-class hardware when RMT stability matters.
+
+The problematic C3 RMT effects observed at 600 LEDs were `Energy`, `Running Dual`, `Running Lights`, `Aurora`, `Dissolve`, and `Noise Pal`. Most other effects tested cleanly, including all Architectural effects and Interference. The documented C3 RMT status remains experimental because the stress/reference effect is still not perfectly clean.
 
 **ESP32-C3 SPI status:** A single C3 SPI output sustained 2000 virtual LEDs at roughly 58-60 `LedFPS` with the `Energy` effect at default values. This validates render load, SPI frame packing, and bus cadence, but it does not fully validate long physical APA102/SK9822 runs because the current physical SPI test strips are short.
 

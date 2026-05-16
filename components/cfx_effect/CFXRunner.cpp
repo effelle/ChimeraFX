@@ -3626,28 +3626,35 @@ uint16_t mode_energy(void) {
     } else if (i <= (int)progress) {
       rainbow_32 = RGBW32(255, 255, 255, 255);
     }
+    instance->_segment.setPixelColor(i, rainbow_32);
+  }
 
-    // Blend Spikes (additive brightness with proportional bloom)
-    uint16_t spike_bri = 0;
-    for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
-      if (data->sparks[s].level > 0) {
-        int distance = std::abs(data->sparks[s].pos - i);
-        if (distance <= (int)spark_radius - 1) {
-          spike_bri = std::max(spike_bri, (uint16_t)data->sparks[s].level);
-        } else if (distance == (int)spark_radius) {
-          uint16_t bloom = data->sparks[s].level >> 1;
-          spike_bri = std::max(spike_bri, bloom);
-        }
+  // Blend spikes in their local radius instead of testing every spark against
+  // every pixel. This keeps the same white-hot bloom behavior while removing
+  // the O(strip_length * spark_count) inner loop that hurts single-core C3.
+  for (int s = 0; s < MAX_ENERGY_SPARKS; s++) {
+    if (data->sparks[s].level == 0)
+      continue;
+
+    const int16_t center = data->sparks[s].pos;
+    const int start = std::max<int>(0, center - spark_radius);
+    const int stop = std::min<int>(len - 1, center + spark_radius);
+    for (int i = start; i <= stop; i++) {
+      const int distance = std::abs(center - i);
+      uint8_t spike_bri = 0;
+      if (distance <= (int)spark_radius - 1) {
+        spike_bri = data->sparks[s].level;
+      } else if (distance == (int)spark_radius) {
+        spike_bri = data->sparks[s].level >> 1;
       }
-    }
+      if (spike_bri == 0)
+        continue;
 
-    if (spike_bri > 0) {
       CRGBW final_c = color_add(
-          CRGBW(rainbow_32), CRGBW(spike_bri, spike_bri, spike_bri, spike_bri));
+          instance->_segment.getPixelColor(i),
+          CRGBW(spike_bri, spike_bri, spike_bri, spike_bri));
       instance->_segment.setPixelColor(
           i, RGBW32(final_c.r, final_c.g, final_c.b, final_c.w));
-    } else {
-      instance->_segment.setPixelColor(i, rainbow_32);
     }
   }
   return FRAMETIME;

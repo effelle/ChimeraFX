@@ -23,11 +23,13 @@ The limits below are based on physical testing for ChimeraFX V1.41 using the `En
 |:---|:---|:---|:---|:---|
 | ESP32 Classic | RMT / 1-wire NRZ | 360 LEDs per GPIO for near-60 `LedFPS` | 600 LEDs per GPIO for 30+ `LedFPS`, up to 4 outputs | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 `LedFPS` |
 | ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
-| ESP32-C3 | RMT / 1-wire NRZ | Experimental, pending retest | Pending retest with C3 RMT tuning | Earlier 1x360, 1x600, and 2x600 Energy tests showed artifacts |
+| ESP32-C3 | RMT / 1-wire NRZ | Experimental: 360 LEDs on 1 output at ~54-56 `LedFPS` | 600 LEDs on 1 output at ~35 `LedFPS` | Sparse pixel artifacts remain on the heaviest/problematic effects |
 | ESP32-C3 | SPI / APA102-SK9822 | 1 SPI output, experimental | 2000 virtual LEDs at ~58-60 `LedFPS` with Energy defaults | Long physical strip pending; only short physical strip verified |
 | ESP32-S3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
 
 For 60 LED/m strips, the tested ESP32 Classic RMT guidance translates to about **24 meters total** at near-60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs.
+
+ESP32-C3 RMT is intentionally marked experimental. After C3-specific RMT tuning, the callback load dropped dramatically and most effects, including all Architectural effects and Interference, ran cleanly in single-output tests. The remaining problematic effects observed at 600 LEDs were `Energy`, `Running Dual`, `Running Lights`, `Aurora`, `Dissolve`, and `Noise Pal`.
 
 For the timing details behind these numbers, see [Performance & Troubleshooting](Troubleshooting.md#performance-limits-and-real-fps).
 

@@ -79,15 +79,19 @@ static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 }
 
 static size_t rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
-  if (mem_block_symbols >= 96u) {
-    return 48u;
-  }
-  if (mem_block_symbols >= 48u) {
-    return 24u;
-  }
-#endif
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
+    defined(CONFIG_IDF_TARGET_ESP32P4)
+  // C3/S3/P4 RMT blocks are small, and waking the simple encoder every byte
+  // creates heavy ISR pressure on long strips. Refill once roughly 3/4 of the
+  // block is free, rounded down to whole bytes, so hardware still has symbols
+  // to transmit while the callback prepares the next chunk.
+  size_t chunk = (mem_block_symbols * 3u) / 4u;
+  chunk = (chunk / RMT_SYMBOLS_PER_BYTE) * RMT_SYMBOLS_PER_BYTE;
+  if (chunk >= RMT_SYMBOLS_PER_BYTE)
+    return chunk;
+#else
   (void) mem_block_symbols;
+#endif
   return RMT_SYMBOLS_PER_BYTE;
 }
 
@@ -1849,7 +1853,8 @@ void CFXLightOutput::setup_rmt_() {
   channel.gpio_num = gpio_num_t(this->pin_);
   channel.trans_queue_depth = 1;
   channel.flags.invert_out = 0;
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
+    defined(CONFIG_IDF_TARGET_ESP32P4)
   channel.intr_priority = 2;
 #else
   channel.intr_priority = 0;
