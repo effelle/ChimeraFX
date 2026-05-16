@@ -1065,9 +1065,6 @@ uint16_t mode_aurora(void) {
   }
 
   waves = reinterpret_cast<AuroraWave *>(instance->_segment.data);
-  const uint32_t *active_palette = getPaletteByIndex(instance->_segment.palette);
-  uint8_t alive_indexes[W_MAX_COUNT];
-  uint8_t alive_count = 0;
 
   // Service Waves - Loop through ALL potential waves for smooth transitions
   for (int i = 0; i < W_MAX_COUNT; i++) {
@@ -1093,6 +1090,8 @@ uint16_t mode_aurora(void) {
         // threshold
         if (i < active_count) {
           uint8_t colorIndex = hw_random8();
+          const uint32_t *active_palette =
+              getPaletteByIndex(instance->_segment.palette);
           CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
           waves[i].init(instance->_segment.length(), color);
         }
@@ -1101,6 +1100,8 @@ uint16_t mode_aurora(void) {
       // Dead slot. If it's within the active_count, start a new wave
       if (i < active_count) {
         uint8_t colorIndex = hw_random8();
+        const uint32_t *active_palette =
+            getPaletteByIndex(instance->_segment.palette);
         CRGBW color = ColorFromPalette(active_palette, colorIndex, 255);
         waves[i].init(instance->_segment.length(), color);
       }
@@ -1108,7 +1109,6 @@ uint16_t mode_aurora(void) {
 
     if (waves[i].alive) {
       waves[i].updateCachedValues();
-      alive_indexes[alive_count++] = i;
     }
   }
 
@@ -1117,9 +1117,11 @@ uint16_t mode_aurora(void) {
 
   for (int i = 0; i < instance->_segment.length(); i++) {
     CRGBW mixedRgb = background;
-    for (uint8_t j = 0; j < alive_count; j++) {
-      CRGBW rgb = waves[alive_indexes[j]].getColorForLED(i);
-      mixedRgb = color_add(mixedRgb, rgb);
+    for (int j = 0; j < W_MAX_COUNT; j++) {
+      if (waves[j].alive) {
+        CRGBW rgb = waves[j].getColorForLED(i);
+        mixedRgb = color_add(mixedRgb, rgb);
+      }
     }
 
     // GAMMA CORRECTION: Apply gamma to final linear output to simulate "deep

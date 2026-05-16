@@ -52,24 +52,7 @@ ChimeraFX reports render performance and LED output cadence separately. This dis
 - **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
 - **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
 
-For V1.41, physical testing on ESP32 Classic confirmed the following guidance. RMT values were tested with 4 outputs running the `Energy` effect at default values, because it is one of the heavier calculation loads in the library.
-
-| Transport | Near-60 FPS target | 30 FPS target | Stress result |
-|:---|:---|:---|:---|
-| RMT / 1-wire NRZ | 360 LEDs per GPIO, 4 outputs, near-60 `LedFPS` | 600 LEDs per GPIO, 4 outputs, 30+ `LedFPS` | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh is roughly 16-18 `LedFPS` |
-| SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
-
-For common 60 LED/m strips, this means an ESP32 Classic RMT-only node can drive about **24 meters total** at near-60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs. The intermediate 4x400 test also held roughly 57-59 `LedFPS` on the test rig.
-
-The 1100 LED RMT stress test is not a physics violation. ChimeraFX can continue rendering the effect above 30 `RenderFPS`, but the 800 kHz strip still needs about 33 ms or more to transmit one full RGB frame per 1100-LED output. In practice, `LedFPS` is the value that reflects what the strip can visibly receive once transport coalescing is included.
-
-ESP32-S3 limits will be updated after fresh physical tests.
-
-**ESP32-C3 RMT status:** C3 RMT output is experimental in ChimeraFX V1.41. After C3-specific RMT tuning plus Energy optimization, a single RMT output reached ~57-59 `LedFPS` at 360 LEDs and ~30-33 `LedFPS` at 600 LEDs with the `Energy` effect at default values. The callback load dropped from roughly 140k+ callbacks per diagnostic window to roughly 24k-28k, and the reference Energy effect is clean in single-output tests. Use ESP32 Classic/S3-class hardware when multi-output RMT stability matters.
-
-Two 600-LED RMT outputs on C3 are not recommended. That configuration split the available RMT buffer down to 48 symbols per strip, raised callback load to roughly 56k-58k per diagnostic window per strip, and remained unstable.
-
-**ESP32-C3 SPI status:** A single C3 SPI output sustained 2000 virtual LEDs at roughly 58-60 `LedFPS` with the `Energy` effect at default values. This validates render load, SPI frame packing, and bus cadence, but it does not fully validate long physical APA102/SK9822 runs because the current physical SPI test strips are short.
+For tested LED counts, platform notes, and V1.41 deployment limits, see [`cfx_light`](cfx_light.md#tested-led-limits). Keep `Troubleshooting` focused on symptoms: if `RenderFPS` is high but `LedFPS` is low, the effect engine is keeping up but the LED transport is saturated. If both numbers are low, reduce effect complexity, LED count, or other ESPHome workload.
 
 ---
 
@@ -77,11 +60,11 @@ Two 600-LED RMT outputs on C3 are not recommended. That configuration split the 
 
 ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the best values for `rmt_symbols` automatically, but if you experience issues like flickering leds or data corruption and you are sure is not a power or wiring issue, you must ensure your `rmt_symbols` are set correctly for your chip type. Each "symbol" represents a bit of data. Limited memory means you can't buffer infinite data. 
 
-- **Classic ESP32**: 512 Total Symbols - Block size 64 symbols 
-- **ESP32-S3**: 192 Total Symbols - Block size 48 symbols 
-- **ESP32-C3**: 96 Total Symbols - Block size 48 symbols, RMT experimental in V1.41 after physical artifact testing
+- **Classic ESP32**: 512 total symbols, 64-symbol blocks.
+- **ESP32-S3**: 192 total symbols, 48-symbol blocks.
+- **ESP32-C3**: 96 total symbols, 48-symbol blocks.
 
-**Note**: with only 96 RMT symbols (48-symbol blocks), the ESP32-C3 RMT backend is not Classic-class. Keep C3 RMT to one output for V1.41 and validate with `LedFPS` plus visual inspection.
+For platform-specific output limits, see [`cfx_light`](cfx_light.md#tested-led-limits).
 
 Example configuration:
 
