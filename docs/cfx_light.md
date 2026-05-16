@@ -25,11 +25,14 @@ The limits below are based on physical testing for ChimeraFX V1.41 using the `En
 | ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
 | ESP32-C3 | RMT / 1-wire NRZ | Experimental: 360 LEDs on 1 output at ~60 `LedFPS` | 600 LEDs on 1 output for 30+ `LedFPS` | Pending larger stress test |
 | ESP32-C3 | SPI / APA102-SK9822 | Up to 2000 LEDs on 1 SPI output | 2000 virtual LEDs at ~60 `LedFPS` | Pending larger stress test |
-| ESP32-S3 | RMT or SPI | Pending retest | Pending retest | Pending retest |
+| ESP32-S3 | RMT / 1-wire NRZ | 2 RMT outputs per node; first output uses the GDMA lane when available | 2x600 SK6812/RGBW at roughly 38-40 `LedFPS` with `Energy` | 3+ RMT outputs are experimental and can show flashing dots/artifacts even at lower LED counts |
+| ESP32-S3 | SPI / APA102-SK9822 | Up to 2 SPI outputs per node | Pending long-strip physical retest | Pending larger stress test |
 
 For 60 LED/m strips, the tested ESP32 Classic RMT guidance translates to about **24 meters total** at ~60 `LedFPS` with 4x360 LEDs, or about **40 meters total** at 30+ `LedFPS` with 4x600 LEDs.
 
 ESP32-C3 RMT is intentionally marked experimental. After C3-specific RMT tuning plus Energy optimization, one RMT output can run the reference `Energy` effect cleanly at the limits above. Two 600-LED RMT outputs still overload the C3 RMT path and are not part of the V1.41 recommended configuration.
+
+ESP32-S3 RMT is limited by its smaller RMT symbol pool and by the number of active non-DMA transmit lanes. In V1.41, the first S3 RMT output can use GDMA and has the best timing margin; additional RMT outputs fall back to non-DMA. Testing showed 2 RMT outputs are release-grade, while 3 or 4 RMT outputs are not recommended for deployment. A future parallel LED driver is planned to address this architecture later this year.
 
 For the timing details behind these numbers, see [Performance & Troubleshooting](Troubleshooting.md#performance-limits-and-real-fps).
 

@@ -76,7 +76,9 @@ light:
     # ... your light config ...
 ```
 
-On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). However, with multiple strips, this total must be divided among them. On an ESP32-S3, the RMT architecture is different: it has dedicated memory for transmission, but the total buffer is smaller. The S3 provides 192 symbols total for all transmit channels. This means if you use 4 strips, you are limited to 48 symbols per strip.
+On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). However, with multiple strips, this total must be divided among them. On an ESP32-S3, the RMT architecture is different: it has a smaller 192-symbol pool and only the first RMT output can use the stronger GDMA transmit path in the tested V1.41 configuration. Additional RMT outputs use non-DMA refill, which has less timing margin.
+
+For V1.41, treat ESP32-S3 as a **2 RMT output** or **2 SPI output** target. Three or more S3 RMT outputs may compile and run, but physical testing showed visible artifacts even when `LedFPS` remained acceptable. This is a transport architecture limit, not an effect-specific failure. A parallel LED driver is planned for a later release to improve multi-output S3 performance.
 
 ---
 
