@@ -1877,17 +1877,11 @@ void CFXLightOutput::setup_rmt_() {
   {
     static uint32_t s_rmt_alloc_count = 0;
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
-    static bool s_rmt_dma_claimed = false;
-    // ESP32-S3 RMT GDMA is effectively a single preferred slot in ESP-IDF's
-    // allocator; probing a second DMA channel emits a driver error before
-    // returning ESP_ERR_NOT_FOUND, so later strips go straight to non-DMA.
-    //
-    // For V1.41 multi-RMT validation, keep S3 on uniform non-DMA RMT. The old
-    // 4-output S3 configuration used this resource model, and mixing one GDMA
-    // output with several non-DMA outputs has exposed failed/dark later
-    // channels on real hardware.
-    const bool skip_dma_probe = true;
-    const char *skip_dma_reason = "S3 multi-RMT validation uses non-DMA";
+    // Probe GDMA per output on S3. Forcing every channel to non-DMA only
+    // exposes two TX slots on current hardware, while old 4-RMT test builds
+    // relied on the driver's allocator deciding which channels can use GDMA.
+    const bool skip_dma_probe = false;
+    const char *skip_dma_reason = "";
 #else
     const bool skip_dma_probe = false;
     const char *skip_dma_reason = "";
@@ -1930,9 +1924,6 @@ void CFXLightOutput::setup_rmt_() {
       if (err == ESP_OK) {
         this->rmt_dma_enabled_ = true;
         this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
-#if defined(CONFIG_IDF_TARGET_ESP32S3)
-        s_rmt_dma_claimed = true;
-#endif
       } else {
         ESP_LOGW(TAG,
                  "RMT %s unavailable for pin=%u (alloc #%" PRIu32
@@ -1944,9 +1935,6 @@ void CFXLightOutput::setup_rmt_() {
                  SOC_RMT_TX_CANDIDATES_PER_GROUP, (int) err,
                  rmt_non_dma_symbols(this->rmt_symbols_));
         this->channel_ = nullptr;
-#if defined(CONFIG_IDF_TARGET_ESP32S3)
-        s_rmt_dma_claimed = true;
-#endif
         channel.flags.with_dma = false;
         channel.mem_block_symbols = rmt_non_dma_symbols(this->rmt_symbols_);
         err = rmt_new_tx_channel(&channel, &this->channel_);
