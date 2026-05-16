@@ -923,103 +923,76 @@ Two strips start together, and when they reach 90% the third strip starts buildi
           mode: single
         ```
 
-### Pulse Relay with Runtime Sparks
+### Interference Takeover
 
-RMT1 acts as the timing rail. RMT2 is adopted with `cfx_set`, RMT3 runs a one-shot child sequence with its own milestone trigger, and RMT4 changes character when that child reaches the middle of the strip.
+Two mirrored strips open the scene with the same slow monochromatic sweep. At the midpoint, a `Venetian` strip takes over the visual focus. When that strip reaches the end, `Interference` enters on RMT3, then spreads to RMT2 after the opening pair fades out.
 
 
-??? abstract "Pulse Relay with Runtime Sparks"
+??? abstract "Interference Takeover"
 
     === "On-Device YAML"
         ```yaml
         cfx_sequence:
-          - id: seq_pulse_relay
-            name: "Pulse Relay with Runtime Sparks"
+          - id: seq_interference_takeover
+            name: "Interference Takeover"
             lights:
               - rmt1
-            effect: "Wipe"
-            set_speed: 190
-            set_intensity: 160
-            set_palette: 4
-            set_brightness: 75%
-            set_mirror: false
+            effect: "Horizon Sweep"
+            set_speed: 128
+            set_brightness: 80%
+            set_color: [100, 45, 0, 0]
             set_autotune: false
-            iterations: 1
+            set_inout_dur: 8
             restore: true
 
             on_cfx_begin:
               - cfx_set:
                   id: rmt4
-                  effect: "Aurora"
-                  set_speed: 90
-                  set_intensity: 110
-                  set_palette: 7
-                  set_brightness: 25%
+                  effect: "Horizon Sweep"
+                  set_speed: 128
+                  set_brightness: 80%
+                  set_color: [100, 45, 0, 0]
+                  set_mirror: true
                   set_autotune: false
+                  set_inout_dur: 8
                   ha_events: true
 
             on_cfx_reach:
-              - position: 20%
-                then:
-                  - cfx_set:
-                      id: rmt2
-                      effect: "Running Lights"
-                      set_speed: 210
-                      set_intensity: 190
-                      set_palette: 5
-                      set_brightness: 65%
-                      set_color: [100, 45, 10, 0]
-                      set_mirror: true
-                      set_autotune: false
-                      set_intro: 3
-                      set_outro: 8
-                      set_inout_dur: 0.8
-                      ha_events: true
-
               - position: 50%
                 then:
                   - cfx_run:
-                      id: rmt3
-                      effect: "Dissolve"
-                      set_speed: 180
-                      set_intensity: 220
-                      set_palette: 9
-                      set_brightness: 80%
-                      set_mirror: false
+                      id: rmt2
+                      effect: "Venetian"
+                      set_speed: 128
+                      set_brightness: 75%
+                      set_color: [100, 45, 0, 0]
                       set_autotune: false
-                      set_intro: 12
-                      set_outro: 18
-                      set_inout_dur: 1.2
+                      set_inout_dur: 4
                       ha_events: true
                       iterations: 1
                       on_cfx_reach:
-                        - position: 50%
+                        - position: 100%
                           then:
                             - cfx_set:
+                                id: rmt3
+                                effect: "Interference"
+                                set_autotune: true
+                                ha_events: true
+                            - delay: 10s
+                            - light.turn_off:
+                                id: rmt1
+                            - light.turn_off:
                                 id: rmt4
-                                effect: "Noise Pal"
-                                set_speed: 160
-                                set_intensity: 210
-                                set_palette: 12
-                                set_brightness: 55%
-                                set_mirror: true
-                                set_autotune: false
-                      on_cfx_complete:
-                        - light.turn_off:
-                            id: rmt4
-
-            on_cfx_stop:
-              - delay: 120ms
-              - light.turn_off:
-                  id: rmt2
-              - delay: 120ms
-              - light.turn_off:
-                  id: rmt3
+                            - cfx_set:
+                                id: rmt2
+                                effect: "Interference"
+                                set_autotune: true
+                                ha_events: true
         ```
 
     === "Home Assistant YAML"
         ```yaml
-          alias: ChimeraFX — Pulse Relay with Runtime Sparks
+          alias: ChimeraFX - Interference Takeover
           description: ""
           triggers:
             - trigger: state
@@ -1038,106 +1011,47 @@ RMT1 acts as the timing rail. RMT2 is adopted with `cfx_set`, RMT3 runs a one-sh
               target:
                 entity_id: number.chimerafx_rmt1_speed
               data:
-                value: 190
+                value: 128
             - action: number.set_value
               target:
-                entity_id: number.chimerafx_rmt1_intensity
+                entity_id: number.chimerafx_rmt1_in_out_duration
               data:
-                value: 160
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt1_palette
-              data:
-                option: Rainbow
+                value: 8
             - action: light.turn_on
               metadata: {}
               target:
                 entity_id: light.chimerafx_rmt1
               data:
-                effect: Wipe
-                brightness_pct: 75
+                effect: Horizon Sweep
+                brightness_pct: 80
+                rgbw_color: [255, 115, 0, 0]
             - action: switch.turn_on
               target:
                 entity_id: switch.chimerafx_rmt4_ha_events
             - action: switch.turn_off
               target:
                 entity_id: switch.chimerafx_rmt4_autotune
+            - action: switch.turn_on
+              target:
+                entity_id: switch.chimerafx_rmt4_mirror
             - action: number.set_value
               target:
                 entity_id: number.chimerafx_rmt4_speed
               data:
-                value: 90
+                value: 128
             - action: number.set_value
               target:
-                entity_id: number.chimerafx_rmt4_intensity
+                entity_id: number.chimerafx_rmt4_in_out_duration
               data:
-                value: 110
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt4_palette
-              data:
-                option: Ice
+                value: 8
             - action: light.turn_on
               metadata: {}
               target:
                 entity_id: light.chimerafx_rmt4
               data:
-                effect: Aurora
-                brightness_pct: 25
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt1
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rmt1:20
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt2_ha_events
-            - action: switch.turn_off
-              target:
-                entity_id: switch.chimerafx_rmt2_autotune
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt2_mirror
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_intro
-              data:
-                option: Center
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_outro
-              data:
-                option: Drain
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_in_out_duration
-              data:
-                value: 0.8
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_speed
-              data:
-                value: 210
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_intensity
-              data:
-                value: 190
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_palette
-              data:
-                option: Fire
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt2
-              data:
-                effect: Running Lights
-                brightness_pct: 65
-                rgbw_color: [255, 115, 26, 0]
+                effect: Horizon Sweep
+                brightness_pct: 80
+                rgbw_color: [255, 115, 0, 0]
             - wait_for_trigger:
                 - trigger: state
                   entity_id:
@@ -1147,471 +1061,65 @@ RMT1 acts as the timing rail. RMT2 is adopted with `cfx_set`, RMT3 runs a one-sh
                     - cfx_reach:rmt1:50
             - action: switch.turn_on
               target:
-                entity_id: switch.chimerafx_rmt3_ha_events
+                entity_id: switch.chimerafx_rmt2_ha_events
             - action: switch.turn_off
+              target:
+                entity_id: switch.chimerafx_rmt2_autotune
+            - action: number.set_value
+              target:
+                entity_id: number.chimerafx_rmt2_speed
+              data:
+                value: 128
+            - action: number.set_value
+              target:
+                entity_id: number.chimerafx_rmt2_in_out_duration
+              data:
+                value: 4
+            - action: light.turn_on
+              metadata: {}
+              target:
+                entity_id: light.chimerafx_rmt2
+              data:
+                effect: Venetian
+                brightness_pct: 75
+                rgbw_color: [255, 115, 0, 0]
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id:
+                    - event.chimerafx_cfx_events_rmt2
+                  attribute: event_type
+                  to:
+                    - cfx_reach:rmt2:100
+            - action: switch.turn_on
+              target:
+                entity_id: switch.chimerafx_rmt3_ha_events
+            - action: switch.turn_on
               target:
                 entity_id: switch.chimerafx_rmt3_autotune
-            - action: switch.turn_off
-              target:
-                entity_id: switch.chimerafx_rmt3_mirror
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt3_intro
-              data:
-                option: Sonar Reveal
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt3_outro
-              data:
-                option: Telemetry Fade
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_in_out_duration
-              data:
-                value: 1.2
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_speed
-              data:
-                value: 180
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_intensity
-              data:
-                value: 220
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt3_palette
-              data:
-                option: Twilight
             - action: light.turn_on
               metadata: {}
               target:
                 entity_id: light.chimerafx_rmt3
-              data:
-                effect: Dissolve
-                brightness_pct: 80
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt3
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rmt3:50
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt4_mirror
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_speed
-              data:
-                value: 160
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_intensity
-              data:
-                value: 210
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt4_palette
-              data:
-                option: HeatColors
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt4
-              data:
-                effect: Noise Pal
-                brightness_pct: 55
-            - delay:
-                seconds: 2
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt4
-              data: {}
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt1
-              data: {}
-            - delay:
-                milliseconds: 120
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt2
-              data: {}
-            - delay:
-                milliseconds: 120
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt3
-              data: {}
-          mode: single
-          max_exceeded: silent
-        ```
-
-### Four Strip Signal Split
-
-RMT1 carries the timing sweep, RMT4 joins immediately as the counter-motion layer, RMT2 becomes a mirrored side chase, and RMT3 fires a short Gas Discharge child run with white-channel emphasis for RGBW strips.
-
-
-??? abstract "Four Strip Signal Split"
-
-    === "On-Device YAML"
-        ```yaml
-        cfx_sequence:
-          - id: seq_signal_split
-            name: "Four Strip Signal Split"
-            lights:
-              - rmt1
-            effect: "Horizon Sweep"
-            set_speed: 170
-            set_intensity: 200
-            set_palette: 6
-            set_brightness: 70%
-            set_autotune: false
-            duration: 12s
-            restore: true
-
-            on_cfx_begin:
-              - cfx_set:
-                  id: rmt4
-                  effect: "Running Dual"
-                  set_speed: 175
-                  set_intensity: 210
-                  set_palette: 6
-                  set_brightness: 70%
-                  set_mirror: true
-                  set_autotune: false
-                  ha_events: true
-
-            on_cfx_start:
-              - cfx_set:
-                  id: rmt2
-                  effect: "Running Lights"
-                  set_speed: 190
-                  set_intensity: 180
-                  set_palette: 6
-                  set_brightness: 60%
-                  set_mirror: true
-                  set_intro: 5
-                  set_outro: 5
-                  set_inout_dur: 0.7
-                  ha_events: true
-
-            on_cfx_reach:
-              - position: 40%
-                then:
-                  - cfx_run:
-                      id: rmt3
-                      effect: "Gas Discharge"
-                      set_speed: 120
-                      set_intensity: 255
-                      set_brightness: 90%
-                      set_color: [65, 85, 100, 100]
-                      set_force_white: true
-                      set_intro: 14
-                      set_outro: 21
-                      set_inout_dur: 1.5
-                      ha_events: true
-                      iterations: 1
-                      on_cfx_start:
-                        - cfx_set:
-                            id: rmt4
-                            effect: "Interference"
-                            set_speed: 140
-                            set_intensity: 180
-                            set_palette: 10
-                            set_brightness: 65%
-                            set_mirror: true
-                            set_autotune: false
-                      on_cfx_complete:
-                        - cfx_set:
-                            id: rmt2
-                            effect: "Horizon Sweep"
-                            set_speed: 220
-                            set_intensity: 140
-                            set_palette: 3
-                            set_brightness: 50%
-                            set_mirror: false
-                            set_outro: 9
-                            set_inout_dur: 0.9
-
-            on_cfx_stop:
-              - light.turn_off:
-                  id: rmt2
-              - delay: 100ms
-              - light.turn_off:
-                  id: rmt3
-              - delay: 100ms
-              - light.turn_off:
-                  id: rmt4
-        ```
-
-    === "Home Assistant YAML"
-        ```yaml
-          alias: ChimeraFX — Four Strip Signal Split
-          description: ""
-          triggers:
-            - trigger: state
-              entity_id:
-                - button.chimerafx_button
-              to: null
-          conditions: []
-          actions:
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt1_ha_events
-            - action: switch.turn_off
-              target:
-                entity_id: switch.chimerafx_rmt1_autotune
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt1_speed
-              data:
-                value: 170
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt1_intensity
-              data:
-                value: 200
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt1_palette
-              data:
-                option: Sunset
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt1
-              data:
-                effect: Horizon Sweep
-                brightness_pct: 70
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt4_ha_events
-            - action: switch.turn_off
-              target:
-                entity_id: switch.chimerafx_rmt4_autotune
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt4_mirror
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_speed
-              data:
-                value: 175
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_intensity
-              data:
-                value: 210
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt4_palette
-              data:
-                option: Sunset
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt4
-              data:
-                effect: Running Dual
-                brightness_pct: 70
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt1
-                  attribute: event_type
-                  to:
-                    - cfx_start:rmt1
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt2_ha_events
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt2_mirror
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_intro
-              data:
-                option: Twin Pulse
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_outro
-              data:
-                option: Twin Pulse
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_in_out_duration
-              data:
-                value: 0.7
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_speed
-              data:
-                value: 190
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_intensity
-              data:
-                value: 180
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_palette
-              data:
-                option: Sunset
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt2
-              data:
-                effect: Running Lights
-                brightness_pct: 60
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt1
-                  attribute: event_type
-                  to:
-                    - cfx_reach:rmt1:40
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt3_ha_events
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt3_force_white
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt3_intro
-              data:
-                option: Crystallize
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt3_outro
-              data:
-                option: Eclipse
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_in_out_duration
-              data:
-                value: 1.5
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_speed
-              data:
-                value: 120
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt3_intensity
-              data:
-                value: 255
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt3
-              data:
-                effect: Gas Discharge
-                brightness_pct: 90
-                rgbw_color: [166, 217, 255, 255]
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id:
-                    - event.chimerafx_cfx_events_rmt3
-                  attribute: event_type
-                  to:
-                    - cfx_start:rmt3
-            - action: switch.turn_on
-              target:
-                entity_id: switch.chimerafx_rmt4_mirror
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_speed
-              data:
-                value: 140
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt4_intensity
-              data:
-                value: 180
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt4_palette
-              data:
-                option: Pastel
-            - action: light.turn_on
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt4
               data:
                 effect: Interference
-                brightness_pct: 65
             - delay:
-                seconds: 2
-            - action: switch.turn_off
+                seconds: 10
+            - action: light.turn_off
+              metadata: {}
               target:
-                entity_id: switch.chimerafx_rmt2_mirror
-            - action: select.select_option
+                entity_id:
+                  - light.chimerafx_rmt1
+                  - light.chimerafx_rmt4
+              data: {}
+            - action: switch.turn_on
               target:
-                entity_id: select.chimerafx_rmt2_outro
-              data:
-                option: Emptying
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_in_out_duration
-              data:
-                value: 0.9
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_speed
-              data:
-                value: 220
-            - action: number.set_value
-              target:
-                entity_id: number.chimerafx_rmt2_intensity
-              data:
-                value: 140
-            - action: select.select_option
-              target:
-                entity_id: select.chimerafx_rmt2_palette
-              data:
-                option: Halloween
+                entity_id: switch.chimerafx_rmt2_autotune
             - action: light.turn_on
               metadata: {}
               target:
                 entity_id: light.chimerafx_rmt2
               data:
-                effect: Horizon Sweep
-                brightness_pct: 50
-            - delay:
-                seconds: 12
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt1
-              data: {}
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt2
-              data: {}
-            - delay:
-                milliseconds: 100
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt3
-              data: {}
-            - delay:
-                milliseconds: 100
-            - action: light.turn_off
-              metadata: {}
-              target:
-                entity_id: light.chimerafx_rmt4
-              data: {}
+                effect: Interference
           mode: single
           max_exceeded: silent
         ```
