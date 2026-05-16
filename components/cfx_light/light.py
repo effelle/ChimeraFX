@@ -941,6 +941,7 @@ def _validate_transport(config):
     - Raises a clear compile-time error for a 3rd SPI strip or unsupported
       host on single-bus variants (C3, H2, etc.).
     """
+    _reserve_cfx_light_component_slot(config)
     chipset = config[CONF_CHIPSET]
     is_spi = chipset in SPI_CHIPSETS
 
@@ -1051,6 +1052,32 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
 
 
 _POWER_MANAGER_DATA_KEY = "cfx_power_manager_var"
+_COMPONENT_RESERVE_DATA_KEY = "cfx_light_component_capacity_reserves"
+
+
+def _reserve_cfx_light_component_slot(config):
+    """Reserve App component capacity for the hidden output component.
+
+    ESPHome sizes its static component vector from CORE.component_ids before
+    generated C++ runs. cfx_light creates a public LightState plus a hidden
+    AddressableLight output component, and some ESPHome versions undercount the
+    hidden output in larger configs. Reserve one extra slot per configured
+    cfx_light so later outputs are not dropped from Application::setup().
+    """
+    reserve_key = getattr(config.get(CONF_OUTPUT_ID), "id", None)
+    if reserve_key is None:
+        reserve_key = getattr(config.get(CONF_ID), "id", None)
+    if reserve_key is None:
+        pin_conf = config.get(CONF_PIN) or config.get(CONF_DATA_PIN) or {}
+        reserve_key = f"{config.get(CONF_NAME, 'unnamed')}_{pin_conf}"
+
+    reserves = CORE.data.setdefault(_COMPONENT_RESERVE_DATA_KEY, set())
+    reserve_key = str(reserve_key)
+    if reserve_key in reserves:
+        return
+    reserves.add(reserve_key)
+    safe_key = re.sub(r"[^a-zA-Z0-9_]", "_", reserve_key)
+    core.CORE.component_ids.add(f"cfx_light_output_capacity_reserve_{safe_key}")
 
 
 def _cfx_power_config():
