@@ -251,6 +251,8 @@ public:
   }
 
   void clear_effect_data() override {
+    if (this->effect_data_ == nullptr || this->num_leds_ == 0)
+      return;
     for (int i = 0; i < this->size(); i++)
       this->effect_data_[i] = 0;
   }
