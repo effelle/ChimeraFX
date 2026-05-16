@@ -1298,7 +1298,7 @@ async def _register_power_output(var, config):
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
-    _LOGGER.warning(
+    _LOGGER.debug(
         "CFXLight codegen: light_id=%s output_id=%s name=%s chipset=%s pin=%s",
         config[CONF_ID],
         config[CONF_OUTPUT_ID],
@@ -1309,6 +1309,8 @@ async def to_code(config):
 
     segments = config.get(CONF_SEGMENTS, [])
     light_config = config
+    # Keep the user-facing light id for light.register_light(), but register
+    # the hardware output component under its generated output_id.
     component_config = dict(config)
     component_config[CONF_ID] = config[CONF_OUTPUT_ID]
     if segments:
