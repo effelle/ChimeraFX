@@ -3397,6 +3397,18 @@ void CFXLightOutput::send_visualizer_metadata(const std::string &name,
 // --- Color View (Maps ESPHome pixel access to our buffer) ---
 
 light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
+  static uint8_t dummy_r = 0;
+  static uint8_t dummy_g = 0;
+  static uint8_t dummy_b = 0;
+  static uint8_t dummy_w = 0;
+  static uint8_t dummy_effect = 0;
+
+  if (this->buf_ == nullptr || this->effect_data_ == nullptr || index < 0 ||
+      index >= this->size()) {
+    return {&dummy_r, &dummy_g, &dummy_b, &dummy_w, &dummy_effect,
+            &this->correction_};
+  }
+
   int32_t r = 0, g = 0, b = 0;
   switch (this->rgb_order_) {
   case ORDER_RGB:
