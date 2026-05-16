@@ -19,6 +19,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 **Your mileage may vary.** Visual effects are computationally expensive.
 
 *   **Use a dual-core ESP32.** Single-core devices are not recommended. ESP32-C3 RMT output is experimental in V1.41 after physical tests showed visible artifacts even with stable `LedFPS` readings — see the [hardware compatibility table](Installation.md#prerequisites).
+*   **For V1.41, ESP32 Classic is the preferred target for new multi-output installs.** It has the strongest validated RMT performance in this release.
 *   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. On ESP32 Classic, V1.41 testing with the heavy `Energy` effect at default values showed **360 LEDs per GPIO** as the near-60 `LedFPS` target and **600 LEDs per GPIO** as the 30+ `LedFPS` target.
 *   **ESP32-S3 is a 2-output target in V1.41.** Use up to 2 RMT outputs or 2 SPI outputs per node. The first S3 RMT output can use GDMA and has the best timing margin; wider parallel output support is planned for a future driver.
 *   **Do not mix RMT and SPI on the same V1.41 node.** Physical testing showed that sustained SPI traffic can disturb RMT timing on ESP32 Classic. Use RMT-only or SPI-only nodes, or split the transports across separate controllers.

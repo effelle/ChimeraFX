@@ -4,8 +4,8 @@
 
 *   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
 *   **Supported Hardware**:
-      *   **ESP32 (Classic)**: Fully supported. V1.41 supports up to 4 RMT strips or 2 SPI strips per node.
-      *   **ESP32-S3**: Fully supported and recommended for new builds. V1.41 supports up to 2 RMT strips or 2 SPI strips per node. On RMT, the first output can use the GDMA lane and has the best timing margin; additional RMT outputs use non-DMA transmission. A parallel LED driver is planned for a future release to improve S3 multi-output scaling.
+      *   **ESP32 (Classic)**: Fully supported and the preferred V1.41 target for new multi-output installs. V1.41 supports up to 4 RMT strips or 2 SPI strips per node.
+      *   **ESP32-S3**: Fully supported, but not the preferred V1.41 target for large multi-output RMT installs. V1.41 supports up to 2 RMT strips or 2 SPI strips per node. On RMT, the first output can use the GDMA lane and has the best timing margin; additional RMT outputs use non-DMA transmission. A parallel LED driver is planned for a future release to improve S3 multi-output scaling.
       *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside Wi-Fi on a single core can cause stuttering and stability issues. V1.41 treats C3 RMT as **experimental**: one tuned RMT output reached ~57-59 `LedFPS` at 360 LEDs and ~30-33 `LedFPS` at 600 LEDs with `Energy` effect (one of the most intensive effects). C3 supports either 1 experimental RMT strip or 1 experimental SPI strip; 2000 virtual SPI LEDs held ~58-60 `LedFPS`.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
