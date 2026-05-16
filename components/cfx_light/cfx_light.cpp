@@ -1719,6 +1719,12 @@ static bool IRAM_ATTR rmt_tx_done_cb_(rmt_channel_handle_t,
 #endif
 
 void CFXLightOutput::setup() {
+  if (this->setup_completed_) {
+    ESP_LOGD(TAG, "CFXLight setup skipped: already initialized (this=%p pin=%u)",
+             this, this->pin_);
+    return;
+  }
+
   size_t buffer_size = this->get_buffer_size_();
   ESP_LOGI(TAG,
            "CFXLight setup begin: this=%p transport=%s pin=%u leds=%u "
@@ -1814,6 +1820,18 @@ void CFXLightOutput::setup() {
              this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
              this->rmt_symbols_, this->rmt_mem_block_symbols_,
              this->get_rmt_physical_led_count_());
+  }
+  this->setup_completed_ = true;
+}
+
+void CFXLightOutput::setup_state(light::LightState *state) {
+  light::AddressableLight::setup_state(state);
+  if (!this->setup_completed_ && !this->is_failed() && this->num_leds_ > 0) {
+    ESP_LOGW(TAG,
+             "CFXLight output was not reached by the component setup pass "
+             "(this=%p pin=%u state=%p); initializing from LightState setup",
+             this, this->pin_, state);
+    this->setup();
   }
 }
 

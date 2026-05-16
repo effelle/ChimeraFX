@@ -192,6 +192,7 @@ class CFXLightOutput : public light::AddressableLight {
 public:
   ~CFXLightOutput(); // CFX-025: closes visualizer socket_fd_ to prevent FD leak
   void setup() override;
+  void setup_state(light::LightState *state) override;
   void loop() override;
   void write_state(light::LightState *state) override;
   void update_state(light::LightState *state) override;
@@ -483,6 +484,7 @@ protected:
 
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
+  bool setup_completed_{false};
 
   // Callbacks used to execute Outro animations after ESPHome turns the light
   // off
