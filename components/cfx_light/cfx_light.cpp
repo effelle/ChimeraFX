@@ -1692,6 +1692,120 @@ static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
 }
 #endif
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+struct CFXRMTLedEncoder {
+  rmt_encoder_t base;
+  rmt_encoder_t *bytes_encoder{nullptr};
+  rmt_encoder_t *reset_encoder{nullptr};
+  rmt_symbol_word_t reset_symbol{};
+  uint8_t state{0};
+};
+
+RMT_ENCODER_FUNC_ATTR
+static size_t cfx_rmt_led_encode(rmt_encoder_t *encoder,
+                                 rmt_channel_handle_t channel,
+                                 const void *primary_data, size_t data_size,
+                                 rmt_encode_state_t *ret_state) {
+  auto *led_encoder = reinterpret_cast<CFXRMTLedEncoder *>(encoder);
+  rmt_encode_state_t session_state = RMT_ENCODING_RESET;
+  rmt_encode_state_t state = RMT_ENCODING_RESET;
+  size_t encoded_symbols = 0;
+
+  if (led_encoder->state == 0) {
+    encoded_symbols += led_encoder->bytes_encoder->encode(
+        led_encoder->bytes_encoder, channel, primary_data, data_size,
+        &session_state);
+    if (session_state & RMT_ENCODING_COMPLETE) {
+      led_encoder->state = 1;
+    }
+    if (session_state & RMT_ENCODING_MEM_FULL) {
+      state |= RMT_ENCODING_MEM_FULL;
+      goto out;
+    }
+  }
+
+  if (led_encoder->state == 1) {
+    encoded_symbols += led_encoder->reset_encoder->encode(
+        led_encoder->reset_encoder, channel, &led_encoder->reset_symbol,
+        sizeof(led_encoder->reset_symbol), &session_state);
+    if (session_state & RMT_ENCODING_COMPLETE) {
+      led_encoder->state = 0;
+      state |= RMT_ENCODING_COMPLETE;
+    }
+    if (session_state & RMT_ENCODING_MEM_FULL) {
+      state |= RMT_ENCODING_MEM_FULL;
+      goto out;
+    }
+  }
+
+out:
+  *ret_state = state;
+  return encoded_symbols;
+}
+
+static esp_err_t cfx_rmt_led_encoder_reset(rmt_encoder_t *encoder) {
+  auto *led_encoder = reinterpret_cast<CFXRMTLedEncoder *>(encoder);
+  rmt_encoder_reset(led_encoder->bytes_encoder);
+  rmt_encoder_reset(led_encoder->reset_encoder);
+  led_encoder->state = 0;
+  return ESP_OK;
+}
+
+static esp_err_t cfx_rmt_led_encoder_del(rmt_encoder_t *encoder) {
+  auto *led_encoder = reinterpret_cast<CFXRMTLedEncoder *>(encoder);
+  if (led_encoder->bytes_encoder != nullptr) {
+    rmt_del_encoder(led_encoder->bytes_encoder);
+  }
+  if (led_encoder->reset_encoder != nullptr) {
+    rmt_del_encoder(led_encoder->reset_encoder);
+  }
+  free(led_encoder);
+  return ESP_OK;
+}
+
+static esp_err_t cfx_rmt_new_led_encoder(const LedParams &params,
+                                         rmt_encoder_handle_t *ret_encoder) {
+  if (ret_encoder == nullptr) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  auto *led_encoder = static_cast<CFXRMTLedEncoder *>(
+      rmt_alloc_encoder_mem(sizeof(CFXRMTLedEncoder)));
+  if (led_encoder == nullptr) {
+    return ESP_ERR_NO_MEM;
+  }
+  memset(led_encoder, 0, sizeof(CFXRMTLedEncoder));
+
+  led_encoder->base.encode = cfx_rmt_led_encode;
+  led_encoder->base.reset = cfx_rmt_led_encoder_reset;
+  led_encoder->base.del = cfx_rmt_led_encoder_del;
+  led_encoder->reset_symbol = params.reset;
+
+  rmt_bytes_encoder_config_t bytes_config;
+  memset(&bytes_config, 0, sizeof(bytes_config));
+  bytes_config.bit0 = params.bit0;
+  bytes_config.bit1 = params.bit1;
+  bytes_config.flags.msb_first = 1;
+  esp_err_t err =
+      rmt_new_bytes_encoder(&bytes_config, &led_encoder->bytes_encoder);
+  if (err != ESP_OK) {
+    cfx_rmt_led_encoder_del(&led_encoder->base);
+    return err;
+  }
+
+  rmt_copy_encoder_config_t reset_config;
+  memset(&reset_config, 0, sizeof(reset_config));
+  err = rmt_new_copy_encoder(&reset_config, &led_encoder->reset_encoder);
+  if (err != ESP_OK) {
+    cfx_rmt_led_encoder_del(&led_encoder->base);
+    return err;
+  }
+
+  *ret_encoder = &led_encoder->base;
+  return ESP_OK;
+}
+#endif
+
 // --- P2: RMT async-done callback ---
 //
 // Fires from the RMT ISR when DMA completes. Clears the per-instance
@@ -1994,16 +2108,9 @@ void CFXLightOutput::setup_rmt_() {
 
   // Create RMT encoder
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  rmt_simple_encoder_config_t encoder;
-  memset(&encoder, 0, sizeof(encoder));
-  encoder.callback = encoder_callback;
-  encoder.arg = &this->params_;
-  encoder.min_chunk_size =
-      rmt_encoder_min_chunk_size(this->rmt_mem_block_symbols_);
-  ESP_LOGI(TAG, "RMT encoder: pin=%u min_chunk_size=%u", this->pin_,
-           (unsigned) encoder.min_chunk_size);
-  if (rmt_new_simple_encoder(&encoder, &this->encoder_) != ESP_OK) {
-    ESP_LOGE(TAG, "Simple encoder creation failed");
+  ESP_LOGI(TAG, "RMT encoder: pin=%u bytes+reset", this->pin_);
+  if (cfx_rmt_new_led_encoder(this->params_, &this->encoder_) != ESP_OK) {
+    ESP_LOGE(TAG, "LED bytes encoder creation failed");
     this->mark_failed();
     return;
   }
