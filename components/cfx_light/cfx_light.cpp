@@ -397,6 +397,9 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
   if (!this->is_spi_transport()) {
     return;
   }
+  if (!runtime_debug_enabled_for_output(this)) {
+    return;
+  }
 
   const uint32_t now_ms = esphome::millis();
   if (this->perf_diag_spi_loop_log_ms_ == 0) {
@@ -446,7 +449,7 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
   char led_fps_text[16];
   cfx::FrameDiagnostics::format_led_fps(this->get_led_fps(), led_fps_text,
                                         sizeof(led_fps_text));
-  ESP_LOGI(TAG,
+  ESP_LOGV(TAG,
            "CFX spi_cad[%s] frames=%" PRIu32
            " LedFPS=%s avg_us(dt=%" PRIu32 " show_q=%" PRIu32
            " write=%" PRIu32 " flush=%" PRIu32 " wait=%" PRIu32
@@ -481,6 +484,9 @@ void CFXLightOutput::log_spi_cadence_diag_(bool force) {
 
 void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   if (this->is_spi_transport()) {
+    return;
+  }
+  if (!runtime_debug_enabled_for_output(this)) {
     return;
   }
 
@@ -534,7 +540,13 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   cfx::FrameDiagnostics::format_led_fps(this->get_led_fps(), led_fps_text,
                                         sizeof(led_fps_text));
 
-  ESP_LOGI(TAG,
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  const char *encoder_label = "bytes+reset";
+#else
+  const char *encoder_label = "copy";
+#endif
+
+  ESP_LOGV(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
            " LedFPS=%s avg_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
@@ -543,11 +555,10 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            " req_us(avg=%" PRIu32 " max=%" PRIu32 ")"
            " guard(avg=%" PRIu32 " max=%" PRIu32
            " hits=%" PRIu64 " timeout=%" PRIu64 ")"
-           " rmt(tx=%" PRIu64 " launch_us(avg=%" PRIu32 " max=%" PRIu32
+           " rmt(enc=%s symbols=%" PRIu32 " mem=%" PRIu32
+           " tx=%" PRIu64 " launch_us(avg=%" PRIu32 " max=%" PRIu32
            ") coalesce=%" PRIu64 " wait=%" PRIu32
-           " timeout=%" PRIu32 " cb=%" PRIu64 " starve=%" PRIu64
-           "/%" PRIu32 " reset=%" PRIu64 "/%" PRIu32
-           " min_free=%" PRIu32 " in_flight=%d)",
+           " timeout=%" PRIu32 " in_flight=%d)",
            light_name, frames, led_fps_text, avg_show_queue_us, avg_write_us,
            avg_flush_us, avg_wait_us, this->perf_diag_max_queue_us_,
            this->perf_diag_max_write_us_, this->perf_diag_max_flush_us_,
@@ -556,19 +567,11 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            avg_guard_us, this->perf_diag_max_dma_guard_wait_us_,
            this->perf_diag_total_dma_guard_hits_,
            this->perf_diag_total_dma_guard_timeouts_,
+           encoder_label, this->rmt_symbols_, this->rmt_mem_block_symbols_,
            this->perf_diag_total_rmt_tx_launches_,
            avg_rmt_tx_dt_us, this->perf_diag_max_rmt_tx_launch_interval_us_,
            this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
-           this->rmt_wait_timeout_count_,
-           this->perf_diag_total_rmt_callback_count_,
-           this->perf_diag_total_rmt_starve_count_,
-           this->perf_diag_max_rmt_starve_count_,
-           this->perf_diag_total_rmt_reset_starve_count_,
-           this->perf_diag_max_rmt_reset_starve_count_,
-           this->perf_diag_min_rmt_symbols_free_ == UINT32_MAX
-               ? 0
-               : this->perf_diag_min_rmt_symbols_free_,
-           this->rmt_tx_in_flight_);
+           this->rmt_wait_timeout_count_, this->rmt_tx_in_flight_);
   this->reset_perf_diag_();
 }
 
@@ -2513,8 +2516,10 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
-  this->log_spi_cadence_diag_();
-  this->log_rmt_cadence_diag_();
+  if (runtime_debug_enabled_for_output(this)) {
+    this->log_spi_cadence_diag_();
+    this->log_rmt_cadence_diag_();
+  }
 
   if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_ &&
       !this->rmt_tx_in_flight_) {
