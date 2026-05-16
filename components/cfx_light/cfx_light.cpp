@@ -1898,7 +1898,11 @@ void CFXLightOutput::setup_rmt_() {
       this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
     } else {
       channel.flags.with_dma = true;
-      channel.mem_block_symbols = this->rmt_symbols_;
+      // Keep S3/P4 GDMA on one 48-symbol block. Although ESP-IDF's field is
+      // a DMA buffer size in this mode, larger values have caused S3 boot
+      // instability during LightState setup on real hardware. Non-DMA channels
+      // still use the configured rmt_symbols_ budget below.
+      channel.mem_block_symbols = 48;
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32 ": pin=%u %s=true mem_block_symbols=%u "
                "rmt_symbols=%u hw_tx_slots=%d",
