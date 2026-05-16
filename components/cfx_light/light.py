@@ -1298,6 +1298,14 @@ async def _register_power_output(var, config):
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
+    _LOGGER.warning(
+        "CFXLight codegen: light_id=%s output_id=%s name=%s chipset=%s pin=%s",
+        config[CONF_ID],
+        config[CONF_OUTPUT_ID],
+        config.get(CONF_NAME, config[CONF_ID].id),
+        config[CONF_CHIPSET],
+        config.get(CONF_PIN),
+    )
 
     segments = config.get(CONF_SEGMENTS, [])
     light_config = config
