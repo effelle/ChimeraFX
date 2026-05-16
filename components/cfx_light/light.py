@@ -1309,6 +1309,8 @@ async def to_code(config):
 
     segments = config.get(CONF_SEGMENTS, [])
     light_config = config
+    component_config = dict(config)
+    component_config[CONF_ID] = config[CONF_OUTPUT_ID]
     if segments:
         # --- Phase 2: Per-segment light entities ---
         # The segmented parent keeps its own master LightState so ESPHome state
@@ -1318,13 +1320,13 @@ async def to_code(config):
         await light.register_light(var, master_config)
         light_state = await cg.get_variable(config[CONF_ID])
         cg.add(var.set_master_light_state(light_state))
-        await cg.register_component(var, config)
+        await cg.register_component(var, component_config)
     else:
         # No segments: original single-light behavior
         await light.register_light(var, light_config)
         light_state = await cg.get_variable(config[CONF_ID])
         cg.add(var.set_master_light_state(light_state))
-        await cg.register_component(var, config)
+        await cg.register_component(var, component_config)
 
     # --- Hardware configuration (always) ---
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
