@@ -1898,7 +1898,7 @@ void CFXLightOutput::setup_rmt_() {
       this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
     } else {
       channel.flags.with_dma = true;
-      channel.mem_block_symbols = 48;
+      channel.mem_block_symbols = this->rmt_symbols_;
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32 ": pin=%u %s=true mem_block_symbols=%u "
                "rmt_symbols=%u hw_tx_slots=%d",
