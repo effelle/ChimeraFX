@@ -19,6 +19,7 @@ from esphome.components import light, event, sensor, select, text_sensor
 import esphome.config_validation as cv
 import esphome.core as core
 import logging
+import re
 from esphome.core import CORE
 from esphome.final_validate import full_config
 from esphome import pins
