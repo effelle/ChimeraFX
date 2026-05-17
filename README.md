@@ -45,6 +45,7 @@ The documentation includes everything you need:
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **Modular Preset Architecture** — Build bespoke configurations by mixing-and-matching transitions, settings and effects. Leverage effects and procedural color groups to create a nearly infinite library of architectural and decorative lighting styles.
 * **Intelligent Autotune** — Automatically snaps to optimal parameters, but instantly yields to manual slider adjustments.
+* **Power Monitoring & Reduction** — Estimate LED strip current, power, PSU load, and energy usage, with optional manual or automatic brightness reduction.
 * **100% Home Assistant Native** — Instantly exposes speed, intensity, palette, and other controls.
 * **Advanced Debugging** — Real-time runtime logger to fine-tune behavior and optimize frame-by-frame performance.
 
@@ -68,9 +69,9 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 - **Framework:** **ESP-IDF** and **Arduino**
 - **Recommended V1.41 target:** **ESP32 Classic**. It has the strongest validated multi-output RMT performance in this release.
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
-  - **ESP32-S3:** Supported, but not the preferred V1.41 target for large multi-output RMT installations. Use up to 2 RMT outputs or 2 SPI outputs per node; the first RMT output can use GDMA, while additional RMT outputs use non-DMA transmission.
+  - **ESP32-S3:** Fully supported, but strictly limited in V1.41 to a maximum of **2 RMT or 2 SPI outputs** per node. Due to the S3's smaller RMT hardware symbol pool (192 symbols compared to the Classic's 512) and the fact that only the first output utilizes the optimized GDMA path, pushing beyond 2 RMT outputs may result in visible visual artifacts. We are actively developing a native parallel driver to unlock higher S3 output density in an upcoming release.
   - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
-- **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811), **2-wire SPI** (APA102, SK9822) are working but still in **BETA** and under development.
+- **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822).
 
 > **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.
 

@@ -21,8 +21,8 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 *   **Use a dual-core ESP32.** Single-core devices are not recommended. ESP32-C3 RMT output is experimental in V1.41 after physical tests showed visible artifacts even with stable `LedFPS` readings — see the [hardware compatibility table](Installation.md#prerequisites).
 *   **For V1.41, ESP32 Classic is the preferred target for new multi-output installs.** It has the strongest validated RMT performance in this release.
 *   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. On ESP32 Classic, V1.41 testing with the heavy `Energy` effect at default values showed **360 LEDs per GPIO** as the near-60 `LedFPS` target and **600 LEDs per GPIO** as the 30+ `LedFPS` target.
-*   **ESP32-S3 is a 2-output target in V1.41.** Use up to 2 RMT outputs or 2 SPI outputs per node. The first S3 RMT output can use GDMA and has the best timing margin; wider parallel output support is planned for a future driver.
-*   **Do not mix RMT and SPI on the same V1.41 node.** Physical testing showed that sustained SPI traffic can disturb RMT timing on ESP32 Classic. Use RMT-only or SPI-only nodes, or split the transports across separate controllers.
+*   **ESP32-S3 is a 2-output target in V1.41.** Due to its notably smaller RMT symbol pool (192 symbols vs 512 on the Classic), just a maximum of 2 RMT or 2 SPI outputs per node is allowed. The first RMT output utilizes GDMA for optimal timing; work on a new parallel LED driver to unlock higher S3 output density is currently the top priority for upcoming releases.
+*   **Do not mix RMT and SPI on the same V1.41 node.** Physical testing showed that sustained SPI traffic can disturb RMT timing on ESP32 Classic. Use RMT-only or SPI-only nodes, or split the transports across separate controllers. ChimeraFX will reject the configuration if you attempt to mix RMT and SPI.
 *   **SPI strips (APA102, SK9822) shift the bottleneck to the CPU**, not the wire. The current ESP32 Classic test rig ran 2x2000 SPI LEDs smoothly, but power delivery and inrush still matter.
 *   **Heavy co-residents hurt.** Running ChimeraFX alongside *Bluetooth Proxy* or *Camera* components will likely cause instability.
 
@@ -40,7 +40,7 @@ ChimeraFX is built as a **transparent tool** designed to coexist peacefully with
     * **Memory Safety:** It employs a dynamic **"Heap Floor"** to ensure critical stacks (Wi-Fi, API, Bluetooth) always have the memory they need to function safely.
     * **Power Awareness:** Includes integrated **Power Monitoring & Reduction** to estimate LED strip current and PSU load, with optional automatic brightness reduction to prevent hardware strain.
 * **Resource Awareness:** It avoids "hijacking" the CPU, allowing your sensors, climate controls, and security features to remain responsive and reliable.
-* **Active Transparency:** Through a built-in runtime debugger, the engine reports real-time CPU and memory usage, empowering you to optimize your configuration based on hard data.
+* **Active Transparency:** Through a built-in runtime debugger, the engine reports real-time performance metrics and memory usage, empowering you to optimize your configuration based on hard data.
 
 This philosophy distinguishes ChimeraFX as a lighting engine that prioritizes the stability of your entire smart home ecosystem over just "showing pretty lights".
 

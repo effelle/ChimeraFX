@@ -76,9 +76,9 @@ light:
     # ... your light config ...
 ```
 
-On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). However, with multiple strips, this total must be divided among them. On an ESP32-S3, the RMT architecture is different: it has a smaller 192-symbol pool and only the first RMT output can use the stronger GDMA transmit path in the tested V1.41 configuration. Additional RMT outputs use non-DMA refill, which has less timing margin.
+On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). With multiple strips, this total must be divided among them.
 
-For V1.41, treat ESP32-S3 as a **2 RMT output** or **2 SPI output** target. Three or more S3 RMT outputs may compile and run, but physical testing showed visible artifacts even when `LedFPS` remained acceptable. This is a transport architecture limit, not an effect-specific failure. A parallel LED driver is planned for a later release to improve multi-output S3 performance.
+**ESP32-S3 Note:** The S3 RMT architecture is heavily constrained by its smaller 192-symbol pool (managed in 48-symbol blocks). In V1.41, only the first RMT output benefits from the high-margin GDMA transmit path. Additional RMT outputs use non-DMA refill, which has much less timing margin. ChimeraFX strictly limits setups to **2 RMT outputs** or **2 SPI outputs** per node. This is a hardware transport limit, not a software bug. Please wait for our upcoming parallel driver release before attempting high-density S3 installations.
 
 ---
 

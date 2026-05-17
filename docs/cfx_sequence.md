@@ -930,6 +930,11 @@ Two mirrored strips open the scene with the same slow monochromatic sweep. At th
 
 ??? abstract "Interference Takeover"
 
+    === "Preview"
+        <video loop muted playsinline autoplay preload="none" style="width: 100%; border-radius: 4px; margin-top: 10px;">
+            <source src="/ChimeraFX/assets/effects/Takeover.webm" type="video/webm">
+        </video>
+
     === "On-Device YAML"
         ```yaml
         cfx_sequence:
