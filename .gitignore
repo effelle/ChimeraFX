@@ -10,7 +10,6 @@ __pycache__/
 *.swp
 *.swo
 *~
-
 # OS    
 .DS_Store
 Thumbs.db
@@ -20,6 +19,3 @@ desktop.ini
 tools/visualizer/
 all_blobs.txt
 local_only
-.agent
-scratch/
-.codex_tmp/
