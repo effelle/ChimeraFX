@@ -787,26 +787,63 @@ void CFXRunner::generateRandomPalette() {
   DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
 
   const uint8_t base_hue = static_cast<uint8_t>(entropy >> 24);
-  const uint8_t harmony_offsets[4] = {0, 24, 96, 160};
+  const uint8_t style = static_cast<uint8_t>((entropy >> 5) % 5u);
+  uint8_t hue_roles[4];
+  switch (style) {
+  case 0: // Complementary: two strong families, not a full wheel.
+    hue_roles[0] = base_hue;
+    hue_roles[1] = static_cast<uint8_t>(base_hue + 10);
+    hue_roles[2] = static_cast<uint8_t>(base_hue + 128);
+    hue_roles[3] = static_cast<uint8_t>(base_hue + 140);
+    break;
+  case 1: // Analogous with one sharp accent.
+    hue_roles[0] = base_hue;
+    hue_roles[1] = static_cast<uint8_t>(base_hue + 18);
+    hue_roles[2] = static_cast<uint8_t>(base_hue + 36);
+    hue_roles[3] = static_cast<uint8_t>(base_hue + 112);
+    break;
+  case 2: // Split complement.
+    hue_roles[0] = base_hue;
+    hue_roles[1] = static_cast<uint8_t>(base_hue + 96);
+    hue_roles[2] = static_cast<uint8_t>(base_hue + 160);
+    hue_roles[3] = static_cast<uint8_t>(base_hue + 14);
+    break;
+  case 3: // Deep monochrome with a distant highlight.
+    hue_roles[0] = base_hue;
+    hue_roles[1] = static_cast<uint8_t>(base_hue + 8);
+    hue_roles[2] = static_cast<uint8_t>(base_hue + 22);
+    hue_roles[3] = static_cast<uint8_t>(base_hue + 176);
+    break;
+  default: // Cinematic cross-pair.
+    hue_roles[0] = base_hue;
+    hue_roles[1] = static_cast<uint8_t>(base_hue + 42);
+    hue_roles[2] = static_cast<uint8_t>(base_hue + 128);
+    hue_roles[3] = static_cast<uint8_t>(base_hue + 170);
+    break;
+  }
+
+  const uint8_t role_lanes[16] = {
+      0, 0, 0, 1, 1, 0, 2, 2,
+      2, 3, 3, 2, 0, 1, 1, 0};
   const uint8_t value_lanes[16] = {
-      72, 142, 224, 104, 248, 88, 168, 232,
-      64, 152, 240, 116, 204, 80, 184, 255};
+      42, 70, 126, 176, 232, 94, 48, 104,
+      204, 58, 148, 238, 76, 118, 218, 52};
 
   for (int i = 0; i < 16; i++) {
     entropy = mix32(entropy + 0x9E3779B9u + static_cast<uint32_t>(i * 97));
-    int8_t hue_jitter = static_cast<int8_t>((entropy >> 16) & 0x1F) - 15;
+    int8_t hue_jitter = static_cast<int8_t>((entropy >> 16) & 0x0F) - 7;
     uint8_t h = static_cast<uint8_t>(
-        base_hue + harmony_offsets[i & 0x03] + hue_jitter);
+        hue_roles[role_lanes[i]] + hue_jitter);
 
-    int16_t v_jitter = static_cast<int16_t>((entropy >> 8) & 0x1F) - 12;
+    int16_t v_jitter = static_cast<int16_t>((entropy >> 8) & 0x1F) - 10;
     int16_t v_i = static_cast<int16_t>(value_lanes[i]) + v_jitter;
-    if (v_i < 56)
-      v_i = 56;
+    if (v_i < 34)
+      v_i = 34;
     if (v_i > 255)
       v_i = 255;
     uint8_t v = static_cast<uint8_t>(v_i);
 
-    uint8_t s_floor = (v < 120) ? 224 : ((v > 224) ? 168 : 196);
+    uint8_t s_floor = (v > 224) ? 208 : 224;
     uint8_t s_span = static_cast<uint8_t>(255u - s_floor);
     uint8_t s = static_cast<uint8_t>(s_floor + ((entropy >> 3) % (s_span + 1u)));
     CHSV color(h, s, v);

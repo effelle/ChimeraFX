@@ -303,7 +303,13 @@ public:
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }
   void setName(const char *name) { _name = name; }
-  void setPaletteSeedSalt(uint32_t salt) { palette_seed_salt_ = salt; }
+  void setPaletteSeedSalt(uint32_t salt) {
+    if (palette_seed_salt_ == salt)
+      return;
+    palette_seed_salt_ = salt;
+    if (_segment.palette == 254)
+      generateRandomPalette();
+  }
   const char *getModeName() const;
 
   void service();
