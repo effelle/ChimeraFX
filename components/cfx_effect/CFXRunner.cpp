@@ -786,11 +786,29 @@ void CFXRunner::generateRandomPalette() {
   }
   DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
 
+  const uint8_t base_hue = static_cast<uint8_t>(entropy >> 24);
+  const uint8_t harmony_offsets[4] = {0, 24, 96, 160};
+  const uint8_t value_lanes[16] = {
+      72, 142, 224, 104, 248, 88, 168, 232,
+      64, 152, 240, 116, 204, 80, 184, 255};
+
   for (int i = 0; i < 16; i++) {
     entropy = mix32(entropy + 0x9E3779B9u + static_cast<uint32_t>(i * 97));
-    uint8_t h = static_cast<uint8_t>(entropy >> 24);
-    uint8_t s = static_cast<uint8_t>(184u + ((entropy >> 12) % 72u));
-    uint8_t v = static_cast<uint8_t>(216u + ((entropy >> 4) % 40u));
+    int8_t hue_jitter = static_cast<int8_t>((entropy >> 16) & 0x1F) - 15;
+    uint8_t h = static_cast<uint8_t>(
+        base_hue + harmony_offsets[i & 0x03] + hue_jitter);
+
+    int16_t v_jitter = static_cast<int16_t>((entropy >> 8) & 0x1F) - 12;
+    int16_t v_i = static_cast<int16_t>(value_lanes[i]) + v_jitter;
+    if (v_i < 56)
+      v_i = 56;
+    if (v_i > 255)
+      v_i = 255;
+    uint8_t v = static_cast<uint8_t>(v_i);
+
+    uint8_t s_floor = (v < 120) ? 224 : ((v > 224) ? 168 : 196);
+    uint8_t s_span = static_cast<uint8_t>(255u - s_floor);
+    uint8_t s = static_cast<uint8_t>(s_floor + ((entropy >> 3) % (s_span + 1u)));
     CHSV color(h, s, v);
 
     // Convert to RGB
