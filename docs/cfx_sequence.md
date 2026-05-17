@@ -556,8 +556,8 @@ control entities automatically:
 
 - **Internal Sequences**: a select dropdown that starts a sequence when you pick
   its name.
-- **Stop All**: a panic-stop button that force-stops all known sequences and
-  forces their lights off.
+- **Stop All**: a hard panic button that force-stops every sequence and turns
+  off every known ChimeraFX light or segment on the device.
 
 The dropdown is the friendliest way to operate sequences from dashboards:
 
@@ -743,11 +743,17 @@ Not every effect sweeps in a direction, so `cfx_reach` doesn't behave the same f
 
 ### Stop All
 
-A **Stop All** button entity is created automatically in HA whenever sequences are defined. Useful for dashboards or emergency "kill everything" automations.
+A **Stop All** button entity is created automatically in HA whenever sequences
+are defined. It is a hard kill-all panic control for dashboards or emergency
+automations.
 
-Use **Stop All** for a hard, global panic stop.
+Use **Stop All** when you want every ChimeraFX sequence, `cfx_run`, light, and
+segment stopped immediately. It does not restore previous states and does not
+wait for outros.
 Use `cfx_sequence.stop` with `mode: self` or `mode: tree` when you want a
 targeted, sequence-aware shutdown that still respects normal sequence teardown.
+Select `None` in **Internal Sequences** when you want the friendly UI path for
+stopping the active selected sequence.
 Use the HA API start/stop calls when Home Assistant needs to target a specific
 sequence directly by name.
 

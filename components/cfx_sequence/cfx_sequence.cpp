@@ -1374,22 +1374,73 @@ void CFXSequence::force_stop_all() {
 
 void CFXSequence::stop_all() {
   std::set<light::LightState *> unique_lights;
-  std::vector<CFXSequence *> pooled_to_release;
-  for (auto *seq : CFXSequence::instances) {
-    for (auto *l : seq->lights_) {
-      unique_lights.insert(l);
+  auto add_light = [&unique_lights](light::LightState *state) {
+    if (state != nullptr) {
+      unique_lights.insert(state);
     }
-    if (seq->is_running_) {
-      seq->is_running_ = false;
-      seq->clear_active_binding();
-      seq->duration_complete_fired_ = false;
+  };
+
+  std::vector<CFXSequence *> sequences = CFXSequence::instances;
+  std::vector<CFXSequence *> pooled_to_release;
+  for (auto *seq : sequences) {
+    if (seq == nullptr) {
+      continue;
+    }
+    for (auto *l : seq->lights_) {
+      add_light(l);
     }
     if (seq->is_pool_owned_) {
       pooled_to_release.push_back(seq);
     }
   }
 
+  auto collect_effect_lights =
+      [&add_light](
+          const std::vector<chimera_fx::CFXAddressableLightEffect *> &effects) {
+        for (auto *inst : effects) {
+          if (inst != nullptr) {
+            add_light(inst->get_light_state());
+          }
+        }
+      };
+  collect_effect_lights(chimera_fx::CFXAddressableLightEffect::all_effects);
+  collect_effect_lights(
+      chimera_fx::CFXAddressableLightEffect::all_segment_effects);
+
+  for (auto *segment : cfx_light::CFXVirtualSegmentLight::all_segments) {
+    if (segment == nullptr) {
+      continue;
+    }
+    add_light(segment->get_state_parent());
+    auto *parent = segment->get_parent();
+    if (parent != nullptr) {
+      add_light(parent->get_master_light_state());
+    }
+  }
+
+  for (auto *seq : sequences) {
+    if (seq == nullptr) {
+      continue;
+    }
+
+    seq->is_starting_ = false;
+    seq->is_running_ = false;
+    seq->duration_complete_fired_ = false;
+    seq->duration_completion_pending_ = false;
+    seq->completion_reported_ = false;
+    seq->clear_active_binding();
+
+    if (seq->is_pool_owned_) {
+      continue;
+    }
+
+    seq->is_stopping_ = true;
+    seq->begin_teardown_(TeardownMode::FORCE_OFF);
+    seq->finalize_teardown_();
+  }
+
   // Two calls required: see stop() else branch for explanation.
+  uint8_t wdt_counter = 0;
   for (auto *l : unique_lights) {
     auto clear_call = l->make_call();
     clear_call.set_effect("None");
@@ -1399,6 +1450,10 @@ void CFXSequence::stop_all() {
     off_call.set_state(false);
     off_call.set_transition_length(0);
     off_call.perform();
+
+    if (++wdt_counter % 16 == 0) {
+      esphome::App.feed_wdt();
+    }
   }
 
   for (auto *seq : pooled_to_release) {
@@ -1759,7 +1814,7 @@ void CFXSequence::CFXSequenceListener::on_light_remote_values_update() {
 
 
 void CFXStopAllButton::press_action() {
-  ESP_LOGD(TAG, "Stop All: stopping all sequences and forcing lights off");
+  ESP_LOGD(TAG, "Stop All: killing all sequences and CFX lights");
   CFXSequence::stop_all();
   // Update Select UI
   if (CFXSequenceSelect::instance != nullptr) {
