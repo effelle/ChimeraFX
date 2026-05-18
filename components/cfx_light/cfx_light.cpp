@@ -62,7 +62,7 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const char *const PARALLEL_BACKEND_REV = "boot-safe-no-i80-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-dummy-cmd-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -2387,7 +2387,10 @@ bool CFXLightOutput::init_parallel_backend_() {
   io_config.trans_queue_depth = 1;
   io_config.on_color_trans_done = parallel_tx_done_cb_;
   io_config.user_ctx = &g_parallel_group;
-  io_config.lcd_cmd_bits = 0;
+  // ESP32 Classic's esp_lcd I80 path is backed by I2S-LCD and always sends
+  // a command phase before color data. A zero-bit command hangs that driver,
+  // so use one dummy low byte before the LED frame.
+  io_config.lcd_cmd_bits = 8;
   io_config.lcd_param_bits = 0;
   io_config.dc_levels.dc_idle_level = 0;
   io_config.dc_levels.dc_cmd_level = 0;
@@ -2518,7 +2521,7 @@ void CFXLightOutput::flush_parallel_() {
 #ifdef CFX_PARALLEL_I80_ENABLED
   g_parallel_group.tx_in_flight = true;
   esp_err_t err = esp_lcd_panel_io_tx_color(
-      g_parallel_group.io, -1, g_parallel_group.frame_buf,
+      g_parallel_group.io, 0, g_parallel_group.frame_buf,
       g_parallel_group.frame_size);
   if (err != ESP_OK) {
     g_parallel_group.tx_in_flight = false;

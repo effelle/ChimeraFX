@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 9
+CFX_LIGHT_SCHEMA_REV = 10
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -1527,6 +1527,9 @@ async def to_code(config):
         from esphome.components.esp32 import include_builtin_idf_component
         include_builtin_idf_component("esp_driver_spi")
         include_builtin_idf_component("esp_driver_rmt")
+        if is_parallel:
+            include_builtin_idf_component("esp_lcd")
+            cg.add_define("CFX_PARALLEL_I80_ENABLED")
     except ImportError:
         pass
 
