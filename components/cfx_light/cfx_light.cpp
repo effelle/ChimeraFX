@@ -119,7 +119,10 @@ struct CFXParallelGroupRuntime {
   uint8_t *classic_reset_buf{nullptr};
   volatile bool classic_sending{false};
   volatile uint32_t classic_completed_chunks{0};
+  volatile uint32_t classic_expected_chunks{0};
+  volatile bool classic_auto_relink{false};
   volatile uint32_t classic_dma_errors{0};
+  volatile uint32_t classic_relink_count{0};
   uint8_t classic_data_desc_tail[PARALLEL_TX_BUFFER_COUNT]{};
   uint32_t classic_underrun_count{0};
   uint32_t classic_stream_count{0};
@@ -175,6 +178,15 @@ static void IRAM_ATTR parallel_classic_i2s_isr_(void *arg) {
   if (out_eof && group != nullptr && group->classic_sending) {
     group->classic_completed_chunks++;
     group->tx_done_count++;
+    if (group->classic_auto_relink &&
+        group->classic_expected_chunks != 0 &&
+        group->classic_completed_chunks >= group->classic_expected_chunks &&
+        group->classic_descs != nullptr) {
+      group->classic_descs[PARALLEL_CLASSIC_SILENCE_DESC_B].qe.stqe_next =
+          &group->classic_descs[PARALLEL_CLASSIC_SILENCE_DESC_A];
+      group->classic_auto_relink = false;
+      group->classic_relink_count++;
+    }
   }
   if (out_dscr_err && group != nullptr) {
     group->classic_dma_errors++;
@@ -3180,6 +3192,8 @@ void CFXLightOutput::flush_parallel_() {
   }
 
   g_parallel_group.classic_completed_chunks = 0;
+  g_parallel_group.classic_expected_chunks = total_chunks;
+  g_parallel_group.classic_auto_relink = true;
   g_parallel_group.classic_dma_errors = 0;
   g_parallel_group.classic_sending = true;
   g_parallel_group.tx_in_flight = true;
@@ -3205,7 +3219,11 @@ void CFXLightOutput::flush_parallel_() {
           static_cast<uint8_t>(recycled_chunks % PARALLEL_TX_BUFFER_COUNT);
       if (!build_classic_chunk(next_chunk_to_build, free_index)) {
         this->status_set_warning();
+        descs[PARALLEL_CLASSIC_SILENCE_DESC_B].qe.stqe_next =
+            &descs[PARALLEL_CLASSIC_SILENCE_DESC_A];
         g_parallel_group.classic_sending = false;
+        g_parallel_group.classic_auto_relink = false;
+        g_parallel_group.classic_expected_chunks = 0;
         g_parallel_group.tx_in_flight = false;
         g_parallel_group.tx_in_flight_count = 0;
         return;
@@ -3243,6 +3261,8 @@ void CFXLightOutput::flush_parallel_() {
       &descs[PARALLEL_CLASSIC_SILENCE_DESC_A];
   esp_rom_delay_us(150);
   g_parallel_group.classic_sending = false;
+  g_parallel_group.classic_auto_relink = false;
+  g_parallel_group.classic_expected_chunks = 0;
   g_parallel_group.tx_in_flight = false;
   g_parallel_group.tx_in_flight_count = 0;
 
@@ -3271,7 +3291,7 @@ void CFXLightOutput::flush_parallel_() {
              "bytes=%u chunk=%u/%u build+stream=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
-             " underruns=%" PRIu32,
+             " underruns=%" PRIu32 " relinks=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, first_pixel[0][0], first_pixel[0][1],
@@ -3282,7 +3302,8 @@ void CFXLightOutput::flush_parallel_() {
              total_chunks, micros() - flush_start_us, build_us, tx_wait_us,
              queue_us, g_parallel_group.coalesced_count,
              g_parallel_group.timeout_flush_count,
-             g_parallel_group.classic_underrun_count);
+             g_parallel_group.classic_underrun_count,
+             static_cast<uint32_t>(g_parallel_group.classic_relink_count));
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     if (g_parallel_group.outputs[lane] != nullptr) {
