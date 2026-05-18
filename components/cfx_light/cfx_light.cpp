@@ -65,7 +65,7 @@ static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
 static const uint16_t PARALLEL_CHUNK_LEDS = 64;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunked-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunked-fix-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -2365,9 +2365,17 @@ bool CFXLightOutput::init_parallel_backend_() {
     return false;
   }
   if (g_parallel_group.init_attempted) {
-    ESP_LOGE(TAG, "Parallel group '%s' backend init was already attempted",
+    if (g_parallel_group.bus != nullptr || g_parallel_group.io != nullptr ||
+        g_parallel_group.frame_buf != nullptr) {
+      ESP_LOGE(TAG,
+               "Parallel group '%s' backend init was already attempted "
+               "(bus=%p io=%p buf=%p)",
+               g_parallel_group.name.c_str(), g_parallel_group.bus,
+               g_parallel_group.io, g_parallel_group.frame_buf);
+      return false;
+    }
+    ESP_LOGW(TAG, "Retrying parallel backend init for group '%s'",
              g_parallel_group.name.c_str());
-    return false;
   }
   g_parallel_group.init_attempted = true;
 
@@ -2430,6 +2438,9 @@ bool CFXLightOutput::init_parallel_backend_() {
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Parallel I80 panel IO init failed for group '%s' (err=%d)",
              g_parallel_group.name.c_str(), (int) err);
+    esp_lcd_del_i80_bus(g_parallel_group.bus);
+    g_parallel_group.bus = nullptr;
+    g_parallel_group.init_attempted = false;
     return false;
   }
 
@@ -2443,9 +2454,14 @@ bool CFXLightOutput::init_parallel_backend_() {
              "largest DMA block before init was %u bytes",
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              static_cast<unsigned>(dma_largest));
+    esp_lcd_panel_io_del(g_parallel_group.io);
+    g_parallel_group.io = nullptr;
+    esp_lcd_del_i80_bus(g_parallel_group.bus);
+    g_parallel_group.bus = nullptr;
+    g_parallel_group.init_attempted = false;
     return false;
   }
-  memset(g_parallel_group.frame_buf, 0, g_parallel_group.frame_size);
+  memset(g_parallel_group.frame_buf, 0, g_parallel_group.chunk_frame_size);
   g_parallel_group.ready = true;
   ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
