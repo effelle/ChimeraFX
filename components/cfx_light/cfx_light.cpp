@@ -183,20 +183,16 @@ static void IRAM_ATTR parallel_classic_i2s_isr_(void *arg) {
 }
 
 static esp_err_t parallel_classic_set_clock_() {
-  auto clkm_conf = I2S1.clkm_conf;
-  clkm_conf.val = 0;
-  clkm_conf.clk_en = 1;
-  clkm_conf.clka_en = 0;
-  clkm_conf.clkm_div_num = 16;
-  clkm_conf.clkm_div_b = 2;
-  clkm_conf.clkm_div_a = 3;
-  I2S1.clkm_conf.val = clkm_conf.val;
+  I2S1.clkm_conf.val = 0;
+  I2S1.clkm_conf.clk_en = 1;
+  I2S1.clkm_conf.clka_en = 0;
+  I2S1.clkm_conf.clkm_div_num = 16;
+  I2S1.clkm_conf.clkm_div_b = 2;
+  I2S1.clkm_conf.clkm_div_a = 3;
 
-  auto sample_rate_conf = I2S1.sample_rate_conf;
-  sample_rate_conf.val = 0;
-  sample_rate_conf.tx_bck_div_num = 4;
-  sample_rate_conf.tx_bits_mod = 8;
-  I2S1.sample_rate_conf.val = sample_rate_conf.val;
+  I2S1.sample_rate_conf.val = 0;
+  I2S1.sample_rate_conf.tx_bck_div_num = 4;
+  I2S1.sample_rate_conf.tx_bits_mod = 8;
   return ESP_OK;
 }
 
@@ -234,45 +230,33 @@ static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group)
   I2S1.conf.tx_fifo_reset = 1;
   I2S1.conf.tx_fifo_reset = 0;
 
-  auto conf2 = I2S1.conf2;
-  conf2.val = 0;
-  conf2.lcd_en = 1;
-  conf2.lcd_tx_wrx2_en = 1;
-  conf2.lcd_tx_sdx2_en = 0;
-  I2S1.conf2.val = conf2.val;
+  I2S1.conf2.val = 0;
+  I2S1.conf2.lcd_en = 1;
+  I2S1.conf2.lcd_tx_wrx2_en = 1;
+  I2S1.conf2.lcd_tx_sdx2_en = 0;
 
-  auto lc_conf = I2S1.lc_conf;
-  lc_conf.val = 0;
-  lc_conf.out_eof_mode = 1;
-  I2S1.lc_conf.val = lc_conf.val;
+  I2S1.lc_conf.val = 0;
+  I2S1.lc_conf.out_eof_mode = 1;
 
   I2S1.pdm_conf.pcm2pdm_conv_en = 0;
   I2S1.pdm_conf.pdm2pcm_conv_en = 0;
 
-  auto fifo_conf = I2S1.fifo_conf;
-  fifo_conf.val = 0;
-  fifo_conf.tx_fifo_mod_force_en = 1;
-  fifo_conf.tx_fifo_mod = 1;
-  fifo_conf.tx_data_num = 32;
-  I2S1.fifo_conf.val = fifo_conf.val;
+  I2S1.fifo_conf.val = 0;
+  I2S1.fifo_conf.tx_fifo_mod_force_en = 1;
+  I2S1.fifo_conf.tx_fifo_mod = 1;
+  I2S1.fifo_conf.tx_data_num = 32;
 
-  auto conf1 = I2S1.conf1;
-  conf1.val = 0;
-  conf1.tx_stop_en = 0;
-  conf1.tx_pcm_bypass = 1;
-  I2S1.conf1.val = conf1.val;
+  I2S1.conf1.val = 0;
+  I2S1.conf1.tx_stop_en = 0;
+  I2S1.conf1.tx_pcm_bypass = 1;
 
-  auto conf_chan = I2S1.conf_chan;
-  conf_chan.val = 0;
-  conf_chan.tx_chan_mod = 1;
-  I2S1.conf_chan.val = conf_chan.val;
+  I2S1.conf_chan.val = 0;
+  I2S1.conf_chan.tx_chan_mod = 1;
 
-  auto conf = I2S1.conf;
-  conf.val = 0;
-  conf.tx_msb_shift = 0;
-  conf.tx_right_first = 1;
-  conf.tx_short_sync = 0;
-  I2S1.conf.val = conf.val;
+  I2S1.conf.val = 0;
+  I2S1.conf.tx_msb_shift = 0;
+  I2S1.conf.tx_right_first = 1;
+  I2S1.conf.tx_short_sync = 0;
 
   I2S1.timing.val = 0;
   I2S1.pdm_conf.tx_pdm_en = 0;
@@ -294,11 +278,9 @@ static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group)
   I2S1.conf.tx_fifo_reset = 0;
   I2S1.conf.rx_fifo_reset = 0;
 
-  auto lc_dma_conf = I2S1.lc_conf;
-  lc_dma_conf.val = 0;
-  lc_dma_conf.out_data_burst_en = 0;
-  lc_dma_conf.indscr_burst_en = 0;
-  I2S1.lc_conf.val = lc_dma_conf.val;
+  I2S1.lc_conf.val = 0;
+  I2S1.lc_conf.out_data_burst_en = 0;
+  I2S1.lc_conf.indscr_burst_en = 0;
 
   esp_err_t err = esp_intr_alloc(ETS_I2S1_INTR_SOURCE,
                                  ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL1,
