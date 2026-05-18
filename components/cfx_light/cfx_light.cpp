@@ -89,7 +89,8 @@ static const uint8_t PARALLEL_CLASSIC_RESET_DESC =
 static const size_t PARALLEL_CLASSIC_SILENCE_BYTES = 32;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
-static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
+static const uint32_t PARALLEL_LCD_FLUSH_TIMEOUT_MS = 2;
+static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
@@ -3494,8 +3495,14 @@ void CFXLightOutput::service_parallel_group_flush_() {
       g_parallel_group.pending_first_ms == 0) {
     return;
   }
+  const uint32_t flush_timeout_ms =
+#if defined(CONFIG_IDF_TARGET_ESP32)
+      PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS;
+#else
+      PARALLEL_LCD_FLUSH_TIMEOUT_MS;
+#endif
   if ((esphome::millis() - g_parallel_group.pending_first_ms) <
-      PARALLEL_FLUSH_TIMEOUT_MS) {
+      flush_timeout_ms) {
     return;
   }
 
