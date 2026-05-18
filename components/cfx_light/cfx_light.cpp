@@ -63,9 +63,11 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 64;
+static const uint16_t PARALLEL_CHUNK_LEDS = 32;
+static const size_t PARALLEL_CANARY_BYTES = 32;
+static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunked-fix-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunked-guard-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -94,6 +96,7 @@ struct CFXParallelGroupRuntime {
   size_t frame_size{0};  // Logical full-frame size, for diagnostics.
   uint16_t chunk_leds{0};
   size_t chunk_frame_size{0};
+  size_t chunk_alloc_size{0};
   uint32_t tx_count{0};
   uint32_t chunk_tx_count{0};
   uint32_t coalesced_count{0};
@@ -2295,6 +2298,8 @@ void CFXLightOutput::setup_parallel_() {
         static_cast<size_t>(g_parallel_group.chunk_leds) *
             this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES +
         PARALLEL_RESET_SAMPLES;
+    g_parallel_group.chunk_alloc_size =
+        g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
       g_parallel_group.lane_pins[i] = this->parallel_lane_pins_[i];
     }
@@ -2324,13 +2329,14 @@ void CFXLightOutput::setup_parallel_() {
     ESP_LOGI(TAG,
              "Parallel backend %s group '%s' configured for deferred init: "
              "lanes=%u wr=GPIO%u internal_dc=GPIO%u pclk=%" PRIu32
-             "Hz frame=%u bytes chunk=%u leds/%u bytes data=[%u,%u,%u,%u,%u,%u,%u,%u]",
+             "Hz frame=%u bytes chunk=%u leds/%u bytes alloc=%u data=[%u,%u,%u,%u,%u,%u,%u,%u]",
              PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
              g_parallel_group.lane_count, g_parallel_group.strobe_pin,
              g_parallel_group.dc_pin, PARALLEL_PCLK_HZ,
              static_cast<unsigned>(frame_size),
              g_parallel_group.chunk_leds,
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
              g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
              g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
              g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
@@ -2396,7 +2402,7 @@ bool CFXLightOutput::init_parallel_backend_() {
       heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   ESP_LOGI(TAG,
            "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
-           "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
+           "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes alloc=%u "
            "dma_free=%u dma_largest=%u",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
            g_parallel_group.lane_count, g_parallel_group.strobe_pin,
@@ -2404,6 +2410,7 @@ bool CFXLightOutput::init_parallel_backend_() {
            static_cast<unsigned>(g_parallel_group.frame_size),
            g_parallel_group.chunk_leds,
            static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+           static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
            static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
 
   esp_err_t err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
@@ -2446,13 +2453,13 @@ bool CFXLightOutput::init_parallel_backend_() {
 
   g_parallel_group.frame_buf = static_cast<uint8_t *>(
       esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
-                                    g_parallel_group.chunk_frame_size,
+                                    g_parallel_group.chunk_alloc_size,
                                     MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
   if (g_parallel_group.frame_buf == nullptr) {
     ESP_LOGE(TAG,
              "Cannot allocate parallel frame buffer (%u bytes, DMA); "
              "largest DMA block before init was %u bytes",
-             static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
              static_cast<unsigned>(dma_largest));
     esp_lcd_panel_io_del(g_parallel_group.io);
     g_parallel_group.io = nullptr;
@@ -2461,7 +2468,9 @@ bool CFXLightOutput::init_parallel_backend_() {
     g_parallel_group.init_attempted = false;
     return false;
   }
-  memset(g_parallel_group.frame_buf, 0, g_parallel_group.chunk_frame_size);
+  memset(g_parallel_group.frame_buf, 0, g_parallel_group.chunk_alloc_size);
+  memset(g_parallel_group.frame_buf + g_parallel_group.chunk_frame_size,
+         PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
   g_parallel_group.ready = true;
   ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
@@ -2496,7 +2505,11 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
   }
 
   memset(dest, 0, needed);
+  if (len >= needed + PARALLEL_CANARY_BYTES) {
+    memset(dest + needed, PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+  }
   uint8_t *out = dest;
+  uint8_t *const end = dest + needed;
 
   for (uint16_t offset = 0; offset < led_count; offset++) {
     const uint16_t led = start_led + offset;
@@ -2524,12 +2537,36 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         }
 
         for (uint8_t sample = 0; sample < PARALLEL_SYMBOL_SAMPLES; sample++) {
+          if (out >= end) {
+            ESP_LOGE(TAG,
+                     "Parallel frame writer overflow guard tripped "
+                     "(start=%u leds=%u needed=%u)",
+                     start_led, led_count, static_cast<unsigned>(needed));
+            return false;
+          }
           *out++ = sample_values[sample];
         }
       }
     }
   }
 
+  if (out != end) {
+    ESP_LOGE(TAG,
+             "Parallel frame writer size mismatch (wrote=%u needed=%u)",
+             static_cast<unsigned>(out - dest), static_cast<unsigned>(needed));
+    return false;
+  }
+  if (len >= needed + PARALLEL_CANARY_BYTES) {
+    for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
+      if (dest[needed + i] != PARALLEL_CANARY_VALUE) {
+        ESP_LOGE(TAG,
+                 "Parallel frame canary corrupted while building chunk "
+                 "(start=%u leds=%u at=%u)",
+                 start_led, led_count, static_cast<unsigned>(i));
+        return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -2607,7 +2644,7 @@ void CFXLightOutput::flush_parallel_() {
         (final_chunk ? PARALLEL_RESET_SAMPLES : 0u);
 
     if (!this->build_parallel_frame_(g_parallel_group.frame_buf,
-                                     g_parallel_group.chunk_frame_size,
+                                     g_parallel_group.chunk_alloc_size,
                                      led_start, chunk_leds, final_chunk)) {
       ESP_LOGE(TAG,
                "Parallel frame chunk build failed for group '%s' "
@@ -2616,6 +2653,29 @@ void CFXLightOutput::flush_parallel_() {
                final_chunk ? "yes" : "no");
       this->status_set_warning();
       return;
+    }
+    if (chunk_size > g_parallel_group.chunk_frame_size ||
+        g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES >
+            g_parallel_group.chunk_alloc_size) {
+      ESP_LOGE(TAG,
+               "Parallel chunk geometry invalid "
+               "(chunk_size=%u frame=%u alloc=%u)",
+               static_cast<unsigned>(chunk_size),
+               static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+               static_cast<unsigned>(g_parallel_group.chunk_alloc_size));
+      this->status_set_warning();
+      return;
+    }
+    for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
+      if (g_parallel_group.frame_buf[g_parallel_group.chunk_frame_size + i] !=
+          PARALLEL_CANARY_VALUE) {
+        ESP_LOGE(TAG,
+                 "Parallel DMA buffer canary corrupted before TX "
+                 "(chunk=%" PRIu32 " at=%u)",
+                 chunks_this_frame, static_cast<unsigned>(i));
+        this->status_set_warning();
+        return;
+      }
     }
 
     g_parallel_group.tx_in_flight = true;
