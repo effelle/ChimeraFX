@@ -329,6 +329,23 @@ public:
   void set_parallel_group(const std::string &group) {
     this->parallel_group_ = group;
   }
+  void set_parallel_lane_index(uint8_t index) {
+    this->parallel_lane_index_ = index;
+  }
+  void set_parallel_lane_count(uint8_t count) {
+    this->parallel_lane_count_ = count;
+  }
+  void set_parallel_strobe_pin(uint8_t pin) {
+    this->parallel_strobe_pin_ = pin;
+  }
+  void set_parallel_dc_pin(uint8_t pin) {
+    this->parallel_dc_pin_ = pin;
+  }
+  void set_parallel_lane_pin(uint8_t index, uint8_t pin) {
+    if (index < 8) {
+      this->parallel_lane_pins_[index] = pin;
+    }
+  }
   void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
@@ -440,6 +457,8 @@ protected:
   void flush_rmt_();
   void flush_spi_();
   void flush_parallel_();
+  size_t get_parallel_frame_size_() const;
+  bool build_parallel_frame_(uint8_t *dest, size_t len);
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
@@ -553,6 +572,11 @@ protected:
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};
   std::string parallel_group_{};
+  uint8_t parallel_lane_index_{0};
+  uint8_t parallel_lane_count_{0};
+  uint8_t parallel_strobe_pin_{22};
+  uint8_t parallel_dc_pin_{21};
+  uint8_t parallel_lane_pins_[8]{};
   uint8_t spi_data_pin_{0};
   uint8_t spi_clock_pin_{0};
   uint32_t spi_speed_hz_{10000000};  // 10 MHz default

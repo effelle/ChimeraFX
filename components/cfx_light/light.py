@@ -184,6 +184,7 @@ CONF_CLOCK_PIN = "clock_pin"
 CONF_SPI_SPEED = "spi_speed"
 CONF_SPI_HOST = "spi_host"
 CONF_PARALLEL_GROUP = "parallel_group"
+CONF_PARALLEL_STROBE_PIN = "parallel_strobe_pin"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DUR = "set_inout_dur"
@@ -194,6 +195,9 @@ SET_COLOR_SCHEMA = cv.All(
     cv.ensure_list(cv.int_range(min=0, max=100)),
     cv.Length(min=3, max=4),
 )
+
+PARALLEL_STROBE_PIN_DEFAULT = 22
+PARALLEL_DC_PIN_DEFAULT = 21
 
 def _current_ma(value):
     if isinstance(value, (int, float)):
@@ -533,6 +537,15 @@ def _is_legacy_rmt_cfx_light(config):
     return not _is_spi_cfx_light(config) and not _is_parallel_cfx_light(config)
 
 
+def _pin_number_or_default(config, key, default):
+    value = config.get(key)
+    if isinstance(value, dict):
+        return int(value[CONF_NUMBER])
+    if value is None:
+        return int(default)
+    return int(value)
+
+
 def _classic_native_spi_host(data_pin, clock_pin):
     # ESP32 Classic native pin groups:
     #   HSPI / SPI2: MOSI=GPIO13, SCLK=GPIO14
@@ -764,6 +777,11 @@ def _final_validate(config):
                 f"cfx_light parallel_group '{group_name}' cannot mix chipsets: "
                 f"{', '.join(sorted(chipsets))}."
             )
+        if chipsets != {"SK6812"}:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' V1 supports SK6812 "
+                f"RGBW lanes only; got {', '.join(sorted(chipsets))}."
+            )
 
         num_leds = {int(lconf[CONF_NUM_LEDS]) for lconf in group_lights}
         if len(num_leds) != 1:
@@ -783,6 +801,31 @@ def _final_validate(config):
             raise cv.Invalid(
                 f"cfx_light parallel_group '{group_name}' cannot mix RGB/RGBW "
                 "or WRGB protocol shapes."
+            )
+        reserved_pins = {
+            _pin_number_or_default(
+                lconf, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
+            )
+            for lconf in group_lights
+        }
+        if len(reserved_pins) != 1:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' must use one shared "
+                f"{CONF_PARALLEL_STROBE_PIN}; got {', '.join(str(v) for v in sorted(reserved_pins))}."
+            )
+        strobe_pin = next(iter(reserved_pins))
+        if strobe_pin == PARALLEL_DC_PIN_DEFAULT:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' cannot use the same "
+                f"GPIO for {CONF_PARALLEL_STROBE_PIN} and the internal I80 "
+                f"D/C reservation GPIO{PARALLEL_DC_PIN_DEFAULT}."
+            )
+        lane_pins = [int(lconf[CONF_PIN][CONF_NUMBER]) for lconf in group_lights]
+        if strobe_pin in lane_pins or PARALLEL_DC_PIN_DEFAULT in lane_pins:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' reserves GPIO{strobe_pin} "
+                f"for internal I80 WR/strobe and GPIO{PARALLEL_DC_PIN_DEFAULT} "
+                "for internal I80 D/C; lane pins must not use either GPIO."
             )
         return config
 
@@ -972,6 +1015,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SPI_SPEED): cv.frequency,
             cv.Optional(CONF_SPI_HOST): cv.string,
             cv.Optional(CONF_PARALLEL_GROUP): cv.string,
+            cv.Optional(CONF_PARALLEL_STROBE_PIN): pins.internal_gpio_output_pin_schema,
             # spi_host is intentionally NOT exposed in the user schema.
             # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
             # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
@@ -1036,6 +1080,11 @@ def _validate_transport(config):
             )
         if CONF_PIN in config:
             raise cv.Invalid(f"'{CONF_PIN}' cannot be used with SPI chipset {chipset}")
+        if CONF_PARALLEL_STROBE_PIN in config:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
+                f"'{CONF_PARALLEL_GROUP}'."
+            )
         if CONF_DATA_PIN not in config:
             raise cv.RequiredFieldInvalid(
                 f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}",
@@ -1086,6 +1135,12 @@ def _validate_transport(config):
                 raise cv.Invalid(
                     f"'{CONF_SACRIFICIAL_PIXEL}' is only supported by legacy RMT "
                     f"in V1. Remove it from cfx_light entries using "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
+        else:
+            if CONF_PARALLEL_STROBE_PIN in config:
+                raise cv.Invalid(
+                    f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
                     f"'{CONF_PARALLEL_GROUP}'."
                 )
 
@@ -1472,6 +1527,7 @@ async def to_code(config):
         from esphome.components.esp32 import include_builtin_idf_component
         include_builtin_idf_component("esp_driver_spi")
         include_builtin_idf_component("esp_driver_rmt")
+        include_builtin_idf_component("esp_lcd")
     except ImportError:
         pass
 
@@ -1493,6 +1549,31 @@ async def to_code(config):
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_PARALLEL))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
         cg.add(var.set_parallel_group(config[CONF_PARALLEL_GROUP]))
+        all_lights = CORE.config.get("light", [])
+        group_lights = [
+            lconf
+            for lconf in all_lights
+            if lconf.get("platform", "") == "cfx_light"
+            and lconf.get(CONF_PARALLEL_GROUP) == config[CONF_PARALLEL_GROUP]
+        ]
+        lane_pins = [lconf[CONF_PIN][CONF_NUMBER] for lconf in group_lights]
+        lane_index = lane_pins.index(config[CONF_PIN][CONF_NUMBER])
+        cg.add(var.set_parallel_lane_index(lane_index))
+        cg.add(var.set_parallel_lane_count(len(lane_pins)))
+        cg.add(
+            var.set_parallel_strobe_pin(
+                _pin_number_or_default(
+                    config, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
+                )
+            )
+        )
+        cg.add(
+            var.set_parallel_dc_pin(
+                PARALLEL_DC_PIN_DEFAULT
+            )
+        )
+        for idx, pin in enumerate(lane_pins):
+            cg.add(var.set_parallel_lane_pin(idx, pin))
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
