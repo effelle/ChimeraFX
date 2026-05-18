@@ -62,7 +62,7 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-dummy-cmd-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-txlog-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -71,6 +71,7 @@ struct CFXParallelGroupRuntime {
   bool ready{false};
   bool init_attempted{false};
   bool tx_in_flight{false};
+  volatile uint32_t tx_done_count{0};
   std::string name{};
   uint8_t lane_count{0};
   uint8_t strobe_pin{22};
@@ -138,6 +139,7 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
   auto *group = static_cast<CFXParallelGroupRuntime *>(user_ctx);
   if (group != nullptr) {
     group->tx_in_flight = false;
+    group->tx_done_count++;
   }
   return false;
 }
@@ -2510,6 +2512,27 @@ void CFXLightOutput::flush_parallel_() {
     esp_rom_delay_us(100);
   }
 
+  uint32_t source_nonzero = 0;
+  uint8_t first_pixel[PARALLEL_MAX_LANES][4] = {};
+  const uint8_t stride = this->get_pixel_stride_();
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output == nullptr || lane_output->buf_ == nullptr) {
+      continue;
+    }
+    for (uint8_t byte_index = 0; byte_index < stride && byte_index < 4;
+         byte_index++) {
+      first_pixel[lane][byte_index] = lane_output->buf_[byte_index];
+    }
+    const size_t lane_size =
+        static_cast<size_t>(lane_output->num_leds_) * lane_output->get_pixel_stride_();
+    for (size_t i = 0; i < lane_size; i++) {
+      if (lane_output->buf_[i] != 0) {
+        source_nonzero++;
+      }
+    }
+  }
+
   if (!this->build_parallel_frame_(g_parallel_group.frame_buf,
                                    g_parallel_group.frame_size)) {
     ESP_LOGE(TAG, "Parallel frame build failed for group '%s'",
@@ -2534,6 +2557,21 @@ void CFXLightOutput::flush_parallel_() {
   }
 
   g_parallel_group.tx_count++;
+  if (g_parallel_group.tx_count <= 12 ||
+      (g_parallel_group.tx_count % 120u) == 0u) {
+    ESP_LOGI(TAG,
+             "Parallel TX queued: group='%s' tx=%" PRIu32
+             " done=%" PRIu32 " source_nonzero=%" PRIu32
+             " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
+             "bytes=%u build+queue=%" PRIu32 "us",
+             g_parallel_group.name.c_str(), g_parallel_group.tx_count,
+             static_cast<uint32_t>(g_parallel_group.tx_done_count),
+             source_nonzero, first_pixel[0][0], first_pixel[0][1],
+             first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
+             first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
+             static_cast<unsigned>(g_parallel_group.frame_size),
+             micros() - flush_start_us);
+  }
   this->record_led_frame_();
   this->perf_diag_flush_count_++;
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
