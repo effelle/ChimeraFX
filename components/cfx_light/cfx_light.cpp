@@ -63,11 +63,11 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 32;
+static const uint16_t PARALLEL_CHUNK_LEDS = 64;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunked-guard-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-expand-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -96,6 +96,7 @@ struct CFXParallelGroupRuntime {
   size_t frame_size{0};  // Logical full-frame size, for diagnostics.
   uint16_t chunk_leds{0};
   size_t chunk_frame_size{0};
+  size_t bus_max_transfer_size{0};
   size_t chunk_alloc_size{0};
   uint32_t tx_count{0};
   uint32_t chunk_tx_count{0};
@@ -2298,6 +2299,15 @@ void CFXLightOutput::setup_parallel_() {
         static_cast<size_t>(g_parallel_group.chunk_leds) *
             this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES +
         PARALLEL_RESET_SAMPLES;
+    g_parallel_group.bus_max_transfer_size = g_parallel_group.chunk_frame_size;
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    if (PARALLEL_I80_BUS_WIDTH == 8) {
+      // ESP32 Classic's I2S-LCD shim expands 8-bit bus data into 32-bit
+      // words in its internal format buffer before DMA.
+      g_parallel_group.bus_max_transfer_size =
+          g_parallel_group.chunk_frame_size * 2u;
+    }
+#endif
     g_parallel_group.chunk_alloc_size =
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
@@ -2329,13 +2339,15 @@ void CFXLightOutput::setup_parallel_() {
     ESP_LOGI(TAG,
              "Parallel backend %s group '%s' configured for deferred init: "
              "lanes=%u wr=GPIO%u internal_dc=GPIO%u pclk=%" PRIu32
-             "Hz frame=%u bytes chunk=%u leds/%u bytes alloc=%u data=[%u,%u,%u,%u,%u,%u,%u,%u]",
+             "Hz frame=%u bytes chunk=%u leds/%u bytes bus_max=%u alloc=%u "
+             "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
              PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
              g_parallel_group.lane_count, g_parallel_group.strobe_pin,
              g_parallel_group.dc_pin, PARALLEL_PCLK_HZ,
              static_cast<unsigned>(frame_size),
              g_parallel_group.chunk_leds,
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
              static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
              g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
              g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
@@ -2390,7 +2402,7 @@ bool CFXLightOutput::init_parallel_backend_() {
   bus_config.wr_gpio_num = g_parallel_group.strobe_pin;
   bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
   bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
-  bus_config.max_transfer_bytes = g_parallel_group.chunk_frame_size;
+  bus_config.max_transfer_bytes = g_parallel_group.bus_max_transfer_size;
   bus_config.dma_burst_size = 4;
   for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
     bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
@@ -2402,14 +2414,15 @@ bool CFXLightOutput::init_parallel_backend_() {
       heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   ESP_LOGI(TAG,
            "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
-           "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes alloc=%u "
-           "dma_free=%u dma_largest=%u",
+           "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
+           "bus_max=%u alloc=%u dma_free=%u dma_largest=%u",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
            g_parallel_group.lane_count, g_parallel_group.strobe_pin,
            g_parallel_group.dc_pin,
            static_cast<unsigned>(g_parallel_group.frame_size),
            g_parallel_group.chunk_leds,
            static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+           static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
            static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
            static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
 
