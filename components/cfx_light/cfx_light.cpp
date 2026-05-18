@@ -31,7 +31,9 @@
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#ifdef CFX_PARALLEL_I80_ENABLED
 #include <esp_lcd_panel_io.h>
+#endif
 #include <esp_system.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
@@ -60,7 +62,7 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-deferred-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "boot-safe-no-i80-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -75,8 +77,13 @@ struct CFXParallelGroupRuntime {
   uint8_t dc_pin{21};
   uint8_t lane_pins[PARALLEL_I80_BUS_WIDTH]{};
   CFXLightOutput *outputs[PARALLEL_MAX_LANES]{};
+#ifdef CFX_PARALLEL_I80_ENABLED
   esp_lcd_i80_bus_handle_t bus{nullptr};
   esp_lcd_panel_io_handle_t io{nullptr};
+#else
+  void *bus{nullptr};
+  void *io{nullptr};
+#endif
   uint8_t *frame_buf{nullptr};
   size_t frame_size{0};
   uint32_t tx_count{0};
@@ -124,6 +131,7 @@ static const char *transport_label(CFXTransport transport) {
   }
 }
 
+#ifdef CFX_PARALLEL_I80_ENABLED
 static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
                                            esp_lcd_panel_io_event_data_t *,
                                            void *user_ctx) {
@@ -133,6 +141,7 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
   }
   return false;
 }
+#endif
 
 static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -2326,7 +2335,7 @@ void CFXLightOutput::setup_parallel_() {
 }
 
 bool CFXLightOutput::init_parallel_backend_() {
-#if SOC_LCD_I80_SUPPORTED
+#if defined(CFX_PARALLEL_I80_ENABLED) && SOC_LCD_I80_SUPPORTED
   if (g_parallel_group.ready) {
     return true;
   }
@@ -2408,6 +2417,12 @@ bool CFXLightOutput::init_parallel_backend_() {
   ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
   return true;
+#elif !defined(CFX_PARALLEL_I80_ENABLED)
+  ESP_LOGE(TAG,
+           "Parallel I80 backend is not compiled into this boot-safe "
+           "diagnostic build (group '%s').",
+           this->parallel_group_.c_str());
+  return false;
 #else
   ESP_LOGE(TAG,
            "Parallel transport requested for group '%s', but this ESP-IDF "
@@ -2500,6 +2515,7 @@ void CFXLightOutput::flush_parallel_() {
     return;
   }
 
+#ifdef CFX_PARALLEL_I80_ENABLED
   g_parallel_group.tx_in_flight = true;
   esp_err_t err = esp_lcd_panel_io_tx_color(
       g_parallel_group.io, -1, g_parallel_group.frame_buf,
@@ -2520,6 +2536,14 @@ void CFXLightOutput::flush_parallel_() {
   this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
   this->perf_diag_last_flush_tx_us_ = 0;
   this->perf_diag_last_flush_valid_ = true;
+#else
+  ESP_LOGE(TAG,
+           "Parallel I80 backend is not compiled into this boot-safe "
+           "diagnostic build (group '%s').",
+           this->parallel_group_.c_str());
+  this->status_set_warning();
+  this->mark_failed();
+#endif
 }
 
 // --- SPI Transport Setup ---
