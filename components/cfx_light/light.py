@@ -183,6 +183,7 @@ CONF_DATA_PIN = "data_pin"
 CONF_CLOCK_PIN = "clock_pin"
 CONF_SPI_SPEED = "spi_speed"
 CONF_SPI_HOST = "spi_host"
+CONF_PARALLEL_GROUP = "parallel_group"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DUR = "set_inout_dur"
@@ -524,6 +525,14 @@ def _is_spi_cfx_light(config):
     return str(config.get(CONF_CHIPSET, "")).upper() in SPI_CHIPSETS
 
 
+def _is_parallel_cfx_light(config):
+    return bool(config.get(CONF_PARALLEL_GROUP))
+
+
+def _is_legacy_rmt_cfx_light(config):
+    return not _is_spi_cfx_light(config) and not _is_parallel_cfx_light(config)
+
+
 def _classic_native_spi_host(data_pin, clock_pin):
     # ESP32 Classic native pin groups:
     #   HSPI / SPI2: MOSI=GPIO13, SCLK=GPIO14
@@ -694,24 +703,89 @@ def _final_validate(config):
     variant = _get_esp32_variant()
     limits = _get_cfx_light_limits(variant)
     spi_count = sum(1 for lconf in cfx_lights if _is_spi_cfx_light(lconf))
-    rmt_count = len(cfx_lights) - spi_count
+    parallel_lights = [lconf for lconf in cfx_lights if _is_parallel_cfx_light(lconf)]
+    legacy_rmt_count = sum(1 for lconf in cfx_lights if _is_legacy_rmt_cfx_light(lconf))
     _LOGGER.info(
-        "CFXLight limits: variant=%s total=%d/%d spi=%d/%d rmt=%d/%d",
+        "CFXLight limits: variant=%s total=%d/%d spi=%d/%d rmt=%d/%d parallel=%d",
         variant,
         len(cfx_lights),
         limits["total"],
         spi_count,
         limits["spi"],
-        rmt_count,
+        legacy_rmt_count,
         limits["rmt"],
+        len(parallel_lights),
     )
 
-    if spi_count > 0 and rmt_count > 0:
+    if spi_count > 0 and (legacy_rmt_count > 0 or parallel_lights):
         raise cv.Invalid(
             "Mixed SPI and RMT cfx_light entries are not supported in this "
             "ChimeraFX release. Use either SPI-only or RMT-only per ESP32 node; "
             "move the other transport to a second controller."
         )
+
+    if parallel_lights:
+        if variant not in ("ESP32", "ESP32S3"):
+            raise cv.Invalid(
+                f"cfx_light parallel_group is only supported on ESP32 and ESP32-S3 "
+                f"for V1; detected {variant}."
+            )
+        if legacy_rmt_count > 0:
+            raise cv.Invalid(
+                "cfx_light parallel_group cannot be mixed with legacy RMT "
+                "cfx_light entries in the first parallel-driver release."
+            )
+
+        groups = {}
+        for lconf in parallel_lights:
+            groups.setdefault(str(lconf[CONF_PARALLEL_GROUP]), []).append(lconf)
+        if len(groups) > 1:
+            names = ", ".join(sorted(groups))
+            raise cv.Invalid(
+                f"Only one cfx_light parallel_group is supported in V1; got {names}."
+            )
+
+        group_name, group_lights = next(iter(groups.items()))
+        max_parallel_lanes = 4
+        if len(group_lights) > max_parallel_lanes:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' has {len(group_lights)} "
+                f"lanes; V1 supports at most {max_parallel_lanes} lanes."
+            )
+
+        chipsets = {str(lconf.get(CONF_CHIPSET, "")).upper() for lconf in group_lights}
+        if any(chipset in SPI_CHIPSETS for chipset in chipsets):
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' is one-wire only; "
+                "SPI chipsets cannot join a parallel group."
+            )
+        if len(chipsets) != 1:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' cannot mix chipsets: "
+                f"{', '.join(sorted(chipsets))}."
+            )
+
+        num_leds = {int(lconf[CONF_NUM_LEDS]) for lconf in group_lights}
+        if len(num_leds) != 1:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' requires equal num_leds "
+                f"for V1; got {', '.join(str(v) for v in sorted(num_leds))}."
+            )
+
+        protocol_shapes = {
+            (
+                bool(lconf.get(CONF_IS_RGBW, lconf.get(CONF_CHIPSET) in RGBW_CHIPSETS)),
+                bool(lconf.get(CONF_IS_WRGB, False)),
+            )
+            for lconf in group_lights
+        }
+        if len(protocol_shapes) != 1:
+            raise cv.Invalid(
+                f"cfx_light parallel_group '{group_name}' cannot mix RGB/RGBW "
+                "or WRGB protocol shapes."
+            )
+        return config
+
     if len(cfx_lights) > limits["total"]:
         raise cv.Invalid(
             f"Too many cfx_light entries for {variant}: {len(cfx_lights)} "
@@ -722,9 +796,9 @@ def _final_validate(config):
             f"Too many SPI cfx_light entries for {variant}: {spi_count} "
             f"(max {limits['spi']})"
         )
-    if rmt_count > limits["rmt"]:
+    if legacy_rmt_count > limits["rmt"]:
         raise cv.Invalid(
-            f"Too many RMT cfx_light entries for {variant}: {rmt_count} "
+            f"Too many RMT cfx_light entries for {variant}: {legacy_rmt_count} "
             f"(max {limits['rmt']})"
         )
     return config
@@ -897,6 +971,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_SPI_SPEED): cv.frequency,
             cv.Optional(CONF_SPI_HOST): cv.string,
+            cv.Optional(CONF_PARALLEL_GROUP): cv.string,
             # spi_host is intentionally NOT exposed in the user schema.
             # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
             # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
@@ -946,8 +1021,19 @@ def _validate_transport(config):
     _reserve_cfx_light_component_slot(config)
     chipset = config[CONF_CHIPSET]
     is_spi = chipset in SPI_CHIPSETS
+    parallel_group = config.get(CONF_PARALLEL_GROUP)
+    if parallel_group is not None:
+        parallel_group = str(parallel_group).strip()
+        if not parallel_group:
+            raise cv.Invalid(f"'{CONF_PARALLEL_GROUP}' cannot be empty")
+        config[CONF_PARALLEL_GROUP] = parallel_group
 
     if is_spi:
+        if parallel_group is not None:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_GROUP}' is only supported by one-wire chipsets "
+                f"(WS2812X, SK6812, WS2811), not SPI chipset {chipset}."
+            )
         if CONF_PIN in config:
             raise cv.Invalid(f"'{CONF_PIN}' cannot be used with SPI chipset {chipset}")
         if CONF_DATA_PIN not in config:
@@ -990,6 +1076,18 @@ def _validate_transport(config):
             raise cv.Invalid(
                 f"SPI options ({joined_keys}) cannot be used with RMT chipset {chipset}"
             )
+        if parallel_group is not None:
+            if config.get(CONF_RMT_SYMBOLS, 0) != 0:
+                raise cv.Invalid(
+                    f"'{CONF_RMT_SYMBOLS}' is only used by legacy RMT. "
+                    f"Remove it from cfx_light entries using '{CONF_PARALLEL_GROUP}'."
+                )
+            if config.get(CONF_SACRIFICIAL_PIXEL, False):
+                raise cv.Invalid(
+                    f"'{CONF_SACRIFICIAL_PIXEL}' is only supported by legacy RMT "
+                    f"in V1. Remove it from cfx_light entries using "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
 
     return config
 
@@ -1366,6 +1464,7 @@ async def to_code(config):
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
     
     is_spi = chipset_name in SPI_CHIPSETS
+    is_parallel = bool(config.get(CONF_PARALLEL_GROUP))
     
     # Re-enable ESP-IDF's SPI and RMT drivers unconditionally
     # because cfx_light.h includes both <driver/spi_master.h> and <driver/rmt_tx.h>
@@ -1390,6 +1489,10 @@ async def to_code(config):
         cg.add(var.set_spi_host(SPI_HOSTS[host_name]))
         registry.append(host_name)
         CORE.data[_SPI_HOST_REGISTRY_KEY] = registry
+    elif is_parallel:
+        cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_PARALLEL))
+        cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
+        cg.add(var.set_parallel_group(config[CONF_PARALLEL_GROUP]))
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
@@ -1433,7 +1536,7 @@ async def to_code(config):
 
     # Auto-compute RMT symbols if not set manually.
     # We must EXCLUDE SPI strips from the auto-budget calculation!
-    if not is_spi:
+    if not is_spi and not is_parallel:
         import esphome.core as _core_rmt
         import logging as _log_rmt
         rmt_sym = config.get(CONF_RMT_SYMBOLS, 0)

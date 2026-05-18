@@ -70,6 +70,18 @@ static const char *rmt_dma_backend_label() {
 #endif
 }
 
+static const char *transport_label(CFXTransport transport) {
+  switch (transport) {
+  case TRANSPORT_SPI:
+    return "SPI";
+  case TRANSPORT_PARALLEL:
+    return "PARALLEL";
+  case TRANSPORT_RMT:
+  default:
+    return "RMT";
+  }
+}
+
 static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return configured_symbols < 128u ? 128u : configured_symbols;
@@ -1846,7 +1858,7 @@ void CFXLightOutput::setup() {
   ESP_LOGI(TAG,
            "CFXLight setup begin: this=%p transport=%s pin=%u leds=%u "
            "buffer=%u stride=%u",
-           this, this->is_spi_transport() ? "SPI" : "RMT", this->pin_,
+           this, transport_label(this->transport_), this->pin_,
            this->num_leds_, static_cast<unsigned>(buffer_size),
            static_cast<unsigned>(this->get_pixel_stride_()));
 
@@ -1871,6 +1883,8 @@ void CFXLightOutput::setup() {
   // Transport-specific hardware init
   if (this->transport_ == TRANSPORT_SPI) {
     this->setup_spi_();
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    this->setup_parallel_();
   } else {
     this->setup_rmt_();
   }
@@ -1883,6 +1897,8 @@ void CFXLightOutput::setup() {
   // first HA-driven state update arrives.
   if (this->transport_ == TRANSPORT_SPI) {
     this->flush_spi_();
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    this->flush_parallel_();
   } else {
     this->flush_rmt_();
   }
@@ -1929,6 +1945,12 @@ void CFXLightOutput::setup() {
     ESP_LOGI(TAG, "CFXLight ready: %u LEDs on SPI (data=GPIO%u clock=GPIO%u speed=%" PRIu32 " Hz)",
              this->num_leds_, this->spi_data_pin_, this->spi_clock_pin_,
              this->spi_speed_hz_);
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    ESP_LOGI(TAG,
+             "CFXLight ready: %u visible LEDs on GPIO%u "
+             "(parallel_group=%s, stride=%u)",
+             this->num_leds_, this->pin_, this->parallel_group_.c_str(),
+             static_cast<unsigned>(this->get_pixel_stride_()));
   } else {
     ESP_LOGI(TAG,
              "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%u, "
@@ -2159,6 +2181,25 @@ void CFXLightOutput::setup_rmt_() {
 #endif
 
   this->reset_rmt_encoder_diag_();
+}
+
+// --- Parallel Transport Setup ---
+
+void CFXLightOutput::setup_parallel_() {
+  ESP_LOGE(TAG,
+           "Parallel transport requested for group '%s' on GPIO%u, but the "
+           "LCD/I80 backend pin contract is not implemented yet. Rejecting "
+           "setup instead of silently falling back to legacy RMT.",
+           this->parallel_group_.c_str(), this->pin_);
+  this->mark_failed();
+}
+
+void CFXLightOutput::flush_parallel_() {
+  ESP_LOGE(TAG,
+           "Parallel transport flush requested for group '%s' before the "
+           "LCD/I80 backend is available.",
+           this->parallel_group_.c_str());
+  this->mark_failed();
 }
 
 // --- SPI Transport Setup ---
@@ -2934,6 +2975,9 @@ void CFXLightOutput::commit_transmit_() {
   if (this->transport_ == TRANSPORT_SPI) {
     esphome::App.feed_wdt();
     this->flush_spi_();
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    esphome::App.feed_wdt();
+    this->flush_parallel_();
   } else {
     const uint32_t stagger_gap_us = rmt_launch_stagger_gap_us();
     uint32_t launch_us = micros();
@@ -3662,6 +3706,19 @@ void CFXLightOutput::dump_config() {
                   static_cast<unsigned>(this->get_spi_frame_size_()),
                   this->get_spi_frame_timeout_ms_(), chipset_str,
                   this->num_leds_, order_str);
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    ESP_LOGCONFIG(TAG,
+                  "CFXLight (Parallel):\n"
+                  "  Group: %s\n"
+                  "  Lane Pin: GPIO%u\n"
+                  "  Chipset: %s\n"
+                  "  LEDs: %u\n"
+                  "  RGBW: %s\n"
+                  "  RGB Order: %s\n"
+                  "  Backend: LCD/I80 pending",
+                  this->parallel_group_.c_str(), this->pin_, chipset_str,
+                  this->num_leds_, this->is_rgbw_ ? "yes" : "no",
+                  order_str);
   } else {
     ESP_LOGCONFIG(TAG,
                   "CFXLight (RMT):\n"

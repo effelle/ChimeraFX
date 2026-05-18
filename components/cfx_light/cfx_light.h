@@ -151,6 +151,7 @@ enum ChimeraChipset : uint8_t {
 enum CFXTransport : uint8_t {
   TRANSPORT_RMT,  // One-wire (WS2812X, SK6812, WS2811)
   TRANSPORT_SPI,  // Two-wire clock+data (APA102, SK9822)
+  TRANSPORT_PARALLEL,  // Future LCD/I80-backed parallel one-wire group
 };
 
 // SPI host selection (maps to ESP-IDF spi_host_device_t)
@@ -319,9 +320,15 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
+  bool is_parallel_transport() const {
+    return this->transport_ == TRANSPORT_PARALLEL;
+  }
   // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
   // Must be public — the barrier is an external caller with no class membership.
   void commit_transmit_();
+  void set_parallel_group(const std::string &group) {
+    this->parallel_group_ = group;
+  }
   void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
@@ -429,8 +436,10 @@ protected:
   // Transport-specific setup/flush helpers
   void setup_rmt_();
   void setup_spi_();
+  void setup_parallel_();
   void flush_rmt_();
   void flush_spi_();
+  void flush_parallel_();
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
@@ -543,6 +552,7 @@ protected:
 
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};
+  std::string parallel_group_{};
   uint8_t spi_data_pin_{0};
   uint8_t spi_clock_pin_{0};
   uint32_t spi_speed_hz_{10000000};  // 10 MHz default
