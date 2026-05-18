@@ -2829,7 +2829,8 @@ bool CFXLightOutput::init_parallel_backend_() {
     bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
     bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
     bus_config.max_transfer_bytes = g_parallel_group.bus_max_transfer_size;
-    bus_config.dma_burst_size = 4;
+    // Keep the ESP-IDF default burst setting on S3. Forcing 4 here trips a
+    // GDMA burst-size assert inside esp_lcd_new_i80_bus() on ESP-IDF 5.5.x.
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
       bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
     }
