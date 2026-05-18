@@ -60,11 +60,14 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-deferred-2026-05-18";
+static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
+    4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
 struct CFXParallelGroupRuntime {
   bool configured{false};
   bool ready{false};
+  bool init_attempted{false};
   bool tx_in_flight{false};
   std::string name{};
   uint8_t lane_count{0};
@@ -82,6 +85,15 @@ struct CFXParallelGroupRuntime {
 };
 
 static CFXParallelGroupRuntime g_parallel_group;
+
+static bool parallel_pin_used_(uint8_t pin, const uint8_t *pins, uint8_t count) {
+  for (uint8_t i = 0; i < count; i++) {
+    if (pins[i] == pin) {
+      return true;
+    }
+  }
+  return false;
+}
 
 static uint32_t rmt_launch_stagger_gap_us() {
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
@@ -1938,7 +1950,10 @@ void CFXLightOutput::setup() {
   if (this->transport_ == TRANSPORT_SPI) {
     this->flush_spi_();
   } else if (this->transport_ == TRANSPORT_PARALLEL) {
-    this->flush_parallel_();
+    ESP_LOGI(TAG,
+             "Parallel startup blackout is deferred until first light update "
+             "(group=%s)",
+             this->parallel_group_.c_str());
   } else {
     this->flush_rmt_();
   }
@@ -2232,7 +2247,6 @@ size_t CFXLightOutput::get_parallel_frame_size_() const {
 }
 
 void CFXLightOutput::setup_parallel_() {
-#if SOC_LCD_I80_SUPPORTED
   if (this->parallel_lane_count_ == 0 ||
       this->parallel_lane_count_ > PARALLEL_MAX_LANES ||
       this->parallel_lane_index_ >= this->parallel_lane_count_) {
@@ -2258,74 +2272,32 @@ void CFXLightOutput::setup_parallel_() {
       g_parallel_group.lane_pins[i] = this->parallel_lane_pins_[i];
     }
 
-    const uint8_t dummy_pins[] = {34, 35, 36, 37, 38, 39, 32, 33};
-    uint8_t dummy_index = 0;
     for (uint8_t i = this->parallel_lane_count_; i < PARALLEL_I80_BUS_WIDTH; i++) {
-      g_parallel_group.lane_pins[i] =
-          dummy_pins[dummy_index++ % (sizeof(dummy_pins) / sizeof(dummy_pins[0]))];
+      bool assigned = false;
+      for (uint8_t candidate : PARALLEL_DUMMY_PIN_CANDIDATES) {
+        if (candidate == g_parallel_group.strobe_pin ||
+            candidate == g_parallel_group.dc_pin ||
+            parallel_pin_used_(candidate, g_parallel_group.lane_pins, i)) {
+          continue;
+        }
+        g_parallel_group.lane_pins[i] = candidate;
+        assigned = true;
+        break;
+      }
+      if (!assigned) {
+        ESP_LOGE(TAG,
+                 "Parallel group '%s' cannot reserve enough output-capable "
+                 "I80 filler GPIOs",
+                 g_parallel_group.name.c_str());
+        this->mark_failed();
+        return;
+      }
     }
-
-    esp_lcd_i80_bus_config_t bus_config = {};
-    bus_config.dc_gpio_num = this->parallel_dc_pin_;
-    bus_config.wr_gpio_num = this->parallel_strobe_pin_;
-    bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
-    bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
-    bus_config.max_transfer_bytes = frame_size;
-    bus_config.dma_burst_size = 4;
-    bus_config.sram_trans_align = 4;
-    for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
-      bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
-    }
-
-    esp_err_t err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG,
-               "Parallel I80 bus init failed for group '%s' "
-               "(err=%d, wr=GPIO%u, internal_dc=GPIO%u)",
-               this->parallel_group_.c_str(), (int) err,
-               this->parallel_strobe_pin_, this->parallel_dc_pin_);
-      this->mark_failed();
-      return;
-    }
-
-    esp_lcd_panel_io_i80_config_t io_config = {};
-    io_config.cs_gpio_num = -1;
-    io_config.pclk_hz = PARALLEL_PCLK_HZ;
-    io_config.trans_queue_depth = 1;
-    io_config.on_color_trans_done = parallel_tx_done_cb_;
-    io_config.user_ctx = &g_parallel_group;
-    io_config.lcd_cmd_bits = 0;
-    io_config.lcd_param_bits = 0;
-    io_config.dc_levels.dc_idle_level = 0;
-    io_config.dc_levels.dc_cmd_level = 0;
-    io_config.dc_levels.dc_dummy_level = 0;
-    io_config.dc_levels.dc_data_level = 1;
-    io_config.flags.pclk_idle_low = 1;
-
-    err = esp_lcd_new_panel_io_i80(g_parallel_group.bus, &io_config,
-                                   &g_parallel_group.io);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Parallel I80 panel IO init failed for group '%s' (err=%d)",
-               this->parallel_group_.c_str(), (int) err);
-      this->mark_failed();
-      return;
-    }
-
-    g_parallel_group.frame_buf = static_cast<uint8_t *>(
-        esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io, frame_size,
-                                      MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
-    if (g_parallel_group.frame_buf == nullptr) {
-      ESP_LOGE(TAG, "Cannot allocate parallel frame buffer (%u bytes, DMA)",
-               static_cast<unsigned>(frame_size));
-      this->mark_failed();
-      return;
-    }
-    memset(g_parallel_group.frame_buf, 0, frame_size);
-    g_parallel_group.ready = true;
 
     ESP_LOGI(TAG,
-             "Parallel backend %s group '%s' ready: lanes=%u wr=GPIO%u internal_dc=GPIO%u "
-             "pclk=%" PRIu32 "Hz frame=%u bytes data=[%u,%u,%u,%u,%u,%u,%u,%u]",
+             "Parallel backend %s group '%s' configured for deferred init: "
+             "lanes=%u wr=GPIO%u internal_dc=GPIO%u pclk=%" PRIu32
+             "Hz frame=%u bytes data=[%u,%u,%u,%u,%u,%u,%u,%u]",
              PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
              g_parallel_group.lane_count, g_parallel_group.strobe_pin,
              g_parallel_group.dc_pin, PARALLEL_PCLK_HZ,
@@ -2351,12 +2323,97 @@ void CFXLightOutput::setup_parallel_() {
   ESP_LOGI(TAG, "Parallel lane %u/%u registered: group='%s' data=GPIO%u",
            this->parallel_lane_index_ + 1, g_parallel_group.lane_count,
            g_parallel_group.name.c_str(), this->pin_);
+}
+
+bool CFXLightOutput::init_parallel_backend_() {
+#if SOC_LCD_I80_SUPPORTED
+  if (g_parallel_group.ready) {
+    return true;
+  }
+  if (!g_parallel_group.configured) {
+    ESP_LOGE(TAG, "Parallel group '%s' was not configured before init",
+             this->parallel_group_.c_str());
+    return false;
+  }
+  if (g_parallel_group.init_attempted) {
+    ESP_LOGE(TAG, "Parallel group '%s' backend init was already attempted",
+             g_parallel_group.name.c_str());
+    return false;
+  }
+  g_parallel_group.init_attempted = true;
+
+  esp_lcd_i80_bus_config_t bus_config = {};
+  bus_config.dc_gpio_num = g_parallel_group.dc_pin;
+  bus_config.wr_gpio_num = g_parallel_group.strobe_pin;
+  bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
+  bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
+  bus_config.max_transfer_bytes = g_parallel_group.frame_size;
+  bus_config.dma_burst_size = 4;
+  bus_config.sram_trans_align = 4;
+  for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
+    bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
+  }
+
+  ESP_LOGI(TAG,
+           "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
+           "internal_dc=GPIO%u frame=%u bytes",
+           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+           g_parallel_group.lane_count, g_parallel_group.strobe_pin,
+           g_parallel_group.dc_pin,
+           static_cast<unsigned>(g_parallel_group.frame_size));
+
+  esp_err_t err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG,
+             "Parallel I80 bus init failed for group '%s' "
+             "(err=%d, wr=GPIO%u, internal_dc=GPIO%u)",
+             g_parallel_group.name.c_str(), (int) err,
+             g_parallel_group.strobe_pin, g_parallel_group.dc_pin);
+    return false;
+  }
+
+  esp_lcd_panel_io_i80_config_t io_config = {};
+  io_config.cs_gpio_num = -1;
+  io_config.pclk_hz = PARALLEL_PCLK_HZ;
+  io_config.trans_queue_depth = 1;
+  io_config.on_color_trans_done = parallel_tx_done_cb_;
+  io_config.user_ctx = &g_parallel_group;
+  io_config.lcd_cmd_bits = 0;
+  io_config.lcd_param_bits = 0;
+  io_config.dc_levels.dc_idle_level = 0;
+  io_config.dc_levels.dc_cmd_level = 0;
+  io_config.dc_levels.dc_dummy_level = 0;
+  io_config.dc_levels.dc_data_level = 1;
+  io_config.flags.pclk_idle_low = 1;
+
+  err = esp_lcd_new_panel_io_i80(g_parallel_group.bus, &io_config,
+                                 &g_parallel_group.io);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Parallel I80 panel IO init failed for group '%s' (err=%d)",
+             g_parallel_group.name.c_str(), (int) err);
+    return false;
+  }
+
+  g_parallel_group.frame_buf = static_cast<uint8_t *>(
+      esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
+                                    g_parallel_group.frame_size,
+                                    MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+  if (g_parallel_group.frame_buf == nullptr) {
+    ESP_LOGE(TAG, "Cannot allocate parallel frame buffer (%u bytes, DMA)",
+             static_cast<unsigned>(g_parallel_group.frame_size));
+    return false;
+  }
+  memset(g_parallel_group.frame_buf, 0, g_parallel_group.frame_size);
+  g_parallel_group.ready = true;
+  ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
+           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
+  return true;
 #else
   ESP_LOGE(TAG,
            "Parallel transport requested for group '%s', but this ESP-IDF "
            "target does not report SOC_LCD_I80_SUPPORTED.",
            this->parallel_group_.c_str());
-  this->mark_failed();
+  return false;
 #endif
 }
 
@@ -2406,7 +2463,16 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len) {
 
 void CFXLightOutput::flush_parallel_() {
   const uint32_t flush_start_us = micros();
-  if (!g_parallel_group.ready || g_parallel_group.io == nullptr ||
+  if (!g_parallel_group.ready) {
+    if (!this->init_parallel_backend_()) {
+      ESP_LOGE(TAG, "Parallel group '%s' could not initialize backend",
+               this->parallel_group_.c_str());
+      this->status_set_warning();
+      this->mark_failed();
+      return;
+    }
+  }
+  if (g_parallel_group.io == nullptr ||
       g_parallel_group.frame_buf == nullptr) {
     ESP_LOGE(TAG, "Parallel group '%s' is not ready", this->parallel_group_.c_str());
     this->mark_failed();

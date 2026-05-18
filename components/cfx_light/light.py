@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 7
+CFX_LIGHT_SCHEMA_REV = 8
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
