@@ -73,9 +73,10 @@ static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
 static const uint16_t PARALLEL_CLASSIC_CHUNK_LEDS = 64;
-static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 65535;
+static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 128;
+static const uint16_t PARALLEL_LCD_FALLBACK_CHUNK_LEDS = 64;
 static const uint8_t PARALLEL_TX_BUFFER_COUNT = 4;
-static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 1;
+static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 4;
 static const size_t PARALLEL_CLASSIC_DMA_MAX_LEN = 4092;
 static const uint8_t PARALLEL_CLASSIC_DESC_PER_BUFFER = 2;
 static const uint8_t PARALLEL_CLASSIC_DESC_COUNT =
@@ -94,7 +95,7 @@ static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
-    "parallel-v1-s3-esp-lcd-slot-2026-05-18";
+    "parallel-v1-s3-esp-lcd-chunked-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -2778,105 +2779,176 @@ bool CFXLightOutput::init_parallel_backend_() {
   }
   g_parallel_group.init_attempted = true;
 
-  esp_lcd_i80_bus_config_t bus_config = {};
-  bus_config.dc_gpio_num = g_parallel_group.dc_pin;
-  bus_config.wr_gpio_num = g_parallel_group.strobe_pin;
-  bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
-  bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
-  bus_config.max_transfer_bytes = g_parallel_group.bus_max_transfer_size;
-  bus_config.dma_burst_size = 4;
-  for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
-    bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
-  }
+  auto configure_lcd_geometry = [&](uint16_t requested_chunk_leds) {
+    g_parallel_group.chunk_leds = static_cast<uint16_t>(
+        std::min<uint16_t>(this->num_leds_, requested_chunk_leds));
+    g_parallel_group.chunk_frame_size =
+        static_cast<size_t>(g_parallel_group.chunk_leds) *
+        this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES;
+    g_parallel_group.bus_max_transfer_size =
+        g_parallel_group.chunk_frame_size + PARALLEL_RESET_SAMPLES;
+    g_parallel_group.chunk_alloc_size =
+        g_parallel_group.bus_max_transfer_size + PARALLEL_CANARY_BYTES;
+  };
 
-  const size_t dma_free =
-      heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-  const size_t dma_largest =
-      heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-  ESP_LOGI(TAG,
-           "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
-           "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
-           "bus_max=%u alloc=%u dma_free=%u dma_largest=%u",
-           PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
-           g_parallel_group.lane_count, g_parallel_group.strobe_pin,
-           g_parallel_group.dc_pin,
-           static_cast<unsigned>(g_parallel_group.frame_size),
-           g_parallel_group.chunk_leds,
-           static_cast<unsigned>(g_parallel_group.chunk_frame_size),
-           static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
-           static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
-           static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
-
-  esp_err_t err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG,
-             "Parallel I80 bus init failed for group '%s' "
-             "(err=%d, wr=GPIO%u, internal_dc=GPIO%u)",
-             g_parallel_group.name.c_str(), (int) err,
-             g_parallel_group.strobe_pin, g_parallel_group.dc_pin);
-    return false;
-  }
-
-  esp_lcd_panel_io_i80_config_t io_config = {};
-  io_config.cs_gpio_num = -1;
-  io_config.pclk_hz = PARALLEL_PCLK_HZ;
-  io_config.trans_queue_depth = PARALLEL_LCD_TX_BUFFER_COUNT;
-  io_config.on_color_trans_done = parallel_tx_done_cb_;
-  io_config.user_ctx = &g_parallel_group;
-  // Keep a dummy command phase here because the esp_lcd I80 path expects one
-  // before color data; the actual LED waveform is carried by the color phase.
-  io_config.lcd_cmd_bits = 8;
-  io_config.lcd_param_bits = 0;
-  io_config.dc_levels.dc_idle_level = 0;
-  io_config.dc_levels.dc_cmd_level = 0;
-  io_config.dc_levels.dc_dummy_level = 0;
-  io_config.dc_levels.dc_data_level = 1;
-  io_config.flags.pclk_idle_low = 1;
-
-  err = esp_lcd_new_panel_io_i80(g_parallel_group.bus, &io_config,
-                                 &g_parallel_group.io);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Parallel I80 panel IO init failed for group '%s' (err=%d)",
-             g_parallel_group.name.c_str(), (int) err);
-    esp_lcd_del_i80_bus(g_parallel_group.bus);
-    g_parallel_group.bus = nullptr;
-    g_parallel_group.init_attempted = false;
-    return false;
-  }
-
-  for (uint8_t i = 0; i < PARALLEL_LCD_TX_BUFFER_COUNT; i++) {
-    g_parallel_group.frame_bufs[i] = static_cast<uint8_t *>(
-        esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
-                                      g_parallel_group.chunk_alloc_size,
-                                      MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
-    if (g_parallel_group.frame_bufs[i] == nullptr) {
-      ESP_LOGE(TAG,
-               "Cannot allocate parallel frame buffer %u/%u (%u bytes, DMA); "
-               "largest DMA block before init was %u bytes",
-               static_cast<unsigned>(i + 1),
-               static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
-               static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
-               static_cast<unsigned>(dma_largest));
-      for (uint8_t j = 0; j < i; j++) {
-        free(g_parallel_group.frame_bufs[j]);
-        g_parallel_group.frame_bufs[j] = nullptr;
-      }
+  auto release_lcd_backend = [&]() {
+    for (uint8_t i = 0; i < PARALLEL_LCD_TX_BUFFER_COUNT; i++) {
+      free(g_parallel_group.frame_bufs[i]);
+      g_parallel_group.frame_bufs[i] = nullptr;
+    }
+    g_parallel_group.frame_buf = nullptr;
+    if (g_parallel_group.io != nullptr) {
       esp_lcd_panel_io_del(g_parallel_group.io);
       g_parallel_group.io = nullptr;
+    }
+    if (g_parallel_group.bus != nullptr) {
       esp_lcd_del_i80_bus(g_parallel_group.bus);
       g_parallel_group.bus = nullptr;
-      g_parallel_group.init_attempted = false;
-      return false;
     }
-    memset(g_parallel_group.frame_bufs[i], 0, g_parallel_group.chunk_alloc_size);
-    memset(g_parallel_group.frame_bufs[i] + g_parallel_group.chunk_frame_size,
-           PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+    g_parallel_group.tx_in_flight = false;
+    g_parallel_group.tx_in_flight_count = 0;
+  };
+
+  const uint16_t chunk_attempts[] = {
+      PARALLEL_LCD_CHUNK_LEDS, PARALLEL_LCD_FALLBACK_CHUNK_LEDS};
+  esp_err_t last_err = ESP_OK;
+  uint16_t previous_attempt = 0;
+  for (uint16_t requested_chunk_leds : chunk_attempts) {
+    const uint16_t selected_chunk_leds =
+        static_cast<uint16_t>(std::min<uint16_t>(this->num_leds_,
+                                                requested_chunk_leds));
+    if (selected_chunk_leds == 0 || selected_chunk_leds == previous_attempt) {
+      continue;
+    }
+    previous_attempt = selected_chunk_leds;
+    configure_lcd_geometry(selected_chunk_leds);
+
+    esp_lcd_i80_bus_config_t bus_config = {};
+    bus_config.dc_gpio_num = g_parallel_group.dc_pin;
+    bus_config.wr_gpio_num = g_parallel_group.strobe_pin;
+    bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
+    bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
+    bus_config.max_transfer_bytes = g_parallel_group.bus_max_transfer_size;
+    bus_config.dma_burst_size = 4;
+    for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
+      bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
+    }
+
+    const size_t dma_free =
+        heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    const size_t dma_largest =
+        heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    const size_t waveform_dma_bytes =
+        g_parallel_group.chunk_alloc_size * PARALLEL_LCD_TX_BUFFER_COUNT;
+    ESP_LOGI(TAG,
+             "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
+             "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
+             "buffers=%u/%u bytes queue_depth=%u bus_max=%u alloc=%u "
+             "dma_free=%u dma_largest=%u",
+             PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
+             g_parallel_group.lane_count, g_parallel_group.strobe_pin,
+             g_parallel_group.dc_pin,
+             static_cast<unsigned>(g_parallel_group.frame_size),
+             g_parallel_group.chunk_leds,
+             static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
+             static_cast<unsigned>(waveform_dma_bytes),
+             static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
+             static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
+             static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
+             static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
+
+    last_err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
+    if (last_err != ESP_OK) {
+      ESP_LOGW(TAG,
+               "Parallel I80 bus init failed for group '%s' at %u LED chunks "
+               "(err=%d, wr=GPIO%u, internal_dc=GPIO%u); trying fallback if "
+               "available",
+               g_parallel_group.name.c_str(), g_parallel_group.chunk_leds,
+               (int) last_err, g_parallel_group.strobe_pin,
+               g_parallel_group.dc_pin);
+      release_lcd_backend();
+      continue;
+    }
+
+    esp_lcd_panel_io_i80_config_t io_config = {};
+    io_config.cs_gpio_num = -1;
+    io_config.pclk_hz = PARALLEL_PCLK_HZ;
+    io_config.trans_queue_depth = PARALLEL_LCD_TX_BUFFER_COUNT;
+    io_config.on_color_trans_done = parallel_tx_done_cb_;
+    io_config.user_ctx = &g_parallel_group;
+    // Keep a dummy command phase here because the esp_lcd I80 path expects one
+    // before color data; the actual LED waveform is carried by the color phase.
+    io_config.lcd_cmd_bits = 8;
+    io_config.lcd_param_bits = 0;
+    io_config.dc_levels.dc_idle_level = 0;
+    io_config.dc_levels.dc_cmd_level = 0;
+    io_config.dc_levels.dc_dummy_level = 0;
+    io_config.dc_levels.dc_data_level = 1;
+    io_config.flags.pclk_idle_low = 1;
+
+    last_err = esp_lcd_new_panel_io_i80(g_parallel_group.bus, &io_config,
+                                        &g_parallel_group.io);
+    if (last_err != ESP_OK) {
+      ESP_LOGW(TAG,
+               "Parallel I80 panel IO init failed for group '%s' at %u LED "
+               "chunks (err=%d); trying fallback if available",
+               g_parallel_group.name.c_str(), g_parallel_group.chunk_leds,
+               (int) last_err);
+      release_lcd_backend();
+      continue;
+    }
+
+    bool buffers_ready = true;
+    for (uint8_t i = 0; i < PARALLEL_LCD_TX_BUFFER_COUNT; i++) {
+      g_parallel_group.frame_bufs[i] = static_cast<uint8_t *>(
+          esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
+                                        g_parallel_group.chunk_alloc_size,
+                                        MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+      if (g_parallel_group.frame_bufs[i] == nullptr) {
+        ESP_LOGW(TAG,
+                 "Cannot allocate S3 parallel frame buffer %u/%u "
+                 "(%u bytes, DMA, chunk=%u LEDs); largest DMA block before "
+                 "init was %u bytes",
+                 static_cast<unsigned>(i + 1),
+                 static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
+                 static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
+                 g_parallel_group.chunk_leds,
+                 static_cast<unsigned>(dma_largest));
+        buffers_ready = false;
+        break;
+      }
+      memset(g_parallel_group.frame_bufs[i], 0, g_parallel_group.chunk_alloc_size);
+      memset(g_parallel_group.frame_bufs[i] + g_parallel_group.chunk_frame_size,
+             PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+    }
+    if (!buffers_ready) {
+      last_err = ESP_ERR_NO_MEM;
+      release_lcd_backend();
+      continue;
+    }
+
+    g_parallel_group.frame_buf = g_parallel_group.frame_bufs[0];
+    g_parallel_group.ready = true;
+    ESP_LOGI(TAG,
+             "Parallel backend %s group '%s' ready: lanes=%u chunk=%u leds/%u "
+             "bytes dma_buffers=%u waveform_dma=%u queue_depth=%u",
+             PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
+             g_parallel_group.lane_count, g_parallel_group.chunk_leds,
+             static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
+             static_cast<unsigned>(waveform_dma_bytes),
+             static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT));
+    return true;
   }
-  g_parallel_group.frame_buf = g_parallel_group.frame_bufs[0];
-  g_parallel_group.ready = true;
-  ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
-           PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str());
-  return true;
+
+  g_parallel_group.init_attempted = false;
+  ESP_LOGE(TAG,
+           "Parallel S3 I80 backend init failed for group '%s' after %u/%u LED "
+           "chunk attempts (last_err=%d)",
+           g_parallel_group.name.c_str(), PARALLEL_LCD_CHUNK_LEDS,
+           PARALLEL_LCD_FALLBACK_CHUNK_LEDS, (int) last_err);
+  return false;
 #elif !defined(CFX_PARALLEL_I80_ENABLED)
   ESP_LOGE(TAG,
            "Parallel I80 backend is not compiled into this boot-safe "
@@ -3435,7 +3507,8 @@ void CFXLightOutput::flush_parallel_() {
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
-             "us coalesced=%" PRIu32 " timeouts=%" PRIu32,
+             "us coalesced=%" PRIu32 " timeouts=%" PRIu32
+             " queue_errors=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, first_pixel[0][0], first_pixel[0][1],
@@ -3445,7 +3518,8 @@ void CFXLightOutput::flush_parallel_() {
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              chunks_this_frame, micros() - flush_start_us,
              build_us, tx_wait_us, queue_us, g_parallel_group.coalesced_count,
-             g_parallel_group.timeout_flush_count);
+             g_parallel_group.timeout_flush_count,
+             g_parallel_group.queue_error_count);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     if (g_parallel_group.outputs[lane] != nullptr) {
