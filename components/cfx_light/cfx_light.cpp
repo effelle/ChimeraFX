@@ -67,7 +67,7 @@ static const uint16_t PARALLEL_CHUNK_LEDS = 64;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-expand-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-reset-tail-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -2511,6 +2511,8 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
   const size_t needed =
       static_cast<size_t>(led_count) * stride * 8u * PARALLEL_SYMBOL_SAMPLES +
       (include_reset ? PARALLEL_RESET_SAMPLES : 0u);
+  const size_t led_data_size =
+      static_cast<size_t>(led_count) * stride * 8u * PARALLEL_SYMBOL_SAMPLES;
   if (!g_parallel_group.ready || dest == nullptr || len < needed ||
       start_led >= this->num_leds_ || led_count == 0 ||
       static_cast<uint32_t>(start_led) + led_count > this->num_leds_) {
@@ -2522,7 +2524,7 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
     memset(dest + needed, PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
   }
   uint8_t *out = dest;
-  uint8_t *const end = dest + needed;
+  uint8_t *const data_end = dest + led_data_size;
 
   for (uint16_t offset = 0; offset < led_count; offset++) {
     const uint16_t led = start_led + offset;
@@ -2550,11 +2552,12 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         }
 
         for (uint8_t sample = 0; sample < PARALLEL_SYMBOL_SAMPLES; sample++) {
-          if (out >= end) {
+          if (out >= data_end) {
             ESP_LOGE(TAG,
                      "Parallel frame writer overflow guard tripped "
-                     "(start=%u leds=%u needed=%u)",
-                     start_led, led_count, static_cast<unsigned>(needed));
+                     "(start=%u leds=%u data=%u total=%u)",
+                     start_led, led_count, static_cast<unsigned>(led_data_size),
+                     static_cast<unsigned>(needed));
             return false;
           }
           *out++ = sample_values[sample];
@@ -2563,10 +2566,11 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
     }
   }
 
-  if (out != end) {
+  if (out != data_end) {
     ESP_LOGE(TAG,
-             "Parallel frame writer size mismatch (wrote=%u needed=%u)",
-             static_cast<unsigned>(out - dest), static_cast<unsigned>(needed));
+             "Parallel frame writer size mismatch (wrote=%u data=%u total=%u)",
+             static_cast<unsigned>(out - dest),
+             static_cast<unsigned>(led_data_size), static_cast<unsigned>(needed));
     return false;
   }
   if (len >= needed + PARALLEL_CANARY_BYTES) {
