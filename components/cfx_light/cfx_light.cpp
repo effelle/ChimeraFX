@@ -150,8 +150,6 @@ struct CFXParallelGroupRuntime {
 };
 
 static CFXParallelGroupRuntime g_parallel_group;
-static uint32_t g_parallel_waveform_lut[256]{};
-static bool g_parallel_waveform_lut_ready = false;
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static void parallel_dma_desc_init_(lldesc_t *desc, uint8_t *buf, size_t len,
@@ -312,32 +310,6 @@ static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group)
   return ESP_OK;
 }
 #endif
-
-static void init_parallel_waveform_lut_() {
-  if (g_parallel_waveform_lut_ready) {
-    return;
-  }
-  for (uint16_t value = 0; value < 256; value++) {
-    uint32_t packed = 0;
-    for (uint8_t bit = 0; bit < 8; bit++) {
-      const bool high = (value & (0x80u >> bit)) != 0;
-      const uint8_t high_samples = high ? 2 : 1;
-      const uint8_t sample_base = bit * PARALLEL_SYMBOL_SAMPLES;
-      for (uint8_t sample = 0; sample < high_samples; sample++) {
-        uint8_t mapped_sample = sample_base + sample;
-#if defined(CONFIG_IDF_TARGET_ESP32)
-        static const uint8_t CLASSIC_SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
-        mapped_sample =
-            static_cast<uint8_t>((mapped_sample & 0xFCu) |
-                                 CLASSIC_SAMPLE_OFFSET_MAP[mapped_sample & 0x03u]);
-#endif
-        packed |= (1UL << mapped_sample);
-      }
-    }
-    g_parallel_waveform_lut[value] = packed;
-  }
-  g_parallel_waveform_lut_ready = true;
-}
 
 static bool parallel_pin_used_(uint8_t pin, const uint8_t *pins, uint8_t count) {
   for (uint8_t i = 0; i < count; i++) {
@@ -2935,22 +2907,29 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
     return false;
   }
 
-  memset(dest, 0, needed);
+  if (include_reset && PARALLEL_RESET_SAMPLES > 0) {
+    memset(dest + led_data_size, 0, PARALLEL_RESET_SAMPLES);
+  }
   if (len >= needed + PARALLEL_CANARY_BYTES) {
     memset(dest + needed, PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
   }
-  init_parallel_waveform_lut_();
   uint8_t *lane_bufs[PARALLEL_MAX_LANES] = {};
   uint8_t lane_scales[PARALLEL_MAX_LANES] = {};
+  uint8_t active_lane_mask = 0;
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *lane_output = g_parallel_group.outputs[lane];
     if (lane_output != nullptr && lane_output->buf_ != nullptr) {
       lane_bufs[lane] = lane_output->buf_;
       lane_scales[lane] = lane_output->get_power_transmit_scale_();
+      active_lane_mask |= static_cast<uint8_t>(1u << lane);
     }
   }
   uint8_t *out = dest;
   uint8_t *const data_end = dest + led_data_size;
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  static const uint8_t SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
+#endif
 
   for (uint16_t offset = 0; offset < led_count; offset++) {
     const uint16_t led = start_led + offset;
@@ -2964,24 +2943,68 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         return false;
       }
       uint8_t *const symbol_out = out;
-      for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-        auto *lane_buf = lane_bufs[lane];
-        if (lane_buf == nullptr) {
-          continue;
+      const size_t byte_offset = static_cast<size_t>(led) * stride + byte_index;
+      uint8_t lane_value0 = 0;
+      uint8_t lane_value1 = 0;
+      uint8_t lane_value2 = 0;
+      uint8_t lane_value3 = 0;
+      if (lane_bufs[0] != nullptr) {
+        lane_value0 = lane_bufs[0][byte_offset];
+        if (lane_scales[0] < 255) {
+          lane_value0 = static_cast<uint8_t>(
+              (static_cast<uint16_t>(lane_value0) * lane_scales[0]) / 255u);
         }
-        uint8_t value = lane_buf[static_cast<size_t>(led) * stride + byte_index];
-        const uint8_t scale = lane_scales[lane];
-        if (scale < 255) {
-          value =
-              static_cast<uint8_t>((static_cast<uint16_t>(value) * scale) / 255u);
+      }
+      if (lane_bufs[1] != nullptr) {
+        lane_value1 = lane_bufs[1][byte_offset];
+        if (lane_scales[1] < 255) {
+          lane_value1 = static_cast<uint8_t>(
+              (static_cast<uint16_t>(lane_value1) * lane_scales[1]) / 255u);
         }
-        uint32_t packed = g_parallel_waveform_lut[value];
-        const uint8_t lane_mask = static_cast<uint8_t>(1u << lane);
-        while (packed != 0) {
-          const uint8_t sample = static_cast<uint8_t>(__builtin_ctz(packed));
-          symbol_out[sample] |= lane_mask;
-          packed &= packed - 1u;
+      }
+      if (lane_bufs[2] != nullptr) {
+        lane_value2 = lane_bufs[2][byte_offset];
+        if (lane_scales[2] < 255) {
+          lane_value2 = static_cast<uint8_t>(
+              (static_cast<uint16_t>(lane_value2) * lane_scales[2]) / 255u);
         }
+      }
+      if (lane_bufs[3] != nullptr) {
+        lane_value3 = lane_bufs[3][byte_offset];
+        if (lane_scales[3] < 255) {
+          lane_value3 = static_cast<uint8_t>(
+              (static_cast<uint16_t>(lane_value3) * lane_scales[3]) / 255u);
+        }
+      }
+      for (uint8_t bit = 0; bit < 8; bit++) {
+        uint8_t one_mask = 0;
+        const uint8_t bit_mask = static_cast<uint8_t>(0x80u >> bit);
+        if ((lane_value0 & bit_mask) != 0) {
+          one_mask |= 0x01;
+        }
+        if ((lane_value1 & bit_mask) != 0) {
+          one_mask |= 0x02;
+        }
+        if ((lane_value2 & bit_mask) != 0) {
+          one_mask |= 0x04;
+        }
+        if ((lane_value3 & bit_mask) != 0) {
+          one_mask |= 0x08;
+        }
+        const uint8_t sample_base =
+            static_cast<uint8_t>(bit * PARALLEL_SYMBOL_SAMPLES);
+#if defined(CONFIG_IDF_TARGET_ESP32)
+        symbol_out[(sample_base & 0xFCu) | SAMPLE_OFFSET_MAP[sample_base & 0x03u]] =
+            active_lane_mask;
+        symbol_out[((sample_base + 1u) & 0xFCu) |
+                   SAMPLE_OFFSET_MAP[(sample_base + 1u) & 0x03u]] = one_mask;
+        symbol_out[((sample_base + 2u) & 0xFCu) |
+                   SAMPLE_OFFSET_MAP[(sample_base + 2u) & 0x03u]] = 0;
+#else
+        symbol_out[sample_base] = active_lane_mask;
+        symbol_out[sample_base + 1u] = one_mask;
+        symbol_out[sample_base + 2u] = 0;
+#endif
       }
       out += 8u * PARALLEL_SYMBOL_SAMPLES;
     }
