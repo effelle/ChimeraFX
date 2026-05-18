@@ -324,7 +324,14 @@ static void init_parallel_waveform_lut_() {
       const uint8_t high_samples = high ? 2 : 1;
       const uint8_t sample_base = bit * PARALLEL_SYMBOL_SAMPLES;
       for (uint8_t sample = 0; sample < high_samples; sample++) {
-        packed |= (1UL << (sample_base + sample));
+        uint8_t mapped_sample = sample_base + sample;
+#if defined(CONFIG_IDF_TARGET_ESP32)
+        static const uint8_t CLASSIC_SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
+        mapped_sample =
+            static_cast<uint8_t>((mapped_sample & 0xFCu) |
+                                 CLASSIC_SAMPLE_OFFSET_MAP[mapped_sample & 0x03u]);
+#endif
+        packed |= (1UL << mapped_sample);
       }
     }
     g_parallel_waveform_lut[value] = packed;
@@ -2970,19 +2977,10 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         }
         uint32_t packed = g_parallel_waveform_lut[value];
         const uint8_t lane_mask = static_cast<uint8_t>(1u << lane);
-        for (uint8_t sample = 0; sample < 8u * PARALLEL_SYMBOL_SAMPLES;
-             sample++) {
-          if ((packed & (1UL << sample)) != 0) {
-#if defined(CONFIG_IDF_TARGET_ESP32)
-            static const uint8_t CLASSIC_SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
-            const uint8_t mapped_sample =
-                static_cast<uint8_t>((sample & 0xFCu) |
-                                     CLASSIC_SAMPLE_OFFSET_MAP[sample & 0x03u]);
-            symbol_out[mapped_sample] |= lane_mask;
-#else
-            symbol_out[sample] |= lane_mask;
-#endif
-          }
+        while (packed != 0) {
+          const uint8_t sample = static_cast<uint8_t>(__builtin_ctz(packed));
+          symbol_out[sample] |= lane_mask;
+          packed &= packed - 1u;
         }
       }
       out += 8u * PARALLEL_SYMBOL_SAMPLES;
