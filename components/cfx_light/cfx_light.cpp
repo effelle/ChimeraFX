@@ -63,11 +63,11 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 128;
+static const uint16_t PARALLEL_CHUNK_LEDS = 64;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-chunk128-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-lut64-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -107,6 +107,27 @@ struct CFXParallelGroupRuntime {
 };
 
 static CFXParallelGroupRuntime g_parallel_group;
+static uint32_t g_parallel_waveform_lut[256]{};
+static bool g_parallel_waveform_lut_ready = false;
+
+static void init_parallel_waveform_lut_() {
+  if (g_parallel_waveform_lut_ready) {
+    return;
+  }
+  for (uint16_t value = 0; value < 256; value++) {
+    uint32_t packed = 0;
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      const bool high = (value & (0x80u >> bit)) != 0;
+      const uint8_t high_samples = high ? 2 : 1;
+      const uint8_t sample_base = bit * PARALLEL_SYMBOL_SAMPLES;
+      for (uint8_t sample = 0; sample < high_samples; sample++) {
+        packed |= (1UL << (sample_base + sample));
+      }
+    }
+    g_parallel_waveform_lut[value] = packed;
+  }
+  g_parallel_waveform_lut_ready = true;
+}
 
 static bool parallel_pin_used_(uint8_t pin, const uint8_t *pins, uint8_t count) {
   for (uint8_t i = 0; i < count; i++) {
@@ -2523,46 +2544,52 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
   if (len >= needed + PARALLEL_CANARY_BYTES) {
     memset(dest + needed, PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
   }
+  init_parallel_waveform_lut_();
+  uint8_t *lane_bufs[PARALLEL_MAX_LANES] = {};
+  uint8_t lane_scales[PARALLEL_MAX_LANES] = {};
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output != nullptr && lane_output->buf_ != nullptr) {
+      lane_bufs[lane] = lane_output->buf_;
+      lane_scales[lane] = lane_output->get_power_transmit_scale_();
+    }
+  }
   uint8_t *out = dest;
   uint8_t *const data_end = dest + led_data_size;
 
   for (uint16_t offset = 0; offset < led_count; offset++) {
     const uint16_t led = start_led + offset;
     for (uint8_t byte_index = 0; byte_index < stride; byte_index++) {
-      for (uint8_t bit = 0; bit < 8; bit++) {
-        uint8_t sample_values[PARALLEL_SYMBOL_SAMPLES] = {};
-
-        for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-          auto *lane_output = g_parallel_group.outputs[lane];
-          if (lane_output == nullptr || lane_output->buf_ == nullptr) {
-            continue;
-          }
-          uint8_t value =
-              lane_output->buf_[static_cast<size_t>(led) * stride + byte_index];
-          const uint8_t scale = lane_output->get_power_transmit_scale_();
-          if (scale < 255) {
-            value = static_cast<uint8_t>((static_cast<uint16_t>(value) * scale) / 255u);
-          }
-          const bool high = (value & (0x80u >> bit)) != 0;
-          const uint8_t high_samples = high ? 2 : 1;
-          const uint8_t lane_mask = static_cast<uint8_t>(1u << lane);
-          for (uint8_t sample = 0; sample < high_samples; sample++) {
-            sample_values[sample] |= lane_mask;
-          }
+      if (out + (8u * PARALLEL_SYMBOL_SAMPLES) > data_end) {
+        ESP_LOGE(TAG,
+                 "Parallel frame writer overflow guard tripped "
+                 "(start=%u leds=%u data=%u total=%u)",
+                 start_led, led_count, static_cast<unsigned>(led_data_size),
+                 static_cast<unsigned>(needed));
+        return false;
+      }
+      uint8_t *const symbol_out = out;
+      for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+        auto *lane_buf = lane_bufs[lane];
+        if (lane_buf == nullptr) {
+          continue;
         }
-
-        for (uint8_t sample = 0; sample < PARALLEL_SYMBOL_SAMPLES; sample++) {
-          if (out >= data_end) {
-            ESP_LOGE(TAG,
-                     "Parallel frame writer overflow guard tripped "
-                     "(start=%u leds=%u data=%u total=%u)",
-                     start_led, led_count, static_cast<unsigned>(led_data_size),
-                     static_cast<unsigned>(needed));
-            return false;
+        uint8_t value = lane_buf[static_cast<size_t>(led) * stride + byte_index];
+        const uint8_t scale = lane_scales[lane];
+        if (scale < 255) {
+          value =
+              static_cast<uint8_t>((static_cast<uint16_t>(value) * scale) / 255u);
+        }
+        uint32_t packed = g_parallel_waveform_lut[value];
+        const uint8_t lane_mask = static_cast<uint8_t>(1u << lane);
+        for (uint8_t sample = 0; sample < 8u * PARALLEL_SYMBOL_SAMPLES;
+             sample++) {
+          if ((packed & (1UL << sample)) != 0) {
+            symbol_out[sample] |= lane_mask;
           }
-          *out++ = sample_values[sample];
         }
       }
+      out += 8u * PARALLEL_SYMBOL_SAMPLES;
     }
   }
 
@@ -2589,10 +2616,14 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
 
 void CFXLightOutput::flush_parallel_() {
   const uint32_t flush_start_us = micros();
+  uint32_t tx_wait_us = 0;
+  uint32_t build_us = 0;
+  uint32_t queue_us = 0;
   auto wait_for_parallel_tx = [&](uint32_t timeout_us) -> bool {
     const uint32_t wait_start_us = micros();
     while (g_parallel_group.tx_in_flight) {
       if ((micros() - wait_start_us) > timeout_us) {
+        tx_wait_us += micros() - wait_start_us;
         g_parallel_group.wait_timeout_count++;
         ESP_LOGW(TAG,
                  "Parallel TX wait timeout for group '%s' (timeouts=%" PRIu32 ")",
@@ -2604,6 +2635,7 @@ void CFXLightOutput::flush_parallel_() {
       esphome::App.feed_wdt();
       esp_rom_delay_us(100);
     }
+    tx_wait_us += micros() - wait_start_us;
     return true;
   };
 
@@ -2660,6 +2692,7 @@ void CFXLightOutput::flush_parallel_() {
         static_cast<size_t>(chunk_leds) * stride * 8u * PARALLEL_SYMBOL_SAMPLES +
         (final_chunk ? PARALLEL_RESET_SAMPLES : 0u);
 
+    const uint32_t build_start_us = micros();
     if (!this->build_parallel_frame_(g_parallel_group.frame_buf,
                                      g_parallel_group.chunk_alloc_size,
                                      led_start, chunk_leds, final_chunk)) {
@@ -2671,6 +2704,7 @@ void CFXLightOutput::flush_parallel_() {
       this->status_set_warning();
       return;
     }
+    build_us += micros() - build_start_us;
     if (chunk_size > g_parallel_group.chunk_frame_size ||
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES >
             g_parallel_group.chunk_alloc_size) {
@@ -2696,9 +2730,11 @@ void CFXLightOutput::flush_parallel_() {
     }
 
     g_parallel_group.tx_in_flight = true;
+    const uint32_t queue_start_us = micros();
     esp_err_t err = esp_lcd_panel_io_tx_color(g_parallel_group.io, 0,
                                               g_parallel_group.frame_buf,
                                               chunk_size);
+    queue_us += micros() - queue_start_us;
     if (err != ESP_OK) {
       g_parallel_group.tx_in_flight = false;
       g_parallel_group.queue_error_count++;
@@ -2727,6 +2763,7 @@ void CFXLightOutput::flush_parallel_() {
              " done=%" PRIu32 " source_nonzero=%" PRIu32
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
+             "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
@@ -2736,7 +2773,7 @@ void CFXLightOutput::flush_parallel_() {
              static_cast<unsigned>(g_parallel_group.frame_size),
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              chunks_this_frame, micros() - flush_start_us,
-             g_parallel_group.coalesced_count,
+             build_us, tx_wait_us, queue_us, g_parallel_group.coalesced_count,
              g_parallel_group.timeout_flush_count);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
