@@ -63,11 +63,12 @@ static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 65535;
+static const uint16_t PARALLEL_CHUNK_LEDS = 120;
+static const uint8_t PARALLEL_TX_BUFFER_COUNT = 2;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-full3x-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-pipe3x120-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -76,6 +77,7 @@ struct CFXParallelGroupRuntime {
   bool ready{false};
   bool init_attempted{false};
   bool tx_in_flight{false};
+  volatile uint8_t tx_in_flight_count{0};
   volatile uint32_t tx_done_count{0};
   uint8_t pending_mask{0};
   uint32_t pending_first_ms{0};
@@ -93,6 +95,7 @@ struct CFXParallelGroupRuntime {
   void *io{nullptr};
 #endif
   uint8_t *frame_buf{nullptr};
+  uint8_t *frame_bufs[PARALLEL_TX_BUFFER_COUNT]{};
   size_t frame_size{0};  // Logical full-frame size, for diagnostics.
   uint16_t chunk_leds{0};
   size_t chunk_frame_size{0};
@@ -173,7 +176,10 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
                                            void *user_ctx) {
   auto *group = static_cast<CFXParallelGroupRuntime *>(user_ctx);
   if (group != nullptr) {
-    group->tx_in_flight = false;
+    if (group->tx_in_flight_count > 0) {
+      group->tx_in_flight_count--;
+    }
+    group->tx_in_flight = group->tx_in_flight_count > 0;
     group->tx_done_count++;
   }
   return false;
@@ -2460,7 +2466,7 @@ bool CFXLightOutput::init_parallel_backend_() {
   esp_lcd_panel_io_i80_config_t io_config = {};
   io_config.cs_gpio_num = -1;
   io_config.pclk_hz = PARALLEL_PCLK_HZ;
-  io_config.trans_queue_depth = 1;
+  io_config.trans_queue_depth = PARALLEL_TX_BUFFER_COUNT;
   io_config.on_color_trans_done = parallel_tx_done_cb_;
   io_config.user_ctx = &g_parallel_group;
   // ESP32 Classic's esp_lcd I80 path is backed by I2S-LCD and always sends
@@ -2485,26 +2491,35 @@ bool CFXLightOutput::init_parallel_backend_() {
     return false;
   }
 
-  g_parallel_group.frame_buf = static_cast<uint8_t *>(
-      esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
-                                    g_parallel_group.chunk_alloc_size,
-                                    MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
-  if (g_parallel_group.frame_buf == nullptr) {
-    ESP_LOGE(TAG,
-             "Cannot allocate parallel frame buffer (%u bytes, DMA); "
-             "largest DMA block before init was %u bytes",
-             static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
-             static_cast<unsigned>(dma_largest));
-    esp_lcd_panel_io_del(g_parallel_group.io);
-    g_parallel_group.io = nullptr;
-    esp_lcd_del_i80_bus(g_parallel_group.bus);
-    g_parallel_group.bus = nullptr;
-    g_parallel_group.init_attempted = false;
-    return false;
+  for (uint8_t i = 0; i < PARALLEL_TX_BUFFER_COUNT; i++) {
+    g_parallel_group.frame_bufs[i] = static_cast<uint8_t *>(
+        esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
+                                      g_parallel_group.chunk_alloc_size,
+                                      MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    if (g_parallel_group.frame_bufs[i] == nullptr) {
+      ESP_LOGE(TAG,
+               "Cannot allocate parallel frame buffer %u/%u (%u bytes, DMA); "
+               "largest DMA block before init was %u bytes",
+               static_cast<unsigned>(i + 1),
+               static_cast<unsigned>(PARALLEL_TX_BUFFER_COUNT),
+               static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
+               static_cast<unsigned>(dma_largest));
+      for (uint8_t j = 0; j < i; j++) {
+        free(g_parallel_group.frame_bufs[j]);
+        g_parallel_group.frame_bufs[j] = nullptr;
+      }
+      esp_lcd_panel_io_del(g_parallel_group.io);
+      g_parallel_group.io = nullptr;
+      esp_lcd_del_i80_bus(g_parallel_group.bus);
+      g_parallel_group.bus = nullptr;
+      g_parallel_group.init_attempted = false;
+      return false;
+    }
+    memset(g_parallel_group.frame_bufs[i], 0, g_parallel_group.chunk_alloc_size);
+    memset(g_parallel_group.frame_bufs[i] + g_parallel_group.chunk_frame_size,
+           PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
   }
-  memset(g_parallel_group.frame_buf, 0, g_parallel_group.chunk_alloc_size);
-  memset(g_parallel_group.frame_buf + g_parallel_group.chunk_frame_size,
-         PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+  g_parallel_group.frame_buf = g_parallel_group.frame_bufs[0];
   g_parallel_group.ready = true;
   ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
@@ -2619,15 +2634,19 @@ void CFXLightOutput::flush_parallel_() {
   uint32_t tx_wait_us = 0;
   uint32_t build_us = 0;
   uint32_t queue_us = 0;
-  auto wait_for_parallel_tx = [&](uint32_t timeout_us) -> bool {
+  auto wait_for_parallel_tx_count = [&](uint8_t max_in_flight,
+                                        uint32_t timeout_us) -> bool {
     const uint32_t wait_start_us = micros();
-    while (g_parallel_group.tx_in_flight) {
+    while (g_parallel_group.tx_in_flight_count > max_in_flight) {
       if ((micros() - wait_start_us) > timeout_us) {
         tx_wait_us += micros() - wait_start_us;
         g_parallel_group.wait_timeout_count++;
         ESP_LOGW(TAG,
-                 "Parallel TX wait timeout for group '%s' (timeouts=%" PRIu32 ")",
+                 "Parallel TX wait timeout for group '%s' "
+                 "(in_flight=%u max=%u timeouts=%" PRIu32 ")",
                  g_parallel_group.name.c_str(),
+                 static_cast<unsigned>(g_parallel_group.tx_in_flight_count),
+                 static_cast<unsigned>(max_in_flight),
                  g_parallel_group.wait_timeout_count);
         this->status_set_warning();
         return false;
@@ -2654,7 +2673,7 @@ void CFXLightOutput::flush_parallel_() {
     return;
   }
 
-  if (!wait_for_parallel_tx(100000u)) {
+  if (!wait_for_parallel_tx_count(0, 100000u)) {
     return;
   }
 
@@ -2691,9 +2710,23 @@ void CFXLightOutput::flush_parallel_() {
     const size_t chunk_size =
         static_cast<size_t>(chunk_leds) * stride * 8u * PARALLEL_SYMBOL_SAMPLES +
         (final_chunk ? PARALLEL_RESET_SAMPLES : 0u);
+    const uint8_t buffer_index =
+        static_cast<uint8_t>(chunks_this_frame % PARALLEL_TX_BUFFER_COUNT);
+    if (!wait_for_parallel_tx_count(PARALLEL_TX_BUFFER_COUNT - 1, 100000u)) {
+      return;
+    }
+    uint8_t *const frame_buf = g_parallel_group.frame_bufs[buffer_index];
+    if (frame_buf == nullptr) {
+      ESP_LOGE(TAG,
+               "Parallel frame buffer %u is not available for group '%s'",
+               static_cast<unsigned>(buffer_index),
+               g_parallel_group.name.c_str());
+      this->status_set_warning();
+      return;
+    }
 
     const uint32_t build_start_us = micros();
-    if (!this->build_parallel_frame_(g_parallel_group.frame_buf,
+    if (!this->build_parallel_frame_(frame_buf,
                                      g_parallel_group.chunk_alloc_size,
                                      led_start, chunk_leds, final_chunk)) {
       ESP_LOGE(TAG,
@@ -2718,7 +2751,7 @@ void CFXLightOutput::flush_parallel_() {
       return;
     }
     for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
-      if (g_parallel_group.frame_buf[g_parallel_group.chunk_frame_size + i] !=
+      if (frame_buf[g_parallel_group.chunk_frame_size + i] !=
           PARALLEL_CANARY_VALUE) {
         ESP_LOGE(TAG,
                  "Parallel DMA buffer canary corrupted before TX "
@@ -2730,13 +2763,16 @@ void CFXLightOutput::flush_parallel_() {
     }
 
     g_parallel_group.tx_in_flight = true;
+    g_parallel_group.tx_in_flight_count++;
     const uint32_t queue_start_us = micros();
     esp_err_t err = esp_lcd_panel_io_tx_color(g_parallel_group.io, 0,
-                                              g_parallel_group.frame_buf,
-                                              chunk_size);
+                                              frame_buf, chunk_size);
     queue_us += micros() - queue_start_us;
     if (err != ESP_OK) {
-      g_parallel_group.tx_in_flight = false;
+      if (g_parallel_group.tx_in_flight_count > 0) {
+        g_parallel_group.tx_in_flight_count--;
+      }
+      g_parallel_group.tx_in_flight = g_parallel_group.tx_in_flight_count > 0;
       g_parallel_group.queue_error_count++;
       ESP_LOGE(TAG,
                "Parallel TX queue failed for group '%s' "
@@ -2750,9 +2786,6 @@ void CFXLightOutput::flush_parallel_() {
     chunks_this_frame++;
     g_parallel_group.chunk_tx_count++;
     led_start += chunk_leds;
-    if (!final_chunk && !wait_for_parallel_tx(100000u)) {
-      return;
-    }
   }
 
   g_parallel_group.tx_count++;
