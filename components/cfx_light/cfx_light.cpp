@@ -32,6 +32,15 @@
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#if defined(CONFIG_IDF_TARGET_ESP32)
+#include <esp_intr_alloc.h>
+#include <esp_private/periph_ctrl.h>
+#include <rom/gpio.h>
+#include <rom/lldesc.h>
+#include <soc/gpio_sig_map.h>
+#include <soc/i2s_struct.h>
+#include <soc/periph_defs.h>
+#endif
 #ifdef CFX_PARALLEL_I80_ENABLED
 #include <esp_lcd_panel_io.h>
 #endif
@@ -63,12 +72,28 @@ static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 65535;
-static const uint8_t PARALLEL_TX_BUFFER_COUNT = 1;
+static const uint16_t PARALLEL_CLASSIC_CHUNK_LEDS = 64;
+static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 65535;
+static const uint8_t PARALLEL_TX_BUFFER_COUNT = 4;
+static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 1;
+static const size_t PARALLEL_CLASSIC_DMA_MAX_LEN = 4092;
+static const uint8_t PARALLEL_CLASSIC_DESC_PER_BUFFER = 2;
+static const uint8_t PARALLEL_CLASSIC_DESC_COUNT =
+    2 + (PARALLEL_TX_BUFFER_COUNT * PARALLEL_CLASSIC_DESC_PER_BUFFER) + 1;
+static const uint8_t PARALLEL_CLASSIC_SILENCE_DESC_A = 0;
+static const uint8_t PARALLEL_CLASSIC_SILENCE_DESC_B = 1;
+static const uint8_t PARALLEL_CLASSIC_DATA_DESC_BASE = 2;
+static const uint8_t PARALLEL_CLASSIC_RESET_DESC =
+    PARALLEL_CLASSIC_DATA_DESC_BASE +
+    (PARALLEL_TX_BUFFER_COUNT * PARALLEL_CLASSIC_DESC_PER_BUFFER);
+static const size_t PARALLEL_CLASSIC_SILENCE_BYTES = 32;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-full3x-tightbus-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV =
+    "parallel-v1-classic-i2s-stream-2026-05-18";
+static const char *const PARALLEL_LCD_BACKEND_REV =
+    "parallel-v1-s3-esp-lcd-slot-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -87,6 +112,18 @@ struct CFXParallelGroupRuntime {
   uint8_t dc_pin{21};
   uint8_t lane_pins[PARALLEL_I80_BUS_WIDTH]{};
   CFXLightOutput *outputs[PARALLEL_MAX_LANES]{};
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  lldesc_t *classic_descs{nullptr};
+  intr_handle_t classic_intr{nullptr};
+  uint8_t *classic_silence_buf{nullptr};
+  uint8_t *classic_reset_buf{nullptr};
+  volatile bool classic_sending{false};
+  volatile uint32_t classic_completed_chunks{0};
+  volatile uint32_t classic_dma_errors{0};
+  uint8_t classic_data_desc_tail[PARALLEL_TX_BUFFER_COUNT]{};
+  uint32_t classic_underrun_count{0};
+  uint32_t classic_stream_count{0};
+#endif
 #ifdef CFX_PARALLEL_I80_ENABLED
   esp_lcd_i80_bus_handle_t bus{nullptr};
   esp_lcd_panel_io_handle_t io{nullptr};
@@ -112,6 +149,175 @@ struct CFXParallelGroupRuntime {
 static CFXParallelGroupRuntime g_parallel_group;
 static uint32_t g_parallel_waveform_lut[256]{};
 static bool g_parallel_waveform_lut_ready = false;
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+static void parallel_dma_desc_init_(lldesc_t *desc, uint8_t *buf, size_t len,
+                                    lldesc_t *next, bool eof) {
+  if (desc == nullptr) {
+    return;
+  }
+  memset(desc, 0, sizeof(lldesc_t));
+  desc->eof = eof ? 1 : 0;
+  desc->owner = 1;
+  desc->sosf = 0;
+  desc->offset = 0;
+  desc->buf = buf;
+  desc->size = len;
+  desc->length = len;
+  desc->qe.stqe_next = next;
+}
+
+static void IRAM_ATTR parallel_classic_i2s_isr_(void *arg) {
+  auto *group = static_cast<CFXParallelGroupRuntime *>(arg);
+  const uint32_t status = I2S1.int_st.val;
+  const bool out_eof = I2S1.int_st.out_eof;
+  const bool out_dscr_err = I2S1.int_st.out_dscr_err;
+  if (out_eof && group != nullptr && group->classic_sending) {
+    group->classic_completed_chunks++;
+    group->tx_done_count++;
+  }
+  if (out_dscr_err && group != nullptr) {
+    group->classic_dma_errors++;
+  }
+  I2S1.int_clr.val = status;
+}
+
+static esp_err_t parallel_classic_set_clock_() {
+  auto clkm_conf = I2S1.clkm_conf;
+  clkm_conf.val = 0;
+  clkm_conf.clk_en = 1;
+  clkm_conf.clka_en = 0;
+  clkm_conf.clkm_div_num = 16;
+  clkm_conf.clkm_div_b = 2;
+  clkm_conf.clkm_div_a = 3;
+  I2S1.clkm_conf.val = clkm_conf.val;
+
+  auto sample_rate_conf = I2S1.sample_rate_conf;
+  sample_rate_conf.val = 0;
+  sample_rate_conf.tx_bck_div_num = 4;
+  sample_rate_conf.tx_bits_mod = 8;
+  I2S1.sample_rate_conf.val = sample_rate_conf.val;
+  return ESP_OK;
+}
+
+static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group) {
+  if (group == nullptr || group->classic_descs == nullptr) {
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  periph_module_enable(PERIPH_I2S1_MODULE);
+
+  for (uint8_t lane = 0; lane < group->lane_count; lane++) {
+    gpio_reset_pin(static_cast<gpio_num_t>(group->lane_pins[lane]));
+    gpio_set_direction(static_cast<gpio_num_t>(group->lane_pins[lane]),
+                       GPIO_MODE_OUTPUT);
+    gpio_matrix_out(group->lane_pins[lane], I2S1O_DATA_OUT0_IDX + lane, false,
+                    false);
+  }
+
+  I2S1.out_link.stop = 1;
+  I2S1.conf.tx_start = 0;
+  I2S1.int_ena.val = 0;
+  I2S1.int_clr.val = 0xFFFFFFFF;
+  I2S1.fifo_conf.dscr_en = 0;
+
+  I2S1.conf.tx_reset = 1;
+  I2S1.conf.tx_reset = 0;
+  I2S1.conf.rx_reset = 1;
+  I2S1.conf.rx_reset = 0;
+  I2S1.lc_conf.in_rst = 1;
+  I2S1.lc_conf.in_rst = 0;
+  I2S1.lc_conf.out_rst = 1;
+  I2S1.lc_conf.out_rst = 0;
+  I2S1.conf.rx_fifo_reset = 1;
+  I2S1.conf.rx_fifo_reset = 0;
+  I2S1.conf.tx_fifo_reset = 1;
+  I2S1.conf.tx_fifo_reset = 0;
+
+  auto conf2 = I2S1.conf2;
+  conf2.val = 0;
+  conf2.lcd_en = 1;
+  conf2.lcd_tx_wrx2_en = 1;
+  conf2.lcd_tx_sdx2_en = 0;
+  I2S1.conf2.val = conf2.val;
+
+  auto lc_conf = I2S1.lc_conf;
+  lc_conf.val = 0;
+  lc_conf.out_eof_mode = 1;
+  I2S1.lc_conf.val = lc_conf.val;
+
+  I2S1.pdm_conf.pcm2pdm_conv_en = 0;
+  I2S1.pdm_conf.pdm2pcm_conv_en = 0;
+
+  auto fifo_conf = I2S1.fifo_conf;
+  fifo_conf.val = 0;
+  fifo_conf.tx_fifo_mod_force_en = 1;
+  fifo_conf.tx_fifo_mod = 1;
+  fifo_conf.tx_data_num = 32;
+  I2S1.fifo_conf.val = fifo_conf.val;
+
+  auto conf1 = I2S1.conf1;
+  conf1.val = 0;
+  conf1.tx_stop_en = 0;
+  conf1.tx_pcm_bypass = 1;
+  I2S1.conf1.val = conf1.val;
+
+  auto conf_chan = I2S1.conf_chan;
+  conf_chan.val = 0;
+  conf_chan.tx_chan_mod = 1;
+  I2S1.conf_chan.val = conf_chan.val;
+
+  auto conf = I2S1.conf;
+  conf.val = 0;
+  conf.tx_msb_shift = 0;
+  conf.tx_right_first = 1;
+  conf.tx_short_sync = 0;
+  I2S1.conf.val = conf.val;
+
+  I2S1.timing.val = 0;
+  I2S1.pdm_conf.tx_pdm_en = 0;
+
+  parallel_classic_set_clock_();
+
+  I2S1.lc_conf.in_rst = 1;
+  I2S1.lc_conf.out_rst = 1;
+  I2S1.lc_conf.ahbm_rst = 1;
+  I2S1.lc_conf.ahbm_fifo_rst = 1;
+  I2S1.lc_conf.in_rst = 0;
+  I2S1.lc_conf.out_rst = 0;
+  I2S1.lc_conf.ahbm_rst = 0;
+  I2S1.lc_conf.ahbm_fifo_rst = 0;
+  I2S1.conf.tx_reset = 1;
+  I2S1.conf.tx_fifo_reset = 1;
+  I2S1.conf.rx_fifo_reset = 1;
+  I2S1.conf.tx_reset = 0;
+  I2S1.conf.tx_fifo_reset = 0;
+  I2S1.conf.rx_fifo_reset = 0;
+
+  auto lc_dma_conf = I2S1.lc_conf;
+  lc_dma_conf.val = 0;
+  lc_dma_conf.out_data_burst_en = 0;
+  lc_dma_conf.indscr_burst_en = 0;
+  I2S1.lc_conf.val = lc_dma_conf.val;
+
+  esp_err_t err = esp_intr_alloc(ETS_I2S1_INTR_SOURCE,
+                                 ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL1,
+                                 parallel_classic_i2s_isr_, group,
+                                 &group->classic_intr);
+  if (err != ESP_OK) {
+    return err;
+  }
+  I2S1.int_ena.out_eof = 1;
+  I2S1.int_ena.out_dscr_err = 1;
+  I2S1.fifo_conf.dscr_en = 1;
+  I2S1.out_link.start = 0;
+  I2S1.out_link.addr =
+      reinterpret_cast<uint32_t>(&group->classic_descs[PARALLEL_CLASSIC_SILENCE_DESC_A]);
+  I2S1.out_link.start = 1;
+  I2S1.conf.tx_start = 1;
+  return ESP_OK;
+}
+#endif
 
 static void init_parallel_waveform_lut_() {
   if (g_parallel_waveform_lut_ready) {
@@ -2320,19 +2526,30 @@ void CFXLightOutput::setup_parallel_() {
     g_parallel_group.strobe_pin = this->parallel_strobe_pin_;
     g_parallel_group.dc_pin = this->parallel_dc_pin_;
     g_parallel_group.frame_size = frame_size;
-    g_parallel_group.chunk_leds =
-        static_cast<uint16_t>(std::min<uint16_t>(this->num_leds_, PARALLEL_CHUNK_LEDS));
+    const uint16_t backend_chunk_leds =
+#if defined(CONFIG_IDF_TARGET_ESP32)
+        PARALLEL_CLASSIC_CHUNK_LEDS;
+#else
+        PARALLEL_LCD_CHUNK_LEDS;
+#endif
+    g_parallel_group.chunk_leds = static_cast<uint16_t>(
+        std::min<uint16_t>(this->num_leds_, backend_chunk_leds));
     g_parallel_group.chunk_frame_size =
         static_cast<size_t>(g_parallel_group.chunk_leds) *
-            this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES +
-        PARALLEL_RESET_SAMPLES;
-    g_parallel_group.bus_max_transfer_size = g_parallel_group.chunk_frame_size;
+        this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES;
+    g_parallel_group.bus_max_transfer_size =
+        g_parallel_group.chunk_frame_size + PARALLEL_RESET_SAMPLES;
+    g_parallel_group.chunk_alloc_size =
+        g_parallel_group.bus_max_transfer_size + PARALLEL_CANARY_BYTES;
+#if defined(CONFIG_IDF_TARGET_ESP32)
     g_parallel_group.chunk_alloc_size =
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
+#endif
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
       g_parallel_group.lane_pins[i] = this->parallel_lane_pins_[i];
     }
 
+#if !defined(CONFIG_IDF_TARGET_ESP32)
     for (uint8_t i = this->parallel_lane_count_; i < PARALLEL_I80_BUS_WIDTH; i++) {
       bool assigned = false;
       for (uint8_t candidate : PARALLEL_DUMMY_PIN_CANDIDATES) {
@@ -2354,13 +2571,28 @@ void CFXLightOutput::setup_parallel_() {
         return;
       }
     }
+#endif
 
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    ESP_LOGI(TAG,
+             "Parallel backend %s group '%s' configured for deferred init: "
+             "lanes=%u pclk=%" PRIu32
+             "Hz frame=%u bytes chunk=%u leds/%u bytes alloc=%u "
+             "data=[%u,%u,%u,%u]",
+             PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+             g_parallel_group.lane_count, PARALLEL_PCLK_HZ,
+             static_cast<unsigned>(frame_size), g_parallel_group.chunk_leds,
+             static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
+             g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
+             g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3]);
+#else
     ESP_LOGI(TAG,
              "Parallel backend %s group '%s' configured for deferred init: "
              "lanes=%u wr=GPIO%u internal_dc=GPIO%u pclk=%" PRIu32
              "Hz frame=%u bytes chunk=%u leds/%u bytes bus_max=%u alloc=%u "
              "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
-             PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+             PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
              g_parallel_group.lane_count, g_parallel_group.strobe_pin,
              g_parallel_group.dc_pin, PARALLEL_PCLK_HZ,
              static_cast<unsigned>(frame_size),
@@ -2372,17 +2604,25 @@ void CFXLightOutput::setup_parallel_() {
              g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
              g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
              g_parallel_group.lane_pins[6], g_parallel_group.lane_pins[7]);
+#endif
   } else {
     if (g_parallel_group.name != this->parallel_group_ ||
         g_parallel_group.lane_count != this->parallel_lane_count_ ||
-        g_parallel_group.strobe_pin != this->parallel_strobe_pin_ ||
-        g_parallel_group.dc_pin != this->parallel_dc_pin_ ||
         g_parallel_group.frame_size != frame_size) {
       ESP_LOGE(TAG, "Parallel group '%s' does not match existing group '%s'",
                this->parallel_group_.c_str(), g_parallel_group.name.c_str());
       this->mark_failed();
       return;
     }
+#if !defined(CONFIG_IDF_TARGET_ESP32)
+    if (g_parallel_group.strobe_pin != this->parallel_strobe_pin_ ||
+        g_parallel_group.dc_pin != this->parallel_dc_pin_) {
+      ESP_LOGE(TAG, "Parallel group '%s' does not match existing group '%s'",
+               this->parallel_group_.c_str(), g_parallel_group.name.c_str());
+      this->mark_failed();
+      return;
+    }
+#endif
   }
 
   g_parallel_group.outputs[this->parallel_lane_index_] = this;
@@ -2392,7 +2632,155 @@ void CFXLightOutput::setup_parallel_() {
 }
 
 bool CFXLightOutput::init_parallel_backend_() {
-#if defined(CFX_PARALLEL_I80_ENABLED) && SOC_LCD_I80_SUPPORTED
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  if (g_parallel_group.ready) {
+    return true;
+  }
+  if (!g_parallel_group.configured) {
+    ESP_LOGE(TAG, "Parallel group '%s' was not configured before init",
+             this->parallel_group_.c_str());
+    return false;
+  }
+  if (g_parallel_group.init_attempted) {
+    ESP_LOGW(TAG, "Retrying parallel Classic I2S init for group '%s'",
+             g_parallel_group.name.c_str());
+  }
+  g_parallel_group.init_attempted = true;
+
+  const size_t dma_free =
+      heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  const size_t dma_largest =
+      heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  const size_t waveform_dma_bytes =
+      g_parallel_group.chunk_frame_size * PARALLEL_TX_BUFFER_COUNT;
+  const size_t control_dma_bytes =
+      PARALLEL_CLASSIC_SILENCE_BYTES + PARALLEL_RESET_SAMPLES +
+      sizeof(lldesc_t) * PARALLEL_CLASSIC_DESC_COUNT;
+  ESP_LOGI(TAG,
+           "Parallel backend %s initializing group '%s': lanes=%u "
+           "frame=%u bytes chunk=%u leds/%u bytes buffers=%u/%u bytes "
+           "desc=%u control=%u dma_free=%u dma_largest=%u",
+           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+           g_parallel_group.lane_count,
+           static_cast<unsigned>(g_parallel_group.frame_size),
+           g_parallel_group.chunk_leds,
+           static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+           static_cast<unsigned>(PARALLEL_TX_BUFFER_COUNT),
+           static_cast<unsigned>(waveform_dma_bytes),
+           static_cast<unsigned>(PARALLEL_CLASSIC_DESC_COUNT),
+           static_cast<unsigned>(control_dma_bytes),
+           static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
+
+  g_parallel_group.classic_descs = static_cast<lldesc_t *>(heap_caps_calloc(
+      PARALLEL_CLASSIC_DESC_COUNT, sizeof(lldesc_t),
+      MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+  g_parallel_group.classic_silence_buf = static_cast<uint8_t *>(heap_caps_calloc(
+      1, PARALLEL_CLASSIC_SILENCE_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+  g_parallel_group.classic_reset_buf = static_cast<uint8_t *>(heap_caps_calloc(
+      1, PARALLEL_RESET_SAMPLES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+  if (g_parallel_group.classic_descs == nullptr ||
+      g_parallel_group.classic_silence_buf == nullptr ||
+      g_parallel_group.classic_reset_buf == nullptr) {
+    ESP_LOGE(TAG,
+             "Cannot allocate Classic parallel I2S descriptor/control DMA "
+             "memory for group '%s'",
+             g_parallel_group.name.c_str());
+    free(g_parallel_group.classic_descs);
+    free(g_parallel_group.classic_silence_buf);
+    free(g_parallel_group.classic_reset_buf);
+    g_parallel_group.classic_descs = nullptr;
+    g_parallel_group.classic_silence_buf = nullptr;
+    g_parallel_group.classic_reset_buf = nullptr;
+    g_parallel_group.init_attempted = false;
+    return false;
+  }
+
+  for (uint8_t i = 0; i < PARALLEL_TX_BUFFER_COUNT; i++) {
+    g_parallel_group.frame_bufs[i] = static_cast<uint8_t *>(heap_caps_malloc(
+        g_parallel_group.chunk_alloc_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    if (g_parallel_group.frame_bufs[i] == nullptr) {
+      ESP_LOGE(TAG,
+               "Cannot allocate Classic parallel rolling DMA buffer %u/%u "
+               "(%u bytes)",
+               static_cast<unsigned>(i + 1),
+               static_cast<unsigned>(PARALLEL_TX_BUFFER_COUNT),
+               static_cast<unsigned>(g_parallel_group.chunk_alloc_size));
+      for (uint8_t j = 0; j < i; j++) {
+        free(g_parallel_group.frame_bufs[j]);
+        g_parallel_group.frame_bufs[j] = nullptr;
+      }
+      free(g_parallel_group.classic_descs);
+      free(g_parallel_group.classic_silence_buf);
+      free(g_parallel_group.classic_reset_buf);
+      g_parallel_group.classic_descs = nullptr;
+      g_parallel_group.classic_silence_buf = nullptr;
+      g_parallel_group.classic_reset_buf = nullptr;
+      g_parallel_group.init_attempted = false;
+      return false;
+    }
+    memset(g_parallel_group.frame_bufs[i], 0, g_parallel_group.chunk_alloc_size);
+    memset(g_parallel_group.frame_bufs[i] + g_parallel_group.chunk_frame_size,
+           PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+  }
+  g_parallel_group.frame_buf = g_parallel_group.frame_bufs[0];
+
+  auto *descs = g_parallel_group.classic_descs;
+  parallel_dma_desc_init_(&descs[PARALLEL_CLASSIC_SILENCE_DESC_A],
+                          g_parallel_group.classic_silence_buf,
+                          PARALLEL_CLASSIC_SILENCE_BYTES,
+                          &descs[PARALLEL_CLASSIC_SILENCE_DESC_B], false);
+  parallel_dma_desc_init_(&descs[PARALLEL_CLASSIC_SILENCE_DESC_B],
+                          g_parallel_group.classic_silence_buf,
+                          PARALLEL_CLASSIC_SILENCE_BYTES,
+                          &descs[PARALLEL_CLASSIC_SILENCE_DESC_A], false);
+  parallel_dma_desc_init_(&descs[PARALLEL_CLASSIC_RESET_DESC],
+                          g_parallel_group.classic_reset_buf,
+                          PARALLEL_RESET_SAMPLES,
+                          &descs[PARALLEL_CLASSIC_SILENCE_DESC_A], false);
+  for (uint8_t i = 0; i < PARALLEL_TX_BUFFER_COUNT; i++) {
+    const uint8_t first_desc =
+        PARALLEL_CLASSIC_DATA_DESC_BASE + i * PARALLEL_CLASSIC_DESC_PER_BUFFER;
+    g_parallel_group.classic_data_desc_tail[i] = first_desc;
+    parallel_dma_desc_init_(&descs[first_desc], g_parallel_group.frame_bufs[i],
+                            4, &descs[PARALLEL_CLASSIC_RESET_DESC], true);
+    parallel_dma_desc_init_(&descs[first_desc + 1],
+                            g_parallel_group.frame_bufs[i], 4,
+                            &descs[PARALLEL_CLASSIC_RESET_DESC], false);
+  }
+
+  esp_err_t err = parallel_classic_configure_i2s_(&g_parallel_group);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG,
+             "Classic parallel I2S backend init failed for group '%s' "
+             "(err=%d)",
+             g_parallel_group.name.c_str(), static_cast<int>(err));
+    for (uint8_t i = 0; i < PARALLEL_TX_BUFFER_COUNT; i++) {
+      free(g_parallel_group.frame_bufs[i]);
+      g_parallel_group.frame_bufs[i] = nullptr;
+    }
+    free(g_parallel_group.classic_descs);
+    free(g_parallel_group.classic_silence_buf);
+    free(g_parallel_group.classic_reset_buf);
+    g_parallel_group.classic_descs = nullptr;
+    g_parallel_group.classic_silence_buf = nullptr;
+    g_parallel_group.classic_reset_buf = nullptr;
+    g_parallel_group.frame_buf = nullptr;
+    g_parallel_group.init_attempted = false;
+    return false;
+  }
+
+  g_parallel_group.ready = true;
+  ESP_LOGI(TAG,
+           "Parallel backend %s group '%s' ready: lanes=%u chunk=%u leds/%u "
+           "bytes dma_buffers=%u waveform_dma=%u underruns=%" PRIu32,
+           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+           g_parallel_group.lane_count, g_parallel_group.chunk_leds,
+           static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+           static_cast<unsigned>(PARALLEL_TX_BUFFER_COUNT),
+           static_cast<unsigned>(waveform_dma_bytes),
+           g_parallel_group.classic_underrun_count);
+  return true;
+#elif defined(CFX_PARALLEL_I80_ENABLED) && SOC_LCD_I80_SUPPORTED
   if (g_parallel_group.ready) {
     return true;
   }
@@ -2435,7 +2823,7 @@ bool CFXLightOutput::init_parallel_backend_() {
            "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
            "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
            "bus_max=%u alloc=%u dma_free=%u dma_largest=%u",
-           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+           PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
            g_parallel_group.lane_count, g_parallel_group.strobe_pin,
            g_parallel_group.dc_pin,
            static_cast<unsigned>(g_parallel_group.frame_size),
@@ -2458,12 +2846,11 @@ bool CFXLightOutput::init_parallel_backend_() {
   esp_lcd_panel_io_i80_config_t io_config = {};
   io_config.cs_gpio_num = -1;
   io_config.pclk_hz = PARALLEL_PCLK_HZ;
-  io_config.trans_queue_depth = PARALLEL_TX_BUFFER_COUNT;
+  io_config.trans_queue_depth = PARALLEL_LCD_TX_BUFFER_COUNT;
   io_config.on_color_trans_done = parallel_tx_done_cb_;
   io_config.user_ctx = &g_parallel_group;
-  // ESP32 Classic's esp_lcd I80 path is backed by I2S-LCD and always sends
-  // a command phase before color data. A zero-bit command hangs that driver,
-  // so use one dummy low byte before the LED frame.
+  // Keep a dummy command phase here because the esp_lcd I80 path expects one
+  // before color data; the actual LED waveform is carried by the color phase.
   io_config.lcd_cmd_bits = 8;
   io_config.lcd_param_bits = 0;
   io_config.dc_levels.dc_idle_level = 0;
@@ -2483,7 +2870,7 @@ bool CFXLightOutput::init_parallel_backend_() {
     return false;
   }
 
-  for (uint8_t i = 0; i < PARALLEL_TX_BUFFER_COUNT; i++) {
+  for (uint8_t i = 0; i < PARALLEL_LCD_TX_BUFFER_COUNT; i++) {
     g_parallel_group.frame_bufs[i] = static_cast<uint8_t *>(
         esp_lcd_i80_alloc_draw_buffer(g_parallel_group.io,
                                       g_parallel_group.chunk_alloc_size,
@@ -2493,7 +2880,7 @@ bool CFXLightOutput::init_parallel_backend_() {
                "Cannot allocate parallel frame buffer %u/%u (%u bytes, DMA); "
                "largest DMA block before init was %u bytes",
                static_cast<unsigned>(i + 1),
-               static_cast<unsigned>(PARALLEL_TX_BUFFER_COUNT),
+               static_cast<unsigned>(PARALLEL_LCD_TX_BUFFER_COUNT),
                static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
                static_cast<unsigned>(dma_largest));
       for (uint8_t j = 0; j < i; j++) {
@@ -2514,7 +2901,7 @@ bool CFXLightOutput::init_parallel_backend_() {
   g_parallel_group.frame_buf = g_parallel_group.frame_bufs[0];
   g_parallel_group.ready = true;
   ESP_LOGI(TAG, "Parallel backend %s group '%s' ready",
-           PARALLEL_BACKEND_REV, g_parallel_group.name.c_str());
+           PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str());
   return true;
 #elif !defined(CFX_PARALLEL_I80_ENABLED)
   ESP_LOGE(TAG,
@@ -2592,7 +2979,15 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         for (uint8_t sample = 0; sample < 8u * PARALLEL_SYMBOL_SAMPLES;
              sample++) {
           if ((packed & (1UL << sample)) != 0) {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+            static const uint8_t CLASSIC_SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
+            const uint8_t mapped_sample =
+                static_cast<uint8_t>((sample & 0xFCu) |
+                                     CLASSIC_SAMPLE_OFFSET_MAP[sample & 0x03u]);
+            symbol_out[mapped_sample] |= lane_mask;
+#else
             symbol_out[sample] |= lane_mask;
+#endif
           }
         }
       }
@@ -2659,15 +3054,29 @@ void CFXLightOutput::flush_parallel_() {
       return;
     }
   }
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  if (g_parallel_group.classic_descs == nullptr ||
+      g_parallel_group.frame_buf == nullptr) {
+    ESP_LOGE(TAG, "Parallel group '%s' Classic backend is not ready",
+             this->parallel_group_.c_str());
+    this->mark_failed();
+    return;
+  }
+#else
   if (g_parallel_group.io == nullptr || g_parallel_group.frame_buf == nullptr) {
     ESP_LOGE(TAG, "Parallel group '%s' is not ready", this->parallel_group_.c_str());
     this->mark_failed();
     return;
   }
+#endif
 
+#if !defined(CONFIG_IDF_TARGET_ESP32)
   if (!wait_for_parallel_tx_count(0, 100000u)) {
     return;
   }
+#else
+  (void) wait_for_parallel_tx_count;
+#endif
 
   uint32_t source_nonzero = 0;
   uint8_t first_pixel[PARALLEL_MAX_LANES][4] = {};
@@ -2690,7 +3099,219 @@ void CFXLightOutput::flush_parallel_() {
     }
   }
 
-#ifdef CFX_PARALLEL_I80_ENABLED
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  if (g_parallel_group.classic_sending) {
+    ESP_LOGW(TAG, "Parallel Classic frame already in flight for group '%s'",
+             g_parallel_group.name.c_str());
+    this->status_set_warning();
+    return;
+  }
+
+  auto *descs = g_parallel_group.classic_descs;
+  const uint16_t total_chunks = static_cast<uint16_t>(
+      (this->num_leds_ + g_parallel_group.chunk_leds - 1u) /
+      g_parallel_group.chunk_leds);
+  const uint16_t initial_chunks = static_cast<uint16_t>(
+      std::min<uint16_t>(total_chunks, PARALLEL_TX_BUFFER_COUNT));
+  uint16_t next_chunk_to_build = 0;
+
+  auto build_classic_chunk = [&](uint16_t chunk_index, uint8_t buffer_index) -> bool {
+    const uint16_t led_start =
+        static_cast<uint16_t>(chunk_index * g_parallel_group.chunk_leds);
+    const uint16_t remaining = this->num_leds_ - led_start;
+    const uint16_t chunk_leds = static_cast<uint16_t>(
+        std::min<uint16_t>(remaining, g_parallel_group.chunk_leds));
+    uint8_t *const frame_buf = g_parallel_group.frame_bufs[buffer_index];
+    if (frame_buf == nullptr) {
+      ESP_LOGE(TAG,
+               "Parallel Classic rolling buffer %u is unavailable for group '%s'",
+               static_cast<unsigned>(buffer_index),
+               g_parallel_group.name.c_str());
+      return false;
+    }
+    const uint32_t build_start_us = micros();
+    if (!this->build_parallel_frame_(frame_buf,
+                                     g_parallel_group.chunk_alloc_size,
+                                     led_start, chunk_leds, false)) {
+      ESP_LOGE(TAG,
+               "Parallel Classic chunk build failed for group '%s' "
+               "(chunk=%u start=%u leds=%u)",
+               g_parallel_group.name.c_str(), chunk_index, led_start, chunk_leds);
+      return false;
+    }
+    build_us += micros() - build_start_us;
+    for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
+      if (frame_buf[g_parallel_group.chunk_frame_size + i] !=
+          PARALLEL_CANARY_VALUE) {
+        ESP_LOGE(TAG,
+                 "Parallel Classic DMA buffer canary corrupted before TX "
+                 "(chunk=%u at=%u)",
+                 chunk_index, static_cast<unsigned>(i));
+        return false;
+      }
+    }
+    const size_t chunk_bytes =
+        static_cast<size_t>(chunk_leds) * stride * 8u * PARALLEL_SYMBOL_SAMPLES;
+    const uint8_t first_desc =
+        PARALLEL_CLASSIC_DATA_DESC_BASE +
+        buffer_index * PARALLEL_CLASSIC_DESC_PER_BUFFER;
+    const size_t first_len = std::min(chunk_bytes, PARALLEL_CLASSIC_DMA_MAX_LEN);
+    const size_t second_len = chunk_bytes - first_len;
+    if (second_len > PARALLEL_CLASSIC_DMA_MAX_LEN) {
+      ESP_LOGE(TAG,
+               "Parallel Classic chunk is too large for two DMA descriptors "
+               "(chunk=%u bytes=%u)",
+               chunk_index, static_cast<unsigned>(chunk_bytes));
+      return false;
+    }
+    if (second_len > 0) {
+      parallel_dma_desc_init_(&descs[first_desc], frame_buf, first_len,
+                              &descs[first_desc + 1], false);
+      parallel_dma_desc_init_(&descs[first_desc + 1], frame_buf + first_len,
+                              second_len, &descs[PARALLEL_CLASSIC_RESET_DESC],
+                              true);
+      g_parallel_group.classic_data_desc_tail[buffer_index] = first_desc + 1;
+    } else {
+      parallel_dma_desc_init_(&descs[first_desc], frame_buf, first_len,
+                              &descs[PARALLEL_CLASSIC_RESET_DESC], true);
+      parallel_dma_desc_init_(&descs[first_desc + 1], frame_buf, 4,
+                              &descs[PARALLEL_CLASSIC_RESET_DESC], false);
+      g_parallel_group.classic_data_desc_tail[buffer_index] = first_desc;
+    }
+    return true;
+  };
+
+  for (; next_chunk_to_build < initial_chunks; next_chunk_to_build++) {
+    if (!build_classic_chunk(next_chunk_to_build,
+                             next_chunk_to_build % PARALLEL_TX_BUFFER_COUNT)) {
+      this->status_set_warning();
+      return;
+    }
+  }
+
+  for (uint8_t i = 0; i < initial_chunks; i++) {
+    auto *next = (i + 1u < initial_chunks)
+                     ? &descs[PARALLEL_CLASSIC_DATA_DESC_BASE +
+                              (i + 1u) * PARALLEL_CLASSIC_DESC_PER_BUFFER]
+                     : &descs[PARALLEL_CLASSIC_RESET_DESC];
+    descs[g_parallel_group.classic_data_desc_tail[i]].qe.stqe_next = next;
+  }
+
+  g_parallel_group.classic_completed_chunks = 0;
+  g_parallel_group.classic_dma_errors = 0;
+  g_parallel_group.classic_sending = true;
+  g_parallel_group.tx_in_flight = true;
+  g_parallel_group.tx_in_flight_count = 1;
+  uint16_t prepared_chunks = initial_chunks;
+  uint16_t recycled_chunks = 0;
+
+  const uint32_t queue_start_us = micros();
+  descs[PARALLEL_CLASSIC_SILENCE_DESC_B].qe.stqe_next =
+      &descs[PARALLEL_CLASSIC_DATA_DESC_BASE];
+  queue_us += micros() - queue_start_us;
+
+  bool underrun = false;
+  const uint32_t stream_start_us = micros();
+  while (g_parallel_group.classic_completed_chunks < total_chunks) {
+    if ((micros() - stream_start_us) > 500000u) {
+      underrun = true;
+      break;
+    }
+    if (next_chunk_to_build < total_chunks &&
+        g_parallel_group.classic_completed_chunks > recycled_chunks) {
+      const uint8_t free_index =
+          static_cast<uint8_t>(recycled_chunks % PARALLEL_TX_BUFFER_COUNT);
+      if (!build_classic_chunk(next_chunk_to_build, free_index)) {
+        this->status_set_warning();
+        g_parallel_group.classic_sending = false;
+        g_parallel_group.tx_in_flight = false;
+        g_parallel_group.tx_in_flight_count = 0;
+        return;
+      }
+      if (g_parallel_group.classic_completed_chunks >= prepared_chunks) {
+        underrun = true;
+        break;
+      }
+      const uint8_t previous_buffer =
+          static_cast<uint8_t>((prepared_chunks - 1u) %
+                               PARALLEL_TX_BUFFER_COUNT);
+      descs[g_parallel_group.classic_data_desc_tail[previous_buffer]]
+          .qe.stqe_next =
+          &descs[PARALLEL_CLASSIC_DATA_DESC_BASE +
+                 free_index * PARALLEL_CLASSIC_DESC_PER_BUFFER];
+      descs[g_parallel_group.classic_data_desc_tail[free_index]].qe.stqe_next =
+          &descs[PARALLEL_CLASSIC_RESET_DESC];
+      prepared_chunks++;
+      recycled_chunks++;
+      next_chunk_to_build++;
+      continue;
+    }
+
+    if (next_chunk_to_build < total_chunks &&
+        g_parallel_group.classic_completed_chunks >= prepared_chunks) {
+      underrun = true;
+      break;
+    }
+
+    esphome::App.feed_wdt();
+    esp_rom_delay_us(50);
+  }
+
+  descs[PARALLEL_CLASSIC_SILENCE_DESC_B].qe.stqe_next =
+      &descs[PARALLEL_CLASSIC_SILENCE_DESC_A];
+  esp_rom_delay_us(150);
+  g_parallel_group.classic_sending = false;
+  g_parallel_group.tx_in_flight = false;
+  g_parallel_group.tx_in_flight_count = 0;
+
+  if (underrun || g_parallel_group.classic_dma_errors != 0) {
+    g_parallel_group.classic_underrun_count++;
+    ESP_LOGE(TAG,
+             "Parallel Classic stream underrun for group '%s' "
+             "(chunks=%u prepared=%u completed=%" PRIu32
+             " dma_errors=%" PRIu32 " underruns=%" PRIu32 ")",
+             g_parallel_group.name.c_str(), total_chunks, prepared_chunks,
+             g_parallel_group.classic_completed_chunks,
+             g_parallel_group.classic_dma_errors,
+             g_parallel_group.classic_underrun_count);
+    this->status_set_warning();
+    return;
+  }
+
+  g_parallel_group.tx_count++;
+  g_parallel_group.classic_stream_count++;
+  if (g_parallel_group.tx_count <= 12 ||
+      (g_parallel_group.tx_count % 120u) == 0u) {
+    ESP_LOGI(TAG,
+             "Parallel Classic TX streamed: group='%s' tx=%" PRIu32
+             " done=%" PRIu32 " source_nonzero=%" PRIu32
+             " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
+             "bytes=%u chunk=%u/%u build+stream=%" PRIu32
+             "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
+             "us coalesced=%" PRIu32 " timeouts=%" PRIu32
+             " underruns=%" PRIu32,
+             g_parallel_group.name.c_str(), g_parallel_group.tx_count,
+             static_cast<uint32_t>(g_parallel_group.tx_done_count),
+             source_nonzero, first_pixel[0][0], first_pixel[0][1],
+             first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
+             first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
+             static_cast<unsigned>(g_parallel_group.frame_size),
+             static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+             total_chunks, micros() - flush_start_us, build_us, tx_wait_us,
+             queue_us, g_parallel_group.coalesced_count,
+             g_parallel_group.timeout_flush_count,
+             g_parallel_group.classic_underrun_count);
+  }
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    if (g_parallel_group.outputs[lane] != nullptr) {
+      g_parallel_group.outputs[lane]->record_led_frame_();
+    }
+  }
+  this->perf_diag_flush_count_++;
+  this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
+  this->perf_diag_last_flush_tx_us_ = micros() - flush_start_us - build_us;
+  this->perf_diag_last_flush_valid_ = true;
+#elif defined(CFX_PARALLEL_I80_ENABLED)
   uint16_t led_start = 0;
   uint32_t chunks_this_frame = 0;
   while (led_start < this->num_leds_) {
@@ -2703,8 +3324,8 @@ void CFXLightOutput::flush_parallel_() {
         static_cast<size_t>(chunk_leds) * stride * 8u * PARALLEL_SYMBOL_SAMPLES +
         (final_chunk ? PARALLEL_RESET_SAMPLES : 0u);
     const uint8_t buffer_index =
-        static_cast<uint8_t>(chunks_this_frame % PARALLEL_TX_BUFFER_COUNT);
-    if (!wait_for_parallel_tx_count(PARALLEL_TX_BUFFER_COUNT - 1, 100000u)) {
+        static_cast<uint8_t>(chunks_this_frame % PARALLEL_LCD_TX_BUFFER_COUNT);
+    if (!wait_for_parallel_tx_count(PARALLEL_LCD_TX_BUFFER_COUNT - 1, 100000u)) {
       return;
     }
     uint8_t *const frame_buf = g_parallel_group.frame_bufs[buffer_index];
@@ -2730,20 +3351,20 @@ void CFXLightOutput::flush_parallel_() {
       return;
     }
     build_us += micros() - build_start_us;
-    if (chunk_size > g_parallel_group.chunk_frame_size ||
-        g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES >
+    if (chunk_size > g_parallel_group.bus_max_transfer_size ||
+        chunk_size + PARALLEL_CANARY_BYTES >
             g_parallel_group.chunk_alloc_size) {
       ESP_LOGE(TAG,
                "Parallel chunk geometry invalid "
-               "(chunk_size=%u frame=%u alloc=%u)",
+               "(chunk_size=%u max=%u alloc=%u)",
                static_cast<unsigned>(chunk_size),
-               static_cast<unsigned>(g_parallel_group.chunk_frame_size),
+               static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
                static_cast<unsigned>(g_parallel_group.chunk_alloc_size));
       this->status_set_warning();
       return;
     }
     for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
-      if (frame_buf[g_parallel_group.chunk_frame_size + i] !=
+      if (frame_buf[chunk_size + i] !=
           PARALLEL_CANARY_VALUE) {
         ESP_LOGE(TAG,
                  "Parallel DMA buffer canary corrupted before TX "
@@ -4380,6 +5001,21 @@ void CFXLightOutput::dump_config() {
                   this->get_spi_frame_timeout_ms_(), chipset_str,
                   this->num_leds_, order_str);
   } else if (this->transport_ == TRANSPORT_PARALLEL) {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    ESP_LOGCONFIG(TAG,
+                  "CFXLight (Parallel):\n"
+                  "  Group: %s\n"
+                  "  Lane Pin: GPIO%u\n"
+                  "  Chipset: %s\n"
+                  "  LEDs: %u\n"
+                  "  RGBW: %s\n"
+                  "  RGB Order: %s\n"
+                  "  Backend: Classic I2S/LCD streaming\n"
+                  "  Chunk: %u LEDs",
+                  this->parallel_group_.c_str(), this->pin_, chipset_str,
+                  this->num_leds_, this->is_rgbw_ ? "yes" : "no",
+                  order_str, PARALLEL_CLASSIC_CHUNK_LEDS);
+#else
     ESP_LOGCONFIG(TAG,
                   "CFXLight (Parallel):\n"
                   "  Group: %s\n"
@@ -4395,6 +5031,7 @@ void CFXLightOutput::dump_config() {
                   this->num_leds_, this->is_rgbw_ ? "yes" : "no",
                   order_str, this->parallel_strobe_pin_,
                   this->parallel_dc_pin_);
+#endif
   } else {
     ESP_LOGCONFIG(TAG,
                   "CFXLight (RMT):\n"

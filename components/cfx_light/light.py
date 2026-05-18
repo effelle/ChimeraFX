@@ -802,31 +802,32 @@ def _final_validate(config):
                 f"cfx_light parallel_group '{group_name}' cannot mix RGB/RGBW "
                 "or WRGB protocol shapes."
             )
-        reserved_pins = {
-            _pin_number_or_default(
-                lconf, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
-            )
-            for lconf in group_lights
-        }
-        if len(reserved_pins) != 1:
-            raise cv.Invalid(
-                f"cfx_light parallel_group '{group_name}' must use one shared "
-                f"{CONF_PARALLEL_STROBE_PIN}; got {', '.join(str(v) for v in sorted(reserved_pins))}."
-            )
-        strobe_pin = next(iter(reserved_pins))
-        if strobe_pin == PARALLEL_DC_PIN_DEFAULT:
-            raise cv.Invalid(
-                f"cfx_light parallel_group '{group_name}' cannot use the same "
-                f"GPIO for {CONF_PARALLEL_STROBE_PIN} and the internal I80 "
-                f"D/C reservation GPIO{PARALLEL_DC_PIN_DEFAULT}."
-            )
         lane_pins = [int(lconf[CONF_PIN][CONF_NUMBER]) for lconf in group_lights]
-        if strobe_pin in lane_pins or PARALLEL_DC_PIN_DEFAULT in lane_pins:
-            raise cv.Invalid(
-                f"cfx_light parallel_group '{group_name}' reserves GPIO{strobe_pin} "
-                f"for internal I80 WR/strobe and GPIO{PARALLEL_DC_PIN_DEFAULT} "
-                "for internal I80 D/C; lane pins must not use either GPIO."
-            )
+        if variant == "ESP32S3":
+            reserved_pins = {
+                _pin_number_or_default(
+                    lconf, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
+                )
+                for lconf in group_lights
+            }
+            if len(reserved_pins) != 1:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' must use one shared "
+                    f"{CONF_PARALLEL_STROBE_PIN}; got {', '.join(str(v) for v in sorted(reserved_pins))}."
+                )
+            strobe_pin = next(iter(reserved_pins))
+            if strobe_pin == PARALLEL_DC_PIN_DEFAULT:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use the same "
+                    f"GPIO for {CONF_PARALLEL_STROBE_PIN} and the internal I80 "
+                    f"D/C reservation GPIO{PARALLEL_DC_PIN_DEFAULT}."
+                )
+            if strobe_pin in lane_pins or PARALLEL_DC_PIN_DEFAULT in lane_pins:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' reserves GPIO{strobe_pin} "
+                    f"for internal I80 WR/strobe and GPIO{PARALLEL_DC_PIN_DEFAULT} "
+                    "for internal I80 D/C; lane pins must not use either GPIO."
+                )
         return config
 
     if len(cfx_lights) > limits["total"]:
@@ -1527,7 +1528,7 @@ async def to_code(config):
         from esphome.components.esp32 import include_builtin_idf_component
         include_builtin_idf_component("esp_driver_spi")
         include_builtin_idf_component("esp_driver_rmt")
-        if is_parallel:
+        if is_parallel and _get_esp32_variant() == "ESP32S3":
             include_builtin_idf_component("esp_lcd")
             cg.add_define("CFX_PARALLEL_I80_ENABLED")
     except ImportError:
