@@ -63,12 +63,12 @@ static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const uint16_t PARALLEL_CHUNK_LEDS = 120;
-static const uint8_t PARALLEL_TX_BUFFER_COUNT = 2;
+static const uint16_t PARALLEL_CHUNK_LEDS = 65535;
+static const uint8_t PARALLEL_TX_BUFFER_COUNT = 1;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-pipe3x120-2026-05-18";
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-full3x-tightbus-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -2327,14 +2327,6 @@ void CFXLightOutput::setup_parallel_() {
             this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES +
         PARALLEL_RESET_SAMPLES;
     g_parallel_group.bus_max_transfer_size = g_parallel_group.chunk_frame_size;
-#if defined(CONFIG_IDF_TARGET_ESP32)
-    if (PARALLEL_I80_BUS_WIDTH == 8) {
-      // ESP32 Classic's I2S-LCD shim expands 8-bit bus data into 32-bit
-      // words in its internal format buffer before DMA.
-      g_parallel_group.bus_max_transfer_size =
-          g_parallel_group.chunk_frame_size * 2u;
-    }
-#endif
     g_parallel_group.chunk_alloc_size =
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
