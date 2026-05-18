@@ -62,7 +62,8 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
-static const char *const PARALLEL_BACKEND_REV = "i80-v1-txlog-2026-05-18";
+static const uint32_t PARALLEL_FLUSH_TIMEOUT_MS = 2;
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-coalesce-2026-05-18";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -72,6 +73,8 @@ struct CFXParallelGroupRuntime {
   bool init_attempted{false};
   bool tx_in_flight{false};
   volatile uint32_t tx_done_count{0};
+  uint8_t pending_mask{0};
+  uint32_t pending_first_ms{0};
   std::string name{};
   uint8_t lane_count{0};
   uint8_t strobe_pin{22};
@@ -88,6 +91,8 @@ struct CFXParallelGroupRuntime {
   uint8_t *frame_buf{nullptr};
   size_t frame_size{0};
   uint32_t tx_count{0};
+  uint32_t coalesced_count{0};
+  uint32_t timeout_flush_count{0};
   uint32_t queue_error_count{0};
   uint32_t wait_timeout_count{0};
 };
@@ -2360,18 +2365,22 @@ bool CFXLightOutput::init_parallel_backend_() {
   bus_config.bus_width = PARALLEL_I80_BUS_WIDTH;
   bus_config.max_transfer_bytes = g_parallel_group.frame_size;
   bus_config.dma_burst_size = 4;
-  bus_config.sram_trans_align = 4;
   for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
     bus_config.data_gpio_nums[i] = g_parallel_group.lane_pins[i];
   }
 
+  const size_t dma_free =
+      heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  const size_t dma_largest =
+      heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   ESP_LOGI(TAG,
            "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
-           "internal_dc=GPIO%u frame=%u bytes",
+           "internal_dc=GPIO%u frame=%u bytes dma_free=%u dma_largest=%u",
            PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
            g_parallel_group.lane_count, g_parallel_group.strobe_pin,
            g_parallel_group.dc_pin,
-           static_cast<unsigned>(g_parallel_group.frame_size));
+           static_cast<unsigned>(g_parallel_group.frame_size),
+           static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
 
   esp_err_t err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
   if (err != ESP_OK) {
@@ -2413,8 +2422,11 @@ bool CFXLightOutput::init_parallel_backend_() {
                                     g_parallel_group.frame_size,
                                     MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
   if (g_parallel_group.frame_buf == nullptr) {
-    ESP_LOGE(TAG, "Cannot allocate parallel frame buffer (%u bytes, DMA)",
-             static_cast<unsigned>(g_parallel_group.frame_size));
+    ESP_LOGE(TAG,
+             "Cannot allocate parallel frame buffer (%u bytes, DMA); "
+             "largest DMA block before init was %u bytes",
+             static_cast<unsigned>(g_parallel_group.frame_size),
+             static_cast<unsigned>(dma_largest));
     return false;
   }
   memset(g_parallel_group.frame_buf, 0, g_parallel_group.frame_size);
@@ -2563,14 +2575,16 @@ void CFXLightOutput::flush_parallel_() {
              "Parallel TX queued: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
-             "bytes=%u build+queue=%" PRIu32 "us",
+             "bytes=%u build+queue=%" PRIu32
+             "us coalesced=%" PRIu32 " timeouts=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
              static_cast<unsigned>(g_parallel_group.frame_size),
-             micros() - flush_start_us);
+             micros() - flush_start_us, g_parallel_group.coalesced_count,
+             g_parallel_group.timeout_flush_count);
   }
   this->record_led_frame_();
   this->perf_diag_flush_count_++;
@@ -2585,6 +2599,51 @@ void CFXLightOutput::flush_parallel_() {
   this->status_set_warning();
   this->mark_failed();
 #endif
+}
+
+bool CFXLightOutput::request_parallel_group_flush_() {
+  if (!this->is_parallel_transport() || this->parallel_lane_count_ <= 1) {
+    return true;
+  }
+  const uint8_t lane_bit = static_cast<uint8_t>(1u << this->parallel_lane_index_);
+  if ((g_parallel_group.pending_mask & lane_bit) == 0) {
+    g_parallel_group.pending_mask |= lane_bit;
+    if (g_parallel_group.pending_first_ms == 0) {
+      g_parallel_group.pending_first_ms = esphome::millis();
+    }
+  }
+
+  const uint8_t all_lanes_mask =
+      static_cast<uint8_t>((1u << g_parallel_group.lane_count) - 1u);
+  if ((g_parallel_group.pending_mask & all_lanes_mask) != all_lanes_mask) {
+    return false;
+  }
+
+  g_parallel_group.pending_mask = 0;
+  g_parallel_group.pending_first_ms = 0;
+  g_parallel_group.coalesced_count++;
+  return true;
+}
+
+void CFXLightOutput::service_parallel_group_flush_() {
+  if (!this->is_parallel_transport() || g_parallel_group.pending_mask == 0 ||
+      g_parallel_group.pending_first_ms == 0) {
+    return;
+  }
+  if ((esphome::millis() - g_parallel_group.pending_first_ms) <
+      PARALLEL_FLUSH_TIMEOUT_MS) {
+    return;
+  }
+
+  const uint8_t pending_mask = g_parallel_group.pending_mask;
+  g_parallel_group.pending_mask = 0;
+  g_parallel_group.pending_first_ms = 0;
+  g_parallel_group.timeout_flush_count++;
+  ESP_LOGV(TAG,
+           "Parallel group '%s' timeout flush: mask=0x%02x timeouts=%" PRIu32,
+           g_parallel_group.name.c_str(), pending_mask,
+           g_parallel_group.timeout_flush_count);
+  this->commit_transmit_();
 }
 
 // --- SPI Transport Setup ---
@@ -2960,6 +3019,7 @@ void CFXLightOutput::loop() {
   // P3: drain any outputs whose barrier window expired before all outputs
   // arrived (e.g. an inactive output that skipped write_state this tick).
   CFXTransmitBarrier::get().service(this);
+  this->service_parallel_group_flush_();
   if (!this->outro_cbs_.empty()) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
@@ -3529,6 +3589,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // on all registered outputs once they have all requested in this tick window,
   // or after BARRIER_TIMEOUT_MS if some outputs are inactive. Single-output
   // setups: request_transmit() returns true immediately (no-op barrier).
+  if (this->is_parallel_transport() && !this->request_parallel_group_flush_()) {
+    mark_committed_mono_idle_outputs(this);
+    this->log_segment_coordinator_diag_();
+    this->record_perf_diag_flush_(write_start_us, perf_diag_enabled,
+                                  spi_cadence_diag_enabled,
+                                  rmt_cadence_diag_enabled);
+    return;
+  }
+
   if (!CFXTransmitBarrier::get().request_transmit(this)) {
     // Deferred or already fired from inside the barrier — do not double-flush.
     mark_committed_mono_idle_outputs(this);

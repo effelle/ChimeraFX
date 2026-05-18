@@ -458,6 +458,8 @@ protected:
   void flush_rmt_();
   void flush_spi_();
   void flush_parallel_();
+  bool request_parallel_group_flush_();
+  void service_parallel_group_flush_();
   size_t get_parallel_frame_size_() const;
   bool build_parallel_frame_(uint8_t *dest, size_t len);
   void bind_force_white_switch_();
