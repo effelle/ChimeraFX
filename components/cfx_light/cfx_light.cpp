@@ -60,6 +60,7 @@ static const uint32_t PARALLEL_PCLK_HZ = 3200000;
 static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
+static const char *const PARALLEL_BACKEND_REV = "i80-v1-classic-2026-05-18";
 
 struct CFXParallelGroupRuntime {
   bool configured{false};
@@ -2323,11 +2324,12 @@ void CFXLightOutput::setup_parallel_() {
     g_parallel_group.ready = true;
 
     ESP_LOGI(TAG,
-             "Parallel I80 group '%s' ready: lanes=%u wr=GPIO%u internal_dc=GPIO%u "
+             "Parallel backend %s group '%s' ready: lanes=%u wr=GPIO%u internal_dc=GPIO%u "
              "pclk=%" PRIu32 "Hz frame=%u bytes data=[%u,%u,%u,%u,%u,%u,%u,%u]",
-             g_parallel_group.name.c_str(), g_parallel_group.lane_count,
-             g_parallel_group.strobe_pin, g_parallel_group.dc_pin,
-             PARALLEL_PCLK_HZ, static_cast<unsigned>(frame_size),
+             PARALLEL_BACKEND_REV, g_parallel_group.name.c_str(),
+             g_parallel_group.lane_count, g_parallel_group.strobe_pin,
+             g_parallel_group.dc_pin, PARALLEL_PCLK_HZ,
+             static_cast<unsigned>(frame_size),
              g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
              g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
              g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
