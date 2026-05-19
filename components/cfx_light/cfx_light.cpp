@@ -3192,6 +3192,7 @@ void CFXLightOutput::flush_parallel_() {
 
   uint32_t source_nonzero = 0;
   uint32_t lane_nonzero[PARALLEL_MAX_LANES] = {};
+  uint32_t lane_segment_nonzero[PARALLEL_MAX_LANES][4] = {};
   uint8_t first_pixel[PARALLEL_MAX_LANES][4] = {};
   const uint8_t stride = this->get_pixel_stride_();
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
@@ -3209,6 +3210,21 @@ void CFXLightOutput::flush_parallel_() {
       if (lane_output->buf_[i] != 0) {
         source_nonzero++;
         lane_nonzero[lane]++;
+      }
+    }
+    const uint8_t lane_stride = lane_output->get_pixel_stride_();
+    const size_t segment_buckets =
+        std::min<size_t>(lane_output->segment_defs_.size(), 4);
+    for (size_t seg = 0; seg < segment_buckets; seg++) {
+      const auto &def = lane_output->segment_defs_[seg];
+      const size_t start = std::min<size_t>(
+          static_cast<size_t>(def.start) * lane_stride, lane_size);
+      const size_t stop = std::min<size_t>(
+          static_cast<size_t>(def.stop) * lane_stride, lane_size);
+      for (size_t i = start; i < stop; i++) {
+        if (lane_output->buf_[i] != 0) {
+          lane_segment_nonzero[lane][seg]++;
+        }
       }
     }
   }
@@ -3408,6 +3424,10 @@ void CFXLightOutput::flush_parallel_() {
              "Parallel Classic TX streamed: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
              " lane_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "]"
+             " seg_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32
+             "|%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32
+             ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32 ",%" PRIu32
+             ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%u build+stream=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
@@ -3417,6 +3437,14 @@ void CFXLightOutput::flush_parallel_() {
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, lane_nonzero[0], lane_nonzero[1],
              lane_nonzero[2], lane_nonzero[3],
+             lane_segment_nonzero[0][0], lane_segment_nonzero[0][1],
+             lane_segment_nonzero[0][2], lane_segment_nonzero[0][3],
+             lane_segment_nonzero[1][0], lane_segment_nonzero[1][1],
+             lane_segment_nonzero[1][2], lane_segment_nonzero[1][3],
+             lane_segment_nonzero[2][0], lane_segment_nonzero[2][1],
+             lane_segment_nonzero[2][2], lane_segment_nonzero[2][3],
+             lane_segment_nonzero[3][0], lane_segment_nonzero[3][1],
+             lane_segment_nonzero[3][2], lane_segment_nonzero[3][3],
              first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
@@ -3534,6 +3562,10 @@ void CFXLightOutput::flush_parallel_() {
              "Parallel TX queued: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
              " lane_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "]"
+             " seg_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32
+             "|%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32
+             ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32 ",%" PRIu32
+             ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
@@ -3543,6 +3575,14 @@ void CFXLightOutput::flush_parallel_() {
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, lane_nonzero[0], lane_nonzero[1],
              lane_nonzero[2], lane_nonzero[3],
+             lane_segment_nonzero[0][0], lane_segment_nonzero[0][1],
+             lane_segment_nonzero[0][2], lane_segment_nonzero[0][3],
+             lane_segment_nonzero[1][0], lane_segment_nonzero[1][1],
+             lane_segment_nonzero[1][2], lane_segment_nonzero[1][3],
+             lane_segment_nonzero[2][0], lane_segment_nonzero[2][1],
+             lane_segment_nonzero[2][2], lane_segment_nonzero[2][3],
+             lane_segment_nonzero[3][0], lane_segment_nonzero[3][1],
+             lane_segment_nonzero[3][2], lane_segment_nonzero[3][3],
              first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
@@ -3879,10 +3919,6 @@ void CFXLightOutput::on_master_update() {
   }
 
   if (this->is_syncing_) {
-    if (this->suppress_next_parallel_master_cascade_) {
-      this->suppress_next_parallel_master_cascade_ = false;
-      this->suppress_next_parallel_master_cascade_ms_ = 0;
-    }
     return;
   }
   this->is_syncing_ = true; // Lock recursion
