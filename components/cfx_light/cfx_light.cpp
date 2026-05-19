@@ -3316,6 +3316,12 @@ void CFXLightOutput::flush_parallel_() {
   uint32_t lane_nonzero[PARALLEL_MAX_LANES] = {};
   uint32_t lane_segment_nonzero[PARALLEL_MAX_LANES][4] = {};
   uint8_t first_pixel[PARALLEL_MAX_LANES][4] = {};
+  uint16_t first_nonzero_led[PARALLEL_MAX_LANES] = {};
+  uint8_t first_nonzero_byte[PARALLEL_MAX_LANES] = {};
+  uint8_t first_nonzero_value[PARALLEL_MAX_LANES] = {};
+  uint8_t encoded_probe0[PARALLEL_MAX_LANES] = {};
+  uint8_t encoded_probe1[PARALLEL_MAX_LANES] = {};
+  bool first_nonzero_seen[PARALLEL_MAX_LANES] = {};
   const uint8_t stride = this->get_pixel_stride_();
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *lane_output = g_parallel_group.outputs[lane];
@@ -3332,6 +3338,14 @@ void CFXLightOutput::flush_parallel_() {
       if (lane_output->buf_[i] != 0) {
         source_nonzero++;
         lane_nonzero[lane]++;
+        if (!first_nonzero_seen[lane]) {
+          first_nonzero_seen[lane] = true;
+          first_nonzero_led[lane] =
+              static_cast<uint16_t>(i / lane_output->get_pixel_stride_());
+          first_nonzero_byte[lane] =
+              static_cast<uint8_t>(i % lane_output->get_pixel_stride_());
+          first_nonzero_value[lane] = lane_output->buf_[i];
+        }
       }
     }
     const uint8_t lane_stride = lane_output->get_pixel_stride_();
@@ -3350,6 +3364,29 @@ void CFXLightOutput::flush_parallel_() {
       }
     }
   }
+
+  auto probe_first_encoded_samples = [&]() {
+    uint8_t *const first_frame =
+        g_parallel_group.frame_bufs[0] != nullptr ? g_parallel_group.frame_bufs[0]
+                                                  : g_parallel_group.frame_buf;
+    if (first_frame == nullptr) {
+      return;
+    }
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      if (!first_nonzero_seen[lane] ||
+          first_nonzero_led[lane] >= g_parallel_group.chunk_leds) {
+        continue;
+      }
+      const size_t byte_offset =
+          (static_cast<size_t>(first_nonzero_led[lane]) * stride +
+           first_nonzero_byte[lane]) *
+          8u * PARALLEL_SYMBOL_SAMPLES;
+      if (byte_offset + 1u < g_parallel_group.chunk_frame_size) {
+        encoded_probe0[lane] = first_frame[byte_offset];
+        encoded_probe1[lane] = first_frame[byte_offset + 1u];
+      }
+    }
+  };
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
   if (g_parallel_group.classic_sending) {
@@ -3540,6 +3577,7 @@ void CFXLightOutput::flush_parallel_() {
 
   g_parallel_group.tx_count++;
   g_parallel_group.classic_stream_count++;
+  probe_first_encoded_samples();
   if (g_parallel_group.tx_count <= 12 ||
       (g_parallel_group.tx_count % 120u) == 0u) {
     ESP_LOGI(TAG,
@@ -3551,6 +3589,8 @@ void CFXLightOutput::flush_parallel_() {
              ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32 ",%" PRIu32
              ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
+             "nz=[%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x|"
+             "%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x] "
              "bytes=%u chunk=%u/%u build+stream=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
@@ -3570,6 +3610,14 @@ void CFXLightOutput::flush_parallel_() {
              first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
+             first_nonzero_led[0], first_nonzero_byte[0],
+             first_nonzero_value[0], encoded_probe0[0], encoded_probe1[0],
+             first_nonzero_led[1], first_nonzero_byte[1],
+             first_nonzero_value[1], encoded_probe0[1], encoded_probe1[1],
+             first_nonzero_led[2], first_nonzero_byte[2],
+             first_nonzero_value[2], encoded_probe0[2], encoded_probe1[2],
+             first_nonzero_led[3], first_nonzero_byte[3],
+             first_nonzero_value[3], encoded_probe0[3], encoded_probe1[3],
              static_cast<unsigned>(g_parallel_group.frame_size),
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              total_chunks, micros() - flush_start_us, build_us, tx_wait_us,
@@ -3678,6 +3726,7 @@ void CFXLightOutput::flush_parallel_() {
   }
 
   g_parallel_group.tx_count++;
+  probe_first_encoded_samples();
   if (g_parallel_group.tx_count <= 12 ||
       (g_parallel_group.tx_count % 120u) == 0u) {
     ESP_LOGI(TAG,
@@ -3689,6 +3738,8 @@ void CFXLightOutput::flush_parallel_() {
              ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32 ",%" PRIu32
              ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
+             "nz=[%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x|"
+             "%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x] "
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
@@ -3708,6 +3759,14 @@ void CFXLightOutput::flush_parallel_() {
              first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
+             first_nonzero_led[0], first_nonzero_byte[0],
+             first_nonzero_value[0], encoded_probe0[0], encoded_probe1[0],
+             first_nonzero_led[1], first_nonzero_byte[1],
+             first_nonzero_value[1], encoded_probe0[1], encoded_probe1[1],
+             first_nonzero_led[2], first_nonzero_byte[2],
+             first_nonzero_value[2], encoded_probe0[2], encoded_probe1[2],
+             first_nonzero_led[3], first_nonzero_byte[3],
+             first_nonzero_value[3], encoded_probe0[3], encoded_probe1[3],
              static_cast<unsigned>(g_parallel_group.frame_size),
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              chunks_this_frame, micros() - flush_start_us,
