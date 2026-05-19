@@ -136,29 +136,6 @@ resolve_diag_output(CFXAddressableLightEffect *effect) {
   return effect->get_diag_output();
 }
 
-static uint32_t cfx_heap_floor_for_effect(CFXAddressableLightEffect *effect) {
-  constexpr uint32_t generic_floor = 15000   // Base System Margin
-#ifdef USE_WIFI
-                                     + 30000 // Wi-Fi TX/RX buffers + LwIP
-#endif
-#ifdef USE_API
-                                     + 10000 // ESPHome HA API overhead
-#endif
-#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
-                                     + 20000 // BLE Dynamic Buffers
-#endif
-      ;
-
-  auto *out = resolve_diag_output(effect);
-  if (out != nullptr && out->is_parallel_transport()) {
-    // Parallel S3 allocates the large waveform DMA buffer during backend init.
-    // After that, starting a segment effect only needs the small activation
-    // object/runner state, so the generic Wi-Fi/API floor blocks valid tests.
-    return 30000;
-  }
-  return generic_floor;
-}
-
 static float resolve_led_fps(CFXAddressableLightEffect *effect) {
   auto *out = resolve_diag_output(effect);
   return out != nullptr ? out->get_led_fps() : -1.0f;
@@ -929,10 +906,20 @@ void CFXAddressableLightEffect::start() {
   //
   // The guard is skipped when act_ is already allocated (rapid start/stop
   // cycle reusing the existing object) because no new heap is consumed.
+  constexpr uint32_t CFX_HEAP_FLOOR = 15000   // Base System Margin
+#ifdef USE_WIFI
+                                      + 30000 // Wi-Fi TX/RX buffers + LwIP
+#endif
+#ifdef USE_API
+                                      + 10000 // ESPHome HA API overhead
+#endif
+#if defined(USE_BLUETOOTH_PROXY) || defined(USE_ESP32_BLE_SERVER) || defined(USE_ESP32_BLE_TRACKER) || defined(USE_ESP32_BLE_CLIENT)
+                                      + 20000 // BLE Dynamic Buffers
+#endif
+      ;
   if (this->act_ == nullptr) {
-    const uint32_t heap_floor = cfx_heap_floor_for_effect(this);
     uint32_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    if (free_heap < heap_floor) {
+    if (free_heap < CFX_HEAP_FLOOR) {
       if (auto *out = resolve_diag_output(this); out != nullptr) {
         out->trigger_low_ram_warning(this->get_light_state());
       }
@@ -940,7 +927,7 @@ void CFXAddressableLightEffect::start() {
                "[%s] Heap too low to start effect (%u B free, %u B floor) — "
                "showing a red 5s warning and forcing the impacted light OFF. "
                "Free RAM before adding more lights/segments.",
-               this->get_name().c_str(), free_heap, heap_floor);
+               this->get_name().c_str(), free_heap, CFX_HEAP_FLOOR);
       return;
     }
   }
