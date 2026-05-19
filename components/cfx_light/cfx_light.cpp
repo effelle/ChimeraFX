@@ -59,7 +59,7 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
-#define CFX_PARALLEL_TEST_PATTERN
+//#define CFX_PARALLEL_TEST_PATTERN
 
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
@@ -81,11 +81,11 @@ static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
 static const uint16_t PARALLEL_CLASSIC_CHUNK_LEDS = 64;
-static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 150;
+static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 128;
 static const uint16_t PARALLEL_LCD_SECONDARY_CHUNK_LEDS = 128;
 static const uint16_t PARALLEL_LCD_FALLBACK_CHUNK_LEDS = 64;
 static const uint8_t PARALLEL_TX_BUFFER_COUNT = 4;
-static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 4;
+static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 2;
 static const size_t PARALLEL_CLASSIC_DMA_MAX_LEN = 4092;
 static const uint8_t PARALLEL_CLASSIC_DESC_PER_BUFFER = 2;
 static const uint8_t PARALLEL_CLASSIC_DESC_COUNT =
