@@ -56,16 +56,32 @@ static const char *const TAG = "chimera_fx";
 
 namespace {
 static CFXAddressableLightEffect *
-resolve_segment_stub_singleton(light::LightEffect *active) {
-  if (active == nullptr) {
+resolve_parallel_segment_stub_singleton(light::LightState *state,
+                                        light::LightEffect *active) {
+  if (state == nullptr || active == nullptr) {
     return nullptr;
   }
+  CFXAddressableLightEffect *singleton = nullptr;
   for (auto *stub : CFXEffectStub::all_stubs()) {
     if (stub == active) {
-      return stub->get_singleton();
+      singleton = stub->get_singleton();
+      break;
     }
   }
+  if (singleton == nullptr) {
+    return nullptr;
+  }
+#ifdef USE_ESP32
+  auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+      state->get_output());
+  auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+  if (parent == nullptr || !parent->is_parallel_transport()) {
+    return nullptr;
+  }
+#else
   return nullptr;
+#endif
+  return singleton;
 }
 
 static CFXAddressableLightEffect *
@@ -77,7 +93,7 @@ resolve_active_segment_cfx_effect(light::LightState *state) {
   if (active == nullptr) {
     return nullptr;
   }
-  auto *stub_singleton = resolve_segment_stub_singleton(active);
+  auto *stub_singleton = resolve_parallel_segment_stub_singleton(state, active);
   if (stub_singleton != nullptr) {
     return stub_singleton;
   }
@@ -341,7 +357,8 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
 
     auto *scheduled_active = LightStateProxy::get_active_effect(scheduled_state);
     if (scheduled_active != this &&
-        resolve_segment_stub_singleton(scheduled_active) != this) {
+        resolve_parallel_segment_stub_singleton(scheduled_state,
+                                                scheduled_active) != this) {
       return;
     }
 
