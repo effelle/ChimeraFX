@@ -4113,6 +4113,11 @@ void CFXLightOutput::on_segment_update() {
   }
 
   bool master_on = this->master_light_state_->remote_values.is_on();
+  if (this->is_parallel_transport()) {
+    this->prev_master_state_ = master_on;
+    this->suppress_next_parallel_master_cascade_ = true;
+    this->suppress_next_parallel_master_cascade_ms_ = esphome::millis();
+  }
 
   // BOTTOM-UP SYNC (A segment changed)
   bool is_any_segment_on = false;
@@ -4136,10 +4141,6 @@ void CFXLightOutput::on_segment_update() {
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
     call.set_transition_length(0);
-    if (this->is_parallel_transport()) {
-      this->suppress_next_parallel_master_cascade_ = true;
-      this->suppress_next_parallel_master_cascade_ms_ = esphome::millis();
-    }
     call.perform();
   }
 
