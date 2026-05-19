@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 19
+CFX_LIGHT_SCHEMA_REV = 20
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -670,6 +670,10 @@ def _validate_segments(config):
     parent_output_id = getattr(
         config.get(CONF_OUTPUT_ID), "id", config.get(CONF_OUTPUT_ID)
     )
+    parent_ids = {
+        parent_id for parent_id in (parent_light_id, parent_output_id)
+        if parent_id is not None
+    }
 
     if len(segments) > MAX_CFX_SEGMENTS:
         raise cv.Invalid(
@@ -687,17 +691,12 @@ def _validate_segments(config):
         start = seg[CONF_SEGMENT_START]
         stop = seg[CONF_SEGMENT_STOP]
 
-        if seg_id_name == parent_light_id:
+        if seg_id_name in parent_ids:
             raise cv.Invalid(
                 f"Segment '{seg_id}' reuses the parent light id "
-                f"'{parent_light_id}'. Segment lights need their own ids."
+                "or output id. Segment lights need their own ids."
             )
-        if seg_id_name == parent_output_id:
-            raise cv.Invalid(
-                f"Segment '{seg_id}' reuses the parent output id "
-                f"'{parent_output_id}'. Segment lights need their own ids."
-            )
-        if seg_output_id_name in (parent_light_id, parent_output_id):
+        if seg_output_id_name is not None and seg_output_id_name in parent_ids:
             raise cv.Invalid(
                 f"Segment '{seg_id}' output id '{seg_output_id_name}' collides "
                 "with the parent light/output id."
