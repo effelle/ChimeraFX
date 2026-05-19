@@ -59,6 +59,8 @@ namespace cfx_light {
 
 static const char *const TAG = "cfx_light";
 
+#define CFX_PARALLEL_TEST_PATTERN
+
 std::vector<CFXVirtualSegmentLight *> CFXVirtualSegmentLight::all_segments;
 
 static const size_t RMT_SYMBOLS_PER_BYTE = 8;
@@ -2737,6 +2739,16 @@ void CFXLightOutput::setup_parallel_() {
   ESP_LOGI(TAG, "Parallel lane %u/%u registered: group='%s' data=GPIO%u",
            this->parallel_lane_index_ + 1, g_parallel_group.lane_count,
            g_parallel_group.name.c_str(), this->pin_);
+  // Phase-1 diag: log segment definitions at boot so we can verify geometry.
+  for (size_t si = 0; si < this->segment_defs_.size(); si++) {
+    const auto &sd = this->segment_defs_[si];
+    ESP_LOGI(TAG,
+             "  lane %u seg[%u] id='%s' start=%u stop=%u len=%u stride=%u",
+             this->parallel_lane_index_, static_cast<unsigned>(si),
+             sd.id.c_str(), sd.start, sd.stop,
+             static_cast<unsigned>(sd.stop - sd.start),
+             this->get_pixel_stride_());
+  }
 }
 
 bool CFXLightOutput::init_parallel_backend_() {
@@ -3305,6 +3317,47 @@ void CFXLightOutput::flush_parallel_() {
   (void) wait_for_parallel_tx_count;
 #endif
 
+#ifdef CFX_PARALLEL_TEST_PATTERN
+  // Phase-1 diag: deterministic test pattern — bypasses effect engine.
+  // Writes directly to each lane's buf_ using segment defs.
+  // Segment 0 = RED, 1 = GREEN, 2 = BLUE, 3 = WHITE.
+  {
+    static const esphome::Color seg_colors[4] = {
+        esphome::Color(255, 0, 0, 0),    // RED
+        esphome::Color(0, 255, 0, 0),    // GREEN
+        esphome::Color(0, 0, 255, 0),    // BLUE
+        esphome::Color(255, 255, 255, 255),  // WHITE
+    };
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      auto *lane_output = g_parallel_group.outputs[lane];
+      if (lane_output == nullptr || lane_output->buf_ == nullptr) {
+        continue;
+      }
+      // Zero the entire buffer first.
+      const size_t buf_bytes =
+          static_cast<size_t>(lane_output->num_leds_) *
+          lane_output->get_pixel_stride_();
+      memset(lane_output->buf_, 0, buf_bytes);
+      // Paint each segment with its test color.
+      const size_t seg_count =
+          std::min<size_t>(lane_output->segment_defs_.size(), 4);
+      for (size_t si = 0; si < seg_count; si++) {
+        const auto &def = lane_output->segment_defs_[si];
+        for (int p = def.start; p < def.stop && p < lane_output->size(); p++) {
+          (*lane_output)[p] = seg_colors[si];
+        }
+      }
+      // Log once per boot cycle.
+      if (g_parallel_group.tx_count < 2) {
+        ESP_LOGI(TAG,
+                 "Test pattern applied: lane %u segs=%u num_leds=%d",
+                 lane, static_cast<unsigned>(seg_count),
+                 lane_output->size());
+      }
+    }
+  }
+#endif
+
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *lane_output = g_parallel_group.outputs[lane];
     if (lane_output != nullptr) {
@@ -3360,6 +3413,28 @@ void CFXLightOutput::flush_parallel_() {
       for (size_t i = start; i < stop; i++) {
         if (lane_output->buf_[i] != 0) {
           lane_segment_nonzero[lane][seg]++;
+        }
+      }
+    }
+  }
+
+  // Phase-1 diag: capture lane_scales for the TX log.
+  uint8_t diag_lane_scales[PARALLEL_MAX_LANES] = {};
+  // Phase-1 diag: capture the buf_ value at the exact byte_offset the encoder
+  // uses, AFTER scrub but BEFORE frame build — to verify data survives.
+  uint8_t diag_buf_at_encode[PARALLEL_MAX_LANES] = {};
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *lo = g_parallel_group.outputs[lane];
+    if (lo != nullptr) {
+      diag_lane_scales[lane] = lo->get_power_transmit_scale_();
+      if (lo->buf_ != nullptr && first_nonzero_seen[lane]) {
+        const size_t bo =
+            static_cast<size_t>(first_nonzero_led[lane]) * stride +
+            first_nonzero_byte[lane];
+        const size_t buf_len =
+            static_cast<size_t>(lo->num_leds_) * lo->get_pixel_stride_();
+        if (bo < buf_len) {
+          diag_buf_at_encode[lane] = lo->buf_[bo];
         }
       }
     }
@@ -3594,7 +3669,9 @@ void CFXLightOutput::flush_parallel_() {
              "bytes=%u chunk=%u/%u build+stream=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
-             " underruns=%" PRIu32 " relinks=%" PRIu32,
+             " underruns=%" PRIu32 " relinks=%" PRIu32
+             " scales=[%u,%u,%u,%u]"
+             " enc_buf=[%02x,%02x,%02x,%02x]",
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, lane_nonzero[0], lane_nonzero[1],
@@ -3624,7 +3701,11 @@ void CFXLightOutput::flush_parallel_() {
              queue_us, g_parallel_group.coalesced_count,
              g_parallel_group.timeout_flush_count,
              g_parallel_group.classic_underrun_count,
-             static_cast<uint32_t>(g_parallel_group.classic_relink_count));
+             static_cast<uint32_t>(g_parallel_group.classic_relink_count),
+             diag_lane_scales[0], diag_lane_scales[1],
+             diag_lane_scales[2], diag_lane_scales[3],
+             diag_buf_at_encode[0], diag_buf_at_encode[1],
+             diag_buf_at_encode[2], diag_buf_at_encode[3]);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     if (g_parallel_group.outputs[lane] != nullptr) {
@@ -3743,7 +3824,9 @@ void CFXLightOutput::flush_parallel_() {
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
-             " queue_errors=%" PRIu32,
+             " queue_errors=%" PRIu32
+             " scales=[%u,%u,%u,%u]"
+             " enc_buf=[%02x,%02x,%02x,%02x]",
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, lane_nonzero[0], lane_nonzero[1],
@@ -3772,7 +3855,11 @@ void CFXLightOutput::flush_parallel_() {
              chunks_this_frame, micros() - flush_start_us,
              build_us, tx_wait_us, queue_us, g_parallel_group.coalesced_count,
              g_parallel_group.timeout_flush_count,
-             g_parallel_group.queue_error_count);
+             g_parallel_group.queue_error_count,
+             diag_lane_scales[0], diag_lane_scales[1],
+             diag_lane_scales[2], diag_lane_scales[3],
+             diag_buf_at_encode[0], diag_buf_at_encode[1],
+             diag_buf_at_encode[2], diag_buf_at_encode[3]);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     if (g_parallel_group.outputs[lane] != nullptr) {
