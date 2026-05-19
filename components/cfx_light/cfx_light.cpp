@@ -2213,6 +2213,8 @@ void CFXLightOutput::setup() {
     this->master_listener_ = new MasterListener(this);
     this->master_light_state_->add_remote_values_listener(
         this->master_listener_);
+    this->prev_master_state_ =
+        this->master_light_state_->remote_values.is_on();
     this->prev_master_defaults_state_ =
         this->master_light_state_->remote_values.is_on();
   }
@@ -3181,7 +3183,15 @@ void CFXLightOutput::flush_parallel_() {
   (void) wait_for_parallel_tx_count;
 #endif
 
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output != nullptr) {
+      lane_output->scrub_inactive_segments_();
+    }
+  }
+
   uint32_t source_nonzero = 0;
+  uint32_t lane_nonzero[PARALLEL_MAX_LANES] = {};
   uint8_t first_pixel[PARALLEL_MAX_LANES][4] = {};
   const uint8_t stride = this->get_pixel_stride_();
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
@@ -3198,6 +3208,7 @@ void CFXLightOutput::flush_parallel_() {
     for (size_t i = 0; i < lane_size; i++) {
       if (lane_output->buf_[i] != 0) {
         source_nonzero++;
+        lane_nonzero[lane]++;
       }
     }
   }
@@ -3396,6 +3407,7 @@ void CFXLightOutput::flush_parallel_() {
     ESP_LOGI(TAG,
              "Parallel Classic TX streamed: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
+             " lane_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%u build+stream=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
@@ -3403,7 +3415,9 @@ void CFXLightOutput::flush_parallel_() {
              " underruns=%" PRIu32 " relinks=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
-             source_nonzero, first_pixel[0][0], first_pixel[0][1],
+             source_nonzero, lane_nonzero[0], lane_nonzero[1],
+             lane_nonzero[2], lane_nonzero[3],
+             first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
              static_cast<unsigned>(g_parallel_group.frame_size),
@@ -3519,6 +3533,7 @@ void CFXLightOutput::flush_parallel_() {
     ESP_LOGI(TAG,
              "Parallel TX queued: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
+             " lane_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "]"
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
@@ -3526,7 +3541,9 @@ void CFXLightOutput::flush_parallel_() {
              " queue_errors=%" PRIu32,
              g_parallel_group.name.c_str(), g_parallel_group.tx_count,
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
-             source_nonzero, first_pixel[0][0], first_pixel[0][1],
+             source_nonzero, lane_nonzero[0], lane_nonzero[1],
+             lane_nonzero[2], lane_nonzero[3],
+             first_pixel[0][0], first_pixel[0][1],
              first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
              first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
              static_cast<unsigned>(g_parallel_group.frame_size),
@@ -3861,8 +3878,13 @@ void CFXLightOutput::on_master_update() {
     this->refresh_parent_owned_segment_slots_();
   }
 
-  if (this->is_syncing_)
+  if (this->is_syncing_) {
+    if (this->suppress_next_parallel_master_cascade_) {
+      this->suppress_next_parallel_master_cascade_ = false;
+      this->suppress_next_parallel_master_cascade_ms_ = 0;
+    }
     return;
+  }
   this->is_syncing_ = true; // Lock recursion
 
   bool master_on = this->master_light_state_->remote_values.is_on();
@@ -3871,6 +3893,17 @@ void CFXLightOutput::on_master_update() {
 
   bool master_state_changed = (master_on != this->prev_master_state_);
   this->prev_master_state_ = master_on;
+
+  if (this->suppress_next_parallel_master_cascade_) {
+    const uint32_t elapsed =
+        esphome::millis() - this->suppress_next_parallel_master_cascade_ms_;
+    this->suppress_next_parallel_master_cascade_ = false;
+    this->suppress_next_parallel_master_cascade_ms_ = 0;
+    if (elapsed < 1000) {
+      this->is_syncing_ = false;
+      return;
+    }
+  }
 
   // TOP-DOWN SYNC
   for (auto *seg_state : this->segment_light_states_) {
@@ -3952,6 +3985,10 @@ void CFXLightOutput::on_segment_update() {
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
     call.set_transition_length(0);
+    if (this->is_parallel_transport()) {
+      this->suppress_next_parallel_master_cascade_ = true;
+      this->suppress_next_parallel_master_cascade_ms_ = esphome::millis();
+    }
     call.perform();
   }
 
@@ -4218,6 +4255,26 @@ void CFXLightOutput::fill_buffer_solid_(const Color &color) {
       base[white] = cw;
     }
     this->effect_data_[i] = 0;
+  }
+}
+
+void CFXLightOutput::scrub_inactive_segments_() {
+  if (this->outro_cbs_.empty() && !this->segment_light_states_.empty()) {
+    esphome::App.feed_wdt();
+    const size_t count =
+        std::min(this->segment_light_states_.size(), this->segment_defs_.size());
+    for (size_t i = 0; i < count; i++) {
+      auto *seg_state = this->segment_light_states_[i];
+      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+        continue;
+      }
+      const auto &def = this->segment_defs_[i];
+      for (int p = def.start; p < def.stop; p++) {
+        if (p < this->size()) {
+          (*this)[p] = esphome::Color::BLACK;
+        }
+      }
+    }
   }
 }
 

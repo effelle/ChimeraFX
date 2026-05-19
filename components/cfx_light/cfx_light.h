@@ -506,6 +506,7 @@ protected:
   void log_segment_coordinator_diag_();
   void apply_power_scale_to_buffer_(uint8_t *data, size_t len) const;
   void fill_buffer_solid_(const Color &color);
+  void scrub_inactive_segments_();
   uint8_t get_power_transmit_scale_() const;
 
   // SPI frame geometry helpers
@@ -645,6 +646,8 @@ protected:
   bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
   bool prev_master_defaults_state_{false};
+  bool suppress_next_parallel_master_cascade_{false};
+  uint32_t suppress_next_parallel_master_cascade_ms_{0};
   uint8_t tracked_brightness_{0};
   float led_fps_{0.0f};
   bool led_fps_valid_{false};
