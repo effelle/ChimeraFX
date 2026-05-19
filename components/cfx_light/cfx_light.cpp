@@ -67,9 +67,15 @@ static uint32_t g_rmt_launch_seq = 0;
 static volatile uint32_t g_rmt_dma_active_count = 0;
 static volatile uint32_t g_spi_dma_active_count = 0;
 
+#if defined(CONFIG_IDF_TARGET_ESP32)
 static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
 static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
+#else
+static const uint8_t PARALLEL_SYMBOL_SAMPLES = 4;
+static const uint32_t PARALLEL_PCLK_HZ = 3200000;
+static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
+#endif
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
 static const uint16_t PARALLEL_CLASSIC_CHUNK_LEDS = 64;
@@ -96,7 +102,7 @@ static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
-    "parallel-v1-s3-esp-lcd-fullframe-seg-direct-2026-05-19";
+    "parallel-v1-s3-esp-lcd-fullframe-4sample-2026-05-19";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -3209,6 +3215,9 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         symbol_out[sample_base] = active_lane_mask;
         symbol_out[sample_base + 1u] = one_mask;
         symbol_out[sample_base + 2u] = 0;
+        if (PARALLEL_SYMBOL_SAMPLES > 3) {
+          symbol_out[sample_base + 3u] = 0;
+        }
 #endif
       }
       out += 8u * PARALLEL_SYMBOL_SAMPLES;
