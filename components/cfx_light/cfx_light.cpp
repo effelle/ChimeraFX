@@ -72,9 +72,9 @@ static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
 static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 #else
-static const uint8_t PARALLEL_SYMBOL_SAMPLES = 4;
-static const uint32_t PARALLEL_PCLK_HZ = 3200000;
-static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
+static const uint8_t PARALLEL_SYMBOL_SAMPLES = 6;
+static const uint32_t PARALLEL_PCLK_HZ = 4800000;
+static const size_t PARALLEL_RESET_SAMPLES = 480;  // 100 us at 4.8 MHz.
 #endif
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
@@ -102,7 +102,7 @@ static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
-    "parallel-v1-s3-esp-lcd-fullframe-4sample-2026-05-19";
+    "parallel-v1-s3-esp-lcd-fullframe-6sample-2026-05-19";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -3212,12 +3212,15 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
         symbol_out[((sample_base + 2u) & 0xFCu) |
                    SAMPLE_OFFSET_MAP[(sample_base + 2u) & 0x03u]] = 0;
 #else
+        // ESP32-S3 esp_lcd/I80 has shown poor tolerance for very narrow
+        // zero pulses after long black runs. Use a 6-sample symbol:
+        //   0 = HHLLLL (~417 ns high), 1 = HHHHLL (~833 ns high).
         symbol_out[sample_base] = active_lane_mask;
-        symbol_out[sample_base + 1u] = one_mask;
-        symbol_out[sample_base + 2u] = 0;
-        if (PARALLEL_SYMBOL_SAMPLES > 3) {
-          symbol_out[sample_base + 3u] = 0;
-        }
+        symbol_out[sample_base + 1u] = active_lane_mask;
+        symbol_out[sample_base + 2u] = one_mask;
+        symbol_out[sample_base + 3u] = one_mask;
+        symbol_out[sample_base + 4u] = 0;
+        symbol_out[sample_base + 5u] = 0;
 #endif
       }
       out += 8u * PARALLEL_SYMBOL_SAMPLES;
