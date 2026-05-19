@@ -84,6 +84,20 @@ resolve_parallel_segment_stub_singleton(light::LightState *state,
   return singleton;
 }
 
+static bool is_parallel_virtual_segment_state(light::LightState *state) {
+#ifdef USE_ESP32
+  if (state == nullptr) {
+    return false;
+  }
+  auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+      state->get_output());
+  auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+  return parent != nullptr && parent->is_parallel_transport();
+#else
+  return false;
+#endif
+}
+
 static CFXAddressableLightEffect *
 resolve_active_segment_cfx_effect(light::LightState *state) {
   if (state == nullptr) {
@@ -2274,6 +2288,9 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
   }
+  if (is_parallel_virtual_segment_state(state)) {
+    return false;
+  }
 #ifdef USE_CFX_SEQUENCE
   if (this->act_->active_sequence != nullptr) {
     return false;
@@ -2471,6 +2488,9 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   }
   auto *my_state = this->get_light_state();
   if (my_state == nullptr) {
+    return false;
+  }
+  if (is_parallel_virtual_segment_state(my_state)) {
     return false;
   }
   auto *my_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(

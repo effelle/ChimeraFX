@@ -96,7 +96,7 @@ static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
-    "parallel-v1-s3-esp-lcd-fullframe-first-2026-05-18";
+    "parallel-v1-s3-esp-lcd-fullframe-seg-direct-2026-05-19";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
