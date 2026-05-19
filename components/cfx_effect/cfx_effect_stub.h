@@ -34,10 +34,14 @@ public:
   }
 
   CFXEffectStub(const char *name, uint8_t effect_id,
-                CFXAddressableLightEffect *singleton)
+                CFXAddressableLightEffect *singleton,
+                uint8_t segment_index = 255,
+                const char *segment_id = "")
       : AddressableLightEffect(name),
         effect_id_(effect_id),
-        singleton_(singleton) {
+        singleton_(singleton),
+        segment_index_(segment_index),
+        segment_id_(segment_id) {
     all_stubs().push_back(this);
   }
 
@@ -53,9 +57,12 @@ public:
     if (start_diag_logs < 32) {
       auto *state = this->get_light_state();
       ESP_LOGI("cfx_stub",
-               "Segment effect start[%u]: light='%s' state=%p output=%p "
-               "stub=%p singleton=%p effect_id=%u effect='%s'",
+               "Segment effect start[%u]: seg=%u seg_id='%s' light='%s' "
+               "state=%p output=%p stub=%p singleton=%p effect_id=%u "
+               "effect='%s'",
                static_cast<unsigned>(start_diag_logs),
+               static_cast<unsigned>(segment_index_),
+               segment_id_ != nullptr ? segment_id_ : "",
                state != nullptr ? state->get_name().c_str() : "<null>",
                state, state != nullptr ? state->get_output() : nullptr, this,
                singleton_, static_cast<unsigned>(effect_id_),
@@ -74,9 +81,12 @@ public:
     if (stop_diag_logs < 32) {
       auto *state = this->get_light_state();
       ESP_LOGI("cfx_stub",
-               "Segment effect stop[%u]: light='%s' state=%p output=%p "
-               "stub=%p singleton=%p effect_id=%u effect='%s'",
+               "Segment effect stop[%u]: seg=%u seg_id='%s' light='%s' "
+               "state=%p output=%p stub=%p singleton=%p effect_id=%u "
+               "effect='%s'",
                static_cast<unsigned>(stop_diag_logs),
+               static_cast<unsigned>(segment_index_),
+               segment_id_ != nullptr ? segment_id_ : "",
                state != nullptr ? state->get_name().c_str() : "<null>",
                state, state != nullptr ? state->get_output() : nullptr, this,
                singleton_, static_cast<unsigned>(effect_id_),
@@ -101,6 +111,8 @@ public:
 private:
   uint8_t effect_id_;
   CFXAddressableLightEffect *singleton_;
+  uint8_t segment_index_;
+  const char *segment_id_;
 };
 
 }  // namespace chimera_fx

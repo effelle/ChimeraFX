@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 18
+CFX_LIGHT_SCHEMA_REV = 19
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -666,6 +666,10 @@ def _validate_segments(config):
         return config
 
     num_leds = config[CONF_NUM_LEDS]
+    parent_light_id = getattr(config.get(CONF_ID), "id", config.get(CONF_ID))
+    parent_output_id = getattr(
+        config.get(CONF_OUTPUT_ID), "id", config.get(CONF_OUTPUT_ID)
+    )
 
     if len(segments) > MAX_CFX_SEGMENTS:
         raise cv.Invalid(
@@ -677,9 +681,27 @@ def _validate_segments(config):
 
     for i, seg in enumerate(segments):
         seg_id = seg[CONF_SEGMENT_ID]
+        seg_id_name = getattr(seg_id, "id", seg_id)
+        seg_output_id = seg.get(CONF_SEGMENT_OUTPUT_ID)
+        seg_output_id_name = getattr(seg_output_id, "id", seg_output_id)
         start = seg[CONF_SEGMENT_START]
         stop = seg[CONF_SEGMENT_STOP]
 
+        if seg_id_name == parent_light_id:
+            raise cv.Invalid(
+                f"Segment '{seg_id}' reuses the parent light id "
+                f"'{parent_light_id}'. Segment lights need their own ids."
+            )
+        if seg_id_name == parent_output_id:
+            raise cv.Invalid(
+                f"Segment '{seg_id}' reuses the parent output id "
+                f"'{parent_output_id}'. Segment lights need their own ids."
+            )
+        if seg_output_id_name in (parent_light_id, parent_output_id):
+            raise cv.Invalid(
+                f"Segment '{seg_id}' output id '{seg_output_id_name}' collides "
+                "with the parent light/output id."
+            )
         if stop <= start:
             raise cv.Invalid(
                 f"Segment '{seg_id}': stop ({stop}) must be > start ({start})"
@@ -1820,7 +1842,9 @@ async def to_code(config):
             stub_id = CoreID(
                 stub_str, is_declaration=True, type=CFXEffectStub
             )
-            stub_var = cg.new_Pvariable(stub_id, name, eff_num, singleton_var)
+            stub_var = cg.new_Pvariable(
+                stub_id, name, eff_num, singleton_var, seg_idx, seg_id_str
+            )
             effect_vars.append(stub_var)
 
         if effect_vars:
