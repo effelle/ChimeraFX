@@ -9,6 +9,7 @@
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_compat.h"
 #include "cfx_control.h"
+#include "cfx_effect_stub.h"
 #include "cfx_utils.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
@@ -55,6 +56,19 @@ static const char *const TAG = "chimera_fx";
 
 namespace {
 static CFXAddressableLightEffect *
+resolve_segment_stub_singleton(light::LightEffect *active) {
+  if (active == nullptr) {
+    return nullptr;
+  }
+  for (auto *stub : CFXEffectStub::all_stubs()) {
+    if (stub == active) {
+      return stub->get_singleton();
+    }
+  }
+  return nullptr;
+}
+
+static CFXAddressableLightEffect *
 resolve_active_segment_cfx_effect(light::LightState *state) {
   if (state == nullptr) {
     return nullptr;
@@ -62,6 +76,10 @@ resolve_active_segment_cfx_effect(light::LightState *state) {
   auto *active = LightStateProxy::get_active_effect(state);
   if (active == nullptr) {
     return nullptr;
+  }
+  auto *stub_singleton = resolve_segment_stub_singleton(active);
+  if (stub_singleton != nullptr) {
+    return stub_singleton;
   }
   for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
     if (effect == active) {
@@ -321,7 +339,9 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
       return;
     }
 
-    if (LightStateProxy::get_active_effect(scheduled_state) != this) {
+    auto *scheduled_active = LightStateProxy::get_active_effect(scheduled_state);
+    if (scheduled_active != this &&
+        resolve_segment_stub_singleton(scheduled_active) != this) {
       return;
     }
 
