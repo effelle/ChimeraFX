@@ -482,6 +482,12 @@ protected:
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
   bool service_segment_render_coordinator_();
+  bool service_parallel_segment_group_coordinator_();
+  bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
+                                         bool force_due = false);
+  void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
+                                           bool transmit);
+  void mark_segment_coordinator_epoch_committed_(uint8_t mask);
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().

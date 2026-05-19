@@ -1649,7 +1649,11 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
   }
 }
 
-bool CFXLightOutput::service_segment_render_coordinator_() {
+bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
+                                                       uint8_t &count,
+                                                       bool force_due) {
+  mask = 0;
+  count = 0;
   if (!this->has_segments() || this->has_outro()) {
     this->apply_segment_coordination_loop_state_(0);
     this->apply_master_segment_coordination_loop_state_();
@@ -1658,12 +1662,12 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
 
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
-  if (!this->segment_coord_schedule_dirty_ && this->segment_coord_owned_mask_ != 0 &&
-      this->segment_coord_next_due_ms_ != 0 && now < this->segment_coord_next_due_ms_) {
+  if (!force_due && !this->segment_coord_schedule_dirty_ &&
+      this->segment_coord_owned_mask_ != 0 &&
+      this->segment_coord_next_due_ms_ != 0 &&
+      now < this->segment_coord_next_due_ms_) {
     return false;
   }
-  uint8_t mask = 0;
-  uint8_t count = 0;
   uint64_t next_due = 0;
   this->refresh_segment_coordination_mask_();
   const uint8_t segment_idle_mask =
@@ -1690,7 +1694,7 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
     if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) == 0) {
       continue;
     }
-    if (!slot.effect->parent_coordinated_segment_due(now)) {
+    if (!force_due && !slot.effect->parent_coordinated_segment_due(now)) {
       const uint64_t slot_due = slot.due_at != 0
                                     ? slot.due_at
                                     : (slot.effect->get_update_interval() + now);
@@ -1740,6 +1744,8 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
       this->perf_diag_max_partial_missing_ = count;
     }
     this->log_segment_coordinator_diag_();
+    mask = 0;
+    count = 0;
     return true;
   }
 
@@ -1750,12 +1756,24 @@ bool CFXLightOutput::service_segment_render_coordinator_() {
   }
   this->seg_coord_epochs_++;
   this->seg_coord_rendered_segments_ += count;
-  this->flush_segment_coordinator_epoch_(mask, count);
   return true;
 }
 
-void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
-                                                     uint8_t count) {
+void CFXLightOutput::mark_segment_coordinator_epoch_committed_(uint8_t mask) {
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    if ((mask & static_cast<uint8_t>(1u << i)) == 0) {
+      continue;
+    }
+    const auto &slot = this->segment_runtime_slots_[i];
+    if (slot.effect != nullptr && slot.effect->has_dirty_mono_idle_output()) {
+      slot.effect->mark_mono_output_committed();
+    }
+  }
+}
+
+void CFXLightOutput::finalize_segment_coordinator_epoch_(uint8_t mask,
+                                                         uint8_t count,
+                                                         bool transmit) {
   if (mask == 0 || count == 0) {
     return;
   }
@@ -1777,7 +1795,104 @@ void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
   this->seg_flush_first_ms_ = 0;
   this->seg_last_flush_mask_ = mask;
   this->seg_last_flush_count_ = count;
-  this->flush_parent_owned_segment_epoch_direct_(mask, count);
+  if (transmit) {
+    this->flush_parent_owned_segment_epoch_direct_(mask, count);
+  }
+}
+
+bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
+  if (!this->is_parallel_transport() || !g_parallel_group.configured ||
+      g_parallel_group.lane_count <= 1) {
+    return false;
+  }
+
+  bool any_rendered = false;
+  uint8_t lane_masks[PARALLEL_MAX_LANES] = {};
+  bool group_due = false;
+  const uint64_t now = static_cast<uint64_t>(esphome::millis());
+
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr || !output->has_segments() || output->has_outro()) {
+      continue;
+    }
+    output->refresh_segment_coordination_mask_();
+    if (output->segment_coord_owned_mask_ == 0) {
+      continue;
+    }
+    if (output->segment_coord_schedule_dirty_ ||
+        output->segment_coord_next_due_ms_ == 0 ||
+        now >= output->segment_coord_next_due_ms_) {
+      group_due = true;
+      break;
+    }
+  }
+
+  if (!group_due) {
+    return false;
+  }
+
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr || !output->has_segments() || output->has_outro()) {
+      continue;
+    }
+    uint8_t mask = 0;
+    uint8_t count = 0;
+    if (output->render_segment_coordinator_epoch_(mask, count, true)) {
+      output->finalize_segment_coordinator_epoch_(mask, count, false);
+      lane_masks[lane] = mask;
+      any_rendered = true;
+    }
+  }
+
+  if (!any_rendered) {
+    return false;
+  }
+
+  this->status_clear_warning();
+  const uint32_t launch_us = micros();
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr || lane_masks[lane] == 0) {
+      continue;
+    }
+    output->last_refresh_ = launch_us;
+    output->mark_shown_();
+  }
+  g_parallel_group.pending_mask = 0;
+  g_parallel_group.pending_first_ms = 0;
+  this->flush_parallel_();
+
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr || lane_masks[lane] == 0) {
+      continue;
+    }
+    output->mark_segment_coordinator_epoch_committed_(lane_masks[lane]);
+    output->log_segment_coordinator_diag_();
+  }
+  return true;
+}
+
+bool CFXLightOutput::service_segment_render_coordinator_() {
+  if (this->is_parallel_transport() && g_parallel_group.lane_count > 1 &&
+      this->has_active_parent_owned_segments_()) {
+    return this->service_parallel_segment_group_coordinator_();
+  }
+
+  uint8_t mask = 0;
+  uint8_t count = 0;
+  if (!this->render_segment_coordinator_epoch_(mask, count, false)) {
+    return false;
+  }
+  this->flush_segment_coordinator_epoch_(mask, count);
+  return true;
+}
+
+void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
+                                                     uint8_t count) {
+  this->finalize_segment_coordinator_epoch_(mask, count, true);
 }
 
 void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
