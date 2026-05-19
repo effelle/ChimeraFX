@@ -4129,6 +4129,14 @@ void CFXLightOutput::on_segment_update() {
   }
 
   if (master_on != is_any_segment_on) {
+    if (this->is_parallel_transport() && is_any_segment_on) {
+      // Parallel segmented mode must not promote a segment turn-on into a
+      // master turn-on. The master listener is a top-down fan-out surface, so
+      // segment-driven master ON can echo back as "all segments on" in HA.
+      // Keep bottom-up OFF so the aggregate still follows a fully idle group.
+      this->is_syncing_ = false;
+      return;
+    }
     this->wake_mono_idle_light_state_(this->master_light_state_);
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master

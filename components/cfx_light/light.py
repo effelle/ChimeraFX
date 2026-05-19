@@ -1700,7 +1700,7 @@ async def to_code(config):
         cg.add(var.set_default_outro_dur(intro_dur_s))
 
     # --- Segment codegen ---
-    for seg in segments:
+    for seg_idx, seg in enumerate(segments):
         seg_id_obj = seg[CONF_SEGMENT_ID]
         seg_id_str = str(seg_id_obj)
         seg_start = seg[CONF_SEGMENT_START]
@@ -1782,7 +1782,6 @@ async def to_code(config):
             CFX_EFFECT_NAMES,
         )
 
-        seg_idx = segments.index(seg)
         parent_id = config[CONF_ID].id
 
         # Phase 1: Create the singleton — one real effect per segment.

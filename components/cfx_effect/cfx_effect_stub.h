@@ -20,6 +20,7 @@
 #include "cfx_addressable_light_effect.h"
 #include "esphome/components/light/addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
+#include "esphome/core/log.h"
 #include <vector>
 
 namespace esphome {
@@ -48,6 +49,19 @@ public:
     // Inject the segment's LightState so the singleton can access the
     // CFXVirtualSegmentLight output, find its CFXControl, and derive
     // its strip_tag for events.
+    static uint8_t start_diag_logs = 0;
+    if (start_diag_logs < 32) {
+      auto *state = this->get_light_state();
+      ESP_LOGI("cfx_stub",
+               "Segment effect start[%u]: light='%s' state=%p output=%p "
+               "stub=%p singleton=%p effect_id=%u effect='%s'",
+               static_cast<unsigned>(start_diag_logs),
+               state != nullptr ? state->get_name().c_str() : "<null>",
+               state, state != nullptr ? state->get_output() : nullptr, this,
+               singleton_, static_cast<unsigned>(effect_id_),
+               this->get_name().c_str());
+      start_diag_logs++;
+    }
     singleton_->init_internal(this->get_light_state());
     singleton_->set_effect_id(effect_id_);
     singleton_->start();
@@ -56,6 +70,19 @@ public:
   /// Called by ESPHome when the effect is deactivated or a different effect
   /// is selected. Tears down the singleton's CFXActivation + CFXRunner.
   void stop() override {
+    static uint8_t stop_diag_logs = 0;
+    if (stop_diag_logs < 32) {
+      auto *state = this->get_light_state();
+      ESP_LOGI("cfx_stub",
+               "Segment effect stop[%u]: light='%s' state=%p output=%p "
+               "stub=%p singleton=%p effect_id=%u effect='%s'",
+               static_cast<unsigned>(stop_diag_logs),
+               state != nullptr ? state->get_name().c_str() : "<null>",
+               state, state != nullptr ? state->get_output() : nullptr, this,
+               singleton_, static_cast<unsigned>(effect_id_),
+               this->get_name().c_str());
+      stop_diag_logs++;
+    }
     singleton_->stop();
   }
 
