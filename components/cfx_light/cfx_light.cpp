@@ -5416,7 +5416,7 @@ void CFXLightOutput::dump_config() {
     }
   }
 
-  constexpr uint32_t cfx_heap_floor = 15000   // Base System Margin
+  constexpr uint32_t generic_cfx_heap_floor = 15000   // Base System Margin
 #ifdef USE_WIFI
                                       + 30000 // Wi-Fi TX/RX buffers + LwIP
 #endif
@@ -5427,7 +5427,10 @@ void CFXLightOutput::dump_config() {
                                       + 20000 // BLE Dynamic Buffers
 #endif
       ;
-  ESP_LOGCONFIG(TAG, "  System CFX Heap Floor dynamically set to: %u B", (unsigned)cfx_heap_floor);
+  const uint32_t cfx_heap_floor =
+      this->is_parallel_transport() ? 30000u : generic_cfx_heap_floor;
+  ESP_LOGCONFIG(TAG, "  System CFX Heap Floor dynamically set to: %u B",
+                (unsigned)cfx_heap_floor);
 }
 
 float CFXLightOutput::get_setup_priority() const {
