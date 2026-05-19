@@ -2447,6 +2447,13 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
   }
 
   act_->runner->target_light = &it;
+  if (this->is_virtual_segment_) {
+    // Segment singleton effects are reused by multiple virtual segment
+    // entities. Rebind each apply to the current virtual view so later
+    // segments do not inherit the first segment's parent/range geometry.
+    act_->runner->_segment.start = 0;
+    act_->runner->_segment.stop = it.size();
+  }
   act_->runner->setDebug(debug_active && !act_->mono_idle);
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
@@ -2816,6 +2823,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   } else if (act_->runner) {
     act_->runner->target_light =
         &it; // INJECT: Ensure we write to current buffer
+    if (this->is_virtual_segment_) {
+      act_->runner->_segment.start = 0;
+      act_->runner->_segment.stop = it.size();
+    }
     act_->runner->setDebug(runner_debug_active);
     if (!runner_name.empty())
       act_->runner->setName(runner_name.c_str());
