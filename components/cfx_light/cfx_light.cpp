@@ -4769,6 +4769,18 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 #endif // CFX_VISUALIZER_ENABLED
 
+  // Segment-owned parallel frames are already coalesced at the segment layer.
+  // Waiting for every physical lane here turns a single-lane segment effect
+  // into a timeout-driven flush on every frame.
+  if (this->is_parallel_transport() && state == nullptr && this->has_segments()) {
+    g_parallel_group.pending_mask = 0;
+    g_parallel_group.pending_first_ms = 0;
+    this->commit_transmit_();
+    mark_committed_mono_idle_outputs(this);
+    this->log_segment_coordinator_diag_();
+    goto record_write_perf;
+  }
+
   // P3: Request coordinated DMA launch. The barrier fires commit_transmit_()
   // on all registered outputs once they have all requested in this tick window,
   // or after BARRIER_TIMEOUT_MS if some outputs are inactive. Single-output
@@ -4796,6 +4808,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
   mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
 
+record_write_perf:
   if ((perf_diag_enabled || spi_cadence_diag_enabled ||
        rmt_cadence_diag_enabled) &&
       this->perf_diag_last_flush_valid_) {
