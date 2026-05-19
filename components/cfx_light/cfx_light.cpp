@@ -1828,6 +1828,9 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
   if (this->transport_ == TRANSPORT_SPI) {
     esphome::App.feed_wdt();
     this->flush_spi_();
+  } else if (this->transport_ == TRANSPORT_PARALLEL) {
+    esphome::App.feed_wdt();
+    this->flush_parallel_();
   } else {
     const uint32_t launch_us = micros();
     g_last_rmt_launch_us = launch_us;
