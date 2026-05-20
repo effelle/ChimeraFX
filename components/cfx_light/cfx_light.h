@@ -653,8 +653,7 @@ protected:
   bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
   bool prev_master_defaults_state_{false};
-  bool suppress_next_parallel_master_cascade_{false};
-  uint32_t suppress_next_parallel_master_cascade_ms_{0};
+
   uint8_t tracked_brightness_{0};
   float led_fps_{0.0f};
   bool led_fps_valid_{false};

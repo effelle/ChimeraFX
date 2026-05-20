@@ -4305,17 +4305,6 @@ void CFXLightOutput::on_master_update() {
   bool master_state_changed = (master_on != this->prev_master_state_);
   this->prev_master_state_ = master_on;
 
-  if (this->suppress_next_parallel_master_cascade_) {
-    const uint32_t elapsed =
-        esphome::millis() - this->suppress_next_parallel_master_cascade_ms_;
-    this->suppress_next_parallel_master_cascade_ = false;
-    this->suppress_next_parallel_master_cascade_ms_ = 0;
-    if (elapsed < 1000) {
-      this->is_syncing_ = false;
-      return;
-    }
-  }
-
   // TOP-DOWN SYNC
   for (auto *seg_state : this->segment_light_states_) {
     // Only force ON/OFF cascade if the Master state actually flipped
@@ -4373,11 +4362,6 @@ void CFXLightOutput::on_segment_update() {
   }
 
   bool master_on = this->master_light_state_->remote_values.is_on();
-  if (this->is_parallel_transport()) {
-    this->prev_master_state_ = master_on;
-    this->suppress_next_parallel_master_cascade_ = true;
-    this->suppress_next_parallel_master_cascade_ms_ = esphome::millis();
-  }
 
   // BOTTOM-UP SYNC (A segment changed)
   bool is_any_segment_on = false;
@@ -4389,14 +4373,8 @@ void CFXLightOutput::on_segment_update() {
   }
 
   if (master_on != is_any_segment_on) {
-    if (this->is_parallel_transport() && is_any_segment_on) {
-      // Parallel segmented mode must not promote a segment turn-on into a
-      // master turn-on. The master listener is a top-down fan-out surface, so
-      // segment-driven master ON can echo back as "all segments on" in HA.
-      // Keep bottom-up OFF so the aggregate still follows a fully idle group.
-      this->is_syncing_ = false;
-      return;
-    }
+    // Bottom-up sync for all transports (RMT, SPI, and Parallel).
+    // The master reflects the aggregate ON/OFF state of the segments.
     this->wake_mono_idle_light_state_(this->master_light_state_);
     // We are commanding the master to change state.
     // Update prev_master_state_ so that unexpected/deferred incoming Master
