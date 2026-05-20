@@ -103,7 +103,7 @@ static const uint8_t PARALLEL_CLASSIC_RESET_DESC =
 static const size_t PARALLEL_CLASSIC_SILENCE_BYTES = 32;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
-static const uint32_t PARALLEL_LCD_FLUSH_TIMEOUT_MS = 2;
+static const uint32_t PARALLEL_LCD_FLUSH_TIMEOUT_MS = 10;
 static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
