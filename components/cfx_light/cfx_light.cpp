@@ -372,13 +372,13 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
                                            void *user_ctx) {
   auto *group = static_cast<CFXParallelGroupRuntime *>(user_ctx);
   if (group != nullptr) {
-    UBaseType_t saved_level = portENTER_CRITICAL_FROM_ISR(&g_parallel_mux);
+    portENTER_CRITICAL_ISR(&g_parallel_mux);
     if (group->tx_in_flight_count > 0) {
       group->tx_in_flight_count--;
     }
     group->tx_in_flight = group->tx_in_flight_count > 0;
     group->tx_done_count++;
-    portEXIT_CRITICAL_FROM_ISR(&g_parallel_mux, saved_level);
+    portEXIT_CRITICAL_ISR(&g_parallel_mux);
   }
   return false;
 }
