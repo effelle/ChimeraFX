@@ -3999,9 +3999,19 @@ bool CFXLightOutput::request_parallel_group_flush_() {
     }
   }
 
-  const uint8_t all_lanes_mask =
-      static_cast<uint8_t>((1u << g_parallel_group.lane_count) - 1u);
-  if ((g_parallel_group.pending_mask & all_lanes_mask) != all_lanes_mask) {
+  uint8_t active_lanes_mask = 0;
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output != nullptr && output->get_master_light_state() != nullptr &&
+        output->get_master_light_state()->remote_values.is_on() &&
+        !all_active_cfx_effects_clean_mono_idle(output)) {
+      active_lanes_mask |= static_cast<uint8_t>(1u << lane);
+    }
+  }
+  // Ensure the calling lane is always expected in the mask
+  active_lanes_mask |= lane_bit;
+
+  if ((g_parallel_group.pending_mask & active_lanes_mask) != active_lanes_mask) {
     return false;
   }
 
