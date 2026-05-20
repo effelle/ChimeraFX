@@ -104,7 +104,7 @@ static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
-    "parallel-v1-s3-esp-lcd-fullframe-seg-guarded-2026-05-19";
+    "parallel-v1-s3-esp-lcd-fullframe-seg-guarded-2026-05-20";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
     4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
 
@@ -3263,9 +3263,11 @@ void CFXLightOutput::flush_parallel_() {
   auto wait_for_parallel_tx_count = [&](uint8_t max_in_flight,
                                         uint32_t timeout_us) -> bool {
     const uint32_t wait_start_us = micros();
+    uint32_t wdt_feed_us = wait_start_us;
     while (g_parallel_group.tx_in_flight_count > max_in_flight) {
-      if ((micros() - wait_start_us) > timeout_us) {
-        tx_wait_us += micros() - wait_start_us;
+      const uint32_t now_us = micros();
+      if ((now_us - wait_start_us) > timeout_us) {
+        tx_wait_us += now_us - wait_start_us;
         g_parallel_group.wait_timeout_count++;
         ESP_LOGW(TAG,
                  "Parallel TX wait timeout for group '%s' "
@@ -3277,8 +3279,15 @@ void CFXLightOutput::flush_parallel_() {
         this->status_set_warning();
         return false;
       }
-      esphome::App.feed_wdt();
-      vTaskDelay(1);
+      // Tight spin: 50 µs polling keeps the I80 DMA pipeline continuously fed.
+      // vTaskDelay(1) would sleep ≥10 ms (1 FreeRTOS tick @ 100 Hz), which is
+      // 125× the 80 µs SK6812 reset threshold and would force a mid-frame reset.
+      esp_rom_delay_us(50);
+      // Feed WDT at most once per ms to avoid call overhead.
+      if ((micros() - wdt_feed_us) >= 1000u) {
+        esphome::App.feed_wdt();
+        wdt_feed_us = micros();
+      }
     }
     tx_wait_us += micros() - wait_start_us;
     return true;
