@@ -1233,13 +1233,20 @@ _COMPONENT_RESERVE_DATA_KEY = "cfx_light_component_capacity_reserves"
 
 
 def _reserve_cfx_light_component_slot(config):
-    """Reserve App component capacity for the hidden output component.
+    """Reserve App component capacity for hidden output components.
 
     ESPHome sizes its static component vector from CORE.component_ids before
-    generated C++ runs. cfx_light creates a public LightState plus a hidden
-    AddressableLight output component, and some ESPHome versions undercount the
-    hidden output in larger configs. Reserve one extra slot per configured
-    cfx_light so later outputs are not dropped from Application::setup().
+    generated C++ runs. cfx_light creates:
+      - 1 hidden CFXLightOutput per strip (alongside its LightState)
+      - 1 hidden CFXVirtualSegmentLight per segment (via light.register_light)
+
+    Both use auto-generated output IDs (cv.GenerateID). Some ESPHome versions
+    do not count GenerateID-based registrations in the pre-allocation budget,
+    causing App.components_ to overflow and crash (EXCVADDR=0x17 / this=23).
+
+    We add one synthetic ID per hidden component so the budget always covers
+    the actual registration count. Sets ignore duplicates, so this is safe even
+    on builds that already count GenerateIDs correctly.
     """
     reserve_key = getattr(config.get(CONF_OUTPUT_ID), "id", None)
     if reserve_key is None:
@@ -1254,7 +1261,18 @@ def _reserve_cfx_light_component_slot(config):
         return
     reserves.add(reserve_key)
     safe_key = re.sub(r"[^a-zA-Z0-9_]", "_", reserve_key)
+
+    # Slot for the main hidden CFXLightOutput.
     core.CORE.component_ids.add(f"cfx_light_output_capacity_reserve_{safe_key}")
+
+    # One slot per segment for the hidden CFXVirtualSegmentLight output.
+    for seg_idx, seg in enumerate(config.get(CONF_SEGMENTS, [])):
+        seg_id = getattr(seg.get(CONF_SEGMENT_ID), "id", f"seg_{seg_idx}")
+        safe_seg = re.sub(r"[^a-zA-Z0-9_]", "_", str(seg_id))
+        core.CORE.component_ids.add(
+            f"cfx_light_vseg_capacity_reserve_{safe_key}_{safe_seg}"
+        )
+
 
 
 def _cfx_power_config():
