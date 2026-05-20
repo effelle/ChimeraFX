@@ -2748,8 +2748,7 @@ void CFXLightOutput::setup_parallel_() {
 #endif
   } else {
     if (g_parallel_group.name != this->parallel_group_ ||
-        g_parallel_group.lane_count != this->parallel_lane_count_ ||
-        g_parallel_group.frame_size != frame_size) {
+        g_parallel_group.lane_count != this->parallel_lane_count_) {
       ESP_LOGE(TAG, "Parallel group '%s' does not match existing group '%s'",
                this->parallel_group_.c_str(), g_parallel_group.name.c_str());
       this->mark_failed();
@@ -4903,6 +4902,12 @@ void CFXLightOutput::write_state(light::LightState *state) {
         all_active_cfx_effects_clean_mono_idle(this)))) {
     this->seg_clean_epoch_suppressed_++;
     this->log_segment_coordinator_diag_();
+    
+    // Evaluate and log idle state even when the rendering pipeline is fully suppressed
+    this->refresh_segment_coordination_mask_();
+    const uint8_t segment_idle_mask =
+        this->collect_clean_mono_idle_segment_mask_();
+    this->apply_mono_idle_loop_state_(segment_idle_mask);
     return;
   }
 
