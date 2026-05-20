@@ -1844,6 +1844,19 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
   }
 
   if (!group_due) {
+    // All lanes are idle (segment_coord_owned_mask_ == 0 everywhere).
+    // Still service the idle state so log_mono_idle_sleep() fires correctly,
+    // mirroring what render_segment_coordinator_epoch_() does at the non-parallel
+    // early-exit path (line ~1675).
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      auto *output = g_parallel_group.outputs[lane];
+      if (output == nullptr || !output->has_segments() || output->has_outro()) {
+        continue;
+      }
+      const uint8_t segment_idle_mask =
+          output->collect_clean_mono_idle_segment_mask_();
+      output->apply_mono_idle_loop_state_(segment_idle_mask);
+    }
     return false;
   }
 
