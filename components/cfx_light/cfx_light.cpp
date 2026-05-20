@@ -85,7 +85,7 @@ static const uint16_t PARALLEL_LCD_CHUNK_LEDS = 128;
 static const uint16_t PARALLEL_LCD_SECONDARY_CHUNK_LEDS = 128;
 static const uint16_t PARALLEL_LCD_FALLBACK_CHUNK_LEDS = 64;
 static const uint8_t PARALLEL_TX_BUFFER_COUNT = 4;
-static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 2;
+static const uint8_t PARALLEL_LCD_TX_BUFFER_COUNT = 3;
 static const size_t PARALLEL_CLASSIC_DMA_MAX_LEN = 4092;
 static const uint8_t PARALLEL_CLASSIC_DESC_PER_BUFFER = 2;
 static const uint8_t PARALLEL_CLASSIC_DESC_COUNT =
@@ -3278,7 +3278,7 @@ void CFXLightOutput::flush_parallel_() {
         return false;
       }
       esphome::App.feed_wdt();
-      esp_rom_delay_us(100);
+      vTaskDelay(1);
     }
     tx_wait_us += micros() - wait_start_us;
     return true;
