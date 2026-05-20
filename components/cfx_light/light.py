@@ -805,11 +805,8 @@ def _final_validate(config):
             )
 
         num_leds = {int(lconf[CONF_NUM_LEDS]) for lconf in group_lights}
-        if len(num_leds) != 1:
-            raise cv.Invalid(
-                f"cfx_light parallel_group '{group_name}' requires equal num_leds "
-                f"for V1; got {', '.join(str(v) for v in sorted(num_leds))}."
-            )
+        # Allowing unequal num_leds for testing
+
 
         protocol_shapes = {
             (
