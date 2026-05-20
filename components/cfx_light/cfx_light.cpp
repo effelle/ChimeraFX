@@ -74,9 +74,11 @@ static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
 static const uint32_t PARALLEL_PCLK_HZ = 2400000;
 static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 #else
-static const uint8_t PARALLEL_SYMBOL_SAMPLES = 4;
-static const uint32_t PARALLEL_PCLK_HZ = 3200000;
-static const size_t PARALLEL_RESET_SAMPLES = 320;  // 100 us at 3.2 MHz.
+// S3/C3: Also use 3 samples/bit @ 2.4 MHz to reduce DMA memory footprint by 25%.
+// This allows driving up to 680 LEDs per lane within 70-80 KB DMA RAM.
+static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
+static const uint32_t PARALLEL_PCLK_HZ = 2400000;
+static const size_t PARALLEL_RESET_SAMPLES = 240;  // 100 us at 2.4 MHz.
 #endif
 static const uint8_t PARALLEL_MAX_LANES = 4;
 static const uint8_t PARALLEL_I80_BUS_WIDTH = 8;
@@ -2656,8 +2658,10 @@ void CFXLightOutput::setup_parallel_() {
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     g_parallel_group.buffer_count = PARALLEL_TX_BUFFER_COUNT;
 #else
-    // Two buffers: while frame N is on the wire, frame N+1 builds into buf[1].
-    g_parallel_group.buffer_count = PARALLEL_LCD_TX_BUFFER_COUNT;
+    // Single buffer if full-frame (saves DMA RAM), otherwise double-buffered.
+    g_parallel_group.buffer_count = (g_parallel_group.chunk_leds >= this->num_leds_)
+                                        ? 1
+                                        : PARALLEL_LCD_TX_BUFFER_COUNT;
 #endif
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
       g_parallel_group.lane_pins[i] = this->parallel_lane_pins_[i];
@@ -2961,7 +2965,8 @@ bool CFXLightOutput::init_parallel_backend_() {
     g_parallel_group.tx_in_flight_count = 0;
   };
 
-  const uint16_t chunk_attempts[] = {PARALLEL_LCD_CHUNK_LEDS,
+  const uint16_t chunk_attempts[] = {this->num_leds_,
+                                     PARALLEL_LCD_CHUNK_LEDS,
                                      PARALLEL_LCD_SECONDARY_CHUNK_LEDS,
                                      PARALLEL_LCD_FALLBACK_CHUNK_LEDS};
   esp_err_t last_err = ESP_OK;
