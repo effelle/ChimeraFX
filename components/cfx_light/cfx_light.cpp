@@ -5010,12 +5010,25 @@ void CFXLightOutput::write_state(light::LightState *state) {
   }
 #endif // CFX_VISUALIZER_ENABLED
 
-  // Segment-owned parallel frames are already coalesced at the segment layer.
-  // Waiting for every physical lane here turns a single-lane segment effect
-  // into a timeout-driven flush on every frame.
+  // Segment-owned parallel frames are coalesced per-lane by request_segment_flush().
+  // We still need group-level coalescing so all lanes share a single DMA transfer.
+  // request_parallel_group_flush_() fires immediately when every lane is ready
+  // (zero extra latency), and service_parallel_group_flush_() provides the 2ms
+  // safety timeout for mixed active/inactive lane configurations.
+  // CFX-FIX: old code reset pending_mask and fired per-lane, producing 4 separate
+  // DMA transfers per visual frame → Time ~40ms, LedFPS ~4× real, jitter 100%.
   if (this->is_parallel_transport() && state == nullptr && this->has_segments()) {
-    g_parallel_group.pending_mask = 0;
-    g_parallel_group.pending_first_ms = 0;
+    if (!this->request_parallel_group_flush_()) {
+      // This lane is ready but peer lanes have not finished their segments yet.
+      // The group flush fires when the last lane calls write_state(nullptr).
+      mark_committed_mono_idle_outputs(this);
+      this->log_segment_coordinator_diag_();
+      this->record_perf_diag_flush_(write_start_us, perf_diag_enabled,
+                                    spi_cadence_diag_enabled,
+                                    rmt_cadence_diag_enabled);
+      return;
+    }
+    // All lanes ready — fire exactly once.
     this->commit_transmit_();
     mark_committed_mono_idle_outputs(this);
     this->log_segment_coordinator_diag_();
