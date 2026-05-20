@@ -190,6 +190,9 @@ public:
     uint32_t idle_max_frame_us{0};
     uint64_t idle_total_frame_us{0};
     uint32_t idle_jitter_count{0};
+    uint32_t idle_parallel_intervals[16]{0};
+    uint8_t idle_parallel_interval_index{0};
+    uint8_t idle_parallel_interval_count{0};
     uint32_t idle_target_frame_us{16666}; // updated from update_interval_ on first frame
     uint32_t idle_probe_total_us{0};
     bool idle_probe_valid{false};

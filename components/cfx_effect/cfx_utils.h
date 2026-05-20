@@ -429,6 +429,11 @@ struct FrameDiagnostics {
   uint32_t gap_count = 0;      // Frames with >50ms gap
   uint32_t last_log_time = 0;
 
+  bool is_parallel = false;
+  uint32_t parallel_intervals_[16]{0};
+  uint8_t parallel_interval_index_{0};
+  uint8_t parallel_interval_count_{0};
+
   uint32_t target_frame_us =
       16666; // Default 60fps, updated from update_interval
   static constexpr uint32_t LOG_INTERVAL_MS = 2000; // Log every 2 seconds
@@ -459,6 +464,11 @@ struct FrameDiagnostics {
     total_service_us = 0;
     jitter_count = 0;
     gap_count = 0;
+    parallel_interval_index_ = 0;
+    parallel_interval_count_ = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+      parallel_intervals_[i] = 0;
+    }
   }
 
   void reset_log_window() {
@@ -485,9 +495,26 @@ struct FrameDiagnostics {
       frame_count++;
 
       // Detect jitter (>50% deviation from target interval)
-      if (delta_us < target_frame_us / 2 ||
-          delta_us > target_frame_us * 3 / 2) {
-        jitter_count++;
+      if (is_parallel) {
+        parallel_intervals_[parallel_interval_index_] = delta_us;
+        parallel_interval_index_ = (parallel_interval_index_ + 1) % 16;
+        if (parallel_interval_count_ < 16) {
+          parallel_interval_count_++;
+        }
+        uint64_t sum_intervals = 0;
+        for (uint8_t i = 0; i < parallel_interval_count_; i++) {
+          sum_intervals += parallel_intervals_[i];
+        }
+        uint32_t avg_delta_us = sum_intervals / parallel_interval_count_;
+        if (avg_delta_us < target_frame_us / 2 ||
+            avg_delta_us > target_frame_us * 3 / 2) {
+          jitter_count++;
+        }
+      } else {
+        if (delta_us < target_frame_us / 2 ||
+            delta_us > target_frame_us * 3 / 2) {
+          jitter_count++;
+        }
       }
 
       // Detect gaps (>50ms)
