@@ -288,6 +288,7 @@ public:
 
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
+    this->sync_diagnostic_target_interval_();
   }
   uint32_t get_update_interval() const { return this->update_interval_; }
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
@@ -723,6 +724,8 @@ public:
   // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
   uint32_t update_interval_{16};
+
+  void sync_diagnostic_target_interval_();
   uint64_t next_run_{0};         // Absolute due-time gate; avoids snapping to caller ticks.
   uint64_t last_run_{0};         // Per-instance rate gate — must NOT be in CFXActivation (shared across virtual segments)
 

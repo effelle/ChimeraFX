@@ -450,7 +450,15 @@ struct FrameDiagnostics {
   }
 
   void set_target_interval_ms(uint32_t interval_ms) {
-    target_frame_us = interval_ms * 1000;
+    if (interval_ms == 0) {
+      target_frame_us = 16666;
+      return;
+    }
+    uint64_t target_us = static_cast<uint64_t>(interval_ms) * 1000ULL;
+    if (target_us > UINT32_MAX) {
+      target_us = UINT32_MAX;
+    }
+    target_frame_us = static_cast<uint32_t>(target_us);
   }
 
   void reset() {

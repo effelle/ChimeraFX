@@ -883,6 +883,28 @@ bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
   return true;
 }
 
+void CFXAddressableLightEffect::sync_diagnostic_target_interval_() {
+  if (this->act_ == nullptr) {
+    return;
+  }
+  if (this->act_->runner != nullptr) {
+    this->act_->runner->diagnostics.set_target_interval_ms(
+        this->update_interval_);
+  }
+  for (auto *runner : this->act_->segment_runners) {
+    if (runner != nullptr) {
+      runner->diagnostics.set_target_interval_ms(this->update_interval_);
+    }
+  }
+  uint64_t idle_target_us = this->update_interval_ == 0
+                                ? 16666ULL
+                                : static_cast<uint64_t>(this->update_interval_) * 1000ULL;
+  if (idle_target_us > UINT32_MAX) {
+    idle_target_us = UINT32_MAX;
+  }
+  this->act_->idle_target_frame_us = static_cast<uint32_t>(idle_target_us);
+}
+
 void CFXAddressableLightEffect::start() {
   light::AddressableLightEffect::start();
 
@@ -1217,6 +1239,7 @@ void CFXAddressableLightEffect::start() {
 #endif
     }
   }
+  this->sync_diagnostic_target_interval_();
 
   // Cache the light name once per start() so apply() never allocates a
   // std::string every frame (audit 1.1).
@@ -2352,6 +2375,7 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
     debug_active = this->local_debug_switch_()->state;
   }
   act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
 
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       state_ptr->get_output());
@@ -2382,6 +2406,7 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
   if (this->act_ == nullptr || this->act_->runner == nullptr) {
     return;
   }
+  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
 
   bool debug_active = CFXControl::global_debug_enabled_;
   if (act_->controller != nullptr && act_->controller->get_debug() != nullptr) {
@@ -2464,6 +2489,7 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     act_->runner->_segment.stop = it.size();
   }
   act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
