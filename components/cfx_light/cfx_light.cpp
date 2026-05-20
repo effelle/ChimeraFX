@@ -3027,9 +3027,9 @@ bool CFXLightOutput::init_parallel_backend_() {
     io_config.trans_queue_depth = g_parallel_group.buffer_count;
     io_config.on_color_trans_done = parallel_tx_done_cb_;
     io_config.user_ctx = &g_parallel_group;
-    // Keep a dummy command phase here because the esp_lcd I80 path expects one
-    // before color data; the actual LED waveform is carried by the color phase.
-    io_config.lcd_cmd_bits = 8;
+    // We must disable the command phase to prevent 8 dummy 0x00 bytes
+    // from being inserted between chunks, which corrupts WS2812 bit timing.
+    io_config.lcd_cmd_bits = 0;
     io_config.lcd_param_bits = 0;
     io_config.dc_levels.dc_idle_level = 0;
     io_config.dc_levels.dc_cmd_level = 0;
