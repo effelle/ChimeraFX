@@ -3987,6 +3987,24 @@ void CFXLightOutput::flush_parallel_() {
 #endif
 }
 
+static bool has_active_rendering_cfx_effect(CFXLightOutput *output) {
+  if (output == nullptr || output->get_master_light_state() == nullptr ||
+      !output->get_master_light_state()->remote_values.is_on()) {
+    return false;
+  }
+  auto *master_effect = resolve_active_cfx_effect(output->get_master_light_state());
+  if (master_effect != nullptr && !master_effect->is_clean_mono_idle_output()) {
+    return true;
+  }
+  for (auto *seg_state : output->get_segment_light_states()) {
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    if (effect != nullptr && !effect->is_clean_mono_idle_output()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool CFXLightOutput::request_parallel_group_flush_() {
   if (!this->is_parallel_transport() || this->parallel_lane_count_ <= 1) {
     return true;
@@ -4002,9 +4020,7 @@ bool CFXLightOutput::request_parallel_group_flush_() {
   uint8_t active_lanes_mask = 0;
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *output = g_parallel_group.outputs[lane];
-    if (output != nullptr && output->get_master_light_state() != nullptr &&
-        output->get_master_light_state()->remote_values.is_on() &&
-        !all_active_cfx_effects_clean_mono_idle(output)) {
+    if (has_active_rendering_cfx_effect(output)) {
       active_lanes_mask |= static_cast<uint8_t>(1u << lane);
     }
   }
