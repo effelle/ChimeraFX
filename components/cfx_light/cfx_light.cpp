@@ -2631,14 +2631,19 @@ void CFXLightOutput::setup_parallel_() {
     g_parallel_group.strobe_pin = this->parallel_strobe_pin_;
     g_parallel_group.dc_pin = this->parallel_dc_pin_;
     g_parallel_group.frame_size = frame_size;
-    const uint16_t backend_chunk_leds =
+    // Full-frame single transaction: set chunk_leds = num_leds so each flush()
+    // is one DMA transaction. Multiple transactions per frame cause I80
+    // inter-transaction gaps (100-500 µs ISR re-arm) that exceed the SK6812
+    // reset threshold (80 µs), scrambling the strip. With 234 KB DMA available
+    // on ESP32-S3, even 680 LEDs (87 KB) fits comfortably.
 #if defined(CONFIG_IDF_TARGET_ESP32)
-        PARALLEL_CLASSIC_CHUNK_LEDS;
-#else
-        PARALLEL_LCD_CHUNK_LEDS;
-#endif
+    const uint16_t backend_chunk_leds = PARALLEL_CLASSIC_CHUNK_LEDS;
     g_parallel_group.chunk_leds = static_cast<uint16_t>(
         std::min<uint16_t>(this->num_leds_, backend_chunk_leds));
+#else
+    // S3/C3: always one chunk = full frame, no splitting.
+    g_parallel_group.chunk_leds = this->num_leds_;
+#endif
     g_parallel_group.chunk_frame_size =
         static_cast<size_t>(g_parallel_group.chunk_leds) *
         this->get_pixel_stride_() * 8u * PARALLEL_SYMBOL_SAMPLES;
@@ -2651,9 +2656,8 @@ void CFXLightOutput::setup_parallel_() {
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     g_parallel_group.buffer_count = PARALLEL_TX_BUFFER_COUNT;
 #else
-    g_parallel_group.buffer_count = (g_parallel_group.chunk_leds >= this->num_leds_)
-                                        ? 1
-                                        : PARALLEL_LCD_TX_BUFFER_COUNT;
+    // Two buffers: while frame N is on the wire, frame N+1 builds into buf[1].
+    g_parallel_group.buffer_count = PARALLEL_LCD_TX_BUFFER_COUNT;
 #endif
     for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
       g_parallel_group.lane_pins[i] = this->parallel_lane_pins_[i];
