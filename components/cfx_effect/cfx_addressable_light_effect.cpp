@@ -1162,9 +1162,9 @@ void CFXAddressableLightEffect::start() {
       // Virtual segment lights are single-runner by design.
       // We check the flag injected by Python codegen to avoid illegal
       // dynamic_cast (-fno-rtti)
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
       const std::vector<cfx_light::CFXSegmentDef> *seg_defs = nullptr;
       if (!this->is_virtual_segment_) {
-        auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
         seg_defs = &cfx_out->get_segment_defs();
       }
 
