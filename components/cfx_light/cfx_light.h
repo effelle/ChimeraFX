@@ -455,6 +455,7 @@ protected:
   void setup_spi_();
   void setup_parallel_();
   bool init_parallel_backend_();
+  void deinit_parallel_backend_();
   void flush_rmt_();
   void flush_spi_();
   void flush_parallel_();
