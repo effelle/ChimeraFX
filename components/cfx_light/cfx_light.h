@@ -462,6 +462,7 @@ protected:
   bool request_parallel_group_flush_();
   void service_parallel_group_flush_();
   size_t get_parallel_frame_size_() const;
+  uint16_t get_parallel_required_led_count_() const;
   bool build_parallel_frame_(uint8_t *dest, size_t len, uint16_t start_led,
                              uint16_t led_count, bool include_reset);
   void bind_force_white_switch_();

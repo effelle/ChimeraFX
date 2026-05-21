@@ -154,6 +154,7 @@ struct CFXParallelGroupRuntime {
   size_t frame_size{0};  // Logical full-frame size, for diagnostics.
   uint16_t chunk_leds{0};
   uint16_t max_leds{0};
+  uint16_t last_tx_leds{0};
   size_t chunk_frame_size{0};
   size_t bus_max_transfer_size{0};
   size_t chunk_alloc_size{0};
@@ -2629,6 +2630,47 @@ size_t CFXLightOutput::get_parallel_frame_size_() const {
          PARALLEL_RESET_SAMPLES;
 }
 
+uint16_t CFXLightOutput::get_parallel_required_led_count_() const {
+  if (!this->is_parallel_transport() || this->num_leds_ == 0) {
+    return 0;
+  }
+  if (!this->outro_cbs_.empty()) {
+    return this->num_leds_;
+  }
+  if (this->segment_light_states_.empty()) {
+    if ((this->master_light_state_ != nullptr &&
+         this->master_light_state_->remote_values.is_on()) ||
+        this->is_effect_active()) {
+      return this->num_leds_;
+    }
+    return 0;
+  }
+
+  uint16_t required = 0;
+  const size_t count =
+      std::min(this->segment_light_states_.size(), this->segment_defs_.size());
+  for (size_t i = 0; i < count; i++) {
+    auto *seg_state = this->segment_light_states_[i];
+    if (seg_state == nullptr) {
+      continue;
+    }
+    auto *effect = resolve_active_cfx_effect(seg_state);
+    const bool active =
+        seg_state->remote_values.is_on() ||
+        (effect != nullptr && !effect->is_clean_mono_idle_output());
+    if (!active) {
+      continue;
+    }
+    const auto &def = this->segment_defs_[i];
+    const uint16_t stop =
+        static_cast<uint16_t>(std::min<int>(def.stop, this->num_leds_));
+    if (stop > required) {
+      required = stop;
+    }
+  }
+  return required;
+}
+
 void CFXLightOutput::setup_parallel_() {
   if (this->parallel_lane_count_ == 0 ||
       this->parallel_lane_count_ > PARALLEL_MAX_LANES ||
@@ -3467,6 +3509,35 @@ void CFXLightOutput::flush_parallel_() {
     }
   }
 
+  uint16_t active_required_leds = 0;
+  uint16_t lane_required_leds[PARALLEL_MAX_LANES] = {};
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output == nullptr) {
+      continue;
+    }
+    lane_required_leds[lane] = lane_output->get_parallel_required_led_count_();
+    active_required_leds =
+        std::max<uint16_t>(active_required_leds, lane_required_leds[lane]);
+    if (lane_required_leds[lane] == 0 && lane_output->buf_ != nullptr) {
+      memset(lane_output->buf_, 0, lane_output->get_buffer_size_());
+    }
+  }
+  if (active_required_leds > g_parallel_group.max_leds) {
+    active_required_leds = g_parallel_group.max_leds;
+  }
+  uint16_t tx_leds = active_required_leds;
+  const bool tail_clear_frame = g_parallel_group.last_tx_leds > tx_leds;
+  if (tail_clear_frame) {
+    tx_leds = g_parallel_group.last_tx_leds;
+  }
+  if (tx_leds > g_parallel_group.max_leds) {
+    tx_leds = g_parallel_group.max_leds;
+  }
+  if (tx_leds == 0 && g_parallel_group.max_leds > 0) {
+    tx_leds = 1;
+  }
+
   uint32_t source_nonzero = 0;
   uint32_t lane_nonzero[PARALLEL_MAX_LANES] = {};
   uint32_t lane_segment_nonzero[PARALLEL_MAX_LANES][4] = {};
@@ -3819,9 +3890,10 @@ void CFXLightOutput::flush_parallel_() {
   this->perf_diag_last_flush_tx_us_ = micros() - flush_start_us - build_us;
   this->perf_diag_last_flush_valid_ = true;
 #elif defined(CFX_PARALLEL_I80_ENABLED)
-  const uint16_t group_max_leds = g_parallel_group.max_leds;
+  const uint16_t group_max_leds = tx_leds;
   uint16_t led_start = 0;
   uint32_t chunks_this_frame = 0;
+  uint32_t tx_bytes_this_frame = 0;
   while (led_start < group_max_leds) {
     const uint16_t remaining = group_max_leds - led_start;
     const uint16_t chunk_leds =
@@ -3910,10 +3982,12 @@ void CFXLightOutput::flush_parallel_() {
 
     chunks_this_frame++;
     g_parallel_group.chunk_tx_count++;
+    tx_bytes_this_frame += static_cast<uint32_t>(chunk_size);
     led_start += chunk_leds;
   }
 
   g_parallel_group.tx_count++;
+  g_parallel_group.last_tx_leds = active_required_leds;
   probe_first_encoded_samples();
   if (g_parallel_group.tx_count <= 12 ||
       (g_parallel_group.tx_count % 120u) == 0u) {
@@ -3928,7 +4002,9 @@ void CFXLightOutput::flush_parallel_() {
              " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
              "nz=[%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x|"
              "%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x] "
-             "bytes=%u chunk=%u/%" PRIu32 " build+queue=%" PRIu32
+             "tx_bytes=%" PRIu32 " frame_bytes=%u tx_leds=%u active_leds=%u "
+             "max_leds=%u clear_tail=%u "
+             "chunk=%u/%" PRIu32 " build+queue=%" PRIu32
              "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
              "us coalesced=%" PRIu32 " timeouts=%" PRIu32
              " queue_errors=%" PRIu32
@@ -3957,7 +4033,10 @@ void CFXLightOutput::flush_parallel_() {
              first_nonzero_value[2], encoded_probe0[2], encoded_probe1[2],
              first_nonzero_led[3], first_nonzero_byte[3],
              first_nonzero_value[3], encoded_probe0[3], encoded_probe1[3],
+             tx_bytes_this_frame,
              static_cast<unsigned>(g_parallel_group.frame_size),
+             tx_leds, active_required_leds, g_parallel_group.max_leds,
+             tail_clear_frame ? 1u : 0u,
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              chunks_this_frame, micros() - flush_start_us,
              build_us, tx_wait_us, queue_us, g_parallel_group.coalesced_count,
