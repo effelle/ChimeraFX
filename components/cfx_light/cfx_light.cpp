@@ -2817,6 +2817,23 @@ void CFXLightOutput::setup_parallel_() {
     }
 
 #if !defined(CONFIG_IDF_TARGET_ESP32)
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(g_parallel_group.strobe_pin) ||
+        !GPIO_IS_VALID_OUTPUT_GPIO(g_parallel_group.dc_pin) ||
+        g_parallel_group.strobe_pin == g_parallel_group.dc_pin ||
+        parallel_pin_used_(g_parallel_group.strobe_pin,
+                           g_parallel_group.lane_pins,
+                           this->parallel_lane_count_) ||
+        parallel_pin_used_(g_parallel_group.dc_pin,
+                           g_parallel_group.lane_pins,
+                           this->parallel_lane_count_)) {
+      ESP_LOGE(TAG,
+               "Parallel group '%s' has invalid internal LCD/I80 pins "
+               "(wr=GPIO%u dc=GPIO%u)",
+               g_parallel_group.name.c_str(), g_parallel_group.strobe_pin,
+               g_parallel_group.dc_pin);
+      this->mark_failed();
+      return;
+    }
     for (uint8_t i = this->parallel_lane_count_; i < PARALLEL_I80_BUS_WIDTH; i++) {
       bool assigned = false;
       for (uint8_t candidate : PARALLEL_DUMMY_PIN_CANDIDATES) {
@@ -5802,12 +5819,14 @@ void CFXLightOutput::dump_config() {
                   "  RGBW: %s\n"
                   "  RGB Order: %s\n"
                   "  Backend: LCD/I80\n"
-                  "  Internal WR: GPIO%u\n"
-                  "  Internal D/C: GPIO%u",
+                  "  Internal WR: GPIO%u (%s)\n"
+                  "  Internal D/C: GPIO%u (%s)",
                   this->parallel_group_.c_str(), this->pin_, chipset_str,
                   this->num_leds_, this->is_rgbw_ ? "yes" : "no",
                   order_str, this->parallel_strobe_pin_,
-                  this->parallel_dc_pin_);
+                  this->parallel_strobe_pin_auto_ ? "auto" : "user",
+                  this->parallel_dc_pin_,
+                  this->parallel_dc_pin_auto_ ? "auto" : "user");
 #endif
   } else {
     ESP_LOGCONFIG(TAG,

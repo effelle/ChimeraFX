@@ -341,6 +341,12 @@ public:
   void set_parallel_dc_pin(uint8_t pin) {
     this->parallel_dc_pin_ = pin;
   }
+  void set_parallel_strobe_pin_auto(bool automatic) {
+    this->parallel_strobe_pin_auto_ = automatic;
+  }
+  void set_parallel_dc_pin_auto(bool automatic) {
+    this->parallel_dc_pin_auto_ = automatic;
+  }
   void set_parallel_lane_pin(uint8_t index, uint8_t pin) {
     if (index < 8) {
       this->parallel_lane_pins_[index] = pin;
@@ -592,6 +598,8 @@ protected:
   uint8_t parallel_lane_count_{0};
   uint8_t parallel_strobe_pin_{22};
   uint8_t parallel_dc_pin_{21};
+  bool parallel_strobe_pin_auto_{true};
+  bool parallel_dc_pin_auto_{true};
   uint8_t parallel_lane_pins_[8]{};
   uint8_t spi_data_pin_{0};
   uint8_t spi_clock_pin_{0};

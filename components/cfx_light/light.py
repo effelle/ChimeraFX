@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 20
+CFX_LIGHT_SCHEMA_REV = 21
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -185,6 +185,7 @@ CONF_SPI_SPEED = "spi_speed"
 CONF_SPI_HOST = "spi_host"
 CONF_PARALLEL_GROUP = "parallel_group"
 CONF_PARALLEL_STROBE_PIN = "parallel_strobe_pin"
+CONF_PARALLEL_DC_PIN = "parallel_dc_pin"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DUR = "set_inout_dur"
@@ -198,6 +199,14 @@ SET_COLOR_SCHEMA = cv.All(
 
 PARALLEL_STROBE_PIN_DEFAULT = 22
 PARALLEL_DC_PIN_DEFAULT = 21
+PARALLEL_PIN_SOURCE_AUTO = "auto"
+PARALLEL_PIN_SOURCE_USER = "user"
+_PARALLEL_PIN_RESOLUTION_KEY = "cfx_parallel_internal_pins"
+
+_ESP32S3_PARALLEL_INTERNAL_PIN_CANDIDATES = (
+    38, 39, 40, 41, 42, 47, 48,
+    1, 2, 4, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18,
+)
 
 def _current_ma(value):
     if isinstance(value, (int, float)):
@@ -525,6 +534,142 @@ def _get_cfx_light_limits(variant=None):
     return _CFX_LIGHT_LIMITS_DEFAULT
 
 
+def _parallel_validate_internal_pin(variant, pin, label):
+    if variant != "ESP32S3":
+        return int(pin)
+    try:
+        from esphome.components.esp32.gpio_esp32_s3 import (
+            esp32_s3_validate_gpio_pin,
+        )
+
+        return int(esp32_s3_validate_gpio_pin(int(pin)))
+    except cv.Invalid:
+        raise
+    except Exception:
+        pin = int(pin)
+        if pin < 0 or pin > 48 or pin in (22, 23, 24, 25):
+            raise cv.Invalid(f"Invalid ESP32-S3 {label} GPIO{pin}.")
+        return pin
+
+
+def _collect_declared_gpio_numbers(value, skip_keys=None):
+    skip_keys = skip_keys or set()
+    found = set()
+
+    if isinstance(value, dict):
+        if CONF_NUMBER in value:
+            try:
+                found.add(int(value[CONF_NUMBER]))
+            except (TypeError, ValueError):
+                pass
+        for key, item in value.items():
+            if key in skip_keys:
+                continue
+            found.update(_collect_declared_gpio_numbers(item, skip_keys))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found.update(_collect_declared_gpio_numbers(item, skip_keys))
+
+    return found
+
+
+def _resolve_parallel_internal_pins(group_name, group_lights, variant, root_config):
+    store = CORE.data.setdefault(_PARALLEL_PIN_RESOLUTION_KEY, {})
+    if group_name in store:
+        return store[group_name]
+
+    lane_pins = {int(lconf[CONF_PIN][CONF_NUMBER]) for lconf in group_lights}
+    skip_internal_keys = {CONF_PARALLEL_STROBE_PIN, CONF_PARALLEL_DC_PIN}
+    used_pins = _collect_declared_gpio_numbers(root_config, skip_internal_keys)
+    used_pins.update(lane_pins)
+
+    strobe_overrides = {
+        _pin_number_or_default(lconf, CONF_PARALLEL_STROBE_PIN, None)
+        for lconf in group_lights
+        if CONF_PARALLEL_STROBE_PIN in lconf
+    }
+    dc_overrides = {
+        _pin_number_or_default(lconf, CONF_PARALLEL_DC_PIN, None)
+        for lconf in group_lights
+        if CONF_PARALLEL_DC_PIN in lconf
+    }
+    if len(strobe_overrides) > 1:
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' must use one shared "
+            f"{CONF_PARALLEL_STROBE_PIN}; got "
+            f"{', '.join(str(v) for v in sorted(strobe_overrides))}."
+        )
+    if len(dc_overrides) > 1:
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' must use one shared "
+            f"{CONF_PARALLEL_DC_PIN}; got "
+            f"{', '.join(str(v) for v in sorted(dc_overrides))}."
+        )
+
+    def choose(label, override_set, already_reserved):
+        if override_set:
+            pin = _parallel_validate_internal_pin(variant, next(iter(override_set)), label)
+            source = PARALLEL_PIN_SOURCE_USER
+            if pin in lane_pins:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    f"for internal {label}; it is already a parallel lane pin."
+                )
+            if pin in used_pins:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    f"for internal {label}; it is already declared in this YAML."
+                )
+            if pin in already_reserved:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    "for both internal WR/strobe and D/C."
+                )
+            return pin, source
+
+        if variant != "ESP32S3":
+            return (
+                PARALLEL_STROBE_PIN_DEFAULT if label == "WR/strobe" else PARALLEL_DC_PIN_DEFAULT,
+                PARALLEL_PIN_SOURCE_AUTO,
+            )
+
+        for candidate in _ESP32S3_PARALLEL_INTERNAL_PIN_CANDIDATES:
+            try:
+                pin = _parallel_validate_internal_pin(variant, candidate, label)
+            except cv.Invalid:
+                continue
+            if pin in used_pins or pin in already_reserved:
+                continue
+            return pin, PARALLEL_PIN_SOURCE_AUTO
+
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' cannot auto-reserve an "
+            f"ESP32-S3 internal {label} GPIO. Free two output-capable GPIOs or "
+            f"set {CONF_PARALLEL_STROBE_PIN}/{CONF_PARALLEL_DC_PIN} explicitly."
+        )
+
+    strobe_pin, strobe_source = choose("WR/strobe", strobe_overrides, set())
+    dc_pin, dc_source = choose("D/C", dc_overrides, {strobe_pin})
+
+    resolved = {
+        CONF_PARALLEL_STROBE_PIN: strobe_pin,
+        CONF_PARALLEL_DC_PIN: dc_pin,
+        "strobe_source": strobe_source,
+        "dc_source": dc_source,
+    }
+    store[group_name] = resolved
+    _LOGGER.info(
+        "CFXLight parallel_group '%s': internal WR/strobe GPIO%d (%s), "
+        "D/C GPIO%d (%s)",
+        group_name,
+        strobe_pin,
+        strobe_source,
+        dc_pin,
+        dc_source,
+    )
+    return resolved
+
+
 def _is_spi_cfx_light(config):
     return str(config.get(CONF_CHIPSET, "")).upper() in SPI_CHIPSETS
 
@@ -822,30 +967,7 @@ def _final_validate(config):
             )
         lane_pins = [int(lconf[CONF_PIN][CONF_NUMBER]) for lconf in group_lights]
         if variant == "ESP32S3":
-            reserved_pins = {
-                _pin_number_or_default(
-                    lconf, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
-                )
-                for lconf in group_lights
-            }
-            if len(reserved_pins) != 1:
-                raise cv.Invalid(
-                    f"cfx_light parallel_group '{group_name}' must use one shared "
-                    f"{CONF_PARALLEL_STROBE_PIN}; got {', '.join(str(v) for v in sorted(reserved_pins))}."
-                )
-            strobe_pin = next(iter(reserved_pins))
-            if strobe_pin == PARALLEL_DC_PIN_DEFAULT:
-                raise cv.Invalid(
-                    f"cfx_light parallel_group '{group_name}' cannot use the same "
-                    f"GPIO for {CONF_PARALLEL_STROBE_PIN} and the internal I80 "
-                    f"D/C reservation GPIO{PARALLEL_DC_PIN_DEFAULT}."
-                )
-            if strobe_pin in lane_pins or PARALLEL_DC_PIN_DEFAULT in lane_pins:
-                raise cv.Invalid(
-                    f"cfx_light parallel_group '{group_name}' reserves GPIO{strobe_pin} "
-                    f"for internal I80 WR/strobe and GPIO{PARALLEL_DC_PIN_DEFAULT} "
-                    "for internal I80 D/C; lane pins must not use either GPIO."
-                )
+            _resolve_parallel_internal_pins(group_name, group_lights, variant, fconf)
         return config
 
     if len(cfx_lights) > limits["total"]:
@@ -1039,6 +1161,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SPI_HOST): cv.string,
             cv.Optional(CONF_PARALLEL_GROUP): cv.string,
             cv.Optional(CONF_PARALLEL_STROBE_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Optional(CONF_PARALLEL_DC_PIN): pins.internal_gpio_output_pin_schema,
             # spi_host is intentionally NOT exposed in the user schema.
             # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
             # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
@@ -1108,6 +1231,11 @@ def _validate_transport(config):
                 f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
                 f"'{CONF_PARALLEL_GROUP}'."
             )
+        if CONF_PARALLEL_DC_PIN in config:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_DC_PIN}' is only supported with "
+                f"'{CONF_PARALLEL_GROUP}'."
+            )
         if CONF_DATA_PIN not in config:
             raise cv.RequiredFieldInvalid(
                 f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}",
@@ -1164,6 +1292,11 @@ def _validate_transport(config):
             if CONF_PARALLEL_STROBE_PIN in config:
                 raise cv.Invalid(
                     f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
+            if CONF_PARALLEL_DC_PIN in config:
+                raise cv.Invalid(
+                    f"'{CONF_PARALLEL_DC_PIN}' is only supported with "
                     f"'{CONF_PARALLEL_GROUP}'."
                 )
 
@@ -1603,16 +1736,22 @@ async def to_code(config):
         lane_index = lane_pins.index(config[CONF_PIN][CONF_NUMBER])
         cg.add(var.set_parallel_lane_index(lane_index))
         cg.add(var.set_parallel_lane_count(len(lane_pins)))
+        pin_resolution = _resolve_parallel_internal_pins(
+            str(config[CONF_PARALLEL_GROUP]),
+            group_lights,
+            _get_esp32_variant(),
+            CORE.config,
+        )
+        cg.add(var.set_parallel_strobe_pin(pin_resolution[CONF_PARALLEL_STROBE_PIN]))
+        cg.add(var.set_parallel_dc_pin(pin_resolution[CONF_PARALLEL_DC_PIN]))
         cg.add(
-            var.set_parallel_strobe_pin(
-                _pin_number_or_default(
-                    config, CONF_PARALLEL_STROBE_PIN, PARALLEL_STROBE_PIN_DEFAULT
-                )
+            var.set_parallel_strobe_pin_auto(
+                pin_resolution["strobe_source"] == PARALLEL_PIN_SOURCE_AUTO
             )
         )
         cg.add(
-            var.set_parallel_dc_pin(
-                PARALLEL_DC_PIN_DEFAULT
+            var.set_parallel_dc_pin_auto(
+                pin_resolution["dc_source"] == PARALLEL_PIN_SOURCE_AUTO
             )
         )
         for idx, pin in enumerate(lane_pins):
