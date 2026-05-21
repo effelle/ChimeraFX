@@ -514,6 +514,7 @@ protected:
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
   void record_led_frame_();
+  void record_parallel_completed_led_frames_();
   void record_perf_diag_flush_(uint32_t write_start_us,
                                bool perf_diag_enabled,
                                bool spi_cadence_diag_enabled,
