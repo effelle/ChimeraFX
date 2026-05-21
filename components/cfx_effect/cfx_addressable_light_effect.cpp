@@ -2731,12 +2731,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         }
         uint32_t avg_delta_us =
             sum_intervals / act_->idle_parallel_interval_count;
-        if (avg_delta_us < act_->idle_target_frame_us / 2 ||
-            avg_delta_us > act_->idle_target_frame_us * 3 / 2)
+        if (act_->idle_parallel_interval_count > 1 &&
+            cfx::FrameDiagnostics::is_jitter_interval(delta_us, avg_delta_us))
           act_->idle_jitter_count++;
       } else {
-        if (delta_us < act_->idle_target_frame_us / 2 ||
-            delta_us > act_->idle_target_frame_us * 3 / 2)
+        const uint32_t avg_delta_us =
+            act_->idle_frame_count > 0
+                ? static_cast<uint32_t>(act_->idle_total_frame_us /
+                                        act_->idle_frame_count)
+                : 0;
+        if (act_->idle_frame_count > 1 &&
+            cfx::FrameDiagnostics::is_jitter_interval(delta_us, avg_delta_us))
           act_->idle_jitter_count++;
       }
     }

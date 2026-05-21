@@ -425,7 +425,7 @@ struct FrameDiagnostics {
   uint32_t service_count = 0;
   uint32_t max_service_us = 0;
   uint64_t total_service_us = 0;
-  uint32_t jitter_count = 0;   // Frames with >50% deviation from target
+  uint32_t jitter_count = 0;   // Cadence outliers with >50% interval deviation
   uint32_t gap_count = 0;      // Frames with >50ms gap
   uint32_t last_log_time = 0;
 
@@ -459,6 +459,14 @@ struct FrameDiagnostics {
       target_us = UINT32_MAX;
     }
     target_frame_us = static_cast<uint32_t>(target_us);
+  }
+
+  static bool is_jitter_interval(uint32_t delta_us, uint32_t reference_us) {
+    if (reference_us == 0) {
+      return false;
+    }
+    return delta_us < reference_us / 2 ||
+           delta_us > reference_us * 3 / 2;
   }
 
   void reset() {
@@ -502,7 +510,9 @@ struct FrameDiagnostics {
       total_frame_us += delta_us;
       frame_count++;
 
-      // Detect jitter (>50% deviation from target interval)
+      // Detect cadence jitter (>50% deviation from observed cadence). Target
+      // misses are already visible as lower RenderFPS/Time; a stable
+      // transport-bound 30 FPS frame should not read as 100% jitter.
       if (is_parallel) {
         parallel_intervals_[parallel_interval_index_] = delta_us;
         parallel_interval_index_ = (parallel_interval_index_ + 1) % 16;
@@ -514,13 +524,14 @@ struct FrameDiagnostics {
           sum_intervals += parallel_intervals_[i];
         }
         uint32_t avg_delta_us = sum_intervals / parallel_interval_count_;
-        if (avg_delta_us < target_frame_us / 2 ||
-            avg_delta_us > target_frame_us * 3 / 2) {
+        if (parallel_interval_count_ > 1 &&
+            is_jitter_interval(delta_us, avg_delta_us)) {
           jitter_count++;
         }
       } else {
-        if (delta_us < target_frame_us / 2 ||
-            delta_us > target_frame_us * 3 / 2) {
+        const uint32_t avg_delta_us =
+            frame_count > 0 ? (uint32_t)(total_frame_us / frame_count) : 0;
+        if (frame_count > 1 && is_jitter_interval(delta_us, avg_delta_us)) {
           jitter_count++;
         }
       }
