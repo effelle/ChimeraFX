@@ -969,7 +969,8 @@ void CFXAddressableLightEffect::start() {
   this->last_run_ = 0;
   this->next_run_ = 0;
   if (auto *out = resolve_diag_output(this);
-      out != nullptr && this->update_interval_ < 17) {
+      out != nullptr && !out->is_parallel_transport() &&
+      this->update_interval_ < 17) {
     this->update_interval_ = 17;
   }
   this->reset_milestones_();
