@@ -110,7 +110,7 @@ static const char *const PARALLEL_BACKEND_REV =
 static const char *const PARALLEL_LCD_BACKEND_REV =
     "parallel-v1-s3-esp-lcd-fullframe-seg-guarded-2026-05-20";
 static const uint8_t PARALLEL_DUMMY_PIN_CANDIDATES[] = {
-    4, 5, 13, 14, 16, 17, 18, 23, 26, 27, 32, 33};
+    4, 5, 13, 14, 16, 17, 18, 26, 27, 32, 33};
 
 struct CFXParallelGroupRuntime {
   bool configured{false};
@@ -2891,7 +2891,8 @@ void CFXLightOutput::setup_parallel_() {
     for (uint8_t i = this->parallel_lane_count_; i < PARALLEL_I80_BUS_WIDTH; i++) {
       bool assigned = false;
       for (uint8_t candidate : PARALLEL_DUMMY_PIN_CANDIDATES) {
-        if (candidate == g_parallel_group.strobe_pin ||
+        if (!GPIO_IS_VALID_OUTPUT_GPIO(candidate) ||
+            candidate == g_parallel_group.strobe_pin ||
             candidate == g_parallel_group.dc_pin ||
             parallel_pin_used_(candidate, g_parallel_group.lane_pins, i)) {
           continue;
@@ -2905,6 +2906,17 @@ void CFXLightOutput::setup_parallel_() {
                  "Parallel group '%s' cannot reserve enough output-capable "
                  "I80 filler GPIOs",
                  g_parallel_group.name.c_str());
+        this->mark_failed();
+        return;
+      }
+    }
+    for (uint8_t i = 0; i < PARALLEL_I80_BUS_WIDTH; i++) {
+      if (!GPIO_IS_VALID_OUTPUT_GPIO(g_parallel_group.lane_pins[i])) {
+        ESP_LOGE(TAG,
+                 "Parallel group '%s' has invalid LCD/I80 data GPIO%u at "
+                 "data[%u]",
+                 g_parallel_group.name.c_str(), g_parallel_group.lane_pins[i],
+                 i);
         this->mark_failed();
         return;
       }
@@ -3255,7 +3267,8 @@ bool CFXLightOutput::init_parallel_backend_() {
                "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
                "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
                "buffers=%u/%u bytes queue_depth=%u bus_max=%u alloc=%u "
-               "dma_free=%u dma_largest=%u",
+               "dma_free=%u dma_largest=%u "
+               "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
                PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
                g_parallel_group.lane_count, g_parallel_group.strobe_pin,
                g_parallel_group.dc_pin,
@@ -3267,7 +3280,12 @@ bool CFXLightOutput::init_parallel_backend_() {
                static_cast<unsigned>(g_parallel_group.buffer_count),
                static_cast<unsigned>(g_parallel_group.bus_max_transfer_size),
                static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
-               static_cast<unsigned>(dma_free), static_cast<unsigned>(dma_largest));
+               static_cast<unsigned>(dma_free),
+               static_cast<unsigned>(dma_largest),
+               g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
+               g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
+               g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
+               g_parallel_group.lane_pins[6], g_parallel_group.lane_pins[7]);
 
       last_err = esp_lcd_new_i80_bus(&bus_config, &g_parallel_group.bus);
       if (last_err != ESP_OK) {
@@ -3345,13 +3363,18 @@ bool CFXLightOutput::init_parallel_backend_() {
       g_parallel_group.ready = true;
       ESP_LOGI(TAG,
                "Parallel backend %s group '%s' ready: lanes=%u chunk=%u leds/%u "
-               "bytes dma_buffers=%u waveform_dma=%u queue_depth=%u",
+               "bytes dma_buffers=%u waveform_dma=%u queue_depth=%u "
+               "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
                PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
                g_parallel_group.lane_count, g_parallel_group.chunk_leds,
                static_cast<unsigned>(g_parallel_group.chunk_frame_size),
                static_cast<unsigned>(g_parallel_group.buffer_count),
                static_cast<unsigned>(waveform_dma_bytes),
-               static_cast<unsigned>(g_parallel_group.buffer_count));
+               static_cast<unsigned>(g_parallel_group.buffer_count),
+               g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
+               g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
+               g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
+               g_parallel_group.lane_pins[6], g_parallel_group.lane_pins[7]);
       return true;
     }
   }
@@ -4278,7 +4301,7 @@ void CFXLightOutput::flush_parallel_() {
              tail_clear_frame ? 1u : 0u,
              static_cast<unsigned>(g_parallel_group.chunk_frame_size),
              chunks_this_frame,
-             static_cast<unsigned>(g_parallel_group.last_tx_buffer_index),
+             static_cast<unsigned>(g_parallel_group.last_tx_buffer_index) + 1u,
              static_cast<unsigned>(g_parallel_group.buffer_count),
              static_cast<unsigned>(g_parallel_group.tx_in_flight_count),
              micros() - flush_start_us,
