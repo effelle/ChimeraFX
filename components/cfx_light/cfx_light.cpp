@@ -3993,15 +3993,8 @@ void CFXLightOutput::flush_parallel_() {
       (g_parallel_group.tx_count % 120u) == 0u) {
     ESP_LOGI(TAG,
              "Parallel TX queued: group='%s' tx=%" PRIu32
-             " done=%" PRIu32 " source_nonzero=%" PRIu32
-             " lane_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "]"
-             " seg_nonzero=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32
-             "|%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32
-             ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "|%" PRIu32 ",%" PRIu32
-             ",%" PRIu32 ",%" PRIu32 "]"
-             " first=[%02x,%02x,%02x,%02x]/[%02x,%02x,%02x,%02x] "
-             "nz=[%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x|"
-             "%u.%u=%02x>%02x/%02x|%u.%u=%02x>%02x/%02x] "
+             " done=%" PRIu32 " nz=%" PRIu32
+             " lane_nz=[%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 "] "
              "tx_bytes=%" PRIu32 " frame_bytes=%u tx_leds=%u active_leds=%u "
              "max_leds=%u clear_tail=%u "
              "chunk=%u/%" PRIu32 " build+queue=%" PRIu32
@@ -4014,25 +4007,6 @@ void CFXLightOutput::flush_parallel_() {
              static_cast<uint32_t>(g_parallel_group.tx_done_count),
              source_nonzero, lane_nonzero[0], lane_nonzero[1],
              lane_nonzero[2], lane_nonzero[3],
-             lane_segment_nonzero[0][0], lane_segment_nonzero[0][1],
-             lane_segment_nonzero[0][2], lane_segment_nonzero[0][3],
-             lane_segment_nonzero[1][0], lane_segment_nonzero[1][1],
-             lane_segment_nonzero[1][2], lane_segment_nonzero[1][3],
-             lane_segment_nonzero[2][0], lane_segment_nonzero[2][1],
-             lane_segment_nonzero[2][2], lane_segment_nonzero[2][3],
-             lane_segment_nonzero[3][0], lane_segment_nonzero[3][1],
-             lane_segment_nonzero[3][2], lane_segment_nonzero[3][3],
-             first_pixel[0][0], first_pixel[0][1],
-             first_pixel[0][2], first_pixel[0][3], first_pixel[1][0],
-             first_pixel[1][1], first_pixel[1][2], first_pixel[1][3],
-             first_nonzero_led[0], first_nonzero_byte[0],
-             first_nonzero_value[0], encoded_probe0[0], encoded_probe1[0],
-             first_nonzero_led[1], first_nonzero_byte[1],
-             first_nonzero_value[1], encoded_probe0[1], encoded_probe1[1],
-             first_nonzero_led[2], first_nonzero_byte[2],
-             first_nonzero_value[2], encoded_probe0[2], encoded_probe1[2],
-             first_nonzero_led[3], first_nonzero_byte[3],
-             first_nonzero_value[3], encoded_probe0[3], encoded_probe1[3],
              tx_bytes_this_frame,
              static_cast<unsigned>(g_parallel_group.frame_size),
              tx_leds, active_required_leds, g_parallel_group.max_leds,

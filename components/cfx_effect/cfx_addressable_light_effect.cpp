@@ -2532,9 +2532,6 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   if (my_state == nullptr) {
     return false;
   }
-  if (is_parallel_virtual_segment_state(my_state)) {
-    return false;
-  }
   auto *my_seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       my_state->get_output());
   if (my_seg == nullptr || my_seg->get_parent() == nullptr) {
