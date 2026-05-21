@@ -485,6 +485,9 @@ protected:
   void wake_mono_idle_light_state_(light::LightState *state);
   bool service_segment_render_coordinator_();
   bool service_parallel_segment_group_coordinator_();
+  bool collect_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
+                                          uint64_t now,
+                                          bool force_due = false);
   bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
                                          bool force_due = false);
   void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
@@ -745,6 +748,7 @@ protected:
   uint32_t mono_idle_wake_count_{0};
   uint32_t segment_coord_owned_mask_ms_{0};
   std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
+  std::vector<chimera_fx::CFXRunner *> parallel_segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};
   uint8_t perf_diag_last_launch_slot_{0};
   CFXTurnOnDefaults turn_on_defaults_{};

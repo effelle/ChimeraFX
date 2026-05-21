@@ -168,6 +168,7 @@ struct CFXParallelGroupRuntime {
 };
 
 static CFXParallelGroupRuntime g_parallel_group;
+static bool has_active_rendering_cfx_effect(CFXLightOutput *output);
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static void parallel_dma_desc_init_(lldesc_t *desc, uint8_t *buf, size_t len,
@@ -1665,9 +1666,10 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
   }
 }
 
-bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
-                                                       uint8_t &count,
-                                                       bool force_due) {
+bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
+                                                        uint8_t &count,
+                                                        uint64_t now,
+                                                        bool force_due) {
   mask = 0;
   count = 0;
   if (!this->has_segments() || this->has_outro()) {
@@ -1677,7 +1679,6 @@ bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
     return false;
   }
 
-  const uint64_t now = static_cast<uint64_t>(esphome::millis());
   if (!force_due && !this->segment_coord_schedule_dirty_ &&
       this->segment_coord_owned_mask_ != 0 &&
       this->segment_coord_next_due_ms_ != 0 &&
@@ -1744,7 +1745,18 @@ bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
     return false;
   }
 
-  // P1: pass the transport constraint directly to the scheduler batch — no
+  return true;
+}
+
+bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
+                                                       uint8_t &count,
+                                                       bool force_due) {
+  const uint64_t now = static_cast<uint64_t>(esphome::millis());
+  if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due)) {
+    return false;
+  }
+
+  // P1: pass the transport constraint directly to the scheduler batch - no
   // global state mutation. SPI batches run sequentially on Core 1 (SPI driver
   // is not safe across cores); RMT batches keep the dual-core split.
   const bool complete =
@@ -1822,8 +1834,8 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     return false;
   }
 
-  bool any_rendered = false;
   uint8_t lane_masks[PARALLEL_MAX_LANES] = {};
+  uint8_t lane_counts[PARALLEL_MAX_LANES] = {};
   bool group_due = false;
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
 
@@ -1861,6 +1873,12 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     return false;
   }
 
+  if (this->parallel_segment_coord_runners_.capacity() <
+      PARALLEL_MAX_LANES * MAX_CFX_SEGMENTS) {
+    this->parallel_segment_coord_runners_.reserve(
+        PARALLEL_MAX_LANES * MAX_CFX_SEGMENTS);
+  }
+  this->parallel_segment_coord_runners_.clear();
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *output = g_parallel_group.outputs[lane];
     if (output == nullptr || !output->has_segments() || output->has_outro()) {
@@ -1868,30 +1886,96 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     }
     uint8_t mask = 0;
     uint8_t count = 0;
-    if (output->render_segment_coordinator_epoch_(mask, count, true)) {
-      output->finalize_segment_coordinator_epoch_(mask, count, false);
+    if (output->collect_segment_coordinator_epoch_(mask, count, now, false)) {
       lane_masks[lane] = mask;
-      any_rendered = true;
+      lane_counts[lane] = count;
+      this->parallel_segment_coord_runners_.insert(
+          this->parallel_segment_coord_runners_.end(),
+          output->segment_coord_runners_.begin(),
+          output->segment_coord_runners_.end());
     }
   }
 
-  if (!any_rendered) {
+  if (this->parallel_segment_coord_runners_.empty()) {
     return false;
   }
 
-  this->status_clear_warning();
+  const bool complete =
+      chimera_fx::CFXScheduler::get().service_runners(
+          this->parallel_segment_coord_runners_, false);
+  esphome::App.feed_wdt();
+
+  if (!complete) {
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      auto *output = g_parallel_group.outputs[lane];
+      if (output == nullptr || lane_counts[lane] == 0) {
+        continue;
+      }
+      output->perf_diag_total_partial_flushes_++;
+      output->seg_partial_frame_suppressed_++;
+      output->seg_missed_epoch_count_ += lane_counts[lane];
+      if (lane_counts[lane] > output->perf_diag_max_partial_missing_) {
+        output->perf_diag_max_partial_missing_ = lane_counts[lane];
+      }
+      output->log_segment_coordinator_diag_();
+    }
+    return true;
+  }
+
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr || lane_counts[lane] == 0) {
+      continue;
+    }
+    for (auto *runner : output->segment_coord_runners_) {
+      if (runner != nullptr) {
+        runner->diagnostics.flush_log(output->get_led_fps());
+      }
+    }
+    output->seg_coord_epochs_++;
+    output->seg_coord_rendered_segments_ += lane_counts[lane];
+    output->finalize_segment_coordinator_epoch_(lane_masks[lane],
+                                                lane_counts[lane], false);
+  }
+
+  uint8_t segment_ready_mask = 0;
   const uint32_t launch_us = micros();
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *output = g_parallel_group.outputs[lane];
-    if (output == nullptr || lane_masks[lane] == 0) {
+    if (output == nullptr || !output->has_active_parent_owned_segments_()) {
+      continue;
+    }
+    segment_ready_mask |= static_cast<uint8_t>(1u << lane);
+    if (lane_masks[lane] == 0) {
       continue;
     }
     output->last_refresh_ = launch_us;
     output->mark_shown_();
   }
-  g_parallel_group.pending_mask = 0;
-  g_parallel_group.pending_first_ms = 0;
-  this->flush_parallel_();
+
+  if (segment_ready_mask != 0) {
+    g_parallel_group.pending_mask |= segment_ready_mask;
+    if (g_parallel_group.pending_first_ms == 0) {
+      g_parallel_group.pending_first_ms = esphome::millis();
+    }
+  }
+
+  uint8_t active_lanes_mask = 0;
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    if (has_active_rendering_cfx_effect(g_parallel_group.outputs[lane])) {
+      active_lanes_mask |= static_cast<uint8_t>(1u << lane);
+    }
+  }
+
+  if (active_lanes_mask == 0 ||
+      (g_parallel_group.pending_mask & active_lanes_mask) ==
+          active_lanes_mask) {
+    g_parallel_group.pending_mask = 0;
+    g_parallel_group.pending_first_ms = 0;
+    g_parallel_group.coalesced_count++;
+    this->status_clear_warning();
+    this->flush_parallel_();
+  }
 
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     auto *output = g_parallel_group.outputs[lane];
@@ -3538,6 +3622,9 @@ void CFXLightOutput::flush_parallel_() {
     tx_leds = 1;
   }
 
+  const bool parallel_diag_log_due =
+      g_parallel_group.tx_count < 12u ||
+      ((g_parallel_group.tx_count + 1u) % 120u) == 0u;
   uint32_t source_nonzero = 0;
   uint32_t lane_nonzero[PARALLEL_MAX_LANES] = {};
   uint32_t lane_segment_nonzero[PARALLEL_MAX_LANES][4] = {};
@@ -3549,43 +3636,46 @@ void CFXLightOutput::flush_parallel_() {
   uint8_t encoded_probe1[PARALLEL_MAX_LANES] = {};
   bool first_nonzero_seen[PARALLEL_MAX_LANES] = {};
   const uint8_t stride = this->get_pixel_stride_();
-  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-    auto *lane_output = g_parallel_group.outputs[lane];
-    if (lane_output == nullptr || lane_output->buf_ == nullptr) {
-      continue;
-    }
-    for (uint8_t byte_index = 0; byte_index < stride && byte_index < 4;
-         byte_index++) {
-      first_pixel[lane][byte_index] = lane_output->buf_[byte_index];
-    }
-    const size_t lane_size =
-        static_cast<size_t>(lane_output->num_leds_) * lane_output->get_pixel_stride_();
-    for (size_t i = 0; i < lane_size; i++) {
-      if (lane_output->buf_[i] != 0) {
-        source_nonzero++;
-        lane_nonzero[lane]++;
-        if (!first_nonzero_seen[lane]) {
-          first_nonzero_seen[lane] = true;
-          first_nonzero_led[lane] =
-              static_cast<uint16_t>(i / lane_output->get_pixel_stride_());
-          first_nonzero_byte[lane] =
-              static_cast<uint8_t>(i % lane_output->get_pixel_stride_());
-          first_nonzero_value[lane] = lane_output->buf_[i];
+  if (parallel_diag_log_due) {
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      auto *lane_output = g_parallel_group.outputs[lane];
+      if (lane_output == nullptr || lane_output->buf_ == nullptr) {
+        continue;
+      }
+      const uint8_t lane_stride = lane_output->get_pixel_stride_();
+      for (uint8_t byte_index = 0; byte_index < lane_stride && byte_index < 4;
+           byte_index++) {
+        first_pixel[lane][byte_index] = lane_output->buf_[byte_index];
+      }
+      const size_t lane_leds =
+          std::min<size_t>(lane_output->num_leds_, tx_leds);
+      const size_t lane_size = lane_leds * lane_stride;
+      for (size_t i = 0; i < lane_size; i++) {
+        if (lane_output->buf_[i] != 0) {
+          source_nonzero++;
+          lane_nonzero[lane]++;
+          if (!first_nonzero_seen[lane]) {
+            first_nonzero_seen[lane] = true;
+            first_nonzero_led[lane] =
+                static_cast<uint16_t>(i / lane_stride);
+            first_nonzero_byte[lane] =
+                static_cast<uint8_t>(i % lane_stride);
+            first_nonzero_value[lane] = lane_output->buf_[i];
+          }
         }
       }
-    }
-    const uint8_t lane_stride = lane_output->get_pixel_stride_();
-    const size_t segment_buckets =
-        std::min<size_t>(lane_output->segment_defs_.size(), 4);
-    for (size_t seg = 0; seg < segment_buckets; seg++) {
-      const auto &def = lane_output->segment_defs_[seg];
-      const size_t start = std::min<size_t>(
-          static_cast<size_t>(def.start) * lane_stride, lane_size);
-      const size_t stop = std::min<size_t>(
-          static_cast<size_t>(def.stop) * lane_stride, lane_size);
-      for (size_t i = start; i < stop; i++) {
-        if (lane_output->buf_[i] != 0) {
-          lane_segment_nonzero[lane][seg]++;
+      const size_t segment_buckets =
+          std::min<size_t>(lane_output->segment_defs_.size(), 4);
+      for (size_t seg = 0; seg < segment_buckets; seg++) {
+        const auto &def = lane_output->segment_defs_[seg];
+        const size_t start = std::min<size_t>(
+            static_cast<size_t>(def.start) * lane_stride, lane_size);
+        const size_t stop = std::min<size_t>(
+            static_cast<size_t>(def.stop) * lane_stride, lane_size);
+        for (size_t i = start; i < stop; i++) {
+          if (lane_output->buf_[i] != 0) {
+            lane_segment_nonzero[lane][seg]++;
+          }
         }
       }
     }
@@ -3594,20 +3684,23 @@ void CFXLightOutput::flush_parallel_() {
   // Phase-1 diag: capture lane_scales for the TX log.
   uint8_t diag_lane_scales[PARALLEL_MAX_LANES] = {};
   // Phase-1 diag: capture the buf_ value at the exact byte_offset the encoder
-  // uses, AFTER scrub but BEFORE frame build — to verify data survives.
+  // uses, AFTER scrub but BEFORE frame build - to verify data survives.
   uint8_t diag_buf_at_encode[PARALLEL_MAX_LANES] = {};
-  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-    auto *lo = g_parallel_group.outputs[lane];
-    if (lo != nullptr) {
-      diag_lane_scales[lane] = lo->get_power_transmit_scale_();
-      if (lo->buf_ != nullptr && first_nonzero_seen[lane]) {
-        const size_t bo =
-            static_cast<size_t>(first_nonzero_led[lane]) * stride +
-            first_nonzero_byte[lane];
-        const size_t buf_len =
-            static_cast<size_t>(lo->num_leds_) * lo->get_pixel_stride_();
-        if (bo < buf_len) {
-          diag_buf_at_encode[lane] = lo->buf_[bo];
+  if (parallel_diag_log_due) {
+    for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+      auto *lo = g_parallel_group.outputs[lane];
+      if (lo != nullptr) {
+        diag_lane_scales[lane] = lo->get_power_transmit_scale_();
+        if (lo->buf_ != nullptr && first_nonzero_seen[lane]) {
+          const size_t bo =
+              static_cast<size_t>(first_nonzero_led[lane]) *
+                  lo->get_pixel_stride_() +
+              first_nonzero_byte[lane];
+          const size_t buf_len =
+              static_cast<size_t>(lo->num_leds_) * lo->get_pixel_stride_();
+          if (bo < buf_len) {
+            diag_buf_at_encode[lane] = lo->buf_[bo];
+          }
         }
       }
     }
@@ -3825,9 +3918,8 @@ void CFXLightOutput::flush_parallel_() {
 
   g_parallel_group.tx_count++;
   g_parallel_group.classic_stream_count++;
-  probe_first_encoded_samples();
-  if (g_parallel_group.tx_count <= 12 ||
-      (g_parallel_group.tx_count % 120u) == 0u) {
+  if (parallel_diag_log_due) {
+    probe_first_encoded_samples();
     ESP_LOGI(TAG,
              "Parallel Classic TX streamed: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " source_nonzero=%" PRIu32
@@ -3988,9 +4080,8 @@ void CFXLightOutput::flush_parallel_() {
 
   g_parallel_group.tx_count++;
   g_parallel_group.last_tx_leds = active_required_leds;
-  probe_first_encoded_samples();
-  if (g_parallel_group.tx_count <= 12 ||
-      (g_parallel_group.tx_count % 120u) == 0u) {
+  if (parallel_diag_log_due) {
+    probe_first_encoded_samples();
     ESP_LOGI(TAG,
              "Parallel TX queued: group='%s' tx=%" PRIu32
              " done=%" PRIu32 " nz=%" PRIu32

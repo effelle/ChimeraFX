@@ -2321,9 +2321,6 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
   }
-  if (is_parallel_virtual_segment_state(state)) {
-    return false;
-  }
 #ifdef USE_CFX_SEQUENCE
   if (this->act_->active_sequence != nullptr) {
     return false;
