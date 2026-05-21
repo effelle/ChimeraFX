@@ -2585,6 +2585,8 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   CFXScheduler::get().service_runners(dispatch_runners);
   esphome::App.feed_wdt();
 
+  const bool direct_parent_flush =
+      parent != nullptr && parent->is_parallel_transport();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
@@ -2592,7 +2594,12 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
         state->get_output());
     effect->act_->runner->diagnostics.flush_log(parent->get_led_fps());
     seg->note_show_request();
-    parent->request_segment_flush(state);
+    if (!direct_parent_flush) {
+      parent->request_segment_flush(state);
+    }
+  }
+  if (direct_parent_flush) {
+    parent->write_state(nullptr);
   }
 
   return true;
