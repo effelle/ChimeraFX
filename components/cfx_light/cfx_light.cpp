@@ -119,6 +119,8 @@ struct CFXParallelGroupRuntime {
   bool tx_in_flight{false};
   volatile uint8_t tx_in_flight_count{0};
   volatile uint32_t tx_done_count{0};
+  bool force_full_span_next{false};
+  bool shutdown_blackout_sent{false};
   uint8_t pending_mask{0};
   uint32_t pending_first_ms{0};
   std::string name{};
@@ -168,6 +170,30 @@ struct CFXParallelGroupRuntime {
 };
 
 static CFXParallelGroupRuntime g_parallel_group;
+
+static bool wait_for_parallel_group_idle_(uint32_t timeout_us,
+                                          uint32_t *waited_us = nullptr) {
+  const uint32_t wait_start_us = micros();
+  uint32_t wdt_feed_us = wait_start_us;
+  while (g_parallel_group.tx_in_flight_count > 0) {
+    const uint32_t now_us = micros();
+    if ((now_us - wait_start_us) > timeout_us) {
+      if (waited_us != nullptr) {
+        *waited_us = now_us - wait_start_us;
+      }
+      return false;
+    }
+    esp_rom_delay_us(50);
+    if ((micros() - wdt_feed_us) >= 1000u) {
+      esphome::App.feed_wdt();
+      wdt_feed_us = micros();
+    }
+  }
+  if (waited_us != nullptr) {
+    *waited_us = micros() - wait_start_us;
+  }
+  return true;
+}
 static bool has_active_rendering_cfx_effect(CFXLightOutput *output);
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -2113,6 +2139,12 @@ CFXLightOutput::~CFXLightOutput() {
   }
 }
 
+void CFXLightOutput::on_shutdown() {
+  if (this->transport_ == TRANSPORT_PARALLEL) {
+    this->force_parallel_shutdown_blackout_();
+  }
+}
+
 // --- Timing Configuration ---
 
 void CFXLightOutput::configure_timing_() {
@@ -3348,6 +3380,71 @@ void CFXLightOutput::deinit_parallel_backend_() {
   portEXIT_CRITICAL(&g_parallel_mux);
 }
 
+bool CFXLightOutput::force_parallel_shutdown_blackout_() {
+  if (!this->is_parallel_transport() || !g_parallel_group.configured) {
+    return false;
+  }
+  if (g_parallel_group.shutdown_blackout_sent) {
+    return true;
+  }
+  g_parallel_group.shutdown_blackout_sent = true;
+
+  uint16_t max_leds = 0;
+  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
+    auto *output = g_parallel_group.outputs[lane];
+    if (output == nullptr) {
+      continue;
+    }
+    max_leds = std::max<uint16_t>(max_leds, output->num_leds_);
+    if (output->buf_ != nullptr) {
+      memset(output->buf_, 0, output->get_buffer_size_());
+    }
+  }
+  if (max_leds == 0) {
+    ESP_LOGI(TAG, "Parallel shutdown blackout skipped: group='%s' has no LEDs",
+             g_parallel_group.name.c_str());
+    return false;
+  }
+
+  g_parallel_group.pending_mask = 0;
+  g_parallel_group.pending_first_ms = 0;
+
+  if (!g_parallel_group.ready && !this->init_parallel_backend_()) {
+    ESP_LOGW(TAG,
+             "Parallel shutdown blackout failed: group='%s' backend not ready",
+             g_parallel_group.name.c_str());
+    return false;
+  }
+
+  const uint32_t tx_before = g_parallel_group.tx_count;
+  g_parallel_group.force_full_span_next = true;
+  this->flush_parallel_();
+  const bool queued = g_parallel_group.tx_count != tx_before;
+  if (!queued) {
+    g_parallel_group.force_full_span_next = false;
+  }
+
+  uint32_t wait_us = 0;
+  const bool completed =
+      queued && wait_for_parallel_group_idle_(80000u, &wait_us);
+  const uint16_t tx_leds =
+      g_parallel_group.max_leds > 0 ? g_parallel_group.max_leds : max_leds;
+  const uint32_t tx_bytes =
+      static_cast<uint32_t>(tx_leds) * this->get_pixel_stride_() * 8u *
+          PARALLEL_SYMBOL_SAMPLES +
+      static_cast<uint32_t>(PARALLEL_RESET_SAMPLES);
+
+  ESP_LOGI(TAG,
+           "Parallel shutdown blackout: group='%s' tx_leds=%u tx_bytes=%" PRIu32
+           " queued=%u completed=%u wait=%" PRIu32 "us",
+           g_parallel_group.name.c_str(), static_cast<unsigned>(tx_leds),
+           tx_bytes, queued ? 1u : 0u, completed ? 1u : 0u, wait_us);
+  if (queued && !completed) {
+    this->status_set_warning();
+  }
+  return queued && completed;
+}
+
 bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
                                            uint16_t start_led,
                                            uint16_t led_count,
@@ -3562,6 +3659,9 @@ void CFXLightOutput::flush_parallel_() {
   (void) wait_for_parallel_tx_count;
 #endif
 
+  const bool force_full_span_frame = g_parallel_group.force_full_span_next;
+  g_parallel_group.force_full_span_next = false;
+
 #ifdef CFX_PARALLEL_TEST_PATTERN
   // Phase-1 diag: deterministic test pattern — bypasses effect engine.
   // Writes directly to each lane's buf_ using segment defs.
@@ -3625,6 +3725,9 @@ void CFXLightOutput::flush_parallel_() {
     }
   }
   if (active_required_leds > g_parallel_group.max_leds) {
+    active_required_leds = g_parallel_group.max_leds;
+  }
+  if (force_full_span_frame && g_parallel_group.max_leds > 0) {
     active_required_leds = g_parallel_group.max_leds;
   }
   uint16_t tx_leds = active_required_leds;
