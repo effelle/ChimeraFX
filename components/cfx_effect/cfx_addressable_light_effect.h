@@ -135,6 +135,7 @@ public:
     int32_t last_triggered_pixel{-1};
     bool last_return_phase{false};
     int32_t last_leading_pixel{-1};
+    bool lifecycle_start_fired{false};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
     bool suppress_reach_event{false};
@@ -768,6 +769,7 @@ public:
   bool can_batch_steady_virtual_segment_() const;
   bool try_batch_steady_virtual_segments_(uint64_t now);
   void prepare_steady_virtual_segment_runner_(light::AddressableLight &it);
+  void fire_start_lifecycle_if_needed_();
 
 
 

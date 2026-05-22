@@ -1032,21 +1032,11 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
-  // on_cfx_begin trigger and HA lifecycle events fire per light/segment entity.
+  // Effect-local on_begin trigger. The HA cfx_begin lifecycle event is
+  // sequence-owned and fires from CFXSequence::report_event_begin().
   // Separator (ID 185) is a UI-only divider — suppress all lifecycle events.
   if (this->effect_id_ != 185) {
     this->trigger_on_begin();
-
-    this->trigger_on_start();
-
-#ifdef USE_CFX_EVENTS
-    if (!act_->strip_tag.empty()) {
-      std::string begin_evt = std::string("cfx_begin:") + act_->strip_tag;
-      chimera_fx::CFXEventManager::get().fire_event(begin_evt.c_str());
-      std::string start_evt = std::string("cfx_start:") + act_->strip_tag;
-      chimera_fx::CFXEventManager::get().fire_event(start_evt.c_str());
-    }
-#endif
   }
 
   const bool allow_default_transition = this->allow_default_transition_();
@@ -1108,6 +1098,8 @@ void CFXAddressableLightEffect::start() {
 
   act_->last_triggered_pixel = -1;
   act_->last_triggered_percentage = -1.0f;
+  act_->last_leading_pixel = -1;
+  act_->lifecycle_start_fired = false;
 
   // CFX-045: Reset mono idle state on every start() so a restarted effect
   // always runs its intro and commits its first solid frame before going idle.
@@ -1746,6 +1738,9 @@ void CFXAddressableLightEffect::start() {
     if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active) {
       act_->intro_active = false;
     }
+  }
+  if (!act_->intro_active) {
+    this->fire_start_lifecycle_if_needed_();
   }
 }
 
@@ -2436,6 +2431,33 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
 
 void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {
   this->last_run_ = now;
+}
+
+void CFXAddressableLightEffect::fire_start_lifecycle_if_needed_() {
+  if (this->act_ == nullptr || this->act_->lifecycle_start_fired ||
+      this->effect_id_ == 185) {
+    return;
+  }
+  this->act_->lifecycle_start_fired = true;
+
+  this->trigger_on_start();
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    this->act_->active_sequence->report_event_start();
+  }
+#endif
+#ifdef USE_CFX_EVENTS
+  bool emit_ha_start = true;
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    emit_ha_start = this->act_->active_sequence->get_ha_events();
+  }
+#endif
+  if (emit_ha_start && !this->act_->strip_tag.empty()) {
+    std::string evt = std::string("cfx_start:") + this->act_->strip_tag;
+    chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+  }
+#endif
 }
 
 void CFXAddressableLightEffect::process_parent_coordinated_runner_events() {
@@ -3462,6 +3484,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       chimera_fx::InstanceGuard start_guard(act_->runner);
       act_->runner->reset();
       act_->runner->start();
+      this->fire_start_lifecycle_if_needed_();
     }
   }
 
