@@ -1834,6 +1834,15 @@ bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
       runner->diagnostics.flush_log(this->get_led_fps());
     }
   }
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    if ((mask & static_cast<uint8_t>(1u << i)) == 0) {
+      continue;
+    }
+    auto &slot = this->segment_runtime_slots_[i];
+    if (slot.effect != nullptr) {
+      slot.effect->process_parent_coordinated_runner_events();
+    }
+  }
   this->seg_coord_epochs_++;
   this->seg_coord_rendered_segments_ += count;
   return true;
@@ -1982,6 +1991,15 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     for (auto *runner : output->segment_coord_runners_) {
       if (runner != nullptr) {
         runner->diagnostics.flush_log(output->get_led_fps());
+      }
+    }
+    for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+      if ((lane_masks[lane] & static_cast<uint8_t>(1u << i)) == 0) {
+        continue;
+      }
+      auto &slot = output->segment_runtime_slots_[i];
+      if (slot.effect != nullptr) {
+        slot.effect->process_parent_coordinated_runner_events();
       }
     }
     output->seg_coord_epochs_++;

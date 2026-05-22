@@ -615,6 +615,7 @@ public:
   void sync_parent_owned_inputs(uint32_t color, float gamma,
                                 float global_brightness);
   void mark_parent_coordinated_run(uint64_t now);
+  void process_parent_coordinated_runner_events();
   bool runner_mode_can_idle_(uint8_t mode);
   bool evaluate_mono_idle_();
 

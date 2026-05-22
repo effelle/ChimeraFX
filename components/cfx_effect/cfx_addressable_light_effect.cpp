@@ -1032,9 +1032,7 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
-  // on_cfx_begin trigger (on-device YAML) fires unconditionally.
-  // The HA cfx_begin *event* fires only when an actual intro is configured;
-  // see end of start() below. (CFX-029)
+  // on_cfx_begin trigger and HA lifecycle events fire per light/segment entity.
   // Separator (ID 185) is a UI-only divider — suppress all lifecycle events.
   if (this->effect_id_ != 185) {
     this->trigger_on_begin();
@@ -1042,8 +1040,12 @@ void CFXAddressableLightEffect::start() {
     this->trigger_on_start();
 
 #ifdef USE_CFX_EVENTS
-    // Suppress cfx_start in cascade - sequence fires it centrally.
-    // This prevents event burst when multiple lights start in sequence.
+    if (!act_->strip_tag.empty()) {
+      std::string begin_evt = std::string("cfx_begin:") + act_->strip_tag;
+      chimera_fx::CFXEventManager::get().fire_event(begin_evt.c_str());
+      std::string start_evt = std::string("cfx_start:") + act_->strip_tag;
+      chimera_fx::CFXEventManager::get().fire_event(start_evt.c_str());
+    }
 #endif
   }
 
@@ -2198,13 +2200,10 @@ void CFXAddressableLightEffect::stop() {
               // If is_sequence_outro_ is true, the sequence already fired
               // completion (report_event_complete was called before stop()),
               // so we skip here to avoid double-firing.
-              // cfx_complete fires when a real outro completes: architectural
-              // preset or user-configured outro selector. INTRO_MODE_NONE is
-              // the default fade-to-black on every light-off — not a meaningful
-              // outro, must not fire cfx_complete.
+              // cfx_complete is a lifecycle event: every started light/segment
+              // gets one, including default fade-to-black stops.
               if (!captured_act->suppress_complete_event &&
-                  !captured_act->is_sequence_outro &&
-                  captured_act->active_outro_mode != INTRO_MODE_NONE) {
+                  !captured_act->is_sequence_outro) {
 #ifdef USE_CFX_SEQUENCE
                 if (captured_sequence != nullptr) {
                   // Sequence-driven path: route through report_event_complete()
@@ -2272,6 +2271,13 @@ void CFXAddressableLightEffect::stop() {
   }
 
   // Free the activation struct — released back to heap until next start().
+#ifdef USE_CFX_EVENTS
+  if (this->act_ != nullptr && !this->act_->strip_tag.empty() &&
+      !this->act_->suppress_complete_event) {
+    std::string evt = std::string("cfx_complete:") + this->act_->strip_tag;
+    chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+  }
+#endif
   delete this->act_;
   this->act_ = nullptr;
 
@@ -2432,6 +2438,46 @@ void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {
   this->last_run_ = now;
 }
 
+void CFXAddressableLightEffect::process_parent_coordinated_runner_events() {
+  if (this->act_ == nullptr || this->act_->runner == nullptr) {
+    return;
+  }
+
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->runner->effect_complete_) {
+    this->act_->completion_pending = true;
+  }
+#endif
+
+  const int32_t leading_pixel = this->act_->runner->current_leading_pixel;
+  const int32_t total_pixels = this->act_->runner->_segment.length();
+  if (leading_pixel < 0 || total_pixels <= 0 ||
+      leading_pixel == this->act_->last_leading_pixel) {
+    return;
+  }
+
+#ifdef USE_CFX_SEQUENCE
+  const float current_percentage =
+      static_cast<float>(leading_pixel) / static_cast<float>(total_pixels);
+  const bool return_phase = this->act_->runner->is_return_phase_;
+  if (this->act_->active_sequence != nullptr &&
+      this->act_->sequence_iterations > 0 && !return_phase) {
+    if (this->act_->last_triggered_percentage > 0.8f &&
+        current_percentage < 0.2f) {
+      this->act_->runner->iteration_count_++;
+      if (this->act_->runner->iteration_count_ >=
+          this->act_->sequence_iterations) {
+        this->act_->runner->effect_complete_ = true;
+        this->act_->completion_pending = true;
+      }
+    }
+  }
+#endif
+
+  this->act_->last_leading_pixel = leading_pixel;
+  this->check_positional_triggers(leading_pixel, total_pixels);
+}
+
 void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     light::AddressableLight &it) {
   auto *state_ptr = this->get_light_state();
@@ -2581,6 +2627,7 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     auto *state = effect->get_light_state();
     auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
         state->get_output());
+    effect->process_parent_coordinated_runner_events();
     effect->act_->runner->diagnostics.flush_log(parent->get_led_fps());
     seg->note_show_request();
     if (!direct_parent_flush) {
