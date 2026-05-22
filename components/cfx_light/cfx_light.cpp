@@ -121,6 +121,8 @@ struct CFXParallelGroupRuntime {
   volatile uint32_t tx_done_count{0};
   bool force_full_span_next{false};
   bool shutdown_blackout_sent{false};
+  bool has_segments{false};
+  const char *buffer_policy{"default"};
   uint8_t pending_mask{0};
   uint32_t pending_first_ms{0};
   std::string name{};
@@ -2977,6 +2979,9 @@ void CFXLightOutput::setup_parallel_() {
   }
 
   g_parallel_group.outputs[this->parallel_lane_index_] = this;
+  if (this->has_segments()) {
+    g_parallel_group.has_segments = true;
+  }
   ESP_LOGI(TAG, "Parallel lane %u/%u registered: group='%s' data=GPIO%u",
            this->parallel_lane_index_ + 1, g_parallel_group.lane_count,
            g_parallel_group.name.c_str(), this->pin_);
@@ -2994,12 +2999,15 @@ void CFXLightOutput::setup_parallel_() {
 
 bool CFXLightOutput::init_parallel_backend_() {
   uint16_t max_leds = 0;
+  bool has_segments = false;
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
     if (g_parallel_group.outputs[lane] != nullptr) {
       max_leds = std::max(max_leds, g_parallel_group.outputs[lane]->num_leds_);
+      has_segments = has_segments || g_parallel_group.outputs[lane]->has_segments();
     }
   }
   g_parallel_group.max_leds = max_leds;
+  g_parallel_group.has_segments = has_segments;
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
   if (g_parallel_group.ready) {
@@ -3185,7 +3193,16 @@ bool CFXLightOutput::init_parallel_backend_() {
   }
   g_parallel_group.init_attempted = true;
 
-  auto select_lcd_buffer_count = [](uint16_t chunk_leds) -> uint8_t {
+  const bool segmented_high_lane =
+      g_parallel_group.has_segments && g_parallel_group.lane_count >= 3;
+  g_parallel_group.buffer_policy =
+      segmented_high_lane ? "segmented_3plus_heap" : "default";
+
+  auto select_lcd_buffer_count = [segmented_high_lane](
+                                     uint16_t chunk_leds) -> uint8_t {
+    if (segmented_high_lane) {
+      return 1;
+    }
     if (chunk_leds <= 200) {
       return 3;
     }
@@ -3269,7 +3286,7 @@ bool CFXLightOutput::init_parallel_backend_() {
                "Parallel backend %s initializing group '%s': lanes=%u wr=GPIO%u "
                "internal_dc=GPIO%u frame=%u bytes chunk=%u leds/%u bytes "
                "buffers=%u/%u bytes queue_depth=%u bus_max=%u alloc=%u "
-               "dma_free=%u dma_largest=%u "
+               "dma_free=%u dma_largest=%u buffer_policy=%s "
                "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
                PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
                g_parallel_group.lane_count, g_parallel_group.strobe_pin,
@@ -3284,6 +3301,7 @@ bool CFXLightOutput::init_parallel_backend_() {
                static_cast<unsigned>(g_parallel_group.chunk_alloc_size),
                static_cast<unsigned>(dma_free),
                static_cast<unsigned>(dma_largest),
+               g_parallel_group.buffer_policy,
                g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
                g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
                g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
@@ -3366,13 +3384,14 @@ bool CFXLightOutput::init_parallel_backend_() {
       ESP_LOGI(TAG,
                "Parallel backend %s group '%s' ready: lanes=%u chunk=%u leds/%u "
                "bytes dma_buffers=%u waveform_dma=%u queue_depth=%u "
-               "data=[%u,%u,%u,%u,%u,%u,%u,%u]",
+               "buffer_policy=%s data=[%u,%u,%u,%u,%u,%u,%u,%u]",
                PARALLEL_LCD_BACKEND_REV, g_parallel_group.name.c_str(),
                g_parallel_group.lane_count, g_parallel_group.chunk_leds,
                static_cast<unsigned>(g_parallel_group.chunk_frame_size),
                static_cast<unsigned>(g_parallel_group.buffer_count),
                static_cast<unsigned>(waveform_dma_bytes),
                static_cast<unsigned>(g_parallel_group.buffer_count),
+               g_parallel_group.buffer_policy,
                g_parallel_group.lane_pins[0], g_parallel_group.lane_pins[1],
                g_parallel_group.lane_pins[2], g_parallel_group.lane_pins[3],
                g_parallel_group.lane_pins[4], g_parallel_group.lane_pins[5],
