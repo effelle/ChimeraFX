@@ -2000,7 +2000,7 @@ async def to_code(config):
                 stub_str, is_declaration=True, type=CFXEffectStub
             )
             stub_var = cg.new_Pvariable(
-                stub_id, name, eff_num, singleton_var, seg_idx, seg_id_str
+                stub_id, name, eff_num, singleton_var
             )
             effect_vars.append(stub_var)
 

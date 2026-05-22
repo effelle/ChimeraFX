@@ -4,15 +4,15 @@
  *
  * Licensed under the EUPL-1.2
  *
- * Lightweight proxy that populates the HA effect dropdown for virtual segments
- * without carrying the full CFXAddressableLightEffect overhead (~60 B → ~36 B).
+ * Slim proxy that populates the HA effect dropdown for virtual segments
+ * without carrying full CFXAddressableLightEffect runner/config overhead.
  * All rendering is delegated to a per-segment singleton effect instance.
  *
  * Architecture:
- *   81 stubs (36 B each) ──delegate──▶ 1 singleton (60 B)
- *   HA sees 81 effect names.  Only the singleton allocates CFXActivation/CFXRunner.
+ *   Many stubs delegate to 1 singleton.
+ *   HA sees all effect names. Only the singleton allocates CFXActivation/CFXRunner.
  *
- * Memory savings: ~2.2 KB per segment (37% reduction).
+ * Memory savings: keeps each selectable segment effect to a tiny proxy.
  */
 
 #pragma once
@@ -21,29 +21,17 @@
 #include "esphome/components/light/addressable_light_effect.h"
 #include "esphome/components/light/light_effect.h"
 #include "esphome/core/log.h"
-#include <vector>
 
 namespace esphome {
 namespace chimera_fx {
 
 class CFXEffectStub : public light::AddressableLightEffect {
 public:
-  static std::vector<CFXEffectStub *> &all_stubs() {
-    static std::vector<CFXEffectStub *> stubs;
-    return stubs;
-  }
-
   CFXEffectStub(const char *name, uint8_t effect_id,
-                CFXAddressableLightEffect *singleton,
-                uint8_t segment_index = 255,
-                const char *segment_id = "")
+                CFXAddressableLightEffect *singleton)
       : AddressableLightEffect(name),
         effect_id_(effect_id),
-        singleton_(singleton),
-        segment_index_(segment_index),
-        segment_id_(segment_id) {
-    all_stubs().push_back(this);
-  }
+        singleton_(singleton) {}
 
   /// Called by ESPHome when this stub is selected from the HA effect dropdown.
   /// ESPHome guarantees: old_effect.stop() completes before new_effect.start().
@@ -57,12 +45,10 @@ public:
     if (start_diag_logs < 32) {
       auto *state = this->get_light_state();
       ESP_LOGI("cfx_stub",
-               "Segment effect start[%u]: seg=%u seg_id='%s' light='%s' "
+               "Segment effect start[%u]: light='%s' "
                "state=%p output=%p stub=%p singleton=%p effect_id=%u "
                "effect='%s'",
                static_cast<unsigned>(start_diag_logs),
-               static_cast<unsigned>(segment_index_),
-               segment_id_ != nullptr ? segment_id_ : "",
                state != nullptr ? state->get_name().c_str() : "<null>",
                state, state != nullptr ? state->get_output() : nullptr, this,
                singleton_, static_cast<unsigned>(effect_id_),
@@ -81,12 +67,10 @@ public:
     if (stop_diag_logs < 32) {
       auto *state = this->get_light_state();
       ESP_LOGI("cfx_stub",
-               "Segment effect stop[%u]: seg=%u seg_id='%s' light='%s' "
+               "Segment effect stop[%u]: light='%s' "
                "state=%p output=%p stub=%p singleton=%p effect_id=%u "
                "effect='%s'",
                static_cast<unsigned>(stop_diag_logs),
-               static_cast<unsigned>(segment_index_),
-               segment_id_ != nullptr ? segment_id_ : "",
                state != nullptr ? state->get_name().c_str() : "<null>",
                state, state != nullptr ? state->get_output() : nullptr, this,
                singleton_, static_cast<unsigned>(effect_id_),
@@ -111,8 +95,6 @@ public:
 private:
   uint8_t effect_id_;
   CFXAddressableLightEffect *singleton_;
-  uint8_t segment_index_;
-  const char *segment_id_;
 };
 
 }  // namespace chimera_fx

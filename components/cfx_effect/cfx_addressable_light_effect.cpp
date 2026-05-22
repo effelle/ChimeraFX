@@ -61,16 +61,11 @@ resolve_parallel_segment_stub_singleton(light::LightState *state,
   if (state == nullptr || active == nullptr) {
     return nullptr;
   }
-  CFXAddressableLightEffect *singleton = nullptr;
-  for (auto *stub : CFXEffectStub::all_stubs()) {
-    if (stub == active) {
-      singleton = stub->get_singleton();
-      break;
-    }
-  }
-  if (singleton == nullptr) {
+  auto *stub = dynamic_cast<CFXEffectStub *>(active);
+  if (stub == nullptr) {
     return nullptr;
   }
+  auto *singleton = stub->get_singleton();
 #ifdef USE_ESP32
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       state->get_output());
