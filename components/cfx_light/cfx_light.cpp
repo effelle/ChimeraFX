@@ -1130,11 +1130,13 @@ resolve_active_cfx_effect(light::LightState *state) {
   }
 
   auto *output = state->get_output();
+  bool virtual_segment_output = false;
   if (output != nullptr) {
     for (auto *seg_out : CFXVirtualSegmentLight::all_segments) {
       if (seg_out != output) {
         continue;
       }
+      virtual_segment_output = true;
       auto *slot_effect = seg_out->get_parent()->get_parent_owned_segment_effect(state);
       if (slot_effect != nullptr) {
         return slot_effect;
@@ -1150,8 +1152,8 @@ resolve_active_cfx_effect(light::LightState *state) {
 
   // If the active effect is a Stub (virtual segment), return its underlying singleton
 #if defined(USE_CFX_LIGHT) && defined(USE_ESP32)
-  auto *cfx_stub = dynamic_cast<chimera_fx::CFXEffectStub *>(effect);
-  if (cfx_stub != nullptr) {
+  if (virtual_segment_output) {
+    auto *cfx_stub = static_cast<chimera_fx::CFXEffectStub *>(effect);
     return cfx_stub->get_singleton();
   }
 #endif
