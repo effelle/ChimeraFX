@@ -4009,9 +4009,8 @@ bool CFXLightOutput::build_parallel_shared_frame_(
     uint8_t lane_count{0};
     uint8_t lane_mask{0};
     uint32_t tx_byte_slots{0};
-    uint32_t led{0};
-    uint8_t byte_index{0};
     CFXLightOutput *outputs[PARALLEL_MAX_LANES]{};
+    uint32_t byte_limits[PARALLEL_MAX_LANES]{};
     uint8_t bus_lanes[PARALLEL_MAX_LANES]{};
     uint8_t scales[PARALLEL_MAX_LANES]{};
   };
@@ -4036,9 +4035,6 @@ bool CFXLightOutput::build_parallel_shared_frame_(
     build_group.active = true;
     build_group.lane_count = group.lane_count;
     build_group.tx_byte_slots = group_tx_byte_slots[gi];
-    build_group.led = start_byte_slot / build_group.stride;
-    build_group.byte_index =
-        static_cast<uint8_t>(start_byte_slot % build_group.stride);
     for (uint8_t lane = 0; lane < group.lane_count; lane++) {
       auto *lane_output = group.outputs[lane];
       const uint8_t bus_lane = static_cast<uint8_t>(group.bit_offset + lane);
@@ -4046,6 +4042,8 @@ bool CFXLightOutput::build_parallel_shared_frame_(
         continue;
       }
       build_group.outputs[lane] = lane_output;
+      build_group.byte_limits[lane] =
+          static_cast<uint32_t>(lane_output->num_leds_) * build_group.stride;
       build_group.bus_lanes[lane] = bus_lane;
       build_group.scales[lane] = lane_output->get_power_transmit_scale_();
       build_group.lane_mask =
@@ -4081,13 +4079,10 @@ bool CFXLightOutput::build_parallel_shared_frame_(
       for (uint8_t lane = 0; lane < build_group.lane_count; lane++) {
         auto *lane_output = build_group.outputs[lane];
         if (lane_output == nullptr || lane_output->buf_ == nullptr ||
-            build_group.led >= lane_output->num_leds_) {
+            byte_slot >= build_group.byte_limits[lane]) {
           continue;
         }
-        const size_t byte_offset =
-            static_cast<size_t>(build_group.led) * build_group.stride +
-            build_group.byte_index;
-        uint8_t lane_value = lane_output->buf_[byte_offset];
+        uint8_t lane_value = lane_output->buf_[byte_slot];
         const uint8_t scale = build_group.scales[lane];
         if (scale < 255) {
           lane_value = static_cast<uint8_t>(
@@ -4101,12 +4096,29 @@ bool CFXLightOutput::build_parallel_shared_frame_(
     for (uint8_t bit = 0; bit < 8; bit++) {
       uint8_t one_mask = 0;
       const uint8_t bit_mask = static_cast<uint8_t>(0x80u >> bit);
-      for (uint8_t bus_lane = 0; bus_lane < PARALLEL_I80_BUS_WIDTH;
-           bus_lane++) {
-        if ((active_lane_mask & static_cast<uint8_t>(1u << bus_lane)) != 0 &&
-            (lane_values[bus_lane] & bit_mask) != 0) {
-          one_mask |= static_cast<uint8_t>(1u << bus_lane);
-        }
+      if ((lane_values[0] & bit_mask) != 0) {
+        one_mask |= 0x01u;
+      }
+      if ((lane_values[1] & bit_mask) != 0) {
+        one_mask |= 0x02u;
+      }
+      if ((lane_values[2] & bit_mask) != 0) {
+        one_mask |= 0x04u;
+      }
+      if ((lane_values[3] & bit_mask) != 0) {
+        one_mask |= 0x08u;
+      }
+      if ((lane_values[4] & bit_mask) != 0) {
+        one_mask |= 0x10u;
+      }
+      if ((lane_values[5] & bit_mask) != 0) {
+        one_mask |= 0x20u;
+      }
+      if ((lane_values[6] & bit_mask) != 0) {
+        one_mask |= 0x40u;
+      }
+      if ((lane_values[7] & bit_mask) != 0) {
+        one_mask |= 0x80u;
       }
       const uint8_t sample_base =
           static_cast<uint8_t>(bit * PARALLEL_SYMBOL_SAMPLES);
@@ -4124,18 +4136,6 @@ bool CFXLightOutput::build_parallel_shared_frame_(
 #endif
     }
     out += 8u * PARALLEL_SYMBOL_SAMPLES;
-
-    for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
-      auto &build_group = build_groups[gi];
-      if (!build_group.active || byte_slot >= build_group.tx_byte_slots) {
-        continue;
-      }
-      build_group.byte_index++;
-      if (build_group.byte_index >= build_group.stride) {
-        build_group.byte_index = 0;
-        build_group.led++;
-      }
-    }
   }
 
   if (out != data_end) {
