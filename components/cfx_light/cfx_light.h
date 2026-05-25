@@ -330,6 +330,13 @@ public:
   void set_parallel_group(const std::string &group) {
     this->parallel_group_ = group;
   }
+  void set_parallel_group_index(uint8_t index) {
+    this->parallel_group_index_ = index;
+  }
+  uint8_t get_parallel_group_index() const { return this->parallel_group_index_; }
+  void set_parallel_bit_offset(uint8_t offset) {
+    this->parallel_bit_offset_ = offset;
+  }
   void set_parallel_lane_index(uint8_t index) {
     this->parallel_lane_index_ = index;
   }
@@ -599,6 +606,8 @@ protected:
   std::string parallel_group_{};
   uint8_t parallel_lane_index_{0};
   uint8_t parallel_lane_count_{0};
+  uint8_t parallel_group_index_{0};
+  uint8_t parallel_bit_offset_{0};
   uint8_t parallel_strobe_pin_{22};
   uint8_t parallel_dc_pin_{21};
   bool parallel_strobe_pin_auto_{true};
