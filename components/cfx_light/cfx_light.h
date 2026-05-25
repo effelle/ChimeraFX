@@ -475,11 +475,18 @@ protected:
   void flush_parallel_();
   bool request_parallel_group_flush_();
   void service_parallel_group_flush_();
+  bool request_parallel_shared_group_flush_();
+  void service_parallel_shared_group_flush_();
   bool force_parallel_shutdown_blackout_();
   size_t get_parallel_frame_size_() const;
   uint16_t get_parallel_required_led_count_() const;
   bool build_parallel_frame_(uint8_t *dest, size_t len, uint16_t start_led,
                              uint16_t led_count, bool include_reset);
+  bool build_parallel_shared_frame_(
+      uint8_t *dest, size_t len, uint32_t start_byte_slot,
+      uint32_t byte_slot_count, const uint32_t *group_tx_byte_slots,
+      bool include_reset);
+  bool flush_parallel_shared_groups_(uint8_t group_mask);
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);

@@ -195,6 +195,10 @@ struct CFXParallelI80SharedRuntime {
   uint8_t buffer_count{0};
   volatile uint8_t tx_in_flight_count{0};
   CFXParallelGroupRuntime *active_group{nullptr};
+  volatile uint8_t active_group_mask{0};
+  uint8_t pending_group_mask{0};
+  uint32_t pending_group_first_ms{0};
+  uint32_t combined_tx_count{0};
 };
 #endif
 
@@ -257,6 +261,7 @@ static bool wait_for_parallel_group_idle_(uint32_t timeout_us,
 }
 
 static bool has_active_rendering_cfx_effect(CFXLightOutput *output);
+static bool parallel_shared_whole_group_mode_enabled_();
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static void parallel_dma_desc_init_(lldesc_t *desc, uint8_t *buf, size_t len,
@@ -462,17 +467,32 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
                                            void *user_ctx) {
   auto *shared = static_cast<CFXParallelI80SharedRuntime *>(user_ctx);
   auto *group = shared != nullptr ? shared->active_group : nullptr;
-  if (group != nullptr) {
-    portENTER_CRITICAL_ISR(&g_parallel_mux);
-    if (group->tx_in_flight_count > 0) {
-      group->tx_in_flight_count--;
+  if (shared != nullptr) {
+    uint8_t group_mask = shared->active_group_mask;
+    if (group_mask == 0 && group != nullptr) {
+      group_mask = static_cast<uint8_t>(1u << group->group_index);
     }
-    group->tx_in_flight = group->tx_in_flight_count > 0;
-    if (shared != nullptr && shared->tx_in_flight_count > 0) {
-      shared->tx_in_flight_count--;
+    if (group_mask != 0) {
+      portENTER_CRITICAL_ISR(&g_parallel_mux);
+      for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+        if ((group_mask & static_cast<uint8_t>(1u << gi)) == 0) {
+          continue;
+        }
+        auto &done_group = g_parallel_groups[gi];
+        if (done_group.tx_in_flight_count > 0) {
+          done_group.tx_in_flight_count--;
+        }
+        done_group.tx_in_flight = done_group.tx_in_flight_count > 0;
+        done_group.tx_done_count++;
+      }
+      if (shared->tx_in_flight_count > 0) {
+        shared->tx_in_flight_count--;
+      }
+      if (shared->tx_in_flight_count == 0) {
+        shared->active_group_mask = 0;
+      }
+      portEXIT_CRITICAL_ISR(&g_parallel_mux);
     }
-    group->tx_done_count++;
-    portEXIT_CRITICAL_ISR(&g_parallel_mux);
   }
   return false;
 }
@@ -3687,6 +3707,10 @@ void CFXLightOutput::deinit_parallel_backend_() {
   g_parallel_i80.ready = false;
   g_parallel_i80.init_attempted = false;
   g_parallel_i80.active_group = nullptr;
+  g_parallel_i80.active_group_mask = 0;
+  g_parallel_i80.pending_group_mask = 0;
+  g_parallel_i80.pending_group_first_ms = 0;
+  g_parallel_i80.combined_tx_count = 0;
   g_parallel_i80.tx_in_flight_count = 0;
   for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
     auto &group = g_parallel_groups[gi];
@@ -3927,6 +3951,465 @@ bool CFXLightOutput::build_parallel_frame_(uint8_t *dest, size_t len,
     }
   }
   return true;
+}
+
+bool CFXLightOutput::build_parallel_shared_frame_(
+    uint8_t *dest, size_t len, uint32_t start_byte_slot,
+    uint32_t byte_slot_count, const uint32_t *group_tx_byte_slots,
+    bool include_reset) {
+  const size_t led_data_size =
+      static_cast<size_t>(byte_slot_count) * 8u * PARALLEL_SYMBOL_SAMPLES;
+  const size_t needed =
+      led_data_size + (include_reset ? PARALLEL_RESET_SAMPLES : 0u);
+  if (dest == nullptr || group_tx_byte_slots == nullptr || byte_slot_count == 0 ||
+      len < needed) {
+    return false;
+  }
+
+  if (include_reset && PARALLEL_RESET_SAMPLES > 0) {
+    memset(dest + led_data_size, 0, PARALLEL_RESET_SAMPLES);
+  }
+  if (len >= needed + PARALLEL_CANARY_BYTES) {
+    memset(dest + needed, PARALLEL_CANARY_VALUE, PARALLEL_CANARY_BYTES);
+  }
+
+  uint8_t *out = dest;
+  uint8_t *const data_end = dest + led_data_size;
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  static const uint8_t SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
+#endif
+
+  for (uint32_t offset = 0; offset < byte_slot_count; offset++) {
+    const uint32_t byte_slot = start_byte_slot + offset;
+    if (out + (8u * PARALLEL_SYMBOL_SAMPLES) > data_end) {
+      ESP_LOGE(TAG,
+               "Parallel shared frame writer overflow guard tripped "
+               "(start_slot=%" PRIu32 " slots=%" PRIu32 " data=%u total=%u)",
+               start_byte_slot, byte_slot_count,
+               static_cast<unsigned>(led_data_size),
+               static_cast<unsigned>(needed));
+      return false;
+    }
+
+    uint8_t active_lane_mask = 0;
+    uint8_t lane_values[PARALLEL_I80_BUS_WIDTH] = {};
+    bool lane_present[PARALLEL_I80_BUS_WIDTH] = {};
+
+    for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+      auto &group = g_parallel_groups[gi];
+      if (!group.configured || group_tx_byte_slots[gi] == 0 ||
+          byte_slot >= group_tx_byte_slots[gi]) {
+        continue;
+      }
+
+      uint8_t stride = 0;
+      for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+        auto *lane_output = group.outputs[lane];
+        if (lane_output != nullptr) {
+          stride = lane_output->get_pixel_stride_();
+          break;
+        }
+      }
+      if (stride == 0) {
+        continue;
+      }
+
+      const uint32_t led = byte_slot / stride;
+      const uint8_t byte_index = static_cast<uint8_t>(byte_slot % stride);
+      for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+        auto *lane_output = group.outputs[lane];
+        if (lane_output == nullptr) {
+          continue;
+        }
+        const uint8_t bus_lane = static_cast<uint8_t>(group.bit_offset + lane);
+        if (bus_lane >= PARALLEL_I80_BUS_WIDTH) {
+          continue;
+        }
+        const uint8_t lane_bit = static_cast<uint8_t>(1u << bus_lane);
+        active_lane_mask |= lane_bit;
+        lane_present[bus_lane] = true;
+        if (lane_output->buf_ == nullptr || led >= lane_output->num_leds_) {
+          continue;
+        }
+        const size_t byte_offset =
+            static_cast<size_t>(led) * stride + byte_index;
+        uint8_t lane_value = lane_output->buf_[byte_offset];
+        const uint8_t scale = lane_output->get_power_transmit_scale_();
+        if (scale < 255) {
+          lane_value = static_cast<uint8_t>(
+              (static_cast<uint16_t>(lane_value) * scale) / 255u);
+        }
+        lane_values[bus_lane] = lane_value;
+      }
+    }
+
+    uint8_t *const symbol_out = out;
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      uint8_t one_mask = 0;
+      const uint8_t bit_mask = static_cast<uint8_t>(0x80u >> bit);
+      for (uint8_t bus_lane = 0; bus_lane < PARALLEL_I80_BUS_WIDTH;
+           bus_lane++) {
+        if (lane_present[bus_lane] &&
+            (lane_values[bus_lane] & bit_mask) != 0) {
+          one_mask |= static_cast<uint8_t>(1u << bus_lane);
+        }
+      }
+      const uint8_t sample_base =
+          static_cast<uint8_t>(bit * PARALLEL_SYMBOL_SAMPLES);
+#if defined(CONFIG_IDF_TARGET_ESP32)
+      symbol_out[(sample_base & 0xFCu) | SAMPLE_OFFSET_MAP[sample_base & 0x03u]] =
+          active_lane_mask;
+      symbol_out[((sample_base + 1u) & 0xFCu) |
+                 SAMPLE_OFFSET_MAP[(sample_base + 1u) & 0x03u]] = one_mask;
+      symbol_out[((sample_base + 2u) & 0xFCu) |
+                 SAMPLE_OFFSET_MAP[(sample_base + 2u) & 0x03u]] = 0;
+#else
+      symbol_out[sample_base] = active_lane_mask;
+      symbol_out[sample_base + 1u] = one_mask;
+      symbol_out[sample_base + 2u] = 0;
+#endif
+    }
+    out += 8u * PARALLEL_SYMBOL_SAMPLES;
+  }
+
+  if (out != data_end) {
+    ESP_LOGE(TAG,
+             "Parallel shared frame writer size mismatch "
+             "(wrote=%u data=%u total=%u)",
+             static_cast<unsigned>(out - dest),
+             static_cast<unsigned>(led_data_size),
+             static_cast<unsigned>(needed));
+    return false;
+  }
+  if (len >= needed + PARALLEL_CANARY_BYTES) {
+    for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
+      if (dest[needed + i] != PARALLEL_CANARY_VALUE) {
+        ESP_LOGE(TAG,
+                 "Parallel shared frame canary corrupted while building chunk "
+                 "(start_slot=%" PRIu32 " slots=%" PRIu32 " at=%u)",
+                 start_byte_slot, byte_slot_count, static_cast<unsigned>(i));
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool CFXLightOutput::flush_parallel_shared_groups_(uint8_t group_mask) {
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  group_mask = static_cast<uint8_t>(group_mask & ((1u << PARALLEL_MAX_GROUPS) - 1u));
+  if (group_mask == 0 || !parallel_shared_whole_group_mode_enabled_()) {
+    return false;
+  }
+
+  const uint32_t flush_start_us = micros();
+  uint32_t tx_wait_us = 0;
+  uint32_t build_us = 0;
+  uint32_t queue_us = 0;
+
+  auto wait_for_shared_tx_count = [&](uint8_t max_in_flight,
+                                      uint32_t timeout_us) -> bool {
+    const uint32_t wait_start_us = micros();
+    uint32_t wdt_feed_us = wait_start_us;
+    while (g_parallel_i80.tx_in_flight_count > max_in_flight) {
+      const uint32_t now_us = micros();
+      if ((now_us - wait_start_us) > timeout_us) {
+        tx_wait_us += now_us - wait_start_us;
+        for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+          if ((group_mask & static_cast<uint8_t>(1u << gi)) != 0) {
+            g_parallel_groups[gi].wait_timeout_count++;
+          }
+        }
+        ESP_LOGW(TAG,
+                 "Parallel shared TX wait timeout "
+                 "(mask=0x%02x in_flight=%u max=%u)",
+                 group_mask,
+                 static_cast<unsigned>(g_parallel_i80.tx_in_flight_count),
+                 static_cast<unsigned>(max_in_flight));
+        this->status_set_warning();
+        this->deinit_parallel_backend_();
+        return false;
+      }
+      esp_rom_delay_us(50);
+      if ((micros() - wdt_feed_us) >= 1000u) {
+        esphome::App.feed_wdt();
+        wdt_feed_us = micros();
+      }
+    }
+    tx_wait_us += micros() - wait_start_us;
+    return true;
+  };
+
+  if (!wait_for_shared_tx_count(g_parallel_i80.buffer_count - 1u, 100000u)) {
+    return false;
+  }
+
+  uint16_t active_required_leds[PARALLEL_MAX_GROUPS] = {};
+  uint16_t tx_leds[PARALLEL_MAX_GROUPS] = {};
+  uint8_t group_stride[PARALLEL_MAX_GROUPS] = {};
+  uint32_t group_tx_byte_slots[PARALLEL_MAX_GROUPS] = {};
+  bool tail_clear_frame[PARALLEL_MAX_GROUPS] = {};
+  uint32_t max_byte_slots = 0;
+
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    if ((group_mask & static_cast<uint8_t>(1u << gi)) == 0) {
+      continue;
+    }
+    auto &group = g_parallel_groups[gi];
+    if (!group.configured || group.has_segments) {
+      continue;
+    }
+    for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+      auto *lane_output = group.outputs[lane];
+      if (lane_output == nullptr) {
+        continue;
+      }
+      lane_output->record_parallel_completed_led_frames_();
+      lane_output->scrub_inactive_segments_();
+      if (group_stride[gi] == 0) {
+        group_stride[gi] = lane_output->get_pixel_stride_();
+      }
+      const uint16_t lane_required =
+          lane_output->get_parallel_required_led_count_();
+      active_required_leds[gi] =
+          std::max<uint16_t>(active_required_leds[gi], lane_required);
+      if (lane_required == 0 && lane_output->buf_ != nullptr) {
+        memset(lane_output->buf_, 0, lane_output->get_buffer_size_());
+      }
+    }
+    if (group_stride[gi] == 0) {
+      continue;
+    }
+    if (active_required_leds[gi] > group.max_leds) {
+      active_required_leds[gi] = group.max_leds;
+    }
+    if (group.force_full_span_next && group.max_leds > 0) {
+      active_required_leds[gi] = group.max_leds;
+    }
+    group.force_full_span_next = false;
+
+    tx_leds[gi] = active_required_leds[gi];
+    tail_clear_frame[gi] = group.last_tx_leds > tx_leds[gi];
+    if (tail_clear_frame[gi]) {
+      tx_leds[gi] = group.last_tx_leds;
+    }
+    if (tx_leds[gi] > group.max_leds) {
+      tx_leds[gi] = group.max_leds;
+    }
+    if (tx_leds[gi] == 0 && group.max_leds > 0) {
+      tx_leds[gi] = 1;
+    }
+    group_tx_byte_slots[gi] =
+        static_cast<uint32_t>(tx_leds[gi]) * group_stride[gi];
+    max_byte_slots = std::max<uint32_t>(max_byte_slots,
+                                        group_tx_byte_slots[gi]);
+  }
+
+  if (max_byte_slots == 0) {
+    return false;
+  }
+
+  const uint32_t bytes_per_slot = 8u * PARALLEL_SYMBOL_SAMPLES;
+  if (g_parallel_i80.bus_max_transfer_size <= PARALLEL_RESET_SAMPLES) {
+    ESP_LOGE(TAG, "Parallel shared geometry invalid: bus_max=%u reset=%u",
+             static_cast<unsigned>(g_parallel_i80.bus_max_transfer_size),
+             static_cast<unsigned>(PARALLEL_RESET_SAMPLES));
+    this->status_set_warning();
+    return false;
+  }
+  const uint32_t chunk_byte_slots =
+      static_cast<uint32_t>((g_parallel_i80.bus_max_transfer_size -
+                             PARALLEL_RESET_SAMPLES) /
+                            bytes_per_slot);
+  if (chunk_byte_slots == 0) {
+    ESP_LOGE(TAG, "Parallel shared chunk has zero byte slots");
+    this->status_set_warning();
+    return false;
+  }
+
+  const bool parallel_diag_log_due =
+      g_parallel_i80.combined_tx_count < 12u ||
+      ((g_parallel_i80.combined_tx_count + 1u) % 120u) == 0u;
+  uint32_t chunks_this_frame = 0;
+  uint32_t tx_bytes_this_frame = 0;
+  uint8_t last_buffer_index = 0;
+
+  for (uint32_t byte_start = 0; byte_start < max_byte_slots;) {
+    const uint32_t remaining = max_byte_slots - byte_start;
+    const uint32_t slots_this_chunk =
+        std::min<uint32_t>(remaining, chunk_byte_slots);
+    const bool final_chunk = (byte_start + slots_this_chunk) >= max_byte_slots;
+    const size_t chunk_size =
+        static_cast<size_t>(slots_this_chunk) * bytes_per_slot +
+        (final_chunk ? PARALLEL_RESET_SAMPLES : 0u);
+    if (chunk_size > g_parallel_i80.bus_max_transfer_size ||
+        chunk_size + PARALLEL_CANARY_BYTES > g_parallel_i80.chunk_alloc_size) {
+      ESP_LOGE(TAG,
+               "Parallel shared chunk geometry invalid "
+               "(chunk_size=%u max=%u alloc=%u slots=%" PRIu32 ")",
+               static_cast<unsigned>(chunk_size),
+               static_cast<unsigned>(g_parallel_i80.bus_max_transfer_size),
+               static_cast<unsigned>(g_parallel_i80.chunk_alloc_size),
+               slots_this_chunk);
+      this->status_set_warning();
+      return false;
+    }
+
+    if (!wait_for_shared_tx_count(g_parallel_i80.buffer_count - 1u,
+                                  100000u)) {
+      return false;
+    }
+
+    const uint8_t buffer_index = static_cast<uint8_t>(
+        (g_parallel_i80.combined_tx_count + chunks_this_frame) %
+        g_parallel_i80.buffer_count);
+    uint8_t *const frame_buf = g_parallel_i80.frame_bufs[buffer_index];
+    if (frame_buf == nullptr) {
+      ESP_LOGE(TAG,
+               "Parallel shared frame buffer %u is unavailable "
+               "(mask=0x%02x)",
+               static_cast<unsigned>(buffer_index), group_mask);
+      this->status_set_warning();
+      return false;
+    }
+
+    const uint32_t build_start_us = micros();
+    if (!this->build_parallel_shared_frame_(
+            frame_buf, g_parallel_i80.chunk_alloc_size, byte_start,
+            slots_this_chunk, group_tx_byte_slots, final_chunk)) {
+      ESP_LOGE(TAG,
+               "Parallel shared frame build failed "
+               "(mask=0x%02x start_slot=%" PRIu32 " slots=%" PRIu32 ")",
+               group_mask, byte_start, slots_this_chunk);
+      this->status_set_warning();
+      return false;
+    }
+    build_us += micros() - build_start_us;
+
+    for (size_t i = 0; i < PARALLEL_CANARY_BYTES; i++) {
+      if (frame_buf[chunk_size + i] != PARALLEL_CANARY_VALUE) {
+        ESP_LOGE(TAG,
+                 "Parallel shared DMA buffer canary corrupted before TX "
+                 "(chunk=%" PRIu32 " at=%u)",
+                 chunks_this_frame, static_cast<unsigned>(i));
+        this->status_set_warning();
+        return false;
+      }
+    }
+
+    CFXParallelGroupRuntime *primary_group = nullptr;
+    for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+      if ((group_mask & static_cast<uint8_t>(1u << gi)) != 0) {
+        primary_group = &g_parallel_groups[gi];
+        break;
+      }
+    }
+
+    portENTER_CRITICAL(&g_parallel_mux);
+    g_parallel_i80.active_group = primary_group;
+    g_parallel_i80.active_group_mask = group_mask;
+    g_parallel_i80.tx_in_flight_count++;
+    for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+      if ((group_mask & static_cast<uint8_t>(1u << gi)) == 0) {
+        continue;
+      }
+      auto &group = g_parallel_groups[gi];
+      group.tx_in_flight = true;
+      group.tx_in_flight_count++;
+    }
+    portEXIT_CRITICAL(&g_parallel_mux);
+
+    const uint32_t queue_start_us = micros();
+    esp_err_t err = esp_lcd_panel_io_tx_color(g_parallel_i80.io, 0,
+                                              frame_buf, chunk_size);
+    queue_us += micros() - queue_start_us;
+    if (err != ESP_OK) {
+      portENTER_CRITICAL(&g_parallel_mux);
+      if (g_parallel_i80.tx_in_flight_count > 0) {
+        g_parallel_i80.tx_in_flight_count--;
+      }
+      if (g_parallel_i80.tx_in_flight_count == 0) {
+        g_parallel_i80.active_group_mask = 0;
+      }
+      for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+        if ((group_mask & static_cast<uint8_t>(1u << gi)) == 0) {
+          continue;
+        }
+        auto &group = g_parallel_groups[gi];
+        if (group.tx_in_flight_count > 0) {
+          group.tx_in_flight_count--;
+        }
+        group.tx_in_flight = group.tx_in_flight_count > 0;
+        group.queue_error_count++;
+      }
+      portEXIT_CRITICAL(&g_parallel_mux);
+      ESP_LOGE(TAG,
+               "Parallel shared TX queue failed "
+               "(err=%d, mask=0x%02x, start_slot=%" PRIu32
+               " slots=%" PRIu32 ")",
+               (int) err, group_mask, byte_start, slots_this_chunk);
+      this->status_set_warning();
+      return false;
+    }
+
+    chunks_this_frame++;
+    last_buffer_index = buffer_index;
+    tx_bytes_this_frame += static_cast<uint32_t>(chunk_size);
+    byte_start += slots_this_chunk;
+  }
+
+  g_parallel_i80.combined_tx_count++;
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    if ((group_mask & static_cast<uint8_t>(1u << gi)) == 0) {
+      continue;
+    }
+    auto &group = g_parallel_groups[gi];
+    group.tx_count++;
+    group.chunk_tx_count += chunks_this_frame;
+    group.last_tx_buffer_index = last_buffer_index;
+    group.last_tx_leds = active_required_leds[gi];
+  }
+
+  if (parallel_diag_log_due) {
+    ESP_LOGI(TAG,
+             "Parallel XGroup TX queued: mask=0x%02x tx=%" PRIu32
+             " group_tx=[%" PRIu32 ",%" PRIu32 "] "
+             "done=[%" PRIu32 ",%" PRIu32 "] tx_bytes=%" PRIu32
+             " byte_slots=%" PRIu32 " tx_leds=[%u,%u] active_leds=[%u,%u] "
+             "clear_tail=[%u,%u] chunk_slots=%" PRIu32 "/%" PRIu32
+             " buf=%u/%u in_flight=%u build+queue=%" PRIu32
+             "us build=%" PRIu32 "us wait=%" PRIu32 "us queue=%" PRIu32
+             "us timeouts=[%" PRIu32 ",%" PRIu32 "] "
+             "queue_errors=[%" PRIu32 ",%" PRIu32 "]",
+             group_mask, g_parallel_i80.combined_tx_count,
+             g_parallel_groups[0].tx_count, g_parallel_groups[1].tx_count,
+             static_cast<uint32_t>(g_parallel_groups[0].tx_done_count),
+             static_cast<uint32_t>(g_parallel_groups[1].tx_done_count),
+             tx_bytes_this_frame, max_byte_slots, tx_leds[0], tx_leds[1],
+             active_required_leds[0], active_required_leds[1],
+             tail_clear_frame[0] ? 1u : 0u,
+             tail_clear_frame[1] ? 1u : 0u, chunk_byte_slots,
+             chunks_this_frame,
+             static_cast<unsigned>(last_buffer_index) + 1u,
+             static_cast<unsigned>(g_parallel_i80.buffer_count),
+             static_cast<unsigned>(g_parallel_i80.tx_in_flight_count),
+             micros() - flush_start_us, build_us, tx_wait_us, queue_us,
+             g_parallel_groups[0].timeout_flush_count,
+             g_parallel_groups[1].timeout_flush_count,
+             g_parallel_groups[0].queue_error_count,
+             g_parallel_groups[1].queue_error_count);
+  }
+
+  this->record_parallel_completed_led_frames_();
+  this->perf_diag_flush_count_++;
+  this->perf_diag_last_flush_total_us_ = micros() - flush_start_us;
+  this->perf_diag_last_flush_tx_us_ = 0;
+  this->perf_diag_last_flush_valid_ = true;
+  return true;
+#else
+  return false;
+#endif
 }
 
 void CFXLightOutput::flush_parallel_() {
@@ -4541,6 +5024,8 @@ void CFXLightOutput::flush_parallel_() {
 
     portENTER_CRITICAL(&g_parallel_mux);
     g_parallel_i80.active_group = &g_parallel_group;
+    g_parallel_i80.active_group_mask =
+        static_cast<uint8_t>(1u << g_parallel_group.group_index);
     g_parallel_group.tx_in_flight = true;
     g_parallel_group.tx_in_flight_count++;
     g_parallel_i80.tx_in_flight_count++;
@@ -4557,6 +5042,9 @@ void CFXLightOutput::flush_parallel_() {
       g_parallel_group.tx_in_flight = g_parallel_group.tx_in_flight_count > 0;
       if (g_parallel_i80.tx_in_flight_count > 0) {
         g_parallel_i80.tx_in_flight_count--;
+      }
+      if (g_parallel_i80.tx_in_flight_count == 0) {
+        g_parallel_i80.active_group_mask = 0;
       }
       portEXIT_CRITICAL(&g_parallel_mux);
       g_parallel_group.queue_error_count++;
@@ -4658,6 +5146,47 @@ static uint8_t active_parallel_lanes_mask_(CFXParallelGroupRuntime &group,
   return static_cast<uint8_t>(active_lanes_mask | fallback_mask);
 }
 
+static bool parallel_group_has_active_rendering_(
+    CFXParallelGroupRuntime &group) {
+  for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+    if (has_active_rendering_cfx_effect(group.outputs[lane])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static uint8_t active_parallel_group_mask_() {
+  uint8_t active_mask = 0;
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    auto &group = g_parallel_groups[gi];
+    if (group.configured && parallel_group_has_active_rendering_(group)) {
+      active_mask |= static_cast<uint8_t>(1u << gi);
+    }
+  }
+  return active_mask;
+}
+
+static bool parallel_shared_whole_group_mode_enabled_() {
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
+    return false;
+  }
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    auto &group = g_parallel_groups[gi];
+    if (!group.configured) {
+      continue;
+    }
+    if (!group.ready || group.has_segments) {
+      return false;
+    }
+  }
+  return true;
+#else
+  return false;
+#endif
+}
+
 bool CFXLightOutput::request_parallel_group_flush_() {
   auto &g_parallel_group = *parallel_group_for_output_(this);
   if (!this->is_parallel_transport() || this->parallel_lane_count_ <= 1) {
@@ -4721,6 +5250,91 @@ void CFXLightOutput::service_parallel_group_flush_() {
            g_parallel_group.name.c_str(), pending_mask,
            g_parallel_group.timeout_flush_count);
   this->commit_transmit_();
+}
+
+bool CFXLightOutput::request_parallel_shared_group_flush_() {
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  auto &g_parallel_group = *parallel_group_for_output_(this);
+  if (!this->is_parallel_transport() ||
+      !parallel_shared_whole_group_mode_enabled_()) {
+    return true;
+  }
+
+  const uint8_t group_bit =
+      static_cast<uint8_t>(1u << g_parallel_group.group_index);
+  uint8_t active_groups = active_parallel_group_mask_();
+  active_groups = static_cast<uint8_t>(active_groups | group_bit);
+
+  // A single active logical group should keep the ordinary group flush path.
+  if ((active_groups & static_cast<uint8_t>(active_groups - 1u)) == 0) {
+    return true;
+  }
+
+  if ((g_parallel_i80.pending_group_mask & group_bit) == 0) {
+    g_parallel_i80.pending_group_mask =
+        static_cast<uint8_t>(g_parallel_i80.pending_group_mask | group_bit);
+    if (g_parallel_i80.pending_group_first_ms == 0) {
+      g_parallel_i80.pending_group_first_ms = esphome::millis();
+    }
+  }
+
+  if ((g_parallel_i80.pending_group_mask & active_groups) == active_groups) {
+    const uint8_t flush_mask = active_groups;
+    g_parallel_i80.pending_group_mask =
+        static_cast<uint8_t>(g_parallel_i80.pending_group_mask & ~flush_mask);
+    if (g_parallel_i80.pending_group_mask == 0) {
+      g_parallel_i80.pending_group_first_ms = 0;
+    }
+    this->flush_parallel_shared_groups_(flush_mask);
+  }
+  return false;
+#else
+  return true;
+#endif
+}
+
+void CFXLightOutput::service_parallel_shared_group_flush_() {
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  if (!this->is_parallel_transport() ||
+      !parallel_shared_whole_group_mode_enabled_() ||
+      g_parallel_i80.pending_group_mask == 0 ||
+      g_parallel_i80.pending_group_first_ms == 0) {
+    return;
+  }
+
+  uint8_t active_groups = active_parallel_group_mask_();
+  if (active_groups == 0) {
+    active_groups = g_parallel_i80.pending_group_mask;
+  }
+
+  if ((g_parallel_i80.pending_group_mask & active_groups) == active_groups) {
+    const uint8_t flush_mask = active_groups;
+    g_parallel_i80.pending_group_mask =
+        static_cast<uint8_t>(g_parallel_i80.pending_group_mask & ~flush_mask);
+    if (g_parallel_i80.pending_group_mask == 0) {
+      g_parallel_i80.pending_group_first_ms = 0;
+    }
+    this->flush_parallel_shared_groups_(flush_mask);
+    return;
+  }
+
+  if ((esphome::millis() - g_parallel_i80.pending_group_first_ms) <
+      PARALLEL_LCD_WHOLE_FLUSH_TIMEOUT_MS) {
+    return;
+  }
+
+  const uint8_t flush_mask = g_parallel_i80.pending_group_mask;
+  g_parallel_i80.pending_group_mask = 0;
+  g_parallel_i80.pending_group_first_ms = 0;
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    if ((flush_mask & static_cast<uint8_t>(1u << gi)) != 0) {
+      g_parallel_groups[gi].timeout_flush_count++;
+    }
+  }
+  ESP_LOGV(TAG, "Parallel shared group timeout flush: mask=0x%02x",
+           flush_mask);
+  this->flush_parallel_shared_groups_(flush_mask);
+#endif
 }
 
 // --- SPI Transport Setup ---
@@ -5102,6 +5716,7 @@ void CFXLightOutput::loop() {
   // arrived (e.g. an inactive output that skipped write_state this tick).
   CFXTransmitBarrier::get().service(this);
   this->service_parallel_group_flush_();
+  this->service_parallel_shared_group_flush_();
   if (!this->outro_cbs_.empty()) {
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
@@ -5723,6 +6338,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // or after BARRIER_TIMEOUT_MS if some outputs are inactive. Single-output
   // setups: request_transmit() returns true immediately (no-op barrier).
   if (this->is_parallel_transport() && !this->request_parallel_group_flush_()) {
+    mark_committed_mono_idle_outputs(this);
+    this->log_segment_coordinator_diag_();
+    this->record_perf_diag_flush_(write_start_us, perf_diag_enabled,
+                                  spi_cadence_diag_enabled,
+                                  rmt_cadence_diag_enabled);
+    return;
+  }
+  if (this->is_parallel_transport() &&
+      !this->request_parallel_shared_group_flush_()) {
     mark_committed_mono_idle_outputs(this);
     this->log_segment_coordinator_diag_();
     this->record_perf_diag_flush_(write_start_us, perf_diag_enabled,
