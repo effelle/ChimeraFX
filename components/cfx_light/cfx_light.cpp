@@ -4003,6 +4003,59 @@ bool CFXLightOutput::build_parallel_shared_frame_(
   static const uint8_t SAMPLE_OFFSET_MAP[4] = {2, 3, 0, 1};
 #endif
 
+  struct SharedBuildGroup {
+    bool active{false};
+    uint8_t stride{0};
+    uint8_t lane_count{0};
+    uint8_t lane_mask{0};
+    uint32_t tx_byte_slots{0};
+    uint32_t led{0};
+    uint8_t byte_index{0};
+    CFXLightOutput *outputs[PARALLEL_MAX_LANES]{};
+    uint8_t bus_lanes[PARALLEL_MAX_LANES]{};
+    uint8_t scales[PARALLEL_MAX_LANES]{};
+  };
+
+  SharedBuildGroup build_groups[PARALLEL_MAX_GROUPS] = {};
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    auto &group = g_parallel_groups[gi];
+    auto &build_group = build_groups[gi];
+    if (!group.configured || group_tx_byte_slots[gi] == 0) {
+      continue;
+    }
+    for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+      auto *lane_output = group.outputs[lane];
+      if (lane_output != nullptr) {
+        build_group.stride = lane_output->get_pixel_stride_();
+        break;
+      }
+    }
+    if (build_group.stride == 0) {
+      continue;
+    }
+    build_group.active = true;
+    build_group.lane_count = group.lane_count;
+    build_group.tx_byte_slots = group_tx_byte_slots[gi];
+    build_group.led = start_byte_slot / build_group.stride;
+    build_group.byte_index =
+        static_cast<uint8_t>(start_byte_slot % build_group.stride);
+    for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+      auto *lane_output = group.outputs[lane];
+      const uint8_t bus_lane = static_cast<uint8_t>(group.bit_offset + lane);
+      if (lane_output == nullptr || bus_lane >= PARALLEL_I80_BUS_WIDTH) {
+        continue;
+      }
+      build_group.outputs[lane] = lane_output;
+      build_group.bus_lanes[lane] = bus_lane;
+      build_group.scales[lane] = lane_output->get_power_transmit_scale_();
+      build_group.lane_mask =
+          static_cast<uint8_t>(build_group.lane_mask | (1u << bus_lane));
+    }
+    if (build_group.lane_mask == 0) {
+      build_group.active = false;
+    }
+  }
+
   for (uint32_t offset = 0; offset < byte_slot_count; offset++) {
     const uint32_t byte_slot = start_byte_slot + offset;
     if (out + (8u * PARALLEL_SYMBOL_SAMPLES) > data_end) {
@@ -4017,53 +4070,30 @@ bool CFXLightOutput::build_parallel_shared_frame_(
 
     uint8_t active_lane_mask = 0;
     uint8_t lane_values[PARALLEL_I80_BUS_WIDTH] = {};
-    bool lane_present[PARALLEL_I80_BUS_WIDTH] = {};
 
     for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
-      auto &group = g_parallel_groups[gi];
-      if (!group.configured || group_tx_byte_slots[gi] == 0 ||
-          byte_slot >= group_tx_byte_slots[gi]) {
+      auto &build_group = build_groups[gi];
+      if (!build_group.active || byte_slot >= build_group.tx_byte_slots) {
         continue;
       }
-
-      uint8_t stride = 0;
-      for (uint8_t lane = 0; lane < group.lane_count; lane++) {
-        auto *lane_output = group.outputs[lane];
-        if (lane_output != nullptr) {
-          stride = lane_output->get_pixel_stride_();
-          break;
-        }
-      }
-      if (stride == 0) {
-        continue;
-      }
-
-      const uint32_t led = byte_slot / stride;
-      const uint8_t byte_index = static_cast<uint8_t>(byte_slot % stride);
-      for (uint8_t lane = 0; lane < group.lane_count; lane++) {
-        auto *lane_output = group.outputs[lane];
-        if (lane_output == nullptr) {
-          continue;
-        }
-        const uint8_t bus_lane = static_cast<uint8_t>(group.bit_offset + lane);
-        if (bus_lane >= PARALLEL_I80_BUS_WIDTH) {
-          continue;
-        }
-        const uint8_t lane_bit = static_cast<uint8_t>(1u << bus_lane);
-        active_lane_mask |= lane_bit;
-        lane_present[bus_lane] = true;
-        if (lane_output->buf_ == nullptr || led >= lane_output->num_leds_) {
+      active_lane_mask =
+          static_cast<uint8_t>(active_lane_mask | build_group.lane_mask);
+      for (uint8_t lane = 0; lane < build_group.lane_count; lane++) {
+        auto *lane_output = build_group.outputs[lane];
+        if (lane_output == nullptr || lane_output->buf_ == nullptr ||
+            build_group.led >= lane_output->num_leds_) {
           continue;
         }
         const size_t byte_offset =
-            static_cast<size_t>(led) * stride + byte_index;
+            static_cast<size_t>(build_group.led) * build_group.stride +
+            build_group.byte_index;
         uint8_t lane_value = lane_output->buf_[byte_offset];
-        const uint8_t scale = lane_output->get_power_transmit_scale_();
+        const uint8_t scale = build_group.scales[lane];
         if (scale < 255) {
           lane_value = static_cast<uint8_t>(
               (static_cast<uint16_t>(lane_value) * scale) / 255u);
         }
-        lane_values[bus_lane] = lane_value;
+        lane_values[build_group.bus_lanes[lane]] = lane_value;
       }
     }
 
@@ -4073,7 +4103,7 @@ bool CFXLightOutput::build_parallel_shared_frame_(
       const uint8_t bit_mask = static_cast<uint8_t>(0x80u >> bit);
       for (uint8_t bus_lane = 0; bus_lane < PARALLEL_I80_BUS_WIDTH;
            bus_lane++) {
-        if (lane_present[bus_lane] &&
+        if ((active_lane_mask & static_cast<uint8_t>(1u << bus_lane)) != 0 &&
             (lane_values[bus_lane] & bit_mask) != 0) {
           one_mask |= static_cast<uint8_t>(1u << bus_lane);
         }
@@ -4094,6 +4124,18 @@ bool CFXLightOutput::build_parallel_shared_frame_(
 #endif
     }
     out += 8u * PARALLEL_SYMBOL_SAMPLES;
+
+    for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+      auto &build_group = build_groups[gi];
+      if (!build_group.active || byte_slot >= build_group.tx_byte_slots) {
+        continue;
+      }
+      build_group.byte_index++;
+      if (build_group.byte_index >= build_group.stride) {
+        build_group.byte_index = 0;
+        build_group.led++;
+      }
+    }
   }
 
   if (out != data_end) {
