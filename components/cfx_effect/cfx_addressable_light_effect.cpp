@@ -1759,6 +1759,10 @@ void CFXAddressableLightEffect::stop() {
     return;
   }
 
+  auto *state = this->get_light_state();
+  const bool lifecycle_shutdown =
+      state == nullptr || !state->remote_values.is_on();
+
   // Clear intro_active so that rapid OFF->ON cycles properly restart the intro
   // instead of bypassing it due to stale state.
   this->act_->intro_active = false;
@@ -1774,12 +1778,12 @@ void CFXAddressableLightEffect::stop() {
 #endif
   }
 
-  if (this->effect_id_ != 185) {
+  if (this->effect_id_ != 185 && lifecycle_shutdown &&
+      !act_->suppress_stop_event) {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
 #ifdef USE_CFX_SEQUENCE
-    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr &&
-        !act_->suppress_stop_event) {
+    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
 #else
     if (!act_->strip_tag.empty()) {
 #endif
@@ -1788,7 +1792,6 @@ void CFXAddressableLightEffect::stop() {
     }
 #endif
   }
-  this->trigger_on_complete();
 
   // Transition snapshots are no longer useful once stop() begins; release
   // capacity instead of holding full-strip buffers until act_ is deleted.
@@ -1805,7 +1808,6 @@ void CFXAddressableLightEffect::stop() {
   }
 
   CFXControl *c = act_->controller;
-  auto *state = this->get_light_state();
 
   if (state != nullptr && act_->runner != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
@@ -2143,7 +2145,8 @@ void CFXAddressableLightEffect::stop() {
       if (out != nullptr) {
         this->act_ = nullptr;
         out->add_outro_callback([this, it_light, captured_runners,
-                                 captured_sequence, captured_act]() -> bool {
+                                 captured_sequence, captured_act,
+                                 lifecycle_shutdown]() -> bool {
             auto *current_state = this->get_light_state();
 
             if (current_state != nullptr &&
@@ -2190,6 +2193,10 @@ void CFXAddressableLightEffect::stop() {
 
             if (done) {
               this->restore_preset_runtime_defaults_(50);
+              if (lifecycle_shutdown &&
+                  !captured_act->suppress_complete_event) {
+                this->trigger_on_complete();
+              }
 #ifdef USE_CFX_EVENTS
               // Fire cfx_complete when the outro animation finishes.
               // If is_sequence_outro_ is true, the sequence already fired
@@ -2197,7 +2204,8 @@ void CFXAddressableLightEffect::stop() {
               // so we skip here to avoid double-firing.
               // cfx_complete is a lifecycle event: every started light/segment
               // gets one, including default fade-to-black stops.
-              if (!captured_act->suppress_complete_event &&
+              if (lifecycle_shutdown &&
+                  !captured_act->suppress_complete_event &&
                   !captured_act->is_sequence_outro) {
 #ifdef USE_CFX_SEQUENCE
                 if (captured_sequence != nullptr) {
@@ -2267,10 +2275,18 @@ void CFXAddressableLightEffect::stop() {
 
   // Free the activation struct — released back to heap until next start().
 #ifdef USE_CFX_EVENTS
-  if (this->act_ != nullptr && !this->act_->strip_tag.empty() &&
+  if (lifecycle_shutdown && this->act_ != nullptr &&
       !this->act_->suppress_complete_event) {
-    std::string evt = std::string("cfx_complete:") + this->act_->strip_tag;
-    chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+    this->trigger_on_complete();
+    if (!this->act_->strip_tag.empty()) {
+      std::string evt = std::string("cfx_complete:") + this->act_->strip_tag;
+      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+    }
+  }
+#else
+  if (lifecycle_shutdown && this->act_ != nullptr &&
+      !this->act_->suppress_complete_event) {
+    this->trigger_on_complete();
   }
 #endif
   delete this->act_;

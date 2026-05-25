@@ -105,7 +105,9 @@ static const size_t PARALLEL_CLASSIC_SILENCE_BYTES = 32;
 static const size_t PARALLEL_CANARY_BYTES = 32;
 static const uint8_t PARALLEL_CANARY_VALUE = 0xA5;
 static const uint32_t PARALLEL_LCD_FLUSH_TIMEOUT_MS = 10;
+static const uint32_t PARALLEL_LCD_WHOLE_FLUSH_TIMEOUT_MS = 22;
 static const uint32_t PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS = 12;
+static const uint32_t PARALLEL_CLASSIC_WHOLE_FLUSH_TIMEOUT_MS = 24;
 static const char *const PARALLEL_BACKEND_REV =
     "parallel-v1-classic-i2s-stream-2026-05-18";
 static const char *const PARALLEL_LCD_BACKEND_REV =
@@ -4645,6 +4647,17 @@ static bool has_active_rendering_cfx_effect(CFXLightOutput *output) {
   return false;
 }
 
+static uint8_t active_parallel_lanes_mask_(CFXParallelGroupRuntime &group,
+                                           uint8_t fallback_mask) {
+  uint8_t active_lanes_mask = 0;
+  for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+    if (has_active_rendering_cfx_effect(group.outputs[lane])) {
+      active_lanes_mask |= static_cast<uint8_t>(1u << lane);
+    }
+  }
+  return static_cast<uint8_t>(active_lanes_mask | fallback_mask);
+}
+
 bool CFXLightOutput::request_parallel_group_flush_() {
   auto &g_parallel_group = *parallel_group_for_output_(this);
   if (!this->is_parallel_transport() || this->parallel_lane_count_ <= 1) {
@@ -4658,15 +4671,8 @@ bool CFXLightOutput::request_parallel_group_flush_() {
     }
   }
 
-  uint8_t active_lanes_mask = 0;
-  for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-    auto *output = g_parallel_group.outputs[lane];
-    if (has_active_rendering_cfx_effect(output)) {
-      active_lanes_mask |= static_cast<uint8_t>(1u << lane);
-    }
-  }
-  // Ensure the calling lane is always expected in the mask
-  active_lanes_mask |= lane_bit;
+  const uint8_t active_lanes_mask =
+      active_parallel_lanes_mask_(g_parallel_group, lane_bit);
 
   if ((g_parallel_group.pending_mask & active_lanes_mask) != active_lanes_mask) {
     return false;
@@ -4686,16 +4692,27 @@ void CFXLightOutput::service_parallel_group_flush_() {
   }
   const uint32_t flush_timeout_ms =
 #if defined(CONFIG_IDF_TARGET_ESP32)
-      PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS;
+      g_parallel_group.has_segments ? PARALLEL_CLASSIC_FLUSH_TIMEOUT_MS
+                                    : PARALLEL_CLASSIC_WHOLE_FLUSH_TIMEOUT_MS;
 #else
-      PARALLEL_LCD_FLUSH_TIMEOUT_MS;
+      g_parallel_group.has_segments ? PARALLEL_LCD_FLUSH_TIMEOUT_MS
+                                    : PARALLEL_LCD_WHOLE_FLUSH_TIMEOUT_MS;
 #endif
+  const uint8_t pending_mask = g_parallel_group.pending_mask;
+  const uint8_t active_lanes_mask =
+      active_parallel_lanes_mask_(g_parallel_group, pending_mask);
+  if ((pending_mask & active_lanes_mask) == active_lanes_mask) {
+    g_parallel_group.pending_mask = 0;
+    g_parallel_group.pending_first_ms = 0;
+    g_parallel_group.coalesced_count++;
+    this->commit_transmit_();
+    return;
+  }
   if ((esphome::millis() - g_parallel_group.pending_first_ms) <
       flush_timeout_ms) {
     return;
   }
 
-  const uint8_t pending_mask = g_parallel_group.pending_mask;
   g_parallel_group.pending_mask = 0;
   g_parallel_group.pending_first_ms = 0;
   g_parallel_group.timeout_flush_count++;
