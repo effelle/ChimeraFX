@@ -3339,6 +3339,14 @@ bool CFXLightOutput::init_parallel_backend_() {
   }
 
   const bool multiple_groups = parallel_configured_group_count_() > 1;
+  bool multiple_group_has_segments = false;
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    if (g_parallel_groups[gi].configured &&
+        g_parallel_groups[gi].has_segments) {
+      multiple_group_has_segments = true;
+      break;
+    }
+  }
   const bool segmented_high_lane =
       g_parallel_group.has_segments && g_parallel_group.lane_count >= 3;
 
@@ -3350,14 +3358,20 @@ bool CFXLightOutput::init_parallel_backend_() {
     const bool group_segmented_high =
         group.has_segments && group.lane_count >= 3;
     group.buffer_policy =
-        multiple_groups
+        multiple_groups && !multiple_group_has_segments
+            ? "shared_xgroup_whole"
+            : multiple_groups
             ? "shared_two_group_heap"
             : (group_segmented_high ? "segmented_3plus_heap" : "default");
   }
 
   auto select_lcd_buffer_count = [&](uint16_t chunk_leds) -> uint8_t {
-    if (multiple_groups || segmented_high_lane) {
+    if ((multiple_groups && multiple_group_has_segments) ||
+        segmented_high_lane) {
       return 1;
+    }
+    if (multiple_groups) {
+      return 2;
     }
     if (chunk_leds <= 200) {
       return 3;
