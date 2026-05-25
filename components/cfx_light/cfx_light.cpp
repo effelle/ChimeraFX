@@ -262,6 +262,7 @@ static bool wait_for_parallel_group_idle_(uint32_t timeout_us,
 
 static bool has_active_rendering_cfx_effect(CFXLightOutput *output);
 static bool parallel_shared_whole_group_mode_enabled_();
+static bool parallel_shared_segment_group_mode_enabled_();
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static void parallel_dma_desc_init_(lldesc_t *desc, uint8_t *buf, size_t len,
@@ -2126,7 +2127,15 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     g_parallel_group.pending_first_ms = 0;
     g_parallel_group.coalesced_count++;
     this->status_clear_warning();
-    this->flush_parallel_();
+    bool shared_deferred = false;
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+    if (parallel_shared_segment_group_mode_enabled_()) {
+      shared_deferred = !this->request_parallel_shared_group_flush_();
+    }
+#endif
+    if (!shared_deferred) {
+      this->flush_parallel_();
+    }
   }
 
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
@@ -4113,7 +4122,10 @@ bool CFXLightOutput::build_parallel_shared_frame_(
 bool CFXLightOutput::flush_parallel_shared_groups_(uint8_t group_mask) {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   group_mask = static_cast<uint8_t>(group_mask & ((1u << PARALLEL_MAX_GROUPS) - 1u));
-  if (group_mask == 0 || !parallel_shared_whole_group_mode_enabled_()) {
+  const bool shared_whole_mode = parallel_shared_whole_group_mode_enabled_();
+  const bool shared_segment_mode =
+      parallel_shared_segment_group_mode_enabled_();
+  if (group_mask == 0 || (!shared_whole_mode && !shared_segment_mode)) {
     return false;
   }
 
@@ -4171,7 +4183,9 @@ bool CFXLightOutput::flush_parallel_shared_groups_(uint8_t group_mask) {
       continue;
     }
     auto &group = g_parallel_groups[gi];
-    if (!group.configured || group.has_segments) {
+    if (!group.configured ||
+        (group.has_segments && !shared_segment_mode) ||
+        (!group.has_segments && !shared_whole_mode)) {
       continue;
     }
     for (uint8_t lane = 0; lane < group.lane_count; lane++) {
@@ -5201,6 +5215,46 @@ static bool parallel_shared_whole_group_mode_enabled_() {
 #endif
 }
 
+static bool parallel_group_active_outputs_are_segmented_(
+    CFXParallelGroupRuntime &group) {
+  bool has_active = false;
+  for (uint8_t lane = 0; lane < group.lane_count; lane++) {
+    auto *output = group.outputs[lane];
+    if (!has_active_rendering_cfx_effect(output)) {
+      continue;
+    }
+    has_active = true;
+    if (output == nullptr || !output->has_segments()) {
+      return false;
+    }
+  }
+  return has_active;
+}
+
+static bool parallel_shared_segment_group_mode_enabled_() {
+#if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
+    return false;
+  }
+  uint8_t active_segment_groups = 0;
+  for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
+    auto &group = g_parallel_groups[gi];
+    if (!group.configured) {
+      continue;
+    }
+    if (!group.ready || !group.has_segments) {
+      return false;
+    }
+    if (parallel_group_active_outputs_are_segmented_(group)) {
+      active_segment_groups++;
+    }
+  }
+  return active_segment_groups >= 2;
+#else
+  return false;
+#endif
+}
+
 bool CFXLightOutput::request_parallel_group_flush_() {
   auto &g_parallel_group = *parallel_group_for_output_(this);
   if (!this->is_parallel_transport() || this->parallel_lane_count_ <= 1) {
@@ -5269,8 +5323,11 @@ void CFXLightOutput::service_parallel_group_flush_() {
 bool CFXLightOutput::request_parallel_shared_group_flush_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   auto &g_parallel_group = *parallel_group_for_output_(this);
+  const bool shared_whole_mode = parallel_shared_whole_group_mode_enabled_();
+  const bool shared_segment_mode =
+      parallel_shared_segment_group_mode_enabled_();
   if (!this->is_parallel_transport() ||
-      !parallel_shared_whole_group_mode_enabled_()) {
+      (!shared_whole_mode && !shared_segment_mode)) {
     return true;
   }
 
@@ -5309,8 +5366,11 @@ bool CFXLightOutput::request_parallel_shared_group_flush_() {
 
 void CFXLightOutput::service_parallel_shared_group_flush_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
+  const bool shared_whole_mode = parallel_shared_whole_group_mode_enabled_();
+  const bool shared_segment_mode =
+      parallel_shared_segment_group_mode_enabled_();
   if (!this->is_parallel_transport() ||
-      !parallel_shared_whole_group_mode_enabled_() ||
+      (!shared_whole_mode && !shared_segment_mode) ||
       g_parallel_i80.pending_group_mask == 0 ||
       g_parallel_i80.pending_group_first_ms == 0) {
     return;
