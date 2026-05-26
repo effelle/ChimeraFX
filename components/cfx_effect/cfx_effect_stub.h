@@ -81,6 +81,7 @@ public:
     }
     singleton_->init_internal(state);
     singleton_->set_effect_id(effect_id_);
+    singleton_->request_lifecycle_shutdown();
     singleton_->stop();
   }
 

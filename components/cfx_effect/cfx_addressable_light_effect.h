@@ -142,6 +142,7 @@ public:
     bool suppress_positional_events{false};
     bool suppress_stop_event{false};
     bool suppress_complete_event{false};
+    bool force_lifecycle_shutdown{false};
     // CFX-035: true only when the MAIN effect is progressive (pixel-marching,
     // e.g. Wipe/Sweep). Intro milestones are suppressed only in that case so
     // that monochromatic and non-progressive intros still fire cfx_reach. (CFX-035b)
@@ -716,6 +717,9 @@ public:
   }
   void set_suppress_complete_event(bool v) {
     if (act_) act_->suppress_complete_event = v;
+  }
+  void request_lifecycle_shutdown() {
+    if (act_) act_->force_lifecycle_shutdown = true;
   }
 
   // ── Activation pointer — null when effect is not running ─────────────────

@@ -1090,6 +1090,7 @@ void CFXAddressableLightEffect::start() {
   act_->suppress_positional_events = false;
   act_->suppress_stop_event = false;
   act_->suppress_complete_event = false;
+  act_->force_lifecycle_shutdown = false;
   release_vector_storage(act_->outro_color_cache);
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
@@ -1767,7 +1768,8 @@ void CFXAddressableLightEffect::stop() {
       this->is_virtual_segment_ && state != nullptr &&
       !state->current_values.is_on();
   const bool lifecycle_shutdown =
-      state == nullptr || !state->remote_values.is_on() ||
+      act_->force_lifecycle_shutdown || state == nullptr ||
+      !state->remote_values.is_on() ||
       virtual_segment_effect_cleared || virtual_segment_output_off;
 
   // Clear intro_active so that rapid OFF->ON cycles properly restart the intro
@@ -2217,7 +2219,7 @@ void CFXAddressableLightEffect::stop() {
                   // to the HA cfx_complete event. Without this, only the HA
                   // event fires and on-device triggers are silently skipped.
                   captured_sequence->report_event_complete();
-                } else
+                }
 #endif
                 {
                   // Standalone (no sequence bound): fire HA event directly.
@@ -8693,8 +8695,8 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
   if (act_->runner != nullptr) {
     act_->runner->diagnostics.idle_sleep_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
-        idle_sample_count, act_->idle_period_start_ms,
-        idle_sample_total_us, act_->idle_jitter_count, resolve_led_fps(this));
+        idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
+        act_->idle_jitter_count, resolve_led_fps(this), true);
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
@@ -8706,9 +8708,8 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
       }
       runner->diagnostics.idle_sleep_log(
           seg_name, runner->getModeName(), runner->getMode(),
-          idle_sample_count, act_->idle_period_start_ms,
-          idle_sample_total_us, act_->idle_jitter_count,
-          resolve_led_fps(this));
+          idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
+          act_->idle_jitter_count, resolve_led_fps(this), true);
     }
   }
 }

@@ -659,14 +659,15 @@ struct FrameDiagnostics {
   void idle_sleep_log(const char *effect_name, const char *mode_name,
                       uint8_t mode_id, uint32_t frame_count_in,
                       uint32_t period_start_ms, uint64_t total_frame_us_in,
-                      uint32_t jitter_count_in, float led_fps = -1.0f) {
+                      uint32_t jitter_count_in, float led_fps = -1.0f,
+                      bool force = false) {
     (void) frame_count_in;
     (void) period_start_ms;
     (void) total_frame_us_in;
     (void) jitter_count_in;
 
     uint32_t now_ms = cfx_millis();
-    if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
+    if (!force && now_ms - last_log_time < LOG_INTERVAL_MS) return;
 
     uint32_t free_heap = 0;
 #ifdef ARDUINO
