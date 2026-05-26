@@ -2331,6 +2331,13 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   if (this->act_->intro_active) {
     return false;
   }
+  // The parent coordinator is only for steady-state rendering. Transition and
+  // completion work must stay in the full apply() path so mono presets can
+  // finish the intro->hold blend and become clean IDLE outputs.
+  if (this->act_->state != TRANSITION_NONE ||
+      this->act_->completion_pending) {
+    return false;
+  }
   auto *state = this->get_light_state();
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
