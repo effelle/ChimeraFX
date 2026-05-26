@@ -127,7 +127,7 @@ public:
           if (seg_out != nullptr && seg_out->get_parent() != nullptr) {
             auto *effect = seg_out->get_parent()->get_parent_owned_segment_effect(seg_out->get_state_parent());
             if (effect != nullptr && effect->get_act() != nullptr && effect->get_act()->runner != nullptr) {
-              effect->get_act()->runner->setDebug(value && !effect->get_act()->mono_idle);
+              effect->get_act()->runner->setDebug(value);
             }
           }
         }

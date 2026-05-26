@@ -2386,7 +2386,7 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
   } else if (this->local_debug_switch_()) {
     debug_active = this->local_debug_switch_()->state;
   }
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->setDebug(debug_active);
   act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
 
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
@@ -2427,7 +2427,7 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
     debug_active = this->local_debug_switch_()->state;
   }
 
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->setDebug(debug_active);
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
@@ -2567,7 +2567,7 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     act_->runner->_segment.start = 0;
     act_->runner->_segment.stop = it.size();
   }
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->setDebug(debug_active);
   act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
@@ -2885,8 +2885,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   const bool apply_perf_enabled = debug_active;
   const bool capture_idle_probe = act_->mono_probe_requested;
-  const bool runner_debug_active =
-      debug_active && !act_->mono_idle && !capture_idle_probe;
+  const bool runner_debug_active = debug_active && !capture_idle_probe;
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
   uint32_t apply_dispatch_us = 0;
