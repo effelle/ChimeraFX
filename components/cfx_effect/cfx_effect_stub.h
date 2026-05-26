@@ -64,8 +64,8 @@ public:
   /// is selected. Tears down the singleton's CFXActivation + CFXRunner.
   void stop() override {
     static uint8_t stop_diag_logs = 0;
+    auto *state = this->get_light_state();
     if (stop_diag_logs < 32) {
-      auto *state = this->get_light_state();
       ESP_LOGI("cfx_stub",
                "Segment effect stop[%u]: light='%s' "
                "state=%p output=%p stub=%p singleton=%p effect_id=%u "
@@ -77,6 +77,8 @@ public:
                this->get_name().c_str());
       stop_diag_logs++;
     }
+    singleton_->init_internal(state);
+    singleton_->set_effect_id(effect_id_);
     singleton_->stop();
   }
 
