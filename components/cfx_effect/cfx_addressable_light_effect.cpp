@@ -8682,7 +8682,7 @@ bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   return saw_runner;
 }
 
-void CFXAddressableLightEffect::log_mono_idle_sleep() {
+void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
   if (act_ == nullptr || !act_->mono_idle ||
       !this->mono_idle_logging_enabled()) {
     return;
@@ -8702,7 +8702,7 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
     act_->runner->diagnostics.idle_sleep_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
         idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-        act_->idle_jitter_count, resolve_led_fps(this), true);
+        act_->idle_jitter_count, resolve_led_fps(this), force);
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
@@ -8715,7 +8715,7 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
       runner->diagnostics.idle_sleep_log(
           seg_name, runner->getModeName(), runner->getMode(),
           idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-          act_->idle_jitter_count, resolve_led_fps(this), true);
+          act_->idle_jitter_count, resolve_led_fps(this), force);
     }
   }
 }
