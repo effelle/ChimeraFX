@@ -69,12 +69,14 @@ public:
       ESP_LOGI("cfx_stub",
                "Segment effect stop[%u]: light='%s' "
                "state=%p output=%p stub=%p singleton=%p effect_id=%u "
-               "effect='%s'",
+               "effect='%s' active='%s' remote_on=%d",
                static_cast<unsigned>(stop_diag_logs),
                state != nullptr ? state->get_name().c_str() : "<null>",
                state, state != nullptr ? state->get_output() : nullptr, this,
                singleton_, static_cast<unsigned>(effect_id_),
-               this->get_name().c_str());
+               this->get_name().c_str(),
+               state != nullptr ? state->get_effect_name().c_str() : "<null>",
+               state != nullptr ? state->remote_values.is_on() : 0);
       stop_diag_logs++;
     }
     singleton_->init_internal(state);

@@ -1760,8 +1760,15 @@ void CFXAddressableLightEffect::stop() {
   }
 
   auto *state = this->get_light_state();
+  const bool virtual_segment_effect_cleared =
+      this->is_virtual_segment_ && state != nullptr &&
+      state->get_effect_name() == "None";
+  const bool virtual_segment_output_off =
+      this->is_virtual_segment_ && state != nullptr &&
+      !state->current_values.is_on();
   const bool lifecycle_shutdown =
-      state == nullptr || !state->remote_values.is_on();
+      state == nullptr || !state->remote_values.is_on() ||
+      virtual_segment_effect_cleared || virtual_segment_output_off;
 
   // Clear intro_active so that rapid OFF->ON cycles properly restart the intro
   // instead of bypassing it due to stale state.
@@ -1782,11 +1789,7 @@ void CFXAddressableLightEffect::stop() {
       !act_->suppress_stop_event) {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
-#ifdef USE_CFX_SEQUENCE
-    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr) {
-#else
     if (!act_->strip_tag.empty()) {
-#endif
       std::string evt = std::string("cfx_stop:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
