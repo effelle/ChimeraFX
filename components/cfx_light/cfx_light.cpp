@@ -1132,6 +1132,9 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   if (this->segment_light_states_.empty()) {
     return;
   }
+  if (!runtime_debug_enabled_for_output(this)) {
+    return;
+  }
   const uint32_t now_ms = esphome::millis();
   if (this->seg_batch_diag_last_log_ms_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
@@ -1148,6 +1151,50 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
+
+  uint8_t active_mask = 0;
+  for (size_t i = 0; i < this->segment_light_states_.size() &&
+                     i < MAX_CFX_SEGMENTS; i++) {
+    auto *state = this->segment_light_states_[i];
+    if (state != nullptr && state->remote_values.is_on()) {
+      active_mask |= static_cast<uint8_t>(1u << i);
+    }
+  }
+
+  const char *light_name =
+      (this->state_parent_ != nullptr) ? this->state_parent_->get_name().c_str()
+                                       : "<seg>";
+  const uint32_t avg_segments =
+      this->seg_coord_epochs_ > 0
+          ? this->seg_coord_rendered_segments_ / this->seg_coord_epochs_
+          : 0;
+  int32_t due_in_ms = 0;
+  if (this->segment_coord_next_due_ms_ != 0) {
+    due_in_ms =
+        static_cast<int32_t>(this->segment_coord_next_due_ms_) -
+        static_cast<int32_t>(now_ms);
+  }
+
+  ESP_LOGD(TAG,
+           "CFX seg_coord[%s] active=0x%02x owned=0x%02x dormant=0x%02x "
+           "idle=0x%02x last=0x%02x/%u epochs=%" PRIu32
+           " segs=%" PRIu32 " avg=%" PRIu32
+           " partial=%" PRIu32 " missed=%" PRIu32
+           " max_missing=%" PRIu32 " clean=%" PRIu32
+           " apply_skip=%" PRIu32 " write_skip=%" PRIu32
+           " max_contrib=%" PRIu32 " refresh_defers=%" PRIu64
+           " next_due=%" PRId32 "ms heap=%ukB",
+           light_name, active_mask, this->segment_coord_owned_mask_,
+           this->segment_coord_dormant_mask_,
+           this->segment_mono_idle_dormant_mask_, this->seg_last_flush_mask_,
+           this->seg_last_flush_count_, this->seg_coord_epochs_,
+           this->seg_coord_rendered_segments_, avg_segments,
+           this->seg_partial_frame_suppressed_, this->seg_missed_epoch_count_,
+           this->perf_diag_max_partial_missing_,
+           this->seg_clean_epoch_suppressed_, this->seg_coord_apply_skips_,
+           this->seg_coord_write_skips_, this->perf_diag_max_seg_contrib_,
+           this->perf_diag_total_refresh_defers_, due_in_ms,
+           ESP.getFreeHeap() / 1024);
 
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
