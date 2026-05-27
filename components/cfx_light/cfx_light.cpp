@@ -2921,26 +2921,29 @@ void CFXLightOutput::setup_rmt_() {
     return;
   }
 
-  // P2: Register async-done callback — mirrors SPI's spi_tx_in_flight_ pattern.
-  // The ISR clears rmt_tx_in_flight_ the moment DMA finishes, letting
-  // flush_rmt_() poll the flag non-blocking instead of calling the heavyweight
-  // rmt_tx_wait_all_done() on every frame.
+  // DMA-backed RMT clears rmt_tx_in_flight_ from the ISR callback. Non-DMA RMT
+  // is polled instead; on Classic/C3 the callback can lag just enough in a
+  // tight single-output loop to make the next frame coalesce unnecessarily.
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
   {
-    rmt_tx_event_callbacks_t rmt_cbs;
-    memset(&rmt_cbs, 0, sizeof(rmt_cbs));
-    rmt_cbs.on_trans_done = rmt_tx_done_cb_;
-    // Pass the address of this instance's flag as ctx.
-    // Each RMT instance gets its own ctx pointer — no shared global state.
-    this->rmt_done_ctx_.in_flight = &this->rmt_tx_in_flight_;
-    this->rmt_done_ctx_.dma_enabled = this->rmt_dma_enabled_;
-    if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs,
-                                        (void *)&this->rmt_done_ctx_) != ESP_OK) {
-      // Non-fatal: flush_rmt_() falls back to rmt_tx_wait_all_done() when
-      // rmt_tx_in_flight_ is never set (startup state is false).
-      ESP_LOGW(TAG, "RMT done callback registration failed — using blocking wait");
+    if (!this->rmt_dma_enabled_) {
+      ESP_LOGI(TAG, "RMT non-DMA completion polling active (GPIO%u)",
+               this->pin_);
     } else {
-      ESP_LOGI(TAG, "RMT async-done callback active (GPIO%u)", this->pin_);
+      rmt_tx_event_callbacks_t rmt_cbs;
+      memset(&rmt_cbs, 0, sizeof(rmt_cbs));
+      rmt_cbs.on_trans_done = rmt_tx_done_cb_;
+      // Pass the address of this instance's flag as ctx.
+      // Each RMT instance gets its own ctx pointer - no shared global state.
+      this->rmt_done_ctx_.in_flight = &this->rmt_tx_in_flight_;
+      this->rmt_done_ctx_.dma_enabled = this->rmt_dma_enabled_;
+      if (rmt_tx_register_event_callbacks(this->channel_, &rmt_cbs,
+                                          (void *)&this->rmt_done_ctx_) != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "RMT done callback registration failed - using blocking wait");
+      } else {
+        ESP_LOGI(TAG, "RMT async-done callback active (GPIO%u)", this->pin_);
+      }
     }
   }
 #endif
@@ -5591,6 +5594,28 @@ bool CFXLightOutput::wait_for_rmt_tx_(uint32_t timeout_ms, const char *context) 
     return true;
   }
 
+  if (!this->rmt_dma_enabled_ && this->channel_ != nullptr) {
+    const uint32_t wait_start_us = micros();
+    const esp_err_t err = rmt_tx_wait_all_done(this->channel_, timeout_ms);
+    const uint32_t wait_us = micros() - wait_start_us;
+    this->perf_diag_total_wait_us_ += wait_us;
+    if (wait_us > this->perf_diag_max_wait_us_) {
+      this->perf_diag_max_wait_us_ = wait_us;
+    }
+    if (err == ESP_OK) {
+      this->rmt_tx_in_flight_ = false;
+      this->rmt_wait_count_++;
+      return true;
+    }
+    this->rmt_wait_timeout_count_++;
+    ESP_LOGW(TAG, "RMT TX wait timeout (%u ms) during %s (waits=%" PRIu32
+             ", timeouts=%" PRIu32 ")",
+             timeout_ms, context, this->rmt_wait_count_,
+             this->rmt_wait_timeout_count_);
+    this->status_set_warning();
+    return false;
+  }
+
   // Slow path: previous frame DMA still in flight (fast refresh or first call).
   // Spin in 100µs slices; feed WDT every ~5ms to prevent watchdog resets on
   // very long strips. Using micros() polling keeps us out of FreeRTOS scheduler
@@ -5629,6 +5654,21 @@ bool CFXLightOutput::wait_for_rmt_tx_(uint32_t timeout_ms, const char *context) 
   }
   this->rmt_wait_count_++;
   return true;
+}
+
+bool CFXLightOutput::poll_non_dma_rmt_done_() {
+  if (!this->rmt_tx_in_flight_) {
+    return true;
+  }
+  if (this->rmt_dma_enabled_ || this->channel_ == nullptr) {
+    return false;
+  }
+  const esp_err_t err = rmt_tx_wait_all_done(this->channel_, 0);
+  if (err == ESP_OK) {
+    this->rmt_tx_in_flight_ = false;
+    return true;
+  }
+  return false;
 }
 
 bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) {
@@ -5892,14 +5932,16 @@ void CFXLightOutput::loop() {
     this->log_rmt_cadence_diag_();
   }
 
-  if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_ &&
-      !this->rmt_tx_in_flight_) {
-    this->rmt_flush_pending_ = false;
-    g_last_rmt_launch_us = micros();
-    this->perf_diag_last_launch_slot_ =
-        static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
-    g_rmt_launch_seq++;
-    this->flush_rmt_();
+  if (this->transport_ == TRANSPORT_RMT && this->rmt_flush_pending_) {
+    this->poll_non_dma_rmt_done_();
+    if (!this->rmt_tx_in_flight_) {
+      this->rmt_flush_pending_ = false;
+      g_last_rmt_launch_us = micros();
+      this->perf_diag_last_launch_slot_ =
+          static_cast<uint8_t>(g_rmt_launch_seq & 0x3);
+      g_rmt_launch_seq++;
+      this->flush_rmt_();
+    }
   }
 
   // P3: drain any outputs whose barrier window expired before all outputs
@@ -6628,7 +6670,7 @@ void CFXLightOutput::flush_rmt_() {
     return;
   }
 
-  if (this->rmt_tx_in_flight_) {
+  if (this->rmt_tx_in_flight_ && !this->poll_non_dma_rmt_done_()) {
     this->rmt_flush_pending_ = true;
     this->perf_diag_total_rmt_coalesced_flushes_++;
     this->perf_diag_last_flush_valid_ = false;

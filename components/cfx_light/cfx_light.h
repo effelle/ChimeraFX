@@ -542,6 +542,7 @@ protected:
                                bool rmt_cadence_diag_enabled);
   void log_spi_cadence_diag_(bool force = false);
   void log_rmt_cadence_diag_(bool force = false);
+  bool poll_non_dma_rmt_done_();
   void reset_rmt_encoder_diag_();
   void harvest_rmt_encoder_diag_();
   void log_segment_coordinator_diag_();
