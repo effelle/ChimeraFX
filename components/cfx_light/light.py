@@ -1431,6 +1431,13 @@ _RMT_BUDGET = {
     "ESP32H2": {"total":  96, "block": 48},
 }
 _RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
+_RMT_AUTO_MAX_SYMBOLS = {
+    # Physical testing on ESP32 Classic with ESP-IDF 5.3+ showed that 512/256
+    # symbol auto allocations can increase completion latency on long SK6812
+    # strips. Keep auto channels on the stable 128-symbol path; manual
+    # rmt_symbols remains available for diagnostic overrides.
+    "ESP32": 128,
+}
 
 def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     """Compute the per-strip RMT symbol count for auto-configured strips.
@@ -1468,6 +1475,9 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     per_strip = (per_strip // block) * block
     # Never less than one block — hardware minimum
     per_strip = max(per_strip, block)
+    max_auto = _RMT_AUTO_MAX_SYMBOLS.get(variant)
+    if max_auto is not None:
+        per_strip = min(per_strip, max_auto)
     return per_strip
 
 
