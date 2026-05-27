@@ -90,6 +90,7 @@ private:
   bool setup_done_{false};
   bool force_sequential_{false};
   bool sequential_diag_logged_{false};
+  uint32_t last_batch_diag_ms_{0};
   std::vector<CFXRunner *> sorted_slice_;
   std::vector<CFXRunner *> core1_slice_;
 
