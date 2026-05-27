@@ -6693,9 +6693,16 @@ void CFXLightOutput::flush_rmt_() {
   if (timeout_ms < 15u) timeout_ms = 15u;
 
   if (this->rmt_tx_in_flight_) {
+    const bool segment_epoch_preflush =
+        this->has_segments() && this->seg_last_flush_mask_ != 0 &&
+        !this->has_outro();
     if (!this->rmt_dma_enabled_ &&
-        CFXTransmitBarrier::get().rmt_output_count() < 2 &&
-        this->wait_for_rmt_tx_(timeout_ms, "single-rmt-preflush")) {
+        (CFXTransmitBarrier::get().rmt_output_count() < 2 ||
+         segment_epoch_preflush) &&
+        this->wait_for_rmt_tx_(timeout_ms,
+                               segment_epoch_preflush
+                                   ? "segment-rmt-preflush"
+                                   : "single-rmt-preflush")) {
       this->rmt_flush_pending_ = false;
     } else {
       this->rmt_flush_pending_ = true;
