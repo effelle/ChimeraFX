@@ -997,7 +997,7 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   if (this->is_spi_transport()) {
     return;
   }
-  if (!runtime_debug_enabled_for_output(this)) {
+  if (!force && !runtime_debug_enabled_for_output(this)) {
     return;
   }
 
