@@ -1147,7 +1147,10 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       this->seg_clean_epoch_suppressed_ == 0 &&
       this->seg_coord_apply_skips_ == 0 &&
       this->seg_coord_write_skips_ == 0 &&
-      this->seg_coord_epochs_ == 0) {
+      this->seg_coord_epochs_ == 0 &&
+      this->seg_coord_epoch_dt_count_ == 0 &&
+      this->seg_coord_collect_flush_count_ == 0 &&
+      this->seg_coord_refresh_dt_count_ == 0) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
@@ -1174,6 +1177,25 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
         static_cast<int32_t>(this->segment_coord_next_due_ms_) -
         static_cast<int32_t>(now_ms);
   }
+  const uint32_t epoch_dt_count =
+      this->seg_coord_epoch_dt_count_ > 0 ? this->seg_coord_epoch_dt_count_ : 1;
+  const uint32_t avg_epoch_dt_us = static_cast<uint32_t>(
+      this->seg_coord_total_epoch_dt_us_ / epoch_dt_count);
+  const uint32_t due_late_count =
+      this->seg_coord_due_late_count_ > 0 ? this->seg_coord_due_late_count_ : 1;
+  const uint32_t avg_due_late_ms = static_cast<uint32_t>(
+      this->seg_coord_total_due_late_ms_ / due_late_count);
+  const uint32_t collect_flush_count =
+      this->seg_coord_collect_flush_count_ > 0
+          ? this->seg_coord_collect_flush_count_
+          : 1;
+  const uint32_t avg_collect_flush_us = static_cast<uint32_t>(
+      this->seg_coord_total_collect_flush_us_ / collect_flush_count);
+  const uint32_t refresh_dt_count =
+      this->seg_coord_refresh_dt_count_ > 0 ? this->seg_coord_refresh_dt_count_
+                                            : 1;
+  const uint32_t avg_refresh_dt_us = static_cast<uint32_t>(
+      this->seg_coord_total_refresh_dt_us_ / refresh_dt_count);
 
   ESP_LOGD(TAG,
            "CFX seg_coord[%s] active=0x%02x owned=0x%02x dormant=0x%02x "
@@ -1183,6 +1205,10 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            " max_missing=%" PRIu32 " clean=%" PRIu32
            " apply_skip=%" PRIu32 " write_skip=%" PRIu32
            " max_contrib=%" PRIu32 " refresh_defers=%" PRIu64
+           " epoch_us=%" PRIu32 "/%" PRIu32
+           " late_ms=%" PRIu32 "/%" PRIu32
+           " collect_flush_us=%" PRIu32 "/%" PRIu32
+           " refresh_us=%" PRIu32 "/%" PRIu32
            " next_due=%" PRId32 "ms heap=%ukB",
            light_name, active_mask, this->segment_coord_owned_mask_,
            this->segment_coord_dormant_mask_,
@@ -1193,7 +1219,11 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            this->perf_diag_max_partial_missing_,
            this->seg_clean_epoch_suppressed_, this->seg_coord_apply_skips_,
            this->seg_coord_write_skips_, this->perf_diag_max_seg_contrib_,
-           this->perf_diag_total_refresh_defers_, due_in_ms,
+           this->perf_diag_total_refresh_defers_, avg_epoch_dt_us,
+           this->seg_coord_max_epoch_dt_us_, avg_due_late_ms,
+           this->seg_coord_max_due_late_ms_, avg_collect_flush_us,
+           this->seg_coord_max_collect_flush_us_, avg_refresh_dt_us,
+           this->seg_coord_max_refresh_dt_us_, due_in_ms,
            esp_get_free_heap_size() / 1024);
 
   this->seg_partial_frame_suppressed_ = 0;
@@ -1203,6 +1233,18 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   this->seg_coord_write_skips_ = 0;
   this->seg_coord_epochs_ = 0;
   this->seg_coord_rendered_segments_ = 0;
+  this->seg_coord_epoch_dt_count_ = 0;
+  this->seg_coord_max_epoch_dt_us_ = 0;
+  this->seg_coord_total_epoch_dt_us_ = 0;
+  this->seg_coord_due_late_count_ = 0;
+  this->seg_coord_max_due_late_ms_ = 0;
+  this->seg_coord_total_due_late_ms_ = 0;
+  this->seg_coord_collect_flush_count_ = 0;
+  this->seg_coord_max_collect_flush_us_ = 0;
+  this->seg_coord_total_collect_flush_us_ = 0;
+  this->seg_coord_refresh_dt_count_ = 0;
+  this->seg_coord_max_refresh_dt_us_ = 0;
+  this->seg_coord_total_refresh_dt_us_ = 0;
   this->seg_batch_diag_last_log_ms_ = now_ms;
 }
 
@@ -1927,6 +1969,7 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
                                                         bool force_due) {
   mask = 0;
   count = 0;
+  const uint64_t scheduled_due = this->segment_coord_next_due_ms_;
   if (!this->has_segments() || this->has_outro()) {
     this->apply_segment_coordination_loop_state_(0);
     this->apply_master_segment_coordination_loop_state_();
@@ -2000,6 +2043,26 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     return false;
   }
 
+  const uint32_t epoch_us = micros();
+  if (this->seg_coord_last_epoch_us_ != 0) {
+    const uint32_t epoch_dt_us = epoch_us - this->seg_coord_last_epoch_us_;
+    this->seg_coord_total_epoch_dt_us_ += epoch_dt_us;
+    this->seg_coord_epoch_dt_count_++;
+    if (epoch_dt_us > this->seg_coord_max_epoch_dt_us_) {
+      this->seg_coord_max_epoch_dt_us_ = epoch_dt_us;
+    }
+  }
+  this->seg_coord_last_epoch_us_ = epoch_us;
+  const uint32_t due_late_ms =
+      scheduled_due != 0 && now > scheduled_due
+          ? static_cast<uint32_t>(now - scheduled_due)
+          : 0;
+  this->seg_coord_total_due_late_ms_ += due_late_ms;
+  this->seg_coord_due_late_count_++;
+  if (due_late_ms > this->seg_coord_max_due_late_ms_) {
+    this->seg_coord_max_due_late_ms_ = due_late_ms;
+  }
+
   return true;
 }
 
@@ -2007,7 +2070,9 @@ bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
                                                        uint8_t &count,
                                                        bool force_due) {
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
+  this->seg_coord_collect_start_us_ = micros();
   if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due)) {
+    this->seg_coord_collect_start_us_ = 0;
     return false;
   }
 
@@ -2020,6 +2085,7 @@ bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
   esphome::App.feed_wdt();
 
   if (!complete) {
+    this->seg_coord_collect_start_us_ = 0;
     this->perf_diag_total_partial_flushes_++;
     this->seg_partial_frame_suppressed_++;
     this->seg_missed_epoch_count_ += count;
@@ -2151,6 +2217,7 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
     }
     uint8_t mask = 0;
     uint8_t count = 0;
+    output->seg_coord_collect_start_us_ = micros();
     if (output->collect_segment_coordinator_epoch_(mask, count, now, false)) {
       lane_masks[lane] = mask;
       lane_counts[lane] = count;
@@ -2158,6 +2225,8 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
           this->parallel_segment_coord_runners_.end(),
           output->segment_coord_runners_.begin(),
           output->segment_coord_runners_.end());
+    } else {
+      output->seg_coord_collect_start_us_ = 0;
     }
   }
 
@@ -2176,6 +2245,7 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
       if (output == nullptr || lane_counts[lane] == 0) {
         continue;
       }
+      output->seg_coord_collect_start_us_ = 0;
       output->perf_diag_total_partial_flushes_++;
       output->seg_partial_frame_suppressed_++;
       output->seg_missed_epoch_count_ += lane_counts[lane];
@@ -2329,10 +2399,28 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
       this->perf_diag_max_refresh_defers_ =
           static_cast<uint32_t>(this->perf_diag_total_refresh_defers_);
     }
+    this->seg_coord_collect_start_us_ = 0;
     this->schedule_show();
     return;
   }
 
+  if (this->seg_coord_collect_start_us_ != 0) {
+    const uint32_t collect_flush_us = now - this->seg_coord_collect_start_us_;
+    this->seg_coord_total_collect_flush_us_ += collect_flush_us;
+    this->seg_coord_collect_flush_count_++;
+    if (collect_flush_us > this->seg_coord_max_collect_flush_us_) {
+      this->seg_coord_max_collect_flush_us_ = collect_flush_us;
+    }
+    this->seg_coord_collect_start_us_ = 0;
+  }
+  if (this->last_refresh_ != 0) {
+    const uint32_t refresh_dt_us = now - this->last_refresh_;
+    this->seg_coord_total_refresh_dt_us_ += refresh_dt_us;
+    this->seg_coord_refresh_dt_count_++;
+    if (refresh_dt_us > this->seg_coord_max_refresh_dt_us_) {
+      this->seg_coord_max_refresh_dt_us_ = refresh_dt_us;
+    }
+  }
   this->last_refresh_ = now;
   this->mark_shown_();
 
