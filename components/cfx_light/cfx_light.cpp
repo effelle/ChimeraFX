@@ -6592,6 +6592,17 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return;
   }
 
+  if (this->is_rmt_transport() && state == nullptr && this->has_segments() &&
+      this->seg_last_flush_mask_ != 0 && !this->has_outro()) {
+    // Parent-owned segment epochs are already converged inside this output.
+    // Waiting for peer RMT outputs can phase-lock independent segment parents
+    // into a slower cadence, especially on Classic ESP32 non-DMA RMT.
+    this->commit_transmit_();
+    mark_committed_mono_idle_outputs(this);
+    this->log_segment_coordinator_diag_();
+    goto record_write_perf;
+  }
+
   if (!CFXTransmitBarrier::get().request_transmit(this)) {
     // Deferred or already fired from inside the barrier — do not double-flush.
     mark_committed_mono_idle_outputs(this);
