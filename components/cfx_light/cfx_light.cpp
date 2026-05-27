@@ -805,7 +805,17 @@ uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
 
   const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
   if (wire_floor_us > 0) {
-    const uint32_t wire_floor_ms = (wire_floor_us + 999u) / 1000u;
+    uint32_t effective_floor_us = wire_floor_us;
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    // Classic ESP32 non-DMA RMT needs a little callback/launch headroom when
+    // segmented outputs share the RMT barrier. A raw wire-time floor can ask
+    // the next segment epoch too early, causing alternating coalesced frames.
+    if (!this->rmt_dma_enabled_ && this->has_segments() &&
+        CFXTransmitBarrier::get().rmt_output_count() >= 2) {
+      effective_floor_us += 2500u;
+    }
+#endif
+    const uint32_t wire_floor_ms = (effective_floor_us + 999u) / 1000u;
     if (wire_floor_ms > effective_ms) {
       effective_ms = wire_floor_ms;
     }
