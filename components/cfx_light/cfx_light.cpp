@@ -2009,12 +2009,13 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) == 0) {
       continue;
     }
-    if (!force_due && !slot.effect->parent_coordinated_segment_due(now)) {
-      const uint64_t slot_due = slot.due_at != 0
-                                    ? slot.due_at
-                                    : (slot.effect->get_effective_update_interval() + now);
-      if (next_due == 0 || slot_due < next_due) {
-        next_due = slot_due;
+    const uint32_t interval = slot.effect->get_effective_update_interval();
+    if (slot.due_at == 0) {
+      slot.due_at = now;
+    }
+    if (!force_due && now < slot.due_at) {
+      if (next_due == 0 || slot.due_at < next_due) {
+        next_due = slot.due_at;
       }
       continue;
     }
@@ -2028,7 +2029,14 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
       slot.dirty = false;
     }
     slot.effect->mark_parent_coordinated_run(now);
-    slot.due_at = now + slot.effect->get_effective_update_interval();
+    if (interval == 0) {
+      slot.due_at = now;
+    } else {
+      const uint64_t late_ms = now > slot.due_at ? now - slot.due_at : 0;
+      const uint64_t reset_threshold = static_cast<uint64_t>(interval) * 4ULL;
+      slot.due_at =
+          late_ms > reset_threshold ? (now + interval) : (slot.due_at + interval);
+    }
     if (next_due == 0 || slot.due_at < next_due) {
       next_due = slot.due_at;
     }
