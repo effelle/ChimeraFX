@@ -6792,12 +6792,16 @@ void CFXLightOutput::flush_rmt_() {
     const bool segment_epoch_preflush =
         this->has_segments() && this->seg_last_flush_mask_ != 0 &&
         !this->has_outro();
+    const bool whole_frame_preflush =
+        this->seg_last_flush_mask_ == 0 && !this->has_outro();
     if (!this->rmt_dma_enabled_ &&
         (CFXTransmitBarrier::get().rmt_output_count() < 2 ||
-         segment_epoch_preflush) &&
+         segment_epoch_preflush || whole_frame_preflush) &&
         this->wait_for_rmt_tx_(timeout_ms,
                                segment_epoch_preflush
                                    ? "segment-rmt-preflush"
+                               : whole_frame_preflush
+                                   ? "whole-rmt-preflush"
                                    : "single-rmt-preflush")) {
       this->rmt_flush_pending_ = false;
     } else {
