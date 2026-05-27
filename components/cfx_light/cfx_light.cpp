@@ -6628,19 +6628,24 @@ void CFXLightOutput::flush_rmt_() {
     return;
   }
 
-  if (this->rmt_tx_in_flight_) {
-    this->rmt_flush_pending_ = true;
-    this->perf_diag_total_rmt_coalesced_flushes_++;
-    this->perf_diag_last_flush_valid_ = false;
-    return;
-  }
-
   // P2: use non-blocking flag poll (fast path: ISR already cleared the flag).
-  // Dynamic timeout matches the old rmt_tx_wait_all_done() budget so the
-  // fallback blocking recovery fires under identical worst-case conditions.
+  // Dynamic timeout tracks the physical wire time with extra callback headroom.
   const uint32_t physical_leds = this->get_rmt_physical_led_count_();
-  uint32_t timeout_ms = (physical_leds * 30u / 1000u) + 10u;
+  uint32_t timeout_ms = (physical_leds * 30u / 1000u) + 20u;
   if (timeout_ms < 15u) timeout_ms = 15u;
+
+  if (this->rmt_tx_in_flight_) {
+    if (!this->rmt_dma_enabled_ &&
+        CFXTransmitBarrier::get().rmt_output_count() < 2 &&
+        this->wait_for_rmt_tx_(timeout_ms, "single-rmt-preflush")) {
+      this->rmt_flush_pending_ = false;
+    } else {
+      this->rmt_flush_pending_ = true;
+      this->perf_diag_total_rmt_coalesced_flushes_++;
+      this->perf_diag_last_flush_valid_ = false;
+      return;
+    }
+  }
 
   if (!this->wait_for_rmt_tx_(timeout_ms, "flush")) {
     ESP_LOGE(TAG, "RMT TX timeout (Wait: %" PRIu32 "ms, physical LEDs: %" PRIu32 ")",
