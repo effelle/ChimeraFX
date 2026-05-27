@@ -805,7 +805,11 @@ uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
 
   const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
   if (wire_floor_us > 0) {
-    const uint32_t wire_floor_ms = (wire_floor_us + 999u) / 1000u;
+    uint32_t effective_wire_floor_us = wire_floor_us;
+    if (!this->rmt_dma_enabled_) {
+      effective_wire_floor_us += 1500u;
+    }
+    const uint32_t wire_floor_ms = (effective_wire_floor_us + 999u) / 1000u;
     if (wire_floor_ms > effective_ms) {
       effective_ms = wire_floor_ms;
     }
@@ -5663,6 +5667,21 @@ bool CFXLightOutput::poll_non_dma_rmt_done_() {
   if (this->rmt_dma_enabled_ || this->channel_ == nullptr) {
     return false;
   }
+  if (this->perf_diag_last_rmt_tx_launch_us_ == 0) {
+    return false;
+  }
+
+  // rmt_tx_wait_all_done(..., 0) is a useful stale-flag probe, but ESP-IDF logs
+  // an error on every timeout. Only probe after the physical wire frame should
+  // have completed, with a little extra room for non-DMA driver bookkeeping.
+  constexpr uint32_t RMT_NON_DMA_POLL_GUARD_US = 1500;
+  const uint32_t elapsed_us = micros() - this->perf_diag_last_rmt_tx_launch_us_;
+  const uint32_t poll_floor_us =
+      this->get_rmt_wire_frame_floor_us() + RMT_NON_DMA_POLL_GUARD_US;
+  if (elapsed_us < poll_floor_us) {
+    return false;
+  }
+
   const esp_err_t err = rmt_tx_wait_all_done(this->channel_, 0);
   if (err == ESP_OK) {
     this->rmt_tx_in_flight_ = false;
