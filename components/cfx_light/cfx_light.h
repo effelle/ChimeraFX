@@ -308,6 +308,13 @@ public:
   }
   bool is_runtime_debug_enabled() const { return this->runtime_debug_enabled_; }
   float get_led_fps() const { return this->led_fps_valid_ ? this->led_fps_ : -1.0f; }
+  uint32_t get_rmt_wire_frame_floor_us() const;
+  uint32_t get_effective_rmt_update_interval_ms(uint32_t requested_ms) const;
+  void note_effective_rmt_update_interval_ms(uint32_t interval_ms) {
+    if (this->is_rmt_transport()) {
+      this->perf_diag_last_effective_rmt_update_ms_ = interval_ms;
+    }
+  }
   void set_default_transition_length(uint32_t ms) {
     this->default_transition_length_ms_ = ms;
   }
@@ -745,6 +752,7 @@ protected:
   uint32_t perf_diag_last_spi_flush_start_us_{0};
   uint32_t perf_diag_rmt_tx_launch_interval_count_{0};
   uint32_t perf_diag_last_rmt_tx_launch_us_{0};
+  uint32_t perf_diag_last_effective_rmt_update_ms_{0};
   uint32_t perf_diag_spi_loop_log_ms_{0};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};

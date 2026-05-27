@@ -852,7 +852,8 @@ bool CFXAddressableLightEffect::allow_default_transition_() const {
 }
 
 bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
-  if (this->update_interval_ == 0) {
+  const uint32_t effective_interval = this->effective_update_interval_ms_();
+  if (effective_interval == 0) {
     this->last_run_ = now;
     this->next_run_ = now;
     return true;
@@ -867,30 +868,46 @@ bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
 
   const uint64_t late_ms = now - this->next_run_;
   const uint64_t reset_threshold =
-      static_cast<uint64_t>(this->update_interval_) * 4U;
+      static_cast<uint64_t>(effective_interval) * 4U;
   this->next_run_ = late_ms > reset_threshold
-                        ? (now + this->update_interval_)
-                        : (this->next_run_ + this->update_interval_);
+                        ? (now + effective_interval)
+                        : (this->next_run_ + effective_interval);
   this->last_run_ = now;
   return true;
+}
+
+uint32_t CFXAddressableLightEffect::effective_update_interval_ms_() const {
+  auto *out = this->get_diag_output();
+  if (out == nullptr) {
+    return this->update_interval_;
+  }
+  const uint32_t effective =
+      out->get_effective_rmt_update_interval_ms(this->update_interval_);
+  out->note_effective_rmt_update_interval_ms(effective);
+  return effective;
+}
+
+uint32_t CFXAddressableLightEffect::get_effective_update_interval() const {
+  return this->effective_update_interval_ms_();
 }
 
 void CFXAddressableLightEffect::sync_diagnostic_target_interval_() {
   if (this->act_ == nullptr) {
     return;
   }
+  const uint32_t effective_interval = this->effective_update_interval_ms_();
   if (this->act_->runner != nullptr) {
     this->act_->runner->diagnostics.set_target_interval_ms(
-        this->update_interval_);
+        effective_interval);
   }
   for (auto *runner : this->act_->segment_runners) {
     if (runner != nullptr) {
-      runner->diagnostics.set_target_interval_ms(this->update_interval_);
+      runner->diagnostics.set_target_interval_ms(effective_interval);
     }
   }
-  uint64_t idle_target_us = this->update_interval_ == 0
+  uint64_t idle_target_us = effective_interval == 0
                                 ? 16666ULL
-                                : static_cast<uint64_t>(this->update_interval_) * 1000ULL;
+                                : static_cast<uint64_t>(effective_interval) * 1000ULL;
   if (idle_target_us > UINT32_MAX) {
     idle_target_us = UINT32_MAX;
   }
@@ -1193,7 +1210,8 @@ void CFXAddressableLightEffect::start() {
           r->_segment.mirror = def.mirror;
           r->set_segment_id(def.id);
           r->setMode(this->effect_id_);
-          r->diagnostics.set_target_interval_ms(this->update_interval_);
+          r->diagnostics.set_target_interval_ms(
+              this->effective_update_interval_ms_());
           r->diagnostics.is_parallel = cfx_out != nullptr && cfx_out->is_parallel_transport();
           act_->segment_runners.push_back(r);
 
@@ -1218,7 +1236,7 @@ void CFXAddressableLightEffect::start() {
         act_->runner->setBakeBrightness(this->is_virtual_segment_);
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
-            this->update_interval_);
+            this->effective_update_interval_ms_());
         act_->runner->diagnostics.is_parallel =
             is_parallel_virtual_segment_state(this->get_light_state()) ||
             (it != nullptr && static_cast<cfx_light::CFXLightOutput *>(it)->is_parallel_transport());
@@ -2365,7 +2383,7 @@ bool CFXAddressableLightEffect::parent_coordinated_segment_due(
     uint64_t now) const {
   return this->can_parent_coordinate_segment() &&
          (this->last_run_ == 0 ||
-          (now - this->last_run_) >= this->update_interval_);
+          (now - this->last_run_) >= this->effective_update_interval_ms_());
 }
 
 void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
@@ -2394,7 +2412,8 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
     debug_active = this->local_debug_switch_()->state;
   }
   act_->runner->setDebug(debug_active);
-  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
 
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       state_ptr->get_output());
@@ -2425,7 +2444,8 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
   if (this->act_ == nullptr || this->act_->runner == nullptr) {
     return;
   }
-  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
 
   bool debug_active = CFXControl::global_debug_enabled_;
   if (act_->controller != nullptr && act_->controller->get_debug() != nullptr) {
@@ -2575,7 +2595,8 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
     act_->runner->_segment.stop = it.size();
   }
   act_->runner->setDebug(debug_active);
-  act_->runner->diagnostics.set_target_interval_ms(this->update_interval_);
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
@@ -2720,7 +2741,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {
     const uint64_t early_now = millis_64();
-    if (early_now - this->last_run_ < this->update_interval_) {
+    if (early_now - this->last_run_ < this->effective_update_interval_ms_()) {
       return;
     }
   }
@@ -3251,7 +3272,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     for (uint8_t i = 0; i < 16; i++) {
       act_->idle_parallel_intervals[i] = 0;
     }
-    act_->idle_target_frame_us = this->update_interval_ * 1000;
+    act_->idle_target_frame_us = this->effective_update_interval_ms_() * 1000;
     act_->idle_probe_total_us = 0;
     act_->idle_probe_valid = false;
 
@@ -3442,7 +3463,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         for (uint8_t i = 0; i < 16; i++) {
           act_->idle_parallel_intervals[i] = 0;
         }
-        act_->idle_target_frame_us = this->update_interval_ * 1000;
+        act_->idle_target_frame_us = this->effective_update_interval_ms_() * 1000;
         act_->idle_probe_total_us = 0;
         act_->idle_probe_valid = false;
 

@@ -758,6 +758,69 @@ void CFXLightOutput::record_led_frame_() {
   }
 }
 
+uint32_t CFXLightOutput::get_rmt_wire_frame_floor_us() const {
+  if (!this->is_rmt_transport() || this->num_leds_ == 0) {
+    return 0;
+  }
+
+  uint32_t bit_time_ns = 1250;
+  uint32_t reset_ns = 280000;
+  switch (this->chipset_) {
+  case CHIPSET_SK6812:
+    bit_time_ns = 1200;
+    reset_ns = 80000;
+    break;
+  case CHIPSET_WS2811:
+    bit_time_ns = 2500;
+    reset_ns = 280000;
+    break;
+  case CHIPSET_WS2812X:
+  default:
+    bit_time_ns = 1250;
+    reset_ns = 280000;
+    break;
+  }
+
+  constexpr uint32_t RMT_FRAME_GUARD_US = 1800;
+  const uint64_t bit_count =
+      static_cast<uint64_t>(this->get_rmt_physical_led_count_()) *
+      static_cast<uint64_t>(this->get_pixel_stride_()) * 8ULL;
+  const uint64_t wire_ns =
+      bit_count * static_cast<uint64_t>(bit_time_ns) +
+      static_cast<uint64_t>(reset_ns);
+  return static_cast<uint32_t>((wire_ns + 999ULL) / 1000ULL) +
+         RMT_FRAME_GUARD_US;
+}
+
+uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
+    uint32_t requested_ms) const {
+  if (!this->is_rmt_transport()) {
+    return requested_ms;
+  }
+
+  uint32_t effective_ms = requested_ms;
+  if (effective_ms != 0 && effective_ms < 17) {
+    effective_ms = 17;
+  }
+
+  const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
+  if (wire_floor_us > 0) {
+    const uint32_t wire_floor_ms = (wire_floor_us + 999u) / 1000u;
+    if (wire_floor_ms > effective_ms) {
+      effective_ms = wire_floor_ms;
+    }
+  }
+
+  if (this->max_refresh_rate_.has_value()) {
+    const uint32_t max_refresh_ms =
+        (*this->max_refresh_rate_ + 999u) / 1000u;
+    if (max_refresh_ms > effective_ms) {
+      effective_ms = max_refresh_ms;
+    }
+  }
+  return effective_ms;
+}
+
 void CFXLightOutput::record_parallel_completed_led_frames_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   auto &g_parallel_group = *parallel_group_for_output_(this);
@@ -984,6 +1047,11 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
           : 1;
   const uint32_t avg_rmt_tx_dt_us = static_cast<uint32_t>(
       this->perf_diag_total_rmt_tx_launch_interval_us_ / rmt_tx_dt_count);
+  const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
+  const uint32_t effective_interval_ms =
+      this->perf_diag_last_effective_rmt_update_ms_ != 0
+          ? this->perf_diag_last_effective_rmt_update_ms_
+          : this->get_effective_rmt_update_interval_ms(0);
   char led_fps_text[16];
   cfx::FrameDiagnostics::format_led_fps(this->get_led_fps(), led_fps_text,
                                         sizeof(led_fps_text));
@@ -994,7 +1062,7 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   const char *encoder_label = "copy";
 #endif
 
-  ESP_LOGV(TAG,
+  ESP_LOGD(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
            " LedFPS=%s avg_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
@@ -1004,6 +1072,8 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            " guard(avg=%" PRIu32 " max=%" PRIu32
            " hits=%" PRIu64 " timeout=%" PRIu64 ")"
            " rmt(enc=%s symbols=%" PRIu32 " mem=%" PRIu32
+           " leds=%" PRIu32 " stride=%u wire_floor=%" PRIu32
+           " eff_ms=%" PRIu32
            " tx=%" PRIu64 " launch_us(avg=%" PRIu32 " max=%" PRIu32
            ") coalesce=%" PRIu64 " wait=%" PRIu32
            " timeout=%" PRIu32 " in_flight=%d)",
@@ -1016,6 +1086,9 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
            this->perf_diag_total_dma_guard_hits_,
            this->perf_diag_total_dma_guard_timeouts_,
            encoder_label, this->rmt_symbols_, this->rmt_mem_block_symbols_,
+           this->get_rmt_physical_led_count_(),
+           static_cast<unsigned>(this->get_pixel_stride_()), wire_floor_us,
+           effective_interval_ms,
            this->perf_diag_total_rmt_tx_launches_,
            avg_rmt_tx_dt_us, this->perf_diag_max_rmt_tx_launch_interval_us_,
            this->perf_diag_total_rmt_coalesced_flushes_, this->rmt_wait_count_,
@@ -1849,7 +1922,7 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     if (!force_due && !slot.effect->parent_coordinated_segment_due(now)) {
       const uint64_t slot_due = slot.due_at != 0
                                     ? slot.due_at
-                                    : (slot.effect->get_update_interval() + now);
+                                    : (slot.effect->get_effective_update_interval() + now);
       if (next_due == 0 || slot_due < next_due) {
         next_due = slot_due;
       }
@@ -1865,7 +1938,7 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
       slot.dirty = false;
     }
     slot.effect->mark_parent_coordinated_run(now);
-    slot.due_at = now + slot.effect->get_update_interval();
+    slot.due_at = now + slot.effect->get_effective_update_interval();
     if (next_due == 0 || slot.due_at < next_due) {
       next_due = slot.due_at;
     }

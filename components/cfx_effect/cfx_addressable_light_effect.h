@@ -293,6 +293,7 @@ public:
     this->sync_diagnostic_target_interval_();
   }
   uint32_t get_update_interval() const { return this->update_interval_; }
+  uint32_t get_effective_update_interval() const;
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
   void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
   void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }
@@ -744,6 +745,7 @@ public:
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool rate_gate_due_(uint64_t now);
+  uint32_t effective_update_interval_ms_() const;
   bool is_monochromatic_(uint8_t effect_id) const;
   bool is_animated_monochromatic_hold_(uint8_t effect_id) const;
   std::vector<uint8_t> get_monochromatic_pool_();
