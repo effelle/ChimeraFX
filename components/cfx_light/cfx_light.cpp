@@ -1194,7 +1194,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            this->seg_clean_epoch_suppressed_, this->seg_coord_apply_skips_,
            this->seg_coord_write_skips_, this->perf_diag_max_seg_contrib_,
            this->perf_diag_total_refresh_defers_, due_in_ms,
-           ESP.getFreeHeap() / 1024);
+           esp_get_free_heap_size() / 1024);
 
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
