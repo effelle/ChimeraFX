@@ -1203,7 +1203,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   const uint32_t avg_refresh_dt_us = static_cast<uint32_t>(
       this->seg_coord_total_refresh_dt_us_ / refresh_dt_count);
 
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "CFX seg_coord[%s] active=0x%02x owned=0x%02x dormant=0x%02x "
            "idle=0x%02x last=0x%02x/%u epochs=%" PRIu32
            " segs=%" PRIu32 " avg=%" PRIu32

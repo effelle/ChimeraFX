@@ -1,59 +1,23 @@
-# ChimeraFX Light Platform
+# ChimeraFX Light Platform (`cfx_light`)
 
-The ChimeraFX Light Platform (`cfx_light`) is a custom ESPHome light component specifically designed to be the output layer for ChimeraFX.
-
-## Hardware & Driver Architecture
-
-`cfx_light` is an asynchronous LED driver built directly on native ESP-IDF peripherals. In practice:
-
-- **Framework-agnostic RMT backend.** Whether you compile with ESP-IDF or Arduino, `cfx_light` drives the ESP32 RMT peripheral directly via IDF drivers.
-- **1-wire NRZ strips** (`WS2812X`, `SK6812`, `WS2811`) are driven at hardware-timed 800 kHz.
-- **ESP32-S3 parallel backend.** For high-density 1-wire installs, `parallel_group` uses the S3 LCD/I80 peripheral as an 8-bit waveform bus. Multiple strips are rendered as lanes and transmitted at the same time, so refresh is bound mostly by the longest active lane instead of the sum of every strip.
-- **2-wire SPI strips** (`APA102`, `SK9822`) are driven via the SPI Master peripheral at configurable speeds, typically 10-20 MHz or higher.
-- **Chipset-aware defaults.** `cfx_light` selects byte order, RGBW protocol width, and RMT symbol allocation automatically based on your declared `chipset`.
-
-If your strip uses standard 800 kbps NRZ timing but is not on the supported list, `WS2812X` is a reliable drop-in. For unlisted SPI strips, try `APA102`.
-
-> **Node limits for V1.51:** A ChimeraFX node must use one LED transport family at a time: **RMT-only**, **SPI-only**, or **parallel-only**. Mixed RMT + SPI + parallel `cfx_light` entries are rejected at compile time. ESP32-S3 parallel output supports up to **4 lanes per group** and up to **2 parallel groups**. ESP32 Classic parallel output is available for SK6812 RGBW lanes only in this release. Each `cfx_light` can define up to **4** segments.
-
-### Tested LED Limits
-
-The limits below are based on physical testing for ChimeraFX V1.51 using the `Energy` effect at default values, chosen because it is one of the heavier calculation loads in the library. Treat the recommended range as the target for smooth real-world installations, the tested range as validated on the current rig, and the stress range as useful engineering data rather than a deployment target. When validating your own rig, use `LedFPS` as the visible strip-refresh metric; `RenderFPS` measures effect calculation speed.
-
-| Platform | Transport | Recommended smooth limit | Tested stable limit | Stress result |
-|:---|:---|:---|:---|:---|
-| ESP32 Classic | RMT / 1-wire NRZ | 360 LEDs per GPIO for ~60 `LedFPS` | 600 LEDs per GPIO for 30+ `LedFPS` | 1100 LEDs per GPIO on 4 outputs runs, but visible refresh drops to roughly 16-18 `LedFPS` |
-| ESP32 Classic | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | 2x2000 LEDs, smooth on the test rig | Pending larger stress test |
-| ESP32 Classic | Parallel / SK6812 RGBW | Engineering option for SK6812-only parallel groups | Conservative testing recommended | S3 is preferred for new parallel installs |
-| ESP32-C3 | RMT / 1-wire NRZ | Experimental: 360 LEDs on 1 output at ~60 `LedFPS` | 600 LEDs on 1 output for 30+ `LedFPS` | Pending larger stress test |
-| ESP32-C3 | SPI / APA102-SK9822 | Up to 2000 LEDs on 1 SPI output | 2000 virtual LEDs at ~60 `LedFPS` | Pending larger stress test |
-| ESP32-S3 | RMT / 1-wire NRZ | Best for 1-2 ordinary strips | 2x600 SK6812/RGBW at roughly ~40 `LedFPS` | Use parallel for dense multi-strip installs |
-| ESP32-S3 | Parallel / SK6812 RGBW | 4x600 LEDs with 4 segments per lane at 30+ `LedFPS` | 4x650 segmented SK6812, or mixed 2x600 SK6812 + 2x600 WS2812X segmented, at 30+ `LedFPS` | 4x650 whole SK6812 runs around the high-30s `LedFPS` |
-| ESP32-S3 | Parallel / WS2812X RGB | Use a separate group from SK6812 | 4x650 whole WS2812X runs above the SK6812 benchmark | Larger RGB limits are possible but SK6812 remains the release benchmark |
-| ESP32-S3 | SPI / APA102-SK9822 | Up to 2000 LEDs per SPI output | Pending long-strip physical retest | Pending larger stress test |
-
-For 60 LED/m strips, the tested ESP32-S3 parallel guidance translates to roughly **40 meters total** at 30+ `LedFPS` with 4x600 LEDs, including segmented lanes.
-
-ESP32-C3 RMT remains experimental. After C3-specific RMT tuning plus Energy optimization, one RMT output can run the reference `Energy` effect cleanly at the limits above. Two 600-LED RMT outputs still overload the C3 RMT path and are not part of the recommended configuration.
-
-ESP32-S3 RMT still has a smaller symbol pool than ESP32 Classic, but V1.51 no longer treats that as a deployment blocker. For dense S3 layouts, use the parallel backend instead of adding more RMT outputs. The S3 is now the preferred target for large 1-wire ChimeraFX nodes.
-
-For the timing details behind these numbers, see [Performance & Troubleshooting](Troubleshooting.md#performance-limits-and-real-fps).
+The ChimeraFX Light Platform (`cfx_light`) is a custom ESPHome light component specifically designed to be the output layer for ChimeraFX. It is an asynchronous LED driver built directly on native ESP-IDF peripherals for maximum performance.
 
 ## Why use `cfx_light`?
 
-1. **Auto-injection (`all_effects`)**: By default, `cfx_light` parses and injects all ChimeraFX effects into your device at compile time. No more `!include` macros and no huge YAML effect lists. Disable this with `all_effects: false`.
-2. **Chipset-aware intelligence**: Native understanding of strip timing, byte order, and RGB/RGBW protocol width.
-3. **Optimized RMT symbol allocation**: For classic RMT output, `cfx_light` automatically chooses safe RMT memory bounds for the current ESP32 variant. You can manually override this with `rmt_symbols`.
-4. **Automatic RGBW handling**: Selecting `SK6812` configures the 4-byte protocol and GRBW formatting automatically.
-5. **Parallel S3 output**: Dense 1-wire installations can use grouped parallel lanes while keeping Home Assistant light entities and ChimeraFX segments.
+1. **Auto-injection (`all_effects`)**: By default, `cfx_light` automatically parses and injects all ChimeraFX effects into your device at compile time. No more `!include` macros or huge YAML effect lists.
+2. **Chipset-aware intelligence**: It natively understands strip timing, byte order, and RGB/RGBW protocol widths.
+3. **Optimized RMT allocation**: Automatically chooses safe memory bounds for your specific ESP32 variant.
+4. **Automatic RGBW handling**: Selecting `SK6812` automatically configures the 4-byte protocol and GRBW formatting.
+5. **Parallel Output (ESP32-S3)**: Dense 1-wire installations can use grouped parallel lanes to run thousands of LEDs at high framerates.
 
 ---
 
-## CFX Light Configuration
+## Quick Start Configuration
 
+A ChimeraFX node must use one LED transport family at a time: **RMT-only**, **SPI-only**, or **parallel-only**. Mixed entries are rejected at compile time.
+
+### 1-Wire NRZ Strips (WS281x, SK6812, WS2811)
 ```yaml
-# Example config for 1-wire NRZ strips (WS2812X, SK6812, WS2811):
 light:
   - platform: cfx_light
     name: "LED Strip RMT"
@@ -61,18 +25,11 @@ light:
     pin: GPIO16
     num_leds: 120
     chipset: WS2812X
+```
+*Note: If your strip uses standard 800 kbps timing but isn't explicitly supported, `WS2812X` is a reliable drop-in.*
 
-# RMT strip with one extra physical sacrificial pixel near the controller:
-light:
-  - platform: cfx_light
-    name: "LED Strip With Sacrificial Pixel"
-    id: led_strip_signal
-    pin: GPIO16
-    num_leds: 60              # Visible LEDs only; physical strip has 61 LEDs
-    chipset: WS2812X
-    sacrificial_pixel: true   # First physical LED stays off and boosts signal
-
-# Example config for 2-wire SPI strips (APA102, SK9822):
+### 2-Wire SPI Strips (APA102, SK9822)
+```yaml
 light:
   - platform: cfx_light
     name: "LED Strip SPI"
@@ -84,157 +41,46 @@ light:
     chipset: SK9822
 ```
 
-### ESP32-S3 Parallel Driver
+---
 
-The parallel driver is intended for high-density 1-wire layouts on ESP32-S3. Every `cfx_light` with the same `parallel_group` becomes one lane of the same parallel output. ChimeraFX renders the lanes independently, then packs them into one LCD/I80 waveform transfer.
-
-```yaml
-light:
-  - platform: cfx_light
-    name: "S3 Lane 1"
-    id: lane_1
-    pin: GPIO14
-    num_leds: 600
-    chipset: SK6812
-    parallel_group: main
-    segments:
-      - id: lane_1_a
-        name: "Lane 1 A"
-        start: 0
-        stop: 150
-      - id: lane_1_b
-        name: "Lane 1 B"
-        start: 150
-        stop: 300
-      - id: lane_1_c
-        name: "Lane 1 C"
-        start: 300
-        stop: 450
-      - id: lane_1_d
-        name: "Lane 1 D"
-        start: 450
-        stop: 600
-
-  - platform: cfx_light
-    name: "S3 Lane 2"
-    id: lane_2
-    pin: GPIO9
-    num_leds: 600
-    chipset: SK6812
-    parallel_group: main
-```
-
-Parallel driver rules for V1.51:
-
-- Use `parallel_group` on each lane that should share a parallel transmission.
-- A group supports up to **4 lanes**.
-- ESP32-S3 supports up to **2 parallel groups**. Use separate groups when you need both `SK6812` and `WS2812X`; chipsets cannot be mixed inside one group.
-- Parallel groups cannot be mixed with normal RMT or SPI `cfx_light` entries on the same node in this release.
-- Segment entities still work normally, up to **4 segments per lane**.
-- `RenderFPS` remains the effect/render cadence. `LedFPS` remains the physical LED output cadence.
-
-### Reserved GPIOs for Parallel Output
-
-The ESP32-S3 LCD/I80 peripheral needs the LED lane pins plus two internal control GPIOs:
-
-- `parallel_strobe_pin`: internal WR/strobe line.
-- `parallel_dc_pin`: internal D/C line.
-
-If you do not configure these pins, `cfx_light` automatically reserves two free output-capable GPIOs that are not already declared elsewhere in your YAML. The chosen pins are printed in the configuration log, for example:
-
-```text
-[C][cfx_light]:   Internal WR: GPIO38 (auto)
-[C][cfx_light]:   Internal D/C: GPIO39 (auto)
-```
-
-You can override them when needed:
-
-```yaml
-light:
-  - platform: cfx_light
-    name: "S3 Lane 1"
-    id: lane_1
-    pin: GPIO14
-    num_leds: 600
-    chipset: SK6812
-    parallel_group: main
-    parallel_strobe_pin: GPIO40
-    parallel_dc_pin: GPIO41
-```
-
-The same internal WR/strobe and D/C pins are shared by every lane in a parallel group. On ESP32-S3 with two parallel groups, the groups share the same internal LCD/I80 bus control pins. Do not connect LEDs to these internal control pins.
+## Configuration Variables
 
 ### Required Parameters
-
-#### For 1-wire NRZ chipsets
-
 * **name** (*string*): The name of the light in Home Assistant.
 * **id** (*ID*): The ID of the light component.
-* **pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
 * **chipset** (*string*): The type of LED strip you are using.
-* **num_leds** (*int*): The number of visible, controllable LEDs in your strip. If `sacrificial_pixel` is enabled, do not include the sacrificial LED in this count.
-
-#### For 2-wire SPI chipsets
-
-* **name** (*string*): The name of the light in Home Assistant.
-* **id** (*ID*): The ID of the light component.
-* **data_pin** (*Pin*): The GPIO pin the data line of your LED strip is connected to.
-* **clock_pin** (*Pin*): The GPIO pin the clock line of your LED strip is connected to.
-* **chipset** (*string*): The type of LED strip you are using.
-* **num_leds** (*int*): The total number of LEDs in your strip.
-
-### Supported Chipsets
-
-`cfx_light` supports both **1-wire (NRZ)** and **2-wire (SPI)** chipsets:
-
-* **1-wire NRZ**: WS2812, WS2812B, WS2813, WS2815, SK6812 (RGBW), WS2811.
-* **2-wire SPI**: APA102, SK9822.
-
-Parallel support in V1.51:
-
-* **ESP32-S3**: `SK6812` and `WS2812X`.
-* **ESP32 Classic**: `SK6812` only.
-* **WS2811**: Supported by normal RMT, not by the V1.51 parallel backend.
-
-### Chipset Identification and Configuration
-
-| Parameter | Chipset Option | Description |
-|:---|:---|:---|
-| **chipset** | `WS2812X` | Standard 3-pin RGB timing |
-| | `SK6812` | 4-byte RGBW timing (GRBW order) |
-| | `WS2811` | Optimized timing for WS2811 data rates |
-| | `APA102` | 2-wire SPI timing |
-| | `SK9822` | 2-wire SPI timing |
+  * *1-Wire:* `WS2812X`, `SK6812` (RGBW), `WS2811`.
+  * *2-Wire:* `APA102`, `SK9822`.
+* **num_leds** (*int*): The number of visible, controllable LEDs. *(Note: If `sacrificial_pixel` is true, do not count it here).*
+* **pin** (*Pin*): The GPIO data pin (Required for 1-wire strips).
+* **data_pin** / **clock_pin** (*Pin*): The GPIO data and clock pins (Required for 2-wire SPI strips).
 
 ### Optional Parameters
-
-* **all_effects** (*boolean*, default: `true`): Register all effects automatically. Set to `false` to manually register only selected effects and custom presets.
-* **rgb_order** (*string*): The byte order of the colors. If omitted, `cfx_light` sets the standard default based on `chipset`. Options: `RGB`, `RBG`, `GRB`, `GBR`, `BGR`, `BRG`.
-* **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. If your chipset is `SK6812`, this is automatically `true`.
-* **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the front of the data packet rather than the end. Required for some rare SK6812 variant clones.
-* **rmt_symbols** (*int*, default: `0`): Number of RMT symbols to allocate for normal RMT output. If left at `0`, `cfx_light` dynamically allocates safe bounds for the ESP32 variant.
-* **sacrificial_pixel** (*boolean*, default: `false`): RMT-only option for long data-line runs. When enabled, `cfx_light` transmits one extra black pixel before logical LED `0`.
-* **parallel_group** (*string*, Optional): Enables parallel transport and assigns this light as one lane of the named group.
-* **parallel_strobe_pin** (*Pin*, Optional): Internal parallel WR/strobe GPIO. Auto-selected if omitted.
-* **parallel_dc_pin** (*Pin*, Optional): Internal parallel D/C GPIO. Auto-selected if omitted.
-* **spi_speed** (*Frequency*, Optional): SPI clock speed for `APA102` and `SK9822` strips.
-* **default_transition_length** (*Time*, default: `0s`): Standard ESPHome transition duration for solid-color mode and eligible ChimeraFX effect power transitions.
-* **set_intro** (*int*, Optional): Force a global intro animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored intros.
-* **set_outro** (*int*, Optional): Force a global outro animation for eligible effects. Architectural effects, `Energy`, and `Chaos Theory` keep their authored outros.
-* **set_inout_dur** (*Time*, Optional): Sets the duration for both global intros and outros.
-* **set_brightness** (*percentage*, Optional): Applies a brightness default every time the light turns on.
-* **set_color** (*list[int]*, Optional): Applies a color default every time the light turns on as `[r, g, b]` or `[r, g, b, w]` using `0-100` channel percentages.
+* **all_effects** (*boolean*, default: `true`): Register all effects automatically. Set to `false` to manually register only selected effects.
+* **rgb_order** (*string*): Override byte order (`RGB`, `RBG`, `GRB`, `GBR`, `BGR`, `BRG`). Auto-set by chipset.
+* **is_rgbw** (*boolean*): Explicitly declare the strip as 4-byte RGBW. Auto-set if chipset is `SK6812`.
+* **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the front of the data packet. Required for some rare SK6812 variant clones.
+* **sacrificial_pixel** (*boolean*, default: `false`): RMT-only option. Transmits one extra black pixel before logical LED `0` to boost data signals on long wire runs.
+* **spi_speed** (*Frequency*): SPI clock speed for 2-wire strips.
+* **rmt_symbols** (*int*, default: `0`): Manual RMT symbol allocation. Leave at `0` for dynamic safe allocation.
+* **default_transition_length** (*Time*, default: `0s`): Standard ESPHome transition duration for solid-color mode and eligible effects.
 * **controls** (*boolean*, default: `true`): Automatically generate ChimeraFX control entities for this light.
-* **ctrl_exclude** (*list[int]*, Optional): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md).
-* **segments** (*list*, Optional): Define logical sub-zones of the strip as independent light entities, up to **4** per `cfx_light`.
+* **ctrl_exclude** (*list[int]*): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md).
+
+#### Boot Defaults
+* **set_brightness** (*percentage*): Default brightness when turned on.
+* **set_color** (*list[int]*): Default color when turned on as `[r, g, b]` or `[r, g, b, w]` (0-100%).
+* **set_intro** / **set_outro** (*int*): Force a global intro/outro animation for eligible effects.
+* **set_inout_dur** (*Time*): Duration for intros and outros.
 
 ---
 
 ## Segments (Multi-Zone Control)
 
-ChimeraFX supports dividing a single physical LED strip into up to **4 independent logical segments**. Each segment is exposed to Home Assistant as a separate light entity, allowing you to run different effects on different parts of the same strip simultaneously.
+You can divide a single physical LED strip into up to **4 independent logical segments**. Each segment appears in Home Assistant as a separate light entity, allowing different effects on different parts of the same strip.
 
-### Segment Configuration
+* **Master Light**: Acts as global power and brightness control. Turning off the master turns off all segments.
+* **Segment Lights**: Have the full suite of effects and controls and operate independently.
 
 ```yaml
 light:
@@ -248,70 +94,144 @@ light:
     segments:
       - id: tv_left
         name: "TV Left Side"
-        start: 0
-        stop: 40
+        start: 0      # Inclusive
+        stop: 40      # Exclusive
       - id: tv_top
         name: "TV Top"
         start: 40
         stop: 80
-        mirror: true
+        mirror: true  # Reverses calculations for this segment
       - id: tv_right
         name: "TV Right Side"
         start: 80
         stop: 120
 ```
 
-### Segment Parameters
-
-* **id** (*ID*, Required): A unique ESPHome `id` for the segment light entity.
-* **name** (*string*, Optional): The name of the light entity in Home Assistant. If omitted, the `id` is used.
-* **start** (*int*, Required): The starting pixel index (inclusive).
-* **stop** (*int*, Required): The stopping pixel index (exclusive).
-* **mirror** (*boolean*, default: `false`): If true, calculations are reversed for this segment.
-* **set_intro** (*int*, Optional): Override the global intro mode for this segment on eligible effects.
-* **set_outro** (*int*, Optional): Override the global outro mode for this segment on eligible effects.
-* **set_inout_dur** (*Time*, Optional): Override intro/outro duration for this segment.
-* **set_brightness** (*percentage*, Optional): Applies a brightness default every time the segment turns on.
-* **set_color** (*list[int]*, Optional): Defines the default color applied when the segment turns on.
-
-### Master vs. Segment Behavior
-
-When segments are defined:
-
-1. The master light entity acts as global power and brightness control. It does not have its own effects. Turning off the master turns off all segments.
-2. Each segment light entity has the full suite of ChimeraFX effects injected into it unless `all_effects: false` is set on the main light.
-3. Each segment operates on its own runner instance, so parameters are independent.
-
 ---
 
 ## Overriding and Customizing Effects
 
-While `all_effects: true` loads all available effects automatically, you may still want to set hardcoded defaults such as making `Aurora` default to the `Forest` palette on boot.
+While `all_effects: true` loads everything, you can define your own defaults (like forcing a specific palette or speed) by manually defining an `addressable_cfx` effect.
 
-* **To override an effect:** Manually define an `addressable_cfx` effect with the exact same name. Your manual override replaces the auto-injected version.
-* **To create multiple versions:** Keep the default effect and add a customized preset with a different name.
+* **To override:** Use the exact same name as the default effect.
+* **To create a preset:** Use a new name.
 
 ```yaml
-light:
-  - platform: cfx_light
-    name: "Living Room Light"
-    id: led_strip
-    pin: GPIO16
-    num_leds: 300
-    chipset: WS2812X
-
     effects:
       - addressable_cfx:
-          name: "Aurora"
+          name: "Aurora" # Overrides default Aurora
           effect_id: 38
           set_palette: 2
           set_speed: 50
 
       - addressable_cfx:
-          name: "Aurora Fast"
+          name: "Aurora Fast" # Creates a new custom preset
           effect_id: 38
           set_palette: 2
           set_speed: 200
 ```
+*Effect IDs can be found in the [Effects Library](Effects-Library.md).*
 
-More on effect presets in the [Effect Presets](Effect-Presets.md) page. Effect IDs can be found in the [Effects Library](Effects-Library.md) page.
+---
+
+## Advanced: ESP32-S3 Parallel Driver
+
+For high-density 1-wire layouts on the ESP32-S3, you can use the parallel driver. Multiple strips are rendered as "lanes" and transmitted simultaneously, drastically improving refresh rates.
+
+* **Limits:** Up to 4 lanes per group, max 2 groups per ESP32-S3.
+* **Note:** Chipsets cannot be mixed inside a single group.
+* **Supported Chipset:** SK6812 and WS2812X.
+
+```yaml
+light:
+  - platform: cfx_light
+    name: "S3 Lane 1"
+    id: lane_1
+    pin: GPIO14
+    num_leds: 600
+    chipset: SK6812
+    parallel_group: main   # Assigns this to the "main" parallel group
+
+  - platform: cfx_light
+    name: "S3 Lane 2"
+    id: lane_2
+    pin: GPIO9
+    num_leds: 600
+    chipset: SK6812
+    parallel_group: main   # Shares transmission with Lane 1
+```
+
+**Reserved GPIOs:** The parallel driver automatically reserves two free output GPIOs for internal control (`parallel_strobe_pin` and `parallel_dc_pin`). Check your compile log to see which pins were claimed, or manually define them if you need strict pin control. Do not connect LEDs to these internal pins!
+
+---
+
+## Hardware Architecture & Performance Limits
+
+`cfx_light` is highly optimized:
+* **ESP-IDF Native**: Drives the RMT peripheral directly, bypassing framework overhead.
+* **ESP32-S3 Preferred**: For large arrays (>800 LEDs), the ESP32-S3 using the parallel backend is strongly recommended. 40 meters of 60 LED/m strip can run at 30+ FPS.
+* **ESP32-C3 limitations**: Single core and limited RMT symbols (96) make it best for desk lamps or short strips (<400 LEDs).
+
+??? abstract "Click here to view the detailed Performance Test Matrices"
+
+
+    ### How to Read These Results
+    * **Stress Tests, Not Averages:** The numbers below represent the suggested maximum limits of the hardware. A device is intentionally pushed to find the maximum number of LEDs you can run while maintaining a *minimum* of ~30 FPS and keeping the device stable.
+    * **Higher FPS:** These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to **~60 FPS**.
+    * **Benchmark Details:** Every test ran for at least 20 minutes using the `Energy` effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.
+    * **Segment Sizing:** In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that **this is not a limitation**. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.
+    * **PASS Results:**
+    * `PASS`: Heap WiFi >= 75kB (Ensures smooth Wi-Fi and Bluetooth operations).
+    * `PASS / BT WARN`: 55kB <= Heap WiFi < 75kB (Wi-Fi works perfectly, but heap is too low for reliable Bluetooth transmissions).
+
+
+    ### ESP32-S3 Test Matrix
+
+    | Driver | Lanes | Segments | LEDs/lane | Total LEDs | Heap | FPS (Render/Led) | Result |
+    | ------ | ----- | -------- | --------- | ---------- | ---- | ---------------- | ------ |
+    | Parallel | 1 | None | 820 | 820 | 76kB | 30.6 / 30.6 | PASS |
+    | Parallel | 1 | 4x200 | 800 | 800 | 68kB | 31.4 / 31.4 | PASS / BT WARN |
+    | RMT-GDMA | 1 | None | 620 | 620 | 230kB | 59.0 / 30.9 | PASS |
+    | RMT-GDMA | 1 | 4x135 | 540 | 540 | 213kB | 53.0 / 31.4 | PASS |
+    | Parallel | 2 | None | 750 | 1500 | 76kB | 33.4 / 33.5 | PASS |
+    | Parallel | 2 | 8x175 | 700 | 1400 | 63kB | 35.8 / 35.8 | PASS / BT WARN |
+    | RMT | 2 | None | 680 | 1360 | 213kB | 58.6 / 31.6 | PASS |
+    | RMT | 2 | 4x154 | 616 | 1232 | 182kB | 43.9 / 31.7 | PASS |
+    | Parallel | 3 | None | 720 | 2880 | 72kB | 34.8 / 34.8 | PASS / BT WARN |
+    | Parallel | 3 | 12x170 | 680 | 2040 | 100kB | 31.5 / 31.4 | PASS |
+    | Parallel | 4 | None | 650 | 2600 | 71kB | 38.5 / 38.6 | PASS / BT WARN |
+    | Parallel | 4 | 16x160 | 640 | 2560 | 82kB | 33.1 / 33.1 | PASS |
+    | SPI | 1 | None | 2000 | 2000 | 166kB | 51.3 / 51.2 | PASS |
+    | SPI | 1 | 4x500 | 2000 | 2000 | 134kB | 45.7 / 45.7 | PASS |
+    | SPI | 2 | None | 2000 | 4000 | 225kB | 58.3 / 58.8 | PASS |
+    | SPI | 2 | 4x500 | 2000 | 4000 | 152kB | 45.2 / 45.4 | PASS |
+
+    ### ESP32 Classic Test Matrix
+
+    | Driver | Lanes | Segments | LEDs/lane | Total LEDs | Heap | FPS (Render/Led) | Result |
+    | ------ | ----- | -------- | --------- | ---------- | ---- | ---------------- | ------ |
+    | RMT | 1 | None | 740 | 740 | 157kB | 32.3 / 32.2 | PASS |
+    | RMT | 1 | 4x175 | 700 | 700 | 145kB | 34.6 / 36.6 | PASS |
+    | RMT | 2 | None | 700 | 1400 | 142kB | 34.4 / 33.8 | PASS |
+    | RMT | 2 | 8x165 | 660 | 1320 | 117kB | 34.6 / 38.7 | PASS |
+    | RMT | 3 | None | 680 | 2040 | 126kB | 35.7 / 32.5 | PASS |
+    | RMT | 3 | 12x160 | 640 | 1920 | 89kB | 35.7 / 35.6 | PASS |
+    | RMT | 4 | None | 670 | 3080 | 109kB | 36.0 / 36.6 | PASS |
+    | RMT | 4 | 16x135 | 540 | 2160 | 64kB | 41.2 / 43.2 | PASS / BT WARN |
+    | SPI | 1 | None | 2000 | 2000 | 220kB | 58.4 / 58.0 | PASS |
+    | SPI | 1 | 4x500 | 2000 | 2000 | 207kB | 58.8 / 58.9 | PASS |
+    | SPI | 2 | None | 2000 | 4000 | 193kB | 58.8 / 58.9 | PASS |
+    | SPI | 2 | 8x500 | 2000 | 4000 | 168kB | 59.3 / 60.0 | PASS |
+
+    ### ESP32-C3 Test Matrix
+
+    | Driver | Lanes | Segments | LEDs/lane | Total LEDs | Heap | FPS (Render/Led) | Result |
+    | ------ | ----- | -------- | --------- | ---------- | ---- | ---------------- | ------ |
+    | RMT | 1 | None | 720 | 720 | 177kB | 32.5 / 32.1 | PASS |
+    | RMT | 1 | 4x165 | 660 | 660 | 163kB | 33.1 / 38.1 | PASS |
+    | SPI | 1 | None | 2000 | 2000 | 166kB | 51.3 / 51.2 | PASS |
+    | SPI | 1 | 4x500 | 2000 | 2000 | 152kB | 45.2 / 45.4 | PASS |
+
+    *Notes:*
+    * *SPI driver is currently in BETA.*
+    * *GDMA means General Direct Memory Access, preventing main CPU bog down.*
