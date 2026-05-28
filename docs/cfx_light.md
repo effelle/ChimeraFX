@@ -195,7 +195,7 @@ Rules of thumb:
     !!! note "Result labels"
         `PASS` means Heap WiFi >= 75kB.
 
-        `PASS / BT WARN` means 55kB <= Heap WiFi < 75kB. Wi-Fi is still in the safe zone, but Bluetooth may not have enough free heap for reliable operation.
+        `PASS / BT WARN` means 55kB <= Heap WiFi < 75kB. Wi-Fi is still in the safe zone, but Bluetooth may not have enough free heap for reliable operation. See [Memory Management & Stability](Troubleshooting.md#memory-management-stability) for the heap floor logic.
 
     * **FPS:** shown as `Render / Led`.
 
