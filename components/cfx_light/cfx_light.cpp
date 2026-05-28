@@ -1068,7 +1068,7 @@ void CFXLightOutput::log_rmt_cadence_diag_(bool force) {
   const char *encoder_label = "copy";
 #endif
 
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "CFX rmt_cad[%s] frames=%" PRIu32
            " LedFPS=%s avg_us(show_q=%" PRIu32 " write=%" PRIu32
            " flush=%" PRIu32 " wait=%" PRIu32 ")"
