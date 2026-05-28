@@ -1162,12 +1162,53 @@ def _reject_legacy_power_keys(config):
         )
     return config
 
+
+def _rmt_wire_floor_update_interval(config):
+    """Return a codegen update_interval floor for tight RMT targets.
+
+    The C++ transport also computes this dynamically, but C3 whole-light
+    effects need the floor injected before effect scheduling so they do not
+    render at 16/17ms while the single RMT channel can only transmit at ~30ms.
+    """
+    if _get_esp32_variant() != "ESP32C3":
+        return None
+    if config.get(CONF_PARALLEL_GROUP):
+        return None
+
+    chipset = str(config.get(CONF_CHIPSET, "")).upper()
+    if chipset in SPI_CHIPSETS:
+        return None
+
+    num_leds = int(config.get(CONF_NUM_LEDS, 0) or 0)
+    if num_leds <= 0:
+        return None
+
+    if chipset == "SK6812":
+        stride = 4
+        bit_time_ns = 1200
+        reset_ns = 80000
+    elif chipset == "WS2811":
+        stride = 3
+        bit_time_ns = 2500
+        reset_ns = 280000
+    else:
+        stride = 3
+        bit_time_ns = 1250
+        reset_ns = 280000
+
+    bit_count = num_leds * stride * 8
+    wire_us = ((bit_count * bit_time_ns + reset_ns) + 999) // 1000
+    floor_ms = (wire_us + 1800 + 999) // 1000
+    floor_ms += 2 if config.get(CONF_SEGMENTS) else 1
+    return f"{floor_ms}ms"
+
+
 def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
-    light_update_interval = (
+    light_update_interval = _rmt_wire_floor_update_interval(config) or (
         "14ms"
         if chipset in SPI_CHIPSETS or config.get(CONF_PARALLEL_GROUP)
         else None
