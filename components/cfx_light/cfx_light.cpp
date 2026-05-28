@@ -5472,12 +5472,10 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
     return false;
   }
 
+  // Governor: request high-frequency loop only while transport/service work is
+  // pending. Active effects alone can monopolize the main loop on dense nodes.
   if (this->has_outro() || this->rmt_flush_pending_ ||
       this->seg_flush_pending_) {
-    return true;
-  }
-
-  if (has_active_rendering_cfx_effect(this)) {
     return true;
   }
 
