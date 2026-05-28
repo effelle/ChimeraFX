@@ -646,13 +646,20 @@ static const uint32_t PaletteTwilight[16] CFX_PROGMEM = {
     0xFF00FF, 0xDD33FF, 0xBB66FF, 0x9999FF  // Magenta -> Lighter
 };
 
-// Palette 255: Solid Color - filled dynamically from segment.colors[0]
-static uint32_t PaletteSolid[16] = {0}; // Will be filled at runtime
+// Palette 255: Solid Color - filled dynamically from segment.colors[0].
+// Runners can be serviced on both ESP32 cores at the same time, so keep the
+// mutable solid palette per-core instead of sharing one write-heavy buffer.
+static uint32_t PaletteSolidPerCore[2][16] = {};
+
+static uint32_t *activeSolidPalette() {
+  return PaletteSolidPerCore[xPortGetCoreID()];
+}
 
 // Fill PaletteSolid with current color
 static void fillSolidPalette(uint32_t color) {
+  uint32_t *palette = activeSolidPalette();
   for (int i = 0; i < 16; i++) {
-    PaletteSolid[i] = color;
+    palette[i] = color;
   }
 }
 
@@ -704,7 +711,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 20:
     return PaletteSunnyGold;
   case 21:
-    return PaletteSolid;
+    return activeSolidPalette();
   case 22:
     return PaletteFairy;
   case 23:
@@ -718,7 +725,7 @@ static const uint32_t *getPaletteByIndex(uint8_t palette_index) {
   case 255:
     // Solid color mode - caller must call fillSolidPalette first
     // 21 = selector position, 255 = internal constant
-    return PaletteSolid;
+    return activeSolidPalette();
   default:
     return PaletteRainbow; // Fallback to Rainbow (most generic)
   }
@@ -2234,7 +2241,7 @@ uint16_t mode_dissolve(void) {
   if (!use_rainbow) {
     if (instance->_segment.palette == 255) {
       fillSolidPalette(instance->_segment.colors[0]);
-      active_palette = PaletteSolid;
+      active_palette = activeSolidPalette();
     } else {
       active_palette = getPaletteByIndex(instance->_segment.palette);
     }
@@ -3229,7 +3236,7 @@ uint16_t mode_percent(void) {
 
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
-          ? PaletteSolid // Default to Solid
+          ? activeSolidPalette() // Default to Solid
           : getPaletteByIndex(instance->_segment.palette);
 
   // Behavior:
@@ -3238,7 +3245,7 @@ uint16_t mode_percent(void) {
 
   if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
     fillSolidPalette(instance->_segment.colors[0]);
-    active_palette = PaletteSolid;
+    active_palette = activeSolidPalette();
   }
 
   for (int i = 0; i < len; i++) {
@@ -3285,12 +3292,12 @@ uint16_t mode_percent_center(void) {
 
   const uint32_t *active_palette =
       (instance->_segment.palette == 0)
-          ? PaletteSolid
+          ? activeSolidPalette()
           : getPaletteByIndex(instance->_segment.palette);
 
   if (instance->_segment.palette == 0 || instance->_segment.palette == 255) {
     fillSolidPalette(instance->_segment.colors[0]);
-    active_palette = PaletteSolid;
+    active_palette = activeSolidPalette();
   }
 
   for (int i = 0; i < len; i++) {
@@ -5811,7 +5818,7 @@ uint16_t mode_bouncing_balls(void) {
     if (instance->_segment.palette == 255 || instance->_segment.palette == 0) {
       // Default (0) or Explicit Solid (255) -> Use Primary Color
       fillSolidPalette(instance->_segment.colors[0]);
-      active_palette = PaletteSolid;
+      active_palette = activeSolidPalette();
     } else {
       active_palette = getPaletteByIndex(instance->_segment.palette);
     }
@@ -6245,7 +6252,7 @@ uint16_t color_wipe(bool rev, bool useRandomColors) {
   if (useRandomColors) {
     active_palette = PaletteRainbow;
   } else if (instance->_segment.palette == 255) {
-    active_palette = PaletteSolid;
+    active_palette = activeSolidPalette();
   } else {
     active_palette = getPaletteByIndex(instance->_segment.palette);
   }
