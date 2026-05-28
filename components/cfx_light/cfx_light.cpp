@@ -805,7 +805,13 @@ uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
 
   const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
   if (wire_floor_us > 0) {
-    const uint32_t wire_floor_ms = (wire_floor_us + 999u) / 1000u;
+    uint32_t wire_floor_ms = (wire_floor_us + 999u) / 1000u;
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+    // C3 has one small RMT block on a single core. Long RGBW frames can be
+    // technically cadence-clean yet still leave too little slack for WiFi/HA
+    // and runner work, showing as rare visual glitches near the limit.
+    wire_floor_ms += this->has_segments() ? 2u : 1u;
+#endif
     if (wire_floor_ms > effective_ms) {
       effective_ms = wire_floor_ms;
     }
