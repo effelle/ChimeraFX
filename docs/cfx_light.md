@@ -188,50 +188,50 @@ light:
 
     ### ESP32-S3 Test Matrix
 
-    | Setup | LEDs | Heap | FPS / Result |
-    | ----- | ---- | ---- | ------------ |
-    | Parallel, 1 lane, no segments | 820/lane, 820 total | 76kB | 30.6 / 30.6, PASS |
-    | Parallel, 1 lane, 4x200 | 800/lane, 800 total | 68kB | 31.4 / 31.4, PASS / BT WARN |
-    | RMT-GDMA, 1 lane, no segments | 620/lane, 620 total | 230kB | 59.0 / 30.9, PASS |
-    | RMT-GDMA, 1 lane, 4x135 | 540/lane, 540 total | 213kB | 53.0 / 31.4, PASS |
-    | Parallel, 2 lanes, no segments | 750/lane, 1500 total | 76kB | 33.4 / 33.5, PASS |
-    | Parallel, 2 lanes, 8x175 | 700/lane, 1400 total | 63kB | 35.8 / 35.8, PASS / BT WARN |
-    | RMT, 2 lanes, no segments | 680/lane, 1360 total | 213kB | 58.6 / 31.6, PASS |
-    | RMT, 2 lanes, 4x154 | 616/lane, 1232 total | 182kB | 43.9 / 31.7, PASS |
-    | Parallel, 3 lanes, no segments | 720/lane, 2880 total | 72kB | 34.8 / 34.8, PASS / BT WARN |
-    | Parallel, 3 lanes, 12x170 | 680/lane, 2040 total | 100kB | 31.5 / 31.4, PASS |
-    | Parallel, 4 lanes, no segments | 650/lane, 2600 total | 71kB | 38.5 / 38.6, PASS / BT WARN |
-    | Parallel, 4 lanes, 16x160 | 640/lane, 2560 total | 82kB | 33.1 / 33.1, PASS |
-    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 166kB | 51.3 / 51.2, PASS |
-    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 134kB | 45.7 / 45.7, PASS |
-    | SPI, 2 lanes, no segments | 2000/lane, 4000 total | 225kB | 58.3 / 58.8, PASS |
-    | SPI, 2 lanes, 4x500 | 2000/lane, 4000 total | 152kB | 45.2 / 45.4, PASS |
+    | Setup | LEDs | Heap | FPS | Result |
+    | ----- | ---- | ---- | --- | ------ |
+    | Parallel, 1 lane, no segments | 820/lane, 820 total | 76kB | 30.6 / 30.6 | PASS |
+    | Parallel, 1 lane, 4x200 | 800/lane, 800 total | 68kB | 31.4 / 31.4 | PASS / BT WARN |
+    | RMT-GDMA, 1 lane, no segments | 620/lane, 620 total | 230kB | 59.0 / 30.9 | PASS |
+    | RMT-GDMA, 1 lane, 4x135 | 540/lane, 540 total | 213kB | 53.0 / 31.4 | PASS |
+    | Parallel, 2 lanes, no segments | 750/lane, 1500 total | 76kB | 33.4 / 33.5 | PASS |
+    | Parallel, 2 lanes, 8x175 | 700/lane, 1400 total | 63kB | 35.8 / 35.8 | PASS / BT WARN |
+    | RMT, 2 lanes, no segments | 680/lane, 1360 total | 213kB | 58.6 / 31.6 | PASS |
+    | RMT, 2 lanes, 4x154 | 616/lane, 1232 total | 182kB | 43.9 / 31.7 | PASS |
+    | Parallel, 3 lanes, no segments | 720/lane, 2880 total | 72kB | 34.8 / 34.8 | PASS / BT WARN |
+    | Parallel, 3 lanes, 12x170 | 680/lane, 2040 total | 100kB | 31.5 / 31.4 | PASS |
+    | Parallel, 4 lanes, no segments | 650/lane, 2600 total | 71kB | 38.5 / 38.6 | PASS / BT WARN |
+    | Parallel, 4 lanes, 16x160 | 640/lane, 2560 total | 82kB | 33.1 / 33.1 | PASS |
+    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 166kB | 51.3 / 51.2 | PASS |
+    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 134kB | 45.7 / 45.7 | PASS |
+    | SPI, 2 lanes, no segments | 2000/lane, 4000 total | 225kB | 58.3 / 58.8 | PASS |
+    | SPI, 2 lanes, 4x500 | 2000/lane, 4000 total | 152kB | 45.2 / 45.4 | PASS |
 
     ### ESP32 Classic Test Matrix
 
-    | Setup | LEDs | Heap | FPS / Result |
-    | ----- | ---- | ---- | ------------ |
-    | RMT, 1 lane, no segments | 740/lane, 740 total | 157kB | 32.3 / 32.2, PASS |
-    | RMT, 1 lane, 4x175 | 700/lane, 700 total | 145kB | 34.6 / 36.6, PASS |
-    | RMT, 2 lanes, no segments | 700/lane, 1400 total | 142kB | 34.4 / 33.8, PASS |
-    | RMT, 2 lanes, 8x165 | 660/lane, 1320 total | 117kB | 34.6 / 38.7, PASS |
-    | RMT, 3 lanes, no segments | 680/lane, 2040 total | 126kB | 35.7 / 32.5, PASS |
-    | RMT, 3 lanes, 12x160 | 640/lane, 1920 total | 89kB | 35.7 / 35.6, PASS |
-    | RMT, 4 lanes, no segments | 670/lane, 3080 total | 109kB | 36.0 / 36.6, PASS |
-    | RMT, 4 lanes, 16x135 | 540/lane, 2160 total | 64kB | 41.2 / 43.2, PASS / BT WARN |
-    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 220kB | 58.4 / 58.0, PASS |
-    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 207kB | 58.8 / 58.9, PASS |
-    | SPI, 2 lanes, no segments | 2000/lane, 4000 total | 193kB | 58.8 / 58.9, PASS |
-    | SPI, 2 lanes, 8x500 | 2000/lane, 4000 total | 168kB | 59.3 / 60.0, PASS |
+    | Setup | LEDs | Heap | FPS | Result |
+    | ----- | ---- | ---- | --- | ------ |
+    | RMT, 1 lane, no segments | 740/lane, 740 total | 157kB | 32.3 / 32.2 | PASS |
+    | RMT, 1 lane, 4x175 | 700/lane, 700 total | 145kB | 34.6 / 36.6 | PASS |
+    | RMT, 2 lanes, no segments | 700/lane, 1400 total | 142kB | 34.4 / 33.8 | PASS |
+    | RMT, 2 lanes, 8x165 | 660/lane, 1320 total | 117kB | 34.6 / 38.7 | PASS |
+    | RMT, 3 lanes, no segments | 680/lane, 2040 total | 126kB | 35.7 / 32.5 | PASS |
+    | RMT, 3 lanes, 12x160 | 640/lane, 1920 total | 89kB | 35.7 / 35.6 | PASS |
+    | RMT, 4 lanes, no segments | 670/lane, 3080 total | 109kB | 36.0 / 36.6 | PASS |
+    | RMT, 4 lanes, 16x135 | 540/lane, 2160 total | 64kB | 41.2 / 43.2 | PASS / BT WARN |
+    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 220kB | 58.4 / 58.0 | PASS |
+    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 207kB | 58.8 / 58.9 | PASS |
+    | SPI, 2 lanes, no segments | 2000/lane, 4000 total | 193kB | 58.8 / 58.9 | PASS |
+    | SPI, 2 lanes, 8x500 | 2000/lane, 4000 total | 168kB | 59.3 / 60.0 | PASS |
 
     ### ESP32-C3 Test Matrix
 
-    | Setup | LEDs | Heap | FPS / Result |
-    | ----- | ---- | ---- | ------------ |
-    | RMT, 1 lane, no segments | 720/lane, 720 total | 177kB | 32.5 / 32.1, PASS |
-    | RMT, 1 lane, 4x165 | 660/lane, 660 total | 163kB | 33.1 / 38.1, PASS |
-    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 166kB | 51.3 / 51.2, PASS |
-    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 152kB | 45.2 / 45.4, PASS |
+    | Setup | LEDs | Heap | FPS | Result |
+    | ----- | ---- | ---- | --- | ------ |
+    | RMT, 1 lane, no segments | 720/lane, 720 total | 177kB | 32.5 / 32.1 | PASS |
+    | RMT, 1 lane, 4x165 | 660/lane, 660 total | 163kB | 33.1 / 38.1 | PASS |
+    | SPI, 1 lane, no segments | 2000/lane, 2000 total | 166kB | 51.3 / 51.2 | PASS |
+    | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 152kB | 45.2 / 45.4 | PASS |
 
     *Notes:*
     * *SPI driver is currently in BETA.*
