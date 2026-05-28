@@ -138,9 +138,9 @@ While `all_effects: true` loads everything, you can define your own defaults (li
 
 For high-density 1-wire layouts on the ESP32-S3, you can use the parallel driver. Multiple strips are rendered as "lanes" and transmitted simultaneously, drastically improving refresh rates.
 
-* **Limits:** Up to 4 lanes per group, max 2 groups per ESP32-S3.
-* **Note:** Chipsets cannot be mixed inside a single group.
-* **Supported Chipset:** SK6812 and WS2812X.
+* **Limits:** Up to 4 lanes per group, up to 4 segments per lane, and max 2 groups per ESP32-S3.
+* **Chipset groups:** `SK6812` and `WS2812X` are supported, but chipsets cannot be mixed inside a single group. Use separate groups when you need both.
+* **Best fit:** Large RGBW/RGB strip layouts where several lanes should refresh together.
 
 ```yaml
 light:
@@ -168,9 +168,21 @@ light:
 ## Hardware Architecture & Performance Limits
 
 `cfx_light` is highly optimized:
+
 * **ESP-IDF Native**: Drives the RMT peripheral directly, bypassing framework overhead.
+
 * **ESP32-S3 Preferred**: For large arrays (>800 LEDs), the ESP32-S3 using the parallel backend is strongly recommended. 40 meters of 60 LED/m strip can run at 30+ FPS.
-* **ESP32-C3 limitations**: Single core and limited RMT symbols (96) make it best for desk lamps or short strips (<400 LEDs).
+
+* **ESP32 Classic Restored**: Classic ESP32 remains a strong RMT/SPI target, especially when you need several ordinary RMT outputs.
+
+* **ESP32-C3 Timing-sensitive**: The C3 can drive useful single-output layouts, but its single core and limited RMT symbols make heavy effects more sensitive near the upper LED limits.
+
+Rules of thumb:
+
+* Choose **S3 parallel** for dense 1-wire installations with 3-4 lanes or many segments.
+* Choose **SPI** when the strip supports it and you want the highest LED count per output.
+* Choose **Classic RMT** for reliable multi-output 1-wire nodes where the LED count is moderate.
+* Treat **C3 RMT** as a compact single-output option, then test your heaviest effect before pushing the LED count.
 
 ??? abstract "Click here to view the detailed Performance Test Matrices"
 
@@ -180,9 +192,11 @@ light:
     * **Higher FPS:** These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to **~60 FPS**.
     * **Benchmark Details:** Every test ran for at least 20 minutes using the `Energy` effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.
     * **Segment Sizing:** In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that **this is not a limitation**. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.
-    * **PASS Results:**
-    * `PASS`: Heap WiFi >= 75kB (Ensures smooth Wi-Fi and Bluetooth operations).
-    * `PASS / BT WARN`: 55kB <= Heap WiFi < 75kB (Wi-Fi works perfectly, but heap is too low for reliable Bluetooth transmissions).
+    !!! note "Result labels"
+        `PASS` means Heap WiFi >= 75kB.
+
+        `PASS / BT WARN` means 55kB <= Heap WiFi < 75kB. Wi-Fi is still in the safe zone, but Bluetooth may not have enough free heap for reliable operation.
+
     * **FPS:** shown as `Render / Led`.
 
 
@@ -234,5 +248,6 @@ light:
     | SPI, 1 lane, 4x500 | 2000/lane, 2000 total | 152kB | 45.2 / 45.4 | PASS |
 
     *Notes:*
+
     * *SPI driver is currently in BETA.*
     * *GDMA means General Direct Memory Access, preventing main CPU bog down.*
