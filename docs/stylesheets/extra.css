@@ -22,6 +22,21 @@ p {
     text-align: justify;
 }
 
+.md-typeset table:not([class]) {
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+    padding: 0.32em 0.45em;
+    white-space: normal;
+}
+
+.md-typeset .md-typeset__table {
+    overflow-x: auto;
+}
+
 :root>* {
     --md-primary-fg-color: #292B2A;
     --md-typeset-a-color: #3498db;

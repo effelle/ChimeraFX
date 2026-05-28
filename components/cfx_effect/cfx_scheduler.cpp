@@ -5,6 +5,7 @@
  */
 
 #include "cfx_scheduler.h"
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include <algorithm>  // std::sort
 
@@ -99,6 +100,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
                                     bool force_sequential) {
   const size_t total = runners.size();
   if (total == 0) return true;
+  const uint32_t dispatch_start_us = total >= 4 ? micros() : 0;
 
   // Global override (diagnostic) takes precedence. Per-call flag (e.g. SPI
   // coordinator batch) runs the same sequential path without the warning —
@@ -116,6 +118,21 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
       if (r != nullptr) {
         InstanceGuard guard(r);
         r->service();
+      }
+    }
+
+    if (total >= 4) {
+      const uint32_t now_ms = millis();
+      if (this->last_batch_diag_ms_ == 0 ||
+          (now_ms - this->last_batch_diag_ms_) >= 2000) {
+        this->last_batch_diag_ms_ = now_ms;
+        ESP_LOGD(TAG,
+                 "CFX sched_batch total=%u mode=sequential force=%u global=%u "
+                 "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
+                 static_cast<unsigned>(total),
+                 static_cast<unsigned>(force_sequential),
+                 static_cast<unsigned>(force_sequential_),
+                 static_cast<unsigned>(total), micros() - dispatch_start_us);
       }
     }
 
@@ -204,6 +221,26 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
                CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
     }
 
+    if (total >= 4) {
+      const uint32_t now_ms = millis();
+      if (this->last_batch_diag_ms_ == 0 ||
+          (now_ms - this->last_batch_diag_ms_) >= 2000) {
+        this->last_batch_diag_ms_ = now_ms;
+        ESP_LOGD(TAG,
+                 "CFX sched_batch total=%u mode=dual force=0 global=%u "
+                 "core1=%u core0=%u cost1=%u cost0=%u dispatch_us=%u "
+                 "ok=%u timeout_ms=%u",
+                 static_cast<unsigned>(total),
+                 static_cast<unsigned>(force_sequential_),
+                 static_cast<unsigned>(core1_slice_.size()),
+                 static_cast<unsigned>(core0_slice_.size()),
+                 static_cast<unsigned>(cost_core1),
+                 static_cast<unsigned>(cost_core0),
+                 micros() - dispatch_start_us, static_cast<unsigned>(core0_ok),
+                 static_cast<unsigned>(CFX_CORE0_TIMEOUT_MS));
+      }
+    }
+
     return core0_ok;
   }
   // Fall through: task not ready yet, or only 1 runner — sequential is fine.
@@ -214,6 +251,21 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
     if (r != nullptr) {
       InstanceGuard guard(r);
       r->service();
+    }
+  }
+
+  if (total >= 4) {
+    const uint32_t now_ms = millis();
+    if (this->last_batch_diag_ms_ == 0 ||
+        (now_ms - this->last_batch_diag_ms_) >= 2000) {
+      this->last_batch_diag_ms_ = now_ms;
+      ESP_LOGD(TAG,
+               "CFX sched_batch total=%u mode=fallthrough force=%u global=%u "
+               "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
+               static_cast<unsigned>(total),
+               static_cast<unsigned>(force_sequential),
+               static_cast<unsigned>(force_sequential_),
+               static_cast<unsigned>(total), micros() - dispatch_start_us);
     }
   }
 

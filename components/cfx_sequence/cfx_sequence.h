@@ -316,6 +316,7 @@ protected:
   bool is_starting_{false};
   bool is_stopping_{false};
   bool is_running_{false};
+  bool start_reported_{false};
   TeardownMode teardown_mode_{TeardownMode::NONE};
   size_t teardown_light_index_{0};
   // bool is_stagger_complete_{true}; // Replaced by stagger_tasks_pending_ atomic

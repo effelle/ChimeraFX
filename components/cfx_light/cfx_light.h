@@ -151,6 +151,7 @@ enum ChimeraChipset : uint8_t {
 enum CFXTransport : uint8_t {
   TRANSPORT_RMT,  // One-wire (WS2812X, SK6812, WS2811)
   TRANSPORT_SPI,  // Two-wire clock+data (APA102, SK9822)
+  TRANSPORT_PARALLEL,  // Future LCD/I80-backed parallel one-wire group
 };
 
 // SPI host selection (maps to ESP-IDF spi_host_device_t)
@@ -196,6 +197,7 @@ public:
   void loop() override;
   void write_state(light::LightState *state) override;
   void update_state(light::LightState *state) override;
+  void on_shutdown() override;
   void on_master_update();
   void on_segment_update();
   void send_visualizer_metadata(const std::string &name,
@@ -298,6 +300,9 @@ public:
   switch_::Switch *get_force_white_switch() const { return this->force_white_sw_; }
   bool is_force_white_active_for(light::LightState *state) const;
   void set_rmt_symbols(uint32_t symbols) { this->rmt_symbols_ = symbols; }
+  void set_rmt_c3_stability_cushion(bool enabled) {
+    this->rmt_c3_stability_cushion_ = enabled;
+  }
   void set_max_refresh_rate(uint32_t interval_us) {
     this->max_refresh_rate_ = interval_us;
   }
@@ -306,6 +311,13 @@ public:
   }
   bool is_runtime_debug_enabled() const { return this->runtime_debug_enabled_; }
   float get_led_fps() const { return this->led_fps_valid_ ? this->led_fps_ : -1.0f; }
+  uint32_t get_rmt_wire_frame_floor_us() const;
+  uint32_t get_effective_rmt_update_interval_ms(uint32_t requested_ms) const;
+  void note_effective_rmt_update_interval_ms(uint32_t interval_ms) {
+    if (this->is_rmt_transport()) {
+      this->perf_diag_last_effective_rmt_update_ms_ = interval_ms;
+    }
+  }
   void set_default_transition_length(uint32_t ms) {
     this->default_transition_length_ms_ = ms;
   }
@@ -319,9 +331,45 @@ public:
   CFXTransport get_transport() const { return this->transport_; }
   bool is_spi_transport() const { return this->transport_ == TRANSPORT_SPI; }
   bool is_rmt_transport() const { return this->transport_ == TRANSPORT_RMT; }
+  bool is_parallel_transport() const {
+    return this->transport_ == TRANSPORT_PARALLEL;
+  }
   // P3: Called by CFXTransmitBarrier to fire the DMA transmit on this output.
   // Must be public — the barrier is an external caller with no class membership.
   void commit_transmit_();
+  void set_parallel_group(const std::string &group) {
+    this->parallel_group_ = group;
+  }
+  void set_parallel_group_index(uint8_t index) {
+    this->parallel_group_index_ = index;
+  }
+  uint8_t get_parallel_group_index() const { return this->parallel_group_index_; }
+  void set_parallel_bit_offset(uint8_t offset) {
+    this->parallel_bit_offset_ = offset;
+  }
+  void set_parallel_lane_index(uint8_t index) {
+    this->parallel_lane_index_ = index;
+  }
+  void set_parallel_lane_count(uint8_t count) {
+    this->parallel_lane_count_ = count;
+  }
+  void set_parallel_strobe_pin(uint8_t pin) {
+    this->parallel_strobe_pin_ = pin;
+  }
+  void set_parallel_dc_pin(uint8_t pin) {
+    this->parallel_dc_pin_ = pin;
+  }
+  void set_parallel_strobe_pin_auto(bool automatic) {
+    this->parallel_strobe_pin_auto_ = automatic;
+  }
+  void set_parallel_dc_pin_auto(bool automatic) {
+    this->parallel_dc_pin_auto_ = automatic;
+  }
+  void set_parallel_lane_pin(uint8_t index, uint8_t pin) {
+    if (index < 8) {
+      this->parallel_lane_pins_[index] = pin;
+    }
+  }
   void set_spi_data_pin(uint8_t pin) { this->spi_data_pin_ = pin; }
   void set_spi_clock_pin(uint8_t pin) { this->spi_clock_pin_ = pin; }
   void set_spi_speed_hz(uint32_t hz) { this->spi_speed_hz_ = hz; }
@@ -429,8 +477,26 @@ protected:
   // Transport-specific setup/flush helpers
   void setup_rmt_();
   void setup_spi_();
+  void setup_parallel_();
+  bool init_parallel_backend_();
+  void deinit_parallel_backend_();
   void flush_rmt_();
   void flush_spi_();
+  void flush_parallel_();
+  bool request_parallel_group_flush_();
+  void service_parallel_group_flush_();
+  bool request_parallel_shared_group_flush_();
+  void service_parallel_shared_group_flush_();
+  bool force_parallel_shutdown_blackout_();
+  size_t get_parallel_frame_size_() const;
+  uint16_t get_parallel_required_led_count_() const;
+  bool build_parallel_frame_(uint8_t *dest, size_t len, uint16_t start_led,
+                             uint16_t led_count, bool include_reset);
+  bool build_parallel_shared_frame_(
+      uint8_t *dest, size_t len, uint32_t start_byte_slot,
+      uint32_t byte_slot_count, const uint32_t *group_tx_byte_slots,
+      bool include_reset);
+  bool flush_parallel_shared_groups_(uint8_t group_mask);
   void bind_force_white_switch_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
@@ -450,6 +516,15 @@ protected:
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
   bool service_segment_render_coordinator_();
+  bool service_parallel_segment_group_coordinator_();
+  bool collect_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
+                                          uint64_t now,
+                                          bool force_due = false);
+  bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
+                                         bool force_due = false);
+  void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
+                                           bool transmit);
+  void mark_segment_coordinator_epoch_committed_(uint8_t mask);
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
@@ -463,6 +538,7 @@ protected:
   bool use_blocking_spi_diag_() const { return this->is_spi_transport(); }
   void reset_perf_diag_();
   void record_led_frame_();
+  void record_parallel_completed_led_frames_();
   void record_perf_diag_flush_(uint32_t write_start_us,
                                bool perf_diag_enabled,
                                bool spi_cadence_diag_enabled,
@@ -474,6 +550,7 @@ protected:
   void log_segment_coordinator_diag_();
   void apply_power_scale_to_buffer_(uint8_t *data, size_t len) const;
   void fill_buffer_solid_(const Color &color);
+  void scrub_inactive_segments_();
   uint8_t get_power_transmit_scale_() const;
 
   // SPI frame geometry helpers
@@ -537,12 +614,23 @@ protected:
   switch_::Switch *force_white_sw_{nullptr};
   switch_::Switch *force_white_cb_sw_{nullptr};
   uint32_t rmt_symbols_{0}; // 0 = auto-detect from chip variant
+  bool rmt_c3_stability_cushion_{false};
   uint32_t default_transition_length_ms_{0};
   bool runtime_debug_enabled_{false};
   mutable bool unsafe_view_logged_{false};
 
   // SPI transport fields (idle harmlessly for RMT instances)
   CFXTransport transport_{TRANSPORT_RMT};
+  std::string parallel_group_{};
+  uint8_t parallel_lane_index_{0};
+  uint8_t parallel_lane_count_{0};
+  uint8_t parallel_group_index_{0};
+  uint8_t parallel_bit_offset_{0};
+  uint8_t parallel_strobe_pin_{22};
+  uint8_t parallel_dc_pin_{21};
+  bool parallel_strobe_pin_auto_{true};
+  bool parallel_dc_pin_auto_{true};
+  uint8_t parallel_lane_pins_[8]{};
   uint8_t spi_data_pin_{0};
   uint8_t spi_clock_pin_{0};
   uint32_t spi_speed_hz_{10000000};  // 10 MHz default
@@ -607,6 +695,7 @@ protected:
   bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
   bool prev_master_defaults_state_{false};
+
   uint8_t tracked_brightness_{0};
   float led_fps_{0.0f};
   bool led_fps_valid_{false};
@@ -667,6 +756,7 @@ protected:
   uint32_t perf_diag_last_spi_flush_start_us_{0};
   uint32_t perf_diag_rmt_tx_launch_interval_count_{0};
   uint32_t perf_diag_last_rmt_tx_launch_us_{0};
+  uint32_t perf_diag_last_effective_rmt_update_ms_{0};
   uint32_t perf_diag_spi_loop_log_ms_{0};
   uint8_t seg_flush_pending_mask_{0};
   uint8_t seg_flush_dirty_mask_{0};
@@ -680,6 +770,20 @@ protected:
   uint32_t seg_coord_epochs_{0};
   uint32_t seg_coord_rendered_segments_{0};
   uint32_t seg_batch_diag_last_log_ms_{0};
+  uint32_t seg_coord_collect_start_us_{0};
+  uint32_t seg_coord_last_epoch_us_{0};
+  uint32_t seg_coord_epoch_dt_count_{0};
+  uint32_t seg_coord_max_epoch_dt_us_{0};
+  uint64_t seg_coord_total_epoch_dt_us_{0};
+  uint32_t seg_coord_due_late_count_{0};
+  uint32_t seg_coord_max_due_late_ms_{0};
+  uint64_t seg_coord_total_due_late_ms_{0};
+  uint32_t seg_coord_collect_flush_count_{0};
+  uint32_t seg_coord_max_collect_flush_us_{0};
+  uint64_t seg_coord_total_collect_flush_us_{0};
+  uint32_t seg_coord_refresh_dt_count_{0};
+  uint32_t seg_coord_max_refresh_dt_us_{0};
+  uint64_t seg_coord_total_refresh_dt_us_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
@@ -697,6 +801,7 @@ protected:
   uint32_t mono_idle_wake_count_{0};
   uint32_t segment_coord_owned_mask_ms_{0};
   std::vector<chimera_fx::CFXRunner *> segment_coord_runners_{};
+  std::vector<chimera_fx::CFXRunner *> parallel_segment_coord_runners_{};
   uint8_t perf_diag_pending_gate_defers_{0};
   uint8_t perf_diag_last_launch_slot_{0};
   CFXTurnOnDefaults turn_on_defaults_{};

@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 6
+CFX_LIGHT_SCHEMA_REV = 22
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -136,6 +136,7 @@ SPI_CHIPSETS = {"APA102", "SK9822"}
 
 # Chipsets that use 4-byte RGBW protocol by default
 RGBW_CHIPSETS = {"SK6812"}
+PARALLEL_S3_CHIPSETS = {"SK6812", "WS2812X"}
 
 # SPI Host mapping
 SPI_HOSTS = {
@@ -183,6 +184,9 @@ CONF_DATA_PIN = "data_pin"
 CONF_CLOCK_PIN = "clock_pin"
 CONF_SPI_SPEED = "spi_speed"
 CONF_SPI_HOST = "spi_host"
+CONF_PARALLEL_GROUP = "parallel_group"
+CONF_PARALLEL_STROBE_PIN = "parallel_strobe_pin"
+CONF_PARALLEL_DC_PIN = "parallel_dc_pin"
 CONF_SET_INTRO = "set_intro"
 CONF_SET_OUTRO = "set_outro"
 CONF_SET_INOUT_DUR = "set_inout_dur"
@@ -192,6 +196,17 @@ CONF_SET_COLOR = "set_color"
 SET_COLOR_SCHEMA = cv.All(
     cv.ensure_list(cv.int_range(min=0, max=100)),
     cv.Length(min=3, max=4),
+)
+
+PARALLEL_STROBE_PIN_DEFAULT = 22
+PARALLEL_DC_PIN_DEFAULT = 21
+PARALLEL_PIN_SOURCE_AUTO = "auto"
+PARALLEL_PIN_SOURCE_USER = "user"
+_PARALLEL_PIN_RESOLUTION_KEY = "cfx_parallel_internal_pins"
+
+_ESP32S3_PARALLEL_INTERNAL_PIN_CANDIDATES = (
+    38, 39, 40, 41, 42, 47, 48,
+    1, 2, 4, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18,
 )
 
 def _current_ma(value):
@@ -382,15 +397,15 @@ _CFX_LIGHT_LIMITS = {
     # ChimeraFX nodes are validated as either RMT-only or SPI-only.
     "ESP32": {"total": 4, "spi": 2, "rmt": 4},
     # S3 has one strong GDMA-backed RMT lane plus non-DMA fallback lanes.
-    # Physical V1.41 testing showed 2 RMT outputs are release-grade; 3+ RMT
-    # outputs can show visible artifacts even at lower LED counts.
+    # Normal RMT remains capped conservatively; dense 1-wire S3 installs should
+    # use the parallel backend instead.
     "ESP32S3": {"total": 2, "spi": 2, "rmt": 2},
     # P4 stays conservative until physically validated.
     "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
     # Single-host C-series targets keep the existing two-output budget.
-    # ESP32-C3 RMT is experimental for V1.41. It has only 96 RMT symbols and
-    # is not Classic-class; physical validation showed one tuned RMT output is
-    # useful, while two 600-LED RMT outputs remain unstable.
+    # ESP32-C3 has only 96 RMT symbols and is not Classic-class; physical
+    # validation showed one tuned RMT output is useful, while multi-output RMT
+    # is not release-grade.
     "ESP32C3": {"total": 1, "spi": 1, "rmt": 1},
     "ESP32C5": {"total": 2, "spi": 1, "rmt": 2},
     "ESP32C6": {"total": 2, "spi": 1, "rmt": 2},
@@ -520,8 +535,247 @@ def _get_cfx_light_limits(variant=None):
     return _CFX_LIGHT_LIMITS_DEFAULT
 
 
+def _parallel_validate_internal_pin(variant, pin, label):
+    if variant != "ESP32S3":
+        return int(pin)
+    try:
+        from esphome.components.esp32.gpio_esp32_s3 import (
+            esp32_s3_validate_gpio_pin,
+        )
+
+        return int(esp32_s3_validate_gpio_pin(int(pin)))
+    except cv.Invalid:
+        raise
+    except Exception:
+        pin = int(pin)
+        if pin < 0 or pin > 48 or pin in (22, 23, 24, 25):
+            raise cv.Invalid(f"Invalid ESP32-S3 {label} GPIO{pin}.")
+        return pin
+
+
+def _collect_declared_gpio_numbers(value, skip_keys=None):
+    skip_keys = skip_keys or set()
+    found = set()
+
+    if isinstance(value, dict):
+        if CONF_NUMBER in value:
+            try:
+                found.add(int(value[CONF_NUMBER]))
+            except (TypeError, ValueError):
+                pass
+        for key, item in value.items():
+            if key in skip_keys:
+                continue
+            found.update(_collect_declared_gpio_numbers(item, skip_keys))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found.update(_collect_declared_gpio_numbers(item, skip_keys))
+
+    return found
+
+
+def _resolve_parallel_internal_pins(group_name, group_lights, variant, root_config):
+    store = CORE.data.setdefault(_PARALLEL_PIN_RESOLUTION_KEY, {})
+    if group_name in store:
+        return store[group_name]
+
+    lane_pins = {int(lconf[CONF_PIN][CONF_NUMBER]) for lconf in group_lights}
+    skip_internal_keys = {CONF_PARALLEL_STROBE_PIN, CONF_PARALLEL_DC_PIN}
+    used_pins = _collect_declared_gpio_numbers(root_config, skip_internal_keys)
+    used_pins.update(lane_pins)
+
+    strobe_overrides = {
+        _pin_number_or_default(lconf, CONF_PARALLEL_STROBE_PIN, None)
+        for lconf in group_lights
+        if CONF_PARALLEL_STROBE_PIN in lconf
+    }
+    dc_overrides = {
+        _pin_number_or_default(lconf, CONF_PARALLEL_DC_PIN, None)
+        for lconf in group_lights
+        if CONF_PARALLEL_DC_PIN in lconf
+    }
+    if len(strobe_overrides) > 1:
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' must use one shared "
+            f"{CONF_PARALLEL_STROBE_PIN}; got "
+            f"{', '.join(str(v) for v in sorted(strobe_overrides))}."
+        )
+    if len(dc_overrides) > 1:
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' must use one shared "
+            f"{CONF_PARALLEL_DC_PIN}; got "
+            f"{', '.join(str(v) for v in sorted(dc_overrides))}."
+        )
+
+    def choose(label, override_set, already_reserved):
+        if override_set:
+            pin = _parallel_validate_internal_pin(variant, next(iter(override_set)), label)
+            source = PARALLEL_PIN_SOURCE_USER
+            if pin in lane_pins:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    f"for internal {label}; it is already a parallel lane pin."
+                )
+            if pin in used_pins:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    f"for internal {label}; it is already declared in this YAML."
+                )
+            if pin in already_reserved:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot use GPIO{pin} "
+                    "for both internal WR/strobe and D/C."
+                )
+            return pin, source
+
+        if variant != "ESP32S3":
+            return (
+                PARALLEL_STROBE_PIN_DEFAULT if label == "WR/strobe" else PARALLEL_DC_PIN_DEFAULT,
+                PARALLEL_PIN_SOURCE_AUTO,
+            )
+
+        for candidate in _ESP32S3_PARALLEL_INTERNAL_PIN_CANDIDATES:
+            try:
+                pin = _parallel_validate_internal_pin(variant, candidate, label)
+            except cv.Invalid:
+                continue
+            if pin in used_pins or pin in already_reserved:
+                continue
+            return pin, PARALLEL_PIN_SOURCE_AUTO
+
+        raise cv.Invalid(
+            f"cfx_light parallel_group '{group_name}' cannot auto-reserve an "
+            f"ESP32-S3 internal {label} GPIO. Free two output-capable GPIOs or "
+            f"set {CONF_PARALLEL_STROBE_PIN}/{CONF_PARALLEL_DC_PIN} explicitly."
+        )
+
+    strobe_pin, strobe_source = choose("WR/strobe", strobe_overrides, set())
+    dc_pin, dc_source = choose("D/C", dc_overrides, {strobe_pin})
+
+    resolved = {
+        CONF_PARALLEL_STROBE_PIN: strobe_pin,
+        CONF_PARALLEL_DC_PIN: dc_pin,
+        "strobe_source": strobe_source,
+        "dc_source": dc_source,
+    }
+    store[group_name] = resolved
+    _LOGGER.info(
+        "CFXLight parallel_group '%s': internal WR/strobe GPIO%d (%s), "
+        "D/C GPIO%d (%s)",
+        group_name,
+        strobe_pin,
+        strobe_source,
+        dc_pin,
+        dc_source,
+    )
+    return resolved
+
+
+def _ordered_parallel_groups(parallel_lights):
+    groups = {}
+    for lconf in parallel_lights:
+        group_name = str(lconf[CONF_PARALLEL_GROUP])
+        groups.setdefault(group_name, []).append(lconf)
+    return groups
+
+
+def _resolve_parallel_s3_bus_pins(parallel_lights, root_config):
+    store = CORE.data.setdefault(_PARALLEL_PIN_RESOLUTION_KEY, {})
+    key = "__shared_s3_i80_bus__"
+    if key in store:
+        return store[key]
+
+    groups = _ordered_parallel_groups(parallel_lights)
+    bus_pins = [None] * 8
+    used_pins = _collect_declared_gpio_numbers(
+        root_config, {CONF_PARALLEL_STROBE_PIN, CONF_PARALLEL_DC_PIN}
+    )
+    for group_index, (group_name, group_lights) in enumerate(groups.items()):
+        bit_offset = group_index * 4
+        for lane_index, lconf in enumerate(group_lights):
+            bus_pins[bit_offset + lane_index] = int(lconf[CONF_PIN][CONF_NUMBER])
+
+    lane_bus_pins = [pin for pin in bus_pins if pin is not None]
+    if len(lane_bus_pins) != len(set(lane_bus_pins)):
+        raise cv.Invalid(
+            "cfx_light parallel_group cannot reuse the same GPIO as a lane "
+            "pin across shared ESP32-S3 parallel groups."
+        )
+
+    for pin in bus_pins:
+        if pin is not None:
+            used_pins.add(pin)
+
+    all_parallel_lights = []
+    for group_lights in groups.values():
+        all_parallel_lights.extend(group_lights)
+    shared_control = _resolve_parallel_internal_pins(
+        key, all_parallel_lights, "ESP32S3", root_config
+    )
+    used_pins.add(shared_control[CONF_PARALLEL_STROBE_PIN])
+    used_pins.add(shared_control[CONF_PARALLEL_DC_PIN])
+
+    for index, pin in enumerate(bus_pins):
+        if pin is not None:
+            continue
+        for candidate in _ESP32S3_PARALLEL_INTERNAL_PIN_CANDIDATES:
+            try:
+                candidate = _parallel_validate_internal_pin(
+                    "ESP32S3", candidate, "I80 data filler"
+                )
+            except cv.Invalid:
+                continue
+            if candidate in used_pins or candidate in bus_pins:
+                continue
+            bus_pins[index] = candidate
+            used_pins.add(candidate)
+            break
+        if bus_pins[index] is None:
+            raise cv.Invalid(
+                "cfx_light parallel_group cannot auto-reserve enough ESP32-S3 "
+                "I80 filler GPIOs for the shared two-group bus."
+            )
+
+    resolved = {
+        "groups": groups,
+        "bus_pins": [int(pin) for pin in bus_pins],
+        CONF_PARALLEL_STROBE_PIN: shared_control[CONF_PARALLEL_STROBE_PIN],
+        CONF_PARALLEL_DC_PIN: shared_control[CONF_PARALLEL_DC_PIN],
+        "strobe_source": shared_control["strobe_source"],
+        "dc_source": shared_control["dc_source"],
+    }
+    store[key] = resolved
+    _LOGGER.info(
+        "CFXLight parallel shared S3 I80 bus: WR/strobe GPIO%d (%s), "
+        "D/C GPIO%d (%s), data=%s",
+        resolved[CONF_PARALLEL_STROBE_PIN],
+        resolved["strobe_source"],
+        resolved[CONF_PARALLEL_DC_PIN],
+        resolved["dc_source"],
+        ",".join(f"GPIO{pin}" for pin in resolved["bus_pins"]),
+    )
+    return resolved
+
+
 def _is_spi_cfx_light(config):
     return str(config.get(CONF_CHIPSET, "")).upper() in SPI_CHIPSETS
+
+
+def _is_parallel_cfx_light(config):
+    return bool(config.get(CONF_PARALLEL_GROUP))
+
+
+def _is_legacy_rmt_cfx_light(config):
+    return not _is_spi_cfx_light(config) and not _is_parallel_cfx_light(config)
+
+
+def _pin_number_or_default(config, key, default):
+    value = config.get(key)
+    if isinstance(value, dict):
+        return int(value[CONF_NUMBER])
+    if value is None:
+        return int(default)
+    return int(value)
 
 
 def _classic_native_spi_host(data_pin, clock_pin):
@@ -644,6 +898,14 @@ def _validate_segments(config):
         return config
 
     num_leds = config[CONF_NUM_LEDS]
+    parent_light_id = getattr(config.get(CONF_ID), "id", config.get(CONF_ID))
+    parent_output_id = getattr(
+        config.get(CONF_OUTPUT_ID), "id", config.get(CONF_OUTPUT_ID)
+    )
+    parent_ids = {
+        parent_id for parent_id in (parent_light_id, parent_output_id)
+        if parent_id is not None
+    }
 
     if len(segments) > MAX_CFX_SEGMENTS:
         raise cv.Invalid(
@@ -655,9 +917,22 @@ def _validate_segments(config):
 
     for i, seg in enumerate(segments):
         seg_id = seg[CONF_SEGMENT_ID]
+        seg_id_name = getattr(seg_id, "id", seg_id)
+        seg_output_id = seg.get(CONF_SEGMENT_OUTPUT_ID)
+        seg_output_id_name = getattr(seg_output_id, "id", seg_output_id)
         start = seg[CONF_SEGMENT_START]
         stop = seg[CONF_SEGMENT_STOP]
 
+        if seg_id_name in parent_ids:
+            raise cv.Invalid(
+                f"Segment '{seg_id}' reuses the parent light id "
+                "or output id. Segment lights need their own ids."
+            )
+        if seg_output_id_name is not None and seg_output_id_name in parent_ids:
+            raise cv.Invalid(
+                f"Segment '{seg_id}' output id '{seg_output_id_name}' collides "
+                "with the parent light/output id."
+            )
         if stop <= start:
             raise cv.Invalid(
                 f"Segment '{seg_id}': stop ({stop}) must be > start ({start})"
@@ -694,24 +969,116 @@ def _final_validate(config):
     variant = _get_esp32_variant()
     limits = _get_cfx_light_limits(variant)
     spi_count = sum(1 for lconf in cfx_lights if _is_spi_cfx_light(lconf))
-    rmt_count = len(cfx_lights) - spi_count
+    parallel_lights = [lconf for lconf in cfx_lights if _is_parallel_cfx_light(lconf)]
+    legacy_rmt_count = sum(1 for lconf in cfx_lights if _is_legacy_rmt_cfx_light(lconf))
     _LOGGER.info(
-        "CFXLight limits: variant=%s total=%d/%d spi=%d/%d rmt=%d/%d",
+        "CFXLight limits: variant=%s total=%d/%d spi=%d/%d rmt=%d/%d parallel=%d",
         variant,
         len(cfx_lights),
         limits["total"],
         spi_count,
         limits["spi"],
-        rmt_count,
+        legacy_rmt_count,
         limits["rmt"],
+        len(parallel_lights),
     )
 
-    if spi_count > 0 and rmt_count > 0:
+    if spi_count > 0 and (legacy_rmt_count > 0 or parallel_lights):
         raise cv.Invalid(
             "Mixed SPI and RMT cfx_light entries are not supported in this "
             "ChimeraFX release. Use either SPI-only or RMT-only per ESP32 node; "
             "move the other transport to a second controller."
         )
+
+    if parallel_lights:
+        if variant not in ("ESP32", "ESP32S3"):
+            raise cv.Invalid(
+                f"cfx_light parallel_group is only supported on ESP32 and ESP32-S3 "
+                f"for V1; detected {variant}."
+            )
+        if legacy_rmt_count > 0:
+            raise cv.Invalid(
+                "cfx_light parallel_group cannot be mixed with legacy RMT "
+                "cfx_light entries in the first parallel-driver release."
+            )
+
+        groups = _ordered_parallel_groups(parallel_lights)
+        if variant == "ESP32S3":
+            if len(groups) > 2:
+                names = ", ".join(groups)
+                raise cv.Invalid(
+                    f"cfx_light parallel_group supports at most two ESP32-S3 "
+                    f"parallel groups; got {names}."
+                )
+        elif len(groups) > 1:
+            names = ", ".join(groups)
+            raise cv.Invalid(
+                f"Only one cfx_light parallel_group is supported on {variant}; "
+                f"got {names}."
+            )
+
+        max_parallel_lanes = 4
+        for group_name, group_lights in groups.items():
+            if len(group_lights) > max_parallel_lanes:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' has {len(group_lights)} "
+                    f"lanes; this release supports at most {max_parallel_lanes} "
+                    "lanes per group."
+                )
+
+            chipsets = {
+                str(lconf.get(CONF_CHIPSET, "")).upper() for lconf in group_lights
+            }
+            if any(chipset in SPI_CHIPSETS for chipset in chipsets):
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' is one-wire only; "
+                    "SPI chipsets cannot join a parallel group."
+                )
+            if len(chipsets) != 1:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot mix chipsets: "
+                    f"{', '.join(sorted(chipsets))}."
+                )
+            if variant == "ESP32S3":
+                unsupported = chipsets - PARALLEL_S3_CHIPSETS
+                if unsupported:
+                    raise cv.Invalid(
+                        f"cfx_light parallel_group '{group_name}' on ESP32-S3 "
+                        "supports SK6812 and WS2812X only in this release; "
+                        f"got {', '.join(sorted(chipsets))}."
+                    )
+            elif chipsets != {"SK6812"}:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' on {variant} "
+                    "still supports SK6812 RGBW lanes only; "
+                    f"got {', '.join(sorted(chipsets))}."
+                )
+
+            protocol_shapes = {
+                (
+                    bool(
+                        lconf.get(
+                            CONF_IS_RGBW,
+                            lconf.get(CONF_CHIPSET) in RGBW_CHIPSETS,
+                        )
+                    ),
+                    bool(lconf.get(CONF_IS_WRGB, False)),
+                )
+                for lconf in group_lights
+            }
+            if len(protocol_shapes) != 1:
+                raise cv.Invalid(
+                    f"cfx_light parallel_group '{group_name}' cannot mix RGB/RGBW "
+                    "or WRGB protocol shapes."
+                )
+
+        if variant == "ESP32S3":
+            _resolve_parallel_s3_bus_pins(parallel_lights, fconf)
+        else:
+            group_name, group_lights = next(iter(groups.items()))
+            _resolve_parallel_internal_pins(group_name, group_lights, variant, fconf)
+        return config
+
     if len(cfx_lights) > limits["total"]:
         raise cv.Invalid(
             f"Too many cfx_light entries for {variant}: {len(cfx_lights)} "
@@ -722,9 +1089,9 @@ def _final_validate(config):
             f"Too many SPI cfx_light entries for {variant}: {spi_count} "
             f"(max {limits['spi']})"
         )
-    if rmt_count > limits["rmt"]:
+    if legacy_rmt_count > limits["rmt"]:
         raise cv.Invalid(
-            f"Too many RMT cfx_light entries for {variant}: {rmt_count} "
+            f"Too many RMT cfx_light entries for {variant}: {legacy_rmt_count} "
             f"(max {limits['rmt']})"
         )
     return config
@@ -795,12 +1162,57 @@ def _reject_legacy_power_keys(config):
         )
     return config
 
+
+def _rmt_wire_floor_update_interval(config):
+    """Return a codegen update_interval floor for tight RMT targets.
+
+    The C++ transport also computes this dynamically, but C3 whole-light
+    effects need the floor injected before effect scheduling so they do not
+    render at 16/17ms while the single RMT channel can only transmit at ~30ms.
+    """
+    if _get_esp32_variant() != "ESP32C3":
+        return None
+    if config.get(CONF_PARALLEL_GROUP):
+        return None
+
+    chipset = str(config.get(CONF_CHIPSET, "")).upper()
+    if chipset in SPI_CHIPSETS:
+        return None
+
+    num_leds = int(config.get(CONF_NUM_LEDS, 0) or 0)
+    if num_leds <= 0:
+        return None
+
+    if chipset == "SK6812":
+        stride = 4
+        bit_time_ns = 1200
+        reset_ns = 80000
+    elif chipset == "WS2811":
+        stride = 3
+        bit_time_ns = 2500
+        reset_ns = 280000
+    else:
+        stride = 3
+        bit_time_ns = 1250
+        reset_ns = 280000
+
+    bit_count = num_leds * stride * 8
+    wire_us = ((bit_count * bit_time_ns + reset_ns) + 999) // 1000
+    floor_ms = (wire_us + 1800 + 999) // 1000
+    floor_ms += 2 if config.get(CONF_SEGMENTS) else 1
+    return f"{floor_ms}ms"
+
+
 def _inject_all_effects(config):
     """If all_effects is true, inject synthetic addressable_cfx entries from
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
-    light_update_interval = "14ms" if chipset in SPI_CHIPSETS else None
+    light_update_interval = _rmt_wire_floor_update_interval(config) or (
+        "14ms"
+        if chipset in SPI_CHIPSETS or config.get(CONF_PARALLEL_GROUP)
+        else None
+    )
 
     user_effects = list(config.get(CONF_EFFECTS, []))
 
@@ -897,6 +1309,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CLOCK_PIN): pins.internal_gpio_output_pin_schema,
             cv.Optional(CONF_SPI_SPEED): cv.frequency,
             cv.Optional(CONF_SPI_HOST): cv.string,
+            cv.Optional(CONF_PARALLEL_GROUP): cv.string,
+            cv.Optional(CONF_PARALLEL_STROBE_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Optional(CONF_PARALLEL_DC_PIN): pins.internal_gpio_output_pin_schema,
             # spi_host is intentionally NOT exposed in the user schema.
             # Host assignment is automatic: 1st SPI strip → SPI2_HOST,
             # 2nd SPI strip → SPI3_HOST. A 3rd strip triggers a compile error.
@@ -946,10 +1361,31 @@ def _validate_transport(config):
     _reserve_cfx_light_component_slot(config)
     chipset = config[CONF_CHIPSET]
     is_spi = chipset in SPI_CHIPSETS
+    parallel_group = config.get(CONF_PARALLEL_GROUP)
+    if parallel_group is not None:
+        parallel_group = str(parallel_group).strip()
+        if not parallel_group:
+            raise cv.Invalid(f"'{CONF_PARALLEL_GROUP}' cannot be empty")
+        config[CONF_PARALLEL_GROUP] = parallel_group
 
     if is_spi:
+        if parallel_group is not None:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_GROUP}' is only supported by one-wire chipsets "
+                f"(WS2812X, SK6812, WS2811), not SPI chipset {chipset}."
+            )
         if CONF_PIN in config:
             raise cv.Invalid(f"'{CONF_PIN}' cannot be used with SPI chipset {chipset}")
+        if CONF_PARALLEL_STROBE_PIN in config:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
+                f"'{CONF_PARALLEL_GROUP}'."
+            )
+        if CONF_PARALLEL_DC_PIN in config:
+            raise cv.Invalid(
+                f"'{CONF_PARALLEL_DC_PIN}' is only supported with "
+                f"'{CONF_PARALLEL_GROUP}'."
+            )
         if CONF_DATA_PIN not in config:
             raise cv.RequiredFieldInvalid(
                 f"'{CONF_DATA_PIN}' is required for SPI chipset {chipset}",
@@ -990,6 +1426,29 @@ def _validate_transport(config):
             raise cv.Invalid(
                 f"SPI options ({joined_keys}) cannot be used with RMT chipset {chipset}"
             )
+        if parallel_group is not None:
+            if config.get(CONF_RMT_SYMBOLS, 0) != 0:
+                raise cv.Invalid(
+                    f"'{CONF_RMT_SYMBOLS}' is only used by legacy RMT. "
+                    f"Remove it from cfx_light entries using '{CONF_PARALLEL_GROUP}'."
+                )
+            if config.get(CONF_SACRIFICIAL_PIXEL, False):
+                raise cv.Invalid(
+                    f"'{CONF_SACRIFICIAL_PIXEL}' is only supported by legacy RMT "
+                    f"in V1. Remove it from cfx_light entries using "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
+        else:
+            if CONF_PARALLEL_STROBE_PIN in config:
+                raise cv.Invalid(
+                    f"'{CONF_PARALLEL_STROBE_PIN}' is only supported with "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
+            if CONF_PARALLEL_DC_PIN in config:
+                raise cv.Invalid(
+                    f"'{CONF_PARALLEL_DC_PIN}' is only supported with "
+                    f"'{CONF_PARALLEL_GROUP}'."
+                )
 
     return config
 
@@ -1013,6 +1472,13 @@ _RMT_BUDGET = {
     "ESP32H2": {"total":  96, "block": 48},
 }
 _RMT_DEFAULT_BUDGET = {"total": 512, "block": 64}  # conservative fallback
+_RMT_AUTO_MAX_SYMBOLS = {
+    # Physical testing on ESP32 Classic with ESP-IDF 5.3+ showed that 512/256
+    # symbol auto allocations can increase completion latency on long SK6812
+    # strips. Keep auto channels on the stable 128-symbol path; manual
+    # rmt_symbols remains available for diagnostic overrides.
+    "ESP32": 128,
+}
 
 def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     """Compute the per-strip RMT symbol count for auto-configured strips.
@@ -1050,6 +1516,9 @@ def _get_rmt_symbols_auto(n_strips: int, manual_reserved: int = 0) -> int:
     per_strip = (per_strip // block) * block
     # Never less than one block — hardware minimum
     per_strip = max(per_strip, block)
+    max_auto = _RMT_AUTO_MAX_SYMBOLS.get(variant)
+    if max_auto is not None:
+        per_strip = min(per_strip, max_auto)
     return per_strip
 
 
@@ -1058,13 +1527,20 @@ _COMPONENT_RESERVE_DATA_KEY = "cfx_light_component_capacity_reserves"
 
 
 def _reserve_cfx_light_component_slot(config):
-    """Reserve App component capacity for the hidden output component.
+    """Reserve App component capacity for hidden output components.
 
     ESPHome sizes its static component vector from CORE.component_ids before
-    generated C++ runs. cfx_light creates a public LightState plus a hidden
-    AddressableLight output component, and some ESPHome versions undercount the
-    hidden output in larger configs. Reserve one extra slot per configured
-    cfx_light so later outputs are not dropped from Application::setup().
+    generated C++ runs. cfx_light creates:
+      - 1 hidden CFXLightOutput per strip (alongside its LightState)
+      - 1 hidden CFXVirtualSegmentLight per segment (via light.register_light)
+
+    Both use auto-generated output IDs (cv.GenerateID). Some ESPHome versions
+    do not count GenerateID-based registrations in the pre-allocation budget,
+    causing App.components_ to overflow and crash (EXCVADDR=0x17 / this=23).
+
+    We add one synthetic ID per hidden component so the budget always covers
+    the actual registration count. Sets ignore duplicates, so this is safe even
+    on builds that already count GenerateIDs correctly.
     """
     reserve_key = getattr(config.get(CONF_OUTPUT_ID), "id", None)
     if reserve_key is None:
@@ -1079,7 +1555,18 @@ def _reserve_cfx_light_component_slot(config):
         return
     reserves.add(reserve_key)
     safe_key = re.sub(r"[^a-zA-Z0-9_]", "_", reserve_key)
+
+    # Slot for the main hidden CFXLightOutput.
     core.CORE.component_ids.add(f"cfx_light_output_capacity_reserve_{safe_key}")
+
+    # One slot per segment for the hidden CFXVirtualSegmentLight output.
+    for seg_idx, seg in enumerate(config.get(CONF_SEGMENTS, [])):
+        seg_id = getattr(seg.get(CONF_SEGMENT_ID), "id", f"seg_{seg_idx}")
+        safe_seg = re.sub(r"[^a-zA-Z0-9_]", "_", str(seg_id))
+        core.CORE.component_ids.add(
+            f"cfx_light_vseg_capacity_reserve_{safe_key}_{safe_seg}"
+        )
+
 
 
 def _cfx_power_config():
@@ -1366,6 +1853,7 @@ async def to_code(config):
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
     
     is_spi = chipset_name in SPI_CHIPSETS
+    is_parallel = bool(config.get(CONF_PARALLEL_GROUP))
     
     # Re-enable ESP-IDF's SPI and RMT drivers unconditionally
     # because cfx_light.h includes both <driver/spi_master.h> and <driver/rmt_tx.h>
@@ -1373,6 +1861,9 @@ async def to_code(config):
         from esphome.components.esp32 import include_builtin_idf_component
         include_builtin_idf_component("esp_driver_spi")
         include_builtin_idf_component("esp_driver_rmt")
+        if is_parallel and _get_esp32_variant() == "ESP32S3":
+            include_builtin_idf_component("esp_lcd")
+            cg.add_define("CFX_PARALLEL_I80_ENABLED")
     except ImportError:
         pass
 
@@ -1390,6 +1881,56 @@ async def to_code(config):
         cg.add(var.set_spi_host(SPI_HOSTS[host_name]))
         registry.append(host_name)
         CORE.data[_SPI_HOST_REGISTRY_KEY] = registry
+    elif is_parallel:
+        cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_PARALLEL))
+        cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
+        cg.add(var.set_parallel_group(config[CONF_PARALLEL_GROUP]))
+        all_lights = CORE.config.get("light", [])
+        parallel_lights = [
+            lconf
+            for lconf in all_lights
+            if lconf.get("platform", "") == "cfx_light"
+            and lconf.get(CONF_PARALLEL_GROUP)
+        ]
+        groups = _ordered_parallel_groups(parallel_lights)
+        group_names = list(groups)
+        group_name = str(config[CONF_PARALLEL_GROUP])
+        group_index = group_names.index(group_name)
+        group_lights = groups[group_name]
+        lane_pins = [lconf[CONF_PIN][CONF_NUMBER] for lconf in group_lights]
+        lane_index = lane_pins.index(config[CONF_PIN][CONF_NUMBER])
+        cg.add(var.set_parallel_lane_index(lane_index))
+        cg.add(var.set_parallel_lane_count(len(lane_pins)))
+        cg.add(var.set_parallel_group_index(group_index))
+        cg.add(var.set_parallel_bit_offset(group_index * 4))
+        if _get_esp32_variant() == "ESP32S3":
+            pin_resolution = _resolve_parallel_s3_bus_pins(
+                parallel_lights,
+                CORE.config,
+            )
+            bus_pins = pin_resolution["bus_pins"]
+        else:
+            pin_resolution = _resolve_parallel_internal_pins(
+                group_name,
+                group_lights,
+                _get_esp32_variant(),
+                CORE.config,
+            )
+            bus_pins = lane_pins
+        cg.add(var.set_parallel_strobe_pin(pin_resolution[CONF_PARALLEL_STROBE_PIN]))
+        cg.add(var.set_parallel_dc_pin(pin_resolution[CONF_PARALLEL_DC_PIN]))
+        cg.add(
+            var.set_parallel_strobe_pin_auto(
+                pin_resolution["strobe_source"] == PARALLEL_PIN_SOURCE_AUTO
+            )
+        )
+        cg.add(
+            var.set_parallel_dc_pin_auto(
+                pin_resolution["dc_source"] == PARALLEL_PIN_SOURCE_AUTO
+            )
+        )
+        for idx, pin in enumerate(bus_pins):
+            cg.add(var.set_parallel_lane_pin(idx, pin))
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
@@ -1433,7 +1974,7 @@ async def to_code(config):
 
     # Auto-compute RMT symbols if not set manually.
     # We must EXCLUDE SPI strips from the auto-budget calculation!
-    if not is_spi:
+    if not is_spi and not is_parallel:
         import esphome.core as _core_rmt
         import logging as _log_rmt
         rmt_sym = config.get(CONF_RMT_SYMBOLS, 0)
@@ -1483,6 +2024,8 @@ async def to_code(config):
                 rmt_sym, n_total,
             )
         cg.add(var.set_rmt_symbols(rmt_sym))
+        if _get_esp32_variant() == "ESP32C3":
+            cg.add(var.set_rmt_c3_stability_cushion(True))
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
@@ -1513,7 +2056,7 @@ async def to_code(config):
         cg.add(var.set_default_outro_dur(intro_dur_s))
 
     # --- Segment codegen ---
-    for seg in segments:
+    for seg_idx, seg in enumerate(segments):
         seg_id_obj = seg[CONF_SEGMENT_ID]
         seg_id_str = str(seg_id_obj)
         seg_start = seg[CONF_SEGMENT_START]
@@ -1595,7 +2138,6 @@ async def to_code(config):
             CFX_EFFECT_NAMES,
         )
 
-        seg_idx = segments.index(seg)
         parent_id = config[CONF_ID].id
 
         # Phase 1: Create the singleton — one real effect per segment.
@@ -1634,7 +2176,9 @@ async def to_code(config):
             stub_id = CoreID(
                 stub_str, is_declaration=True, type=CFXEffectStub
             )
-            stub_var = cg.new_Pvariable(stub_id, name, eff_num, singleton_var)
+            stub_var = cg.new_Pvariable(
+                stub_id, name, eff_num, singleton_var
+            )
             effect_vars.append(stub_var)
 
         if effect_vars:

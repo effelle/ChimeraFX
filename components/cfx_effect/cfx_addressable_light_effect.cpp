@@ -9,6 +9,7 @@
 #include "../cfx_light/cfx_virtual_segment_light.h"
 #include "cfx_compat.h"
 #include "cfx_control.h"
+#include "cfx_effect_stub.h"
 #include "cfx_utils.h"
 #include "esphome/core/application.h"
 #include "esphome/core/color.h"
@@ -55,6 +56,41 @@ static const char *const TAG = "chimera_fx";
 
 namespace {
 static CFXAddressableLightEffect *
+resolve_parallel_segment_stub_singleton(light::LightState *state,
+                                        light::LightEffect *active) {
+  if (state == nullptr || active == nullptr) {
+    return nullptr;
+  }
+#ifdef USE_ESP32
+  auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+      state->get_output());
+  auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+  if (parent == nullptr || !parent->is_parallel_transport()) {
+    return nullptr;
+  }
+#else
+  return nullptr;
+#endif
+  auto *stub = static_cast<CFXEffectStub *>(active);
+  auto *singleton = stub->get_singleton();
+  return singleton;
+}
+
+static bool is_parallel_virtual_segment_state(light::LightState *state) {
+#ifdef USE_ESP32
+  if (state == nullptr) {
+    return false;
+  }
+  auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+      state->get_output());
+  auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
+  return parent != nullptr && parent->is_parallel_transport();
+#else
+  return false;
+#endif
+}
+
+static CFXAddressableLightEffect *
 resolve_active_segment_cfx_effect(light::LightState *state) {
   if (state == nullptr) {
     return nullptr;
@@ -62,6 +98,10 @@ resolve_active_segment_cfx_effect(light::LightState *state) {
   auto *active = LightStateProxy::get_active_effect(state);
   if (active == nullptr) {
     return nullptr;
+  }
+  auto *stub_singleton = resolve_parallel_segment_stub_singleton(state, active);
+  if (stub_singleton != nullptr) {
+    return stub_singleton;
   }
   for (auto *effect : CFXAddressableLightEffect::all_segment_effects) {
     if (effect == active) {
@@ -321,7 +361,10 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
       return;
     }
 
-    if (LightStateProxy::get_active_effect(scheduled_state) != this) {
+    auto *scheduled_active = LightStateProxy::get_active_effect(scheduled_state);
+    if (scheduled_active != this &&
+        resolve_parallel_segment_stub_singleton(scheduled_state,
+                                                scheduled_active) != this) {
       return;
     }
 
@@ -809,7 +852,8 @@ bool CFXAddressableLightEffect::allow_default_transition_() const {
 }
 
 bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
-  if (this->update_interval_ == 0) {
+  const uint32_t effective_interval = this->effective_update_interval_ms_();
+  if (effective_interval == 0) {
     this->last_run_ = now;
     this->next_run_ = now;
     return true;
@@ -824,12 +868,50 @@ bool CFXAddressableLightEffect::rate_gate_due_(uint64_t now) {
 
   const uint64_t late_ms = now - this->next_run_;
   const uint64_t reset_threshold =
-      static_cast<uint64_t>(this->update_interval_) * 4U;
+      static_cast<uint64_t>(effective_interval) * 4U;
   this->next_run_ = late_ms > reset_threshold
-                        ? (now + this->update_interval_)
-                        : (this->next_run_ + this->update_interval_);
+                        ? (now + effective_interval)
+                        : (this->next_run_ + effective_interval);
   this->last_run_ = now;
   return true;
+}
+
+uint32_t CFXAddressableLightEffect::effective_update_interval_ms_() const {
+  auto *out = this->get_diag_output();
+  if (out == nullptr) {
+    return this->update_interval_;
+  }
+  const uint32_t effective =
+      out->get_effective_rmt_update_interval_ms(this->update_interval_);
+  out->note_effective_rmt_update_interval_ms(effective);
+  return effective;
+}
+
+uint32_t CFXAddressableLightEffect::get_effective_update_interval() const {
+  return this->effective_update_interval_ms_();
+}
+
+void CFXAddressableLightEffect::sync_diagnostic_target_interval_() {
+  if (this->act_ == nullptr) {
+    return;
+  }
+  const uint32_t effective_interval = this->effective_update_interval_ms_();
+  if (this->act_->runner != nullptr) {
+    this->act_->runner->diagnostics.set_target_interval_ms(
+        effective_interval);
+  }
+  for (auto *runner : this->act_->segment_runners) {
+    if (runner != nullptr) {
+      runner->diagnostics.set_target_interval_ms(effective_interval);
+    }
+  }
+  uint64_t idle_target_us = effective_interval == 0
+                                ? 16666ULL
+                                : static_cast<uint64_t>(effective_interval) * 1000ULL;
+  if (idle_target_us > UINT32_MAX) {
+    idle_target_us = UINT32_MAX;
+  }
+  this->act_->idle_target_frame_us = static_cast<uint32_t>(idle_target_us);
 }
 
 void CFXAddressableLightEffect::start() {
@@ -896,7 +978,8 @@ void CFXAddressableLightEffect::start() {
   this->last_run_ = 0;
   this->next_run_ = 0;
   if (auto *out = resolve_diag_output(this);
-      out != nullptr && this->update_interval_ < 17) {
+      out != nullptr && !out->is_parallel_transport() &&
+      this->update_interval_ < 17) {
     this->update_interval_ = 17;
   }
   this->reset_milestones_();
@@ -966,19 +1049,11 @@ void CFXAddressableLightEffect::start() {
   }
 #endif
 
-  // on_cfx_begin trigger (on-device YAML) fires unconditionally.
-  // The HA cfx_begin *event* fires only when an actual intro is configured;
-  // see end of start() below. (CFX-029)
+  // Effect-local on_begin trigger. The HA cfx_begin lifecycle event is
+  // sequence-owned and fires from CFXSequence::report_event_begin().
   // Separator (ID 185) is a UI-only divider — suppress all lifecycle events.
   if (this->effect_id_ != 185) {
     this->trigger_on_begin();
-
-    this->trigger_on_start();
-
-#ifdef USE_CFX_EVENTS
-    // Suppress cfx_start in cascade - sequence fires it centrally.
-    // This prevents event burst when multiple lights start in sequence.
-#endif
   }
 
   const bool allow_default_transition = this->allow_default_transition_();
@@ -1032,6 +1107,7 @@ void CFXAddressableLightEffect::start() {
   act_->suppress_positional_events = false;
   act_->suppress_stop_event = false;
   act_->suppress_complete_event = false;
+  act_->force_lifecycle_shutdown = false;
   release_vector_storage(act_->outro_color_cache);
   act_->hydraulics_fluid_level = 0.0f;
   act_->hydraulics_fluid_velocity = 0.0f;
@@ -1040,6 +1116,8 @@ void CFXAddressableLightEffect::start() {
 
   act_->last_triggered_pixel = -1;
   act_->last_triggered_percentage = -1.0f;
+  act_->last_leading_pixel = -1;
+  act_->lifecycle_start_fired = false;
 
   // CFX-045: Reset mono idle state on every start() so a restarted effect
   // always runs its intro and commits its first solid frame before going idle.
@@ -1059,6 +1137,11 @@ void CFXAddressableLightEffect::start() {
   act_->idle_max_frame_us = 0;
   act_->idle_total_frame_us = 0;
   act_->idle_jitter_count = 0;
+  act_->idle_parallel_interval_index = 0;
+  act_->idle_parallel_interval_count = 0;
+  for (uint8_t i = 0; i < 16; i++) {
+    act_->idle_parallel_intervals[i] = 0;
+  }
   act_->idle_probe_total_us = 0;
   act_->idle_probe_valid = false;
 
@@ -1106,9 +1189,9 @@ void CFXAddressableLightEffect::start() {
       // Virtual segment lights are single-runner by design.
       // We check the flag injected by Python codegen to avoid illegal
       // dynamic_cast (-fno-rtti)
+      auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
       const std::vector<cfx_light::CFXSegmentDef> *seg_defs = nullptr;
       if (!this->is_virtual_segment_) {
-        auto *cfx_out = static_cast<cfx_light::CFXLightOutput *>(it);
         seg_defs = &cfx_out->get_segment_defs();
       }
 
@@ -1127,7 +1210,9 @@ void CFXAddressableLightEffect::start() {
           r->_segment.mirror = def.mirror;
           r->set_segment_id(def.id);
           r->setMode(this->effect_id_);
-          r->diagnostics.set_target_interval_ms(this->update_interval_);
+          r->diagnostics.set_target_interval_ms(
+              this->effective_update_interval_ms_());
+          r->diagnostics.is_parallel = cfx_out != nullptr && cfx_out->is_parallel_transport();
           act_->segment_runners.push_back(r);
 
           // Feed WDT during potentially heavy allocation loop
@@ -1151,12 +1236,16 @@ void CFXAddressableLightEffect::start() {
         act_->runner->setBakeBrightness(this->is_virtual_segment_);
         act_->runner->setMode(this->effect_id_);
         act_->runner->diagnostics.set_target_interval_ms(
-            this->update_interval_);
+            this->effective_update_interval_ms_());
+        act_->runner->diagnostics.is_parallel =
+            is_parallel_virtual_segment_state(this->get_light_state()) ||
+            (it != nullptr && static_cast<cfx_light::CFXLightOutput *>(it)->is_parallel_transport());
 #ifdef USE_ESP32
       }
 #endif
     }
   }
+  this->sync_diagnostic_target_interval_();
 
   // Cache the light name once per start() so apply() never allocates a
   // std::string every frame (audit 1.1).
@@ -1382,7 +1471,7 @@ void CFXAddressableLightEffect::start() {
     auto *seg_state = this->get_light_state();
     auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
     if (parent != nullptr && seg_state != nullptr) {
-      parent->unregister_parent_owned_segment(seg_state, this);
+      parent->unregister_parent_owned_segment(seg_state, nullptr);
       // Skip eager coordinator enrollment on a fresh turn-on: apply() will
       // enroll the effect after intro_active is set and eventually cleared.
       // Enrolling here would cause apply() to return via the coordinator
@@ -1669,6 +1758,9 @@ void CFXAddressableLightEffect::start() {
       act_->intro_active = false;
     }
   }
+  if (!act_->intro_active) {
+    this->fire_start_lifecycle_if_needed_();
+  }
 }
 
 void CFXAddressableLightEffect::stop() {
@@ -1686,6 +1778,18 @@ void CFXAddressableLightEffect::stop() {
     return;
   }
 
+  auto *state = this->get_light_state();
+  const bool virtual_segment_effect_cleared =
+      this->is_virtual_segment_ && state != nullptr &&
+      state->get_effect_name() == "None";
+  const bool virtual_segment_output_off =
+      this->is_virtual_segment_ && state != nullptr &&
+      !state->current_values.is_on();
+  const bool lifecycle_shutdown =
+      act_->force_lifecycle_shutdown || state == nullptr ||
+      !state->remote_values.is_on() ||
+      virtual_segment_effect_cleared || virtual_segment_output_off;
+
   // Clear intro_active so that rapid OFF->ON cycles properly restart the intro
   // instead of bypassing it due to stale state.
   this->act_->intro_active = false;
@@ -1696,26 +1800,21 @@ void CFXAddressableLightEffect::stop() {
         this->get_addressable_());
     auto *parent = segment != nullptr ? segment->get_parent() : nullptr;
     if (parent != nullptr) {
-      parent->unregister_parent_owned_segment(this->get_light_state(), this);
+      parent->unregister_parent_owned_segment(this->get_light_state(), nullptr);
     }
 #endif
   }
 
-  if (this->effect_id_ != 185) {
+  if (this->effect_id_ != 185 && lifecycle_shutdown &&
+      !act_->suppress_stop_event) {
     this->trigger_on_stop();
 #ifdef USE_CFX_EVENTS
-#ifdef USE_CFX_SEQUENCE
-    if (!act_->strip_tag.empty() && act_->active_sequence == nullptr &&
-        !act_->suppress_stop_event) {
-#else
     if (!act_->strip_tag.empty()) {
-#endif
       std::string evt = std::string("cfx_stop:") + act_->strip_tag;
       chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
     }
 #endif
   }
-  this->trigger_on_complete();
 
   // Transition snapshots are no longer useful once stop() begins; release
   // capacity instead of holding full-strip buffers until act_ is deleted.
@@ -1732,7 +1831,6 @@ void CFXAddressableLightEffect::stop() {
   }
 
   CFXControl *c = act_->controller;
-  auto *state = this->get_light_state();
 
   if (state != nullptr && act_->runner != nullptr) {
     cfx_light::CFXLightOutput *out = nullptr;
@@ -2070,7 +2168,8 @@ void CFXAddressableLightEffect::stop() {
       if (out != nullptr) {
         this->act_ = nullptr;
         out->add_outro_callback([this, it_light, captured_runners,
-                                 captured_sequence, captured_act]() -> bool {
+                                 captured_sequence, captured_act,
+                                 lifecycle_shutdown]() -> bool {
             auto *current_state = this->get_light_state();
 
             if (current_state != nullptr &&
@@ -2117,18 +2216,20 @@ void CFXAddressableLightEffect::stop() {
 
             if (done) {
               this->restore_preset_runtime_defaults_(50);
+              if (lifecycle_shutdown &&
+                  !captured_act->suppress_complete_event) {
+                this->trigger_on_complete();
+              }
 #ifdef USE_CFX_EVENTS
               // Fire cfx_complete when the outro animation finishes.
               // If is_sequence_outro_ is true, the sequence already fired
               // completion (report_event_complete was called before stop()),
               // so we skip here to avoid double-firing.
-              // cfx_complete fires when a real outro completes: architectural
-              // preset or user-configured outro selector. INTRO_MODE_NONE is
-              // the default fade-to-black on every light-off — not a meaningful
-              // outro, must not fire cfx_complete.
-              if (!captured_act->suppress_complete_event &&
-                  !captured_act->is_sequence_outro &&
-                  captured_act->active_outro_mode != INTRO_MODE_NONE) {
+              // cfx_complete is a lifecycle event: every started light/segment
+              // gets one, including default fade-to-black stops.
+              if (lifecycle_shutdown &&
+                  !captured_act->suppress_complete_event &&
+                  !captured_act->is_sequence_outro) {
 #ifdef USE_CFX_SEQUENCE
                 if (captured_sequence != nullptr) {
                   // Sequence-driven path: route through report_event_complete()
@@ -2136,7 +2237,7 @@ void CFXAddressableLightEffect::stop() {
                   // to the HA cfx_complete event. Without this, only the HA
                   // event fires and on-device triggers are silently skipped.
                   captured_sequence->report_event_complete();
-                } else
+                }
 #endif
                 {
                   // Standalone (no sequence bound): fire HA event directly.
@@ -2196,6 +2297,21 @@ void CFXAddressableLightEffect::stop() {
   }
 
   // Free the activation struct — released back to heap until next start().
+#ifdef USE_CFX_EVENTS
+  if (lifecycle_shutdown && this->act_ != nullptr &&
+      !this->act_->suppress_complete_event) {
+    this->trigger_on_complete();
+    if (!this->act_->strip_tag.empty()) {
+      std::string evt = std::string("cfx_complete:") + this->act_->strip_tag;
+      chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+    }
+  }
+#else
+  if (lifecycle_shutdown && this->act_ != nullptr &&
+      !this->act_->suppress_complete_event) {
+    this->trigger_on_complete();
+  }
+#endif
   delete this->act_;
   this->act_ = nullptr;
 
@@ -2233,6 +2349,13 @@ bool CFXAddressableLightEffect::can_parent_coordinate_segment() const {
   if (this->act_->intro_active) {
     return false;
   }
+  // The parent coordinator is only for steady-state rendering. Transition and
+  // completion work must stay in the full apply() path so mono presets can
+  // finish the intro->hold blend and become clean IDLE outputs.
+  if (this->act_->state != TRANSITION_NONE ||
+      this->act_->completion_pending) {
+    return false;
+  }
   auto *state = this->get_light_state();
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
@@ -2260,7 +2383,7 @@ bool CFXAddressableLightEffect::parent_coordinated_segment_due(
     uint64_t now) const {
   return this->can_parent_coordinate_segment() &&
          (this->last_run_ == 0 ||
-          (now - this->last_run_) >= this->update_interval_);
+          (now - this->last_run_) >= this->effective_update_interval_ms_());
 }
 
 void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
@@ -2288,7 +2411,9 @@ void CFXAddressableLightEffect::prepare_parent_coordinated_runner(
   } else if (this->local_debug_switch_()) {
     debug_active = this->local_debug_switch_()->state;
   }
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->setDebug(debug_active);
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
 
   auto *segment = static_cast<cfx_light::CFXVirtualSegmentLight *>(
       state_ptr->get_output());
@@ -2319,6 +2444,8 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
   if (this->act_ == nullptr || this->act_->runner == nullptr) {
     return;
   }
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
 
   bool debug_active = CFXControl::global_debug_enabled_;
   if (act_->controller != nullptr && act_->controller->get_debug() != nullptr) {
@@ -2327,7 +2454,7 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
     debug_active = this->local_debug_switch_()->state;
   }
 
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  act_->runner->setDebug(debug_active);
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
@@ -2352,6 +2479,73 @@ void CFXAddressableLightEffect::sync_parent_owned_inputs(
 
 void CFXAddressableLightEffect::mark_parent_coordinated_run(uint64_t now) {
   this->last_run_ = now;
+}
+
+void CFXAddressableLightEffect::fire_start_lifecycle_if_needed_() {
+  if (this->act_ == nullptr || this->act_->lifecycle_start_fired ||
+      this->effect_id_ == 185) {
+    return;
+  }
+  this->act_->lifecycle_start_fired = true;
+
+  this->trigger_on_start();
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    this->act_->active_sequence->report_event_start();
+  }
+#endif
+#ifdef USE_CFX_EVENTS
+  bool emit_ha_start = true;
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->active_sequence != nullptr) {
+    emit_ha_start = this->act_->active_sequence->get_ha_events();
+  }
+#endif
+  if (emit_ha_start && !this->act_->strip_tag.empty()) {
+    std::string evt = std::string("cfx_start:") + this->act_->strip_tag;
+    chimera_fx::CFXEventManager::get().fire_event(evt.c_str());
+  }
+#endif
+}
+
+void CFXAddressableLightEffect::process_parent_coordinated_runner_events() {
+  if (this->act_ == nullptr || this->act_->runner == nullptr) {
+    return;
+  }
+
+#ifdef USE_CFX_SEQUENCE
+  if (this->act_->runner->effect_complete_) {
+    this->act_->completion_pending = true;
+  }
+#endif
+
+  const int32_t leading_pixel = this->act_->runner->current_leading_pixel;
+  const int32_t total_pixels = this->act_->runner->_segment.length();
+  if (leading_pixel < 0 || total_pixels <= 0 ||
+      leading_pixel == this->act_->last_leading_pixel) {
+    return;
+  }
+
+#ifdef USE_CFX_SEQUENCE
+  const float current_percentage =
+      static_cast<float>(leading_pixel) / static_cast<float>(total_pixels);
+  const bool return_phase = this->act_->runner->is_return_phase_;
+  if (this->act_->active_sequence != nullptr &&
+      this->act_->sequence_iterations > 0 && !return_phase) {
+    if (this->act_->last_triggered_percentage > 0.8f &&
+        current_percentage < 0.2f) {
+      this->act_->runner->iteration_count_++;
+      if (this->act_->runner->iteration_count_ >=
+          this->act_->sequence_iterations) {
+        this->act_->runner->effect_complete_ = true;
+        this->act_->completion_pending = true;
+      }
+    }
+  }
+#endif
+
+  this->act_->last_leading_pixel = leading_pixel;
+  this->check_positional_triggers(leading_pixel, total_pixels);
 }
 
 void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
@@ -2393,7 +2587,16 @@ void CFXAddressableLightEffect::prepare_steady_virtual_segment_runner_(
   }
 
   act_->runner->target_light = &it;
-  act_->runner->setDebug(debug_active && !act_->mono_idle);
+  if (this->is_virtual_segment_) {
+    // Segment singleton effects are reused by multiple virtual segment
+    // entities. Rebind each apply to the current virtual view so later
+    // segments do not inherit the first segment's parent/range geometry.
+    act_->runner->_segment.start = 0;
+    act_->runner->_segment.stop = it.size();
+  }
+  act_->runner->setDebug(debug_active);
+  act_->runner->diagnostics.set_target_interval_ms(
+      this->effective_update_interval_ms_());
   if (!act_->cached_runner_name.empty()) {
     act_->runner->setName(act_->cached_runner_name.c_str());
   }
@@ -2488,14 +2691,22 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
   CFXScheduler::get().service_runners(dispatch_runners);
   esphome::App.feed_wdt();
 
+  const bool direct_parent_flush =
+      parent != nullptr && parent->is_parallel_transport();
   for (size_t i = 0; i < count; i++) {
     auto *effect = effects[i];
     auto *state = effect->get_light_state();
     auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
         state->get_output());
+    effect->process_parent_coordinated_runner_events();
     effect->act_->runner->diagnostics.flush_log(parent->get_led_fps());
     seg->note_show_request();
-    parent->request_segment_flush(state);
+    if (!direct_parent_flush) {
+      parent->request_segment_flush(state);
+    }
+  }
+  if (direct_parent_flush) {
+    parent->write_state(nullptr);
   }
 
   return true;
@@ -2530,7 +2741,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   if (this->is_virtual_segment_ && act_->runner != nullptr &&
       !act_->mono_idle && this->last_run_ != 0) {
     const uint64_t early_now = millis_64();
-    if (early_now - this->last_run_ < this->update_interval_) {
+    if (early_now - this->last_run_ < this->effective_update_interval_ms_()) {
       return;
     }
   }
@@ -2616,9 +2827,33 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_max_frame_us = delta_us;
       act_->idle_total_frame_us += delta_us;
       act_->idle_frame_count++;
-      if (delta_us < act_->idle_target_frame_us / 2 ||
-          delta_us > act_->idle_target_frame_us * 3 / 2)
-        act_->idle_jitter_count++;
+      if (is_parallel_virtual_segment_state(this->get_light_state())) {
+        act_->idle_parallel_intervals[act_->idle_parallel_interval_index] =
+            delta_us;
+        act_->idle_parallel_interval_index =
+            (act_->idle_parallel_interval_index + 1) % 16;
+        if (act_->idle_parallel_interval_count < 16) {
+          act_->idle_parallel_interval_count++;
+        }
+        uint64_t sum_intervals = 0;
+        for (uint8_t i = 0; i < act_->idle_parallel_interval_count; i++) {
+          sum_intervals += act_->idle_parallel_intervals[i];
+        }
+        uint32_t avg_delta_us =
+            sum_intervals / act_->idle_parallel_interval_count;
+        if (act_->idle_parallel_interval_count > 1 &&
+            cfx::FrameDiagnostics::is_jitter_interval(delta_us, avg_delta_us))
+          act_->idle_jitter_count++;
+      } else {
+        const uint32_t avg_delta_us =
+            act_->idle_frame_count > 0
+                ? static_cast<uint32_t>(act_->idle_total_frame_us /
+                                        act_->idle_frame_count)
+                : 0;
+        if (act_->idle_frame_count > 1 &&
+            cfx::FrameDiagnostics::is_jitter_interval(delta_us, avg_delta_us))
+          act_->idle_jitter_count++;
+      }
     }
     act_->idle_last_frame_us = now_us;
   }
@@ -2678,8 +2913,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   }
   const bool apply_perf_enabled = debug_active;
   const bool capture_idle_probe = act_->mono_probe_requested;
-  const bool runner_debug_active =
-      debug_active && !act_->mono_idle && !capture_idle_probe;
+  const bool runner_debug_active = debug_active && !capture_idle_probe;
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
   uint32_t apply_dispatch_us = 0;
@@ -2759,6 +2993,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   } else if (act_->runner) {
     act_->runner->target_light =
         &it; // INJECT: Ensure we write to current buffer
+    if (this->is_virtual_segment_) {
+      act_->runner->_segment.start = 0;
+      act_->runner->_segment.stop = it.size();
+    }
     act_->runner->setDebug(runner_debug_active);
     if (!runner_name.empty())
       act_->runner->setName(runner_name.c_str());
@@ -2916,6 +3154,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_max_frame_us = 0;
         act_->idle_total_frame_us = 0;
         act_->idle_jitter_count = 0;
+        act_->idle_parallel_interval_index = 0;
+        act_->idle_parallel_interval_count = 0;
+        for (uint8_t i = 0; i < 16; i++) {
+          act_->idle_parallel_intervals[i] = 0;
+        }
       }
 
       // Fix 2 — DMA scrub detection.
@@ -3024,9 +3267,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     act_->idle_max_frame_us = 0;
     act_->idle_total_frame_us = 0;
     act_->idle_jitter_count = 0;
-    act_->idle_target_frame_us = this->update_interval_ * 1000;
+    act_->idle_parallel_interval_index = 0;
+    act_->idle_parallel_interval_count = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+      act_->idle_parallel_intervals[i] = 0;
+    }
+    act_->idle_target_frame_us = this->effective_update_interval_ms_() * 1000;
     act_->idle_probe_total_us = 0;
     act_->idle_probe_valid = false;
+
+    if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+      auto *state_ptr = this->get_light_state();
+      if (state_ptr != nullptr) {
+        auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+            state_ptr->get_output());
+        if (seg != nullptr && seg->get_parent() != nullptr) {
+          seg->get_parent()->register_parent_owned_segment(state_ptr, seg, this,
+                                                           act_->runner);
+        }
+      }
+#endif
+    }
   }
   const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
 
@@ -3196,9 +3458,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->idle_max_frame_us = 0;
         act_->idle_total_frame_us = 0;
         act_->idle_jitter_count = 0;
-        act_->idle_target_frame_us = this->update_interval_ * 1000;
+        act_->idle_parallel_interval_index = 0;
+        act_->idle_parallel_interval_count = 0;
+        for (uint8_t i = 0; i < 16; i++) {
+          act_->idle_parallel_intervals[i] = 0;
+        }
+        act_->idle_target_frame_us = this->effective_update_interval_ms_() * 1000;
         act_->idle_probe_total_us = 0;
         act_->idle_probe_valid = false;
+
+        if (this->is_virtual_segment_) {
+#ifdef USE_ESP32
+          auto *state_ptr = this->get_light_state();
+          if (state_ptr != nullptr) {
+            auto *seg = static_cast<cfx_light::CFXVirtualSegmentLight *>(
+                state_ptr->get_output());
+            if (seg != nullptr && seg->get_parent() != nullptr) {
+              seg->get_parent()->register_parent_owned_segment(state_ptr, seg, this,
+                                                               act_->runner);
+            }
+          }
+#endif
+        }
 
         // CFX-run: Monochromatic presets complete when the sweep reaches 100%
         // (i.e. the intro finishes and the effect goes idle). The runner never
@@ -3251,6 +3532,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       chimera_fx::InstanceGuard start_guard(act_->runner);
       act_->runner->reset();
       act_->runner->start();
+      this->fire_start_lifecycle_if_needed_();
     }
   }
 
@@ -8421,7 +8703,7 @@ bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   return saw_runner;
 }
 
-void CFXAddressableLightEffect::log_mono_idle_sleep() {
+void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
   if (act_ == nullptr || !act_->mono_idle ||
       !this->mono_idle_logging_enabled()) {
     return;
@@ -8440,8 +8722,8 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
   if (act_->runner != nullptr) {
     act_->runner->diagnostics.idle_sleep_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
-        idle_sample_count, act_->idle_period_start_ms,
-        idle_sample_total_us, act_->idle_jitter_count, resolve_led_fps(this));
+        idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
+        act_->idle_jitter_count, resolve_led_fps(this), force);
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
@@ -8453,9 +8735,8 @@ void CFXAddressableLightEffect::log_mono_idle_sleep() {
       }
       runner->diagnostics.idle_sleep_log(
           seg_name, runner->getModeName(), runner->getMode(),
-          idle_sample_count, act_->idle_period_start_ms,
-          idle_sample_total_us, act_->idle_jitter_count,
-          resolve_led_fps(this));
+          idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
+          act_->idle_jitter_count, resolve_led_fps(this), force);
     }
   }
 }

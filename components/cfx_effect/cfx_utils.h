@@ -425,9 +425,14 @@ struct FrameDiagnostics {
   uint32_t service_count = 0;
   uint32_t max_service_us = 0;
   uint64_t total_service_us = 0;
-  uint32_t jitter_count = 0;   // Frames with >50% deviation from target
+  uint32_t jitter_count = 0;   // Cadence outliers with >50% interval deviation
   uint32_t gap_count = 0;      // Frames with >50ms gap
   uint32_t last_log_time = 0;
+
+  bool is_parallel = false;
+  uint32_t parallel_intervals_[16]{0};
+  uint8_t parallel_interval_index_{0};
+  uint8_t parallel_interval_count_{0};
 
   uint32_t target_frame_us =
       16666; // Default 60fps, updated from update_interval
@@ -445,7 +450,23 @@ struct FrameDiagnostics {
   }
 
   void set_target_interval_ms(uint32_t interval_ms) {
-    target_frame_us = interval_ms * 1000;
+    if (interval_ms == 0) {
+      target_frame_us = 16666;
+      return;
+    }
+    uint64_t target_us = static_cast<uint64_t>(interval_ms) * 1000ULL;
+    if (target_us > UINT32_MAX) {
+      target_us = UINT32_MAX;
+    }
+    target_frame_us = static_cast<uint32_t>(target_us);
+  }
+
+  static bool is_jitter_interval(uint32_t delta_us, uint32_t reference_us) {
+    if (reference_us == 0) {
+      return false;
+    }
+    return delta_us < reference_us / 2 ||
+           delta_us > reference_us * 3 / 2;
   }
 
   void reset() {
@@ -459,6 +480,11 @@ struct FrameDiagnostics {
     total_service_us = 0;
     jitter_count = 0;
     gap_count = 0;
+    parallel_interval_index_ = 0;
+    parallel_interval_count_ = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+      parallel_intervals_[i] = 0;
+    }
   }
 
   void reset_log_window() {
@@ -484,10 +510,30 @@ struct FrameDiagnostics {
       total_frame_us += delta_us;
       frame_count++;
 
-      // Detect jitter (>50% deviation from target interval)
-      if (delta_us < target_frame_us / 2 ||
-          delta_us > target_frame_us * 3 / 2) {
-        jitter_count++;
+      // Detect cadence jitter (>50% deviation from observed cadence). Target
+      // misses are already visible as lower RenderFPS/Time; a stable
+      // transport-bound 30 FPS frame should not read as 100% jitter.
+      if (is_parallel) {
+        parallel_intervals_[parallel_interval_index_] = delta_us;
+        parallel_interval_index_ = (parallel_interval_index_ + 1) % 16;
+        if (parallel_interval_count_ < 16) {
+          parallel_interval_count_++;
+        }
+        uint64_t sum_intervals = 0;
+        for (uint8_t i = 0; i < parallel_interval_count_; i++) {
+          sum_intervals += parallel_intervals_[i];
+        }
+        uint32_t avg_delta_us = sum_intervals / parallel_interval_count_;
+        if (parallel_interval_count_ > 1 &&
+            is_jitter_interval(delta_us, avg_delta_us)) {
+          jitter_count++;
+        }
+      } else {
+        const uint32_t avg_delta_us =
+            frame_count > 0 ? (uint32_t)(total_frame_us / frame_count) : 0;
+        if (frame_count > 1 && is_jitter_interval(delta_us, avg_delta_us)) {
+          jitter_count++;
+        }
       }
 
       // Detect gaps (>50ms)
@@ -613,14 +659,15 @@ struct FrameDiagnostics {
   void idle_sleep_log(const char *effect_name, const char *mode_name,
                       uint8_t mode_id, uint32_t frame_count_in,
                       uint32_t period_start_ms, uint64_t total_frame_us_in,
-                      uint32_t jitter_count_in, float led_fps = -1.0f) {
+                      uint32_t jitter_count_in, float led_fps = -1.0f,
+                      bool force = false) {
     (void) frame_count_in;
     (void) period_start_ms;
     (void) total_frame_us_in;
     (void) jitter_count_in;
 
     uint32_t now_ms = cfx_millis();
-    if (now_ms - last_log_time < LOG_INTERVAL_MS) return;
+    if (!force && now_ms - last_log_time < LOG_INTERVAL_MS) return;
 
     uint32_t free_heap = 0;
 #ifdef ARDUINO

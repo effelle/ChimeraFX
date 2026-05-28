@@ -925,6 +925,7 @@ void CFXSequence::start() {
   this->last_triggered_percentage_ = -1.0f;
   this->last_triggered_pixel_ = -1;
   this->fired_reach_triggers_.clear();
+  this->start_reported_ = false;
   this->completion_reported_ = false;
   this->duration_completion_pending_ = false; 
   this->is_running_ = true;
@@ -943,7 +944,6 @@ void CFXSequence::start() {
   this->duration_start_ms_ = millis();
   this->duration_complete_fired_ = false;
 
-  this->report_event_start();
 }
 
 // CFX-055: Unified bind helper — used by both the deferred bind_all and retry.
@@ -1612,6 +1612,10 @@ void CFXSequence::check_duration() {
 }
 
 void CFXSequence::report_event_start() {
+  if (this->start_reported_) {
+    return;
+  }
+  this->start_reported_ = true;
   for (auto *t : this->on_start_triggers_) {
     esphome::App.scheduler.set_timeout(CFXSequenceSelect::instance, 
                                       (uint32_t)t, 0, [s = this, t]() {
@@ -1619,8 +1623,8 @@ void CFXSequence::report_event_start() {
       t->trigger();
     });
   }
-  // NOTE: cfx_start HA event is fired by CFXAddressableLightEffect::start()
-  // unconditionally for all effects and all paths. Do NOT fire it here again.
+  // NOTE: cfx_start HA events are fired by CFXAddressableLightEffect when each
+  // target effect actually starts rendering. Do NOT fire them here again.
 }
 
 void CFXSequence::report_event_begin() {
@@ -1632,12 +1636,8 @@ void CFXSequence::report_event_begin() {
       t->trigger();
     });
   }
-  // CFX-029: HA cfx_begin event only fires when the sequence has a real
-  // intro configured (intro_ != 0). Without an intro, cfx_begin and
-  // cfx_start fire at the same millisecond and are redundant.
   if (!this->strip_tag_.empty()
-      && this->ha_events_
-      && this->intro_.has_value() && this->intro_.value() != 0) {
+      && this->ha_events_) {
     std::string evt = std::string("cfx_begin:") + this->strip_tag_;
     CFXEventManager::get().fire_event(evt.c_str());
   }

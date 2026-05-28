@@ -4,9 +4,9 @@
 
 *   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
 *   **Supported Hardware**:
-      *   **ESP32 (Classic)**: Fully supported and the preferred V1.41 target for new multi-output installs. V1.41 supports up to 4 RMT strips or 2 SPI strips per node.
-      *   **ESP32-S3**: Fully supported, but note that V1.41 limits this chip to 2 RMT or 2 SPI outputs. The S3 features a much smaller RMT symbol pool (192 symbols) than the ESP32 Classic (512 symbols). While the first output uses the optimized GDMA lane, additional outputs fall back to non-DMA modes which have narrower timing margins. A native parallel driver is currently in development for the ESP32-S3 and will be included in a future release.
-      *   **ESP32-C3**: **NOT RECOMMENDED**. The C3 is single-core, and since the effects are computationally intensive, running them alongside Wi-Fi on a single core can cause stuttering and stability issues. V1.41 treats C3 RMT as **experimental**: one tuned RMT output reached ~57-59 `LedFPS` at 360 LEDs and ~30-33 `LedFPS` at 600 LEDs with `Energy` effect (one of the most intensive effects). C3 supports either 1 experimental RMT strip or 1 experimental SPI strip; 2000 virtual SPI LEDs held ~58-60 `LedFPS`.
+      *   **ESP32 (Classic)**: Fully supported and still a strong choice for ordinary RMT and SPI nodes, especially when you need several moderate 1-wire outputs.
+      *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
+      *   **ESP32-C3**: Supported for compact single-output layouts. The C3 is single-core and timing-sensitive, so validate your heaviest effect before pushing the upper LED limits.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
@@ -25,7 +25,7 @@ ChimeraFX does not need special ESPHome knowledge, but addressable LEDs are pick
 
 For flicker, random colors, resets, SPI inrush, and memory pressure, see [Performance & Troubleshooting](Troubleshooting.md).
 
-For ChimeraFX V1.41, keep each node **RMT-only** or **SPI-only**. Mixed RMT + SPI `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs both transports.
+Keep each ChimeraFX node on one LED transport family: **RMT-only**, **SPI-only**, or **parallel-only**. Mixed transport `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs multiple transport families.
 
 ---
 

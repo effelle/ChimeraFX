@@ -47,6 +47,8 @@ class CFXTransmitBarrier {
   // that are pending and whose barrier window has expired.
   void service(CFXLightOutput *caller);
 
+  size_t rmt_output_count() const { return rmt_count_; }
+
  private:
   CFXTransmitBarrier() = default;
   void fire_all_pending_();

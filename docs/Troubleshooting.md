@@ -52,7 +52,7 @@ ChimeraFX reports render performance and LED output cadence separately. This dis
 - **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
 - **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
 
-For tested LED counts, platform notes, and V1.41 deployment limits, see [`cfx_light`](cfx_light.md#tested-led-limits). Keep `Troubleshooting` focused on symptoms: if `RenderFPS` is high but `LedFPS` is low, the effect engine is keeping up but the LED transport is saturated. If both numbers are low, reduce effect complexity, LED count, or other ESPHome workload.
+For tested LED counts, platform notes, and deployment limits, see [`cfx_light`](cfx_light.md#hardware-architecture--performance-limits). Keep `Troubleshooting` focused on symptoms: if `RenderFPS` is high but `LedFPS` is low, the effect engine is keeping up but the LED transport is saturated. If both numbers are low, reduce effect complexity, LED count, or other ESPHome workload.
 
 ---
 
@@ -64,7 +64,7 @@ ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the b
 - **ESP32-S3**: 192 total symbols, 48-symbol blocks.
 - **ESP32-C3**: 96 total symbols, 48-symbol blocks.
 
-For platform-specific output limits, see [`cfx_light`](cfx_light.md#tested-led-limits).
+For platform-specific output limits, see [`cfx_light`](cfx_light.md#hardware-architecture--performance-limits).
 
 Example configuration:
 
@@ -78,7 +78,7 @@ light:
 
 On an ESP32 Classic, when driving a single LED strip, you can utilize the full RMT buffer (512 symbols). With multiple strips, this total must be divided among them.
 
-**ESP32-S3 Note:** The S3 RMT architecture is heavily constrained by its smaller 192-symbol pool (managed in 48-symbol blocks). In V1.41, only the first RMT output benefits from the high-margin GDMA transmit path. Additional RMT outputs use non-DMA refill, which has much less timing margin. ChimeraFX strictly limits setups to **2 RMT outputs** or **2 SPI outputs** per node. This is a hardware transport limit, not a software bug. Please wait for our upcoming parallel driver release before attempting high-density S3 installations.
+**ESP32-S3 Note:** The S3 RMT architecture has a smaller 192-symbol pool (managed in 48-symbol blocks), so normal RMT remains best for 1-2 ordinary strips. For dense 1-wire layouts, use the ESP32-S3 parallel backend: it is the preferred path for high LED counts, multiple SK6812/WS2812X lanes, and heavily segmented installs.
 
 ---
 
@@ -110,9 +110,9 @@ When the SPI inrush current exceeds your power supply's headroom:
 
 These symptoms are **not software bugs** — they are hardware power-rail collapses.
 
-### Using SPI and RMT Together
+### Using Multiple LED Transports
 
-For ChimeraFX V1.41, do **not** mix SPI and RMT `cfx_light` entries on the same ESP32 node. Testing on ESP32 Classic showed that sustained SPI bus traffic can disturb RMT timing and create visible artifacts on 1-wire strips. This is a transport-level interaction, not an effect-specific bug.
+Do **not** mix LED transport families on the same ESP32 node. Keep a ChimeraFX node **RMT-only**, **SPI-only**, or **parallel-only**. Mixed transport `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs multiple transport families.
 
 Use one of these layouts instead:
 
@@ -120,7 +120,9 @@ Use one of these layouts instead:
 
 2. **SPI-only node.** Use this for APA102 and SK9822 strips.
 
-3. **Separate controllers when both transports are needed.** Put RMT strips on one ESP32 and SPI strips on another ESP32. Keep power injection sized correctly and share ground only where required by the electrical layout.
+3. **Parallel-only node.** Use this on ESP32-S3 for grouped WS2812X/SK6812 lanes.
+
+4. **Separate controllers when multiple transports are needed.** Put each transport family on its own ESP32. Keep power injection sized correctly and share ground only where required by the electrical layout.
 
 The SPI power guidance below still applies to SPI-only nodes and to shared PSU planning across separate controllers.
 

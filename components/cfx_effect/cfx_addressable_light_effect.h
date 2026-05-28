@@ -135,12 +135,14 @@ public:
     int32_t last_triggered_pixel{-1};
     bool last_return_phase{false};
     int32_t last_leading_pixel{-1};
+    bool lifecycle_start_fired{false};
     uint8_t last_fired_milestone{0};
     bool milestone_fired_this_frame{false};
     bool suppress_reach_event{false};
     bool suppress_positional_events{false};
     bool suppress_stop_event{false};
     bool suppress_complete_event{false};
+    bool force_lifecycle_shutdown{false};
     // CFX-035: true only when the MAIN effect is progressive (pixel-marching,
     // e.g. Wipe/Sweep). Intro milestones are suppressed only in that case so
     // that monochromatic and non-progressive intros still fire cfx_reach. (CFX-035b)
@@ -190,6 +192,9 @@ public:
     uint32_t idle_max_frame_us{0};
     uint64_t idle_total_frame_us{0};
     uint32_t idle_jitter_count{0};
+    uint32_t idle_parallel_intervals[16]{0};
+    uint8_t idle_parallel_interval_index{0};
+    uint8_t idle_parallel_interval_count{0};
     uint32_t idle_target_frame_us{16666}; // updated from update_interval_ on first frame
     uint32_t idle_probe_total_us{0};
     bool idle_probe_valid{false};
@@ -285,8 +290,10 @@ public:
 
   void set_update_interval(uint32_t update_interval) {
     this->update_interval_ = update_interval;
+    this->sync_diagnostic_target_interval_();
   }
   uint32_t get_update_interval() const { return this->update_interval_; }
+  uint32_t get_effective_update_interval() const;
   void set_transition_effect(select::Select *v) { ensure_cfg_(); cfg_->transition_effect = v; }
   void set_transition_duration(number::Number *v) { ensure_cfg_(); cfg_->transition_duration = v; }
   void set_intro_effect(select::Select *v) { ensure_cfg_(); cfg_->intro_effect = v; }
@@ -611,6 +618,7 @@ public:
   void sync_parent_owned_inputs(uint32_t color, float gamma,
                                 float global_brightness);
   void mark_parent_coordinated_run(uint64_t now);
+  void process_parent_coordinated_runner_events();
   bool runner_mode_can_idle_(uint8_t mode);
   bool evaluate_mono_idle_();
 
@@ -674,7 +682,7 @@ public:
       }
     }
   }
-  void log_mono_idle_sleep();
+  void log_mono_idle_sleep(bool force = false);
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {
       act_->mono_output_dirty = true;
@@ -711,6 +719,9 @@ public:
   void set_suppress_complete_event(bool v) {
     if (act_) act_->suppress_complete_event = v;
   }
+  void request_lifecycle_shutdown() {
+    if (act_) act_->force_lifecycle_shutdown = true;
+  }
 
   // ── Activation pointer — null when effect is not running ─────────────────
   // All per-run state lives in CFXActivation, allocated in start(), freed in
@@ -720,6 +731,8 @@ public:
   // is_virtual_segment_ is set at codegen time, not per-activation.
   bool is_virtual_segment_{false};
   uint32_t update_interval_{16};
+
+  void sync_diagnostic_target_interval_();
   uint64_t next_run_{0};         // Absolute due-time gate; avoids snapping to caller ticks.
   uint64_t last_run_{0};         // Per-instance rate gate — must NOT be in CFXActivation (shared across virtual segments)
 
@@ -732,6 +745,7 @@ public:
 
   MonochromaticPreset get_monochromatic_preset_(uint8_t effect_id);
   bool rate_gate_due_(uint64_t now);
+  uint32_t effective_update_interval_ms_() const;
   bool is_monochromatic_(uint8_t effect_id) const;
   bool is_animated_monochromatic_hold_(uint8_t effect_id) const;
   std::vector<uint8_t> get_monochromatic_pool_();
@@ -761,6 +775,7 @@ public:
   bool can_batch_steady_virtual_segment_() const;
   bool try_batch_steady_virtual_segments_(uint64_t now);
   void prepare_steady_virtual_segment_runner_(light::AddressableLight &it);
+  void fire_start_lifecycle_if_needed_();
 
 
 

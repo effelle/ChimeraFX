@@ -40,7 +40,7 @@ The documentation includes everything you need:
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
 * **ChimeraFX Originals** — Exclusive physics-based fluid and noise algorithms.
 * **Architectural Transitions** — Premium intro/outro sweeps for monochromatic setups.
-* **Segment Runner Core** — High-performance parallel rendering for up to 4 independent segments per light, with platform-specific multi-output limits for RMT-only or SPI-only nodes.
+* **Segment Runner Core** — High-performance rendering for up to 4 independent segments per light, including grouped S3 parallel output for large multi-strip installations.
 * **Powerful Sequencer** — A native C++ event-driven engine for multi-light orchestration and complex timelines, running locally on-device with seamless Home Assistant integration.
 * **Smart Random Palette** — Procedural color theory engine for aesthetic, non-repeating palettes.
 * **Modular Preset Architecture** — Build bespoke configurations by mixing-and-matching transitions, settings and effects. Leverage effects and procedural color groups to create a nearly infinite library of architectural and decorative lighting styles.
@@ -67,9 +67,9 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 > ⚠️**[IMPORTANT]** Minimum Requirement: ChimeraFX requires ESPHome **2026.3.0 or later** to leverage the latest C++ performance optimizations and core event loop improvements.
 
 - **Framework:** **ESP-IDF** and **Arduino**
-- **Recommended V1.41 target:** **ESP32 Classic**. It has the strongest validated multi-output RMT performance in this release.
+- **Recommended target:** **ESP32-S3**. The native parallel driver unlocks the S3 as the strongest validated target for dense 1-wire LED installs.
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
-  - **ESP32-S3:** Fully supported, but strictly limited in V1.41 to a maximum of **2 RMT or 2 SPI outputs** per node. Due to the S3's smaller RMT hardware symbol pool (192 symbols compared to the Classic's 512) and the fact that only the first output utilizes the optimized GDMA path, pushing beyond 2 RMT outputs may result in visible visual artifacts. We are actively developing a native parallel driver to unlock higher S3 output density in an upcoming release.
+  - **ESP32-S3:** Fully supported and preferred. Use normal RMT/SPI for smaller installs, or `parallel_group` for high-density WS2812X/SK6812 layouts with up to 4 lanes per group and up to 2 parallel groups.
   - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
 - **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822).
 
