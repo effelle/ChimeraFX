@@ -397,15 +397,15 @@ _CFX_LIGHT_LIMITS = {
     # ChimeraFX nodes are validated as either RMT-only or SPI-only.
     "ESP32": {"total": 4, "spi": 2, "rmt": 4},
     # S3 has one strong GDMA-backed RMT lane plus non-DMA fallback lanes.
-    # Physical V1.41 testing showed 2 RMT outputs are release-grade; 3+ RMT
-    # outputs can show visible artifacts even at lower LED counts.
+    # Normal RMT remains capped conservatively; dense 1-wire S3 installs should
+    # use the parallel backend instead.
     "ESP32S3": {"total": 2, "spi": 2, "rmt": 2},
     # P4 stays conservative until physically validated.
     "ESP32P4": {"total": 4, "spi": 2, "rmt": 2},
     # Single-host C-series targets keep the existing two-output budget.
-    # ESP32-C3 RMT is experimental for V1.41. It has only 96 RMT symbols and
-    # is not Classic-class; physical validation showed one tuned RMT output is
-    # useful, while two 600-LED RMT outputs remain unstable.
+    # ESP32-C3 has only 96 RMT symbols and is not Classic-class; physical
+    # validation showed one tuned RMT output is useful, while multi-output RMT
+    # is not release-grade.
     "ESP32C3": {"total": 1, "spi": 1, "rmt": 1},
     "ESP32C5": {"total": 2, "spi": 1, "rmt": 2},
     "ESP32C6": {"total": 2, "spi": 1, "rmt": 2},

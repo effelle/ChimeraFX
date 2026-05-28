@@ -67,9 +67,9 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 > ⚠️**[IMPORTANT]** Minimum Requirement: ChimeraFX requires ESPHome **2026.3.0 or later** to leverage the latest C++ performance optimizations and core event loop improvements.
 
 - **Framework:** **ESP-IDF** and **Arduino**
-- **Recommended V1.51 target:** **ESP32-S3**. The native parallel driver unlocks the S3 as the strongest validated target for dense 1-wire LED installs.
+- **Recommended target:** **ESP32-S3**. The native parallel driver unlocks the S3 as the strongest validated target for dense 1-wire LED installs.
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
-  - **ESP32-S3:** Fully supported and preferred for V1.51. Use normal RMT/SPI for smaller installs, or `parallel_group` for high-density WS2812X/SK6812 layouts with up to 4 lanes per group and up to 2 parallel groups.
+  - **ESP32-S3:** Fully supported and preferred. Use normal RMT/SPI for smaller installs, or `parallel_group` for high-density WS2812X/SK6812 layouts with up to 4 lanes per group and up to 2 parallel groups.
   - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
 - **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822).
 
