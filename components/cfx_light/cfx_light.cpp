@@ -664,6 +664,11 @@ void CFXLightOutput::release_outro_callback_storage_() {
   }
 }
 
+void CFXLightOutput::add_outro_callback(OutroCallback cb) {
+  this->outro_cbs_.push_back(cb);
+  this->update_high_frequency_loop_request_();
+}
+
 void CFXLightOutput::drain_outro_callbacks() {
   if (this->outro_cbs_.empty()) {
     return;
@@ -2473,6 +2478,7 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
 // all subsequent socket() calls to fail. close() is available via
 // lwip/sockets.h.
 CFXLightOutput::~CFXLightOutput() {
+  this->high_freq_loop_requester_.stop();
   if (this->socket_fd_ >= 0) {
     ::close(this->socket_fd_);
     this->socket_fd_ = -1;
@@ -2502,6 +2508,7 @@ void CFXLightOutput::on_shutdown() {
   if (this->transport_ == TRANSPORT_PARALLEL) {
     this->force_parallel_shutdown_blackout_();
   }
+  this->high_freq_loop_requester_.stop();
 }
 
 // --- Timing Configuration ---
@@ -5460,6 +5467,45 @@ static uint8_t active_parallel_group_mask_() {
   return active_mask;
 }
 
+bool CFXLightOutput::should_request_high_frequency_loop_() {
+  if (!this->setup_completed_ || this->is_failed()) {
+    return false;
+  }
+
+  if (this->has_outro() || this->rmt_flush_pending_ ||
+      this->seg_flush_pending_) {
+    return true;
+  }
+
+  if (has_active_rendering_cfx_effect(this)) {
+    return true;
+  }
+
+  if (this->is_parallel_transport()) {
+    auto &group = *parallel_group_for_output_(this);
+    if (group.pending_mask != 0 || group.pending_first_ms != 0) {
+      return true;
+    }
+#ifdef CFX_PARALLEL_I80_ENABLED
+    const uint8_t group_bit =
+        static_cast<uint8_t>(1u << group.group_index);
+    if ((g_parallel_i80.pending_group_mask & group_bit) != 0) {
+      return true;
+    }
+#endif
+  }
+
+  return false;
+}
+
+void CFXLightOutput::update_high_frequency_loop_request_() {
+  if (this->should_request_high_frequency_loop_()) {
+    this->high_freq_loop_requester_.start();
+  } else {
+    this->high_freq_loop_requester_.stop();
+  }
+}
+
 static bool parallel_shared_whole_group_mode_enabled_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
@@ -5537,6 +5583,7 @@ bool CFXLightOutput::request_parallel_group_flush_() {
       active_parallel_lanes_mask_(g_parallel_group, lane_bit);
 
   if ((g_parallel_group.pending_mask & active_lanes_mask) != active_lanes_mask) {
+    this->update_high_frequency_loop_request_();
     return false;
   }
 
@@ -5623,6 +5670,7 @@ bool CFXLightOutput::request_parallel_shared_group_flush_() {
     }
     this->flush_parallel_shared_groups_(flush_mask);
   }
+  this->update_high_frequency_loop_request_();
   return false;
 #else
   return true;
@@ -6034,6 +6082,7 @@ void CFXLightOutput::on_segment_update() {
 // --- Component Loop (Intercepts Outro Playback) ---
 
 void CFXLightOutput::loop() {
+  this->update_high_frequency_loop_request_();
   this->record_parallel_completed_led_frames_();
 
   if (runtime_debug_enabled_for_output(this)) {
@@ -6173,6 +6222,7 @@ void CFXLightOutput::loop() {
   }
 
 segment_flush_done:
+  this->update_high_frequency_loop_request_();
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
 #endif
@@ -6425,6 +6475,7 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
   if (!this->seg_flush_pending_) {
     this->seg_flush_pending_ = true;
     this->seg_flush_first_ms_ = esphome::millis();
+    this->update_high_frequency_loop_request_();
   }
 
   const size_t segment_count = this->segment_light_states_.size();
@@ -6511,6 +6562,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
   const bool rmt_cadence_diag_enabled =
       this->is_rmt_transport() && runtime_debug_enabled_for_output(this);
   const uint32_t write_start_us = micros();
+  this->update_high_frequency_loop_request_();
   this->perf_diag_last_flush_valid_ = false;
   this->perf_diag_last_flush_total_us_ = 0;
   this->perf_diag_last_flush_tx_us_ = 0;
@@ -6774,6 +6826,7 @@ record_write_perf:
       this->perf_diag_last_log_ms_ = now_ms;
     }
   }
+  this->update_high_frequency_loop_request_();
 }
 
 // --- RMT Transport Flush ---
@@ -6814,6 +6867,7 @@ void CFXLightOutput::flush_rmt_() {
       this->rmt_flush_pending_ = true;
       this->perf_diag_total_rmt_coalesced_flushes_++;
       this->perf_diag_last_flush_valid_ = false;
+      this->update_high_frequency_loop_request_();
       return;
     }
   }

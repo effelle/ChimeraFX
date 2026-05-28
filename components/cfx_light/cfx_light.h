@@ -206,7 +206,7 @@ public:
   int32_t size() const override { return this->num_leds_; }
   std::unique_ptr<light::LightTransformer> create_default_transition() override;
 
-  void add_outro_callback(OutroCallback cb) { this->outro_cbs_.push_back(cb); }
+  void add_outro_callback(OutroCallback cb);
   void drain_outro_callbacks();
   bool has_outro() const { return !this->outro_cbs_.empty(); }
   void note_show_request();
@@ -498,6 +498,8 @@ protected:
       bool include_reset);
   bool flush_parallel_shared_groups_(uint8_t group_mask);
   void bind_force_white_switch_();
+  bool should_request_high_frequency_loop_();
+  void update_high_frequency_loop_request_();
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
   void release_outro_callback_storage_();
@@ -562,6 +564,7 @@ protected:
   // Pixel data buffer (written by effects via ESPColorView)
   uint8_t *buf_{nullptr};
   bool setup_completed_{false};
+  HighFrequencyLoopRequester high_freq_loop_requester_{};
 
   // Callbacks used to execute Outro animations after ESPHome turns the light
   // off
