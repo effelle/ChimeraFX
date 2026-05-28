@@ -1983,6 +1983,8 @@ async def to_code(config):
                 rmt_sym, n_total,
             )
         cg.add(var.set_rmt_symbols(rmt_sym))
+        if _get_esp32_variant() == "ESP32C3":
+            cg.add(var.set_rmt_c3_stability_cushion(True))
 
     if CONF_MAX_REFRESH_RATE in config:
         cg.add(var.set_max_refresh_rate(config[CONF_MAX_REFRESH_RATE]))
