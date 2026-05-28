@@ -23,13 +23,14 @@ p {
 }
 
 .md-typeset table:not([class]) {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
+    line-height: 1.35;
 }
 
 .md-typeset table:not([class]) th,
 .md-typeset table:not([class]) td {
-    padding: 0.38em 0.55em;
-    white-space: nowrap;
+    padding: 0.32em 0.45em;
+    white-space: normal;
 }
 
 .md-typeset .md-typeset__table {
