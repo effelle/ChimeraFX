@@ -5479,6 +5479,14 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
     return true;
   }
 
+  // SPI writes are synchronous, so there is no pending async transport flag to
+  // keep ESPHome 2026.5+ on the old animation cadence after a flush completes.
+  // Limit active-effect cadence restoration to SPI; parallel remains governed
+  // by pending group work to preserve the validated S3 behavior.
+  if (this->is_spi_transport() && has_active_rendering_cfx_effect(this)) {
+    return true;
+  }
+
   if (this->is_parallel_transport()) {
     auto &group = *parallel_group_for_output_(this);
     if (group.pending_mask != 0 || group.pending_first_ms != 0) {
