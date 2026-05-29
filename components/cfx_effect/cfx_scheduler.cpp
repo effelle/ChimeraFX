@@ -126,7 +126,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
       if (this->last_batch_diag_ms_ == 0 ||
           (now_ms - this->last_batch_diag_ms_) >= 2000) {
         this->last_batch_diag_ms_ = now_ms;
-        ESP_LOGD(TAG,
+        ESP_LOGV(TAG,
                  "CFX sched_batch total=%u mode=sequential force=%u global=%u "
                  "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
                  static_cast<unsigned>(total),
@@ -226,7 +226,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
       if (this->last_batch_diag_ms_ == 0 ||
           (now_ms - this->last_batch_diag_ms_) >= 2000) {
         this->last_batch_diag_ms_ = now_ms;
-        ESP_LOGD(TAG,
+        ESP_LOGV(TAG,
                  "CFX sched_batch total=%u mode=dual force=0 global=%u "
                  "core1=%u core0=%u cost1=%u cost0=%u dispatch_us=%u "
                  "ok=%u timeout_ms=%u",
@@ -259,7 +259,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
     if (this->last_batch_diag_ms_ == 0 ||
         (now_ms - this->last_batch_diag_ms_) >= 2000) {
       this->last_batch_diag_ms_ = now_ms;
-      ESP_LOGD(TAG,
+      ESP_LOGV(TAG,
                "CFX sched_batch total=%u mode=fallthrough force=%u global=%u "
                "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
                static_cast<unsigned>(total),

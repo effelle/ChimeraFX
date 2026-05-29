@@ -62,7 +62,7 @@ light:
 * **is_wrgb** (*boolean*, default: `false`): Sets the white byte position to the front of the data packet. Required for some rare SK6812 variant clones.
 * **sacrificial_pixel** (*boolean*, default: `false`): RMT-only option. Transmits one extra black pixel before logical LED `0` to boost data signals on long wire runs.
 * **spi_speed** (*Frequency*): SPI clock speed for 2-wire strips.
-* **rmt_symbols** (*int*, default: `0`): Manual RMT symbol allocation. Leave at `0` for dynamic safe allocation.
+* **rmt_symbols** (*int*, default: `0`): Manual RMT symbol allocation. Leave at `0` for dynamic safe allocation. On ESP32 Classic, auto mode intentionally caps each RMT light at `128` symbols for the lowest-latency stable path; set this manually if a tested install should use more of the 512-symbol hardware pool.
 * **default_transition_length** (*Time*, default: `0s`): Standard ESPHome transition duration for solid-color mode and eligible effects.
 * **controls** (*boolean*, default: `true`): Automatically generate ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md).
@@ -191,6 +191,7 @@ Rules of thumb:
     * **Stress Tests, Not Averages:** The numbers below represent the suggested maximum limits of the hardware. A device is intentionally pushed to find the maximum number of LEDs you can run while maintaining a *minimum* of ~30 FPS and keeping the device stable.
     * **Higher FPS:** These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to **~60 FPS**.
     * **Benchmark Details:** Every test ran for at least 20 minutes using the `Energy` effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.
+    * **Strip Type:** The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run roughly **10-15% faster** because each frame carries less pixel data.
     * **Segment Sizing:** In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that **this is not a limitation**. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.
     !!! note "Result labels"
         `PASS` means Heap WiFi >= 75kB.
