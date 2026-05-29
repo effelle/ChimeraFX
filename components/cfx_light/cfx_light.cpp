@@ -7047,6 +7047,16 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
+  if (this->has_active_parent_owned_segments_() &&
+      this->perf_diag_last_spi_flush_start_us_ != 0) {
+    constexpr uint32_t SPI_SEGMENT_DUPLICATE_WINDOW_US =
+        (FRAMETIME * 1000u * 3u) / 4u;
+    if ((flush_start_us - this->perf_diag_last_spi_flush_start_us_) <
+        SPI_SEGMENT_DUPLICATE_WINDOW_US) {
+      this->note_segment_coord_write_skip();
+      return;
+    }
+  }
   this->perf_diag_flush_count_++;
   if (this->perf_diag_last_spi_flush_start_us_ != 0) {
     const uint32_t interval_us =
