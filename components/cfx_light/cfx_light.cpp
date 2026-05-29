@@ -6607,6 +6607,15 @@ void CFXLightOutput::write_state(light::LightState *state) {
   if (state != nullptr && !this->outro_cbs_.empty()) {
     return; // Block Master during outro on non-segmented lights
   }
+  if (state == nullptr && this->is_spi_transport() &&
+      this->has_active_parent_owned_segments_() && !this->has_outro()) {
+    // Parent-coordinated SPI segments flush through
+    // flush_parent_owned_segment_epoch_direct_(). A generic nullptr write can
+    // still be queued by ESPHome/legacy segment paths in the same visual frame,
+    // causing a second identical SPI DMA frame and inflated LedFPS.
+    this->note_segment_coord_write_skip();
+    return;
+  }
 
   // 1.2 Prevent Master paint from bleeding into OFF segments.
   // Skip during outro — the outro renders into the OFF segment's range;
