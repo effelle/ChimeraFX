@@ -2645,6 +2645,12 @@ bool CFXAddressableLightEffect::try_batch_steady_virtual_segments_(
     return false;
   }
   auto *parent = my_seg->get_parent();
+  if (parent->is_spi_transport()) {
+    // SPI parents already use the CFXLightOutput segment coordinator/coalesced
+    // flush path. The legacy steady batcher can be entered once per virtual
+    // segment apply and queue duplicate full-strip SPI frames.
+    return false;
+  }
 
   CFXAddressableLightEffect *effects[MAX_CFX_SEGMENTS]{};
   CFXRunner *runners[MAX_CFX_SEGMENTS]{};
