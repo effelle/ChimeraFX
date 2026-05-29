@@ -6459,6 +6459,10 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
     this->log_segment_coordinator_diag_();
     return;
   }
+  if (state != nullptr && this->segment_coordinator_owns(state)) {
+    this->note_segment_coord_write_skip();
+    return;
+  }
 
   if (state != nullptr) {
     for (size_t i = 0; i < this->segment_light_states_.size() && i < 8; i++) {
