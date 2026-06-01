@@ -64,7 +64,7 @@ If you are developing, need to modify the code locally, or prefer not to rely on
 ```yaml
 external_components:
   - source: components
-    components: [cfx_effect]
+    components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer]
 ```
 
 ---
