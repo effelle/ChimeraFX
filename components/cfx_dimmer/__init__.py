@@ -77,6 +77,7 @@ def _dimmer_action_schema(value):
     "cfx_dimmer.press",
     PressAction,
     _dimmer_action_schema,
+    synchronous=True,
 )
 async def cfx_dimmer_press_to_code(config, action_id, template_arg, args):
     dimmer = await cg.get_variable(config[CONF_ID])
@@ -87,6 +88,7 @@ async def cfx_dimmer_press_to_code(config, action_id, template_arg, args):
     "cfx_dimmer.release",
     ReleaseAction,
     _dimmer_action_schema,
+    synchronous=True,
 )
 async def cfx_dimmer_release_to_code(config, action_id, template_arg, args):
     dimmer = await cg.get_variable(config[CONF_ID])
