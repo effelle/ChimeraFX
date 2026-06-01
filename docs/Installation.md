@@ -43,6 +43,10 @@ external_components:
     refresh: always
 ```
 
+Do not add a `components:` list for the normal GitHub install. If you keep an
+old allow-list, ESPHome will only import those named components; using
+`cfx_dimmer:` then requires `cfx_dimmer` to be present in that list.
+
 ⚠️ **About `refresh: always`**
 
 Setting to `always` forces ESPHome to download the absolute latest version of the code every time you compile. 
@@ -66,6 +70,10 @@ external_components:
   - source: components
     components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer]
 ```
+
+If you use a local or manual allow-list, include every ChimeraFX component you
+use. For example, omitting `cfx_dimmer` from this list will make ESPHome report
+`Component not found: cfx_dimmer` even when the folder exists.
 
 ---
 ## Complete Minimal Example

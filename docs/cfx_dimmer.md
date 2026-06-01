@@ -15,6 +15,10 @@ external_components:
     refresh: always
 ```
 
+If your existing `external_components` block still has a `components:` list,
+remove that list or add `cfx_dimmer` to it. ESPHome treats `components:` as a
+hard allow-list, so omitted components cannot be imported.
+
 ```yaml
 cfx_dimmer:
   - id: desk_lamp_dimmer
