@@ -7,6 +7,16 @@ press alternates between ramping up and ramping down.
 It does not create a Home Assistant entity. Bind it to an existing ESPHome
 `binary_sensor` button.
 
+If your `external_components` entry uses a `components:` allow-list, include
+`cfx_dimmer` there too:
+
+```yaml
+external_components:
+  - source: github://effelle/ChimeraFX@stage
+    refresh: always
+    components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer]
+```
+
 ```yaml
 cfx_dimmer:
   - id: desk_lamp_dimmer
