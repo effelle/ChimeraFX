@@ -121,7 +121,7 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness) {
     return;
   }
   auto call = state->make_call();
-  call.set_transition_length(0);
+  call.set_transition_length(RAMP_TRANSITION_MS);
   call.set_state(true);
   call.set_brightness(this->clamp_brightness_(brightness));
   call.perform();

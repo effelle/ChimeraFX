@@ -27,7 +27,8 @@ class CFXDimmer : public Component {
   void release();
 
  protected:
-  static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 35;
+  static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 16;
+  static constexpr uint32_t RAMP_TRANSITION_MS = 32;
 
   void start_ramp_(uint32_t now);
   void apply_ramp_(uint32_t now);
