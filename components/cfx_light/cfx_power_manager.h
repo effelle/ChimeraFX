@@ -75,6 +75,7 @@ class CFXPowerManager : public Component {
                              bool outputs_idle, uint32_t now_ms);
   void set_auto_reduction_percent_(uint8_t value);
   void update_effective_reduction_();
+  void refresh_outputs_();
   void publish_reduction_state_();
   static float live_sensor_or_(sensor::Sensor *sensor, float fallback,
                                float min_value, float max_value);

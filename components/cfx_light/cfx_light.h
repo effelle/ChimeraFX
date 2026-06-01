@@ -377,6 +377,7 @@ public:
   void set_power_manager(CFXPowerManager *manager) {
     this->power_manager_ = manager;
   }
+  void request_power_reduction_refresh();
   float estimate_power_current_ma(const CFXPowerModel &model,
                                   float dynamic_scale = 1.0f) const;
 

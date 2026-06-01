@@ -191,7 +191,7 @@ Rules of thumb:
     * **Stress Tests, Not Averages:** The numbers below represent the suggested maximum limits of the hardware. A device is intentionally pushed to find the maximum number of LEDs you can run while maintaining a *minimum* of ~30 FPS and keeping the device stable.
     * **Higher FPS:** These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to **~60 FPS**.
     * **Benchmark Details:** Every test ran for at least 20 minutes using the `Energy` effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.
-    * **Strip Type:** The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run roughly **10-15% faster** because each frame carries less pixel data.
+    * **Strip Type:** The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run often **10-15%** faster in dense multi-output tests, and up to **~25-30%** faster in single-channel wire-bound cases because each frame carries less pixel data.
     * **Segment Sizing:** In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that **this is not a limitation**. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.
     !!! note "Result labels"
         `PASS` means Heap WiFi >= 75kB.

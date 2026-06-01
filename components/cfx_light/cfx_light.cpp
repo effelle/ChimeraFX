@@ -843,8 +843,12 @@ void CFXLightOutput::record_parallel_completed_led_frames_() {
   while (g_parallel_group.led_recorded_done_count < done_count) {
     g_parallel_group.led_recorded_done_count++;
     for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-      if (g_parallel_group.outputs[lane] != nullptr) {
-        g_parallel_group.outputs[lane]->record_led_frame_();
+      auto *lane_output = g_parallel_group.outputs[lane];
+      if (lane_output != nullptr) {
+        lane_output->record_led_frame_();
+        if (lane_output->power_manager_ != nullptr) {
+          lane_output->power_manager_->record_output_frame(lane_output);
+        }
       }
     }
   }
@@ -5223,8 +5227,12 @@ void CFXLightOutput::flush_parallel_() {
              diag_buf_at_encode[2], diag_buf_at_encode[3]);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-    if (g_parallel_group.outputs[lane] != nullptr) {
-      g_parallel_group.outputs[lane]->record_led_frame_();
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output != nullptr) {
+      lane_output->record_led_frame_();
+      if (lane_output->power_manager_ != nullptr) {
+        lane_output->power_manager_->record_output_frame(lane_output);
+      }
     }
   }
   this->perf_diag_flush_count_++;
@@ -6277,6 +6285,14 @@ uint8_t CFXLightOutput::get_power_transmit_scale_() const {
     return 255;
   }
   return this->power_manager_->get_transmit_scale();
+}
+
+void CFXLightOutput::request_power_reduction_refresh() {
+  if (this->has_segments() && !this->has_outro()) {
+    this->write_state(nullptr);
+    return;
+  }
+  this->schedule_show();
 }
 
 void CFXLightOutput::apply_power_scale_to_buffer_(uint8_t *data,

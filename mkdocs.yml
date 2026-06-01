@@ -2,7 +2,7 @@ site_name: ChimeraFX
 repo_url: https://github.com/effelle/ChimeraFX
 site_url: https://effelle.github.io/ChimeraFX/
 repo_name: ChimeraFX
-edit_uri: "" 
+edit_uri: ""
 
 theme:
   name: material
@@ -47,6 +47,7 @@ nav:
     - Effect Library: Effects-Library.md
     - Effect Presets: Effect-Presets.md
     - The Sequencer: cfx_sequence.md
+    - Button Dimmer: cfx_dimmer.md
     - Troubleshooting: Troubleshooting.md
   - About:
     - The Story: The-Story.md
@@ -71,4 +72,3 @@ markdown_extensions:
   - md_in_html
   - pymdownx.tabbed:
       alternate_style: true           # Allows markdown inside HTML divs
- 
