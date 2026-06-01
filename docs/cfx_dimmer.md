@@ -47,6 +47,10 @@ binary_sensor:
 | `ramp_time` | `2s` | Time to ramp from minimum to maximum brightness. |
 | `min_brightness` | `1%` | Lowest brightness used by the ramp. |
 | `max_brightness` | `100%` | Highest brightness used by the ramp. |
+| `off_brightness` | `10%` | Down-ramp cutoff that turns target lights off. |
 | `restore_direction` | `false` | Persist the next ramp direction across reboot. |
 
-Brightness changes preserve the currently selected ChimeraFX effect.
+Brightness changes use ESPHome light transitions, preserve the currently
+selected ChimeraFX effect, and stop sending updates when the ramp reaches the
+upper or lower bound. On a down-ramp, targets turn off when they reach
+`off_brightness`.

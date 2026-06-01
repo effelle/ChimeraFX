@@ -21,42 +21,50 @@ class CFXDimmer : public Component {
   void set_ramp_time_ms(uint32_t value) { this->ramp_time_ms_ = value; }
   void set_min_brightness(float value) { this->min_brightness_ = value; }
   void set_max_brightness(float value) { this->max_brightness_ = value; }
+  void set_off_brightness(float value) { this->off_brightness_ = value; }
   void set_restore_direction(bool value) { this->restore_direction_ = value; }
 
   void press();
   void release();
 
  protected:
-  static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 16;
-  static constexpr uint32_t RAMP_TRANSITION_MS = 32;
+  static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
+  static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
 
   void start_ramp_(uint32_t now);
-  void apply_ramp_(uint32_t now);
-  void apply_brightness_(light::LightState *state, float brightness);
+  void finish_ramp_();
+  void freeze_ramp_();
+  void apply_brightness_(light::LightState *state, float brightness,
+                         uint32_t transition_ms);
   void save_direction_();
   void toggle_targets_();
+  void turn_off_targets_();
   bool any_target_on_() const;
+  uint32_t ramp_duration_ms_(float start, float target) const;
+  float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
+  float current_brightness_(light::LightState *state) const;
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
-  std::vector<float> ramp_start_brightness_;
   std::string id_;
   ESPPreferenceObject direction_pref_{};
   bool direction_pref_ready_{false};
   uint32_t long_press_ms_{500};
   uint32_t ramp_time_ms_{2000};
+  uint32_t ramp_end_ms_{0};
   float min_brightness_{0.01f};
   float max_brightness_{1.0f};
+  float off_brightness_{0.10f};
   bool restore_direction_{false};
   bool next_direction_up_{true};
   bool pressed_{false};
   bool ramping_{false};
+  bool ramp_finished_{false};
   bool suppress_toggle_{false};
   bool ramp_direction_up_{true};
   uint32_t press_started_ms_{0};
   uint32_t ramp_started_ms_{0};
-  uint32_t last_ramp_update_ms_{0};
 };
 
 template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
