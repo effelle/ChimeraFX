@@ -203,6 +203,13 @@ public:
     uint32_t perf_apply_max_total_us{0};
     uint32_t perf_apply_max_prep_us{0};
     uint32_t perf_apply_max_sync_us{0};
+    uint32_t perf_apply_max_sync_force_us{0};
+    uint32_t perf_apply_max_sync_light_us{0};
+    uint32_t perf_apply_max_sync_runner_us{0};
+    uint32_t perf_apply_max_sync_controls_us{0};
+    uint32_t perf_apply_max_sync_gamma_us{0};
+    uint32_t perf_apply_max_sync_brightness_us{0};
+    uint32_t perf_apply_max_sync_idle_us{0};
     uint32_t perf_apply_max_dispatch_us{0};
     uint32_t perf_apply_max_intro_us{0};
     uint32_t perf_apply_max_state_us{0};
@@ -210,6 +217,13 @@ public:
     uint64_t perf_apply_total_us{0};
     uint64_t perf_apply_prep_us{0};
     uint64_t perf_apply_sync_us{0};
+    uint64_t perf_apply_sync_force_us{0};
+    uint64_t perf_apply_sync_light_us{0};
+    uint64_t perf_apply_sync_runner_us{0};
+    uint64_t perf_apply_sync_controls_us{0};
+    uint64_t perf_apply_sync_gamma_us{0};
+    uint64_t perf_apply_sync_brightness_us{0};
+    uint64_t perf_apply_sync_idle_us{0};
     uint64_t perf_apply_dispatch_us{0};
     uint64_t perf_apply_intro_us{0};
     uint64_t perf_apply_state_us{0};

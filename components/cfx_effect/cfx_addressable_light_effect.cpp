@@ -2927,7 +2927,15 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   uint32_t apply_intro_us = 0;
   uint32_t apply_state_us = 0;
   uint32_t apply_post_us = 0;
+  uint32_t apply_sync_force_us = 0;
+  uint32_t apply_sync_light_us = 0;
+  uint32_t apply_sync_runner_us = 0;
+  uint32_t apply_sync_controls_us = 0;
+  uint32_t apply_sync_gamma_us = 0;
+  uint32_t apply_sync_brightness_us = 0;
+  uint32_t apply_sync_idle_us = 0;
 
+  uint32_t sync_section_start_us = apply_perf_enabled ? cfx_micros() : 0;
   bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
@@ -2939,6 +2947,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                     : this->get_palette_index_();
   act_->active_force_white = this->resolve_force_white_active_(
       force_white_requested, force_white_palette);
+  if (apply_perf_enabled) {
+    apply_sync_force_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // Use the name cached in start() — avoids heap allocation every frame
   // (audit 1.1).
@@ -2990,6 +3002,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       null_state_log = millis_64();
     }
   }
+  if (apply_perf_enabled) {
+    apply_sync_light_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
@@ -3011,10 +3027,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->runner->setName(runner_name.c_str());
     act_->runner->setColor(color);
   }
+  if (apply_perf_enabled) {
+    apply_sync_runner_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // Update controls via Controller or Local entities (Crucial for
   // Speed/Intensity)
   this->run_controls_();
+  if (apply_perf_enabled) {
+    apply_sync_controls_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting.
@@ -3031,6 +3055,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (abs(act_->runner->_gamma - current_gamma) > 0.01f) {
       act_->runner->setGamma(current_gamma);
     }
+  }
+  if (apply_perf_enabled) {
+    apply_sync_gamma_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
   }
 
   // (Lazy Binding removed — binding happens in cfx_sequence::start())
@@ -3085,6 +3113,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->get_monochromatic_preset_(this->effect_id_).is_active;
   const bool supports_idle_output =
       is_mono_preset || this->effect_id_ == FX_MODE_STATIC;
+  if (apply_perf_enabled) {
+    apply_sync_brightness_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // ── CFX-045: Monochromatic idle suppression ──────────────────────────────
   // Phase 1 — intro/outro skip (existing behaviour, preserved as-is).
@@ -3189,6 +3221,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
   if (apply_perf_enabled) {
+    apply_sync_idle_us = cfx_micros() - sync_section_start_us;
     apply_sync_us = cfx_micros() - apply_start_us;
   }
 
@@ -3747,6 +3780,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->perf_apply_total_us += apply_total_us;
       act_->perf_apply_prep_us += apply_prep_us;
       act_->perf_apply_sync_us += apply_sync_us;
+      act_->perf_apply_sync_force_us += apply_sync_force_us;
+      act_->perf_apply_sync_light_us += apply_sync_light_us;
+      act_->perf_apply_sync_runner_us += apply_sync_runner_us;
+      act_->perf_apply_sync_controls_us += apply_sync_controls_us;
+      act_->perf_apply_sync_gamma_us += apply_sync_gamma_us;
+      act_->perf_apply_sync_brightness_us += apply_sync_brightness_us;
+      act_->perf_apply_sync_idle_us += apply_sync_idle_us;
       act_->perf_apply_dispatch_us += apply_dispatch_us;
       act_->perf_apply_intro_us += apply_intro_us;
       act_->perf_apply_state_us += apply_state_us;
@@ -3759,6 +3799,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_max_prep_us = apply_prep_us;
       if (apply_sync_us > act_->perf_apply_max_sync_us)
         act_->perf_apply_max_sync_us = apply_sync_us;
+      if (apply_sync_force_us > act_->perf_apply_max_sync_force_us)
+        act_->perf_apply_max_sync_force_us = apply_sync_force_us;
+      if (apply_sync_light_us > act_->perf_apply_max_sync_light_us)
+        act_->perf_apply_max_sync_light_us = apply_sync_light_us;
+      if (apply_sync_runner_us > act_->perf_apply_max_sync_runner_us)
+        act_->perf_apply_max_sync_runner_us = apply_sync_runner_us;
+      if (apply_sync_controls_us > act_->perf_apply_max_sync_controls_us)
+        act_->perf_apply_max_sync_controls_us = apply_sync_controls_us;
+      if (apply_sync_gamma_us > act_->perf_apply_max_sync_gamma_us)
+        act_->perf_apply_max_sync_gamma_us = apply_sync_gamma_us;
+      if (apply_sync_brightness_us > act_->perf_apply_max_sync_brightness_us)
+        act_->perf_apply_max_sync_brightness_us = apply_sync_brightness_us;
+      if (apply_sync_idle_us > act_->perf_apply_max_sync_idle_us)
+        act_->perf_apply_max_sync_idle_us = apply_sync_idle_us;
       if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
         act_->perf_apply_max_dispatch_us = apply_dispatch_us;
       if (apply_intro_us > act_->perf_apply_max_intro_us)
@@ -3780,6 +3834,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                  " total_us=%" PRIu32 "/%" PRIu32
                  " prep=%" PRIu32 "/%" PRIu32
                  " sync=%" PRIu32 "/%" PRIu32
+                 " sync_detail force=%" PRIu32 "/%" PRIu32
+                 " light=%" PRIu32 "/%" PRIu32
+                 " runner=%" PRIu32 "/%" PRIu32
+                 " controls=%" PRIu32 "/%" PRIu32
+                 " gamma=%" PRIu32 "/%" PRIu32
+                 " bri=%" PRIu32 "/%" PRIu32
+                 " idle=%" PRIu32 "/%" PRIu32
                  " dispatch=%" PRIu32 "/%" PRIu32
                  " intro=%" PRIu32 "/%" PRIu32
                  " state=%" PRIu32 "/%" PRIu32
@@ -3792,6 +3853,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                  act_->perf_apply_max_prep_us,
                  static_cast<uint32_t>(act_->perf_apply_sync_us / count),
                  act_->perf_apply_max_sync_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_force_us / count),
+                 act_->perf_apply_max_sync_force_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_light_us / count),
+                 act_->perf_apply_max_sync_light_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_runner_us / count),
+                 act_->perf_apply_max_sync_runner_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_controls_us / count),
+                 act_->perf_apply_max_sync_controls_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_gamma_us / count),
+                 act_->perf_apply_max_sync_gamma_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_brightness_us / count),
+                 act_->perf_apply_max_sync_brightness_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_idle_us / count),
+                 act_->perf_apply_max_sync_idle_us,
                  static_cast<uint32_t>(act_->perf_apply_dispatch_us / count),
                  act_->perf_apply_max_dispatch_us,
                  static_cast<uint32_t>(act_->perf_apply_intro_us / count),
@@ -3809,6 +3884,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_total_us = 0;
         act_->perf_apply_prep_us = 0;
         act_->perf_apply_sync_us = 0;
+        act_->perf_apply_sync_force_us = 0;
+        act_->perf_apply_sync_light_us = 0;
+        act_->perf_apply_sync_runner_us = 0;
+        act_->perf_apply_sync_controls_us = 0;
+        act_->perf_apply_sync_gamma_us = 0;
+        act_->perf_apply_sync_brightness_us = 0;
+        act_->perf_apply_sync_idle_us = 0;
         act_->perf_apply_dispatch_us = 0;
         act_->perf_apply_intro_us = 0;
         act_->perf_apply_state_us = 0;
@@ -3816,6 +3898,13 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_max_total_us = 0;
         act_->perf_apply_max_prep_us = 0;
         act_->perf_apply_max_sync_us = 0;
+        act_->perf_apply_max_sync_force_us = 0;
+        act_->perf_apply_max_sync_light_us = 0;
+        act_->perf_apply_max_sync_runner_us = 0;
+        act_->perf_apply_max_sync_controls_us = 0;
+        act_->perf_apply_max_sync_gamma_us = 0;
+        act_->perf_apply_max_sync_brightness_us = 0;
+        act_->perf_apply_max_sync_idle_us = 0;
         act_->perf_apply_max_dispatch_us = 0;
         act_->perf_apply_max_intro_us = 0;
         act_->perf_apply_max_state_us = 0;

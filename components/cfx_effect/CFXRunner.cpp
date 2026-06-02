@@ -128,6 +128,8 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
 void CFXRunner::setGamma(float g) {
   if (g < 0.1f)
     g = 1.0f; // Safety
+  if (_lut != nullptr && fabsf(_gamma - g) <= 0.01f)
+    return;
   _gamma = g;
 
   if (g > (CFX_DEFAULT_GAMMA - 0.01f) && g < (CFX_DEFAULT_GAMMA + 0.01f)) {

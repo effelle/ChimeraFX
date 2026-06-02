@@ -302,7 +302,11 @@ public:
 
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }
-  void setName(const char *name) { _name = name; }
+  void setName(const char *name) {
+    const char *safe_name = name != nullptr ? name : "";
+    if (_name != safe_name)
+      _name = safe_name;
+  }
   void setPaletteSeedSalt(uint32_t salt) {
     if (palette_seed_salt_ == salt)
       return;
