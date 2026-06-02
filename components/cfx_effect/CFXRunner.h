@@ -45,7 +45,7 @@ struct CRGBW {
 #define DEFAULT_INTENSITY 128
 #define DEFAULT_COLOR 0xFFAA00
 
-#define FRAMETIME 15
+#define FRAMETIME 17
 
 #define NO_OPTIONS (uint16_t)0x0000
 #define REVERSE (uint16_t)0x0002

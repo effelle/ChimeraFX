@@ -1209,7 +1209,7 @@ def _inject_all_effects(config):
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
     light_update_interval = _rmt_wire_floor_update_interval(config) or (
-        "14ms"
+        "17ms"
         if chipset in SPI_CHIPSETS or config.get(CONF_PARALLEL_GROUP)
         else None
     )

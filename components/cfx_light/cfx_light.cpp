@@ -71,6 +71,14 @@ static uint32_t g_rmt_launch_seq = 0;
 static volatile uint32_t g_rmt_dma_active_count = 0;
 static volatile uint32_t g_spi_dma_active_count = 0;
 
+static bool cfx_unicore_build_() {
+#ifdef CONFIG_FREERTOS_UNICORE
+  return true;
+#else
+  return false;
+#endif
+}
+
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
 static const uint32_t PARALLEL_PCLK_HZ = 2400000;
@@ -802,13 +810,20 @@ uint32_t CFXLightOutput::get_rmt_wire_frame_floor_us() const {
 
 uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
     uint32_t requested_ms) const {
-  if (!this->is_rmt_transport()) {
-    return requested_ms;
-  }
-
   uint32_t effective_ms = requested_ms;
   if (effective_ms != 0 && effective_ms < 17) {
     effective_ms = 17;
+  }
+
+  if (!this->is_rmt_transport()) {
+    if (this->max_refresh_rate_.has_value()) {
+      const uint32_t max_refresh_ms =
+          (*this->max_refresh_rate_ + 999u) / 1000u;
+      if (max_refresh_ms > effective_ms) {
+        effective_ms = max_refresh_ms;
+      }
+    }
+    return effective_ms;
   }
 
   const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
@@ -3217,7 +3232,7 @@ void CFXLightOutput::setup_parallel_() {
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     g_parallel_group.buffer_count = PARALLEL_TX_BUFFER_COUNT;
 #else
-    // S3/C3: Triple-buffered for <= 200 LEDs to guarantee smooth 16ms/60FPS target,
+    // S3/C3: Triple-buffered for <= 200 LEDs to guarantee smooth ~60 FPS target,
     // double-buffered <= 400 LEDs to optimize heap, and single-buffered above 400.
     if (this->num_leds_ <= 200) {
       g_parallel_group.buffer_count = 3;
@@ -5487,8 +5502,10 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
   }
 
   // Governor: request high-frequency loop only while transport/service work is
-  // pending. Active effects alone can monopolize the main loop on dense nodes.
-  if (this->has_outro() || this->rmt_flush_pending_ ||
+  // pending. On single-core ESP32 variants (C3/S2/H2), active effects and
+  // long outro phases share the same core with API, WiFi, OTA, and sensors, so
+  // keep the persistent high-frequency request for concrete flush work only.
+  if ((!cfx_unicore_build_() && this->has_outro()) || this->rmt_flush_pending_ ||
       this->seg_flush_pending_) {
     return true;
   }
@@ -5496,7 +5513,8 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
   // SPI and Classic RMT need active-effect cadence restoration under ESPHome
   // 2026.5+. Parallel remains governed by pending group work to preserve the
   // validated S3 behavior and avoid monopolizing dense parallel nodes.
-  if ((this->is_spi_transport() || this->is_rmt_transport()) &&
+  if (!cfx_unicore_build_() &&
+      (this->is_spi_transport() || this->is_rmt_transport()) &&
       has_active_rendering_cfx_effect(this)) {
     return true;
   }

@@ -979,7 +979,7 @@ struct AuroraWave {
 
 // Separator effect — blinks red 3 times then self-terminates.
 // Visual feedback that tells the user "that was a category divider, not an effect".
-// Uses _segment.call (increments every frame at ~16ms) with 15 frames per half-cycle
+// Uses _segment.call (increments every frame at ~17ms) with 15 frames per half-cycle
 // → ~240ms per half/cycle, 3 blinks = ~1.4s total.
 #define SEP_FRAMES_PER_HALF 15
 uint16_t mode_separator(void) {

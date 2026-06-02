@@ -263,7 +263,7 @@ CFX_EFFECTS = [
         cv.Optional(CONF_INTENSITY): cv.use_id(number.Number),
         cv.Optional(CONF_PALETTE): cv.use_id(select.Select),
         cv.Optional(CONF_MIRROR): cv.use_id(switch.Switch),
-        cv.Optional(CONF_UPDATE_INTERVAL, default="16ms"): cv.update_interval,
+        cv.Optional(CONF_UPDATE_INTERVAL, default="17ms"): cv.update_interval,
         cv.Optional(CONF_INTRO_EFFECT): cv.use_id(select.Select),
         cv.Optional(CONF_INOUT_DURATION): cv.use_id(number.Number),
         cv.Optional(CONF_OUTRO_EFFECT): cv.use_id(select.Select),
