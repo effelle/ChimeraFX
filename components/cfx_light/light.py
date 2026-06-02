@@ -1208,11 +1208,12 @@ def _inject_all_effects(config):
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
-    light_update_interval = _rmt_wire_floor_update_interval(config) or (
-        "17ms"
-        if chipset in SPI_CHIPSETS or config.get(CONF_PARALLEL_GROUP)
-        else None
-    )
+    light_update_interval = _rmt_wire_floor_update_interval(config)
+    if light_update_interval is None:
+        if chipset in SPI_CHIPSETS:
+            light_update_interval = "17ms"
+        elif config.get(CONF_PARALLEL_GROUP):
+            light_update_interval = "14ms"
 
     user_effects = list(config.get(CONF_EFFECTS, []))
 
