@@ -6245,7 +6245,8 @@ void CFXLightOutput::loop() {
     goto segment_flush_done;
   }
 
-  if (this->seg_flush_pending_ && !this->is_parallel_transport() &&
+  if (cfx_unicore_build_() && this->is_rmt_transport() &&
+      this->seg_flush_pending_ &&
       this->has_active_parent_owned_segments_()) {
     uint8_t mixed_segment_mask = 0;
     uint8_t mixed_segment_count = 0;
