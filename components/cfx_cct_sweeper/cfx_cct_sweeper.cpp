@@ -91,12 +91,17 @@ void CFXCCTSweeper::start_sweep_(uint32_t now) {
   this->next_direction_warmer_ = !this->sweep_direction_warmer_;
   this->save_direction_();
   this->sweep_end_ms_ = now;
-  const CFXColor target = this->sweep_target_();
+  this->sweep_started_ms_ = now;
+  this->active_sweep_target_ = this->sweep_target_();
+  this->sweep_targets_.clear();
+  this->sweep_targets_.reserve(this->lights_.size());
   for (auto *state : this->lights_) {
     const CFXColor start = this->current_color_(state);
-    const uint32_t duration = this->sweep_duration_ms_(start, target);
+    const uint32_t duration =
+        this->sweep_duration_ms_(start, this->active_sweep_target_);
+    this->sweep_targets_.push_back({true, start, duration});
     this->sweep_end_ms_ = std::max(this->sweep_end_ms_, now + duration);
-    this->apply_color_(state, target, duration);
+    this->apply_color_(state, this->active_sweep_target_, duration);
   }
 }
 
@@ -106,9 +111,8 @@ void CFXCCTSweeper::finish_sweep_() {
   }
   this->sweeping_ = false;
   this->sweep_finished_ = true;
-  const CFXColor target = this->sweep_target_();
   for (auto *state : this->lights_) {
-    this->apply_color_(state, target, 0);
+    this->apply_color_(state, this->active_sweep_target_, 0);
   }
 }
 
@@ -116,11 +120,35 @@ void CFXCCTSweeper::freeze_sweep_() {
   if (!this->sweeping_) {
     return;
   }
-  for (auto *state : this->lights_) {
-    this->apply_color_(state, this->current_color_(state), 0);
+  const uint32_t now = millis();
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *state = this->lights_[i];
+    if (i < this->sweep_targets_.size() && this->sweep_targets_[i].valid) {
+      this->apply_color_(state, this->sweep_color_at_(this->sweep_targets_[i], now),
+                         0);
+    } else {
+      this->apply_color_(state, this->current_color_(state), 0);
+    }
   }
   this->sweeping_ = false;
   this->sweep_finished_ = true;
+}
+
+CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
+                                         uint32_t now) const {
+  float progress = 1.0f;
+  if (target.duration_ms > 0) {
+    progress = static_cast<float>(now - this->sweep_started_ms_) /
+               static_cast<float>(target.duration_ms);
+  }
+  progress = std::max(0.0f, std::min(1.0f, progress));
+  const auto blend = [progress](float start, float end) {
+    return start + ((end - start) * progress);
+  };
+  return {blend(target.start.red, this->active_sweep_target_.red),
+          blend(target.start.green, this->active_sweep_target_.green),
+          blend(target.start.blue, this->active_sweep_target_.blue),
+          blend(target.start.white, this->active_sweep_target_.white)};
 }
 
 void CFXCCTSweeper::toggle_favorite_white_() {

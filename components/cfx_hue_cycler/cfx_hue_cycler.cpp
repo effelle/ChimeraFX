@@ -98,6 +98,13 @@ void CFXHueCycler::apply_cycle_(uint32_t now) {
     return;
   }
   this->last_cycle_update_ms_ = now;
+  const CFXColor color = this->cycle_color_at_(now);
+  for (auto *state : this->lights_) {
+    this->apply_color_(state, color, HUE_TRANSITION_MS);
+  }
+}
+
+CFXColor CFXHueCycler::cycle_color_at_(uint32_t now) {
   float hue = this->base_hue_;
   if (this->cycle_time_ms_ > 0) {
     const float progress =
@@ -105,37 +112,19 @@ void CFXHueCycler::apply_cycle_(uint32_t now) {
         static_cast<float>(this->cycle_time_ms_);
     hue = this->normalize_hue_(this->base_hue_ + (progress * 360.0f));
   }
-  const CFXColor color = this->color_from_hue_(hue);
-  for (auto *state : this->lights_) {
-    this->apply_color_(state, color, HUE_TRANSITION_MS);
-  }
+  this->last_cycle_hue_ = hue;
+  this->last_cycle_color_ = this->color_from_hue_(hue);
+  return this->last_cycle_color_;
 }
 
 void CFXHueCycler::freeze_cycle_() {
   if (!this->cycling_) {
     return;
   }
-  if (!this->lights_.empty()) {
-    const CFXColor current = this->current_color_(this->lights_[0]);
-    const CFXColor remote = this->remote_color_(this->lights_[0]);
-    this->base_hue_ =
-        this->color_distance_(current, this->white_) <= WHITE_MATCH_TOLERANCE &&
-                this->color_distance_(remote, this->white_) >
-                    WHITE_MATCH_TOLERANCE
-            ? this->current_hue_(this->lights_[0], true)
-            : this->current_hue_(this->lights_[0], false);
-  }
+  this->base_hue_ = this->last_cycle_hue_;
   this->save_hue_();
   for (auto *state : this->lights_) {
-    const CFXColor current = this->current_color_(state);
-    const CFXColor remote = this->remote_color_(state);
-    const bool current_is_white =
-        this->color_distance_(current, this->white_) <= WHITE_MATCH_TOLERANCE;
-    const bool remote_is_color =
-        this->color_distance_(remote, this->white_) > WHITE_MATCH_TOLERANCE;
-    this->apply_color_(state,
-                       current_is_white && remote_is_color ? remote : current,
-                       0);
+    this->apply_color_(state, this->last_cycle_color_, 0);
   }
   this->cycling_ = false;
 }

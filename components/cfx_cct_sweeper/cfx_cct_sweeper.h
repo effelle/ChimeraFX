@@ -46,6 +46,12 @@ class CFXCCTSweeper : public Component {
     CFXColor color{};
   };
 
+  struct SweepTarget {
+    bool valid{false};
+    CFXColor start{};
+    uint32_t duration_ms{0};
+  };
+
   static constexpr uint32_t MIN_SWEEP_TRANSITION_MS = 50;
   static constexpr uint32_t POST_SWEEP_GUARD_MS = 350;
   static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
@@ -53,6 +59,7 @@ class CFXCCTSweeper : public Component {
   void start_sweep_(uint32_t now);
   void finish_sweep_();
   void freeze_sweep_();
+  CFXColor sweep_color_at_(const SweepTarget &target, uint32_t now) const;
   void toggle_favorite_white_();
   void save_current_colors_();
   void restore_saved_color_(size_t index, light::LightState *state);
@@ -70,13 +77,16 @@ class CFXCCTSweeper : public Component {
 
   std::vector<light::LightState *> lights_;
   std::vector<SavedColor> saved_colors_;
+  std::vector<SweepTarget> sweep_targets_;
   std::string id_;
   ESPPreferenceObject direction_pref_{};
   bool direction_pref_ready_{false};
   uint32_t long_press_ms_{500};
   uint32_t sweep_time_ms_{4000};
   uint32_t sweep_end_ms_{0};
+  uint32_t sweep_started_ms_{0};
   uint32_t ignore_press_until_ms_{0};
+  CFXColor active_sweep_target_{1.0f, 0.55f, 0.18f, 1.0f};
   CFXColor favorite_white_{1.0f, 1.0f, 1.0f, 1.0f};
   CFXColor warm_white_{1.0f, 0.55f, 0.18f, 1.0f};
   CFXColor cool_white_{0.70f, 0.85f, 1.0f, 1.0f};
