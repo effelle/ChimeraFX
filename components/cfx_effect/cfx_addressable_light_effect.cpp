@@ -2922,8 +2922,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   const bool runner_debug_active = debug_active && !capture_idle_probe;
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
+  uint32_t apply_sync_us = 0;
   uint32_t apply_dispatch_us = 0;
   uint32_t apply_intro_us = 0;
+  uint32_t apply_state_us = 0;
   uint32_t apply_post_us = 0;
 
   bool force_white_requested =
@@ -3186,6 +3188,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       skip_service = true;
     }
   }
+  if (apply_perf_enabled) {
+    apply_sync_us = cfx_micros() - apply_start_us;
+  }
 
   if (!skip_service) {
     const uint32_t dispatch_start_us = apply_perf_enabled ? cfx_micros() : 0;
@@ -3297,7 +3302,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #endif
     }
   }
-  const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
+  const uint32_t state_start_us = measure_apply_cost ? cfx_micros() : 0;
 
 #ifdef USE_CFX_SEQUENCE
   // CFX-run: Check effect_complete_ regardless of skip_service so that
@@ -3680,6 +3685,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // (Duplicate completion handler removed — handled in service loop above)
 
+  if (measure_apply_cost) {
+    apply_state_us = cfx_micros() - state_start_us;
+  }
+
+  const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
+
   // CFX-032: Scrub OFF segments before DMA fires.
   // The effect writes into the full strip buffer without knowing which
   // segments are OFF. If it bleeds into an OFF segment's pixel range,
@@ -3720,9 +3731,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     apply_post_us = cfx_micros() - post_start_us;
     const uint32_t apply_total_us = cfx_micros() - apply_start_us;
     const uint32_t apply_prep_us =
-        (apply_total_us > (apply_dispatch_us + apply_intro_us + apply_post_us))
-            ? (apply_total_us - apply_dispatch_us - apply_intro_us -
-               apply_post_us)
+        (apply_total_us > (apply_sync_us + apply_dispatch_us + apply_state_us +
+                           apply_post_us))
+            ? (apply_total_us - apply_sync_us - apply_dispatch_us -
+               apply_state_us - apply_post_us)
             : 0;
 
     if (capture_idle_probe) {
@@ -3734,8 +3746,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (apply_perf_enabled) {
       act_->perf_apply_total_us += apply_total_us;
       act_->perf_apply_prep_us += apply_prep_us;
+      act_->perf_apply_sync_us += apply_sync_us;
       act_->perf_apply_dispatch_us += apply_dispatch_us;
       act_->perf_apply_intro_us += apply_intro_us;
+      act_->perf_apply_state_us += apply_state_us;
       act_->perf_apply_post_us += apply_post_us;
       act_->perf_apply_count++;
 
@@ -3743,10 +3757,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_max_total_us = apply_total_us;
       if (apply_prep_us > act_->perf_apply_max_prep_us)
         act_->perf_apply_max_prep_us = apply_prep_us;
+      if (apply_sync_us > act_->perf_apply_max_sync_us)
+        act_->perf_apply_max_sync_us = apply_sync_us;
       if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
         act_->perf_apply_max_dispatch_us = apply_dispatch_us;
       if (apply_intro_us > act_->perf_apply_max_intro_us)
         act_->perf_apply_max_intro_us = apply_intro_us;
+      if (apply_state_us > act_->perf_apply_max_state_us)
+        act_->perf_apply_max_state_us = apply_state_us;
       if (apply_post_us > act_->perf_apply_max_post_us)
         act_->perf_apply_max_post_us = apply_post_us;
 
@@ -3761,19 +3779,25 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                  "CFX apply_perf[%s] n=%" PRIu32
                  " total_us=%" PRIu32 "/%" PRIu32
                  " prep=%" PRIu32 "/%" PRIu32
+                 " sync=%" PRIu32 "/%" PRIu32
                  " dispatch=%" PRIu32 "/%" PRIu32
                  " intro=%" PRIu32 "/%" PRIu32
+                 " state=%" PRIu32 "/%" PRIu32
                  " post=%" PRIu32 "/%" PRIu32
-                 " intro_active=%u mode=%u mono_idle=%u state=%u",
+                 " intro_active=%u mode=%u mono_idle=%u fsm=%u",
                  runner_name.c_str(), act_->perf_apply_count,
                  static_cast<uint32_t>(act_->perf_apply_total_us / count),
                  act_->perf_apply_max_total_us,
                  static_cast<uint32_t>(act_->perf_apply_prep_us / count),
                  act_->perf_apply_max_prep_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_us / count),
+                 act_->perf_apply_max_sync_us,
                  static_cast<uint32_t>(act_->perf_apply_dispatch_us / count),
                  act_->perf_apply_max_dispatch_us,
                  static_cast<uint32_t>(act_->perf_apply_intro_us / count),
                  act_->perf_apply_max_intro_us,
+                 static_cast<uint32_t>(act_->perf_apply_state_us / count),
+                 act_->perf_apply_max_state_us,
                  static_cast<uint32_t>(act_->perf_apply_post_us / count),
                  act_->perf_apply_max_post_us,
                  static_cast<unsigned>(act_->intro_active),
@@ -3784,13 +3808,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_count = 0;
         act_->perf_apply_total_us = 0;
         act_->perf_apply_prep_us = 0;
+        act_->perf_apply_sync_us = 0;
         act_->perf_apply_dispatch_us = 0;
         act_->perf_apply_intro_us = 0;
+        act_->perf_apply_state_us = 0;
         act_->perf_apply_post_us = 0;
         act_->perf_apply_max_total_us = 0;
         act_->perf_apply_max_prep_us = 0;
+        act_->perf_apply_max_sync_us = 0;
         act_->perf_apply_max_dispatch_us = 0;
         act_->perf_apply_max_intro_us = 0;
+        act_->perf_apply_max_state_us = 0;
         act_->perf_apply_max_post_us = 0;
       }
     }

@@ -202,13 +202,17 @@ public:
     uint32_t perf_apply_count{0};
     uint32_t perf_apply_max_total_us{0};
     uint32_t perf_apply_max_prep_us{0};
+    uint32_t perf_apply_max_sync_us{0};
     uint32_t perf_apply_max_dispatch_us{0};
     uint32_t perf_apply_max_intro_us{0};
+    uint32_t perf_apply_max_state_us{0};
     uint32_t perf_apply_max_post_us{0};
     uint64_t perf_apply_total_us{0};
     uint64_t perf_apply_prep_us{0};
+    uint64_t perf_apply_sync_us{0};
     uint64_t perf_apply_dispatch_us{0};
     uint64_t perf_apply_intro_us{0};
+    uint64_t perf_apply_state_us{0};
     uint64_t perf_apply_post_us{0};
   };
 
