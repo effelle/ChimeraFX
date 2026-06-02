@@ -25,6 +25,7 @@ external_components:
       - cfx_dimmer
       - cfx_cct_sweeper
       - cfx_hue_cycler
+      - cfx_effect_selector
 ```
 
 All helpers support the same button binding shape:
@@ -152,3 +153,44 @@ binary_sensor:
 
 Hue actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
+
+## Effect Selector
+
+`cfx_effect_selector` controls a configured list of light effects. A short press
+turns the target lights on or off. A long press walks through the configured
+effect names, one effect at a time, and release keeps the currently selected
+effect running.
+
+```yaml
+cfx_effect_selector:
+  - id: desk_lamp_fx
+    lights:
+      - c3_Strip1
+      - c3_Strip2
+      - c3_Strip3
+      - c3_Strip4
+    effects:
+      - Rainbow
+      - Fire
+      - Aurora
+
+binary_sensor:
+  - platform: gpio
+    pin: GPIO08
+    on_press:
+      - cfx_effect_selector.press: desk_lamp_fx
+    on_release:
+      - cfx_effect_selector.release: desk_lamp_fx
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `id` | required | Effect selector helper ID. |
+| `lights` | required | One or more light entities to control. |
+| `effects` | required | One or more effect names to cycle through. Names must match the target light effect names. |
+| `long_press` | `500ms` | Press duration before effect selection starts. |
+| `effect_interval` | `900ms` | Time between effect changes while the button remains held. |
+
+Short press on uses the last selected effect, starting with the first configured
+effect after boot. Long press starts from the currently active configured effect
+when possible, then advances to the next effect immediately.

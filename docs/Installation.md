@@ -68,7 +68,7 @@ If you are developing, need to modify the code locally, or prefer not to rely on
 ```yaml
 external_components:
   - source: components
-    components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer, cfx_cct_sweeper, cfx_hue_cycler]
+    components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer, cfx_cct_sweeper, cfx_hue_cycler, cfx_effect_selector]
 ```
 
 If you use a local or manual allow-list, include every ChimeraFX component you
