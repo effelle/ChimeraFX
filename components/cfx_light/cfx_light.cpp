@@ -2173,37 +2173,6 @@ void CFXLightOutput::mark_segment_coordinator_epoch_committed_(uint8_t mask) {
   }
 }
 
-void CFXLightOutput::enqueue_segment_coordinator_epoch_(uint8_t mask,
-                                                        uint8_t count) {
-  if (mask == 0 || count == 0) {
-    return;
-  }
-
-  this->seg_generation_counter_++;
-  if (this->seg_generation_counter_ == 0) {
-    this->seg_generation_counter_ = 1;
-  }
-  for (size_t i = 0; i < this->segment_light_states_.size() &&
-                     i < MAX_CFX_SEGMENTS; i++) {
-    if ((mask & static_cast<uint8_t>(1u << i)) == 0) {
-      continue;
-    }
-    this->seg_request_generation_[i] = this->seg_generation_counter_;
-  }
-
-  // A mixed intro + parent-coordinated frame should be presented once, by the
-  // normal segment barrier. Mark the parent-owned pixels as ready/dirty, but
-  // leave flushed_generation untouched until write_state(nullptr) transmits the
-  // combined buffer.
-  this->seg_flush_pending_mask_ |= mask;
-  this->seg_flush_dirty_mask_ |= mask;
-  if (!this->seg_flush_pending_) {
-    this->seg_flush_pending_ = true;
-    this->seg_flush_first_ms_ = esphome::millis();
-    this->update_high_frequency_loop_request_();
-  }
-}
-
 void CFXLightOutput::finalize_segment_coordinator_epoch_(uint8_t mask,
                                                          uint8_t count,
                                                          bool transmit) {
@@ -6245,17 +6214,7 @@ void CFXLightOutput::loop() {
     goto segment_flush_done;
   }
 
-  if (cfx_unicore_build_() && this->is_rmt_transport() &&
-      this->seg_flush_pending_ &&
-      this->has_active_parent_owned_segments_()) {
-    uint8_t mixed_segment_mask = 0;
-    uint8_t mixed_segment_count = 0;
-    if (this->render_segment_coordinator_epoch_(mixed_segment_mask,
-                                                mixed_segment_count, false)) {
-      this->enqueue_segment_coordinator_epoch_(mixed_segment_mask,
-                                               mixed_segment_count);
-    }
-  } else if (this->service_segment_render_coordinator_()) {
+  if (this->service_segment_render_coordinator_()) {
     goto segment_flush_done;
   }
 

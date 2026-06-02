@@ -2923,6 +2923,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
   uint32_t apply_dispatch_us = 0;
+  uint32_t apply_intro_us = 0;
   uint32_t apply_post_us = 0;
 
   bool force_white_requested =
@@ -3352,6 +3353,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #else
       true) {
 #endif
+    const uint32_t intro_start_us = apply_perf_enabled ? cfx_micros() : 0;
     // Run intro on ALL segments (swap-on-service pattern)
     // This acts as a mask on top of the already-rendered main effect.
     if (!act_->segment_runners.empty()) {
@@ -3364,6 +3366,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       chimera_fx::InstanceGuard intro_guard(
           act_->runner); // CFX-004: scoped single-runner
       this->run_intro(it, current_color);
+    }
+    if (apply_perf_enabled) {
+      apply_intro_us += cfx_micros() - intro_start_us;
     }
 
     // CFX-035b: Fire progress-based milestones from the intro for monochromatic
@@ -3715,8 +3720,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     apply_post_us = cfx_micros() - post_start_us;
     const uint32_t apply_total_us = cfx_micros() - apply_start_us;
     const uint32_t apply_prep_us =
-        (apply_total_us > (apply_dispatch_us + apply_post_us))
-            ? (apply_total_us - apply_dispatch_us - apply_post_us)
+        (apply_total_us > (apply_dispatch_us + apply_intro_us + apply_post_us))
+            ? (apply_total_us - apply_dispatch_us - apply_intro_us -
+               apply_post_us)
             : 0;
 
     if (capture_idle_probe) {
@@ -3729,6 +3735,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->perf_apply_total_us += apply_total_us;
       act_->perf_apply_prep_us += apply_prep_us;
       act_->perf_apply_dispatch_us += apply_dispatch_us;
+      act_->perf_apply_intro_us += apply_intro_us;
       act_->perf_apply_post_us += apply_post_us;
       act_->perf_apply_count++;
 
@@ -3738,6 +3745,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_max_prep_us = apply_prep_us;
       if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
         act_->perf_apply_max_dispatch_us = apply_dispatch_us;
+      if (apply_intro_us > act_->perf_apply_max_intro_us)
+        act_->perf_apply_max_intro_us = apply_intro_us;
       if (apply_post_us > act_->perf_apply_max_post_us)
         act_->perf_apply_max_post_us = apply_post_us;
 
@@ -3746,15 +3755,42 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_log_ms = now_ms;
       } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
                  act_->perf_apply_count > 0) {
+        const uint32_t count =
+            act_->perf_apply_count > 0 ? act_->perf_apply_count : 1;
+        ESP_LOGD("chimera_fx",
+                 "CFX apply_perf[%s] n=%" PRIu32
+                 " total_us=%" PRIu32 "/%" PRIu32
+                 " prep=%" PRIu32 "/%" PRIu32
+                 " dispatch=%" PRIu32 "/%" PRIu32
+                 " intro=%" PRIu32 "/%" PRIu32
+                 " post=%" PRIu32 "/%" PRIu32
+                 " intro_active=%u mode=%u mono_idle=%u state=%u",
+                 runner_name.c_str(), act_->perf_apply_count,
+                 static_cast<uint32_t>(act_->perf_apply_total_us / count),
+                 act_->perf_apply_max_total_us,
+                 static_cast<uint32_t>(act_->perf_apply_prep_us / count),
+                 act_->perf_apply_max_prep_us,
+                 static_cast<uint32_t>(act_->perf_apply_dispatch_us / count),
+                 act_->perf_apply_max_dispatch_us,
+                 static_cast<uint32_t>(act_->perf_apply_intro_us / count),
+                 act_->perf_apply_max_intro_us,
+                 static_cast<uint32_t>(act_->perf_apply_post_us / count),
+                 act_->perf_apply_max_post_us,
+                 static_cast<unsigned>(act_->intro_active),
+                 static_cast<unsigned>(act_->active_intro_mode),
+                 static_cast<unsigned>(act_->mono_idle),
+                 static_cast<unsigned>(act_->state));
         act_->perf_log_ms = now_ms;
         act_->perf_apply_count = 0;
         act_->perf_apply_total_us = 0;
         act_->perf_apply_prep_us = 0;
         act_->perf_apply_dispatch_us = 0;
+        act_->perf_apply_intro_us = 0;
         act_->perf_apply_post_us = 0;
         act_->perf_apply_max_total_us = 0;
         act_->perf_apply_max_prep_us = 0;
         act_->perf_apply_max_dispatch_us = 0;
+        act_->perf_apply_max_intro_us = 0;
         act_->perf_apply_max_post_us = 0;
       }
     }

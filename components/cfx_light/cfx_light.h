@@ -527,7 +527,6 @@ protected:
   bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
                                          bool force_due = false,
                                          bool allow_outro = false);
-  void enqueue_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
                                            bool transmit);
   void mark_segment_coordinator_epoch_committed_(uint8_t mask);
