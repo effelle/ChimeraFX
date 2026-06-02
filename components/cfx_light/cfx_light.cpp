@@ -665,6 +665,9 @@ void CFXLightOutput::release_outro_callback_storage_() {
 }
 
 void CFXLightOutput::add_outro_callback(OutroCallback cb) {
+  if (this->outro_cbs_.empty()) {
+    this->outro_last_frame_ms_ = 0;
+  }
   this->outro_cbs_.push_back(cb);
   this->update_high_frequency_loop_request_();
 }
@@ -6123,6 +6126,13 @@ void CFXLightOutput::loop() {
   this->service_parallel_group_flush_();
   this->service_parallel_shared_group_flush_();
   if (!this->outro_cbs_.empty()) {
+    const uint32_t now_ms = esphome::millis();
+    if (this->outro_last_frame_ms_ != 0 &&
+        (now_ms - this->outro_last_frame_ms_) < FRAMETIME) {
+      goto segment_flush_done;
+    }
+    this->outro_last_frame_ms_ = now_ms;
+
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
     this->correction_.set_local_brightness(255);
@@ -6145,10 +6155,14 @@ void CFXLightOutput::loop() {
                                                 outro_segment_count, false);
     }
 
-    // Force direct DMA flush of the frame!
-    // We cannot use schedule_show() here because ESPHome's LightState loop
-    // is disabled when the light is turned off, meaning it will never poll us.
-    this->write_state(nullptr);
+    if (!this->outro_cbs_.empty()) {
+      // Force direct DMA flush of the frame. We cannot use schedule_show()
+      // here because ESPHome's LightState loop is disabled when the light is
+      // turned off, meaning it will never poll us.
+      this->outro_parent_flush_allowed_ = true;
+      this->write_state(nullptr);
+      this->outro_parent_flush_allowed_ = false;
+    }
 
     if (this->outro_cbs_.empty()) {
       // Outro finished. Black out only the pixels that belong to segments
@@ -6173,7 +6187,10 @@ void CFXLightOutput::loop() {
           (*this)[i] = Color::BLACK;
         }
       }
+      this->outro_parent_flush_allowed_ = true;
       this->write_state(nullptr);
+      this->outro_parent_flush_allowed_ = false;
+      this->outro_last_frame_ms_ = 0;
       this->release_outro_callback_storage_();
     }
     goto segment_flush_done;
@@ -6637,11 +6654,12 @@ void CFXLightOutput::write_state(light::LightState *state) {
     return; // Block Master during outro on non-segmented lights
   }
   if (state == nullptr && this->is_spi_transport() &&
-      this->has_active_parent_owned_segments_() && !this->has_outro()) {
-    // Parent-coordinated SPI segments flush through
-    // flush_parent_owned_segment_epoch_direct_(). A generic nullptr write can
+      this->has_active_parent_owned_segments_(this->has_outro()) &&
+      (!this->has_outro() || !this->outro_parent_flush_allowed_)) {
+    // Parent-coordinated SPI segments flush through the segment coordinator or
+    // the single intentional outro parent flush. A generic nullptr write can
     // still be queued by ESPHome/legacy segment paths in the same visual frame,
-    // causing a second identical SPI DMA frame and inflated LedFPS.
+    // causing extra SPI DMA frames and inflated LedFPS.
     this->note_segment_coord_write_skip();
     return;
   }
@@ -7076,7 +7094,7 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
-  if (this->has_active_parent_owned_segments_() &&
+  if (this->has_active_parent_owned_segments_(this->has_outro()) &&
       this->perf_diag_last_spi_flush_start_us_ != 0) {
     constexpr uint32_t SPI_SEGMENT_DUPLICATE_WINDOW_US =
         (FRAMETIME * 1000u * 3u) / 4u;

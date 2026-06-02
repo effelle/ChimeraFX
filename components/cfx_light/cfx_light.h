@@ -572,6 +572,8 @@ protected:
   // Callbacks used to execute Outro animations after ESPHome turns the light
   // off
   std::vector<OutroCallback> outro_cbs_;
+  uint32_t outro_last_frame_ms_{0};
+  bool outro_parent_flush_allowed_{false};
 
   // Per-pixel effect data (used by AddressableLight)
   uint8_t *effect_data_{nullptr};
