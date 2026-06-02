@@ -55,14 +55,6 @@ const std::vector<CfxOnReachTrigger *>
 static const char *const TAG = "chimera_fx";
 
 namespace {
-static bool cfx_unicore_build_() {
-#ifdef CONFIG_FREERTOS_UNICORE
-  return true;
-#else
-  return false;
-#endif
-}
-
 static CFXAddressableLightEffect *
 resolve_parallel_segment_stub_singleton(light::LightState *state,
                                         light::LightEffect *active) {
@@ -8338,37 +8330,29 @@ void CFXAddressableLightEffect::check_milestones_(float current_pct) {
   if (act_->intro_active && act_->intro_suppresses_milestones)
     return;
   act_->milestone_fired_this_frame = false;
-  static uint8_t reach_pressure_suppress_logs = 0;
+  static uint8_t spi_reach_suppress_logs = 0;
   bool suppress_ha_reach = false;
 #ifdef USE_CFX_EVENTS
-  if (!act_->suppress_reach_event) {
-    SPIDiagCensus diag_census = collect_spi_diag_census();
-    const size_t active_cfx_renderers =
-        diag_census.active_effects + diag_census.active_segment_effects;
 #ifdef USE_CFX_SEQUENCE
+  if (!act_->suppress_reach_event && act_->active_sequence != nullptr) {
+    SPIDiagCensus diag_census = collect_spi_diag_census();
     suppress_ha_reach =
-        act_->active_sequence != nullptr && diag_census.active_spi_effects > 0 &&
-        active_cfx_renderers >= 2;
-#endif
-    if (!suppress_ha_reach && cfx_unicore_build_() &&
-        active_cfx_renderers >= 2 && diag_census.runner_count >= 2) {
-      suppress_ha_reach = true;
-    }
-    if (suppress_ha_reach && reach_pressure_suppress_logs < 12) {
+        diag_census.active_spi_effects > 0 && diag_census.active_effects >= 2;
+    if (suppress_ha_reach && spi_reach_suppress_logs < 12) {
       ESP_LOGV("cfx_seq",
-               "CFX reach-suppress[%u]: effect=%s tag=%s active(e=%u,se=%u,"
-               "spi=%u) bound=%u runners=%u unicore=%u",
-               static_cast<unsigned>(reach_pressure_suppress_logs),
+               "SPI diag reach-suppress[%u]: effect=%s tag=%s active(e=%u,"
+               "se=%u,spi=%u) bound=%u runners=%u",
+               static_cast<unsigned>(spi_reach_suppress_logs),
                act_->cached_runner_name.c_str(), act_->strip_tag.c_str(),
                static_cast<unsigned>(diag_census.active_effects),
                static_cast<unsigned>(diag_census.active_segment_effects),
                static_cast<unsigned>(diag_census.active_spi_effects),
                static_cast<unsigned>(diag_census.bound_sequences),
-               static_cast<unsigned>(diag_census.runner_count),
-               static_cast<unsigned>(cfx_unicore_build_()));
-      reach_pressure_suppress_logs++;
+               static_cast<unsigned>(diag_census.runner_count));
+      spi_reach_suppress_logs++;
     }
   }
+#endif
 #endif
   uint8_t next = act_->last_fired_milestone + MILESTONE_STEP;
   while (current_pct >= next && next <= 100) {
