@@ -5466,30 +5466,35 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // 3. Render Shimmering Fluid Mass (Coherent Waves)
     int floor_level = (int)act_->hydraulics_fluid_level;
-    float vel_glow = 0.15f * (abs(act_->hydraulics_fluid_velocity) / target_l);
-    float wave_time = now_ms * 0.005f;
+    int vel_glow_b = (int)(38.0f * fabsf(act_->hydraulics_fluid_velocity) /
+                           (target_l > 0.0f ? target_l : 1.0f));
+    if (vel_glow_b > 64)
+      vel_glow_b = 64;
+    const uint8_t wave_t1 = (uint8_t)((now_ms * 5u) & 0xFFu);
+    const uint8_t wave_t2 = (uint8_t)((now_ms * 13u / 10u) & 0xFFu);
 
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        // Overlapping Sine Waves create a flowing "liquid" texture
-        float wave1 = sinf(i * 0.5f - wave_time);
-        float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
-        float liquid_noise = (wave1 + wave2) * 0.15f;
-
-        float brightness =
-            0.7f + liquid_noise + vel_glow; // v4.1 Match White Peak
+        // Overlapping integer sine waves create a flowing liquid texture.
+        // Avoid per-pixel sinf() here: ESP32-C3 has no FPU, and this intro
+        // often runs while another segment effect is active.
+        const int wave1 =
+            (int)cfx::sin8((uint8_t)(i * 10u - wave_t1)) - 128;
+        const int wave2 =
+            (int)cfx::sin8((uint8_t)(i * 16u - wave_t2)) - 128;
+        int brightness = 179 + ((wave1 + wave2) * 38 / 128) + vel_glow_b;
 
         // The "Froth" (Water is brighter/turbulent at the leading edge)
         float dist_to_head = act_->hydraulics_fluid_level - i;
         if (dist_to_head < 5.0f) {
-          brightness += (5.0f - dist_to_head) * 0.15f;
+          brightness += (int)((5.0f - dist_to_head) * 38.0f);
         }
 
-        if (brightness > 1.0f)
-          brightness = 1.0f;
-        if (brightness < 0.1f)
-          brightness = 0.1f;
-        uint8_t b = (uint8_t)(255 * brightness);
+        if (brightness > 255)
+          brightness = 255;
+        if (brightness < 26)
+          brightness = 26;
+        uint8_t b = (uint8_t)brightness;
         uint8_t r = b, g = b, b_val = b, w = b;
         if (act_->active_force_white)
           cfx::apply_force_white(r, g, b_val, w);
