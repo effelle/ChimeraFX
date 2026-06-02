@@ -4,36 +4,10 @@ ChimeraFX magic buttons are small on-device helpers for physical buttons. They
 do not create Home Assistant entities. Instead, you bind an existing ESPHome
 `binary_sensor` button to a helper with `press` and `release` actions.
 
-With the normal GitHub install, no component allow-list is needed:
-
-```yaml
-external_components:
-  - source: github://effelle/ChimeraFX@main
-    refresh: always
-```
-
-If your existing `external_components` block still has a `components:` list,
-remove that list or add every button helper you use. ESPHome treats
-`components:` as a hard allow-list, so omitted components cannot be imported.
-
-```yaml
-external_components:
-  - source: github://effelle/ChimeraFX@main
-    refresh: always
-    components:
-      - cfx_light
-      - cfx_dimmer
-      - cfx_cct_sweeper
-      - cfx_hue_cycler
-      - cfx_effect_selector
-```
-
-All helpers support the same button binding shape:
-
 ```yaml
 binary_sensor:
   - platform: gpio
-    pin: GPIO0
+    pin: GPIO05     # GPIO pin where the button is connected
     on_press:
       - helper_name.press: helper_id
     on_release:
@@ -57,7 +31,7 @@ cfx_dimmer:
 
 binary_sensor:
   - platform: gpio
-    pin: GPIO0
+    pin: GPIO05     # GPIO pin where the button is connected
     on_press:
       - cfx_dimmer.press: desk_lamp_dimmer
     on_release:
@@ -95,7 +69,7 @@ cfx_cct_sweeper:
 
 binary_sensor:
   - platform: gpio
-    pin: GPIO06
+    pin: GPIO06     # GPIO pin where the button is connected
     on_press:
       - cfx_cct_sweeper.press: living_room_cct
     on_release:
@@ -134,7 +108,7 @@ cfx_hue_cycler:
 
 binary_sensor:
   - platform: gpio
-    pin: GPIO07
+    pin: GPIO07     # GPIO pin where the button is connected
     on_press:
       - cfx_hue_cycler.press: game_room_rgb
     on_release:
@@ -170,13 +144,13 @@ cfx_effect_selector:
       - c3_Strip3
       - c3_Strip4
     effects:
-      - Rainbow
-      - Fire
-      - Aurora
+      - Energy
+      - Horizon Sweep
+      - Ocean
 
 binary_sensor:
   - platform: gpio
-    pin: GPIO08
+    pin: GPIO08     # GPIO pin where the button is connected
     on_press:
       - cfx_effect_selector.press: desk_lamp_fx
     on_release:

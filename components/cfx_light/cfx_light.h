@@ -508,10 +508,10 @@ protected:
   void restore_low_ram_warning_color_(light::LightState *state);
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
-  bool has_active_parent_owned_segments_() const;
+  bool has_active_parent_owned_segments_(bool include_outro = false) const;
   void refresh_parent_owned_segment_slot_(CFXSegmentRuntimeSlot &slot);
   void refresh_parent_owned_segment_slots_();
-  void refresh_segment_coordination_mask_();
+  void refresh_segment_coordination_mask_(bool include_outro = false);
   void invalidate_segment_coord_schedule_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();
@@ -522,9 +522,11 @@ protected:
   bool service_parallel_segment_group_coordinator_();
   bool collect_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
                                           uint64_t now,
-                                          bool force_due = false);
+                                          bool force_due = false,
+                                          bool allow_outro = false);
   bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
-                                         bool force_due = false);
+                                         bool force_due = false,
+                                         bool allow_outro = false);
   void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
                                            bool transmit);
   void mark_segment_coordinator_epoch_committed_(uint8_t mask);

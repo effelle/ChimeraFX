@@ -1772,8 +1772,8 @@ void CFXLightOutput::clear_segment_runtime_slot_(size_t index) {
   this->segment_runtime_slots_[index] = CFXSegmentRuntimeSlot{};
 }
 
-bool CFXLightOutput::has_active_parent_owned_segments_() const {
-  if (this->has_outro()) {
+bool CFXLightOutput::has_active_parent_owned_segments_(bool include_outro) const {
+  if (this->has_outro() && !include_outro) {
     return false;
   }
   for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
@@ -1921,9 +1921,9 @@ void CFXLightOutput::unregister_parent_owned_segment(
   this->refresh_segment_coordination_mask_();
 }
 
-void CFXLightOutput::refresh_segment_coordination_mask_() {
+void CFXLightOutput::refresh_segment_coordination_mask_(bool include_outro) {
   uint8_t mask = 0;
-  if (this->has_segments() && !this->has_outro()) {
+  if (this->has_segments() && (!this->has_outro() || include_outro)) {
     for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
       const auto &slot = this->segment_runtime_slots_[i];
       if (!slot.active || slot.state == nullptr || slot.effect == nullptr ||
@@ -1947,7 +1947,7 @@ void CFXLightOutput::refresh_segment_coordination_mask_() {
 
 bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
   if (this->segment_coord_schedule_dirty_) {
-    this->refresh_segment_coordination_mask_();
+    this->refresh_segment_coordination_mask_(this->has_outro());
   }
   const int slot_index = this->find_segment_runtime_slot_(state);
   return slot_index >= 0 &&
@@ -1981,11 +1981,12 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
 bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
                                                         uint8_t &count,
                                                         uint64_t now,
-                                                        bool force_due) {
+                                                        bool force_due,
+                                                        bool allow_outro) {
   mask = 0;
   count = 0;
   const uint64_t scheduled_due = this->segment_coord_next_due_ms_;
-  if (!this->has_segments() || this->has_outro()) {
+  if (!this->has_segments() || (this->has_outro() && !allow_outro)) {
     this->apply_segment_coordination_loop_state_(0);
     this->apply_master_segment_coordination_loop_state_();
     this->apply_mono_idle_loop_state_(0);
@@ -1999,9 +2000,9 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     return false;
   }
   uint64_t next_due = 0;
-  this->refresh_segment_coordination_mask_();
+  this->refresh_segment_coordination_mask_(allow_outro);
   const uint8_t segment_idle_mask =
-      this->collect_clean_mono_idle_segment_mask_();
+      allow_outro ? 0 : this->collect_clean_mono_idle_segment_mask_();
   this->apply_mono_idle_loop_state_(segment_idle_mask);
   this->apply_master_segment_coordination_loop_state_();
   if (this->segment_coord_owned_mask_ == 0) {
@@ -2091,10 +2092,12 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
 
 bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
                                                        uint8_t &count,
-                                                       bool force_due) {
+                                                       bool force_due,
+                                                       bool allow_outro) {
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
   this->seg_coord_collect_start_us_ = micros();
-  if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due)) {
+  if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due,
+                                               allow_outro)) {
     this->seg_coord_collect_start_us_ = 0;
     return false;
   }
@@ -6133,6 +6136,15 @@ void CFXLightOutput::loop() {
       }
     }
 
+    uint8_t outro_segment_mask = 0;
+    uint8_t outro_segment_count = 0;
+    if (this->render_segment_coordinator_epoch_(outro_segment_mask,
+                                                outro_segment_count, false,
+                                                true)) {
+      this->finalize_segment_coordinator_epoch_(outro_segment_mask,
+                                                outro_segment_count, false);
+    }
+
     // Force direct DMA flush of the frame!
     // We cannot use schedule_show() here because ESPHome's LightState loop
     // is disabled when the light is turned off, meaning it will never poll us.
@@ -6164,6 +6176,7 @@ void CFXLightOutput::loop() {
       this->write_state(nullptr);
       this->release_outro_callback_storage_();
     }
+    goto segment_flush_done;
   }
 
   if (this->service_segment_render_coordinator_()) {
