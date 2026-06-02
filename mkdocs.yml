@@ -48,6 +48,8 @@ nav:
     - Effect Presets: Effect-Presets.md
     - The Sequencer: cfx_sequence.md
     - Button Dimmer: cfx_dimmer.md
+    - CCT Sweeper: cfx_cct_sweeper.md
+    - Hue Cycler: cfx_hue_cycler.md
     - Troubleshooting: Troubleshooting.md
   - About:
     - The Story: The-Story.md
