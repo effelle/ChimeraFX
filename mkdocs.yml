@@ -47,9 +47,7 @@ nav:
     - Effect Library: Effects-Library.md
     - Effect Presets: Effect-Presets.md
     - The Sequencer: cfx_sequence.md
-    - Button Dimmer: cfx_dimmer.md
-    - CCT Sweeper: cfx_cct_sweeper.md
-    - Hue Cycler: cfx_hue_cycler.md
+    - Magic Buttons: cfx_magic_buttons.md
     - Troubleshooting: Troubleshooting.md
   - About:
     - The Story: The-Story.md

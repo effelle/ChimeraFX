@@ -76,10 +76,10 @@ class CFXHueCycler : public Component {
   uint32_t last_cycle_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
   CFXColor white_{1.0f, 1.0f, 1.0f, 1.0f};
-  CFXColor last_cycle_color_{1.0f, 0.0f, 0.0f, 0.0f};
+  CFXColor last_cycle_color_{0.0f, 0.62f, 1.0f, 0.0f};
   float saturation_{1.0f};
-  float base_hue_{0.0f};
-  float last_cycle_hue_{0.0f};
+  float base_hue_{202.8f};
+  float last_cycle_hue_{202.8f};
   bool restore_hue_{false};
   bool pressed_{false};
   bool cycling_{false};
