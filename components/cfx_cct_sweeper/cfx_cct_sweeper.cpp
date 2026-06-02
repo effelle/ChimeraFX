@@ -32,6 +32,9 @@ void CFXCCTSweeper::press() {
     return;
   }
   const uint32_t now = millis();
+  if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+    return;
+  }
   this->pressed_ = true;
   this->sweeping_ = false;
   this->sweep_finished_ = false;
@@ -46,6 +49,9 @@ void CFXCCTSweeper::release() {
   }
   if (this->sweeping_) {
     this->freeze_sweep_();
+  }
+  if (this->suppress_toggle_) {
+    this->ignore_press_until_ms_ = millis() + POST_SWEEP_GUARD_MS;
   }
   const bool should_toggle = !this->suppress_toggle_ && !this->sweeping_;
   this->pressed_ = false;
@@ -143,7 +149,7 @@ void CFXCCTSweeper::save_current_colors_() {
       continue;
     }
     this->saved_colors_[i].valid = true;
-    this->saved_colors_[i].color = this->current_color_(state);
+    this->saved_colors_[i].color = this->remote_color_(state);
   }
 }
 
@@ -193,7 +199,7 @@ bool CFXCCTSweeper::matches_favorite_white_(light::LightState *state) const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
   }
-  return this->color_distance_(this->current_color_(state),
+  return this->color_distance_(this->remote_color_(state),
                                this->favorite_white_) <= WHITE_MATCH_TOLERANCE;
 }
 
@@ -217,6 +223,14 @@ CFXColor CFXCCTSweeper::current_color_(light::LightState *state) const {
   }
   return {state->current_values.get_red(), state->current_values.get_green(),
           state->current_values.get_blue(), state->current_values.get_white()};
+}
+
+CFXColor CFXCCTSweeper::remote_color_(light::LightState *state) const {
+  if (state == nullptr) {
+    return this->favorite_white_;
+  }
+  return {state->remote_values.get_red(), state->remote_values.get_green(),
+          state->remote_values.get_blue(), state->remote_values.get_white()};
 }
 
 CFXColor CFXCCTSweeper::sweep_target_() const {

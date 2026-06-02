@@ -47,6 +47,7 @@ class CFXCCTSweeper : public Component {
   };
 
   static constexpr uint32_t MIN_SWEEP_TRANSITION_MS = 50;
+  static constexpr uint32_t POST_SWEEP_GUARD_MS = 350;
   static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
 
   void start_sweep_(uint32_t now);
@@ -62,6 +63,7 @@ class CFXCCTSweeper : public Component {
   uint32_t sweep_duration_ms_(const CFXColor &start,
                               const CFXColor &target) const;
   CFXColor current_color_(light::LightState *state) const;
+  CFXColor remote_color_(light::LightState *state) const;
   CFXColor sweep_target_() const;
   CFXColor clamp_color_(const CFXColor &color) const;
   float color_distance_(const CFXColor &a, const CFXColor &b) const;
@@ -74,6 +76,7 @@ class CFXCCTSweeper : public Component {
   uint32_t long_press_ms_{500};
   uint32_t sweep_time_ms_{4000};
   uint32_t sweep_end_ms_{0};
+  uint32_t ignore_press_until_ms_{0};
   CFXColor favorite_white_{1.0f, 1.0f, 1.0f, 1.0f};
   CFXColor warm_white_{1.0f, 0.55f, 0.18f, 1.0f};
   CFXColor cool_white_{0.70f, 0.85f, 1.0f, 1.0f};

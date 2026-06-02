@@ -43,6 +43,7 @@ class CFXHueCycler : public Component {
 
   static constexpr uint32_t HUE_UPDATE_INTERVAL_MS = 120;
   static constexpr uint32_t HUE_TRANSITION_MS = 180;
+  static constexpr uint32_t POST_CYCLE_GUARD_MS = 350;
   static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
 
   void start_cycle_(uint32_t now);
@@ -56,9 +57,10 @@ class CFXHueCycler : public Component {
   void save_hue_();
   bool matches_white_(light::LightState *state) const;
   CFXColor current_color_(light::LightState *state) const;
+  CFXColor remote_color_(light::LightState *state) const;
   CFXColor color_from_hue_(float hue) const;
   CFXColor clamp_color_(const CFXColor &color) const;
-  float current_hue_(light::LightState *state) const;
+  float current_hue_(light::LightState *state, bool use_remote = false) const;
   float normalize_hue_(float hue) const;
   float color_distance_(const CFXColor &a, const CFXColor &b) const;
 
@@ -71,6 +73,7 @@ class CFXHueCycler : public Component {
   uint32_t cycle_time_ms_{6000};
   uint32_t cycle_started_ms_{0};
   uint32_t last_cycle_update_ms_{0};
+  uint32_t ignore_press_until_ms_{0};
   CFXColor white_{1.0f, 1.0f, 1.0f, 1.0f};
   float saturation_{1.0f};
   float base_hue_{0.0f};
