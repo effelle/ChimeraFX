@@ -2493,6 +2493,8 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
     }
   }
   this->log_segment_coordinator_diag_();
+  this->seg_last_flush_count_ = 0;
+  this->seg_last_flush_mask_ = 0;
 }
 
 // --- Core Control Loop & Initialization ---
@@ -6898,8 +6900,6 @@ record_write_perf:
       this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
     }
     this->perf_diag_pending_gate_defers_ = 0;
-    this->seg_last_flush_count_ = 0;
-    this->seg_last_flush_mask_ = 0;
 
     const uint32_t now_ms = esphome::millis();
     if (this->perf_diag_last_log_ms_ == 0) {
@@ -6918,6 +6918,8 @@ record_write_perf:
       this->perf_diag_last_log_ms_ = now_ms;
     }
   }
+  this->seg_last_flush_count_ = 0;
+  this->seg_last_flush_mask_ = 0;
   this->update_high_frequency_loop_request_();
 }
 
