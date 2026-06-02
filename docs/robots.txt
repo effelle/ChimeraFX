@@ -1,3 +1,4 @@
 User-agent: *
+Sitemap: https://effelle.github.io/ChimeraFX/sitemap.txt
 Sitemap: https://effelle.github.io/ChimeraFX/google-sitemap.xml
 Sitemap: https://effelle.github.io/ChimeraFX/sitemap.xml
