@@ -533,6 +533,7 @@ protected:
   void mark_segment_coordinator_epoch_committed_(uint8_t mask);
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
+  uint32_t get_segmented_rmt_refresh_floor_us_() const;
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
   // Returns true when the frame is done (fast path: flag already clear).
   // Spins in 100µs slices up to timeout_ms, then returns false.

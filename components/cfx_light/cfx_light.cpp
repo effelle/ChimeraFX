@@ -2411,6 +2411,18 @@ void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
   this->finalize_segment_coordinator_epoch_(mask, count, true);
 }
 
+uint32_t CFXLightOutput::get_segmented_rmt_refresh_floor_us_() const {
+  if (!this->is_rmt_transport() || !this->has_segments()) {
+    return 0;
+  }
+  uint32_t floor_us = 16666u;
+  if (this->max_refresh_rate_.has_value() &&
+      *this->max_refresh_rate_ > floor_us) {
+    floor_us = *this->max_refresh_rate_;
+  }
+  return floor_us;
+}
+
 void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
                                                               uint8_t count) {
   if (mask == 0 || count == 0) {
@@ -2442,8 +2454,13 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
   this->status_clear_warning();
 
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  const uint32_t segmented_rmt_floor_us =
+      this->get_segmented_rmt_refresh_floor_us_();
+  const uint32_t refresh_floor_us =
+      segmented_rmt_floor_us != 0
+          ? segmented_rmt_floor_us
+          : (this->max_refresh_rate_.has_value() ? *this->max_refresh_rate_ : 0);
+  if (refresh_floor_us != 0 && (now - this->last_refresh_) < refresh_floor_us) {
     this->perf_diag_total_refresh_defers_++;
     if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
       this->perf_diag_max_refresh_defers_ =
@@ -6774,8 +6791,13 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   // Protect from refreshing too often
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  const uint32_t segmented_rmt_floor_us =
+      this->get_segmented_rmt_refresh_floor_us_();
+  const uint32_t refresh_floor_us =
+      segmented_rmt_floor_us != 0
+          ? segmented_rmt_floor_us
+          : (this->max_refresh_rate_.has_value() ? *this->max_refresh_rate_ : 0);
+  if (refresh_floor_us != 0 && (now - this->last_refresh_) < refresh_floor_us) {
     this->perf_diag_total_refresh_defers_++;
     if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
       this->perf_diag_max_refresh_defers_ =
