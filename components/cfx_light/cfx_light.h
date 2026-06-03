@@ -518,6 +518,7 @@ protected:
   uint8_t collect_clean_mono_idle_segment_mask_() const;
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
+  bool segment_participates_in_barrier_(light::LightState *state) const;
   bool service_segment_render_coordinator_();
   bool service_parallel_segment_group_coordinator_();
   bool collect_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,

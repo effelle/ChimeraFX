@@ -1516,7 +1516,8 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   return nullptr;
 }
 
-static bool segment_participates_in_barrier(light::LightState *state) {
+bool CFXLightOutput::segment_participates_in_barrier_(
+    light::LightState *state) const {
   if (state == nullptr) {
     return false;
   }
@@ -1525,6 +1526,10 @@ static bool segment_participates_in_barrier(light::LightState *state) {
   }
   auto *effect = resolve_active_cfx_effect(state);
   if (effect == nullptr) {
+    return false;
+  }
+  if (this->segment_coord_owned_mask_ != 0 &&
+      effect->has_dirty_mono_idle_output()) {
     return false;
   }
   return !effect->is_clean_mono_idle_output();
@@ -2492,6 +2497,7 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
       slot.effect->mark_mono_output_committed();
     }
   }
+  mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
   this->seg_last_flush_count_ = 0;
   this->seg_last_flush_mask_ = 0;
@@ -6229,7 +6235,8 @@ void CFXLightOutput::loop() {
     uint8_t active_count = 0;
     uint8_t ready_count = 0;
     for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
-      if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+      if (!this->segment_participates_in_barrier_(
+              this->segment_light_states_[i])) {
         continue;
       }
       const uint8_t bit = static_cast<uint8_t>(1u << i);
@@ -6242,6 +6249,16 @@ void CFXLightOutput::loop() {
       if (this->seg_request_generation_[i] != this->seg_flushed_generation_[i]) {
         ready_count++;
       }
+    }
+    if (active_count == 0) {
+      this->seg_flush_pending_mask_ = 0;
+      this->seg_flush_dirty_mask_ = 0;
+      this->seg_flush_pending_ = false;
+      this->seg_flush_first_ms_ = 0;
+      this->seg_coord_collect_start_us_ = 0;
+      this->seg_clean_epoch_suppressed_++;
+      this->log_segment_coordinator_diag_();
+      goto segment_flush_done;
     }
     uint32_t wait_target_ms = active_count == ready_count ? 0 : 2;
     // Segmented parents are visibly less tolerant of partial-frame
@@ -6570,7 +6587,8 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
   uint8_t active_count = 0;
   uint8_t ready_count = 0;
   for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
-    if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+    if (!this->segment_participates_in_barrier_(
+            this->segment_light_states_[i])) {
       continue;
     }
     active_count++;
@@ -6578,7 +6596,17 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
       ready_count++;
     }
   }
-  if (active_count == 0 || ready_count != active_count) {
+  if (active_count == 0) {
+    this->seg_flush_pending_mask_ = 0;
+    this->seg_flush_dirty_mask_ = 0;
+    this->seg_flush_pending_ = false;
+    this->seg_flush_first_ms_ = 0;
+    this->seg_clean_epoch_suppressed_++;
+    this->log_segment_coordinator_diag_();
+    this->update_high_frequency_loop_request_();
+    return;
+  }
+  if (ready_count != active_count) {
     return;
   }
 
