@@ -508,7 +508,7 @@ protected:
   void restore_low_ram_warning_color_(light::LightState *state);
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
-  void clear_segment_idle_transients_();
+  void clear_segment_idle_diag_();
   bool has_active_parent_owned_segments_(bool include_outro = false) const;
   void refresh_parent_owned_segment_slot_(CFXSegmentRuntimeSlot &slot);
   void refresh_parent_owned_segment_slots_();
