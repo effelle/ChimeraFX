@@ -1529,10 +1529,6 @@ bool CFXLightOutput::segment_participates_in_barrier_(
   if (effect == nullptr) {
     return false;
   }
-  if (this->segment_coord_owned_mask_ != 0 &&
-      effect->has_dirty_mono_idle_output()) {
-    return false;
-  }
   return !effect->is_clean_mono_idle_output();
 }
 
@@ -6277,21 +6273,11 @@ void CFXLightOutput::loop() {
         ready_count++;
       }
     }
-    if (active_count == 0) {
-      this->seg_flush_pending_mask_ = 0;
-      this->seg_flush_dirty_mask_ = 0;
-      this->seg_flush_pending_ = false;
-      this->seg_flush_first_ms_ = 0;
-      this->seg_coord_collect_start_us_ = 0;
-      this->seg_clean_epoch_suppressed_++;
-      this->log_segment_coordinator_diag_();
-      goto segment_flush_done;
-    }
-    uint32_t wait_target_ms = active_count == ready_count ? 0 : 2;
+    uint32_t wait_target_ms = 2;
     // Segmented parents are visibly less tolerant of partial-frame
     // presentation, so bias them harder toward waiting for full convergence
     // without ever blocking indefinitely.
-    if (wait_target_ms != 0 && segment_count > 0) {
+    if (segment_count > 0) {
       wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
                            ? 2
                            : 3;
@@ -6623,17 +6609,7 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
       ready_count++;
     }
   }
-  if (active_count == 0) {
-    this->seg_flush_pending_mask_ = 0;
-    this->seg_flush_dirty_mask_ = 0;
-    this->seg_flush_pending_ = false;
-    this->seg_flush_first_ms_ = 0;
-    this->seg_clean_epoch_suppressed_++;
-    this->log_segment_coordinator_diag_();
-    this->update_high_frequency_loop_request_();
-    return;
-  }
-  if (ready_count != active_count) {
+  if (active_count == 0 || ready_count != active_count) {
     return;
   }
 
