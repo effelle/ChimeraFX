@@ -286,6 +286,7 @@ public:
   bool sequence_owns_mirror_{false};
 
   void setGamma(float g);
+  static void prewarmGamma(float g);
   inline uint8_t applyGamma(uint8_t val) { return _lut ? _lut[val] : val; }
   uint8_t shiftFloor(uint8_t val);
   uint8_t getFadeFactor(uint8_t factor);

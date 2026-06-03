@@ -12,6 +12,7 @@
 #include "cfx_virtual_segment_light.h"
 #include "cfx_transmit_barrier.h"
 #include "../cfx_effect/cfx_control.h"
+#include "../cfx_effect/CFXRunner.h"
 #include "../cfx_effect/cfx_scheduler.h"
 #include "../cfx_effect/cfx_utils.h"
 #include "../cfx_effect/cfx_effect_stub.h"
@@ -2827,6 +2828,16 @@ void CFXLightOutput::setup() {
     ESP_LOGE(TAG, "Cannot allocate effect data!");
     this->mark_failed();
     return;
+  }
+
+  if (this->state_parent_ != nullptr) {
+    chimera_fx::CFXRunner::prewarmGamma(
+        this->state_parent_->get_gamma_correct());
+  }
+  for (auto *seg_state : this->segment_light_states_) {
+    if (seg_state != nullptr) {
+      chimera_fx::CFXRunner::prewarmGamma(seg_state->get_gamma_correct());
+    }
   }
 
   // Transport-specific hardware init

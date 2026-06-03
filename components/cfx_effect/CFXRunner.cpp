@@ -57,6 +57,38 @@ static const uint8_t CFX_DEFAULT_GAMMA_LUT[256] CFX_PROGMEM = {
     216, 218, 219, 220, 221, 222, 224, 225, 226, 227, 229, 230, 231, 232, 233, 235,
     236, 237, 238, 240, 241, 242, 243, 245, 246, 247, 248, 250, 251, 252, 253, 255};
 
+struct CFXGammaCacheEntry {
+  bool valid{false};
+  float gamma{CFX_DEFAULT_GAMMA};
+  uint8_t lut[256]{};
+};
+
+static CFXGammaCacheEntry g_gamma_lut_cache[4];
+
+static void build_gamma_lut_(uint8_t *dest, float gamma) {
+  const float power = 3.5f / gamma;
+  for (int i = 0; i < 256; i++) {
+    dest[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+  }
+}
+
+static const uint8_t *get_cached_gamma_lut_(float gamma) {
+  for (auto &entry : g_gamma_lut_cache) {
+    if (entry.valid && fabsf(entry.gamma - gamma) <= 0.01f) {
+      return entry.lut;
+    }
+  }
+  for (auto &entry : g_gamma_lut_cache) {
+    if (!entry.valid) {
+      build_gamma_lut_(entry.lut, gamma);
+      entry.gamma = gamma;
+      entry.valid = true;
+      return entry.lut;
+    }
+  }
+  return nullptr;
+}
+
 // Forward declarations
 uint16_t mode_running_lights(void);
 uint16_t mode_running_dual(void);
@@ -141,6 +173,16 @@ void CFXRunner::setGamma(float g) {
     return;
   }
 
+  const uint8_t *cached_lut = get_cached_gamma_lut_(g);
+  if (cached_lut != nullptr) {
+    if (_dynamic_lut != nullptr) {
+      free(_dynamic_lut);
+      _dynamic_lut = nullptr;
+    }
+    _lut = cached_lut;
+    return;
+  }
+
   if (_dynamic_lut == nullptr) {
     _dynamic_lut = (uint8_t *)malloc(256);
     if (_dynamic_lut == nullptr) {
@@ -151,15 +193,17 @@ void CFXRunner::setGamma(float g) {
     }
   }
   _lut = _dynamic_lut;
+  build_gamma_lut_(_dynamic_lut, _gamma);
+}
 
-  // The power we need to raise input by to get x^3.5 output (Compromise for
-  // Aurora vs Plasma) If Gamma=3.5 -> p=1.0 If Gamma=1.0 -> p=3.5 ->
-  // (x^3.5)^1.0 = x^3.5
-  float power = 3.5f / _gamma;
-
-  for (int i = 0; i < 256; i++) {
-    _dynamic_lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+void CFXRunner::prewarmGamma(float g) {
+  if (g < 0.1f)
+    g = 1.0f;
+  if (g > (CFX_DEFAULT_GAMMA - 0.01f) &&
+      g < (CFX_DEFAULT_GAMMA + 0.01f)) {
+    return;
   }
+  get_cached_gamma_lut_(g);
 }
 
 // Adjust a "floor" brightness value (e.g. Breath effect minimum)
