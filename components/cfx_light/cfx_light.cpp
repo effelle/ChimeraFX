@@ -6729,9 +6729,9 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // go through the segment-driven flush path (write_state(nullptr)) instead.
   // Non-segmented lights and outro DMA (nullptr calls) pass through unchanged.
   if (state != nullptr && this->has_segments()) {
-    // CFX: Even though the master buffer is muted, we must validate its
-    // idle output so the effect can transition to IDLE state and sleep.
-    mark_committed_mono_idle_outputs(this);
+    // Master/segment state writes are muted here; no transport frame is sent.
+    // Leave dirty mono-idle outputs dirty so the next segment epoch can commit
+    // the final intro/hold frame before the idle suppressor goes to sleep.
     return; // Master muted — segments own the pixel buffer
   }
   if (state != nullptr && !this->outro_cbs_.empty()) {
