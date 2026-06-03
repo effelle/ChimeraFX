@@ -2515,7 +2515,6 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
       slot.effect->mark_mono_output_committed();
     }
   }
-  mark_committed_mono_idle_outputs(this);
   this->log_segment_coordinator_diag_();
   this->seg_last_flush_count_ = 0;
   this->seg_last_flush_mask_ = 0;
@@ -6907,7 +6906,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     // Waiting for peer RMT outputs can phase-lock independent segment parents
     // into a slower cadence, especially on Classic ESP32 non-DMA RMT.
     this->commit_transmit_();
-    mark_committed_mono_idle_outputs(this);
+    this->mark_segment_coordinator_epoch_committed_(this->seg_last_flush_mask_);
     this->log_segment_coordinator_diag_();
     goto record_write_perf;
   }
