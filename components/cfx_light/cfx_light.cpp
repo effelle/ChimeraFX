@@ -1653,11 +1653,6 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
   if (master_should_sleep &&
       (!this->master_mono_idle_dormant_ ||
        this->master_light_state_->is_in_loop_state())) {
-    const bool entering_idle = !this->master_mono_idle_dormant_;
-    auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr) {
-      effect->log_mono_idle_sleep(entering_idle);
-    }
     if (!this->master_mono_idle_dormant_) {
       this->master_mono_idle_sleep_ms_ = esphome::millis();
       this->mono_idle_sleep_count_++;
@@ -1676,17 +1671,10 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       this->segment_mono_idle_dormant_mask_;
   for (size_t i = 0; i < this->segment_light_states_.size() &&
                      i < MAX_CFX_SEGMENTS; i++) {
-    auto *seg_state = this->segment_light_states_[i];
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool now_idle = (segment_idle_mask & bit) != 0;
     const bool was_idle = (previous_segment_idle_mask & bit) != 0;
-    auto *effect = seg_state != nullptr
-                       ? resolve_active_cfx_effect(seg_state)
-                       : nullptr;
     if (now_idle && !was_idle) {
-      if (effect != nullptr) {
-        effect->log_mono_idle_sleep(true);
-      }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
     } else if (!now_idle && was_idle) {

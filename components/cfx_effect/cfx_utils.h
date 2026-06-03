@@ -656,35 +656,6 @@ struct FrameDiagnostics {
              fps, led_fps_text, avg_frame_ms, jitter_pct, free_heap_kb);
   }
 
-  void idle_sleep_log(const char *effect_name, const char *mode_name,
-                      uint8_t mode_id, uint32_t frame_count_in,
-                      uint32_t period_start_ms, uint64_t total_frame_us_in,
-                      uint32_t jitter_count_in, float led_fps = -1.0f,
-                      bool force = false) {
-    (void) frame_count_in;
-    (void) period_start_ms;
-    (void) total_frame_us_in;
-    (void) jitter_count_in;
-
-    uint32_t now_ms = cfx_millis();
-    if (!force && now_ms - last_log_time < LOG_INTERVAL_MS) return;
-
-    uint32_t free_heap = 0;
-#ifdef ARDUINO
-    free_heap = ESP.getFreeHeap();
-#else
-    free_heap = esp_get_free_heap_size();
-#endif
-    uint32_t free_heap_kb = free_heap / 1024;
-    char led_fps_text[16];
-    format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
-    ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | RenderFPS:- | LedFPS:%s | Time:- | Jitter:- | Heap: %ukB [IDLE]",
-             effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
-             mode_id, led_fps_text, free_heap_kb);
-
-    last_log_time = now_ms;
-  }
 };
 
 // Global diagnostics instance for each effect that needs it
