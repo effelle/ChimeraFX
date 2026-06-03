@@ -27,7 +27,7 @@ class CFXEffectSelector : public Component {
  protected:
   static constexpr uint32_t POST_SELECT_GUARD_MS = 350;
   static constexpr size_t GROUP_DISPATCH_THRESHOLD = 2;
-  static constexpr uint32_t GROUP_DISPATCH_INTERVAL_MS = 20;
+  static constexpr uint32_t GROUP_DISPATCH_INTERVAL_MS = 8;
 
   void start_selection_(uint32_t now);
   void select_next_effect_(uint32_t now);
