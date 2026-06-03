@@ -26,12 +26,18 @@ class CFXEffectSelector : public Component {
 
  protected:
   static constexpr uint32_t POST_SELECT_GUARD_MS = 350;
+  static constexpr size_t GROUP_DISPATCH_THRESHOLD = 2;
+  static constexpr uint32_t GROUP_DISPATCH_INTERVAL_MS = 20;
 
   void start_selection_(uint32_t now);
   void select_next_effect_(uint32_t now);
   void sync_index_from_targets_();
   void apply_effect_(const std::string &effect);
   void toggle_targets_();
+  void begin_dispatch_(bool set_state, bool state_value, bool set_effect,
+                       const std::string &effect, bool transition_off);
+  bool service_dispatch_(uint32_t now);
+  void perform_dispatch_call_(light::LightState *state);
   bool any_target_on_() const;
 
   std::vector<light::LightState *> lights_;
@@ -46,6 +52,14 @@ class CFXEffectSelector : public Component {
   bool pressed_{false};
   bool selecting_{false};
   bool suppress_toggle_{false};
+  bool dispatch_active_{false};
+  bool dispatch_set_state_{false};
+  bool dispatch_state_value_{false};
+  bool dispatch_set_effect_{false};
+  bool dispatch_transition_off_{false};
+  size_t dispatch_index_{0};
+  uint32_t dispatch_next_ms_{0};
+  std::string dispatch_effect_;
 };
 
 template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {

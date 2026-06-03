@@ -39,10 +39,12 @@ void CFXEffectSelector::release() {
 }
 
 void CFXEffectSelector::loop() {
+  const uint32_t now = millis();
+  this->service_dispatch_(now);
+
   if (!this->pressed_ || this->effects_.empty()) {
     return;
   }
-  const uint32_t now = millis();
   if (!this->selecting_) {
     if ((now - this->press_started_ms_) < this->long_press_ms_) {
       return;
@@ -91,33 +93,82 @@ void CFXEffectSelector::sync_index_from_targets_() {
 }
 
 void CFXEffectSelector::apply_effect_(const std::string &effect) {
-  for (auto *state : this->lights_) {
-    if (state == nullptr) {
-      continue;
-    }
-    auto call = state->make_call();
-    call.set_state(true);
-    call.set_effect(effect);
-    call.perform();
-  }
+  this->begin_dispatch_(true, true, true, effect, false);
 }
 
 void CFXEffectSelector::toggle_targets_() {
   const bool turn_off = this->any_target_on_();
-  for (auto *state : this->lights_) {
+  const bool set_effect = !turn_off && !this->effects_.empty();
+  const std::string effect =
+      set_effect ? this->effects_[this->active_index_] : std::string();
+  this->begin_dispatch_(true, !turn_off, set_effect, effect, turn_off);
+}
+
+void CFXEffectSelector::begin_dispatch_(bool set_state, bool state_value,
+                                        bool set_effect,
+                                        const std::string &effect,
+                                        bool transition_off) {
+  this->dispatch_active_ = false;
+  this->dispatch_set_state_ = set_state;
+  this->dispatch_state_value_ = state_value;
+  this->dispatch_set_effect_ = set_effect;
+  this->dispatch_effect_ = effect;
+  this->dispatch_transition_off_ = transition_off;
+  this->dispatch_index_ = 0;
+  this->dispatch_next_ms_ = millis();
+
+  if (this->lights_.size() <= GROUP_DISPATCH_THRESHOLD) {
+    for (auto *state : this->lights_) {
+      this->perform_dispatch_call_(state);
+    }
+    return;
+  }
+
+  this->dispatch_active_ = true;
+  this->service_dispatch_(this->dispatch_next_ms_);
+}
+
+bool CFXEffectSelector::service_dispatch_(uint32_t now) {
+  if (!this->dispatch_active_) {
+    return false;
+  }
+  if ((int32_t) (now - this->dispatch_next_ms_) < 0) {
+    return false;
+  }
+
+  while (this->dispatch_index_ < this->lights_.size()) {
+    auto *state = this->lights_[this->dispatch_index_++];
     if (state == nullptr) {
       continue;
     }
-    auto call = state->make_call();
-    call.set_state(!turn_off);
-    if (turn_off) {
-      call.set_transition_length(0);
+    this->perform_dispatch_call_(state);
+    if (this->dispatch_index_ >= this->lights_.size()) {
+      this->dispatch_active_ = false;
+    } else {
+      this->dispatch_next_ms_ = millis() + GROUP_DISPATCH_INTERVAL_MS;
     }
-    if (!turn_off && !this->effects_.empty()) {
-      call.set_effect(this->effects_[this->active_index_]);
-    }
-    call.perform();
+    return true;
   }
+
+  this->dispatch_active_ = false;
+  return true;
+}
+
+void CFXEffectSelector::perform_dispatch_call_(light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  auto call = state->make_call();
+  if (this->dispatch_set_state_) {
+    call.set_state(this->dispatch_state_value_);
+  }
+  if (this->dispatch_transition_off_) {
+    call.set_transition_length(0);
+  }
+  if (this->dispatch_set_effect_) {
+    call.set_effect(this->dispatch_effect_);
+  }
+  call.perform();
 }
 
 bool CFXEffectSelector::any_target_on_() const {
