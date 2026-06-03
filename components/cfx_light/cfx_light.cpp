@@ -2030,14 +2030,6 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     this->segment_coord_next_due_ms_ = 0;
     return false;
   }
-  uint8_t owned_count = 0;
-  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
-    if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) != 0) {
-      owned_count++;
-    }
-  }
-  const bool align_segment_epoch =
-      this->is_rmt_transport() && owned_count >= 3;
 
   if (this->segment_coord_runners_.capacity() < MAX_CFX_SEGMENTS) {
     this->segment_coord_runners_.reserve(MAX_CFX_SEGMENTS);
@@ -2057,7 +2049,7 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     if (slot.due_at == 0) {
       slot.due_at = now;
     }
-    if (!force_due && !align_segment_epoch && now < slot.due_at) {
+    if (!force_due && now < slot.due_at) {
       if (next_due == 0 || slot.due_at < next_due) {
         next_due = slot.due_at;
       }
@@ -2075,8 +2067,6 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     slot.effect->mark_parent_coordinated_run(now);
     if (interval == 0) {
       slot.due_at = now;
-    } else if (align_segment_epoch) {
-      slot.due_at = now + interval;
     } else {
       const uint64_t late_ms = now > slot.due_at ? now - slot.due_at : 0;
       const uint64_t reset_threshold = static_cast<uint64_t>(interval) * 4ULL;
