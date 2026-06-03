@@ -96,7 +96,6 @@ void CFXEffectSelector::apply_effect_(const std::string &effect) {
       continue;
     }
     auto call = state->make_call();
-    call.set_transition_length(0);
     call.set_state(true);
     call.set_effect(effect);
     call.perform();
@@ -110,8 +109,10 @@ void CFXEffectSelector::toggle_targets_() {
       continue;
     }
     auto call = state->make_call();
-    call.set_transition_length(0);
     call.set_state(!turn_off);
+    if (turn_off) {
+      call.set_transition_length(0);
+    }
     if (!turn_off && !this->effects_.empty()) {
       call.set_effect(this->effects_[this->active_index_]);
     }
