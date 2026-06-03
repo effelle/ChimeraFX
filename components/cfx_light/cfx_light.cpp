@@ -1723,13 +1723,8 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool should_sleep = (owned_mask & bit) != 0;
     const bool is_sleeping = (this->segment_coord_dormant_mask_ & bit) != 0;
-    auto *effect = resolve_active_cfx_effect(seg_state);
-    const bool keep_probe_awake =
-        should_sleep && seg_state->is_in_loop_state() && effect != nullptr &&
-        effect->has_pending_mono_idle_probe();
 
-    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state()) &&
-        !keep_probe_awake) {
+    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state())) {
       chimera_fx::LightStateProxy::clear_pending_write(seg_state);
       seg_state->disable_loop();
       next_dormant_mask |= bit;
