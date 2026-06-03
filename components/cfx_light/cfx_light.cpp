@@ -1665,11 +1665,6 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     chimera_fx::LightStateProxy::clear_pending_write(this->master_light_state_);
     this->master_light_state_->disable_loop();
     this->master_mono_idle_dormant_ = true;
-  } else if (master_should_sleep && this->master_mono_idle_dormant_) {
-    auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr) {
-      effect->log_mono_idle_sleep();
-    }
   } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
     this->master_light_state_->enable_loop();
     this->master_mono_idle_dormant_ = false;
@@ -1694,10 +1689,6 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
       }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
-    } else if (now_idle && was_idle) {
-      if (effect != nullptr) {
-        effect->log_mono_idle_sleep();
-      }
     } else if (!now_idle && was_idle) {
       this->segment_mono_idle_sleep_ms_[i] = 0;
       this->mono_idle_wake_count_++;
@@ -2240,9 +2231,7 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
 
   if (!group_due) {
     // All lanes are idle (segment_coord_owned_mask_ == 0 everywhere).
-    // Still service the idle state so log_mono_idle_sleep() fires correctly,
-    // mirroring what render_segment_coordinator_epoch_() does at the non-parallel
-    // early-exit path (line ~1675).
+    // Still service idle entry/wake state without emitting periodic sleep logs.
     for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
       auto *output = g_parallel_group.outputs[lane];
       if (output == nullptr || !output->has_segments() || output->has_outro()) {

@@ -8887,7 +8887,7 @@ void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
     act_->runner->diagnostics.idle_sleep_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
         idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-        act_->idle_jitter_count, 0.0f, force);
+        act_->idle_jitter_count, -1.0f, force);
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
@@ -8900,7 +8900,7 @@ void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
       runner->diagnostics.idle_sleep_log(
           seg_name, runner->getModeName(), runner->getMode(),
           idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-          act_->idle_jitter_count, 0.0f, force);
+          act_->idle_jitter_count, -1.0f, force);
     }
   }
 }
