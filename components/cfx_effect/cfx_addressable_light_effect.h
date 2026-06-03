@@ -702,6 +702,7 @@ public:
       }
     }
   }
+  void log_mono_idle_hold(bool force = false);
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {
       act_->mono_output_dirty = true;

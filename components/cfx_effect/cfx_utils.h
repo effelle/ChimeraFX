@@ -656,6 +656,26 @@ struct FrameDiagnostics {
              fps, led_fps_text, avg_frame_ms, jitter_pct, free_heap_kb);
   }
 
+  void idle_hold_log(const char *effect_name, const char *mode_name,
+                     uint8_t mode_id, bool force = false) {
+    if (!enabled) return;
+    uint32_t now_ms = cfx_millis();
+    if (!force && now_ms - last_log_time < LOG_INTERVAL_MS) return;
+
+    uint32_t free_heap = 0;
+#ifdef ARDUINO
+    free_heap = ESP.getFreeHeap();
+#else
+    free_heap = esp_get_free_heap_size();
+#endif
+    ESP_LOGI("chimera_fx",
+             "[%s] FX:%s(%u) | State:hold | Heap: %ukB [IDLE]",
+             effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
+             mode_id, free_heap / 1024);
+
+    last_log_time = now_ms;
+  }
+
 };
 
 // Global diagnostics instance for each effect that needs it

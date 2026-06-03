@@ -8867,5 +8867,34 @@ bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   return saw_runner;
 }
 
+void CFXAddressableLightEffect::log_mono_idle_hold(bool force) {
+  if (act_ == nullptr || !act_->mono_idle ||
+      !this->mono_idle_logging_enabled()) {
+    return;
+  }
+  const char *light_name =
+      act_->cached_runner_name.empty() ? nullptr
+                                       : act_->cached_runner_name.c_str();
+
+  if (act_->runner != nullptr) {
+    act_->runner->diagnostics.idle_hold_log(
+        light_name, act_->runner->getModeName(), act_->runner->getMode(),
+        force);
+  }
+
+  for (size_t i = 0; i < act_->segment_runners.size(); i++) {
+    auto *runner = act_->segment_runners[i];
+    if (runner != nullptr) {
+      const char *seg_name = light_name;
+      if (i < act_->cached_segment_names.size() &&
+          !act_->cached_segment_names[i].empty()) {
+        seg_name = act_->cached_segment_names[i].c_str();
+      }
+      runner->diagnostics.idle_hold_log(
+          seg_name, runner->getModeName(), runner->getMode(), force);
+    }
+  }
+}
+
 } // namespace chimera_fx
 } // namespace esphome
