@@ -1792,6 +1792,23 @@ void CFXLightOutput::clear_segment_runtime_slot_(size_t index) {
   this->segment_runtime_slots_[index] = CFXSegmentRuntimeSlot{};
 }
 
+void CFXLightOutput::clear_segment_idle_transients_() {
+  this->seg_flush_pending_mask_ = 0;
+  this->seg_flush_dirty_mask_ = 0;
+  this->seg_flush_pending_ = false;
+  this->seg_flush_first_ms_ = 0;
+  this->seg_last_flush_mask_ = 0;
+  this->seg_last_flush_count_ = 0;
+  this->seg_coord_collect_start_us_ = 0;
+  this->seg_partial_frame_suppressed_ = 0;
+  this->seg_missed_epoch_count_ = 0;
+  this->perf_diag_max_partial_missing_ = 0;
+  for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
+    this->seg_request_generation_[i] = 0;
+    this->seg_flushed_generation_[i] = 0;
+  }
+}
+
 bool CFXLightOutput::has_active_parent_owned_segments_(bool include_outro) const {
   if (this->has_outro() && !include_outro) {
     return false;
@@ -2010,6 +2027,9 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     this->apply_segment_coordination_loop_state_(0);
     this->apply_master_segment_coordination_loop_state_();
     this->apply_mono_idle_loop_state_(0);
+    if (!this->has_segments()) {
+      this->clear_segment_idle_transients_();
+    }
     return false;
   }
 
@@ -2028,6 +2048,7 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
   if (this->segment_coord_owned_mask_ == 0) {
     this->segment_coord_schedule_dirty_ = false;
     this->segment_coord_next_due_ms_ = 0;
+    this->clear_segment_idle_transients_();
     return false;
   }
 
@@ -6566,6 +6587,7 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush(light::LightState *state) {
   if (active_cfx_effect_is_clean_mono_idle(state)) {
+    this->clear_segment_idle_transients_();
     this->seg_clean_epoch_suppressed_++;
     this->log_segment_coordinator_diag_();
     return;
@@ -6693,6 +6715,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
       ((state != nullptr && active_cfx_effect_is_clean_mono_idle(state)) ||
        (state == nullptr && this->seg_last_flush_mask_ == 0 &&
         all_active_cfx_effects_clean_mono_idle(this)))) {
+    this->clear_segment_idle_transients_();
     this->seg_clean_epoch_suppressed_++;
     this->log_segment_coordinator_diag_();
     
