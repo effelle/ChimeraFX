@@ -6282,6 +6282,13 @@ void CFXLightOutput::loop() {
                            ? 2
                            : 3;
     }
+    if (cfx_unicore_build_() && this->is_rmt_transport() &&
+        segment_count >= 3 && active_count > ready_count) {
+      // C3-class single-core RMT can need a full frame budget for 4+ segment
+      // intros/outros to converge under WiFi/API pressure. Prefer a lower FPS
+      // over presenting visibly mixed segment phases.
+      wait_target_ms = 17;
+    }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
       this->seg_last_flush_mask_ = this->seg_flush_pending_mask_;
