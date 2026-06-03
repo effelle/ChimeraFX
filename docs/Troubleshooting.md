@@ -9,15 +9,20 @@ Example:
 [16:13:17.440][I][chimera_fx:550]:[WS_Strip] FX:Interference(180) | RenderFPS:58.6 | LedFPS:57.9 | Time: 17.1ms | Jitter: 0% | Heap: 95kB [ACTV]
 ```
 
+Static-hold example:
+```c
+[13:47:04.308][I][chimera_fx:671]: [WS_Strip] FX:Gas Discharge(182) | RenderFPS:hold | LedFPS:sleep | Time:- | Jitter:- | Heap: 143kB [IDLE]
+```
+
 ### Understanding the Log Output
 *   **[WS_Strip]**: The strip name in the YAML configuration.
 *   **FX:Interference(180)**: The current effect running on the strip. (In the example, 'Interference' is the effect name and '180' is the ID of the effect.)
-*   **RenderFPS**: How often ChimeraFX is able to calculate new frames for the effect. Ideally, this stays around **55-60 FPS**. If it consistently drops below 30, your ESP32 is struggling to keep up.
-*   **LedFPS**: The measured strip-output cadence from successful RMT launches or SPI frame queues. This is the number to trust for visible LED refresh. On very long RMT strips, `RenderFPS` can look healthy while `LedFPS` falls below 30 because the 800 kHz wire time becomes the real limit.
+*   **RenderFPS**: How often ChimeraFX is able to calculate new frames for the effect. Ideally, this stays around **55-60 FPS**. If it consistently drops below 30, your ESP32 is struggling to keep up. `RenderFPS:hold` means the effect reached a static hold frame and no new animation frames are being calculated.
+*   **LedFPS**: The measured strip-output cadence from successful RMT launches or SPI frame queues. This is the number to trust for visible LED refresh. On very long RMT strips, `RenderFPS` can look healthy while `LedFPS` falls below 30 because the 800 kHz wire time becomes the real limit. `LedFPS:sleep` means the strip is intentionally not being refreshed because the current output is static.
 *   **Time**: How long (in milliseconds) it took to render the last frame. Lower is better. For example, 17ms corresponds to ~59 FPS.
 *   **Jitter**: The percentage of variation in frame timing. **0-8% is excellent**. Consistently high jitter (>50%) means other components (like Wi-Fi, heavy sensors, or multiple light effects running at the same time) are interrupting the LED driver, which can cause visible stuttering and low frame rates.
 *   **Heap**: The available RAM on your chip. More is better. If you fall under the **Heap Floor**, you should rethink your configuration, especially if you are running the firmware on a Wi-Fi device. More information about the Heap Floor can be found in the [Memory Management & Stability](#memory-management-stability) section.
-*   **[ACTV]** or **[IDLE]**: Indicates whether the effect is currently active or idle. Static effects, such as solid colors, will be marked as idle to save system resources.
+*   **[ACTV]** or **[IDLE]**: Indicates whether the effect is currently active or idle. Static effects, such as solid colors or monochromatic effects after their intro completes, will be marked as idle to save system resources.
  
 
 ## Common Issues
@@ -49,6 +54,7 @@ ChimeraFX reports render performance and LED output cadence separately. This dis
 
 - **RenderFPS** is the effect engine rate. It tells you how quickly the ESP32 can calculate new frames.
 - **LedFPS** is the practical LED refresh rate. It tells you how often complete frames are actually being launched toward the strip.
+- **RenderFPS:hold / LedFPS:sleep** is expected for monochromatic effects that have completed their animated intro and are holding a static final frame. This is not a transport failure; it means ChimeraFX has stopped spending CPU and bus time on an output that is no longer changing.
 - **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
 - **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
 

@@ -669,7 +669,7 @@ struct FrameDiagnostics {
     free_heap = esp_get_free_heap_size();
 #endif
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | State:hold | Heap: %ukB [IDLE]",
+             "[%s] FX:%s(%u) | RenderFPS:hold | LedFPS:sleep | Time:- | Jitter:- | Heap: %ukB [IDLE]",
              effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
              mode_id, free_heap / 1024);
 
