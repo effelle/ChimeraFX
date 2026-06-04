@@ -58,9 +58,14 @@ void CFXEffectSelector::loop() {
 }
 
 void CFXEffectSelector::start_selection_(uint32_t now) {
-  this->sync_index_from_targets_();
+  const bool synced_from_active_target = this->sync_index_from_targets_();
   this->selecting_ = true;
   this->suppress_toggle_ = true;
+  if (this->active_index_known_ && !synced_from_active_target) {
+    this->last_effect_update_ms_ = now;
+    this->apply_effect_(this->effects_[this->active_index_]);
+    return;
+  }
   this->select_next_effect_(now);
 }
 
@@ -68,14 +73,18 @@ void CFXEffectSelector::select_next_effect_(uint32_t now) {
   if (this->effects_.empty()) {
     return;
   }
+  if (!this->active_index_known_) {
+    this->active_index_ = this->effects_.size() - 1;
+  }
   this->active_index_ = (this->active_index_ + 1) % this->effects_.size();
+  this->active_index_known_ = true;
   this->last_effect_update_ms_ = now;
   this->apply_effect_(this->effects_[this->active_index_]);
 }
 
-void CFXEffectSelector::sync_index_from_targets_() {
+bool CFXEffectSelector::sync_index_from_targets_() {
   if (this->effects_.empty()) {
-    return;
+    return false;
   }
   for (auto *state : this->lights_) {
     if (state == nullptr || !state->remote_values.is_on()) {
@@ -85,11 +94,12 @@ void CFXEffectSelector::sync_index_from_targets_() {
     for (size_t i = 0; i < this->effects_.size(); i++) {
       if (this->effects_[i] == current) {
         this->active_index_ = i;
-        return;
+        this->active_index_known_ = true;
+        return true;
       }
     }
   }
-  this->active_index_ = this->effects_.size() - 1;
+  return false;
 }
 
 void CFXEffectSelector::apply_effect_(const std::string &effect) {
@@ -101,6 +111,9 @@ void CFXEffectSelector::toggle_targets_() {
   const bool set_effect = !turn_off && !this->effects_.empty();
   const std::string effect =
       set_effect ? this->effects_[this->active_index_] : std::string();
+  if (set_effect) {
+    this->active_index_known_ = true;
+  }
   this->begin_dispatch_(true, !turn_off, set_effect, effect, turn_off);
 }
 

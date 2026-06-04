@@ -31,7 +31,7 @@ class CFXEffectSelector : public Component {
 
   void start_selection_(uint32_t now);
   void select_next_effect_(uint32_t now);
-  void sync_index_from_targets_();
+  bool sync_index_from_targets_();
   void apply_effect_(const std::string &effect);
   void toggle_targets_();
   void begin_dispatch_(bool set_state, bool state_value, bool set_effect,
@@ -49,6 +49,7 @@ class CFXEffectSelector : public Component {
   uint32_t last_effect_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
   size_t active_index_{0};
+  bool active_index_known_{false};
   bool pressed_{false};
   bool selecting_{false};
   bool suppress_toggle_{false};

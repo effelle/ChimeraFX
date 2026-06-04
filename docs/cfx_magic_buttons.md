@@ -53,6 +53,10 @@ Brightness changes use ESPHome light transitions, preserve the currently
 selected ChimeraFX effect, and stop sending updates when the ramp reaches the
 upper or lower bound.
 
+If a target is still marked on but its brightness is zero, a short press treats
+it as off and restores it to a visible brightness instead of requiring a second
+button press.
+
 ## CCT Sweeper
 
 `cfx_cct_sweeper` controls white tone with RGB/RGBW approximations. A short
@@ -167,4 +171,6 @@ binary_sensor:
 
 Short press on uses the last selected effect, starting with the first configured
 effect after boot. Long press starts from the currently active configured effect
-when possible, then advances to the next effect immediately.
+when possible, then advances to the next effect immediately. If the lights are
+off, it first restores the last effect selected during the current runtime and
+then continues cycling while held. The runtime selection resets after reboot.

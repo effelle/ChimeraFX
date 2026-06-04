@@ -30,6 +30,7 @@ class CFXDimmer : public Component {
  protected:
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
+  static constexpr float ZERO_BRIGHTNESS_EPSILON = 0.005f;
 
   void start_ramp_(uint32_t now);
   void finish_ramp_();
@@ -39,11 +40,12 @@ class CFXDimmer : public Component {
   void save_direction_();
   void toggle_targets_();
   void turn_off_targets_();
-  bool any_target_on_() const;
+  bool any_target_visible_() const;
   uint32_t ramp_duration_ms_(float start, float target) const;
   float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
-  float current_brightness_(light::LightState *state) const;
+  float ramp_current_brightness_(size_t index, uint32_t now) const;
+  float toggle_on_brightness_(light::LightState *state) const;
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
@@ -65,6 +67,8 @@ class CFXDimmer : public Component {
   bool ramp_direction_up_{true};
   uint32_t press_started_ms_{0};
   uint32_t ramp_started_ms_{0};
+  std::vector<float> ramp_start_brightness_;
+  std::vector<uint32_t> ramp_durations_ms_;
 };
 
 template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
