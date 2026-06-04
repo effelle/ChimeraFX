@@ -53,9 +53,11 @@ Brightness changes use ESPHome light transitions, preserve the currently
 selected ChimeraFX effect, and stop sending updates when the ramp reaches the
 upper or lower bound.
 
-If a target is still marked on but its brightness is zero, a short press treats
-it as off and restores it to a visible brightness instead of requiring a second
-button press.
+If a target is still marked on but its brightness is at or below the configured
+off cutoff, a short press treats it as off and restores it to a visible
+brightness instead of requiring a second button press. When the dimmer turns a
+light off, it remembers the last visible brightness and active effect for the
+current runtime so a later dimmer short press can restore the same look.
 
 ## CCT Sweeper
 

@@ -16,7 +16,7 @@ class CFXDimmer : public Component {
   void setup() override;
   void loop() override;
 
-  void add_light(light::LightState *state) { this->lights_.push_back(state); }
+  void add_light(light::LightState *state);
   void set_long_press_ms(uint32_t value) { this->long_press_ms_ = value; }
   void set_ramp_time_ms(uint32_t value) { this->ramp_time_ms_ = value; }
   void set_min_brightness(float value) { this->min_brightness_ = value; }
@@ -28,18 +28,25 @@ class CFXDimmer : public Component {
   void release();
 
  protected:
+  struct SavedState {
+    bool valid{false};
+    float brightness{1.0f};
+    std::string effect{};
+  };
+
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
-  static constexpr float ZERO_BRIGHTNESS_EPSILON = 0.005f;
 
   void start_ramp_(uint32_t now);
   void finish_ramp_();
   void freeze_ramp_();
   void apply_brightness_(light::LightState *state, float brightness,
                          uint32_t transition_ms);
+  void save_target_state_(size_t index, light::LightState *state);
   void save_direction_();
   void toggle_targets_();
   void turn_off_targets_();
+  float off_visibility_cutoff_() const;
   bool any_target_visible_() const;
   uint32_t ramp_duration_ms_(float start, float target) const;
   float ramp_target_brightness_() const;
@@ -49,6 +56,7 @@ class CFXDimmer : public Component {
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
+  std::vector<SavedState> saved_states_;
   std::string id_;
   ESPPreferenceObject direction_pref_{};
   bool direction_pref_ready_{false};
