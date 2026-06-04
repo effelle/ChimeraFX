@@ -27,6 +27,9 @@ void CFXDimmer::press() {
     return;
   }
   const uint32_t now = millis();
+  if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+    return;
+  }
   this->pressed_ = true;
   this->ramping_ = false;
   this->ramp_finished_ = false;
@@ -34,8 +37,10 @@ void CFXDimmer::press() {
   this->press_started_ms_ = now;
   this->ramp_started_ms_ = 0;
   this->ramp_end_ms_ = 0;
+  this->last_ramp_update_ms_ = 0;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
 }
 
 void CFXDimmer::add_light(light::LightState *state) {
@@ -57,8 +62,11 @@ void CFXDimmer::release() {
   this->suppress_toggle_ = false;
   this->ramp_started_ms_ = 0;
   this->ramp_end_ms_ = 0;
+  this->last_ramp_update_ms_ = 0;
+  this->ignore_press_until_ms_ = millis() + POST_ACTION_GUARD_MS;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
 
   if (should_toggle) {
     this->toggle_targets_();
@@ -82,7 +90,9 @@ void CFXDimmer::loop() {
   }
   if ((int32_t) (now - this->ramp_end_ms_) >= 0) {
     this->finish_ramp_();
+    return;
   }
+  this->service_manual_ramp_(now);
 }
 
 void CFXDimmer::start_ramp_(uint32_t now) {
@@ -95,8 +105,10 @@ void CFXDimmer::start_ramp_(uint32_t now) {
   this->save_direction_();
   this->ramp_started_ms_ = now;
   this->ramp_end_ms_ = now;
+  this->last_ramp_update_ms_ = 0;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
   const float target = this->ramp_target_brightness_();
   if (!this->ramp_direction_up_) {
     for (size_t i = 0; i < this->lights_.size(); i++) {
@@ -106,11 +118,15 @@ void CFXDimmer::start_ramp_(uint32_t now) {
   for (auto *state : this->lights_) {
     const float start = this->target_start_brightness_(state);
     const uint32_t duration = this->ramp_duration_ms_(start, target);
+    const bool manual = this->target_has_effect_(state);
     this->ramp_start_brightness_.push_back(start);
     this->ramp_durations_ms_.push_back(duration);
+    this->ramp_manual_.push_back(manual);
     this->ramp_end_ms_ = std::max(this->ramp_end_ms_, now + duration);
-    this->apply_brightness_(state, target, duration);
+    this->apply_brightness_(state, manual ? start : target,
+                            manual ? 0 : duration);
   }
+  this->service_manual_ramp_(now);
 }
 
 void CFXDimmer::finish_ramp_() {
@@ -123,6 +139,7 @@ void CFXDimmer::finish_ramp_() {
     this->turn_off_targets_();
     this->ramp_start_brightness_.clear();
     this->ramp_durations_ms_.clear();
+    this->ramp_manual_.clear();
     return;
   }
   for (auto *state : this->lights_) {
@@ -130,6 +147,7 @@ void CFXDimmer::finish_ramp_() {
   }
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
 }
 
 void CFXDimmer::freeze_ramp_() {
@@ -159,6 +177,22 @@ void CFXDimmer::freeze_ramp_() {
   this->ramp_finished_ = true;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
+}
+
+void CFXDimmer::service_manual_ramp_(uint32_t now) {
+  if (this->last_ramp_update_ms_ != 0 &&
+      (now - this->last_ramp_update_ms_) < RAMP_UPDATE_INTERVAL_MS) {
+    return;
+  }
+  this->last_ramp_update_ms_ = now;
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    if (i >= this->ramp_manual_.size() || !this->ramp_manual_[i]) {
+      continue;
+    }
+    this->apply_brightness_(this->lights_[i],
+                            this->ramp_current_brightness_(i, now), 0);
+  }
 }
 
 void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
@@ -171,6 +205,29 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   call.set_state(true);
   call.set_brightness(this->clamp_brightness_(brightness));
   call.perform();
+}
+
+void CFXDimmer::restore_saved_state_(size_t index, light::LightState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  if (index >= this->saved_states_.size() || !this->saved_states_[index].valid) {
+    this->apply_brightness_(state, this->toggle_on_brightness_(state), 0);
+    return;
+  }
+  auto call = state->make_call();
+  call.set_state(true);
+  call.set_brightness(this->saved_states_[index].brightness);
+  if (!this->saved_states_[index].effect.empty()) {
+    call.set_transition_length(0);
+    call.perform();
+    auto effect_call = state->make_call();
+    effect_call.set_effect(this->saved_states_[index].effect);
+    effect_call.perform();
+  } else {
+    call.set_transition_length(0);
+    call.perform();
+  }
 }
 
 void CFXDimmer::save_target_state_(size_t index, light::LightState *state) {
@@ -212,14 +269,8 @@ void CFXDimmer::toggle_targets_() {
     call.set_transition_length(0);
     call.set_state(!turn_off);
     if (!turn_off) {
-      if (i < this->saved_states_.size() && this->saved_states_[i].valid) {
-        call.set_brightness(this->saved_states_[i].brightness);
-        if (!this->saved_states_[i].effect.empty()) {
-          call.set_effect(this->saved_states_[i].effect);
-        }
-      } else {
-        call.set_brightness(this->toggle_on_brightness_(state));
-      }
+      this->restore_saved_state_(i, state);
+      continue;
     }
     call.perform();
   }
@@ -309,6 +360,13 @@ float CFXDimmer::toggle_on_brightness_(light::LightState *state) const {
     return this->max_brightness_;
   }
   return this->clamp_brightness_(brightness);
+}
+
+bool CFXDimmer::target_has_effect_(light::LightState *state) const {
+  if (state == nullptr || !state->remote_values.is_on()) {
+    return false;
+  }
+  return state->get_effect_name() != "None";
 }
 
 float CFXDimmer::clamp_brightness_(float value) const {
