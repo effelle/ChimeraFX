@@ -2400,6 +2400,36 @@ void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
   this->finalize_segment_coordinator_epoch_(mask, count, true);
 }
 
+void CFXLightOutput::schedule_c3_segment_deferred_flush_(
+    uint8_t mask, uint8_t count, uint32_t remaining_us) {
+  if (!this->rmt_c3_stability_cushion_ || mask == 0 || count == 0) {
+    this->schedule_show();
+    return;
+  }
+
+  this->seg_c3_deferred_flush_pending_ = true;
+  this->seg_c3_deferred_flush_mask_ = mask;
+  this->seg_c3_deferred_flush_count_ = count;
+
+  uint32_t delay_ms = (remaining_us + 999u) / 1000u;
+  if (delay_ms == 0) {
+    delay_ms = 1;
+  }
+  const uint32_t hash =
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^ 0xC3F17u;
+  esphome::App.scheduler.set_timeout(this, hash, delay_ms, [this]() {
+    if (!this->seg_c3_deferred_flush_pending_) {
+      return;
+    }
+    const uint8_t mask = this->seg_c3_deferred_flush_mask_;
+    const uint8_t count = this->seg_c3_deferred_flush_count_;
+    this->seg_c3_deferred_flush_pending_ = false;
+    this->seg_c3_deferred_flush_mask_ = 0;
+    this->seg_c3_deferred_flush_count_ = 0;
+    this->flush_parent_owned_segment_epoch_direct_(mask, count);
+  });
+}
+
 uint32_t CFXLightOutput::get_segmented_rmt_refresh_floor_us_() const {
   if (!this->is_rmt_transport() || !this->has_segments()) {
     return 0;
@@ -2457,16 +2487,22 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
       segmented_rmt_floor_us != 0
           ? segmented_rmt_floor_us
           : (this->max_refresh_rate_.has_value() ? *this->max_refresh_rate_ : 0);
-  if (refresh_floor_us != 0 && (now - this->last_refresh_) < refresh_floor_us) {
+  const uint32_t since_refresh_us = now - this->last_refresh_;
+  if (refresh_floor_us != 0 && since_refresh_us < refresh_floor_us) {
     this->perf_diag_total_refresh_defers_++;
     if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
       this->perf_diag_max_refresh_defers_ =
           static_cast<uint32_t>(this->perf_diag_total_refresh_defers_);
     }
     this->seg_coord_collect_start_us_ = 0;
-    this->schedule_show();
+    this->schedule_c3_segment_deferred_flush_(
+        mask, count, refresh_floor_us - since_refresh_us);
     return;
   }
+
+  this->seg_c3_deferred_flush_pending_ = false;
+  this->seg_c3_deferred_flush_mask_ = 0;
+  this->seg_c3_deferred_flush_count_ = 0;
 
   if (this->seg_coord_collect_start_us_ != 0) {
     const uint32_t collect_flush_us = now - this->seg_coord_collect_start_us_;

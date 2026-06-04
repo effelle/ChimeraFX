@@ -534,6 +534,8 @@ protected:
   void mark_segment_coordinator_epoch_committed_(uint8_t mask);
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
+  void schedule_c3_segment_deferred_flush_(uint8_t mask, uint8_t count,
+                                           uint32_t remaining_us);
   uint32_t get_segmented_rmt_refresh_floor_us_() const;
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
   // Returns true when the frame is done (fast path: flag already clear).
@@ -795,6 +797,9 @@ protected:
   uint32_t seg_coord_refresh_dt_count_{0};
   uint32_t seg_coord_max_refresh_dt_us_{0};
   uint64_t seg_coord_total_refresh_dt_us_{0};
+  bool seg_c3_deferred_flush_pending_{false};
+  uint8_t seg_c3_deferred_flush_mask_{0};
+  uint8_t seg_c3_deferred_flush_count_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};
