@@ -36,7 +36,7 @@ class CFXDimmer : public Component {
 
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
-  static constexpr uint32_t POST_ACTION_GUARD_MS = 250;
+  static constexpr uint32_t POST_ACTION_GUARD_MS = 750;
   static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
 
   void start_ramp_(uint32_t now);
