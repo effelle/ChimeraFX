@@ -2040,7 +2040,14 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) == 0) {
       continue;
     }
-    const uint32_t interval = slot.effect->get_effective_update_interval();
+    uint32_t interval = slot.effect->get_effective_update_interval();
+    if (this->rmt_c3_stability_cushion_) {
+      const uint32_t c3_floor_us = this->get_segmented_rmt_refresh_floor_us_();
+      const uint32_t c3_floor_ms = (c3_floor_us + 999u) / 1000u;
+      if (c3_floor_ms > interval) {
+        interval = c3_floor_ms;
+      }
+    }
     if (slot.due_at == 0) {
       slot.due_at = now;
     }
