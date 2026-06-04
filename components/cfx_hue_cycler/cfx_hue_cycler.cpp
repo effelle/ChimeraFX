@@ -85,7 +85,7 @@ void CFXHueCycler::start_cycle_(uint32_t now) {
   this->cycling_ = true;
   this->suppress_toggle_ = true;
   if (!this->restore_hue_ && !this->lights_.empty()) {
-    this->base_hue_ = this->current_hue_(this->lights_[0]);
+    this->base_hue_ = this->remote_hue_(this->lights_[0]);
   }
   this->cycle_started_ms_ = now;
   this->last_cycle_update_ms_ = 0;
@@ -207,14 +207,6 @@ bool CFXHueCycler::matches_white_(light::LightState *state) const {
                                this->white_) <= WHITE_MATCH_TOLERANCE;
 }
 
-CFXColor CFXHueCycler::current_color_(light::LightState *state) const {
-  if (state == nullptr) {
-    return this->white_;
-  }
-  return {state->current_values.get_red(), state->current_values.get_green(),
-          state->current_values.get_blue(), state->current_values.get_white()};
-}
-
 CFXColor CFXHueCycler::remote_color_(light::LightState *state) const {
   if (state == nullptr) {
     return this->white_;
@@ -259,13 +251,11 @@ CFXColor CFXHueCycler::clamp_color_(const CFXColor &color) const {
           clamp(color.white)};
 }
 
-float CFXHueCycler::current_hue_(light::LightState *state,
-                                 bool use_remote) const {
+float CFXHueCycler::remote_hue_(light::LightState *state) const {
   if (state == nullptr) {
     return this->base_hue_;
   }
-  const CFXColor c =
-      use_remote ? this->remote_color_(state) : this->current_color_(state);
+  const CFXColor c = this->remote_color_(state);
   const float max_v = std::max({c.red, c.green, c.blue});
   const float min_v = std::min({c.red, c.green, c.blue});
   const float delta = max_v - min_v;

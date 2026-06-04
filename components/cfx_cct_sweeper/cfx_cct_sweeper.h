@@ -69,7 +69,7 @@ class CFXCCTSweeper : public Component {
   bool matches_favorite_white_(light::LightState *state) const;
   uint32_t sweep_duration_ms_(const CFXColor &start,
                               const CFXColor &target) const;
-  CFXColor current_color_(light::LightState *state) const;
+  CFXColor sweep_start_color_(light::LightState *state) const;
   CFXColor remote_color_(light::LightState *state) const;
   CFXColor sweep_target_() const;
   CFXColor clamp_color_(const CFXColor &color) const;

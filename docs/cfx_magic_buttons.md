@@ -94,6 +94,9 @@ binary_sensor:
 CCT actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
 
+While sweeping, the helper locks the release color from its own commanded sweep
+timeline so ESPHome transition sampling cannot jump the output to a stale color.
+
 ## Hue Cycler
 
 `cfx_hue_cycler` controls RGB color. A short press toggles one or more lights
@@ -131,6 +134,9 @@ binary_sensor:
 
 Hue actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
+
+While cycling, the helper locks the release color from its own commanded hue
+timeline so ESPHome transition sampling cannot jump the output to a stale color.
 
 ## Effect Selector
 

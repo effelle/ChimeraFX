@@ -57,11 +57,10 @@ class CFXHueCycler : public Component {
                     uint32_t transition_ms);
   void save_hue_();
   bool matches_white_(light::LightState *state) const;
-  CFXColor current_color_(light::LightState *state) const;
   CFXColor remote_color_(light::LightState *state) const;
   CFXColor color_from_hue_(float hue) const;
   CFXColor clamp_color_(const CFXColor &color) const;
-  float current_hue_(light::LightState *state, bool use_remote = false) const;
+  float remote_hue_(light::LightState *state) const;
   float normalize_hue_(float hue) const;
   float color_distance_(const CFXColor &a, const CFXColor &b) const;
 

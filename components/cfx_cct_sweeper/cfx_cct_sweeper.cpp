@@ -41,6 +41,8 @@ void CFXCCTSweeper::press() {
   this->suppress_toggle_ = false;
   this->press_started_ms_ = now;
   this->sweep_end_ms_ = 0;
+  this->sweep_started_ms_ = 0;
+  this->sweep_targets_.clear();
 }
 
 void CFXCCTSweeper::release() {
@@ -59,6 +61,8 @@ void CFXCCTSweeper::release() {
   this->sweep_finished_ = false;
   this->suppress_toggle_ = false;
   this->sweep_end_ms_ = 0;
+  this->sweep_started_ms_ = 0;
+  this->sweep_targets_.clear();
 
   if (should_toggle) {
     this->toggle_favorite_white_();
@@ -96,7 +100,7 @@ void CFXCCTSweeper::start_sweep_(uint32_t now) {
   this->sweep_targets_.clear();
   this->sweep_targets_.reserve(this->lights_.size());
   for (auto *state : this->lights_) {
-    const CFXColor start = this->current_color_(state);
+    const CFXColor start = this->sweep_start_color_(state);
     const uint32_t duration =
         this->sweep_duration_ms_(start, this->active_sweep_target_);
     this->sweep_targets_.push_back({true, start, duration});
@@ -114,6 +118,7 @@ void CFXCCTSweeper::finish_sweep_() {
   for (auto *state : this->lights_) {
     this->apply_color_(state, this->active_sweep_target_, 0);
   }
+  this->sweep_targets_.clear();
 }
 
 void CFXCCTSweeper::freeze_sweep_() {
@@ -127,11 +132,12 @@ void CFXCCTSweeper::freeze_sweep_() {
       this->apply_color_(state, this->sweep_color_at_(this->sweep_targets_[i], now),
                          0);
     } else {
-      this->apply_color_(state, this->current_color_(state), 0);
+      this->apply_color_(state, this->sweep_start_color_(state), 0);
     }
   }
   this->sweeping_ = false;
   this->sweep_finished_ = true;
+  this->sweep_targets_.clear();
 }
 
 CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
@@ -245,12 +251,11 @@ uint32_t CFXCCTSweeper::sweep_duration_ms_(const CFXColor &start,
   return std::max(MIN_SWEEP_TRANSITION_MS, duration);
 }
 
-CFXColor CFXCCTSweeper::current_color_(light::LightState *state) const {
-  if (state == nullptr) {
+CFXColor CFXCCTSweeper::sweep_start_color_(light::LightState *state) const {
+  if (state == nullptr || !state->remote_values.is_on()) {
     return this->favorite_white_;
   }
-  return {state->current_values.get_red(), state->current_values.get_green(),
-          state->current_values.get_blue(), state->current_values.get_white()};
+  return this->remote_color_(state);
 }
 
 CFXColor CFXCCTSweeper::remote_color_(light::LightState *state) const {
