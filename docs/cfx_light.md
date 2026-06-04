@@ -175,14 +175,14 @@ light:
 
 * **ESP32 Classic Restored**: Classic ESP32 remains a strong RMT/SPI target, especially when you need several ordinary RMT outputs.
 
-* **ESP32-C3 Timing-sensitive**: The C3 can drive useful single-output layouts, but its single core and limited RMT symbols make heavy effects more sensitive near the upper LED limits.
+* **ESP32-C3 Experimental**: C3 support remains experimental for segmented RMT and is not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
 
 Rules of thumb:
 
 * Choose **S3 parallel** for dense 1-wire installations with 3-4 lanes or many segments.
 * Choose **SPI** when the strip supports it and you want the highest LED count per output.
 * Choose **Classic RMT** for reliable multi-output 1-wire nodes where the LED count is moderate.
-* Treat **C3 RMT** as a compact single-output option, then test your heaviest effect before pushing the LED count.
+* Treat **C3 RMT** as experimental for segmented layouts. Use it only for simple or low-segment installs, and do not choose it for 4-segment builds.
 
 ??? abstract "Click here to view the detailed Performance Test Matrices"
 

@@ -70,6 +70,8 @@ ESP-IDF doesn't always play well with RGB lights. `ChimeraFX` tries to set the b
 - **ESP32-S3**: 192 total symbols, 48-symbol blocks.
 - **ESP32-C3**: 96 total symbols, 48-symbol blocks.
 
+ESP32-C3 support remains experimental for segmented RMT and is not recommended for new builds. Use it only for simple or low-segment setups; avoid 4-segment builds.
+
 On ESP32 Classic, automatic allocation is intentionally conservative and caps each RMT light at `128` symbols. This avoids the higher completion latency seen with larger automatic blocks on long strips. If you have a tested layout that benefits from larger buffers, set `rmt_symbols` manually: for example `512` for one RMT light, `256` each for two RMT lights, or `128` each for four RMT lights.
 
 For platform-specific output limits, see [`cfx_light`](cfx_light.md#hardware-architecture--performance-limits).

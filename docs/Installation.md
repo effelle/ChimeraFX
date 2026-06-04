@@ -6,7 +6,7 @@
 *   **Supported Hardware**:
       *   **ESP32 (Classic)**: Fully supported and still a strong choice for ordinary RMT and SPI nodes, especially when you need several moderate 1-wire outputs.
       *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
-      *   **ESP32-C3**: Supported for compact single-output layouts. The C3 is single-core and timing-sensitive, so validate your heaviest effect before pushing the upper LED limits.
+      *   **ESP32-C3**: Experimental for segmented RMT and not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.

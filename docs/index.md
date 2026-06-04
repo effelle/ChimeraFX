@@ -18,7 +18,7 @@ It allows you to run complex RGB LED effects with high performance on ESP32 devi
 
 **Your mileage may vary.** Visual effects are computationally expensive.
 
-*   **Use the right ESP32 for the job.** Dual-core ESP32 variants have the most timing headroom. ESP32-C3 can work well for compact single-output layouts, but it is timing-sensitive near the upper LED limits.
+*   **Use the right ESP32 for the job.** Dual-core ESP32 variants have the most timing headroom. ESP32-C3 segmented RMT support is experimental and not recommended for new builds; use it only for simple or low-segment layouts, not 4-segment builds.
 *   **ESP32-S3 is the preferred dense 1-wire target.** The parallel backend lets several SK6812 or WS2812X lanes refresh together, making the S3 the best choice for large multi-strip installations.
 *   **ESP32 Classic remains a strong RMT/SPI target.** It is still a good fit for ordinary multi-output 1-wire nodes and high-count SPI layouts.
 *   **LED count matters.** 1-wire NRZ strips (WS2812B, SK6812) are protocol-limited to ~800 kHz. Long strips can be transport-bound even when the effect renderer still has CPU headroom.
