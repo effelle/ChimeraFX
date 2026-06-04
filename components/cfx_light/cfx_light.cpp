@@ -2408,9 +2408,9 @@ uint32_t CFXLightOutput::get_segmented_rmt_refresh_floor_us_() const {
   if (this->rmt_c3_stability_cushion_) {
     const size_t segment_count = this->segment_light_states_.size();
     if (segment_count >= 4) {
-      floor_us = 22000u;
+      floor_us = 17200u;
     } else if (segment_count >= 3) {
-      floor_us = 20000u;
+      floor_us = 17000u;
     }
   }
   if (this->max_refresh_rate_.has_value() &&
