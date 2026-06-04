@@ -2006,6 +2006,9 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     }
     return false;
   }
+  if (!force_due && this->seg_c3_deferred_flush_pending_) {
+    return false;
+  }
 
   if (!force_due && !this->segment_coord_schedule_dirty_ &&
       this->segment_coord_owned_mask_ != 0 &&
@@ -2411,6 +2414,9 @@ void CFXLightOutput::schedule_c3_segment_deferred_flush_(
     uint8_t mask, uint8_t count, uint32_t remaining_us) {
   if (!this->rmt_c3_stability_cushion_ || mask == 0 || count == 0) {
     this->schedule_show();
+    return;
+  }
+  if (this->seg_c3_deferred_flush_pending_) {
     return;
   }
 
