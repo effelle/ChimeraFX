@@ -60,8 +60,8 @@ light off, it remembers the last visible brightness and active effect for the
 current runtime so a later dimmer short press can restore the same look.
 Running effects are dimmed with direct brightness steps instead of ESPHome light
 transitions to avoid effect stop/start churn while the button is held.
-Release is accepted only after the input remains stable briefly, preventing
-contact chatter from turning a long press into an accidental short-press toggle.
+Long-press classification also checks the total held time at release, so a busy
+device loop cannot misclassify a completed hold as a short-press toggle.
 
 ## CCT Sweeper
 
