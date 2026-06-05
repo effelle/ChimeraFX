@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cfx_dimmer_gesture.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
@@ -39,7 +40,7 @@ class CFXDimmer : public Component {
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
   static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
 
-  void finalize_release_(uint32_t released_at_ms);
+  void finalize_release_(DimmerReleaseAction action, uint32_t released_at_ms);
   void start_ramp_(uint32_t now);
   void finish_ramp_();
   void freeze_ramp_(uint32_t now);
@@ -48,11 +49,14 @@ class CFXDimmer : public Component {
                          uint32_t transition_ms);
   void restore_saved_state_(size_t index, light::LightState *state);
   void save_target_state_(size_t index, light::LightState *state);
+  void save_target_state_at_brightness_(size_t index,
+                                        light::LightState *state,
+                                        float brightness);
   void save_direction_();
-  void toggle_targets_();
+  void turn_on_targets_();
   void turn_off_targets_();
   float off_visibility_cutoff_() const;
-  bool any_target_visible_() const;
+  bool any_target_on_() const;
   uint32_t ramp_duration_ms_(float start, float target) const;
   float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
@@ -79,8 +83,8 @@ class CFXDimmer : public Component {
   bool pressed_{false};
   bool ramping_{false};
   bool ramp_finished_{false};
-  bool suppress_toggle_{false};
   bool ramp_direction_up_{true};
+  DimmerGesture gesture_{};
   uint32_t press_started_ms_{0};
   uint32_t ramp_started_ms_{0};
   std::vector<float> ramp_start_brightness_;

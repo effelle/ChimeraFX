@@ -53,17 +53,22 @@ Brightness changes use ESPHome light transitions, preserve the currently
 selected ChimeraFX effect, and stop sending updates when the ramp reaches the
 upper or lower bound.
 
-If a target is still marked on but its brightness is at or below the configured
-off cutoff, a short press treats it as off and restores it to a visible
-brightness instead of requiring a second button press. When the dimmer turns a
-light off, it remembers the last visible brightness and active effect for the
-current runtime so a later dimmer short press can restore the same look.
+Each accepted press records whether any configured light is on. A short release
+uses that snapshot to turn the targets off or restore them, so transitions
+started during the gesture cannot reverse the requested action. When a short
+press turns a light off, the dimmer remembers the last visible brightness and
+active effect for the current runtime so a later short press can restore the
+same look.
 Running effects are dimmed with direct brightness steps instead of ESPHome light
 transitions to avoid effect stop/start churn while the button is held.
-Long-press classification also checks the total held time at release, so a busy
-device loop cannot misclassify a completed hold as a short-press toggle. The
-first release is applied immediately; repeated input edges are then suppressed
-until the button has remained quiet for 350 ms.
+A long press only ramps when the gesture began with at least one configured
+light on. Long presses that begin while all targets are off are ignored. On
+release, the dimmer freezes and saves the brightness selected at that exact
+time; it does not recall an older saved brightness. Classification also checks
+the total held time at release, so a busy device loop cannot misclassify a
+completed hold as a short-press toggle. The first release is applied
+immediately; repeated input edges are then suppressed until the button has
+remained quiet for 350 ms.
 
 ## CCT Sweeper
 
