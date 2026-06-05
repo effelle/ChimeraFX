@@ -24,6 +24,10 @@ void CFXDimmer::setup() {
 
 void CFXDimmer::press() {
   if (this->pressed_) {
+    if (this->release_pending_) {
+      this->release_pending_ = false;
+      this->release_started_ms_ = 0;
+    }
     return;
   }
   const uint32_t now = millis();
@@ -33,11 +37,13 @@ void CFXDimmer::press() {
   this->pressed_ = true;
   this->ramping_ = false;
   this->ramp_finished_ = false;
+  this->release_pending_ = false;
   this->suppress_toggle_ = false;
   this->press_started_ms_ = now;
   this->ramp_started_ms_ = 0;
   this->ramp_end_ms_ = 0;
   this->last_ramp_update_ms_ = 0;
+  this->release_started_ms_ = 0;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
   this->ramp_manual_.clear();
@@ -49,20 +55,27 @@ void CFXDimmer::add_light(light::LightState *state) {
 }
 
 void CFXDimmer::release() {
-  if (!this->pressed_) {
+  if (!this->pressed_ || this->release_pending_) {
     return;
   }
+  this->release_pending_ = true;
+  this->release_started_ms_ = millis();
+}
+
+void CFXDimmer::finalize_release_(uint32_t released_at_ms) {
   if (this->ramping_) {
-    this->freeze_ramp_();
+    this->freeze_ramp_(released_at_ms);
   }
   const bool should_toggle = !this->suppress_toggle_ && !this->ramping_;
   this->pressed_ = false;
   this->ramping_ = false;
   this->ramp_finished_ = false;
+  this->release_pending_ = false;
   this->suppress_toggle_ = false;
   this->ramp_started_ms_ = 0;
   this->ramp_end_ms_ = 0;
   this->last_ramp_update_ms_ = 0;
+  this->release_started_ms_ = 0;
   this->ignore_press_until_ms_ = millis() + POST_ACTION_GUARD_MS;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
@@ -78,6 +91,13 @@ void CFXDimmer::loop() {
     return;
   }
   const uint32_t now = millis();
+  if (this->release_pending_) {
+    if ((now - this->release_started_ms_) < RELEASE_DEBOUNCE_MS) {
+      return;
+    }
+    this->finalize_release_(this->release_started_ms_);
+    return;
+  }
   if (this->ramp_finished_) {
     return;
   }
@@ -150,11 +170,10 @@ void CFXDimmer::finish_ramp_() {
   this->ramp_manual_.clear();
 }
 
-void CFXDimmer::freeze_ramp_() {
+void CFXDimmer::freeze_ramp_(uint32_t now) {
   if (!this->ramping_) {
     return;
   }
-  const uint32_t now = millis();
   const float off_cutoff = this->ramp_target_brightness_() +
                            OFF_BRIGHTNESS_HYSTERESIS;
   for (size_t i = 0; i < this->lights_.size(); i++) {

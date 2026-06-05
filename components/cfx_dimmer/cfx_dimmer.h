@@ -37,11 +37,13 @@ class CFXDimmer : public Component {
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
   static constexpr uint32_t POST_ACTION_GUARD_MS = 750;
+  static constexpr uint32_t RELEASE_DEBOUNCE_MS = 350;
   static constexpr float OFF_BRIGHTNESS_HYSTERESIS = 0.015f;
 
+  void finalize_release_(uint32_t released_at_ms);
   void start_ramp_(uint32_t now);
   void finish_ramp_();
-  void freeze_ramp_();
+  void freeze_ramp_(uint32_t now);
   void service_manual_ramp_(uint32_t now);
   void apply_brightness_(light::LightState *state, float brightness,
                          uint32_t transition_ms);
@@ -70,6 +72,7 @@ class CFXDimmer : public Component {
   uint32_t ramp_end_ms_{0};
   uint32_t last_ramp_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
+  uint32_t release_started_ms_{0};
   float min_brightness_{0.01f};
   float max_brightness_{1.0f};
   float off_brightness_{0.10f};
@@ -78,6 +81,7 @@ class CFXDimmer : public Component {
   bool pressed_{false};
   bool ramping_{false};
   bool ramp_finished_{false};
+  bool release_pending_{false};
   bool suppress_toggle_{false};
   bool ramp_direction_up_{true};
   uint32_t press_started_ms_{0};
