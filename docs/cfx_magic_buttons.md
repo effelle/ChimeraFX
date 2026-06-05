@@ -1,18 +1,31 @@
 # ChimeraFX Magic Buttons
 
 ChimeraFX magic buttons are small on-device helpers for physical buttons. They
-do not create Home Assistant entities. Instead, you bind an existing ESPHome
-`binary_sensor` button to a helper with `press` and `release` actions.
+do not create Home Assistant entities. The recommended `cfx_button` wrapper
+binds an existing ESPHome `binary_sensor` to one ChimeraFX controller:
 
 ```yaml
 binary_sensor:
   - platform: gpio
+    id: my_button
     pin: GPIO05     # GPIO pin where the button is connected
-    on_press:
-      - helper_name.press: helper_id
-    on_release:
-      - helper_name.release: helper_id
+
+cfx_button:
+  - id: my_button_binding
+    button: my_button
+    dimmer: helper_id
 ```
+
+Exactly one controller is allowed per wrapper: `dimmer`, `cct_sweeper`,
+`hue_cycler`, or `effect_selector`. The referenced binary sensor remains
+responsible for GPIO configuration, inversion, filtering, debounce, touch
+inputs, expanders, and template state. Its logical convention must be
+`ON = pressed`.
+
+The wrapper waits for the first valid `OFF` state before accepting input. A
+button that is already `ON` during startup is ignored until released, preventing
+an accidental gesture after reboot. Controller timing and short/long behavior
+remain configured on the selected helper.
 
 ## Button Dimmer
 
@@ -31,11 +44,13 @@ cfx_dimmer:
 
 binary_sensor:
   - platform: gpio
+    id: desk_lamp_button
     pin: GPIO05     # GPIO pin where the button is connected
-    on_press:
-      - cfx_dimmer.press: desk_lamp_dimmer
-    on_release:
-      - cfx_dimmer.release: desk_lamp_dimmer
+
+cfx_button:
+  - id: desk_lamp_button_binding
+    button: desk_lamp_button
+    dimmer: desk_lamp_dimmer
 ```
 
 | Option | Default | Description |
@@ -89,11 +104,13 @@ cfx_cct_sweeper:
 
 binary_sensor:
   - platform: gpio
+    id: living_room_cct_button
     pin: GPIO06     # GPIO pin where the button is connected
-    on_press:
-      - cfx_cct_sweeper.press: living_room_cct
-    on_release:
-      - cfx_cct_sweeper.release: living_room_cct
+
+cfx_button:
+  - id: living_room_cct_binding
+    button: living_room_cct_button
+    cct_sweeper: living_room_cct
 ```
 
 | Option | Default | Description |
@@ -131,11 +148,13 @@ cfx_hue_cycler:
 
 binary_sensor:
   - platform: gpio
+    id: game_room_rgb_button
     pin: GPIO07     # GPIO pin where the button is connected
-    on_press:
-      - cfx_hue_cycler.press: game_room_rgb
-    on_release:
-      - cfx_hue_cycler.release: game_room_rgb
+
+cfx_button:
+  - id: game_room_rgb_binding
+    button: game_room_rgb_button
+    hue_cycler: game_room_rgb
 ```
 
 | Option | Default | Description |
@@ -176,11 +195,13 @@ cfx_effect_selector:
 
 binary_sensor:
   - platform: gpio
+    id: desk_lamp_fx_button
     pin: GPIO08     # GPIO pin where the button is connected
-    on_press:
-      - cfx_effect_selector.press: desk_lamp_fx
-    on_release:
-      - cfx_effect_selector.release: desk_lamp_fx
+
+cfx_button:
+  - id: desk_lamp_fx_binding
+    button: desk_lamp_fx_button
+    effect_selector: desk_lamp_fx
 ```
 
 | Option | Default | Description |
@@ -196,3 +217,21 @@ effect after boot. Long press starts from the currently active configured effect
 when possible, then advances to the next effect immediately. If the lights are
 off, it first restores the last effect selected during the current runtime and
 then continues cycling while held. The runtime selection resets after reboot.
+
+## Direct Action Compatibility
+
+Existing `press` and `release` actions remain supported for configurations that
+need manual automation wiring:
+
+```yaml
+binary_sensor:
+  - platform: gpio
+    pin: GPIO05
+    on_press:
+      - cfx_dimmer.press: desk_lamp_dimmer
+    on_release:
+      - cfx_dimmer.release: desk_lamp_dimmer
+```
+
+Do not bind both `cfx_button` and direct actions to the same binary sensor and
+controller pair.
