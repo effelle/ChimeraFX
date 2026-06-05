@@ -16,7 +16,7 @@ void CFXDimmer::setup() {
       global_preferences->make_preference<uint8_t>(fnv1a_hash(key.c_str()),
                                                    true);
   this->direction_pref_ready_ = true;
-  uint8_t restored = 1;
+  uint8_t restored = this->next_direction_up_ ? 1 : 0;
   if (this->direction_pref_.load(&restored)) {
     this->next_direction_up_ = restored != 0;
   }
@@ -124,7 +124,10 @@ void CFXDimmer::start_ramp_(uint32_t now) {
   this->ramping_ = true;
   this->ramp_finished_ = false;
   this->gesture_.mark_long_press_started();
-  this->ramp_direction_up_ = this->next_direction_up_;
+  this->ramp_direction_up_ = select_ramp_direction_up(
+      this->average_target_brightness_(), this->next_direction_up_,
+      this->first_ramp_after_boot_);
+  this->first_ramp_after_boot_ = false;
   this->next_direction_up_ = !this->ramp_direction_up_;
   this->save_direction_();
   this->ramp_started_ms_ = now;
@@ -248,6 +251,19 @@ bool CFXDimmer::any_target_on_() const {
     }
   }
   return false;
+}
+
+float CFXDimmer::average_target_brightness_() const {
+  float total = 0.0f;
+  size_t count = 0;
+  for (auto *state : this->lights_) {
+    if (state == nullptr || !state->remote_values.is_on()) {
+      continue;
+    }
+    total += state->remote_values.get_brightness();
+    count++;
+  }
+  return count == 0 ? this->min_brightness_ : total / count;
 }
 
 uint32_t CFXDimmer::ramp_duration_ms_(float start, float target) const {

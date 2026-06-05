@@ -43,6 +43,7 @@ class CFXDimmer : public Component {
   void turn_on_targets_();
   void turn_off_targets_();
   bool any_target_on_() const;
+  float average_target_brightness_() const;
   uint32_t ramp_duration_ms_(float start, float target) const;
   float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
@@ -62,11 +63,12 @@ class CFXDimmer : public Component {
   float min_brightness_{0.15f};
   float max_brightness_{1.0f};
   bool restore_direction_{false};
-  bool next_direction_up_{true};
+  bool next_direction_up_{false};
   bool pressed_{false};
   bool ramping_{false};
   bool ramp_finished_{false};
   bool ramp_direction_up_{true};
+  bool first_ramp_after_boot_{true};
   DimmerGesture gesture_{};
   uint32_t press_started_ms_{0};
   uint32_t ramp_started_ms_{0};

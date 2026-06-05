@@ -707,6 +707,7 @@ protected:
   bool is_syncing_{false};
   bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
+  float prev_master_brightness_{1.0f};
   bool prev_master_defaults_state_{false};
 
   uint8_t tracked_brightness_{0};

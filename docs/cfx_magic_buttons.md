@@ -65,6 +65,9 @@ release, the dimmer freezes at the brightness selected at that exact time. A
 completed down-ramp stops at `min_brightness` and leaves the light on; only a
 short press turns it off. The minimum applies to dimmer ramps and does not
 rewrite a lower brightness deliberately selected through Home Assistant.
+The first long press after boot defaults to ramping down. At 70% brightness or
+higher, the dimmer always ramps down; at 30% or lower, it always ramps up.
+Between those barriers, consecutive long presses alternate direction.
 Classification also checks the total held time at release, so a busy device
 loop cannot misclassify a completed hold as a short-press toggle. The first
 release is applied immediately; repeated input edges are then suppressed until

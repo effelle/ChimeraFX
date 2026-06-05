@@ -12,6 +12,18 @@ enum class DimmerReleaseAction : uint8_t {
   HOLD,
 };
 
+constexpr bool select_ramp_direction_up(float brightness,
+                                        bool alternating_direction_up,
+                                        bool first_ramp_after_boot) {
+  if (brightness <= 0.30f) {
+    return true;
+  }
+  if (brightness >= 0.70f || first_ramp_after_boot) {
+    return false;
+  }
+  return alternating_direction_up;
+}
+
 class DimmerGesture {
  public:
   constexpr void begin(bool was_on) {

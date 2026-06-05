@@ -8,6 +8,7 @@
  */
 
 #include "cfx_light.h"
+#include "cfx_master_sync.h"
 #include "cfx_power_manager.h"
 #include "cfx_virtual_segment_light.h"
 #include "cfx_transmit_barrier.h"
@@ -2947,6 +2948,8 @@ void CFXLightOutput::setup() {
         this->master_listener_);
     this->prev_master_state_ =
         this->master_light_state_->remote_values.is_on();
+    this->prev_master_brightness_ =
+        this->master_light_state_->remote_values.get_brightness();
     this->prev_master_defaults_state_ =
         this->master_light_state_->remote_values.is_on();
   }
@@ -6108,7 +6111,13 @@ void CFXLightOutput::on_master_update() {
       this->master_light_state_->remote_values.get_brightness();
 
   bool master_state_changed = (master_on != this->prev_master_state_);
+  bool master_brightness_changed =
+      master_on && cfx_light::master_brightness_changed(
+                       this->prev_master_brightness_, master_brightness);
   this->prev_master_state_ = master_on;
+  if (master_on) {
+    this->prev_master_brightness_ = master_brightness;
+  }
 
   // TOP-DOWN SYNC
   for (auto *seg_state : this->segment_light_states_) {
@@ -6119,7 +6128,7 @@ void CFXLightOutput::on_master_update() {
     // Only update brightness if the segment is currently ON (or is becoming ON)
     bool is_seg_on =
         state_changed ? master_on : seg_state->remote_values.is_on();
-    bool bright_changed = master_on && is_seg_on &&
+    bool bright_changed = master_brightness_changed && is_seg_on &&
                           std::abs(seg_state->remote_values.get_brightness() -
                                    master_brightness) > 0.01f;
 
@@ -6166,28 +6175,41 @@ void CFXLightOutput::on_segment_update() {
     this->wake_mono_idle_light_state_(seg_state);
   }
 
-  bool master_on = this->master_light_state_->remote_values.is_on();
-
   // BOTTOM-UP SYNC (A segment changed)
-  bool is_any_segment_on = false;
+  SegmentBrightnessAggregate brightness;
   for (auto *s : this->segment_light_states_) {
-    if (s->remote_values.is_on()) {
-      is_any_segment_on = true;
-      break;
-    }
+    brightness.add(s->remote_values.is_on(),
+                   s->remote_values.get_brightness());
   }
 
-  if (master_on != is_any_segment_on) {
+  bool master_on = this->master_light_state_->remote_values.is_on();
+  float master_brightness =
+      this->master_light_state_->remote_values.get_brightness();
+  bool is_any_segment_on = brightness.any_on();
+  float aggregate_brightness = brightness.average(master_brightness);
+  bool state_changed = master_on != is_any_segment_on;
+  bool brightness_changed =
+      is_any_segment_on && cfx_light::master_brightness_changed(
+                               master_brightness, aggregate_brightness);
+
+  if (state_changed || brightness_changed) {
     // Bottom-up sync for all transports (RMT, SPI, and Parallel).
-    // The master reflects the aggregate ON/OFF state of the segments.
+    // The master reflects aggregate segment state and active brightness.
     this->wake_mono_idle_light_state_(this->master_light_state_);
-    // We are commanding the master to change state.
-    // Update prev_master_state_ so that unexpected/deferred incoming Master
-    // listener callbacks don't overreact and force all segments ON!
+    // Update tracked values before the guarded call so deferred listener
+    // callbacks cannot reinterpret this reflection as a new master command.
     this->prev_master_state_ = is_any_segment_on;
+    if (is_any_segment_on) {
+      this->prev_master_brightness_ = aggregate_brightness;
+    }
 
     auto call = this->master_light_state_->make_call();
-    call.set_state(is_any_segment_on);
+    if (state_changed) {
+      call.set_state(is_any_segment_on);
+    }
+    if (brightness_changed) {
+      call.set_brightness(aggregate_brightness);
+    }
     // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer.
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
