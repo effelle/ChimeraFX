@@ -13,7 +13,9 @@ binary_sensor:
 cfx_button:
   - id: my_button_binding
     button: my_button
-    dimmer: helper_id
+    dimmer:
+      lights:
+        - my_light
 ```
 
 Exactly one controller is allowed per wrapper: `dimmer`, `cct_sweeper`,
@@ -22,10 +24,12 @@ responsible for GPIO configuration, inversion, filtering, debounce, touch
 inputs, expanders, and template state. Its logical convention must be
 `ON = pressed`.
 
-The wrapper waits for the first valid `OFF` state before accepting input. A
+Each controller is configured directly inside its wrapper; no separate helper
+declaration or helper ID is required. The wrapper waits for the first valid
+`OFF` state before accepting input. A
 button that is already `ON` during startup is ignored until released, preventing
 an accidental gesture after reboot. Controller timing and short/long behavior
-remain configured on the selected helper.
+remain configured inside the selected controller block.
 
 ## Button Dimmer
 
@@ -34,14 +38,6 @@ long press ramps brightness, and each new long press alternates between ramping
 up and ramping down.
 
 ```yaml
-cfx_dimmer:
-  - id: desk_lamp_dimmer
-    lights:
-      - desk_lamp_segment_1
-      - desk_lamp_segment_2
-      - desk_lamp_segment_3
-      - desk_lamp_segment_4
-
 binary_sensor:
   - platform: gpio
     id: desk_lamp_button
@@ -50,7 +46,12 @@ binary_sensor:
 cfx_button:
   - id: desk_lamp_button_binding
     button: desk_lamp_button
-    dimmer: desk_lamp_dimmer
+    dimmer:
+      lights:
+        - desk_lamp_segment_1
+        - desk_lamp_segment_2
+        - desk_lamp_segment_3
+        - desk_lamp_segment_4
 ```
 
 | Option | Default | Description |
@@ -96,12 +97,6 @@ favorite white. A long press sweeps between warm and cool white; each new long
 press alternates direction.
 
 ```yaml
-cfx_cct_sweeper:
-  - id: living_room_cct
-    lights:
-      - couch_lamp
-      - tv_backlight
-
 binary_sensor:
   - platform: gpio
     id: living_room_cct_button
@@ -110,7 +105,10 @@ binary_sensor:
 cfx_button:
   - id: living_room_cct_binding
     button: living_room_cct_button
-    cct_sweeper: living_room_cct
+    cct_sweeper:
+      lights:
+        - couch_lamp
+        - tv_backlight
 ```
 
 | Option | Default | Description |
@@ -140,12 +138,6 @@ The default boot/start hue is cyan-blue (`0%, 62%, 100%`) so it does not
 conflict with red error signaling.
 
 ```yaml
-cfx_hue_cycler:
-  - id: game_room_rgb
-    lights:
-      - monitor_backlight
-      - desk_underglow
-
 binary_sensor:
   - platform: gpio
     id: game_room_rgb_button
@@ -154,7 +146,10 @@ binary_sensor:
 cfx_button:
   - id: game_room_rgb_binding
     button: game_room_rgb_button
-    hue_cycler: game_room_rgb
+    hue_cycler:
+      lights:
+        - monitor_backlight
+        - desk_underglow
 ```
 
 | Option | Default | Description |
@@ -181,18 +176,6 @@ effect names, one effect at a time, and release keeps the currently selected
 effect running.
 
 ```yaml
-cfx_effect_selector:
-  - id: desk_lamp_fx
-    lights:
-      - c3_Strip1
-      - c3_Strip2
-      - c3_Strip3
-      - c3_Strip4
-    effects:
-      - Energy
-      - Horizon Sweep
-      - Ocean
-
 binary_sensor:
   - platform: gpio
     id: desk_lamp_fx_button
@@ -201,7 +184,16 @@ binary_sensor:
 cfx_button:
   - id: desk_lamp_fx_binding
     button: desk_lamp_fx_button
-    effect_selector: desk_lamp_fx
+    effect_selector:
+      lights:
+        - c3_Strip1
+        - c3_Strip2
+        - c3_Strip3
+        - c3_Strip4
+      effects:
+        - Energy
+        - Horizon Sweep
+        - Ocean
 ```
 
 | Option | Default | Description |
