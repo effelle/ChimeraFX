@@ -61,7 +61,9 @@ current runtime so a later dimmer short press can restore the same look.
 Running effects are dimmed with direct brightness steps instead of ESPHome light
 transitions to avoid effect stop/start churn while the button is held.
 Long-press classification also checks the total held time at release, so a busy
-device loop cannot misclassify a completed hold as a short-press toggle.
+device loop cannot misclassify a completed hold as a short-press toggle. The
+first release is applied immediately; repeated input edges are then suppressed
+until the button has remained quiet for 350 ms.
 
 ## CCT Sweeper
 

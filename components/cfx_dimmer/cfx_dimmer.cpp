@@ -28,6 +28,7 @@ void CFXDimmer::press() {
   }
   const uint32_t now = millis();
   if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+    this->ignore_press_until_ms_ = now + POST_ACTION_QUIET_MS;
     return;
   }
   this->pressed_ = true;
@@ -50,6 +51,10 @@ void CFXDimmer::add_light(light::LightState *state) {
 
 void CFXDimmer::release() {
   if (!this->pressed_) {
+    const uint32_t now = millis();
+    if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+      this->ignore_press_until_ms_ = now + POST_ACTION_QUIET_MS;
+    }
     return;
   }
   const uint32_t released_at_ms = millis();
@@ -72,7 +77,7 @@ void CFXDimmer::finalize_release_(uint32_t released_at_ms) {
   this->ramp_started_ms_ = 0;
   this->ramp_end_ms_ = 0;
   this->last_ramp_update_ms_ = 0;
-  this->ignore_press_until_ms_ = millis() + POST_ACTION_GUARD_MS;
+  this->ignore_press_until_ms_ = millis() + POST_ACTION_QUIET_MS;
   this->ramp_start_brightness_.clear();
   this->ramp_durations_ms_.clear();
   this->ramp_manual_.clear();
