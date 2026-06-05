@@ -17,11 +17,13 @@ CONF_LONG_PRESS = "long_press"
 CONF_RAMP_TIME = "ramp_time"
 CONF_MIN_BRIGHTNESS = "min_brightness"
 CONF_MAX_BRIGHTNESS = "max_brightness"
-CONF_OFF_BRIGHTNESS = "off_brightness"
 CONF_RESTORE_DIRECTION = "restore_direction"
+MIN_BRIGHTNESS_FLOOR = 0.15
 
 
 def _validate_brightness_bounds(config):
+    if config[CONF_MIN_BRIGHTNESS] < MIN_BRIGHTNESS_FLOOR:
+        raise cv.Invalid("min_brightness must be at least 15%")
     if config[CONF_MIN_BRIGHTNESS] >= config[CONF_MAX_BRIGHTNESS]:
         raise cv.Invalid("min_brightness must be lower than max_brightness")
     return config
@@ -42,9 +44,8 @@ CONFIG_SCHEMA = cv.All(
                     cv.Optional(
                         CONF_RAMP_TIME, default="2s"
                     ): cv.positive_time_period_milliseconds,
-                    cv.Optional(CONF_MIN_BRIGHTNESS, default="1%"): cv.percentage,
+                    cv.Optional(CONF_MIN_BRIGHTNESS, default="15%"): cv.percentage,
                     cv.Optional(CONF_MAX_BRIGHTNESS, default="100%"): cv.percentage,
-                    cv.Optional(CONF_OFF_BRIGHTNESS, default="10%"): cv.percentage,
                     cv.Optional(CONF_RESTORE_DIRECTION, default=False): cv.boolean,
                 }
             ).extend(cv.COMPONENT_SCHEMA),
@@ -62,7 +63,6 @@ async def to_code(config):
         cg.add(var.set_ramp_time_ms(conf[CONF_RAMP_TIME].total_milliseconds))
         cg.add(var.set_min_brightness(conf[CONF_MIN_BRIGHTNESS]))
         cg.add(var.set_max_brightness(conf[CONF_MAX_BRIGHTNESS]))
-        cg.add(var.set_off_brightness(conf[CONF_OFF_BRIGHTNESS]))
         cg.add(var.set_restore_direction(conf[CONF_RESTORE_DIRECTION]))
 
         for light_id in conf[CONF_LIGHTS]:

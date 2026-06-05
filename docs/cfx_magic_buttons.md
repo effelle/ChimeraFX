@@ -44,9 +44,8 @@ binary_sensor:
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before dimming starts. |
 | `ramp_time` | `2s` | Time to ramp from minimum to maximum brightness. |
-| `min_brightness` | `1%` | Lowest brightness used by the ramp. |
+| `min_brightness` | `15%` | Lowest brightness used by the ramp. Values below 15% are rejected. |
 | `max_brightness` | `100%` | Highest brightness used by the ramp. |
-| `off_brightness` | `10%` | Down-ramp cutoff that turns target lights off. |
 | `restore_direction` | `false` | Persist the next ramp direction across reboot. |
 
 Brightness changes use ESPHome light transitions, preserve the currently
@@ -54,21 +53,22 @@ selected ChimeraFX effect, and stop sending updates when the ramp reaches the
 upper or lower bound.
 
 Each accepted press records whether any configured light is on. A short release
-uses that snapshot to turn the targets off or restore them, so transitions
-started during the gesture cannot reverse the requested action. When a short
-press turns a light off, the dimmer remembers the last visible brightness and
-active effect for the current runtime so a later short press can restore the
-same look.
+uses that snapshot to turn the targets off or on, so transitions started during
+the gesture cannot reverse the requested action. Short presses change only the
+ON/OFF state; ESPHome remains authoritative for the retained brightness, color,
+and active effect. Changes made from Home Assistant are therefore preserved.
 Running effects are dimmed with direct brightness steps instead of ESPHome light
 transitions to avoid effect stop/start churn while the button is held.
 A long press only ramps when the gesture began with at least one configured
 light on. Long presses that begin while all targets are off are ignored. On
-release, the dimmer freezes and saves the brightness selected at that exact
-time; it does not recall an older saved brightness. Classification also checks
-the total held time at release, so a busy device loop cannot misclassify a
-completed hold as a short-press toggle. The first release is applied
-immediately; repeated input edges are then suppressed until the button has
-remained quiet for 350 ms.
+release, the dimmer freezes at the brightness selected at that exact time. A
+completed down-ramp stops at `min_brightness` and leaves the light on; only a
+short press turns it off. The minimum applies to dimmer ramps and does not
+rewrite a lower brightness deliberately selected through Home Assistant.
+Classification also checks the total held time at release, so a busy device
+loop cannot misclassify a completed hold as a short-press toggle. The first
+release is applied immediately; repeated input edges are then suppressed until
+the button has remained quiet for 350 ms.
 
 ## CCT Sweeper
 
