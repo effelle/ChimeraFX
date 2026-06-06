@@ -8,23 +8,41 @@ namespace esphome {
 namespace cfx_cct_sweeper {
 
 void CFXCCTSweeper::setup() {
-  if (!this->restore_direction_ || global_preferences == nullptr) {
+  if (global_preferences == nullptr) {
     return;
   }
-  const std::string key = "cfx_cct_sweeper_" + this->id_ + "_direction";
-  this->direction_pref_ =
-      global_preferences->make_preference<uint8_t>(fnv1a_hash(key.c_str()),
-                                                   true);
-  this->direction_pref_ready_ = true;
-  uint8_t restored = 1;
-  if (this->direction_pref_.load(&restored)) {
-    this->next_direction_warmer_ = restored != 0;
+  if (this->restore_direction_) {
+    const std::string key = "cfx_cct_sweeper_" + this->id_ + "_direction";
+    this->direction_pref_ =
+        global_preferences->make_preference<uint8_t>(fnv1a_hash(key.c_str()),
+                                                     true);
+    this->direction_pref_ready_ = true;
+    uint8_t restored = this->next_direction_warmer_ ? 1 : 0;
+    if (this->direction_pref_.load(&restored)) {
+      this->next_direction_warmer_ = restored != 0;
+    }
+  }
+  if (this->restore_) {
+    const std::string key =
+        "cfx_cct_sweeper_" + this->id_ + "_preferred_white";
+    this->preferred_white_pref_ =
+        global_preferences->make_preference<StoredPreferredWhite>(
+            fnv1a_hash(key.c_str()), true);
+    this->preferred_white_pref_ready_ = true;
+    StoredPreferredWhite restored;
+    if (this->preferred_white_pref_.load(&restored) &&
+        restored.version == PREFERRED_WHITE_VERSION &&
+        std::isfinite(restored.red) && std::isfinite(restored.green) &&
+        std::isfinite(restored.blue) && std::isfinite(restored.white)) {
+      this->preferred_white_ =
+          this->clamp_color_({restored.red, restored.green, restored.blue,
+                              restored.white});
+    }
   }
 }
 
 void CFXCCTSweeper::add_light(light::LightState *state) {
   this->lights_.push_back(state);
-  this->saved_colors_.push_back({});
 }
 
 void CFXCCTSweeper::press() {
@@ -36,6 +54,10 @@ void CFXCCTSweeper::press() {
     return;
   }
   this->pressed_ = true;
+  this->gesture_began_on_ = this->any_target_on_();
+  if (this->gesture_began_on_) {
+    this->has_retained_state_ = true;
+  }
   this->sweeping_ = false;
   this->sweep_finished_ = false;
   this->suppress_toggle_ = false;
@@ -49,13 +71,24 @@ void CFXCCTSweeper::release() {
   if (!this->pressed_) {
     return;
   }
+  const uint32_t now = millis();
+  const bool held_long =
+      (now - this->press_started_ms_) >= this->long_press_ms_;
+  if (held_long && !this->sweeping_ && !this->sweep_finished_) {
+    if (can_start_cct_sweep(this->gesture_began_on_)) {
+      this->start_sweep_(this->press_started_ms_ + this->long_press_ms_);
+    } else {
+      this->suppress_toggle_ = true;
+      this->sweep_finished_ = true;
+    }
+  }
   if (this->sweeping_) {
     this->freeze_sweep_();
   }
   if (this->suppress_toggle_) {
     this->ignore_press_until_ms_ = millis() + POST_SWEEP_GUARD_MS;
   }
-  const bool should_toggle = !this->suppress_toggle_ && !this->sweeping_;
+  const bool should_toggle = !held_long && !this->suppress_toggle_;
   this->pressed_ = false;
   this->sweeping_ = false;
   this->sweep_finished_ = false;
@@ -65,17 +98,25 @@ void CFXCCTSweeper::release() {
   this->sweep_targets_.clear();
 
   if (should_toggle) {
-    this->toggle_favorite_white_();
+    this->handle_short_press_();
   }
 }
 
 void CFXCCTSweeper::loop() {
+  if (this->any_target_on_()) {
+    this->has_retained_state_ = true;
+  }
   if (!this->pressed_ || this->sweep_finished_) {
     return;
   }
   const uint32_t now = millis();
   if (!this->sweeping_) {
     if ((now - this->press_started_ms_) < this->long_press_ms_) {
+      return;
+    }
+    if (!can_start_cct_sweep(this->gesture_began_on_)) {
+      this->suppress_toggle_ = true;
+      this->sweep_finished_ = true;
       return;
     }
     this->start_sweep_(now);
@@ -87,11 +128,12 @@ void CFXCCTSweeper::loop() {
 }
 
 void CFXCCTSweeper::start_sweep_(uint32_t now) {
-  this->save_current_colors_();
   this->sweeping_ = true;
   this->sweep_finished_ = false;
   this->suppress_toggle_ = true;
-  this->sweep_direction_warmer_ = this->next_direction_warmer_;
+  this->sweep_direction_warmer_ = select_sweep_direction_warmer(
+      this->next_direction_warmer_, this->first_sweep_after_boot_);
+  this->first_sweep_after_boot_ = false;
   this->next_direction_warmer_ = !this->sweep_direction_warmer_;
   this->save_direction_();
   this->sweep_end_ms_ = now;
@@ -115,9 +157,10 @@ void CFXCCTSweeper::finish_sweep_() {
   }
   this->sweeping_ = false;
   this->sweep_finished_ = true;
-  for (auto *state : this->lights_) {
-    this->apply_color_(state, this->active_sweep_target_, 0);
-  }
+  this->preferred_white_ = this->active_sweep_target_;
+  this->last_endpoint_ = CCTEndpoint::PREFERRED;
+  this->apply_color_to_all_(this->preferred_white_, 0);
+  this->save_preferred_white_();
   this->sweep_targets_.clear();
 }
 
@@ -126,15 +169,14 @@ void CFXCCTSweeper::freeze_sweep_() {
     return;
   }
   const uint32_t now = millis();
-  for (size_t i = 0; i < this->lights_.size(); i++) {
-    auto *state = this->lights_[i];
-    if (i < this->sweep_targets_.size() && this->sweep_targets_[i].valid) {
-      this->apply_color_(state, this->sweep_color_at_(this->sweep_targets_[i], now),
-                         0);
-    } else {
-      this->apply_color_(state, this->sweep_start_color_(state), 0);
-    }
+  CFXColor selected = this->active_sweep_target_;
+  if (!this->sweep_targets_.empty() && this->sweep_targets_[0].valid) {
+    selected = this->sweep_color_at_(this->sweep_targets_[0], now);
   }
+  this->preferred_white_ = this->clamp_color_(selected);
+  this->last_endpoint_ = CCTEndpoint::PREFERRED;
+  this->apply_color_to_all_(this->preferred_white_, 0);
+  this->save_preferred_white_();
   this->sweeping_ = false;
   this->sweep_finished_ = true;
   this->sweep_targets_.clear();
@@ -157,43 +199,35 @@ CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
           blend(target.start.white, this->active_sweep_target_.white)};
 }
 
-void CFXCCTSweeper::toggle_favorite_white_() {
-  const bool restore = !this->lights_.empty() &&
-                       this->matches_favorite_white_(this->lights_[0]);
-  if (!restore) {
-    this->save_current_colors_();
-  }
-  for (size_t i = 0; i < this->lights_.size(); i++) {
-    auto *state = this->lights_[i];
-    if (restore) {
-      this->restore_saved_color_(i, state);
-    } else {
-      this->apply_color_(state, this->favorite_white_, 150);
-    }
-  }
-}
-
-void CFXCCTSweeper::save_current_colors_() {
-  if (this->saved_colors_.size() < this->lights_.size()) {
-    this->saved_colors_.resize(this->lights_.size());
-  }
-  for (size_t i = 0; i < this->lights_.size(); i++) {
-    auto *state = this->lights_[i];
-    if (state == nullptr || !state->remote_values.is_on()) {
-      continue;
-    }
-    this->saved_colors_[i].valid = true;
-    this->saved_colors_[i].color = this->remote_color_(state);
-  }
-}
-
-void CFXCCTSweeper::restore_saved_color_(size_t index,
-                                         light::LightState *state) {
-  if (index < this->saved_colors_.size() && this->saved_colors_[index].valid) {
-    this->apply_color_(state, this->saved_colors_[index].color, 150);
+void CFXCCTSweeper::handle_short_press_() {
+  const CCTShortPressAction action = select_cct_short_press_action(
+      this->any_target_on_(), this->has_retained_state_,
+      this->current_endpoint_(), this->last_endpoint_);
+  if (action == CCTShortPressAction::RESTORE_RETAINED) {
+    this->restore_retained_state_();
     return;
   }
-  this->apply_color_(state, this->warm_white_, 150);
+  if (action == CCTShortPressAction::APPLY_NATIVE) {
+    this->apply_color_to_all_(this->native_white_, 150);
+    this->last_endpoint_ = CCTEndpoint::NATIVE;
+    this->has_retained_state_ = true;
+    return;
+  }
+  this->apply_color_to_all_(this->preferred_white_, 150);
+  this->last_endpoint_ = CCTEndpoint::PREFERRED;
+  this->has_retained_state_ = true;
+}
+
+void CFXCCTSweeper::restore_retained_state_() {
+  for (auto *state : this->lights_) {
+    if (state == nullptr) {
+      continue;
+    }
+    auto call = state->make_call();
+    call.set_transition_length(0);
+    call.set_state(true);
+    call.perform();
+  }
 }
 
 void CFXCCTSweeper::apply_color_(light::LightState *state,
@@ -221,6 +255,24 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   call.perform();
 }
 
+void CFXCCTSweeper::apply_color_to_all_(const CFXColor &color,
+                                        uint32_t transition_ms) {
+  for (auto *state : this->lights_) {
+    this->apply_color_(state, color, transition_ms);
+  }
+}
+
+void CFXCCTSweeper::save_preferred_white_() {
+  if (!this->restore_ || !this->preferred_white_pref_ready_) {
+    return;
+  }
+  StoredPreferredWhite stored{
+      PREFERRED_WHITE_VERSION, this->preferred_white_.red,
+      this->preferred_white_.green, this->preferred_white_.blue,
+      this->preferred_white_.white};
+  this->preferred_white_pref_.save(&stored);
+}
+
 void CFXCCTSweeper::save_direction_() {
   if (!this->restore_direction_ || !this->direction_pref_ready_) {
     return;
@@ -229,12 +281,45 @@ void CFXCCTSweeper::save_direction_() {
   this->direction_pref_.save(&stored);
 }
 
-bool CFXCCTSweeper::matches_favorite_white_(light::LightState *state) const {
-  if (state == nullptr || !state->remote_values.is_on()) {
-    return false;
+bool CFXCCTSweeper::any_target_on_() const {
+  for (auto *state : this->lights_) {
+    if (state != nullptr && state->remote_values.is_on()) {
+      return true;
+    }
   }
-  return this->color_distance_(this->remote_color_(state),
-                               this->favorite_white_) <= WHITE_MATCH_TOLERANCE;
+  return false;
+}
+
+CCTEndpoint CFXCCTSweeper::current_endpoint_() const {
+  CCTEndpoint endpoint = CCTEndpoint::NON_CCT;
+  bool found = false;
+  for (auto *state : this->lights_) {
+    if (state == nullptr || !state->remote_values.is_on()) {
+      return CCTEndpoint::NON_CCT;
+    }
+    CCTEndpoint current = CCTEndpoint::NON_CCT;
+    if (this->matches_color_(state, this->native_white_)) {
+      current = CCTEndpoint::NATIVE;
+    } else if (this->matches_color_(state, this->preferred_white_)) {
+      current = CCTEndpoint::PREFERRED;
+    }
+    if (current == CCTEndpoint::NON_CCT) {
+      return current;
+    }
+    if (found && current != endpoint) {
+      return CCTEndpoint::NON_CCT;
+    }
+    endpoint = current;
+    found = true;
+  }
+  return found ? endpoint : CCTEndpoint::NON_CCT;
+}
+
+bool CFXCCTSweeper::matches_color_(light::LightState *state,
+                                   const CFXColor &color) const {
+  return state != nullptr && state->remote_values.is_on() &&
+         this->color_distance_(this->remote_color_(state), color) <=
+             WHITE_MATCH_TOLERANCE;
 }
 
 uint32_t CFXCCTSweeper::sweep_duration_ms_(const CFXColor &start,
@@ -253,14 +338,14 @@ uint32_t CFXCCTSweeper::sweep_duration_ms_(const CFXColor &start,
 
 CFXColor CFXCCTSweeper::sweep_start_color_(light::LightState *state) const {
   if (state == nullptr || !state->remote_values.is_on()) {
-    return this->favorite_white_;
+    return this->preferred_white_;
   }
   return this->remote_color_(state);
 }
 
 CFXColor CFXCCTSweeper::remote_color_(light::LightState *state) const {
   if (state == nullptr) {
-    return this->favorite_white_;
+    return this->preferred_white_;
   }
   return {state->remote_values.get_red(), state->remote_values.get_green(),
           state->remote_values.get_blue(), state->remote_values.get_white()};

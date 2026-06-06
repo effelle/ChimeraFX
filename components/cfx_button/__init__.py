@@ -38,9 +38,12 @@ CONF_MIN_BRIGHTNESS = "min_brightness"
 CONF_MAX_BRIGHTNESS = "max_brightness"
 CONF_RESTORE_DIRECTION = "restore_direction"
 CONF_SWEEP_TIME = "sweep_time"
+CONF_NATIVE_WHITE = "native_white"
+CONF_PREFERRED_WHITE = "preferred_white"
 CONF_FAVORITE_WHITE = "favorite_white"
 CONF_WARM_WHITE = "warm_white"
 CONF_COOL_WHITE = "cool_white"
+CONF_RESTORE = "restore"
 CONF_CYCLE_TIME = "cycle_time"
 CONF_WHITE = "white"
 CONF_SATURATION = "saturation"
@@ -81,6 +84,18 @@ def _validate_brightness_bounds(config):
     return config
 
 
+def _resolve_preferred_white(config):
+    if CONF_PREFERRED_WHITE in config and CONF_FAVORITE_WHITE in config:
+        raise cv.Invalid(
+            "preferred_white and legacy favorite_white cannot both be configured"
+        )
+    if CONF_PREFERRED_WHITE not in config:
+        config[CONF_PREFERRED_WHITE] = config.pop(
+            CONF_FAVORITE_WHITE, [1.0, 1.0, 1.0, 1.0]
+        )
+    return config
+
+
 LIGHTS_SCHEMA = {
     cv.Required(CONF_LIGHTS): cv.ensure_list(cv.use_id(light.LightState))
 }
@@ -104,31 +119,37 @@ DIMMER_SCHEMA = cv.All(
     _validate_brightness_bounds,
 )
 
-CCT_SWEEPER_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(): cv.declare_id(CFXCCTSweeper),
-        **LIGHTS_SCHEMA,
-        cv.Optional(
-            CONF_LONG_PRESS, default="500ms"
-        ): cv.positive_time_period_milliseconds,
-        cv.Optional(
-            CONF_SWEEP_TIME, default="4s"
-        ): cv.positive_time_period_milliseconds,
-        cv.Optional(
-            CONF_FAVORITE_WHITE,
-            default=["100%", "100%", "100%", "100%"],
-        ): _color4,
-        cv.Optional(
-            CONF_WARM_WHITE,
-            default=["100%", "55%", "18%", "100%"],
-        ): _color4,
-        cv.Optional(
-            CONF_COOL_WHITE,
-            default=["70%", "85%", "100%", "100%"],
-        ): _color4,
-        cv.Optional(CONF_RESTORE_DIRECTION, default=False): cv.boolean,
-    }
-).extend(cv.COMPONENT_SCHEMA)
+CCT_SWEEPER_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(CFXCCTSweeper),
+            **LIGHTS_SCHEMA,
+            cv.Optional(
+                CONF_LONG_PRESS, default="500ms"
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(
+                CONF_SWEEP_TIME, default="4s"
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(
+                CONF_NATIVE_WHITE,
+                default=["0%", "0%", "0%", "100%"],
+            ): _color4,
+            cv.Optional(CONF_PREFERRED_WHITE): _color4,
+            cv.Optional(CONF_FAVORITE_WHITE): _color4,
+            cv.Optional(
+                CONF_WARM_WHITE,
+                default=["100%", "55%", "18%", "100%"],
+            ): _color4,
+            cv.Optional(
+                CONF_COOL_WHITE,
+                default=["70%", "85%", "100%", "100%"],
+            ): _color4,
+            cv.Optional(CONF_RESTORE, default=False): cv.boolean,
+            cv.Optional(CONF_RESTORE_DIRECTION, default=False): cv.boolean,
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    _resolve_preferred_white,
+)
 
 HUE_CYCLER_SCHEMA = cv.Schema(
     {
@@ -202,9 +223,11 @@ async def _build_cct_sweeper(config):
     await cg.register_component(var, config)
     cg.add(var.set_long_press_ms(config[CONF_LONG_PRESS].total_milliseconds))
     cg.add(var.set_sweep_time_ms(config[CONF_SWEEP_TIME].total_milliseconds))
-    cg.add(var.set_favorite_white(*config[CONF_FAVORITE_WHITE]))
+    cg.add(var.set_native_white(*config[CONF_NATIVE_WHITE]))
+    cg.add(var.set_preferred_white(*config[CONF_PREFERRED_WHITE]))
     cg.add(var.set_warm_white(*config[CONF_WARM_WHITE]))
     cg.add(var.set_cool_white(*config[CONF_COOL_WHITE]))
+    cg.add(var.set_restore(config[CONF_RESTORE]))
     cg.add(var.set_restore_direction(config[CONF_RESTORE_DIRECTION]))
     await _add_lights(var, config)
     return var

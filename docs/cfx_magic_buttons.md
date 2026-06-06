@@ -91,10 +91,9 @@ the button has remained quiet for 350 ms.
 
 ## CCT Sweeper
 
-`cfx_cct_sweeper` controls white tone with RGB/RGBW approximations. A short
-press toggles one or more lights between the previous solid color and a
-favorite white. A long press sweeps between warm and cool white; each new long
-press alternates direction.
+`cfx_cct_sweeper` controls white tone with RGB/RGBW approximations. It keeps an
+immutable native-white endpoint for the physical white channel and a preferred
+white that can be selected with a long press.
 
 ```yaml
 binary_sensor:
@@ -109,6 +108,9 @@ cfx_button:
       lights:
         - couch_lamp
         - tv_backlight
+      native_white: [0%, 0%, 0%, 100%]
+      preferred_white: [100%, 90%, 75%, 60%]
+      restore: true
 ```
 
 | Option | Default | Description |
@@ -117,13 +119,30 @@ cfx_button:
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before sweeping starts. |
 | `sweep_time` | `4s` | Time to sweep from warm to cool white. |
-| `favorite_white` | `[100%, 100%, 100%, 100%]` | Short-press white color as `[red, green, blue, white]`. |
+| `native_white` | `[0%, 0%, 0%, 100%]` | Immutable native white-channel endpoint as `[red, green, blue, white]`. |
+| `preferred_white` | `[100%, 100%, 100%, 100%]` | Boot/default preferred white as `[red, green, blue, white]`. A long press updates it at runtime. |
 | `warm_white` | `[100%, 55%, 18%, 100%]` | Warm sweep endpoint as `[red, green, blue, white]`. |
 | `cool_white` | `[70%, 85%, 100%, 100%]` | Cool sweep endpoint as `[red, green, blue, white]`. |
+| `restore` | `false` | Restore the last preferred white selected by long press after reboot. |
 | `restore_direction` | `false` | Persist the next sweep direction across reboot. |
 
-CCT actions switch targets to solid color mode. If an effect is running, the
-helper replaces it with the selected solid output.
+The legacy `favorite_white` option remains accepted as an alias for
+`preferred_white`, but the two names cannot be configured together.
+
+A short press from the initial off state turns the targets on at
+`preferred_white`. After another controller or Home Assistant has turned the
+targets off, the first CCT short press restores their retained ESPHome state
+without replacing its effect, color, or brightness. The next short press enters
+CCT control. While the targets are on, a non-CCT output changes to the last
+white endpoint selected by this helper; later short presses alternate between
+`native_white` and `preferred_white`.
+
+A long press that begins while all targets are off is ignored. The first valid
+sweep after boot moves toward `warm_white`; later long presses alternate
+between warm and cool. Releasing the button freezes one shared white value
+across all targets and makes it the new `preferred_white`. With `restore:
+false`, reboot returns to the YAML value. With `restore: true`, the learned
+value survives reboot.
 
 While sweeping, the helper locks the release color from its own commanded sweep
 timeline so ESPHome transition sampling cannot jump the output to a stale color.
