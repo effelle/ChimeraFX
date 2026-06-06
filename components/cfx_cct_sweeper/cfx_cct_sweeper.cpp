@@ -1,13 +1,54 @@
 #include "cfx_cct_sweeper.h"
 
 #include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 #include <algorithm>
 #include <cmath>
 
 namespace esphome {
 namespace cfx_cct_sweeper {
 
+static const char *const TAG = "cfx_cct_sweeper";
+
+static const char *color_mode_name(light::ColorMode mode) {
+  switch (mode) {
+    case light::ColorMode::WHITE:
+      return "WHITE";
+    case light::ColorMode::RGB:
+      return "RGB";
+    case light::ColorMode::RGB_WHITE:
+      return "RGB_WHITE";
+    default:
+      return "OTHER";
+  }
+}
+
+static const char *endpoint_name(CCTEndpoint endpoint) {
+  switch (endpoint) {
+    case CCTEndpoint::NATIVE:
+      return "native";
+    case CCTEndpoint::PREFERRED:
+      return "preferred";
+    case CCTEndpoint::NON_CCT:
+    default:
+      return "non_cct";
+  }
+}
+
+static const char *short_action_name(CCTShortPressAction action) {
+  switch (action) {
+    case CCTShortPressAction::RESTORE_RETAINED:
+      return "restore_retained";
+    case CCTShortPressAction::APPLY_NATIVE:
+      return "apply_native";
+    case CCTShortPressAction::APPLY_PREFERRED:
+    default:
+      return "apply_preferred";
+  }
+}
+
 void CFXCCTSweeper::setup() {
+  this->log_configured_colors_();
   if (global_preferences == nullptr) {
     return;
   }
@@ -37,6 +78,11 @@ void CFXCCTSweeper::setup() {
       this->preferred_white_ =
           this->clamp_color_({restored.red, restored.green, restored.blue,
                               restored.white});
+      ESP_LOGD(TAG,
+               "[%s] restored preferred RGBW=%.3f/%.3f/%.3f/%.3f",
+               this->id_.c_str(), this->preferred_white_.red,
+               this->preferred_white_.green, this->preferred_white_.blue,
+               this->preferred_white_.white);
     }
   }
 }
@@ -200,9 +246,22 @@ CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
 }
 
 void CFXCCTSweeper::handle_short_press_() {
+  for (auto *state : this->lights_) {
+    this->log_light_state_(state, "short input");
+  }
+  const CCTEndpoint current_endpoint = this->current_endpoint_();
   const CCTShortPressAction action = select_cct_short_press_action(
       this->any_target_on_(), this->has_retained_state_,
-      this->current_endpoint_(), this->last_endpoint_);
+      current_endpoint, this->last_endpoint_);
+  ESP_LOGD(TAG,
+           "[%s] short decision current=%s(%u) last=%s(%u) retained=%s "
+           "action=%s(%u)",
+           this->id_.c_str(), endpoint_name(current_endpoint),
+           static_cast<unsigned>(current_endpoint),
+           endpoint_name(this->last_endpoint_),
+           static_cast<unsigned>(this->last_endpoint_),
+           YESNO(this->has_retained_state_), short_action_name(action),
+           static_cast<unsigned>(action));
   if (action == CCTShortPressAction::RESTORE_RETAINED) {
     this->restore_retained_state_();
     return;
@@ -237,12 +296,30 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
     return;
   }
   const CFXColor c = this->clamp_color_(color);
+  const bool white_only =
+      use_white_only_mode(c.red, c.green, c.blue, c.white) &&
+      state->get_traits().supports_color_mode(light::ColorMode::WHITE);
+  const light::ColorMode command_mode =
+      white_only ? light::ColorMode::WHITE
+                 : (state->get_traits().supports_color_mode(
+                        light::ColorMode::RGB_WHITE)
+                        ? light::ColorMode::RGB_WHITE
+                        : (state->get_traits().supports_color_mode(
+                               light::ColorMode::RGB)
+                               ? light::ColorMode::RGB
+                               : light::ColorMode::WHITE));
+  ESP_LOGD(TAG,
+           "[%s] command light='%s' mode=%s(%u) transition=%ums "
+           "RGBW=%.3f/%.3f/%.3f/%.3f",
+           this->id_.c_str(), state->get_name().c_str(),
+           color_mode_name(command_mode),
+           static_cast<unsigned>(command_mode), transition_ms, c.red, c.green,
+           c.blue, c.white);
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
   call.set_state(true);
   call.set_effect("None");
-  if (use_white_only_mode(c.red, c.green, c.blue, c.white) &&
-      state->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+  if (white_only) {
     call.set_color_mode(light::ColorMode::WHITE);
     call.set_white(c.white);
   } else if (state->get_traits().supports_color_mode(
@@ -258,6 +335,7 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
     call.set_white(std::max({c.red, c.green, c.blue, c.white}));
   }
   call.perform();
+  this->log_light_state_(state, "command applied");
 }
 
 void CFXCCTSweeper::apply_color_to_all_(const CFXColor &color,
@@ -284,6 +362,35 @@ void CFXCCTSweeper::save_direction_() {
   }
   uint8_t stored = this->next_direction_warmer_ ? 1 : 0;
   this->direction_pref_.save(&stored);
+}
+
+void CFXCCTSweeper::log_configured_colors_() const {
+  ESP_LOGD(TAG,
+           "[%s] configured native RGBW=%.3f/%.3f/%.3f/%.3f "
+           "preferred RGBW=%.3f/%.3f/%.3f/%.3f restore=%s",
+           this->id_.c_str(), this->native_white_.red, this->native_white_.green,
+           this->native_white_.blue, this->native_white_.white,
+           this->preferred_white_.red, this->preferred_white_.green,
+           this->preferred_white_.blue, this->preferred_white_.white,
+           YESNO(this->restore_));
+}
+
+void CFXCCTSweeper::log_light_state_(light::LightState *state,
+                                     const char *context) const {
+  if (state == nullptr) {
+    ESP_LOGD(TAG, "[%s] %s light=<null>", this->id_.c_str(), context);
+    return;
+  }
+  const auto &values = state->remote_values;
+  ESP_LOGD(TAG,
+           "[%s] %s light='%s' on=%s mode=%s(%u) brightness=%.3f "
+           "color_brightness=%.3f RGBW=%.3f/%.3f/%.3f/%.3f effect='%s'",
+           this->id_.c_str(), context, state->get_name().c_str(),
+           YESNO(values.is_on()), color_mode_name(values.get_color_mode()),
+           static_cast<unsigned>(values.get_color_mode()),
+           values.get_brightness(), values.get_color_brightness(),
+           values.get_red(), values.get_green(), values.get_blue(),
+           values.get_white(), state->get_effect_name().c_str());
 }
 
 bool CFXCCTSweeper::any_target_on_() const {

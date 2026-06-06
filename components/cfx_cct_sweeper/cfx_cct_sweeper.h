@@ -76,6 +76,8 @@ class CFXCCTSweeper : public Component {
   void apply_color_to_all_(const CFXColor &color, uint32_t transition_ms);
   void save_preferred_white_();
   void save_direction_();
+  void log_configured_colors_() const;
+  void log_light_state_(light::LightState *state, const char *context) const;
   bool any_target_on_() const;
   CCTEndpoint current_endpoint_() const;
   bool matches_color_(light::LightState *state, const CFXColor &color) const;
