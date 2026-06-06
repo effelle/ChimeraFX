@@ -1,8 +1,8 @@
 #pragma once
 
 #include "esphome/components/light/light_state.h"
-#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
+#include "esphome/core/preferences.h"
 #include <string>
 #include <vector>
 
@@ -12,6 +12,7 @@ namespace cfx_effect_selector {
 class CFXEffectSelector : public Component {
  public:
   explicit CFXEffectSelector(const std::string &id) : id_(id) {}
+  void setup() override;
   void loop() override;
 
   void add_light(light::LightState *state) { this->lights_.push_back(state); }
@@ -20,6 +21,7 @@ class CFXEffectSelector : public Component {
   void set_effect_interval_ms(uint32_t value) {
     this->effect_interval_ms_ = value;
   }
+  void set_restore(bool value) { this->restore_ = value; }
 
   void press();
   void release();
@@ -32,6 +34,7 @@ class CFXEffectSelector : public Component {
   void start_selection_(uint32_t now);
   void select_next_effect_(uint32_t now);
   bool sync_index_from_targets_();
+  void save_active_index_();
   void apply_effect_(const std::string &effect);
   void toggle_targets_();
   void begin_dispatch_(bool set_state, bool state_value, bool set_effect,
@@ -43,13 +46,16 @@ class CFXEffectSelector : public Component {
   std::vector<light::LightState *> lights_;
   std::vector<std::string> effects_;
   std::string id_;
+  ESPPreferenceObject active_index_pref_{};
   uint32_t long_press_ms_{500};
   uint32_t effect_interval_ms_{900};
   uint32_t press_started_ms_{0};
   uint32_t last_effect_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
   size_t active_index_{0};
+  bool active_index_pref_ready_{false};
   bool active_index_known_{false};
+  bool restore_{false};
   bool pressed_{false};
   bool selecting_{false};
   bool suppress_toggle_{false};
@@ -61,32 +67,6 @@ class CFXEffectSelector : public Component {
   size_t dispatch_index_{0};
   uint32_t dispatch_next_ms_{0};
   std::string dispatch_effect_;
-};
-
-template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
- public:
-  explicit PressAction(CFXEffectSelector *selector) : selector_(selector) {}
-  void play(const Ts &...x) override {
-    if (this->selector_ != nullptr) {
-      this->selector_->press();
-    }
-  }
-
- protected:
-  CFXEffectSelector *selector_;
-};
-
-template<typename... Ts> class ReleaseAction : public ::esphome::Action<Ts...> {
- public:
-  explicit ReleaseAction(CFXEffectSelector *selector) : selector_(selector) {}
-  void play(const Ts &...x) override {
-    if (this->selector_ != nullptr) {
-      this->selector_->release();
-    }
-  }
-
- protected:
-  CFXEffectSelector *selector_;
 };
 
 }  // namespace cfx_effect_selector

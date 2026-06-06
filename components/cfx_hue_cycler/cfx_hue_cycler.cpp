@@ -8,17 +8,32 @@ namespace esphome {
 namespace cfx_hue_cycler {
 
 void CFXHueCycler::setup() {
-  if (!this->restore_hue_ || global_preferences == nullptr) {
+  if (!this->restore_ || global_preferences == nullptr) {
     return;
   }
-  const std::string key = "cfx_hue_cycler_" + this->id_ + "_hue";
-  this->hue_pref_ =
-      global_preferences->make_preference<float>(fnv1a_hash(key.c_str()),
-                                                 true);
-  this->hue_pref_ready_ = true;
-  float restored = 0.0f;
-  if (this->hue_pref_.load(&restored)) {
-    this->base_hue_ = this->normalize_hue_(restored);
+  const bool palette_mode = !this->colors_.empty();
+  const std::string key = "cfx_hue_cycler_" + this->id_ +
+                          (palette_mode ? "_color_index" : "_hue");
+  if (palette_mode) {
+    this->selection_pref_ =
+        global_preferences->make_preference<uint32_t>(
+            fnv1a_hash(key.c_str()), true);
+    this->selection_pref_ready_ = true;
+    uint32_t restored = 0;
+    if (this->selection_pref_.load(&restored) &&
+        restored < this->colors_.size()) {
+      this->active_color_index_ = restored;
+      this->active_color_known_ = true;
+    }
+  } else {
+    this->selection_pref_ =
+        global_preferences->make_preference<float>(fnv1a_hash(key.c_str()),
+                                                   true);
+    this->selection_pref_ready_ = true;
+    float restored = 0.0f;
+    if (this->selection_pref_.load(&restored)) {
+      this->base_hue_ = this->normalize_hue_(restored);
+    }
   }
 }
 
@@ -84,15 +99,25 @@ void CFXHueCycler::start_cycle_(uint32_t now) {
   this->save_current_colors_();
   this->cycling_ = true;
   this->suppress_toggle_ = true;
-  if (!this->restore_hue_ && !this->lights_.empty()) {
+  if (this->colors_.empty() && !this->restore_ && !this->lights_.empty()) {
     this->base_hue_ = this->remote_hue_(this->lights_[0]);
   }
   this->cycle_started_ms_ = now;
   this->last_cycle_update_ms_ = 0;
-  this->apply_cycle_(now);
+  if (this->colors_.empty()) {
+    this->apply_cycle_(now);
+  } else {
+    this->select_next_palette_color_(now);
+  }
 }
 
 void CFXHueCycler::apply_cycle_(uint32_t now) {
+  if (!this->colors_.empty()) {
+    if ((now - this->last_cycle_update_ms_) >= this->color_interval_ms_) {
+      this->select_next_palette_color_(now);
+    }
+    return;
+  }
   if (this->last_cycle_update_ms_ != 0 &&
       (now - this->last_cycle_update_ms_) < HUE_UPDATE_INTERVAL_MS) {
     return;
@@ -102,6 +127,22 @@ void CFXHueCycler::apply_cycle_(uint32_t now) {
   for (auto *state : this->lights_) {
     this->apply_color_(state, color, HUE_TRANSITION_MS);
   }
+}
+
+void CFXHueCycler::select_next_palette_color_(uint32_t now) {
+  if (this->colors_.empty()) {
+    return;
+  }
+  this->active_color_index_ = next_palette_index(
+      this->active_color_index_, this->colors_.size(),
+      this->active_color_known_);
+  this->active_color_known_ = true;
+  this->last_cycle_update_ms_ = now;
+  this->last_cycle_color_ = this->colors_[this->active_color_index_];
+  for (auto *state : this->lights_) {
+    this->apply_color_(state, this->last_cycle_color_, HUE_TRANSITION_MS);
+  }
+  this->save_selection_();
 }
 
 CFXColor CFXHueCycler::cycle_color_at_(uint32_t now) {
@@ -121,8 +162,10 @@ void CFXHueCycler::freeze_cycle_() {
   if (!this->cycling_) {
     return;
   }
-  this->base_hue_ = this->last_cycle_hue_;
-  this->save_hue_();
+  if (this->colors_.empty()) {
+    this->base_hue_ = this->last_cycle_hue_;
+  }
+  this->save_selection_();
   for (auto *state : this->lights_) {
     this->apply_color_(state, this->last_cycle_color_, 0);
   }
@@ -164,7 +207,11 @@ void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) 
     this->apply_color_(state, this->saved_colors_[index].color, 150);
     return;
   }
-  this->apply_color_(state, this->color_from_hue_(this->base_hue_), 150);
+  const CFXColor fallback =
+      !this->colors_.empty() && this->active_color_known_
+          ? this->colors_[this->active_color_index_]
+          : this->color_from_hue_(this->base_hue_);
+  this->apply_color_(state, fallback, 150);
 }
 
 void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
@@ -173,17 +220,21 @@ void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
     return;
   }
   const CFXColor c = this->clamp_color_(color);
+  const float color_brightness = std::max({c.red, c.green, c.blue});
+  const float divisor = color_brightness > 0.0f ? color_brightness : 1.0f;
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
   call.set_state(true);
   call.set_effect("None");
   if (state->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
     call.set_color_mode(light::ColorMode::RGB_WHITE);
-    call.set_rgb(c.red, c.green, c.blue);
+    call.set_color_brightness(color_brightness);
+    call.set_rgb(c.red / divisor, c.green / divisor, c.blue / divisor);
     call.set_white(c.white);
   } else if (state->get_traits().supports_color_mode(light::ColorMode::RGB)) {
     call.set_color_mode(light::ColorMode::RGB);
-    call.set_rgb(c.red, c.green, c.blue);
+    call.set_color_brightness(color_brightness);
+    call.set_rgb(c.red / divisor, c.green / divisor, c.blue / divisor);
   } else if (state->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
     call.set_color_mode(light::ColorMode::WHITE);
     call.set_white(std::max({c.red, c.green, c.blue, c.white}));
@@ -191,12 +242,17 @@ void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
   call.perform();
 }
 
-void CFXHueCycler::save_hue_() {
-  if (!this->restore_hue_ || !this->hue_pref_ready_) {
+void CFXHueCycler::save_selection_() {
+  if (!this->restore_ || !this->selection_pref_ready_) {
     return;
   }
-  float stored = this->base_hue_;
-  this->hue_pref_.save(&stored);
+  if (!this->colors_.empty()) {
+    uint32_t stored = static_cast<uint32_t>(this->active_color_index_);
+    this->selection_pref_.save(&stored);
+  } else {
+    float stored = this->base_hue_;
+    this->selection_pref_.save(&stored);
+  }
 }
 
 bool CFXHueCycler::matches_white_(light::LightState *state) const {
@@ -211,8 +267,12 @@ CFXColor CFXHueCycler::remote_color_(light::LightState *state) const {
   if (state == nullptr) {
     return this->white_;
   }
-  return {state->remote_values.get_red(), state->remote_values.get_green(),
-          state->remote_values.get_blue(), state->remote_values.get_white()};
+  const float color_brightness =
+      state->remote_values.get_color_brightness();
+  return {color_brightness * state->remote_values.get_red(),
+          color_brightness * state->remote_values.get_green(),
+          color_brightness * state->remote_values.get_blue(),
+          state->remote_values.get_white()};
 }
 
 CFXColor CFXHueCycler::color_from_hue_(float hue) const {

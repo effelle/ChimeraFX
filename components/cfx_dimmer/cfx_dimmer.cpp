@@ -7,21 +7,6 @@
 namespace esphome {
 namespace cfx_dimmer {
 
-void CFXDimmer::setup() {
-  if (!this->restore_direction_ || global_preferences == nullptr) {
-    return;
-  }
-  const std::string key = "cfx_dimmer_" + this->id_ + "_direction";
-  this->direction_pref_ =
-      global_preferences->make_preference<uint8_t>(fnv1a_hash(key.c_str()),
-                                                   true);
-  this->direction_pref_ready_ = true;
-  uint8_t restored = this->next_direction_up_ ? 1 : 0;
-  if (this->direction_pref_.load(&restored)) {
-    this->next_direction_up_ = restored != 0;
-  }
-}
-
 void CFXDimmer::press() {
   if (this->pressed_) {
     return;
@@ -129,7 +114,6 @@ void CFXDimmer::start_ramp_(uint32_t now) {
       this->first_ramp_after_boot_);
   this->first_ramp_after_boot_ = false;
   this->next_direction_up_ = !this->ramp_direction_up_;
-  this->save_direction_();
   this->ramp_started_ms_ = now;
   this->ramp_end_ms_ = now;
   this->last_ramp_update_ms_ = 0;
@@ -210,14 +194,6 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   call.set_state(true);
   call.set_brightness(this->clamp_brightness_(brightness));
   call.perform();
-}
-
-void CFXDimmer::save_direction_() {
-  if (!this->restore_direction_ || !this->direction_pref_ready_) {
-    return;
-  }
-  uint8_t stored = this->next_direction_up_ ? 1 : 0;
-  this->direction_pref_.save(&stored);
 }
 
 void CFXDimmer::turn_on_targets_() {

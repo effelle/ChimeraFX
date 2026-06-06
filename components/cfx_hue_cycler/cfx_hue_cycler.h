@@ -1,7 +1,7 @@
 #pragma once
 
+#include "cfx_hue_policy.h"
 #include "esphome/components/light/light_state.h"
-#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include <string>
@@ -26,11 +26,17 @@ class CFXHueCycler : public Component {
   void add_light(light::LightState *state);
   void set_long_press_ms(uint32_t value) { this->long_press_ms_ = value; }
   void set_cycle_time_ms(uint32_t value) { this->cycle_time_ms_ = value; }
+  void set_color_interval_ms(uint32_t value) {
+    this->color_interval_ms_ = value;
+  }
+  void add_color(float r, float g, float b, float w) {
+    this->colors_.push_back({r, g, b, w});
+  }
   void set_white(float r, float g, float b, float w) {
     this->white_ = {r, g, b, w};
   }
   void set_saturation(float value) { this->saturation_ = value; }
-  void set_restore_hue(bool value) { this->restore_hue_ = value; }
+  void set_restore(bool value) { this->restore_ = value; }
 
   void press();
   void release();
@@ -48,6 +54,7 @@ class CFXHueCycler : public Component {
 
   void start_cycle_(uint32_t now);
   void apply_cycle_(uint32_t now);
+  void select_next_palette_color_(uint32_t now);
   CFXColor cycle_color_at_(uint32_t now);
   void freeze_cycle_();
   void toggle_white_();
@@ -55,7 +62,7 @@ class CFXHueCycler : public Component {
   void restore_saved_color_(size_t index, light::LightState *state);
   void apply_color_(light::LightState *state, const CFXColor &color,
                     uint32_t transition_ms);
-  void save_hue_();
+  void save_selection_();
   bool matches_white_(light::LightState *state) const;
   CFXColor remote_color_(light::LightState *state) const;
   CFXColor color_from_hue_(float hue) const;
@@ -66,11 +73,13 @@ class CFXHueCycler : public Component {
 
   std::vector<light::LightState *> lights_;
   std::vector<SavedColor> saved_colors_;
+  std::vector<CFXColor> colors_;
   std::string id_;
-  ESPPreferenceObject hue_pref_{};
-  bool hue_pref_ready_{false};
+  ESPPreferenceObject selection_pref_{};
+  bool selection_pref_ready_{false};
   uint32_t long_press_ms_{500};
   uint32_t cycle_time_ms_{6000};
+  uint32_t color_interval_ms_{900};
   uint32_t cycle_started_ms_{0};
   uint32_t last_cycle_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
@@ -79,37 +88,13 @@ class CFXHueCycler : public Component {
   float saturation_{1.0f};
   float base_hue_{202.8f};
   float last_cycle_hue_{202.8f};
-  bool restore_hue_{false};
+  size_t active_color_index_{0};
+  bool active_color_known_{false};
+  bool restore_{false};
   bool pressed_{false};
   bool cycling_{false};
   bool suppress_toggle_{false};
   uint32_t press_started_ms_{0};
-};
-
-template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
- public:
-  explicit PressAction(CFXHueCycler *cycler) : cycler_(cycler) {}
-  void play(const Ts &...x) override {
-    if (this->cycler_ != nullptr) {
-      this->cycler_->press();
-    }
-  }
-
- protected:
-  CFXHueCycler *cycler_;
-};
-
-template<typename... Ts> class ReleaseAction : public ::esphome::Action<Ts...> {
- public:
-  explicit ReleaseAction(CFXHueCycler *cycler) : cycler_(cycler) {}
-  void play(const Ts &...x) override {
-    if (this->cycler_ != nullptr) {
-      this->cycler_->release();
-    }
-  }
-
- protected:
-  CFXHueCycler *cycler_;
 };
 
 }  // namespace cfx_hue_cycler

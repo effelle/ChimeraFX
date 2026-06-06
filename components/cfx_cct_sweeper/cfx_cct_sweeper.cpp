@@ -52,17 +52,6 @@ void CFXCCTSweeper::setup() {
   if (global_preferences == nullptr) {
     return;
   }
-  if (this->restore_direction_) {
-    const std::string key = "cfx_cct_sweeper_" + this->id_ + "_direction";
-    this->direction_pref_ =
-        global_preferences->make_preference<uint8_t>(fnv1a_hash(key.c_str()),
-                                                     true);
-    this->direction_pref_ready_ = true;
-    uint8_t restored = this->next_direction_warmer_ ? 1 : 0;
-    if (this->direction_pref_.load(&restored)) {
-      this->next_direction_warmer_ = restored != 0;
-    }
-  }
   if (this->restore_) {
     const std::string key =
         "cfx_cct_sweeper_" + this->id_ + "_preferred_white";
@@ -181,7 +170,6 @@ void CFXCCTSweeper::start_sweep_(uint32_t now) {
       this->next_direction_warmer_, this->first_sweep_after_boot_);
   this->first_sweep_after_boot_ = false;
   this->next_direction_warmer_ = !this->sweep_direction_warmer_;
-  this->save_direction_();
   this->sweep_end_ms_ = now;
   this->sweep_started_ms_ = now;
   this->active_sweep_target_ = this->sweep_target_();
@@ -359,14 +347,6 @@ void CFXCCTSweeper::save_preferred_white_() {
       this->preferred_white_.green, this->preferred_white_.blue,
       this->preferred_white_.white};
   this->preferred_white_pref_.save(&stored);
-}
-
-void CFXCCTSweeper::save_direction_() {
-  if (!this->restore_direction_ || !this->direction_pref_ready_) {
-    return;
-  }
-  uint8_t stored = this->next_direction_warmer_ ? 1 : 0;
-  this->direction_pref_.save(&stored);
 }
 
 void CFXCCTSweeper::log_configured_colors_() const {

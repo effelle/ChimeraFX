@@ -5,6 +5,25 @@
 namespace esphome {
 namespace cfx_effect_selector {
 
+void CFXEffectSelector::setup() {
+  if (!this->restore_ || global_preferences == nullptr ||
+      this->effects_.empty()) {
+    return;
+  }
+  const std::string key =
+      "cfx_effect_selector_" + this->id_ + "_effect_index";
+  this->active_index_pref_ =
+      global_preferences->make_preference<uint32_t>(
+          fnv1a_hash(key.c_str()), true);
+  this->active_index_pref_ready_ = true;
+  uint32_t restored = 0;
+  if (this->active_index_pref_.load(&restored) &&
+      restored < this->effects_.size()) {
+    this->active_index_ = restored;
+    this->active_index_known_ = true;
+  }
+}
+
 void CFXEffectSelector::press() {
   if (this->pressed_) {
     return;
@@ -78,6 +97,7 @@ void CFXEffectSelector::select_next_effect_(uint32_t now) {
   }
   this->active_index_ = (this->active_index_ + 1) % this->effects_.size();
   this->active_index_known_ = true;
+  this->save_active_index_();
   this->last_effect_update_ms_ = now;
   this->apply_effect_(this->effects_[this->active_index_]);
 }
@@ -95,11 +115,21 @@ bool CFXEffectSelector::sync_index_from_targets_() {
       if (this->effects_[i] == current) {
         this->active_index_ = i;
         this->active_index_known_ = true;
+        this->save_active_index_();
         return true;
       }
     }
   }
   return false;
+}
+
+void CFXEffectSelector::save_active_index_() {
+  if (!this->restore_ || !this->active_index_pref_ready_ ||
+      !this->active_index_known_) {
+    return;
+  }
+  uint32_t stored = static_cast<uint32_t>(this->active_index_);
+  this->active_index_pref_.save(&stored);
 }
 
 void CFXEffectSelector::apply_effect_(const std::string &effect) {

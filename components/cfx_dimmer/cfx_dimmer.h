@@ -2,9 +2,7 @@
 
 #include "cfx_dimmer_gesture.h"
 #include "esphome/components/light/light_state.h"
-#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
-#include "esphome/core/preferences.h"
 #include <string>
 #include <vector>
 
@@ -14,7 +12,6 @@ namespace cfx_dimmer {
 class CFXDimmer : public Component {
  public:
   explicit CFXDimmer(const std::string &id) : id_(id) {}
-  void setup() override;
   void loop() override;
 
   void add_light(light::LightState *state);
@@ -22,7 +19,6 @@ class CFXDimmer : public Component {
   void set_ramp_time_ms(uint32_t value) { this->ramp_time_ms_ = value; }
   void set_min_brightness(float value) { this->min_brightness_ = value; }
   void set_max_brightness(float value) { this->max_brightness_ = value; }
-  void set_restore_direction(bool value) { this->restore_direction_ = value; }
 
   void press();
   void release();
@@ -39,7 +35,6 @@ class CFXDimmer : public Component {
   void service_manual_ramp_(uint32_t now);
   void apply_brightness_(light::LightState *state, float brightness,
                          uint32_t transition_ms);
-  void save_direction_();
   void turn_on_targets_();
   void turn_off_targets_();
   bool any_target_on_() const;
@@ -53,8 +48,6 @@ class CFXDimmer : public Component {
 
   std::vector<light::LightState *> lights_;
   std::string id_;
-  ESPPreferenceObject direction_pref_{};
-  bool direction_pref_ready_{false};
   uint32_t long_press_ms_{500};
   uint32_t ramp_time_ms_{2000};
   uint32_t ramp_end_ms_{0};
@@ -62,7 +55,6 @@ class CFXDimmer : public Component {
   uint32_t ignore_press_until_ms_{0};
   float min_brightness_{0.15f};
   float max_brightness_{1.0f};
-  bool restore_direction_{false};
   bool next_direction_up_{false};
   bool pressed_{false};
   bool ramping_{false};
@@ -75,32 +67,6 @@ class CFXDimmer : public Component {
   std::vector<float> ramp_start_brightness_;
   std::vector<uint32_t> ramp_durations_ms_;
   std::vector<bool> ramp_manual_;
-};
-
-template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
- public:
-  explicit PressAction(CFXDimmer *dimmer) : dimmer_(dimmer) {}
-  void play(const Ts &...x) override {
-    if (this->dimmer_ != nullptr) {
-      this->dimmer_->press();
-    }
-  }
-
- protected:
-  CFXDimmer *dimmer_;
-};
-
-template<typename... Ts> class ReleaseAction : public ::esphome::Action<Ts...> {
- public:
-  explicit ReleaseAction(CFXDimmer *dimmer) : dimmer_(dimmer) {}
-  void play(const Ts &...x) override {
-    if (this->dimmer_ != nullptr) {
-      this->dimmer_->release();
-    }
-  }
-
- protected:
-  CFXDimmer *dimmer_;
 };
 
 }  // namespace cfx_dimmer

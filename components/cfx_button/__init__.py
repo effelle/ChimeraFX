@@ -36,18 +36,16 @@ CONF_LONG_PRESS = "long_press"
 CONF_RAMP_TIME = "ramp_time"
 CONF_MIN_BRIGHTNESS = "min_brightness"
 CONF_MAX_BRIGHTNESS = "max_brightness"
-CONF_RESTORE_DIRECTION = "restore_direction"
 CONF_SWEEP_TIME = "sweep_time"
 CONF_NATIVE_WHITE = "native_white"
 CONF_PREFERRED_WHITE = "preferred_white"
 CONF_FAVORITE_WHITE = "favorite_white"
-CONF_WARM_WHITE = "warm_white"
-CONF_COOL_WHITE = "cool_white"
 CONF_RESTORE = "restore"
 CONF_CYCLE_TIME = "cycle_time"
+CONF_COLORS = "colors"
+CONF_COLOR_INTERVAL = "color_interval"
 CONF_WHITE = "white"
 CONF_SATURATION = "saturation"
-CONF_RESTORE_HUE = "restore_hue"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_INTERVAL = "effect_interval"
 MIN_BRIGHTNESS_FLOOR = 0.15
@@ -74,6 +72,34 @@ def _effect_list(value):
     if not value:
         raise cv.Invalid("effects must contain at least one effect name")
     return value
+
+
+def _color_list(value):
+    value = cv.ensure_list(_color4)(value)
+    if not value:
+        raise cv.Invalid("colors must contain at least one RGBW color")
+    return value
+
+
+def _validate_hue_mode(config):
+    palette_mode = CONF_COLORS in config
+    if palette_mode and CONF_CYCLE_TIME in config:
+        raise cv.Invalid("cycle_time cannot be used with colors")
+    if palette_mode and CONF_SATURATION in config:
+        raise cv.Invalid("saturation cannot be used with colors")
+    if not palette_mode and CONF_COLOR_INTERVAL in config:
+        raise cv.Invalid("color_interval requires colors")
+    if not palette_mode:
+        config.setdefault(
+            CONF_CYCLE_TIME, cv.positive_time_period_milliseconds("6s")
+        )
+        config.setdefault(CONF_SATURATION, 1.0)
+    else:
+        config.setdefault(
+            CONF_COLOR_INTERVAL,
+            cv.positive_time_period_milliseconds("900ms"),
+        )
+    return config
 
 
 def _validate_brightness_bounds(config):
@@ -113,7 +139,6 @@ DIMMER_SCHEMA = cv.All(
             ): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_MIN_BRIGHTNESS, default="15%"): cv.percentage,
             cv.Optional(CONF_MAX_BRIGHTNESS, default="100%"): cv.percentage,
-            cv.Optional(CONF_RESTORE_DIRECTION, default=False): cv.boolean,
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _validate_brightness_bounds,
@@ -136,38 +161,34 @@ CCT_SWEEPER_SCHEMA = cv.All(
             ): _color4,
             cv.Optional(CONF_PREFERRED_WHITE): _color4,
             cv.Optional(CONF_FAVORITE_WHITE): _color4,
-            cv.Optional(
-                CONF_WARM_WHITE,
-                default=["100%", "55%", "18%", "100%"],
-            ): _color4,
-            cv.Optional(
-                CONF_COOL_WHITE,
-                default=["70%", "85%", "100%", "100%"],
-            ): _color4,
             cv.Optional(CONF_RESTORE, default=False): cv.boolean,
-            cv.Optional(CONF_RESTORE_DIRECTION, default=False): cv.boolean,
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _resolve_preferred_white,
 )
 
-HUE_CYCLER_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(): cv.declare_id(CFXHueCycler),
-        **LIGHTS_SCHEMA,
-        cv.Optional(
-            CONF_LONG_PRESS, default="500ms"
-        ): cv.positive_time_period_milliseconds,
-        cv.Optional(
-            CONF_CYCLE_TIME, default="6s"
-        ): cv.positive_time_period_milliseconds,
-        cv.Optional(
-            CONF_WHITE, default=["100%", "100%", "100%", "100%"]
-        ): _color4,
-        cv.Optional(CONF_SATURATION, default="100%"): cv.percentage,
-        cv.Optional(CONF_RESTORE_HUE, default=False): cv.boolean,
-    }
-).extend(cv.COMPONENT_SCHEMA)
+HUE_CYCLER_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(CFXHueCycler),
+            **LIGHTS_SCHEMA,
+            cv.Optional(
+                CONF_LONG_PRESS, default="500ms"
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_CYCLE_TIME): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_COLORS): _color_list,
+            cv.Optional(
+                CONF_COLOR_INTERVAL
+            ): cv.positive_time_period_milliseconds,
+            cv.Optional(
+                CONF_WHITE, default=["100%", "100%", "100%", "100%"]
+            ): _color4,
+            cv.Optional(CONF_SATURATION): cv.percentage,
+            cv.Optional(CONF_RESTORE, default=False): cv.boolean,
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    _validate_hue_mode,
+)
 
 EFFECT_SELECTOR_SCHEMA = cv.Schema(
     {
@@ -180,6 +201,7 @@ EFFECT_SELECTOR_SCHEMA = cv.Schema(
         cv.Optional(
             CONF_EFFECT_INTERVAL, default="900ms"
         ): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_RESTORE, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -213,7 +235,6 @@ async def _build_dimmer(config):
     cg.add(var.set_ramp_time_ms(config[CONF_RAMP_TIME].total_milliseconds))
     cg.add(var.set_min_brightness(config[CONF_MIN_BRIGHTNESS]))
     cg.add(var.set_max_brightness(config[CONF_MAX_BRIGHTNESS]))
-    cg.add(var.set_restore_direction(config[CONF_RESTORE_DIRECTION]))
     await _add_lights(var, config)
     return var
 
@@ -225,10 +246,7 @@ async def _build_cct_sweeper(config):
     cg.add(var.set_sweep_time_ms(config[CONF_SWEEP_TIME].total_milliseconds))
     cg.add(var.set_native_white(*config[CONF_NATIVE_WHITE]))
     cg.add(var.set_preferred_white(*config[CONF_PREFERRED_WHITE]))
-    cg.add(var.set_warm_white(*config[CONF_WARM_WHITE]))
-    cg.add(var.set_cool_white(*config[CONF_COOL_WHITE]))
     cg.add(var.set_restore(config[CONF_RESTORE]))
-    cg.add(var.set_restore_direction(config[CONF_RESTORE_DIRECTION]))
     await _add_lights(var, config)
     return var
 
@@ -237,10 +255,21 @@ async def _build_hue_cycler(config):
     var = cg.new_Pvariable(config[CONF_ID], config[CONF_ID].id)
     await cg.register_component(var, config)
     cg.add(var.set_long_press_ms(config[CONF_LONG_PRESS].total_milliseconds))
-    cg.add(var.set_cycle_time_ms(config[CONF_CYCLE_TIME].total_milliseconds))
+    if CONF_COLORS in config:
+        cg.add(
+            var.set_color_interval_ms(
+                config[CONF_COLOR_INTERVAL].total_milliseconds
+            )
+        )
+        for color in config[CONF_COLORS]:
+            cg.add(var.add_color(*color))
+    else:
+        cg.add(
+            var.set_cycle_time_ms(config[CONF_CYCLE_TIME].total_milliseconds)
+        )
+        cg.add(var.set_saturation(config[CONF_SATURATION]))
     cg.add(var.set_white(*config[CONF_WHITE]))
-    cg.add(var.set_saturation(config[CONF_SATURATION]))
-    cg.add(var.set_restore_hue(config[CONF_RESTORE_HUE]))
+    cg.add(var.set_restore(config[CONF_RESTORE]))
     await _add_lights(var, config)
     return var
 
@@ -254,6 +283,7 @@ async def _build_effect_selector(config):
             config[CONF_EFFECT_INTERVAL].total_milliseconds
         )
     )
+    cg.add(var.set_restore(config[CONF_RESTORE]))
     await _add_lights(var, config)
     for effect in config[CONF_EFFECTS]:
         cg.add(var.add_effect(effect))

@@ -2,7 +2,6 @@
 
 #include "cfx_cct_policy.h"
 #include "esphome/components/light/light_state.h"
-#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include <string>
@@ -33,14 +32,7 @@ class CFXCCTSweeper : public Component {
   void set_preferred_white(float r, float g, float b, float w) {
     this->preferred_white_ = {r, g, b, w};
   }
-  void set_warm_white(float r, float g, float b, float w) {
-    this->warm_white_ = {r, g, b, w};
-  }
-  void set_cool_white(float r, float g, float b, float w) {
-    this->cool_white_ = {r, g, b, w};
-  }
   void set_restore(bool value) { this->restore_ = value; }
-  void set_restore_direction(bool value) { this->restore_direction_ = value; }
 
   void press();
   void release();
@@ -75,7 +67,6 @@ class CFXCCTSweeper : public Component {
                     uint32_t transition_ms);
   void apply_color_to_all_(const CFXColor &color, uint32_t transition_ms);
   void save_preferred_white_();
-  void save_direction_();
   void log_configured_colors_() const;
   void log_light_state_(light::LightState *state, const char *context) const;
   bool any_target_on_() const;
@@ -92,9 +83,7 @@ class CFXCCTSweeper : public Component {
   std::vector<light::LightState *> lights_;
   std::vector<SweepTarget> sweep_targets_;
   std::string id_;
-  ESPPreferenceObject direction_pref_{};
   ESPPreferenceObject preferred_white_pref_{};
-  bool direction_pref_ready_{false};
   bool preferred_white_pref_ready_{false};
   uint32_t long_press_ms_{500};
   uint32_t sweep_time_ms_{4000};
@@ -104,10 +93,9 @@ class CFXCCTSweeper : public Component {
   CFXColor active_sweep_target_{1.0f, 0.55f, 0.18f, 1.0f};
   CFXColor native_white_{0.0f, 0.0f, 0.0f, 1.0f};
   CFXColor preferred_white_{1.0f, 1.0f, 1.0f, 1.0f};
-  CFXColor warm_white_{1.0f, 0.55f, 0.18f, 1.0f};
-  CFXColor cool_white_{0.70f, 0.85f, 1.0f, 1.0f};
+  const CFXColor warm_white_{1.0f, 0.55f, 0.18f, 1.0f};
+  const CFXColor cool_white_{0.70f, 0.85f, 1.0f, 1.0f};
   bool restore_{false};
-  bool restore_direction_{false};
   bool next_direction_warmer_{true};
   bool first_sweep_after_boot_{true};
   bool gesture_began_on_{false};
@@ -119,32 +107,6 @@ class CFXCCTSweeper : public Component {
   bool sweep_direction_warmer_{true};
   CCTEndpoint last_endpoint_{CCTEndpoint::PREFERRED};
   uint32_t press_started_ms_{0};
-};
-
-template<typename... Ts> class PressAction : public ::esphome::Action<Ts...> {
- public:
-  explicit PressAction(CFXCCTSweeper *sweeper) : sweeper_(sweeper) {}
-  void play(const Ts &...x) override {
-    if (this->sweeper_ != nullptr) {
-      this->sweeper_->press();
-    }
-  }
-
- protected:
-  CFXCCTSweeper *sweeper_;
-};
-
-template<typename... Ts> class ReleaseAction : public ::esphome::Action<Ts...> {
- public:
-  explicit ReleaseAction(CFXCCTSweeper *sweeper) : sweeper_(sweeper) {}
-  void play(const Ts &...x) override {
-    if (this->sweeper_ != nullptr) {
-      this->sweeper_->release();
-    }
-  }
-
- protected:
-  CFXCCTSweeper *sweeper_;
 };
 
 }  // namespace cfx_cct_sweeper

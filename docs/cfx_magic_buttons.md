@@ -1,7 +1,7 @@
 # ChimeraFX Magic Buttons
 
 ChimeraFX magic buttons are small on-device helpers for physical buttons. They
-do not create Home Assistant entities. The recommended `cfx_button` wrapper
+do not create Home Assistant entities. The `cfx_button` platform
 binds an existing ESPHome `binary_sensor` to one ChimeraFX controller:
 
 ```yaml
@@ -62,7 +62,6 @@ cfx_button:
 | `ramp_time` | `2s` | Time to ramp from minimum to maximum brightness. |
 | `min_brightness` | `15%` | Lowest brightness used by the ramp. Values below 15% are rejected. |
 | `max_brightness` | `100%` | Highest brightness used by the ramp. |
-| `restore_direction` | `false` | Persist the next ramp direction across reboot. |
 
 Brightness changes use ESPHome light transitions, preserve the currently
 selected ChimeraFX effect, and stop sending updates when the ramp reaches the
@@ -121,10 +120,7 @@ cfx_button:
 | `sweep_time` | `4s` | Time to sweep from warm to cool white. |
 | `native_white` | `[0%, 0%, 0%, 100%]` | Immutable native white-channel endpoint as `[red, green, blue, white]`. |
 | `preferred_white` | `[100%, 100%, 100%, 100%]` | Boot/default preferred white as `[red, green, blue, white]`. A long press updates it at runtime. |
-| `warm_white` | `[100%, 55%, 18%, 100%]` | Warm sweep endpoint as `[red, green, blue, white]`. |
-| `cool_white` | `[70%, 85%, 100%, 100%]` | Cool sweep endpoint as `[red, green, blue, white]`. |
 | `restore` | `false` | Restore the last preferred white selected by long press after reboot. |
-| `restore_direction` | `false` | Persist the next sweep direction across reboot. |
 
 The legacy `favorite_white` option remains accepted as an alias for
 `preferred_white`, but the two names cannot be configured together.
@@ -141,8 +137,8 @@ white endpoint selected by this helper; later short presses alternate between
 `native_white` and `preferred_white`.
 
 A long press that begins while all targets are off is ignored. The first valid
-sweep after boot moves toward `warm_white`; later long presses alternate
-between warm and cool. Releasing the button freezes one shared white value
+sweep after boot moves toward the built-in warm limit; later long presses
+alternate between the internal warm and cool limits. Releasing the button freezes one shared white value
 across all targets and makes it the new `preferred_white`. With `restore:
 false`, reboot returns to the YAML value. With `restore: true`, the learned
 value survives reboot.
@@ -152,9 +148,10 @@ timeline so ESPHome transition sampling cannot jump the output to a stale color.
 
 ## Hue Cycler
 
-`cfx_hue_cycler` controls RGB color. A short press toggles one or more lights
-between the previous solid RGB color and a standard white. A long press cycles
-hue around the color wheel, and release locks the current color.
+`cfx_hue_cycler` controls RGBW color. A short press toggles one or more lights
+between the previous solid color and a standard white. Without `colors`, a
+long press cycles around the hue wheel. With `colors`, it steps through only
+the configured palette. Release keeps the color currently shown.
 
 The default boot/start hue is cyan-blue (`0%, 62%, 100%`) so it does not
 conflict with red error signaling.
@@ -180,9 +177,30 @@ cfx_button:
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before hue cycling starts. |
 | `cycle_time` | `6s` | Time for one full hue loop. |
+| `colors` | unset | Optional list of RGBW colors. Enables palette mode and cannot be combined with `cycle_time` or `saturation`. |
+| `color_interval` | `900ms` | Time between palette entries while held. Valid only with `colors`. |
 | `white` | `[100%, 100%, 100%, 100%]` | Short-press white color as `[red, green, blue, white]`. |
 | `saturation` | `100%` | Hue-cycle saturation. Lower values cycle pastel colors. |
-| `restore_hue` | `false` | Persist the last locked hue across reboot. |
+| `restore` | `false` | Restore the last locked hue or palette entry after reboot. |
+
+Palette mode uses the same RGBW format on every strip. RGB-only lights ignore
+the white entry. The first palette entry is selected when long press activates;
+later entries follow at `color_interval` and wrap to the beginning.
+
+```yaml
+cfx_button:
+  - button: game_room_rgb_button
+    hue_cycler:
+      lights:
+        - monitor_backlight
+        - desk_underglow
+      colors:
+        - [100%, 0%, 0%, 0%]
+        - [0%, 60%, 100%, 0%]
+        - [35%, 0%, 100%, 20%]
+      color_interval: 700ms
+      restore: true
+```
 
 Hue actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
@@ -225,27 +243,13 @@ cfx_button:
 | `effects` | required | One or more effect names to cycle through. Names must match the target light effect names. |
 | `long_press` | `500ms` | Press duration before effect selection starts. |
 | `effect_interval` | `900ms` | Time between effect changes while the button remains held. |
+| `restore` | `false` | Restore the last selected effect after reboot. |
 
 Short press on uses the last selected effect, starting with the first configured
 effect after boot. Long press starts from the currently active configured effect
 when possible, then advances to the next effect immediately. If the lights are
-off, it first restores the last effect selected during the current runtime and
-then continues cycling while held. The runtime selection resets after reboot.
+off, it first restores the last selected effect and then continues cycling
+while held. With `restore: true`, that selection survives reboot.
 
-## Direct Action Compatibility
-
-Existing `press` and `release` actions remain supported for configurations that
-need manual automation wiring:
-
-```yaml
-binary_sensor:
-  - platform: gpio
-    pin: GPIO05
-    on_press:
-      - cfx_dimmer.press: desk_lamp_dimmer
-    on_release:
-      - cfx_dimmer.release: desk_lamp_dimmer
-```
-
-Do not bind both `cfx_button` and direct actions to the same binary sensor and
-controller pair.
+`cfx_button` is the only supported configuration interface. Standalone helper
+declarations and direct `press`/`release` actions are not available.
