@@ -205,6 +205,10 @@ cfx_button:
 Hue actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
 
+When used beside `cfx_cct_sweeper` on an RGBW light, CCT output is treated as
+white mode. Pressing the hue button restores the last real RGB selection (or
+the configured/default hue) instead of saving and restoring the CCT white mix.
+
 While cycling, the helper locks the release color from its own commanded hue
 timeline so ESPHome transition sampling cannot jump the output to a stale color.
 

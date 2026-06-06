@@ -100,7 +100,10 @@ void CFXHueCycler::start_cycle_(uint32_t now) {
   this->cycling_ = true;
   this->suppress_toggle_ = true;
   if (this->colors_.empty() && !this->restore_ && !this->lights_.empty()) {
-    this->base_hue_ = this->remote_hue_(this->lights_[0]);
+    const CFXColor current = this->remote_color_(this->lights_[0]);
+    if (!this->is_white_output_(current)) {
+      this->base_hue_ = this->remote_hue_(this->lights_[0]);
+    }
   }
   this->cycle_started_ms_ = now;
   this->last_cycle_update_ms_ = 0;
@@ -165,8 +168,14 @@ void CFXHueCycler::freeze_cycle_() {
   if (this->colors_.empty()) {
     this->base_hue_ = this->last_cycle_hue_;
   }
+  if (this->saved_colors_.size() < this->lights_.size()) {
+    this->saved_colors_.resize(this->lights_.size());
+  }
   this->save_selection_();
-  for (auto *state : this->lights_) {
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    this->saved_colors_[i].valid = true;
+    this->saved_colors_[i].color = this->last_cycle_color_;
+    auto *state = this->lights_[i];
     this->apply_color_(state, this->last_cycle_color_, 0);
   }
   this->cycling_ = false;
@@ -197,13 +206,18 @@ void CFXHueCycler::save_current_colors_() {
     if (state == nullptr || !state->remote_values.is_on()) {
       continue;
     }
+    const CFXColor current = this->remote_color_(state);
+    if (this->is_white_output_(current)) {
+      continue;
+    }
     this->saved_colors_[i].valid = true;
-    this->saved_colors_[i].color = this->remote_color_(state);
+    this->saved_colors_[i].color = current;
   }
 }
 
 void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) {
-  if (index < this->saved_colors_.size() && this->saved_colors_[index].valid) {
+  if (index < this->saved_colors_.size() && this->saved_colors_[index].valid &&
+      !this->is_white_output_(this->saved_colors_[index].color)) {
     this->apply_color_(state, this->saved_colors_[index].color, 150);
     return;
   }
@@ -259,8 +273,28 @@ bool CFXHueCycler::matches_white_(light::LightState *state) const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
   }
-  return this->color_distance_(this->remote_color_(state),
-                               this->white_) <= WHITE_MATCH_TOLERANCE;
+  return this->is_white_output_(this->remote_color_(state));
+}
+
+bool CFXHueCycler::is_white_output_(const CFXColor &color) const {
+  if (this->is_known_hue_color_(color)) {
+    return false;
+  }
+  return color.white > WHITE_MATCH_TOLERANCE ||
+         this->color_distance_(color, this->white_) <= WHITE_MATCH_TOLERANCE;
+}
+
+bool CFXHueCycler::is_known_hue_color_(const CFXColor &color) const {
+  if (this->color_distance_(color, this->last_cycle_color_) <=
+      WHITE_MATCH_TOLERANCE) {
+    return true;
+  }
+  for (const auto &configured : this->colors_) {
+    if (this->color_distance_(color, configured) <= WHITE_MATCH_TOLERANCE) {
+      return true;
+    }
+  }
+  return false;
 }
 
 CFXColor CFXHueCycler::remote_color_(light::LightState *state) const {
