@@ -42,5 +42,10 @@ constexpr bool select_sweep_direction_warmer(
   return first_sweep_after_boot || alternating_direction_warmer;
 }
 
+constexpr bool use_white_only_mode(float red, float green, float blue,
+                                   float white) {
+  return red == 0.0f && green == 0.0f && blue == 0.0f && white > 0.0f;
+}
+
 }  // namespace cfx_cct_sweeper
 }  // namespace esphome

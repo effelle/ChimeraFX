@@ -128,6 +128,9 @@ cfx_button:
 
 The legacy `favorite_white` option remains accepted as an alias for
 `preferred_white`, but the two names cannot be configured together.
+White-only endpoints such as the default `native_white` use ESPHome's native
+white color mode, keeping the RGB emitters off instead of normalizing them to
+full output.
 
 A short press from the initial off state turns the targets on at
 `preferred_white`. After another controller or Home Assistant has turned the

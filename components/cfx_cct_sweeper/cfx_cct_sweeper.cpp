@@ -241,7 +241,12 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   call.set_transition_length(transition_ms);
   call.set_state(true);
   call.set_effect("None");
-  if (state->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {
+  if (use_white_only_mode(c.red, c.green, c.blue, c.white) &&
+      state->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+    call.set_color_mode(light::ColorMode::WHITE);
+    call.set_white(c.white);
+  } else if (state->get_traits().supports_color_mode(
+                 light::ColorMode::RGB_WHITE)) {
     call.set_color_mode(light::ColorMode::RGB_WHITE);
     call.set_rgb(c.red, c.green, c.blue);
     call.set_white(c.white);
@@ -346,6 +351,9 @@ CFXColor CFXCCTSweeper::sweep_start_color_(light::LightState *state) const {
 CFXColor CFXCCTSweeper::remote_color_(light::LightState *state) const {
   if (state == nullptr) {
     return this->preferred_white_;
+  }
+  if (state->remote_values.get_color_mode() == light::ColorMode::WHITE) {
+    return {0.0f, 0.0f, 0.0f, state->remote_values.get_white()};
   }
   return {state->remote_values.get_red(), state->remote_values.get_green(),
           state->remote_values.get_blue(), state->remote_values.get_white()};
