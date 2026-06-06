@@ -12,6 +12,7 @@
 
 #include "../cfx_effect/cfx_utils.h"
 #include "cfx_light.h"
+#include "cfx_light_color.h"
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/select/select.h"
 #include "esphome/core/component.h"
@@ -111,7 +112,7 @@ public:
     float bri = val.get_brightness() * val.get_state();
     if (state->is_transformer_active() && bri > 0.0f)
       return;
-    Color c = light::color_from_light_color_values(val);
+    Color c = mode_aware_color(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
@@ -190,7 +191,7 @@ public:
     auto val = state->current_values;
     float bri = val.get_brightness() * val.get_state();
 
-    Color c = light::color_from_light_color_values(val);
+    Color c = mode_aware_color(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);

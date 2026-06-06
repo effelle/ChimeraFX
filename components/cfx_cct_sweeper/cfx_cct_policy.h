@@ -47,5 +47,12 @@ constexpr bool use_white_only_mode(float red, float green, float blue,
   return red == 0.0f && green == 0.0f && blue == 0.0f && white > 0.0f;
 }
 
+constexpr uint32_t cct_transition_ms(bool white_only,
+                                     uint32_t requested_transition_ms) {
+  // ESPHome's addressable transition snapshots inactive RGB values even in
+  // WHITE mode. Apply white-only endpoints immediately so RGB stays dark.
+  return white_only ? 0 : requested_transition_ms;
+}
+
 }  // namespace cfx_cct_sweeper
 }  // namespace esphome

@@ -299,6 +299,8 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   const bool white_only =
       use_white_only_mode(c.red, c.green, c.blue, c.white) &&
       state->get_traits().supports_color_mode(light::ColorMode::WHITE);
+  const uint32_t effective_transition_ms =
+      cct_transition_ms(white_only, transition_ms);
   const light::ColorMode command_mode =
       white_only ? light::ColorMode::WHITE
                  : (state->get_traits().supports_color_mode(
@@ -313,10 +315,10 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
            "RGBW=%.3f/%.3f/%.3f/%.3f",
            this->id_.c_str(), state->get_name().c_str(),
            color_mode_name(command_mode),
-           static_cast<unsigned>(command_mode), transition_ms, c.red, c.green,
-           c.blue, c.white);
+           static_cast<unsigned>(command_mode), effective_transition_ms, c.red,
+           c.green, c.blue, c.white);
   auto call = state->make_call();
-  call.set_transition_length(transition_ms);
+  call.set_transition_length(effective_transition_ms);
   call.set_state(true);
   call.set_effect("None");
   if (white_only) {
