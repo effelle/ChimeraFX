@@ -296,6 +296,7 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
     return;
   }
   const CFXColor c = this->clamp_color_(color);
+  const CCTRGBCommand rgb = split_cct_rgb(c.red, c.green, c.blue);
   const bool white_only =
       use_white_only_mode(c.red, c.green, c.blue, c.white) &&
       state->get_traits().supports_color_mode(light::ColorMode::WHITE);
@@ -312,11 +313,11 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
                                : light::ColorMode::WHITE));
   ESP_LOGD(TAG,
            "[%s] command light='%s' mode=%s(%u) transition=%ums "
-           "RGBW=%.3f/%.3f/%.3f/%.3f",
+           "RGBW=%.3f/%.3f/%.3f/%.3f color_brightness=%.3f",
            this->id_.c_str(), state->get_name().c_str(),
            color_mode_name(command_mode),
            static_cast<unsigned>(command_mode), effective_transition_ms, c.red,
-           c.green, c.blue, c.white);
+           c.green, c.blue, c.white, rgb.color_brightness);
   auto call = state->make_call();
   call.set_transition_length(effective_transition_ms);
   call.set_state(true);
@@ -327,11 +328,13 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   } else if (state->get_traits().supports_color_mode(
                  light::ColorMode::RGB_WHITE)) {
     call.set_color_mode(light::ColorMode::RGB_WHITE);
-    call.set_rgb(c.red, c.green, c.blue);
+    call.set_color_brightness(rgb.color_brightness);
+    call.set_rgb(rgb.red, rgb.green, rgb.blue);
     call.set_white(c.white);
   } else if (state->get_traits().supports_color_mode(light::ColorMode::RGB)) {
     call.set_color_mode(light::ColorMode::RGB);
-    call.set_rgb(c.red, c.green, c.blue);
+    call.set_color_brightness(rgb.color_brightness);
+    call.set_rgb(rgb.red, rgb.green, rgb.blue);
   } else if (state->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
     call.set_color_mode(light::ColorMode::WHITE);
     call.set_white(std::max({c.red, c.green, c.blue, c.white}));
@@ -464,8 +467,12 @@ CFXColor CFXCCTSweeper::remote_color_(light::LightState *state) const {
   if (state->remote_values.get_color_mode() == light::ColorMode::WHITE) {
     return {0.0f, 0.0f, 0.0f, state->remote_values.get_white()};
   }
-  return {state->remote_values.get_red(), state->remote_values.get_green(),
-          state->remote_values.get_blue(), state->remote_values.get_white()};
+  const float color_brightness =
+      state->remote_values.get_color_brightness();
+  return {color_brightness * state->remote_values.get_red(),
+          color_brightness * state->remote_values.get_green(),
+          color_brightness * state->remote_values.get_blue(),
+          state->remote_values.get_white()};
 }
 
 CFXColor CFXCCTSweeper::sweep_target_() const {

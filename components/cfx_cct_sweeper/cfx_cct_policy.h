@@ -17,6 +17,22 @@ enum class CCTShortPressAction : uint8_t {
   APPLY_PREFERRED,
 };
 
+struct CCTRGBCommand {
+  float color_brightness;
+  float red;
+  float green;
+  float blue;
+};
+
+constexpr CCTRGBCommand split_cct_rgb(float red, float green, float blue) {
+  const float max_rg = red > green ? red : green;
+  const float maximum = max_rg > blue ? max_rg : blue;
+  if (maximum <= 0.0f) {
+    return {0.0f, 1.0f, 1.0f, 1.0f};
+  }
+  return {maximum, red / maximum, green / maximum, blue / maximum};
+}
+
 constexpr CCTShortPressAction select_cct_short_press_action(
     bool any_on, bool has_retained_state, CCTEndpoint current_endpoint,
     CCTEndpoint last_endpoint) {
