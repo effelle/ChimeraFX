@@ -66,6 +66,7 @@ class CFXHueCycler : public Component {
   bool matches_white_(light::LightState *state) const;
   bool is_white_output_(const CFXColor &color) const;
   bool is_known_hue_color_(const CFXColor &color) const;
+  CFXColor fallback_color_() const;
   CFXColor remote_color_(light::LightState *state) const;
   CFXColor color_from_hue_(float hue) const;
   CFXColor clamp_color_(const CFXColor &color) const;

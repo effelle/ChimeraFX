@@ -208,6 +208,9 @@ helper replaces it with the selected solid output.
 When used beside `cfx_cct_sweeper` on an RGBW light, CCT output is treated as
 white mode. Pressing the hue button restores the last real RGB selection (or
 the configured/default hue) instead of saving and restoring the CCT white mix.
+If the palette contains the configured standard white, color restore skips that
+entry and selects the next color entry. Repeated input edges are suppressed
+until the button has remained quiet for 350 ms.
 
 While cycling, the helper locks the release color from its own commanded hue
 timeline so ESPHome transition sampling cannot jump the output to a stale color.

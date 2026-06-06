@@ -48,6 +48,7 @@ void CFXHueCycler::press() {
   }
   const uint32_t now = millis();
   if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+    this->ignore_press_until_ms_ = now + POST_CYCLE_GUARD_MS;
     return;
   }
   this->pressed_ = true;
@@ -59,14 +60,15 @@ void CFXHueCycler::press() {
 }
 
 void CFXHueCycler::release() {
+  const uint32_t now = millis();
   if (!this->pressed_) {
+    if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+      this->ignore_press_until_ms_ = now + POST_CYCLE_GUARD_MS;
+    }
     return;
   }
   if (this->cycling_) {
     this->freeze_cycle_();
-  }
-  if (this->suppress_toggle_) {
-    this->ignore_press_until_ms_ = millis() + POST_CYCLE_GUARD_MS;
   }
   const bool should_toggle = !this->suppress_toggle_ && !this->cycling_;
   this->pressed_ = false;
@@ -78,6 +80,7 @@ void CFXHueCycler::release() {
   if (should_toggle) {
     this->toggle_white_();
   }
+  this->ignore_press_until_ms_ = millis() + POST_CYCLE_GUARD_MS;
 }
 
 void CFXHueCycler::loop() {
@@ -221,10 +224,11 @@ void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) 
     this->apply_color_(state, this->saved_colors_[index].color, 150);
     return;
   }
-  const CFXColor fallback =
-      !this->colors_.empty() && this->active_color_known_
-          ? this->colors_[this->active_color_index_]
-          : this->color_from_hue_(this->base_hue_);
+  const CFXColor fallback = this->fallback_color_();
+  if (index < this->saved_colors_.size()) {
+    this->saved_colors_[index].valid = true;
+    this->saved_colors_[index].color = fallback;
+  }
   this->apply_color_(state, fallback, 150);
 }
 
@@ -277,11 +281,13 @@ bool CFXHueCycler::matches_white_(light::LightState *state) const {
 }
 
 bool CFXHueCycler::is_white_output_(const CFXColor &color) const {
+  if (this->color_distance_(color, this->white_) <= WHITE_MATCH_TOLERANCE) {
+    return true;
+  }
   if (this->is_known_hue_color_(color)) {
     return false;
   }
-  return color.white > WHITE_MATCH_TOLERANCE ||
-         this->color_distance_(color, this->white_) <= WHITE_MATCH_TOLERANCE;
+  return color.white > WHITE_MATCH_TOLERANCE;
 }
 
 bool CFXHueCycler::is_known_hue_color_(const CFXColor &color) const {
@@ -295,6 +301,20 @@ bool CFXHueCycler::is_known_hue_color_(const CFXColor &color) const {
     }
   }
   return false;
+}
+
+CFXColor CFXHueCycler::fallback_color_() const {
+  if (!this->colors_.empty()) {
+    const size_t start =
+        this->active_color_known_ ? this->active_color_index_ : 0;
+    for (size_t offset = 0; offset < this->colors_.size(); offset++) {
+      const size_t index = (start + offset) % this->colors_.size();
+      if (!this->is_white_output_(this->colors_[index])) {
+        return this->colors_[index];
+      }
+    }
+  }
+  return this->color_from_hue_(this->base_hue_);
 }
 
 CFXColor CFXHueCycler::remote_color_(light::LightState *state) const {
