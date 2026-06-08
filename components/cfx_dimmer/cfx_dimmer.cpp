@@ -31,6 +31,7 @@ void CFXDimmer::press() {
 
 void CFXDimmer::add_light(light::LightState *state) {
   this->lights_.push_back(state);
+  this->saved_states_.emplace_back();
 }
 
 void CFXDimmer::release() {
@@ -197,20 +198,45 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
 }
 
 void CFXDimmer::turn_on_targets_() {
-  for (auto *state : this->lights_) {
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *state = this->lights_[i];
     if (state == nullptr) {
       continue;
     }
     auto call = state->make_call();
-    call.set_state(true);
+    if (i >= this->saved_states_.size() ||
+        !this->saved_states_[i].valid) {
+      call.set_state(true);
+      call.perform();
+      continue;
+    }
+
+    const auto &saved = this->saved_states_[i];
+    if (saved.effect.empty()) {
+      call.set_effect("None");
+      call.from_light_color_values(saved.values);
+      call.set_state(true);
+    } else {
+      call.set_state(true);
+      call.set_brightness_if_supported(saved.values.get_brightness());
+      call.set_effect(saved.effect);
+    }
     call.perform();
   }
 }
 
 void CFXDimmer::turn_off_targets_() {
-  for (auto *state : this->lights_) {
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *state = this->lights_[i];
     if (state == nullptr) {
       continue;
+    }
+    if (state->remote_values.is_on() && i < this->saved_states_.size()) {
+      auto &saved = this->saved_states_[i];
+      saved.values = state->remote_values;
+      const std::string effect = state->get_effect_name();
+      saved.effect = effect != "None" ? effect : "";
+      saved.valid = true;
     }
     auto call = state->make_call();
     call.set_state(false);

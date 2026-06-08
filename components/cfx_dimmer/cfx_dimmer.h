@@ -24,6 +24,12 @@ class CFXDimmer : public Component {
   void release();
 
  protected:
+  struct SavedState {
+    light::LightColorValues values{};
+    std::string effect{};
+    bool valid{false};
+  };
+
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
@@ -47,6 +53,7 @@ class CFXDimmer : public Component {
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
+  std::vector<SavedState> saved_states_;
   std::string id_;
   uint32_t long_press_ms_{500};
   uint32_t ramp_time_ms_{2000};
