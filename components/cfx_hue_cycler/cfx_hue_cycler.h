@@ -4,6 +4,7 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,7 @@ class CFXHueCycler : public Component {
   static constexpr uint32_t HUE_UPDATE_INTERVAL_MS = 120;
   static constexpr uint32_t HUE_TRANSITION_MS = 180;
   static constexpr uint32_t POST_CYCLE_GUARD_MS = 350;
+  static constexpr uint32_t USE_DEFAULT_TRANSITION = UINT32_MAX;
   static constexpr float COLOR_MATCH_TOLERANCE = 0.04f;
 
   void start_cycle_(uint32_t now);

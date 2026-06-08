@@ -54,6 +54,7 @@ class CFXCCTSweeper : public Component {
 
   static constexpr uint32_t MIN_SWEEP_TRANSITION_MS = 50;
   static constexpr uint32_t POST_SWEEP_GUARD_MS = 350;
+  static constexpr uint32_t USE_DEFAULT_TRANSITION = UINT32_MAX;
   static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
   static constexpr uint32_t PREFERRED_WHITE_VERSION = 1;
 

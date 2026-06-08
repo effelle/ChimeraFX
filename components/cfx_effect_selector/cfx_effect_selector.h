@@ -38,7 +38,8 @@ class CFXEffectSelector : public Component {
   void apply_effect_(const std::string &effect);
   void toggle_targets_();
   void begin_dispatch_(bool set_state, bool state_value, bool set_effect,
-                       const std::string &effect, bool transition_off);
+                       const std::string &effect,
+                       bool use_default_transition);
   bool service_dispatch_(uint32_t now);
   void perform_dispatch_call_(light::LightState *state);
   bool any_target_on_() const;
@@ -63,7 +64,7 @@ class CFXEffectSelector : public Component {
   bool dispatch_set_state_{false};
   bool dispatch_state_value_{false};
   bool dispatch_set_effect_{false};
-  bool dispatch_transition_off_{false};
+  bool dispatch_use_default_transition_{false};
   size_t dispatch_index_{0};
   uint32_t dispatch_next_ms_{0};
   std::string dispatch_effect_;

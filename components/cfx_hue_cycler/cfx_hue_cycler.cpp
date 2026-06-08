@@ -186,7 +186,7 @@ void CFXHueCycler::toggle_fixed_color_() {
     if (output == ShortPressOutput::SELECTED_HUE) {
       this->restore_saved_color_(i, state);
     } else {
-      this->apply_color_(state, this->fixed_color_, 150);
+      this->apply_color_(state, this->fixed_color_, USE_DEFAULT_TRANSITION);
     }
   }
 }
@@ -194,7 +194,8 @@ void CFXHueCycler::toggle_fixed_color_() {
 void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) {
   if (index < this->saved_colors_.size() &&
       this->saved_colors_[index].valid) {
-    this->apply_color_(state, this->saved_colors_[index].color, 150);
+    this->apply_color_(state, this->saved_colors_[index].color,
+                       USE_DEFAULT_TRANSITION);
     return;
   }
   const CFXColor fallback = this->fallback_color_();
@@ -202,7 +203,7 @@ void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) 
     this->saved_colors_[index].valid = true;
     this->saved_colors_[index].color = fallback;
   }
-  this->apply_color_(state, fallback, 150);
+  this->apply_color_(state, fallback, USE_DEFAULT_TRANSITION);
 }
 
 void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
@@ -214,7 +215,9 @@ void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
   const float color_brightness = std::max({c.red, c.green, c.blue});
   const float divisor = color_brightness > 0.0f ? color_brightness : 1.0f;
   auto call = state->make_call();
-  call.set_transition_length(transition_ms);
+  if (transition_ms != USE_DEFAULT_TRANSITION) {
+    call.set_transition_length(transition_ms);
+  }
   call.set_state(true);
   call.set_effect("None");
   if (state->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE)) {

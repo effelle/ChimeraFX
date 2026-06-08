@@ -202,7 +202,6 @@ void CFXDimmer::turn_on_targets_() {
       continue;
     }
     auto call = state->make_call();
-    call.set_transition_length(0);
     call.set_state(true);
     call.perform();
   }
@@ -214,7 +213,6 @@ void CFXDimmer::turn_off_targets_() {
       continue;
     }
     auto call = state->make_call();
-    call.set_transition_length(0);
     call.set_state(false);
     call.perform();
   }

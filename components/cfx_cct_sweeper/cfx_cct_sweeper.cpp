@@ -67,7 +67,7 @@ void CFXCCTSweeper::setup() {
       this->preferred_white_ =
           this->clamp_color_({restored.red, restored.green, restored.blue,
                               restored.white});
-      ESP_LOGD(TAG,
+      ESP_LOGV(TAG,
                "[%s] restored preferred RGBW=%.3f/%.3f/%.3f/%.3f",
                this->id_.c_str(), this->preferred_white_.red,
                this->preferred_white_.green, this->preferred_white_.blue,
@@ -241,7 +241,7 @@ void CFXCCTSweeper::handle_short_press_() {
   const CCTShortPressAction action = select_cct_short_press_action(
       this->any_target_on_(), this->has_retained_state_,
       current_endpoint, this->last_endpoint_);
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "[%s] short decision current=%s(%u) last=%s(%u) retained=%s "
            "action=%s(%u)",
            this->id_.c_str(), endpoint_name(current_endpoint),
@@ -255,12 +255,12 @@ void CFXCCTSweeper::handle_short_press_() {
     return;
   }
   if (action == CCTShortPressAction::APPLY_NATIVE) {
-    this->apply_color_to_all_(this->native_white_, 150);
+    this->apply_color_to_all_(this->native_white_, USE_DEFAULT_TRANSITION);
     this->last_endpoint_ = CCTEndpoint::NATIVE;
     this->has_retained_state_ = true;
     return;
   }
-  this->apply_color_to_all_(this->preferred_white_, 150);
+  this->apply_color_to_all_(this->preferred_white_, USE_DEFAULT_TRANSITION);
   this->last_endpoint_ = CCTEndpoint::PREFERRED;
   this->has_retained_state_ = true;
 }
@@ -271,7 +271,6 @@ void CFXCCTSweeper::restore_retained_state_() {
       continue;
     }
     auto call = state->make_call();
-    call.set_transition_length(0);
     call.set_state(true);
     call.perform();
   }
@@ -288,8 +287,10 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   const bool white_only =
       use_white_only_mode(c.red, c.green, c.blue, c.white) &&
       state->get_traits().supports_color_mode(light::ColorMode::WHITE);
+  const bool use_default_transition =
+      transition_ms == USE_DEFAULT_TRANSITION;
   const uint32_t effective_transition_ms =
-      cct_transition_ms(white_only, transition_ms);
+      use_default_transition ? 0 : cct_transition_ms(white_only, transition_ms);
   const light::ColorMode command_mode =
       white_only ? light::ColorMode::WHITE
                  : (state->get_traits().supports_color_mode(
@@ -299,7 +300,7 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
                                light::ColorMode::RGB)
                                ? light::ColorMode::RGB
                                : light::ColorMode::WHITE));
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "[%s] command light='%s' mode=%s(%u) transition=%ums "
            "RGBW=%.3f/%.3f/%.3f/%.3f color_brightness=%.3f",
            this->id_.c_str(), state->get_name().c_str(),
@@ -307,7 +308,9 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
            static_cast<unsigned>(command_mode), effective_transition_ms, c.red,
            c.green, c.blue, c.white, rgb.color_brightness);
   auto call = state->make_call();
-  call.set_transition_length(effective_transition_ms);
+  if (!use_default_transition) {
+    call.set_transition_length(effective_transition_ms);
+  }
   call.set_state(true);
   call.set_effect("None");
   if (white_only) {
@@ -350,7 +353,7 @@ void CFXCCTSweeper::save_preferred_white_() {
 }
 
 void CFXCCTSweeper::log_configured_colors_() const {
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "[%s] configured native RGBW=%.3f/%.3f/%.3f/%.3f "
            "preferred RGBW=%.3f/%.3f/%.3f/%.3f restore=%s",
            this->id_.c_str(), this->native_white_.red, this->native_white_.green,
@@ -363,11 +366,11 @@ void CFXCCTSweeper::log_configured_colors_() const {
 void CFXCCTSweeper::log_light_state_(light::LightState *state,
                                      const char *context) const {
   if (state == nullptr) {
-    ESP_LOGD(TAG, "[%s] %s light=<null>", this->id_.c_str(), context);
+    ESP_LOGV(TAG, "[%s] %s light=<null>", this->id_.c_str(), context);
     return;
   }
   const auto &values = state->remote_values;
-  ESP_LOGD(TAG,
+  ESP_LOGV(TAG,
            "[%s] %s light='%s' on=%s mode=%s(%u) brightness=%.3f "
            "color_brightness=%.3f RGBW=%.3f/%.3f/%.3f/%.3f effect='%s'",
            this->id_.c_str(), context, state->get_name().c_str(),

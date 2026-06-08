@@ -144,19 +144,19 @@ void CFXEffectSelector::toggle_targets_() {
   if (set_effect) {
     this->active_index_known_ = true;
   }
-  this->begin_dispatch_(true, !turn_off, set_effect, effect, turn_off);
+  this->begin_dispatch_(true, !turn_off, set_effect, effect, true);
 }
 
 void CFXEffectSelector::begin_dispatch_(bool set_state, bool state_value,
                                         bool set_effect,
                                         const std::string &effect,
-                                        bool transition_off) {
+                                        bool use_default_transition) {
   this->dispatch_active_ = false;
   this->dispatch_set_state_ = set_state;
   this->dispatch_state_value_ = state_value;
   this->dispatch_set_effect_ = set_effect;
   this->dispatch_effect_ = effect;
-  this->dispatch_transition_off_ = transition_off;
+  this->dispatch_use_default_transition_ = use_default_transition;
   this->dispatch_index_ = 0;
   this->dispatch_next_ms_ = millis();
 
@@ -205,7 +205,7 @@ void CFXEffectSelector::perform_dispatch_call_(light::LightState *state) {
   if (this->dispatch_set_state_) {
     call.set_state(this->dispatch_state_value_);
   }
-  if (this->dispatch_transition_off_) {
+  if (!this->dispatch_use_default_transition_) {
     call.set_transition_length(0);
   }
   if (this->dispatch_set_effect_) {

@@ -31,6 +31,13 @@ button that is already `ON` during startup is ignored until released, preventing
 an accidental gesture after reboot. Controller timing and short/long behavior
 remain configured inside the selected controller block.
 
+Every short-press light command respects the target light's
+`default_transition_length`. Long-press dimming, CCT sweeping, hue cycling, and
+effect browsing keep their own configured timing. Effects with authored power
+choreography, including architectural and signature effects with embedded
+intros, continue to ignore the default transition through ChimeraFX's existing
+effect eligibility rules.
+
 ## Button Dimmer
 
 `cfx_dimmer` controls brightness. A short press toggles one or more lights. A
