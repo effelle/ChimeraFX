@@ -150,7 +150,9 @@ sweep after boot moves toward the built-in warm limit; later long presses
 alternate between the internal warm and cool limits. Releasing the button freezes one shared white value
 across all targets and makes it the new `preferred_white`. With `restore:
 false`, reboot returns to the YAML value. With `restore: true`, the learned
-value survives reboot.
+value survives reboot. When a sweep begins from `native_white`, the helper first
+enters the stored `preferred_white` RGBW domain so the warm/cool movement is
+visible immediately; `native_white` itself remains immutable.
 
 While sweeping, the helper locks the release color from its own commanded sweep
 timeline so ESPHome transition sampling cannot jump the output to a stale color.

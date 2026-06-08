@@ -444,6 +444,12 @@ CFXColor CFXCCTSweeper::sweep_start_color_(light::LightState *state) const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return this->preferred_white_;
   }
+  if (sweep_uses_preferred_start(
+          this->matches_color_(state, this->native_white_)
+              ? CCTEndpoint::NATIVE
+              : CCTEndpoint::NON_CCT)) {
+    return this->preferred_white_;
+  }
   return this->remote_color_(state);
 }
 
