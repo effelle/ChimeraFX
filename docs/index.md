@@ -48,6 +48,8 @@ This philosophy distinguishes ChimeraFX as a lighting engine that prioritizes th
 
 ## Key Features
 
+*   **[Magic Buttons](cfx_magic_buttons.md)**: Bind physical buttons to on-device dimming, CCT sweeping, hue or palette selection, and effect selection without lambdas or extra Home Assistant entities.
+
 *   **Native Performance**: Optimized for ESP-IDF and dual-core ESP32s.
 *   **ChimeraFX Light Platform**: A custom ESPHome light platform that support segments, allows you to run parallel complex RGB LED effects on ESP32 devices.
 *   **ChimeraFX Sequencer**: High-performance logic layer for hardware-precise event triggers and responsive Home Assistant automations.
@@ -62,6 +64,8 @@ This philosophy distinguishes ChimeraFX as a lighting engine that prioritizes th
 *   **Debug Logger**: An easy way to enable/disable the logger at runtime level.
 
 ## Quick Links
+
+*   **[Magic Buttons](cfx_magic_buttons.md)** - Configure physical buttons for dimming, white tone, color, and effect selection.
 
 *   **[Installation Guide](Installation.md)** - Get up and running in minutes.
 *   **[Controls Guide](Controls.md)** - How to set up inputs and switches.

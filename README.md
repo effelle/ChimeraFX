@@ -29,12 +29,15 @@ That’s it! You already have everything you need to run ChimeraFX!
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
+- [Magic Buttons](https://effelle.github.io/ChimeraFX/cfx_magic_buttons/)
 - [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---
 
 ### Key Features
+
+* **Magic Buttons** - Bind physical ESPHome buttons to on-device dimming, CCT sweeping, hue or palette selection, and effect selection without lambdas or extra Home Assistant entities.
 
 * **Zero YAML Overhead** — Pure C++ implementation for maximum ESP32 frame rates.
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
