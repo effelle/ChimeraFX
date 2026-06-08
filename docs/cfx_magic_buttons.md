@@ -36,7 +36,9 @@ Every short-press light command respects the target light's
 effect browsing keep their own configured timing. Effects with authored power
 choreography, including architectural and signature effects with embedded
 intros, continue to ignore the default transition through ChimeraFX's existing
-effect eligibility rules.
+effect eligibility rules. A CCT `native_white` endpoint that uses only the
+physical white channel switches immediately, preventing ESPHome's addressable
+transition engine from carrying stale RGB channels into native-white mode.
 
 ## Button Dimmer
 

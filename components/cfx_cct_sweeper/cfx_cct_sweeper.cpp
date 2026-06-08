@@ -308,7 +308,11 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
            static_cast<unsigned>(command_mode), effective_transition_ms, c.red,
            c.green, c.blue, c.white, rgb.color_brightness);
   auto call = state->make_call();
-  if (!use_default_transition) {
+  if (use_default_transition && white_only) {
+    // ESPHome's addressable default transformer snapshots the previous RGB
+    // channels. Native white must switch immediately to keep RGB fully off.
+    call.set_transition_length(0);
+  } else if (!use_default_transition) {
     call.set_transition_length(effective_transition_ms);
   }
   call.set_state(true);
