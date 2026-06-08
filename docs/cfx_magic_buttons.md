@@ -150,9 +150,15 @@ timeline so ESPHome transition sampling cannot jump the output to a stale color.
 
 `cfx_hue_cycler` controls RGBW color. A short press toggles one or more lights
 between the selected hue and an immutable `fixed_color`. The fixed endpoint can
-be white or any other RGBW color. Without `colors`, a long press cycles around
-the hue wheel. With `colors`, it steps through only the configured palette.
-Release keeps the color currently shown.
+be white or any other RGBW color. Release keeps the color currently shown.
+
+Choose one long-press mode:
+
+- **Hue mode:** omit `colors`. The helper continuously cycles around the hue
+  wheel using `cycle_time` and `saturation`.
+- **Palette mode:** configure `colors`. The helper steps only through those
+  RGBW entries using `color_interval`. Do not configure `cycle_time` or
+  `saturation` with `colors`.
 
 The default boot/start hue is cyan-blue (`0%, 62%, 100%`) so it does not
 conflict with red error signaling.
@@ -178,11 +184,11 @@ cfx_button:
 | `id` | required | Hue cycler helper ID. |
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before hue cycling starts. |
-| `cycle_time` | `6s` | Time for one full hue loop. |
+| `cycle_time` | `6s` | Hue mode only. Time for one full hue loop. Cannot be used with `colors`. |
 | `colors` | unset | Optional list of RGBW colors. Enables palette mode and cannot be combined with `cycle_time` or `saturation`. |
 | `color_interval` | `900ms` | Time between palette entries while held. Valid only with `colors`. |
 | `fixed_color` | `[100%, 100%, 100%, 100%]` | Immutable short-press endpoint as `[red, green, blue, white]`. It does not need to be white. |
-| `saturation` | `100%` | Hue-cycle saturation. Lower values cycle pastel colors. |
+| `saturation` | `100%` | Hue mode only. Lower values cycle pastel colors. Cannot be used with `colors`. |
 | `restore` | `false` | Restore the last locked hue or palette entry after reboot. |
 
 Palette mode uses the same RGBW format on every strip. RGB-only lights ignore
@@ -197,9 +203,9 @@ cfx_button:
         - monitor_backlight
         - desk_underglow
       colors:
-        - [100%, 0%, 0%, 0%]
-        - [0%, 60%, 100%, 0%]
-        - [35%, 0%, 100%, 20%]
+        - [10%, 30%, 50%, 0%]
+        - [90%, 30%, 0%, 50%]
+        - [10%, 100%, 10%, 100%]
       color_interval: 700ms
       restore: true
 ```
