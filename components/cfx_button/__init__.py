@@ -2,6 +2,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import binary_sensor, light
 from esphome.const import CONF_ID
+from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["binary_sensor"]
@@ -48,6 +49,7 @@ CONF_FIXED_COLOR = "fixed_color"
 CONF_SATURATION = "saturation"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_INTERVAL = "effect_interval"
+CONF_SEGMENTS = "segments"
 MIN_BRIGHTNESS_FLOOR = 0.15
 
 CONTROLLER_KEYS = (
@@ -221,6 +223,47 @@ CONFIG_SCHEMA = cv.ensure_list(
         cv.has_exactly_one_key(*CONTROLLER_KEYS),
     )
 )
+
+
+def _id_name(value):
+    return getattr(value, "id", value)
+
+
+def _final_validate(config):
+    all_lights = full_config.get().get_config_for_path(["light"])
+    segmented_lights = {
+        _id_name(light_config[CONF_ID]): [
+            _id_name(segment[CONF_ID])
+            for segment in light_config.get(CONF_SEGMENTS, [])
+        ]
+        for light_config in all_lights
+        if light_config.get("platform") == "cfx_light"
+        and light_config.get(CONF_SEGMENTS)
+    }
+
+    for button_config in config:
+        controller_key = next(
+            key for key in CONTROLLER_KEYS if key in button_config
+        )
+        targets = {
+            _id_name(light_id)
+            for light_id in button_config[controller_key][CONF_LIGHTS]
+        }
+        for master_id, segment_ids in segmented_lights.items():
+            if master_id not in targets:
+                continue
+            for segment_id in segment_ids:
+                if segment_id in targets:
+                    raise cv.Invalid(
+                        f"{controller_key} controller cannot target segmented "
+                        f"master '{master_id}' and child segment "
+                        f"'{segment_id}' together"
+                    )
+
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def _add_lights(controller, config):
