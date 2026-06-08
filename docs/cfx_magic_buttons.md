@@ -149,9 +149,10 @@ timeline so ESPHome transition sampling cannot jump the output to a stale color.
 ## Hue Cycler
 
 `cfx_hue_cycler` controls RGBW color. A short press toggles one or more lights
-between the previous solid color and a standard white. Without `colors`, a
-long press cycles around the hue wheel. With `colors`, it steps through only
-the configured palette. Release keeps the color currently shown.
+between the selected hue and an immutable `fixed_color`. The fixed endpoint can
+be white or any other RGBW color. Without `colors`, a long press cycles around
+the hue wheel. With `colors`, it steps through only the configured palette.
+Release keeps the color currently shown.
 
 The default boot/start hue is cyan-blue (`0%, 62%, 100%`) so it does not
 conflict with red error signaling.
@@ -169,6 +170,7 @@ cfx_button:
       lights:
         - monitor_backlight
         - desk_underglow
+      fixed_color: [100%, 100%, 100%, 100%]
 ```
 
 | Option | Default | Description |
@@ -179,7 +181,7 @@ cfx_button:
 | `cycle_time` | `6s` | Time for one full hue loop. |
 | `colors` | unset | Optional list of RGBW colors. Enables palette mode and cannot be combined with `cycle_time` or `saturation`. |
 | `color_interval` | `900ms` | Time between palette entries while held. Valid only with `colors`. |
-| `white` | `[100%, 100%, 100%, 100%]` | Short-press white color as `[red, green, blue, white]`. |
+| `fixed_color` | `[100%, 100%, 100%, 100%]` | Immutable short-press endpoint as `[red, green, blue, white]`. It does not need to be white. |
 | `saturation` | `100%` | Hue-cycle saturation. Lower values cycle pastel colors. |
 | `restore` | `false` | Restore the last locked hue or palette entry after reboot. |
 
@@ -205,12 +207,12 @@ cfx_button:
 Hue actions switch targets to solid color mode. If an effect is running, the
 helper replaces it with the selected solid output.
 
-When used beside `cfx_cct_sweeper` on an RGBW light, CCT output is treated as
-white mode. Pressing the hue button restores the last real RGB selection (or
-the configured/default hue) instead of saving and restoring the CCT white mix.
-If the palette contains the configured standard white, color restore skips that
-entry and selects the next color entry. Repeated input edges are suppressed
-until the button has remained quiet for 350 ms.
+The helper recognizes only its configured `fixed_color` and its own selected
+hue. A short press while the selected hue is active applies `fixed_color`.
+A short press from `fixed_color`, a CCT selection, a Home Assistant change, or
+any other external state restores the selected hue. This avoids guessing
+whether an arbitrary RGBW value represents white. Repeated input edges are
+suppressed until the button has remained quiet for 350 ms.
 
 While cycling, the helper locks the release color from its own commanded hue
 timeline so ESPHome transition sampling cannot jump the output to a stale color.

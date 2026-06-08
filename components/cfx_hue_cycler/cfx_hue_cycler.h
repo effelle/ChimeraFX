@@ -32,8 +32,8 @@ class CFXHueCycler : public Component {
   void add_color(float r, float g, float b, float w) {
     this->colors_.push_back({r, g, b, w});
   }
-  void set_white(float r, float g, float b, float w) {
-    this->white_ = {r, g, b, w};
+  void set_fixed_color(float r, float g, float b, float w) {
+    this->fixed_color_ = {r, g, b, w};
   }
   void set_saturation(float value) { this->saturation_ = value; }
   void set_restore(bool value) { this->restore_ = value; }
@@ -50,27 +50,27 @@ class CFXHueCycler : public Component {
   static constexpr uint32_t HUE_UPDATE_INTERVAL_MS = 120;
   static constexpr uint32_t HUE_TRANSITION_MS = 180;
   static constexpr uint32_t POST_CYCLE_GUARD_MS = 350;
-  static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
+  static constexpr float COLOR_MATCH_TOLERANCE = 0.04f;
 
   void start_cycle_(uint32_t now);
   void apply_cycle_(uint32_t now);
   void select_next_palette_color_(uint32_t now);
   CFXColor cycle_color_at_(uint32_t now);
   void freeze_cycle_();
-  void toggle_white_();
-  void save_current_colors_();
+  void toggle_fixed_color_();
   void restore_saved_color_(size_t index, light::LightState *state);
   void apply_color_(light::LightState *state, const CFXColor &color,
                     uint32_t transition_ms);
   void save_selection_();
-  bool matches_white_(light::LightState *state) const;
-  bool is_white_output_(const CFXColor &color) const;
-  bool is_known_hue_color_(const CFXColor &color) const;
+  bool all_targets_match_fixed_color_() const;
+  bool all_targets_match_selected_hue_() const;
+  bool matches_color_(light::LightState *state,
+                      const CFXColor &color) const;
+  CFXColor selected_color_(size_t index) const;
   CFXColor fallback_color_() const;
   CFXColor remote_color_(light::LightState *state) const;
   CFXColor color_from_hue_(float hue) const;
   CFXColor clamp_color_(const CFXColor &color) const;
-  float remote_hue_(light::LightState *state) const;
   float normalize_hue_(float hue) const;
   float color_distance_(const CFXColor &a, const CFXColor &b) const;
 
@@ -86,7 +86,7 @@ class CFXHueCycler : public Component {
   uint32_t cycle_started_ms_{0};
   uint32_t last_cycle_update_ms_{0};
   uint32_t ignore_press_until_ms_{0};
-  CFXColor white_{1.0f, 1.0f, 1.0f, 1.0f};
+  CFXColor fixed_color_{1.0f, 1.0f, 1.0f, 1.0f};
   CFXColor last_cycle_color_{0.0f, 0.62f, 1.0f, 0.0f};
   float saturation_{1.0f};
   float base_hue_{202.8f};

@@ -78,7 +78,7 @@ void CFXHueCycler::release() {
   this->last_cycle_update_ms_ = 0;
 
   if (should_toggle) {
-    this->toggle_white_();
+    this->toggle_fixed_color_();
   }
   this->ignore_press_until_ms_ = millis() + POST_CYCLE_GUARD_MS;
 }
@@ -99,15 +99,8 @@ void CFXHueCycler::loop() {
 }
 
 void CFXHueCycler::start_cycle_(uint32_t now) {
-  this->save_current_colors_();
   this->cycling_ = true;
   this->suppress_toggle_ = true;
-  if (this->colors_.empty() && !this->restore_ && !this->lights_.empty()) {
-    const CFXColor current = this->remote_color_(this->lights_[0]);
-    if (!this->is_white_output_(current)) {
-      this->base_hue_ = this->remote_hue_(this->lights_[0]);
-    }
-  }
   this->cycle_started_ms_ = now;
   this->last_cycle_update_ms_ = 0;
   if (this->colors_.empty()) {
@@ -184,43 +177,23 @@ void CFXHueCycler::freeze_cycle_() {
   this->cycling_ = false;
 }
 
-void CFXHueCycler::toggle_white_() {
-  const bool restore =
-      !this->lights_.empty() && this->matches_white_(this->lights_[0]);
-  if (!restore) {
-    this->save_current_colors_();
-  }
+void CFXHueCycler::toggle_fixed_color_() {
+  const ShortPressOutput output = next_short_press_output(
+      this->all_targets_match_fixed_color_(),
+      this->all_targets_match_selected_hue_());
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *state = this->lights_[i];
-    if (restore) {
+    if (output == ShortPressOutput::SELECTED_HUE) {
       this->restore_saved_color_(i, state);
     } else {
-      this->apply_color_(state, this->white_, 150);
+      this->apply_color_(state, this->fixed_color_, 150);
     }
-  }
-}
-
-void CFXHueCycler::save_current_colors_() {
-  if (this->saved_colors_.size() < this->lights_.size()) {
-    this->saved_colors_.resize(this->lights_.size());
-  }
-  for (size_t i = 0; i < this->lights_.size(); i++) {
-    auto *state = this->lights_[i];
-    if (state == nullptr || !state->remote_values.is_on()) {
-      continue;
-    }
-    const CFXColor current = this->remote_color_(state);
-    if (this->is_white_output_(current)) {
-      continue;
-    }
-    this->saved_colors_[i].valid = true;
-    this->saved_colors_[i].color = current;
   }
 }
 
 void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) {
-  if (index < this->saved_colors_.size() && this->saved_colors_[index].valid &&
-      !this->is_white_output_(this->saved_colors_[index].color)) {
+  if (index < this->saved_colors_.size() &&
+      this->saved_colors_[index].valid) {
     this->apply_color_(state, this->saved_colors_[index].color, 150);
     return;
   }
@@ -273,53 +246,59 @@ void CFXHueCycler::save_selection_() {
   }
 }
 
-bool CFXHueCycler::matches_white_(light::LightState *state) const {
+bool CFXHueCycler::all_targets_match_fixed_color_() const {
+  if (this->lights_.empty()) {
+    return false;
+  }
+  for (auto *state : this->lights_) {
+    if (!this->matches_color_(state, this->fixed_color_)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool CFXHueCycler::all_targets_match_selected_hue_() const {
+  if (this->lights_.empty()) {
+    return false;
+  }
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    if (!this->matches_color_(this->lights_[i], this->selected_color_(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool CFXHueCycler::matches_color_(light::LightState *state,
+                                 const CFXColor &color) const {
   if (state == nullptr || !state->remote_values.is_on()) {
     return false;
   }
-  return this->is_white_output_(this->remote_color_(state));
+  return this->color_distance_(this->remote_color_(state), color) <=
+         COLOR_MATCH_TOLERANCE;
 }
 
-bool CFXHueCycler::is_white_output_(const CFXColor &color) const {
-  if (this->color_distance_(color, this->white_) <= WHITE_MATCH_TOLERANCE) {
-    return true;
+CFXColor CFXHueCycler::selected_color_(size_t index) const {
+  if (index < this->saved_colors_.size() &&
+      this->saved_colors_[index].valid) {
+    return this->saved_colors_[index].color;
   }
-  if (this->is_known_hue_color_(color)) {
-    return false;
-  }
-  return color.white > WHITE_MATCH_TOLERANCE;
-}
-
-bool CFXHueCycler::is_known_hue_color_(const CFXColor &color) const {
-  if (this->color_distance_(color, this->last_cycle_color_) <=
-      WHITE_MATCH_TOLERANCE) {
-    return true;
-  }
-  for (const auto &configured : this->colors_) {
-    if (this->color_distance_(color, configured) <= WHITE_MATCH_TOLERANCE) {
-      return true;
-    }
-  }
-  return false;
+  return this->fallback_color_();
 }
 
 CFXColor CFXHueCycler::fallback_color_() const {
   if (!this->colors_.empty()) {
-    const size_t start =
+    const size_t index =
         this->active_color_known_ ? this->active_color_index_ : 0;
-    for (size_t offset = 0; offset < this->colors_.size(); offset++) {
-      const size_t index = (start + offset) % this->colors_.size();
-      if (!this->is_white_output_(this->colors_[index])) {
-        return this->colors_[index];
-      }
-    }
+    return this->colors_[index];
   }
   return this->color_from_hue_(this->base_hue_);
 }
 
 CFXColor CFXHueCycler::remote_color_(light::LightState *state) const {
   if (state == nullptr) {
-    return this->white_;
+    return this->fixed_color_;
   }
   const float color_brightness =
       state->remote_values.get_color_brightness();
@@ -363,28 +342,6 @@ CFXColor CFXHueCycler::clamp_color_(const CFXColor &color) const {
   auto clamp = [](float value) { return std::max(0.0f, std::min(1.0f, value)); };
   return {clamp(color.red), clamp(color.green), clamp(color.blue),
           clamp(color.white)};
-}
-
-float CFXHueCycler::remote_hue_(light::LightState *state) const {
-  if (state == nullptr) {
-    return this->base_hue_;
-  }
-  const CFXColor c = this->remote_color_(state);
-  const float max_v = std::max({c.red, c.green, c.blue});
-  const float min_v = std::min({c.red, c.green, c.blue});
-  const float delta = max_v - min_v;
-  if (delta <= 0.001f) {
-    return this->base_hue_;
-  }
-  float hue = 0.0f;
-  if (max_v == c.red) {
-    hue = 60.0f * std::fmod(((c.green - c.blue) / delta), 6.0f);
-  } else if (max_v == c.green) {
-    hue = 60.0f * (((c.blue - c.red) / delta) + 2.0f);
-  } else {
-    hue = 60.0f * (((c.red - c.green) / delta) + 4.0f);
-  }
-  return this->normalize_hue_(hue);
 }
 
 float CFXHueCycler::normalize_hue_(float hue) const {

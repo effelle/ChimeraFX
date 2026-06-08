@@ -44,7 +44,7 @@ CONF_RESTORE = "restore"
 CONF_CYCLE_TIME = "cycle_time"
 CONF_COLORS = "colors"
 CONF_COLOR_INTERVAL = "color_interval"
-CONF_WHITE = "white"
+CONF_FIXED_COLOR = "fixed_color"
 CONF_SATURATION = "saturation"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_INTERVAL = "effect_interval"
@@ -181,7 +181,8 @@ HUE_CYCLER_SCHEMA = cv.All(
                 CONF_COLOR_INTERVAL
             ): cv.positive_time_period_milliseconds,
             cv.Optional(
-                CONF_WHITE, default=["100%", "100%", "100%", "100%"]
+                CONF_FIXED_COLOR,
+                default=["100%", "100%", "100%", "100%"],
             ): _color4,
             cv.Optional(CONF_SATURATION): cv.percentage,
             cv.Optional(CONF_RESTORE, default=False): cv.boolean,
@@ -268,7 +269,7 @@ async def _build_hue_cycler(config):
             var.set_cycle_time_ms(config[CONF_CYCLE_TIME].total_milliseconds)
         )
         cg.add(var.set_saturation(config[CONF_SATURATION]))
-    cg.add(var.set_white(*config[CONF_WHITE]))
+    cg.add(var.set_fixed_color(*config[CONF_FIXED_COLOR]))
     cg.add(var.set_restore(config[CONF_RESTORE]))
     await _add_lights(var, config)
     return var
