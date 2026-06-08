@@ -24,6 +24,10 @@ responsible for GPIO configuration, inversion, filtering, debounce, touch
 inputs, expanders, and template state. Its logical convention must be
 `ON = pressed`.
 
+Each controller may target a segmented master or its child segments, but the
+same `lights` list cannot contain both the master and any of its children.
+Configuration validation rejects that overlap.
+
 Each controller is configured directly inside its wrapper; no separate helper
 declaration or helper ID is required. The wrapper waits for the first valid
 `OFF` state before accepting input. A
@@ -65,7 +69,7 @@ cfx_button:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `id` | required | Dimmer helper ID. |
+| `id` | optional | Internal dimmer helper ID. Generated automatically when omitted. |
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before dimming starts. |
 | `ramp_time` | `2s` | Time to ramp from minimum to maximum brightness. |
@@ -78,9 +82,18 @@ upper or lower bound.
 
 Each accepted press records whether any configured light is on. A short release
 uses that snapshot to turn the targets off or on, so transitions started during
-the gesture cannot reverse the requested action. Short presses change only the
-ON/OFF state; ESPHome remains authoritative for the retained brightness, color,
-and active effect. Changes made from Home Assistant are therefore preserved.
+the gesture cannot reverse the requested action. Immediately before turning
+targets off, the dimmer captures each active target independently. The next
+dimmer turn-on restores a solid snapshot's brightness, color mode, and RGBW
+values. An effect snapshot instead restores its brightness and effect name
+without forcing possibly stale solid-color channels. Child segments therefore
+retain independent state. A segmented master has no effect state to capture, so
+its brightness and color values are restored as a solid snapshot.
+
+These snapshots exist only at runtime and do not survive reboot. A target that
+has not yet been captured, including one that was already off when another
+target was captured, uses normal light turn-on behavior, so its configured
+restore mode or defaults may apply.
 Running effects are dimmed with direct brightness steps instead of ESPHome light
 transitions to avoid effect stop/start churn while the button is held.
 A long press only ramps when the gesture began with at least one configured
@@ -123,7 +136,7 @@ cfx_button:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `id` | required | CCT sweeper helper ID. |
+| `id` | optional | Internal CCT sweeper helper ID. Generated automatically when omitted. |
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before sweeping starts. |
 | `sweep_time` | `4s` | Time to sweep from warm to cool white. |
@@ -192,7 +205,7 @@ cfx_button:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `id` | required | Hue cycler helper ID. |
+| `id` | optional | Internal hue cycler helper ID. Generated automatically when omitted. |
 | `lights` | required | One or more light entities to control. |
 | `long_press` | `500ms` | Press duration before hue cycling starts. |
 | `cycle_time` | `6s` | Hue mode only. Time for one full hue loop. Cannot be used with `colors`. |
@@ -264,7 +277,7 @@ cfx_button:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `id` | required | Effect selector helper ID. |
+| `id` | optional | Internal effect selector helper ID. Generated automatically when omitted. |
 | `lights` | required | One or more light entities to control. |
 | `effects` | required | One or more effect names to cycle through. Names must match the target light effect names. |
 | `long_press` | `500ms` | Press duration before effect selection starts. |
