@@ -14,6 +14,7 @@
 #include "cfx_light.h"
 #include "cfx_light_color.h"
 #include "esphome/components/light/addressable_light.h"
+#include "esphome/components/light/transformers.h"
 #include "esphome/components/select/select.h"
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
