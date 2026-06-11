@@ -23,11 +23,5 @@ constexpr CFXLightChannels mask_color_channels(CFXLightChannels channels,
   };
 }
 
-constexpr bool should_restore_rgb_white(bool force_white_active,
-                                        bool current_mode_white,
-                                        bool supports_rgb_white) {
-  return !force_white_active && current_mode_white && supports_rgb_white;
-}
-
 }  // namespace cfx_light
 }  // namespace esphome
