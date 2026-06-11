@@ -61,11 +61,6 @@ public:
     return (*parent_)[start_ + index];
   }
 
-  std::unique_ptr<light::LightTransformer>
-  create_default_transition() override {
-    return make_unique<light::LightTransitionTransformer>();
-  }
-
   void loop() override {
     if (parent_->segment_coordinator_owns(this->state_parent_)) {
       return;
@@ -111,9 +106,12 @@ public:
     }
 
     // CFX-032: correction_ is held at 255; bake brightness into channels.
-    // Virtual segments use LightTransitionTransformer so every interpolated
-    // frame passes through this renderer and honors Force White.
+    // For a real fade (bri > 0 and transformer active), let ESPHome drive
+    // the pixels. Always fall through when bri==0 so turning OFF paints
+    // black even if a 0ms transformer exists on that frame.
     float bri = val.get_brightness() * val.get_state();
+    if (state->is_transformer_active() && bri > 0.0f)
+      return;
     Color c = mode_aware_color(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
