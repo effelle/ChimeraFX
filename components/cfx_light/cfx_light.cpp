@@ -651,6 +651,20 @@ void CFXLightOutput::repaint_force_white_solid_(bool state) {
     }
 
     auto val = this->state_parent_->current_values;
+    if (should_restore_rgb_white(
+            state, val.get_color_mode() == light::ColorMode::WHITE,
+            this->state_parent_->get_traits().supports_color_mode(
+                light::ColorMode::RGB_WHITE))) {
+      auto call = this->state_parent_->make_call();
+      call.set_transition_length(0);
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_color_brightness(1.0f);
+      call.set_rgb(1.0f, 1.0f, 1.0f);
+      call.set_white(0.0f);
+      call.perform();
+      return;
+    }
+
     Color c = light::color_from_light_color_values(val);
     if (state)
       cfx::apply_force_white(c.r, c.g, c.b, c.w);

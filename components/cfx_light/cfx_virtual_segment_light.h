@@ -191,13 +191,29 @@ public:
     auto val = state->current_values;
     float bri = val.get_brightness() * val.get_state();
 
+    const bool force_white_active = this->is_force_white_active_();
+    if (should_restore_rgb_white(
+            force_white_active,
+            val.get_color_mode() == light::ColorMode::WHITE,
+            state->get_traits().supports_color_mode(
+                light::ColorMode::RGB_WHITE))) {
+      auto call = state->make_call();
+      call.set_transition_length(0);
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_color_brightness(1.0f);
+      call.set_rgb(1.0f, 1.0f, 1.0f);
+      call.set_white(0.0f);
+      call.perform();
+      return;
+    }
+
     Color c = mode_aware_color(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    if (this->is_force_white_active_())
+    if (force_white_active)
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
     this->all() = c;
