@@ -201,7 +201,7 @@ public:
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
     this->all() = c;
-    parent_->request_segment_flush(this->state_parent_);
+    parent_->request_segment_solid_repaint_flush(this->state_parent_);
   }
 
   light::LightTraits get_traits() override {

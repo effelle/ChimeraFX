@@ -230,6 +230,7 @@ public:
   // Counter-based: fires write_state(nullptr) only when ALL N segments have
   // reported their render complete, preventing premature DMA on partial frames.
   void request_segment_flush(light::LightState *state = nullptr);
+  void request_segment_solid_repaint_flush(light::LightState *state);
 
   // Segment flush coalescing state (Fix-2: one DMA call per frame)
   bool     seg_flush_pending_{false};

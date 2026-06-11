@@ -6709,6 +6709,24 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
   this->write_state(nullptr);
 }
 
+void CFXLightOutput::request_segment_solid_repaint_flush(
+    light::LightState *state) {
+  if (state == nullptr || this->has_outro()) {
+    return;
+  }
+
+  for (size_t i = 0;
+       i < this->segment_light_states_.size() && i < MAX_CFX_SEGMENTS; i++) {
+    if (this->segment_light_states_[i] != state) {
+      continue;
+    }
+
+    const uint8_t mask = static_cast<uint8_t>(1u << i);
+    this->flush_parent_owned_segment_epoch_direct_(mask, 1);
+    return;
+  }
+}
+
 // --- Write State (Fire-and-Forget DMA) ---
 
 // P3: Called by CFXTransmitBarrier when all registered outputs are ready.
