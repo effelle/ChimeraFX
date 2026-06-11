@@ -6135,10 +6135,6 @@ void CFXLightOutput::on_master_update() {
     if (state_changed || bright_changed) {
       this->wake_mono_idle_light_state_(seg_state);
       auto call = seg_state->make_call();
-      // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer which
-      // paints RGB white directly into the pixel buffer during transitions.
-      // CFX effects handle their own visual transitions (intros/outros).
-      call.set_transition_length(0);
       if (state_changed)
         call.set_state(master_on);
       if (bright_changed)
