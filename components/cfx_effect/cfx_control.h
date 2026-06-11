@@ -424,9 +424,9 @@ protected:
 
     this->force_white_cb_switch_ = this->force_white_;
     this->force_white_->add_on_state_callback(
-        [this](bool) {
+        [this](bool state) {
           this->wake_mono_idle_output_();
-          this->repaint_force_white_segment_();
+          this->repaint_force_white_segment_(state);
           this->schedule_force_white_sync_(25, true);
         });
   }
@@ -461,16 +461,16 @@ protected:
         this, hash, delay_ms, [this, repaint_after]() {
           this->sync_force_white_output_();
           if (repaint_after)
-            this->repaint_force_white_segment_now_();
+            this->repaint_force_white_segment_now_(this->force_white_->state);
         });
   }
 
-  void repaint_force_white_segment_() {
+  void repaint_force_white_segment_(bool state) {
     this->sync_force_white_output_();
-    this->repaint_force_white_segment_now_();
+    this->repaint_force_white_segment_now_(state);
   }
 
-  void repaint_force_white_segment_now_() {
+  void repaint_force_white_segment_now_(bool state) {
     if (this->light_ == nullptr) {
       return;
     }
@@ -494,7 +494,7 @@ protected:
         return;
       }
 
-      seg_out->repaint_force_white_current_state();
+      seg_out->repaint_force_white_current_state(state);
       return;
     }
 #endif
