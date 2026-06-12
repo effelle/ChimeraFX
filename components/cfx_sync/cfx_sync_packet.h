@@ -41,6 +41,14 @@ struct CFXSyncPacket {
   uint32_t field_mask{0};
   bool has_power{false};
   bool power{false};
+  bool has_brightness{false};
+  uint8_t brightness{0};
+  bool has_color{false};
+  bool source_has_white{false};
+  uint8_t red{0};
+  uint8_t green{0};
+  uint8_t blue{0};
+  uint8_t white{0};
 };
 
 class CFXSyncPacketCodec {
@@ -49,13 +57,20 @@ class CFXSyncPacketCodec {
   static constexpr size_t HEADER_SIZE = 22;
   static constexpr size_t AUTH_TAG_SIZE = 16;
   static constexpr uint32_t FIELD_POWER = 0x00000001UL;
-  static constexpr size_t STATE_PAYLOAD_SIZE = 5;
+  static constexpr uint32_t FIELD_BRIGHTNESS = 0x00000002UL;
+  static constexpr uint32_t FIELD_COLOR = 0x00000004UL;
+  static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
+  static constexpr uint32_t FULL_STATE_MASK =
+      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR;
+  static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 11;
   static constexpr size_t STATE_PACKET_SIZE =
-      HEADER_SIZE + STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+      HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
-                           uint32_t sequence, bool power,
+                           uint32_t sequence, bool power, uint8_t brightness,
+                           uint8_t red, uint8_t green, uint8_t blue,
+                           uint8_t white, bool has_white,
                            const std::array<uint8_t, 32> &key,
                            std::vector<uint8_t> &output);
   static bool encode_sync_request(uint32_t group_hash, uint32_t boot_id,

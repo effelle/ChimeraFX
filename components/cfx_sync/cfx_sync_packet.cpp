@@ -90,11 +90,19 @@ bool CFXSyncPacketCodec::encode_(
 
 bool CFXSyncPacketCodec::encode_state(
     uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
+    uint8_t brightness, uint8_t red, uint8_t green, uint8_t blue,
+    uint8_t white, bool has_white,
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
   std::vector<uint8_t> payload;
-  payload.reserve(STATE_PAYLOAD_SIZE);
-  append_u32_(payload, FIELD_POWER);
+  payload.reserve(FULL_STATE_PAYLOAD_SIZE);
+  append_u32_(payload, FULL_STATE_MASK);
   payload.push_back(power ? 1 : 0);
+  payload.push_back(brightness);
+  payload.push_back(has_white ? COLOR_CAP_WHITE : 0);
+  payload.push_back(red);
+  payload.push_back(green);
+  payload.push_back(blue);
+  payload.push_back(white);
   return encode_(CFXSyncPacketType::STATE, group_hash, boot_id, sequence,
                  payload.data(), payload.size(), key, output);
 }
@@ -168,12 +176,44 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
   }
   const uint8_t *payload = data + HEADER_SIZE;
   packet.field_mask = read_u32_(payload);
+  size_t offset = sizeof(uint32_t);
+
   if ((packet.field_mask & FIELD_POWER) != 0) {
-    if (payload_size < STATE_PAYLOAD_SIZE || payload[4] > 1) {
+    if (offset + 1 > payload_size || payload[offset] > 1) {
       return CFXSyncDecodeResult::MALFORMED;
     }
     packet.has_power = true;
-    packet.power = payload[4] != 0;
+    packet.power = payload[offset++] != 0;
+  }
+
+  if ((packet.field_mask & FIELD_BRIGHTNESS) != 0) {
+    if (offset + 1 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_brightness = true;
+    packet.brightness = payload[offset++];
+  }
+
+  if ((packet.field_mask & FIELD_COLOR) != 0) {
+    if (offset + 5 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    const uint8_t capabilities = payload[offset++];
+    if ((capabilities & ~COLOR_CAP_WHITE) != 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_color = true;
+    packet.source_has_white = (capabilities & COLOR_CAP_WHITE) != 0;
+    packet.red = payload[offset++];
+    packet.green = payload[offset++];
+    packet.blue = payload[offset++];
+    packet.white = payload[offset++];
+  }
+
+  constexpr uint32_t KNOWN_FIELDS =
+      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR;
+  if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
+    return CFXSyncDecodeResult::MALFORMED;
   }
 
   // Unknown mask bits and their trailing canonical values are ignored by V1.

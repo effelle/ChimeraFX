@@ -1,4 +1,4 @@
-"""Authenticated ESP-NOW power-state synchronization for ChimeraFX."""
+"""Authenticated ESP-NOW light-state synchronization for ChimeraFX."""
 
 import hashlib
 

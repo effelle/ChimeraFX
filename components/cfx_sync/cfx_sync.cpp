@@ -14,6 +14,15 @@ namespace cfx_sync {
 
 static const char *const TAG = "cfx_sync";
 
+class RemoteApplyGuard {
+ public:
+  explicit RemoteApplyGuard(bool &flag) : flag_(flag) { this->flag_ = true; }
+  ~RemoteApplyGuard() { this->flag_ = false; }
+
+ protected:
+  bool &flag_;
+};
+
 void CFXSyncLightListener::on_light_remote_values_update() {
   if (this->parent_ != nullptr) {
     this->parent_->on_local_light_update();
@@ -34,8 +43,8 @@ void CFXSyncComponent::setup() {
   this->espnow_->register_receive_handler(this);
 
   if (this->role_ == CFXSyncRole::LEADER) {
-    this->observed_power_ = this->light_->remote_values.is_on();
-    this->has_observed_power_ = true;
+    this->observed_state_ = capture_light_snapshot(*this->light_);
+    this->has_observed_state_ = true;
     this->light_->add_remote_values_listener(&this->light_listener_);
     this->set_interval("heartbeat", this->heartbeat_ms_,
                        [this]() { this->send_state_(); });
@@ -107,10 +116,11 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
     return true;
   }
 
-  if (this->role_ == CFXSyncRole::FOLLOWER && packet.has_power) {
+  if (this->role_ == CFXSyncRole::FOLLOWER &&
+      (packet.has_power || packet.has_brightness || packet.has_color)) {
     this->has_valid_state_ = true;
     this->status_clear_warning();
-    this->apply_remote_power_(packet.power);
+    this->apply_remote_state_(packet);
   }
   return true;
 }
@@ -121,24 +131,30 @@ void CFXSyncComponent::on_local_light_update() {
     return;
   }
 
-  const bool power = this->light_->remote_values.is_on();
-  if (this->has_observed_power_ && power == this->observed_power_) {
+  const auto snapshot = capture_light_snapshot(*this->light_);
+  if (this->has_observed_state_ && snapshot == this->observed_state_) {
     return;
   }
-  this->has_observed_power_ = true;
-  this->observed_power_ = power;
-  this->send_state_();
+  this->has_observed_state_ = true;
+  this->observed_state_ = snapshot;
+  this->send_state_(snapshot);
 }
 
 bool CFXSyncComponent::send_state_() {
   if (this->role_ != CFXSyncRole::LEADER || this->light_ == nullptr) {
     return false;
   }
+  return this->send_state_(capture_light_snapshot(*this->light_));
+}
 
+bool CFXSyncComponent::send_state_(
+    const CFXSyncLightSnapshot &snapshot) {
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
-          this->light_->remote_values.is_on(), this->key_, packet)) {
+          snapshot.power, snapshot.brightness, snapshot.red, snapshot.green,
+          snapshot.blue, snapshot.white, snapshot.has_white, this->key_,
+          packet)) {
     return false;
   }
   return this->send_packet_(packet);
@@ -286,17 +302,43 @@ void CFXSyncComponent::schedule_follower_recovery_() {
   });
 }
 
-void CFXSyncComponent::apply_remote_power_(bool power) {
-  if (this->light_ == nullptr ||
-      this->light_->remote_values.is_on() == power) {
+void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
+  if (this->light_ == nullptr) {
     return;
   }
 
-  this->applying_remote_state_ = true;
+  RemoteApplyGuard guard(this->applying_remote_state_);
   auto call = this->light_->make_call();
-  call.set_state(power);
+
+  if (packet.has_power) {
+    call.set_state(packet.power);
+  }
+  if (packet.has_brightness) {
+    call.set_brightness(packet.brightness / 255.0f);
+  }
+  if (packet.has_color) {
+    CFXSyncLightSnapshot snapshot;
+    snapshot.red = packet.red;
+    snapshot.green = packet.green;
+    snapshot.blue = packet.blue;
+    snapshot.white = packet.source_has_white ? packet.white : 0;
+    snapshot.has_white = packet.source_has_white;
+
+    if (light_supports_rgb_white(*this->light_)) {
+      const auto converted = convert_color_for_follower(snapshot, true);
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
+                   converted.blue / 255.0f);
+      call.set_white(converted.white / 255.0f);
+    } else if (light_supports_rgb(*this->light_)) {
+      const auto converted = convert_color_for_follower(snapshot, false);
+      call.set_color_mode(light::ColorMode::RGB);
+      call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
+                   converted.blue / 255.0f);
+    }
+  }
+
   call.perform();
-  this->applying_remote_state_ = false;
 }
 
 bool CFXSyncComponent::is_peer_(const uint8_t *address) const {
