@@ -6,6 +6,7 @@ packages:
 
 esphome:
   name: cfx-sync-leader-idf
+  min_version: 2026.5.1
 
 esp32:
   board: esp32dev

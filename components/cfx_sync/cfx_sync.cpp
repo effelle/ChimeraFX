@@ -31,7 +31,7 @@ void CFXSyncComponent::setup() {
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
-  this->espnow_->register_received_handler(this);
+  this->espnow_->register_receive_handler(this);
 
   if (this->role_ == CFXSyncRole::LEADER) {
     this->observed_power_ = this->light_->remote_values.is_on();
@@ -75,8 +75,8 @@ void CFXSyncComponent::dump_config() {
                 this->unsupported_packets_, this->send_failures_);
 }
 
-bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
-                                   const uint8_t *data, uint8_t size) {
+bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
+                                  const uint8_t *data, uint8_t size) {
   if (!this->is_peer_(info.src_addr)) {
     return false;
   }

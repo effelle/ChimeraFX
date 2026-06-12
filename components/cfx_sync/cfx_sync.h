@@ -61,8 +61,8 @@ class CFXSyncComponent : public Component,
     this->heartbeat_ms_ = heartbeat_ms;
   }
 
-  bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                   uint8_t size) override;
+  bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                  uint8_t size) override;
   void on_local_light_update();
 
  protected:
