@@ -507,6 +507,7 @@ protected:
   void release_outro_callback_storage_();
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
+  bool should_scrub_segment_(light::LightState *state) const;
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
   void clear_segment_idle_diag_();

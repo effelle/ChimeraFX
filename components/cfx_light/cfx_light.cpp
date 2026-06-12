@@ -2480,7 +2480,7 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
     esphome::App.feed_wdt();
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+      if (!this->should_scrub_segment_(seg_state)) {
         continue;
       }
       const auto &def = this->segment_defs_[i];
@@ -6539,7 +6539,7 @@ void CFXLightOutput::scrub_inactive_segments_() {
         std::min(this->segment_light_states_.size(), this->segment_defs_.size());
     for (size_t i = 0; i < count; i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+      if (!this->should_scrub_segment_(seg_state)) {
         continue;
       }
       const auto &def = this->segment_defs_[i];
@@ -6550,6 +6550,12 @@ void CFXLightOutput::scrub_inactive_segments_() {
       }
     }
   }
+}
+
+bool CFXLightOutput::should_scrub_segment_(
+    light::LightState *state) const {
+  return state != nullptr && !state->remote_values.is_on() &&
+         !state->is_transformer_active();
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -6829,9 +6835,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     esphome::App.feed_wdt();
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      // CFX-032: scrub on remote_values only; current_values may lag
-      // by a frame with 0ms transitions, leaving stale lit pixels.
-      if (!seg_state->remote_values.is_on()) {
+      if (this->should_scrub_segment_(seg_state)) {
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
