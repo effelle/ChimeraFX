@@ -13,8 +13,11 @@ TAG_SIZE = 16
 FIELD_POWER = 0x00000001
 FIELD_BRIGHTNESS = 0x00000002
 FIELD_COLOR = 0x00000004
+FIELD_COLOR_BRIGHTNESS = 0x00000008
 COLOR_CAP_WHITE = 0x01
-FULL_STATE_MASK = FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR
+FULL_STATE_MASK = (
+    FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS
+)
 
 KEY = bytes(range(32))
 GROUP_HASH = 0x12345678
@@ -44,7 +47,14 @@ def encode(
 
 
 def full_state_payload(
-    power, brightness, red, green, blue, white, has_white
+    power,
+    brightness,
+    red,
+    green,
+    blue,
+    white,
+    has_white,
+    color_brightness,
 ):
     return (
         struct.pack(">I", FULL_STATE_MASK)
@@ -57,6 +67,7 @@ def full_state_payload(
                 green,
                 blue,
                 white,
+                color_brightness,
             )
         )
     )
@@ -94,6 +105,7 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         "has_power": False,
         "has_brightness": False,
         "has_color": False,
+        "has_color_brightness": False,
     }
     if not boot_id or not sequence:
         raise ValueError("replay-fields")
@@ -130,7 +142,18 @@ def decode(packet, expected_group_hash=GROUP_HASH):
             result["blue"] = payload[offset + 3]
             result["white"] = payload[offset + 4]
             offset += 5
-        known_fields = FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR
+        if result["field_mask"] & FIELD_COLOR_BRIGHTNESS:
+            if offset + 1 > payload_size:
+                raise ValueError("color-brightness")
+            result["has_color_brightness"] = True
+            result["color_brightness"] = payload[offset]
+            offset += 1
+        known_fields = (
+            FIELD_POWER
+            | FIELD_BRIGHTNESS
+            | FIELD_COLOR
+            | FIELD_COLOR_BRIGHTNESS
+        )
         if not result["field_mask"] & ~known_fields and offset != payload_size:
             raise ValueError("state-length")
     elif packet[5] == TYPE_SYNC_REQUEST:
@@ -186,18 +209,19 @@ class ProtocolTests(unittest.TestCase):
     def test_full_state_vector_is_stable(self):
         packet = encode(
             TYPE_STATE,
-            full_state_payload(True, 128, 10, 20, 30, 40, True),
+            full_state_payload(True, 128, 10, 20, 30, 40, True, 158),
         )
-        self.assertEqual(len(packet), 49)
+        self.assertEqual(len(packet), 50)
         self.assertEqual(
             packet.hex(),
-            "4346585301010016000b12345678a1b2c3d401020304"
-            "000000070180010a141e28"
-            "5b8180f4f0401cb61f2fd3182cd3de41",
+            "4346585301010016000c12345678a1b2c3d401020304"
+            "0000000f0180010a141e289e"
+            "5985e262cdd939013415824feb9eb01b",
         )
         decoded = decode(packet)
         self.assertTrue(decoded["power"])
         self.assertEqual(decoded["brightness"], 128)
+        self.assertEqual(decoded["color_brightness"], 158)
         self.assertTrue(decoded["source_has_white"])
         self.assertEqual(
             (
@@ -216,6 +240,27 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(decoded["power"])
         self.assertFalse(decoded["has_brightness"])
         self.assertFalse(decoded["has_color"])
+        self.assertFalse(decoded["has_color_brightness"])
+
+    def test_legacy_full_state_without_color_brightness_remains_valid(self):
+        legacy_mask = FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR
+        payload = (
+            struct.pack(">I", legacy_mask)
+            + bytes((1, 128, COLOR_CAP_WHITE, 10, 20, 30, 40))
+        )
+        decoded = decode(encode(TYPE_STATE, payload))
+        self.assertTrue(decoded["has_color"])
+        self.assertFalse(decoded["has_color_brightness"])
+
+    def test_color_brightness_is_appended_after_legacy_state_fields(self):
+        payload = full_state_payload(
+            True, 128, 10, 20, 30, 40, True, 158
+        )
+        self.assertEqual(
+            payload[4:11],
+            bytes((1, 128, COLOR_CAP_WHITE, 10, 20, 30, 40)),
+        )
+        self.assertEqual(payload[11], 158)
 
     def test_bad_authentication_is_rejected(self):
         packet = bytearray(
@@ -240,7 +285,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_unknown_fields_after_known_values_are_ignored(self):
         payload = (
-            full_state_payload(False, 64, 1, 2, 3, 4, False)
+            full_state_payload(False, 64, 1, 2, 3, 4, False, 128)
             + b"\xaa\xbb"
         )
         payload = (
@@ -271,6 +316,11 @@ class ProtocolTests(unittest.TestCase):
     def test_truncated_color_is_rejected(self):
         payload = struct.pack(">I", FIELD_COLOR) + b"\x01\x10\x20"
         with self.assertRaisesRegex(ValueError, "color"):
+            decode(encode(TYPE_STATE, payload))
+
+    def test_truncated_color_brightness_is_rejected(self):
+        payload = struct.pack(">I", FIELD_COLOR_BRIGHTNESS)
+        with self.assertRaisesRegex(ValueError, "color-brightness"):
             decode(encode(TYPE_STATE, payload))
 
     def test_unknown_color_capability_bits_are_rejected(self):

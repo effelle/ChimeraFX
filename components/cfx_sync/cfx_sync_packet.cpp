@@ -90,8 +90,8 @@ bool CFXSyncPacketCodec::encode_(
 
 bool CFXSyncPacketCodec::encode_state(
     uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
-    uint8_t brightness, uint8_t red, uint8_t green, uint8_t blue,
-    uint8_t white, bool has_white,
+    uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
+    uint8_t blue, uint8_t white, bool has_white,
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
   std::vector<uint8_t> payload;
   payload.reserve(FULL_STATE_PAYLOAD_SIZE);
@@ -103,6 +103,7 @@ bool CFXSyncPacketCodec::encode_state(
   payload.push_back(green);
   payload.push_back(blue);
   payload.push_back(white);
+  payload.push_back(color_brightness);
   return encode_(CFXSyncPacketType::STATE, group_hash, boot_id, sequence,
                  payload.data(), payload.size(), key, output);
 }
@@ -210,8 +211,16 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     packet.white = payload[offset++];
   }
 
+  if ((packet.field_mask & FIELD_COLOR_BRIGHTNESS) != 0) {
+    if (offset + 1 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_color_brightness = true;
+    packet.color_brightness = payload[offset++];
+  }
+
   constexpr uint32_t KNOWN_FIELDS =
-      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR;
+      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
     return CFXSyncDecodeResult::MALFORMED;
   }

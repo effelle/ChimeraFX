@@ -117,7 +117,8 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
   }
 
   if (this->role_ == CFXSyncRole::FOLLOWER &&
-      (packet.has_power || packet.has_brightness || packet.has_color)) {
+      (packet.has_power || packet.has_brightness || packet.has_color ||
+       packet.has_color_brightness)) {
     this->has_valid_state_ = true;
     this->status_clear_warning();
     this->apply_remote_state_(packet);
@@ -152,9 +153,9 @@ bool CFXSyncComponent::send_state_(
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
-          snapshot.power, snapshot.brightness, snapshot.red, snapshot.green,
-          snapshot.blue, snapshot.white, snapshot.has_white, this->key_,
-          packet)) {
+          snapshot.power, snapshot.brightness, snapshot.color_brightness,
+          snapshot.red, snapshot.green, snapshot.blue, snapshot.white,
+          snapshot.has_white, this->key_, packet)) {
     return false;
   }
   return this->send_packet_(packet);
@@ -322,20 +323,26 @@ void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
     snapshot.green = packet.green;
     snapshot.blue = packet.blue;
     snapshot.white = packet.source_has_white ? packet.white : 0;
+    snapshot.color_brightness =
+        packet.has_color_brightness ? packet.color_brightness : 255;
     snapshot.has_white = packet.source_has_white;
 
     if (light_supports_rgb_white(*this->light_)) {
       const auto converted = convert_color_for_follower(snapshot, true);
       call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_color_brightness(converted.color_brightness / 255.0f);
       call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
                    converted.blue / 255.0f);
       call.set_white(converted.white / 255.0f);
     } else if (light_supports_rgb(*this->light_)) {
       const auto converted = convert_color_for_follower(snapshot, false);
       call.set_color_mode(light::ColorMode::RGB);
+      call.set_color_brightness(converted.color_brightness / 255.0f);
       call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
                    converted.blue / 255.0f);
     }
+  } else if (packet.has_color_brightness) {
+    call.set_color_brightness(packet.color_brightness / 255.0f);
   }
 
   call.perform();

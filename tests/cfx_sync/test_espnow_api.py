@@ -27,9 +27,11 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("FIELD_BRIGHTNESS = 0x00000002UL", header)
         self.assertIn("FIELD_COLOR = 0x00000004UL", header)
-        self.assertIn("FULL_STATE_PAYLOAD_SIZE = 11", header)
+        self.assertIn("FIELD_COLOR_BRIGHTNESS = 0x00000008UL", header)
+        self.assertIn("FULL_STATE_PAYLOAD_SIZE = 12", header)
         self.assertIn("packet.has_brightness = true", source)
         self.assertIn("packet.has_color = true", source)
+        self.assertIn("packet.has_color_brightness = true", source)
 
     def test_color_helper_is_renderer_independent(self):
         text = COLOR_HEADER.read_text(encoding="utf-8")
@@ -37,7 +39,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("struct CFXSyncLightSnapshot", text)
         self.assertIn("convert_color_for_follower", text)
         self.assertIn(
-            "if (snapshot.has_white) {\n    return snapshot;\n  }",
+            "if (snapshot.has_white == follower_has_white) {\n"
+            "    return snapshot;\n  }",
             text,
         )
         self.assertIn("light::LightState &state", text)
@@ -52,6 +55,7 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("CFXSyncLightSnapshot observed_state_", header)
         self.assertIn("capture_light_snapshot(*this->light_)", source)
+        self.assertIn("snapshot.color_brightness", source)
         self.assertNotIn("observed_power_", header)
 
     def test_follower_applies_one_call_without_effect_changes(self):
@@ -62,6 +66,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("if (packet.has_brightness)", source)
         self.assertIn("if (packet.has_color)", source)
         self.assertIn("call.set_brightness(", source)
+        self.assertIn("call.set_color_brightness(", source)
         self.assertIn("call.set_rgb(", source)
         self.assertIn("call.set_white(", source)
         self.assertNotIn("call.set_effect(", source)

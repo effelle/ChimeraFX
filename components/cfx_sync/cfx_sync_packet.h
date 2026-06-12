@@ -43,6 +43,8 @@ struct CFXSyncPacket {
   bool power{false};
   bool has_brightness{false};
   uint8_t brightness{0};
+  bool has_color_brightness{false};
+  uint8_t color_brightness{0};
   bool has_color{false};
   bool source_has_white{false};
   uint8_t red{0};
@@ -59,16 +61,18 @@ class CFXSyncPacketCodec {
   static constexpr uint32_t FIELD_POWER = 0x00000001UL;
   static constexpr uint32_t FIELD_BRIGHTNESS = 0x00000002UL;
   static constexpr uint32_t FIELD_COLOR = 0x00000004UL;
+  static constexpr uint32_t FIELD_COLOR_BRIGHTNESS = 0x00000008UL;
   static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
   static constexpr uint32_t FULL_STATE_MASK =
-      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR;
-  static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 11;
+      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
+  static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
   static constexpr size_t STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
                            uint32_t sequence, bool power, uint8_t brightness,
+                           uint8_t color_brightness,
                            uint8_t red, uint8_t green, uint8_t blue,
                            uint8_t white, bool has_white,
                            const std::array<uint8_t, 32> &key,

@@ -19,6 +19,7 @@ namespace cfx_sync {
 struct CFXSyncLightSnapshot {
   bool power{false};
   uint8_t brightness{0};
+  uint8_t color_brightness{255};
   uint8_t red{0};
   uint8_t green{0};
   uint8_t blue{0};
@@ -27,7 +28,9 @@ struct CFXSyncLightSnapshot {
 
   bool operator==(const CFXSyncLightSnapshot &other) const {
     return this->power == other.power &&
-           this->brightness == other.brightness && this->red == other.red &&
+           this->brightness == other.brightness &&
+           this->color_brightness == other.color_brightness &&
+           this->red == other.red &&
            this->green == other.green && this->blue == other.blue &&
            this->white == other.white && this->has_white == other.has_white;
   }
@@ -64,6 +67,8 @@ inline CFXSyncLightSnapshot capture_light_snapshot(
   CFXSyncLightSnapshot snapshot;
   snapshot.power = values.is_on();
   snapshot.brightness = quantize_light_value(values.get_brightness());
+  snapshot.color_brightness =
+      quantize_light_value(values.get_color_brightness());
   snapshot.red = quantize_light_value(values.get_red());
   snapshot.green = quantize_light_value(values.get_green());
   snapshot.blue = quantize_light_value(values.get_blue());
@@ -75,30 +80,52 @@ inline CFXSyncLightSnapshot capture_light_snapshot(
 
 inline CFXSyncLightSnapshot convert_color_for_follower(
     CFXSyncLightSnapshot snapshot, bool follower_has_white) {
-  if (!follower_has_white) {
-    snapshot.red = static_cast<uint8_t>(
-        std::min(255, static_cast<int>(snapshot.red) + snapshot.white));
-    snapshot.green = static_cast<uint8_t>(
-        std::min(255, static_cast<int>(snapshot.green) + snapshot.white));
-    snapshot.blue = static_cast<uint8_t>(
-        std::min(255, static_cast<int>(snapshot.blue) + snapshot.white));
+  if (snapshot.has_white == follower_has_white) {
+    return snapshot;
+  }
+
+  auto effective_channel = [&snapshot](uint8_t channel) {
+    return static_cast<uint8_t>(
+        (static_cast<uint16_t>(channel) * snapshot.color_brightness + 127) /
+        255);
+  };
+  uint8_t red = effective_channel(snapshot.red);
+  uint8_t green = effective_channel(snapshot.green);
+  uint8_t blue = effective_channel(snapshot.blue);
+
+  if (follower_has_white) {
+    const uint8_t neutral = std::min(red, std::min(green, blue));
+    red -= neutral;
+    green -= neutral;
+    blue -= neutral;
+    snapshot.white = neutral;
+  } else {
+    red = static_cast<uint8_t>(
+        std::min(255, static_cast<int>(red) + snapshot.white));
+    green = static_cast<uint8_t>(
+        std::min(255, static_cast<int>(green) + snapshot.white));
+    blue = static_cast<uint8_t>(
+        std::min(255, static_cast<int>(blue) + snapshot.white));
     snapshot.white = 0;
-    snapshot.has_white = false;
-    return snapshot;
   }
 
-  if (snapshot.has_white) {
-    return snapshot;
+  snapshot.color_brightness = std::max(red, std::max(green, blue));
+  if (snapshot.color_brightness == 0) {
+    snapshot.red = 255;
+    snapshot.green = 255;
+    snapshot.blue = 255;
+  } else {
+    auto normalize_channel = [&snapshot](uint8_t channel) {
+      return static_cast<uint8_t>(
+          (static_cast<uint16_t>(channel) * 255 +
+           snapshot.color_brightness / 2) /
+          snapshot.color_brightness);
+    };
+    snapshot.red = normalize_channel(red);
+    snapshot.green = normalize_channel(green);
+    snapshot.blue = normalize_channel(blue);
   }
-
-  const uint8_t neutral =
-      std::min(snapshot.red, std::min(snapshot.green, snapshot.blue));
-  snapshot.red -= neutral;
-  snapshot.green -= neutral;
-  snapshot.blue -= neutral;
-  snapshot.white = static_cast<uint8_t>(
-      std::min(255, static_cast<int>(snapshot.white) + neutral));
-  snapshot.has_white = true;
+  snapshot.has_white = follower_has_white;
   return snapshot;
 }
 
