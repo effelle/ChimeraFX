@@ -36,6 +36,10 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("struct CFXSyncLightSnapshot", text)
         self.assertIn("convert_color_for_follower", text)
+        self.assertIn(
+            "if (snapshot.has_white) {\n    return snapshot;\n  }",
+            text,
+        )
         self.assertIn("light::LightState &state", text)
         self.assertNotIn("const light::LightState &state", text)
         self.assertNotIn("cfx_light", text)

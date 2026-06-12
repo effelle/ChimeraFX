@@ -87,6 +87,10 @@ inline CFXSyncLightSnapshot convert_color_for_follower(
     return snapshot;
   }
 
+  if (snapshot.has_white) {
+    return snapshot;
+  }
+
   const uint8_t neutral =
       std::min(snapshot.red, std::min(snapshot.green, snapshot.blue));
   snapshot.red -= neutral;
