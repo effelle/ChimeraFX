@@ -1,0 +1,13 @@
+substitutions:
+  sync_role: follower
+
+packages:
+  common: !include common.yaml
+
+esphome:
+  name: cfx-sync-follower-idf
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf

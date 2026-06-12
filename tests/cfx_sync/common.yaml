@@ -1,0 +1,33 @@
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [cfx_sync]
+
+logger:
+
+espnow:
+  id: espnow_bus
+  channel: 1
+  auto_add_peer: false
+
+output:
+  - platform: ledc
+    id: sync_output
+    pin: GPIO4
+
+light:
+  - platform: monochromatic
+    id: sync_light
+    name: "Sync Test Light"
+    output: sync_output
+
+cfx_sync:
+  id: room_sync
+  espnow_id: espnow_bus
+  role: ${sync_role}
+  light_id: sync_light
+  peer: "02:00:00:00:00:02"
+  group: living_room
+  key: "living-room-2026"
+  heartbeat: 30s

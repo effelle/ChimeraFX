@@ -1,0 +1,314 @@
+#include "cfx_sync.h"
+
+#ifdef USE_ESP32
+
+#include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
+
+#include <esp_random.h>
+#include <cstring>
+#include <inttypes.h>
+
+namespace esphome {
+namespace cfx_sync {
+
+static const char *const TAG = "cfx_sync";
+
+void CFXSyncLightListener::on_light_remote_values_update() {
+  if (this->parent_ != nullptr) {
+    this->parent_->on_local_light_update();
+  }
+}
+
+void CFXSyncComponent::setup() {
+  if (this->espnow_ == nullptr || this->light_ == nullptr) {
+    ESP_LOGE(TAG, "ESP-NOW and light references are required");
+    this->mark_failed();
+    return;
+  }
+
+  this->boot_id_ = esp_random();
+  if (this->boot_id_ == 0) {
+    this->boot_id_ = 1;
+  }
+  this->espnow_->register_received_handler(this);
+
+  if (this->role_ == CFXSyncRole::LEADER) {
+    this->observed_power_ = this->light_->remote_values.is_on();
+    this->has_observed_power_ = true;
+    this->light_->add_remote_values_listener(&this->light_listener_);
+    this->set_interval("heartbeat", this->heartbeat_ms_,
+                       [this]() { this->send_state_(); });
+  } else {
+    this->schedule_follower_recovery_();
+  }
+}
+
+void CFXSyncComponent::dump_config() {
+  char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+  format_mac_addr_upper(this->peer_.data(), peer_buf);
+  const uint32_t packet_age =
+      this->last_valid_packet_ms_ == 0
+          ? 0
+          : millis() - this->last_valid_packet_ms_;
+
+  ESP_LOGCONFIG(TAG,
+                "CFX Sync:\n"
+                "  Role: %s\n"
+                "  Light: %s\n"
+                "  Peer: %s\n"
+                "  Group hash: %08" PRIX32 "\n"
+                "  Heartbeat: %" PRIu32 " ms\n"
+                "  Last valid packet age: %" PRIu32 " ms",
+                this->role_name_(),
+                this->light_ != nullptr ? this->light_->get_name().c_str()
+                                        : "<unset>",
+                peer_buf, this->group_hash_, this->heartbeat_ms_, packet_age);
+  ESP_LOGCONFIG(TAG,
+                "  Packets: sent=%" PRIu32 " received=%" PRIu32
+                " malformed=%" PRIu32 " auth_failed=%" PRIu32
+                " wrong_group=%" PRIu32 " stale=%" PRIu32
+                " unsupported=%" PRIu32 " send_failed=%" PRIu32,
+                this->sent_packets_, this->received_packets_,
+                this->malformed_packets_, this->authentication_failures_,
+                this->wrong_group_packets_, this->stale_packets_,
+                this->unsupported_packets_, this->send_failures_);
+}
+
+bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
+                                   const uint8_t *data, uint8_t size) {
+  if (!this->is_peer_(info.src_addr)) {
+    return false;
+  }
+
+  CFXSyncPacket packet;
+  const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
+      data, size, this->group_hash_, this->key_, packet);
+  if (result == CFXSyncDecodeResult::NOT_CFX) {
+    return false;
+  }
+  if (result != CFXSyncDecodeResult::OK) {
+    this->handle_decode_failure_(result);
+    return true;
+  }
+  if (!this->accept_sequence_(packet.boot_id, packet.sequence)) {
+    this->stale_packets_++;
+    this->log_rejection_("Ignoring duplicate or stale packet");
+    return true;
+  }
+
+  this->received_packets_++;
+  this->last_valid_packet_ms_ = millis();
+
+  if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
+    if (this->role_ == CFXSyncRole::LEADER) {
+      this->send_state_();
+    }
+    return true;
+  }
+
+  if (this->role_ == CFXSyncRole::FOLLOWER && packet.has_power) {
+    this->has_valid_state_ = true;
+    this->status_clear_warning();
+    this->apply_remote_power_(packet.power);
+  }
+  return true;
+}
+
+void CFXSyncComponent::on_local_light_update() {
+  if (this->role_ != CFXSyncRole::LEADER ||
+      this->applying_remote_state_ || this->light_ == nullptr) {
+    return;
+  }
+
+  const bool power = this->light_->remote_values.is_on();
+  if (this->has_observed_power_ && power == this->observed_power_) {
+    return;
+  }
+  this->has_observed_power_ = true;
+  this->observed_power_ = power;
+  this->send_state_();
+}
+
+bool CFXSyncComponent::send_state_() {
+  if (this->role_ != CFXSyncRole::LEADER || this->light_ == nullptr) {
+    return false;
+  }
+
+  std::vector<uint8_t> packet;
+  if (!CFXSyncPacketCodec::encode_state(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          this->light_->remote_values.is_on(), this->key_, packet)) {
+    return false;
+  }
+  return this->send_packet_(packet);
+}
+
+bool CFXSyncComponent::send_sync_request_() {
+  if (this->role_ != CFXSyncRole::FOLLOWER) {
+    return false;
+  }
+
+  std::vector<uint8_t> packet;
+  if (!CFXSyncPacketCodec::encode_sync_request(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          this->key_, packet)) {
+    return false;
+  }
+  return this->send_packet_(packet);
+}
+
+bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
+  if (this->espnow_ == nullptr) {
+    return false;
+  }
+
+  const esp_err_t result = this->espnow_->send(
+      this->peer_.data(), packet,
+      [this](esp_err_t send_result) {
+        this->handle_send_result_(send_result);
+      });
+  if (result != ESP_OK) {
+    this->handle_send_result_(result);
+    return false;
+  }
+  this->sent_packets_++;
+  return true;
+}
+
+uint32_t CFXSyncComponent::next_sequence_() {
+  this->tx_sequence_++;
+  if (this->tx_sequence_ == 0) {
+    this->boot_id_ = esp_random();
+    if (this->boot_id_ == 0) {
+      this->boot_id_ = 1;
+    }
+    this->tx_sequence_ = 1;
+  }
+  return this->tx_sequence_;
+}
+
+bool CFXSyncComponent::accept_sequence_(uint32_t boot_id,
+                                        uint32_t sequence) {
+  if (!this->has_rx_sequence_ || boot_id != this->rx_boot_id_) {
+    this->has_rx_sequence_ = true;
+    this->rx_boot_id_ = boot_id;
+    this->rx_sequence_ = sequence;
+    return true;
+  }
+  if (sequence <= this->rx_sequence_) {
+    return false;
+  }
+  this->rx_sequence_ = sequence;
+  return true;
+}
+
+void CFXSyncComponent::handle_send_result_(esp_err_t result) {
+  if (result == ESP_OK) {
+    this->consecutive_send_failures_ = 0;
+    if (this->role_ == CFXSyncRole::LEADER) {
+      this->status_clear_warning();
+    }
+    return;
+  }
+
+  this->send_failures_++;
+  if (this->consecutive_send_failures_ < UINT8_MAX) {
+    this->consecutive_send_failures_++;
+  }
+  const uint32_t now = millis();
+  if (this->last_send_failure_log_ms_ == 0 ||
+      now - this->last_send_failure_log_ms_ >= 5000) {
+    ESP_LOGW(TAG, "ESP-NOW send failed: %s", esp_err_to_name(result));
+    this->last_send_failure_log_ms_ = now;
+  }
+  if (this->role_ == CFXSyncRole::LEADER &&
+      this->consecutive_send_failures_ >=
+          MAX_CONSECUTIVE_SEND_FAILURES) {
+    this->status_set_warning();
+  }
+}
+
+void CFXSyncComponent::handle_decode_failure_(
+    CFXSyncDecodeResult result) {
+  switch (result) {
+    case CFXSyncDecodeResult::MALFORMED:
+      this->malformed_packets_++;
+      this->log_rejection_("Ignoring malformed packet");
+      break;
+    case CFXSyncDecodeResult::UNSUPPORTED_VERSION:
+    case CFXSyncDecodeResult::UNSUPPORTED_TYPE:
+      this->unsupported_packets_++;
+      this->log_rejection_("Ignoring unsupported packet");
+      break;
+    case CFXSyncDecodeResult::WRONG_GROUP:
+      this->wrong_group_packets_++;
+      this->log_rejection_("Ignoring packet for another group");
+      break;
+    case CFXSyncDecodeResult::BAD_AUTH:
+      this->authentication_failures_++;
+      break;
+    default:
+      break;
+  }
+}
+
+void CFXSyncComponent::log_rejection_(const char *message) {
+  const uint32_t now = millis();
+  if (this->last_rejection_log_ms_ == 0 ||
+      now - this->last_rejection_log_ms_ >= 5000) {
+    ESP_LOGD(TAG, "%s", message);
+    this->last_rejection_log_ms_ = now;
+  }
+}
+
+void CFXSyncComponent::schedule_follower_recovery_() {
+  this->set_timeout("sync-request-1", 1000, [this]() {
+    if (!this->has_valid_state_) {
+      this->send_sync_request_();
+    }
+  });
+  this->set_timeout("sync-request-2", 2000, [this]() {
+    if (!this->has_valid_state_) {
+      this->send_sync_request_();
+    }
+  });
+  this->set_timeout("sync-request-3", 4000, [this]() {
+    if (!this->has_valid_state_) {
+      this->send_sync_request_();
+    }
+  });
+  this->set_timeout("sync-recovery-expired", 6000, [this]() {
+    if (!this->has_valid_state_) {
+      ESP_LOGW(TAG, "No valid leader state received during startup recovery");
+      this->status_set_warning();
+    }
+  });
+}
+
+void CFXSyncComponent::apply_remote_power_(bool power) {
+  if (this->light_ == nullptr ||
+      this->light_->remote_values.is_on() == power) {
+    return;
+  }
+
+  this->applying_remote_state_ = true;
+  auto call = this->light_->make_call();
+  call.set_state(power);
+  call.perform();
+  this->applying_remote_state_ = false;
+}
+
+bool CFXSyncComponent::is_peer_(const uint8_t *address) const {
+  return address != nullptr &&
+         memcmp(address, this->peer_.data(), this->peer_.size()) == 0;
+}
+
+const char *CFXSyncComponent::role_name_() const {
+  return this->role_ == CFXSyncRole::LEADER ? "leader" : "follower";
+}
+
+}  // namespace cfx_sync
+}  // namespace esphome
+
+#endif  // USE_ESP32

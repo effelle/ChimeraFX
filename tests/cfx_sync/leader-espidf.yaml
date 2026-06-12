@@ -1,0 +1,13 @@
+substitutions:
+  sync_role: leader
+
+packages:
+  common: !include common.yaml
+
+esphome:
+  name: cfx-sync-leader-idf
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
