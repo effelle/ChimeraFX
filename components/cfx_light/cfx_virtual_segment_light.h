@@ -263,8 +263,8 @@ public:
 protected:
   void apply_force_white_to_transition_buffer_() {
     auto *state = this->state_parent_;
-    if (state == nullptr || !state->is_transformer_active() ||
-        !this->is_force_white_active_() || this->is_effect_active()) {
+    if (state == nullptr || !this->is_force_white_active_() ||
+        this->is_effect_active()) {
       return;
     }
 
