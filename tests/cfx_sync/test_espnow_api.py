@@ -85,6 +85,23 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_white(", source)
         self.assertNotIn("call.set_effect(", source)
 
+    def test_follower_fans_out_with_independent_light_calls(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void apply_remote_state_to_light_(", header
+        )
+        self.assertIn("for (auto *light : this->lights_)", source)
+        self.assertIn(
+            "this->apply_remote_state_to_light_(packet, light);",
+            source,
+        )
+        self.assertIn("auto call = light->make_call();", source)
+        self.assertIn("light_supports_rgb_white(*light)", source)
+        self.assertIn("light_supports_rgb(*light)", source)
+        self.assertEqual(source.count("call.perform();"), 1)
+
     def test_sync_component_has_no_renderer_or_effect_dependency(self):
         component_dir = ROOT / "components" / "cfx_sync"
         source_files = list(component_dir.glob("*.h")) + list(

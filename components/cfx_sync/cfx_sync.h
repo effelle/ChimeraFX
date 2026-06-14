@@ -82,6 +82,8 @@ class CFXSyncComponent : public Component,
   void log_rejection_(const char *message);
   void schedule_follower_recovery_();
   void apply_remote_state_(const CFXSyncPacket &packet);
+  void apply_remote_state_to_light_(const CFXSyncPacket &packet,
+                                    light::LightState *light);
   light::LightState *leader_light_() const;
   bool is_peer_(const uint8_t *address) const;
   const char *role_name_() const;

@@ -319,12 +319,17 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 }
 
 void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
-  if (this->lights_.empty() || this->lights_[0] == nullptr) {
-    return;
-  }
-
-  auto *light = this->lights_[0];
   RemoteApplyGuard guard(this->applying_remote_state_);
+  for (auto *light : this->lights_) {
+    if (light == nullptr) {
+      continue;
+    }
+    this->apply_remote_state_to_light_(packet, light);
+  }
+}
+
+void CFXSyncComponent::apply_remote_state_to_light_(
+    const CFXSyncPacket &packet, light::LightState *light) {
   auto call = light->make_call();
 
   if (packet.has_power) {
