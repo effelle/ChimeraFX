@@ -77,16 +77,19 @@ void CFXSyncComponent::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "CFX Sync:\n"
                 "  Role: %s\n"
-                "  Light: %s\n"
                 "  Peer: %s\n"
                 "  Group hash: %08" PRIX32 "\n"
                 "  Heartbeat: %" PRIu32 " ms\n"
                 "  Last valid packet age: %" PRIu32 " ms",
-                this->role_name_(),
-                !this->lights_.empty() && this->lights_[0] != nullptr
-                    ? this->lights_[0]->get_name().c_str()
-                    : "<unset>",
-                peer_buf, this->group_hash_, this->heartbeat_ms_, packet_age);
+                this->role_name_(), peer_buf, this->group_hash_,
+                this->heartbeat_ms_, packet_age);
+  ESP_LOGCONFIG(TAG, "  Lights: %u",
+                static_cast<unsigned>(this->lights_.size()));
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *light = this->lights_[i];
+    ESP_LOGCONFIG(TAG, "    [%u] %s", static_cast<unsigned>(i),
+                  light != nullptr ? light->get_name().c_str() : "<null>");
+  }
   ESP_LOGCONFIG(TAG,
                 "  Packets: sent=%" PRIu32 " received=%" PRIu32
                 " malformed=%" PRIu32 " auth_failed=%" PRIu32

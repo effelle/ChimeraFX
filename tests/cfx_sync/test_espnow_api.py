@@ -102,6 +102,16 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("light_supports_rgb(*light)", source)
         self.assertEqual(source.count("call.perform();"), 1)
 
+    def test_dump_config_lists_all_bound_lights(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn('"  Lights: %u"', source)
+        self.assertIn(
+            "for (size_t i = 0; i < this->lights_.size(); i++)",
+            source,
+        )
+        self.assertIn('"    [%u] %s"', source)
+
     def test_sync_component_has_no_renderer_or_effect_dependency(self):
         component_dir = ROOT / "components" / "cfx_sync"
         source_files = list(component_dir.glob("*.h")) + list(
