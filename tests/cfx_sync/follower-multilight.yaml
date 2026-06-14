@@ -39,9 +39,21 @@ light:
 cfx_sync:
   id: room_sync
   espnow_id: espnow_bus
-  role: ${sync_role}
-  lights: sync_light
+  role: follower
+  lights:
+    - sync_light
+    - sync_light_b
+    - sync_light_c
   peer: "02:00:00:00:00:02"
   group: living_room
   key: "living-room-2026"
   heartbeat: 30s
+
+esphome:
+  name: cfx-sync-follower-multilight
+  min_version: 2026.5.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf

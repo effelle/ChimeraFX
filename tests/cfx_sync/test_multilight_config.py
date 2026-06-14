@@ -16,6 +16,10 @@ from components.cfx_sync import (
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
+COMMON = ROOT / "tests" / "cfx_sync" / "common.yaml"
+MULTI_FOLLOWER = (
+    ROOT / "tests" / "cfx_sync" / "follower-multilight.yaml"
+)
 
 
 def light_id(name):
@@ -89,6 +93,16 @@ class MultiLightConfigTests(unittest.TestCase):
         )
         self.assertIn("cg.add(var.add_light(light_var))", source)
         self.assertNotIn("var.set_light(", source)
+
+    def test_yaml_fixtures_use_lights_interface(self):
+        common = COMMON.read_text(encoding="utf-8")
+        follower = MULTI_FOLLOWER.read_text(encoding="utf-8")
+
+        self.assertIn("lights: sync_light", common)
+        self.assertNotIn("light_id:", common)
+        self.assertIn("- sync_light", follower)
+        self.assertIn("- sync_light_b", follower)
+        self.assertIn("- sync_light_c", follower)
 
 
 if __name__ == "__main__":
