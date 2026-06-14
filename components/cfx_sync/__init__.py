@@ -137,13 +137,14 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     espnow_var = await cg.get_variable(config[CONF_ESPNOW_ID])
-    light_var = await cg.get_variable(config[CONF_LIGHT_ID])
     peer = config[CONF_PEER]
     peer_bytes = [HexInt(value) for value in peer.parts]
     key_bytes = [HexInt(value) for value in _derive_key(config[CONF_KEY])]
 
     cg.add(var.set_espnow(espnow_var))
-    cg.add(var.set_light(light_var))
+    for light_id in config[CONF_LIGHTS]:
+        light_var = await cg.get_variable(light_id)
+        cg.add(var.add_light(light_var))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_peer(peer_bytes))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))

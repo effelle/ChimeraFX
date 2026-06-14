@@ -81,6 +81,15 @@ class MultiLightConfigTests(unittest.TestCase):
         self.assertNotIn('CONF_LIGHT_ID = "light_id"', source)
         self.assertNotIn("cv.Required(CONF_LIGHT_ID)", source)
 
+    def test_codegen_registers_every_configured_light(self):
+        source = COMPONENT.read_text(encoding="utf-8")
+        self.assertIn("for light_id in config[CONF_LIGHTS]:", source)
+        self.assertIn(
+            "light_var = await cg.get_variable(light_id)", source
+        )
+        self.assertIn("cg.add(var.add_light(light_var))", source)
+        self.assertNotIn("var.set_light(", source)
+
 
 if __name__ == "__main__":
     unittest.main()
