@@ -15,7 +15,7 @@ AUTO_LOAD = ["hmac_sha256"]
 
 CONF_ESPNOW_ID = "espnow_id"
 CONF_ROLE = "role"
-CONF_LIGHT_ID = "light_id"
+CONF_LIGHTS = "lights"
 CONF_PEER = "peer"
 CONF_GROUP = "group"
 CONF_KEY = "key"
@@ -37,6 +37,30 @@ ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,
     ROLE_FOLLOWER: CFXSyncRole.FOLLOWER,
 }
+
+_LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
+
+
+def _normalize_lights(value):
+    return _LIGHTS_VALIDATOR(value)
+
+
+def _validate_role_lights(config):
+    lights = config[CONF_LIGHTS]
+    if config[CONF_ROLE] == ROLE_LEADER and len(lights) != 1:
+        raise cv.Invalid("cfx_sync leader requires exactly one light")
+    if config[CONF_ROLE] == ROLE_FOLLOWER and not lights:
+        raise cv.Invalid("cfx_sync follower requires at least one light")
+
+    seen = set()
+    for light_id in lights:
+        light_name = light_id.id
+        if light_name in seen:
+            raise cv.Invalid(
+                f"cfx_sync duplicate light id '{light_name}'"
+            )
+        seen.add(light_name)
+    return config
 
 
 def _validate_group(value):
@@ -89,7 +113,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_ROLE): cv.one_of(
                 ROLE_LEADER, ROLE_FOLLOWER, lower=True
             ),
-            cv.Required(CONF_LIGHT_ID): cv.use_id(light.LightState),
+            cv.Required(CONF_LIGHTS): _normalize_lights,
             cv.Required(CONF_PEER): cv.mac_address,
             cv.Required(CONF_GROUP): _validate_group,
             cv.Required(CONF_KEY): _validate_key,
@@ -101,6 +125,7 @@ CONFIG_SCHEMA = cv.All(
             ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
+    _validate_role_lights,
     cv.only_on_esp32,
 )
 

@@ -1,0 +1,86 @@
+from pathlib import Path
+import unittest
+
+from esphome import config_validation as cv
+from esphome.core import ID
+
+from components.cfx_sync import (
+    CONF_LIGHTS,
+    CONF_ROLE,
+    ROLE_FOLLOWER,
+    ROLE_LEADER,
+    _normalize_lights,
+    _validate_role_lights,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
+
+
+def light_id(name):
+    return ID(name)
+
+
+class MultiLightConfigTests(unittest.TestCase):
+    def test_scalar_light_is_normalized_to_one_item(self):
+        lights = _normalize_lights("leader_segment")
+        self.assertEqual([item.id for item in lights], ["leader_segment"])
+
+    def test_list_of_lights_is_preserved(self):
+        lights = _normalize_lights(
+            ["follower_segment_a", "follower_segment_b"]
+        )
+        self.assertEqual(
+            [item.id for item in lights],
+            ["follower_segment_a", "follower_segment_b"],
+        )
+
+    def test_leader_requires_exactly_one_light(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "leader requires exactly one light"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_LEADER,
+                    CONF_LIGHTS: [light_id("one"), light_id("two")],
+                }
+            )
+
+    def test_follower_requires_at_least_one_light(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "follower requires at least one light"
+        ):
+            _validate_role_lights(
+                {CONF_ROLE: ROLE_FOLLOWER, CONF_LIGHTS: []}
+            )
+
+    def test_duplicate_lights_are_rejected(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "duplicate light id 'same_light'"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_FOLLOWER,
+                    CONF_LIGHTS: [
+                        light_id("same_light"),
+                        light_id("same_light"),
+                    ],
+                }
+            )
+
+    def test_valid_follower_fanout_is_accepted(self):
+        config = {
+            CONF_ROLE: ROLE_FOLLOWER,
+            CONF_LIGHTS: [light_id("one"), light_id("two")],
+        }
+        self.assertIs(_validate_role_lights(config), config)
+
+    def test_legacy_light_id_option_is_removed(self):
+        source = COMPONENT.read_text(encoding="utf-8")
+        self.assertNotIn('CONF_LIGHT_ID = "light_id"', source)
+        self.assertNotIn("cv.Required(CONF_LIGHT_ID)", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
