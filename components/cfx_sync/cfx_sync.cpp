@@ -29,9 +29,21 @@ void CFXSyncLightListener::on_light_remote_values_update() {
   }
 }
 
+light::LightState *CFXSyncComponent::leader_light_() const {
+  if (this->role_ != CFXSyncRole::LEADER || this->lights_.size() != 1) {
+    return nullptr;
+  }
+  return this->lights_[0];
+}
+
 void CFXSyncComponent::setup() {
-  if (this->espnow_ == nullptr || this->light_ == nullptr) {
-    ESP_LOGE(TAG, "ESP-NOW and light references are required");
+  if (this->espnow_ == nullptr || this->lights_.empty()) {
+    ESP_LOGE(TAG, "ESP-NOW and at least one light reference are required");
+    this->mark_failed();
+    return;
+  }
+  if (this->role_ == CFXSyncRole::LEADER && this->lights_.size() != 1) {
+    ESP_LOGE(TAG, "Leader requires exactly one light reference");
     this->mark_failed();
     return;
   }
@@ -43,9 +55,10 @@ void CFXSyncComponent::setup() {
   this->espnow_->register_receive_handler(this);
 
   if (this->role_ == CFXSyncRole::LEADER) {
-    this->observed_state_ = capture_light_snapshot(*this->light_);
+    auto *leader = this->leader_light_();
+    this->observed_state_ = capture_light_snapshot(*leader);
     this->has_observed_state_ = true;
-    this->light_->add_remote_values_listener(&this->light_listener_);
+    leader->add_remote_values_listener(&this->light_listener_);
     this->set_interval("heartbeat", this->heartbeat_ms_,
                        [this]() { this->send_state_(); });
   } else {
@@ -70,8 +83,9 @@ void CFXSyncComponent::dump_config() {
                 "  Heartbeat: %" PRIu32 " ms\n"
                 "  Last valid packet age: %" PRIu32 " ms",
                 this->role_name_(),
-                this->light_ != nullptr ? this->light_->get_name().c_str()
-                                        : "<unset>",
+                !this->lights_.empty() && this->lights_[0] != nullptr
+                    ? this->lights_[0]->get_name().c_str()
+                    : "<unset>",
                 peer_buf, this->group_hash_, this->heartbeat_ms_, packet_age);
   ESP_LOGCONFIG(TAG,
                 "  Packets: sent=%" PRIu32 " received=%" PRIu32
@@ -127,12 +141,12 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
 }
 
 void CFXSyncComponent::on_local_light_update() {
-  if (this->role_ != CFXSyncRole::LEADER ||
-      this->applying_remote_state_ || this->light_ == nullptr) {
+  auto *leader = this->leader_light_();
+  if (this->applying_remote_state_ || leader == nullptr) {
     return;
   }
 
-  const auto snapshot = capture_light_snapshot(*this->light_);
+  const auto snapshot = capture_light_snapshot(*leader);
   if (this->has_observed_state_ && snapshot == this->observed_state_) {
     return;
   }
@@ -142,10 +156,11 @@ void CFXSyncComponent::on_local_light_update() {
 }
 
 bool CFXSyncComponent::send_state_() {
-  if (this->role_ != CFXSyncRole::LEADER || this->light_ == nullptr) {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr) {
     return false;
   }
-  return this->send_state_(capture_light_snapshot(*this->light_));
+  return this->send_state_(capture_light_snapshot(*leader));
 }
 
 bool CFXSyncComponent::send_state_(
@@ -304,12 +319,13 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 }
 
 void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
-  if (this->light_ == nullptr) {
+  if (this->lights_.empty() || this->lights_[0] == nullptr) {
     return;
   }
 
+  auto *light = this->lights_[0];
   RemoteApplyGuard guard(this->applying_remote_state_);
-  auto call = this->light_->make_call();
+  auto call = light->make_call();
 
   if (packet.has_power) {
     call.set_state(packet.power);
@@ -327,14 +343,14 @@ void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
         packet.has_color_brightness ? packet.color_brightness : 255;
     snapshot.has_white = packet.source_has_white;
 
-    if (light_supports_rgb_white(*this->light_)) {
+    if (light_supports_rgb_white(*light)) {
       const auto converted = convert_color_for_follower(snapshot, true);
       call.set_color_mode(light::ColorMode::RGB_WHITE);
       call.set_color_brightness(converted.color_brightness / 255.0f);
       call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
                    converted.blue / 255.0f);
       call.set_white(converted.white / 255.0f);
-    } else if (light_supports_rgb(*this->light_)) {
+    } else if (light_supports_rgb(*light)) {
       const auto converted = convert_color_for_follower(snapshot, false);
       call.set_color_mode(light::ColorMode::RGB);
       call.set_color_brightness(converted.color_brightness / 255.0f);

@@ -49,7 +49,9 @@ class CFXSyncComponent : public Component,
   void set_espnow(espnow::ESPNowComponent *espnow) {
     this->espnow_ = espnow;
   }
-  void set_light(light::LightState *light) { this->light_ = light; }
+  void add_light(light::LightState *light) {
+    this->lights_.push_back(light);
+  }
   void set_role(CFXSyncRole role) { this->role_ = role; }
   void set_peer(const std::array<uint8_t, 6> &peer) {
     this->peer_ = peer;
@@ -80,11 +82,12 @@ class CFXSyncComponent : public Component,
   void log_rejection_(const char *message);
   void schedule_follower_recovery_();
   void apply_remote_state_(const CFXSyncPacket &packet);
+  light::LightState *leader_light_() const;
   bool is_peer_(const uint8_t *address) const;
   const char *role_name_() const;
 
   espnow::ESPNowComponent *espnow_{nullptr};
-  light::LightState *light_{nullptr};
+  std::vector<light::LightState *> lights_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   std::array<uint8_t, 6> peer_{};
   std::array<uint8_t, 32> key_{};

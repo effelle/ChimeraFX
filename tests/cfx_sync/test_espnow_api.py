@@ -54,9 +54,23 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("CFXSyncLightSnapshot observed_state_", header)
-        self.assertIn("capture_light_snapshot(*this->light_)", source)
+        self.assertIn("capture_light_snapshot(*leader)", source)
         self.assertIn("snapshot.color_brightness", source)
         self.assertNotIn("observed_power_", header)
+
+    def test_runtime_stores_ordered_light_collection(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void add_light(light::LightState *light)", header
+        )
+        self.assertIn(
+            "std::vector<light::LightState *> lights_;", header
+        )
+        self.assertNotIn("void set_light(", header)
+        self.assertNotIn("light::LightState *light_{", header)
+        self.assertIn("this->lights_[0]", source)
 
     def test_follower_applies_one_call_without_effect_changes(self):
         source = SOURCE.read_text(encoding="utf-8")
