@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from esphome import automation
 from esphome import config_validation as cv
@@ -50,7 +50,7 @@ class _FakeFullConfig:
         raise AssertionError(f"unexpected config path: {path}")
 
 
-class EffectCatalogTests(unittest.TestCase):
+class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
     def test_register_action_support_accepts_synchronous_keyword(self):
         calls = []
 
@@ -76,6 +76,18 @@ class EffectCatalogTests(unittest.TestCase):
 
         self.assertIs(cfx_effect.CFX_EFFECT_NAMES, CFX_EFFECT_NAMES)
         self.assertIs(cfx_sync.CFX_EFFECT_NAMES, CFX_EFFECT_NAMES)
+
+    def test_every_published_effect_has_a_canonical_name(self):
+        from components import cfx_effect
+        from components.cfx_effect_registry import CFX_EFFECT_NAMES
+
+        published_ids = {
+            effect_id
+            for category, effect_id, _ in cfx_effect.CFX_EFFECTS
+            if category != "sep"
+        }
+
+        self.assertEqual(published_ids - CFX_EFFECT_NAMES.keys(), set())
 
     def test_cfx_sync_has_no_effect_registry_source_parsing(self):
         source = COMPONENT.read_text(encoding="utf-8")
@@ -294,20 +306,65 @@ class EffectCatalogTests(unittest.TestCase):
         finally:
             cfx_sync.full_config.reset(token)
 
-    def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
-        source = COMPONENT.read_text(encoding="utf-8")
+    async def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
+        emitted = []
 
-        self.assertIn(
-            "for light_index, light_id in enumerate(config[CONF_LIGHTS]):",
-            source,
-        )
-        self.assertIn(
-            "for effect_id, effect_name in effect_catalogs[light_index]:",
-            source,
-        )
-        self.assertIn(
-            "var.add_effect(light_index, effect_id, effect_name)",
-            source,
+        class _Var:
+            def __getattr__(self, name):
+                return lambda *args: (name, *args)
+
+        var = _Var()
+        espnow_var = _Var()
+        light_a = object()
+        light_b = object()
+        peer = SimpleNamespace(parts=[0, 1, 2, 3, 4, 5])
+        heartbeat = SimpleNamespace(total_milliseconds=30_000)
+        config = {
+            "id": light_id("sync"),
+            "espnow_id": light_id("espnow"),
+            "role": "follower",
+            "lights": [light_id("a"), light_id("b")],
+            "peer": peer,
+            "group": "room",
+            "key": "password",
+            "heartbeat": heartbeat,
+            "_effect_catalogs": [
+                [(3, "Wipe"), (3, "Slow Wipe")],
+                [(9, "Rainbow")],
+            ],
+        }
+
+        with (
+            patch.object(cfx_sync.cg, "new_Pvariable", return_value=var),
+            patch.object(
+                cfx_sync.cg,
+                "register_component",
+                new=AsyncMock(),
+            ),
+            patch.object(
+                cfx_sync.cg,
+                "get_variable",
+                new=AsyncMock(
+                    side_effect=[espnow_var, light_a, light_b]
+                ),
+            ),
+            patch.object(
+                cfx_sync.cg,
+                "add",
+                side_effect=emitted.append,
+            ),
+        ):
+            await cfx_sync.to_code(config)
+
+        self.assertEqual(
+            emitted[1:6],
+            [
+                ("add_light", light_a),
+                ("add_effect", 0, 3, "Wipe"),
+                ("add_effect", 0, 3, "Slow Wipe"),
+                ("add_light", light_b),
+                ("add_effect", 1, 9, "Rainbow"),
+            ],
         )
 
 
