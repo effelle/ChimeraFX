@@ -1,11 +1,25 @@
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from esphome import automation
 from esphome import config_validation as cv
 from esphome.core import ID
 
 from components import cfx_sync
+
+if __package__:
+    from .esphome_test_support import (
+        ensure_register_action_supports_synchronous,
+    )
+else:
+    from esphome_test_support import (
+        ensure_register_action_supports_synchronous,
+    )
+
+
+ensure_register_action_supports_synchronous(automation)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +51,25 @@ class _FakeFullConfig:
 
 
 class EffectCatalogTests(unittest.TestCase):
+    def test_register_action_support_accepts_synchronous_keyword(self):
+        calls = []
+
+        def legacy_register_action(name, action_type, schema):
+            calls.append((name, action_type, schema))
+            return lambda function: function
+
+        legacy_automation = SimpleNamespace(
+            register_action=legacy_register_action
+        )
+
+        ensure_register_action_supports_synchronous(legacy_automation)
+        decorator = legacy_automation.register_action(
+            "test.action", object, {}, synchronous=True
+        )
+
+        self.assertTrue(callable(decorator))
+        self.assertEqual(len(calls), 1)
+
     def test_cfx_effect_and_cfx_sync_share_effect_name_registry(self):
         from components import cfx_effect
         from components.cfx_effect_registry import CFX_EFFECT_NAMES
