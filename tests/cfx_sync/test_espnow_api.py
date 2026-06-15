@@ -377,6 +377,18 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn('std::string desired_effect{"None"};', source)
 
+    def test_follower_does_not_select_effect_while_turning_off(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "const bool may_select_effect = "
+            "!packet.has_power || packet.power;",
+            source,
+        )
+        self.assertIn(
+            "if (packet.has_effect && may_select_effect)", source
+        )
+
     def test_missing_and_unsupported_effects_fall_back_with_logi(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

@@ -400,7 +400,8 @@ void CFXSyncComponent::apply_remote_state_to_light_(
     call.set_color_brightness(packet.color_brightness / 255.0f);
   }
 
-  if (packet.has_effect) {
+  const bool may_select_effect = !packet.has_power || packet.power;
+  if (packet.has_effect && may_select_effect) {
     std::string desired_effect{"None"};
     bool fallback = false;
     const bool identity_changed =
