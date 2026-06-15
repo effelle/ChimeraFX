@@ -10,13 +10,58 @@ esp32:
   framework:
     type: esp-idf
 
+light:
+  - platform: cfx_light
+    id: sync_effect_follower_a
+    name: "Sync Effect Follower A"
+    pin: GPIO16
+    num_leds: 8
+    chipset: WS2812X
+    all_effects: false
+    controls: false
+    effects:
+      - addressable_cfx:
+          effect_id: 3
+      - addressable_cfx:
+          name: "Slow Red Wipe"
+          effect_id: 3
+          set_speed: 32
+          set_color: [100, 0, 0]
+      - addressable_lambda:
+          name: "Unsupported Follower A"
+          update_interval: 50ms
+          lambda: |-
+            it.all() = Color::BLACK;
+
+  - platform: cfx_light
+    id: sync_effect_follower_b
+    name: "Sync Effect Follower B"
+    pin: GPIO17
+    num_leds: 8
+    chipset: WS2812X
+    all_effects: false
+    controls: false
+    effects:
+      - addressable_cfx:
+          effect_id: 3
+      - addressable_cfx:
+          name: "Slow Red Wipe"
+          effect_id: 3
+          set_speed: 32
+          set_color: [100, 0, 0]
+      - addressable_lambda:
+          name: "Unsupported Follower B"
+          update_interval: 50ms
+          lambda: |-
+            it.all() = Color::BLACK;
+
 cfx_sync:
   id: effect_sync
   espnow_id: espnow_bus
   role: follower
   lights:
-    - sync_effect_segment_a
-    - sync_effect_segment_b
+    - sync_effect_follower_a
+    - sync_effect_follower_b
   peer: "02:00:00:00:00:02"
   group: effect_room
   key: "effect-room-2026"
