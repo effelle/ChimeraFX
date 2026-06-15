@@ -1,0 +1,156 @@
+from pathlib import Path
+import unittest
+
+from esphome import config_validation as cv
+from esphome.core import ID
+
+from components import cfx_sync
+
+
+ROOT = Path(__file__).resolve().parents[2]
+COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
+
+
+def light_id(name):
+    return ID(name)
+
+
+def cfx_effect(effect_id, name=None):
+    config = {"effect_id": effect_id}
+    if name is not None:
+        config["name"] = name
+    return {"addressable_cfx": config}
+
+
+class EffectCatalogTests(unittest.TestCase):
+    def test_catalog_includes_only_addressable_cfx_entries(self):
+        light_config = {
+            "effects": [
+                cfx_effect(0),
+                {"addressable_lambda": {"name": "Diagnostic"}},
+                cfx_effect(1, "Custom Blink"),
+            ]
+        }
+
+        self.assertEqual(
+            cfx_sync._extract_cfx_effect_catalog(light_config),
+            [(0, "Solid"), (1, "Custom Blink")],
+        )
+
+    def test_same_effect_id_with_different_names_is_valid(self):
+        light_config = {
+            "effects": [
+                cfx_effect(7, "Dynamic Slow"),
+                cfx_effect(7, "Dynamic Fast"),
+            ]
+        }
+
+        self.assertEqual(
+            cfx_sync._extract_cfx_effect_catalog(light_config),
+            [(7, "Dynamic Slow"), (7, "Dynamic Fast")],
+        )
+
+    def test_exact_duplicate_id_and_name_is_rejected(self):
+        light_config = {
+            "effects": [
+                cfx_effect(7, "Dynamic"),
+                cfx_effect(7, "Dynamic"),
+            ]
+        }
+
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(light_config)
+
+    def test_case_insensitive_name_collision_is_rejected(self):
+        light_config = {
+            "effects": [
+                cfx_effect(7, "Dynamic"),
+                cfx_effect(8, "DYNAMIC"),
+            ]
+        }
+
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(light_config)
+
+    def test_reserved_none_name_is_rejected_case_insensitively(self):
+        for name in ("None", "NONE", "none"):
+            with self.subTest(name=name), self.assertRaises(cv.Invalid):
+                cfx_sync._extract_cfx_effect_catalog(
+                    {"effects": [cfx_effect(1, name)]}
+                )
+
+    def test_addressable_cfx_name_over_64_utf8_bytes_is_rejected(self):
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(
+                {"effects": [cfx_effect(1, "é" * 33)]}
+            )
+
+    def test_unsupported_effect_name_over_64_utf8_bytes_is_rejected(self):
+        light_config = {
+            "effects": [
+                {"addressable_lambda": {"name": "é" * 33}},
+            ]
+        }
+
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(light_config)
+
+    def test_find_effect_source_returns_direct_light_config(self):
+        direct = {
+            "platform": "addressable_lambda",
+            "id": light_id("direct_light"),
+            "effects": [],
+        }
+        all_lights = [
+            {
+                "platform": "cfx_light",
+                "id": light_id("parent"),
+                "segments": [{"id": light_id("direct_light")}],
+            },
+            direct,
+        ]
+
+        self.assertIs(
+            cfx_sync._find_effect_source_config(
+                light_id("direct_light"), all_lights
+            ),
+            direct,
+        )
+
+    def test_find_effect_source_returns_parent_for_cfx_light_segment(self):
+        parent = {
+            "platform": "cfx_light",
+            "id": light_id("parent"),
+            "segments": [
+                {"id": light_id("segment_a")},
+                {"id": light_id("segment_b")},
+            ],
+            "effects": [cfx_effect(0)],
+        }
+
+        self.assertIs(
+            cfx_sync._find_effect_source_config(
+                light_id("segment_b"), [parent]
+            ),
+            parent,
+        )
+
+    def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
+        source = COMPONENT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "for light_index, light_id in enumerate(config[CONF_LIGHTS]):",
+            source,
+        )
+        self.assertIn(
+            "for effect_id, effect_name in effect_catalogs[light_index]:",
+            source,
+        )
+        self.assertIn(
+            "var.add_effect(light_index, effect_id, effect_name)",
+            source,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

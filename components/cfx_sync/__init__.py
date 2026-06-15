@@ -21,12 +21,20 @@ CONF_GROUP = "group"
 CONF_KEY = "key"
 CONF_HEARTBEAT = "heartbeat"
 CONF_AUTO_ADD_PEER = "auto_add_peer"
+CONF_EFFECT_CATALOGS = "_effect_catalogs"
+CONF_EFFECTS = "effects"
+CONF_EFFECT_ID = "effect_id"
+CONF_NAME = "name"
+CONF_PLATFORM = "platform"
+CONF_SEGMENTS = "segments"
+CONF_ADDRESSABLE_CFX = "addressable_cfx"
 
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
 
 MIN_HEARTBEAT = TimePeriod(seconds=10)
 MAX_HEARTBEAT = TimePeriod(minutes=5)
+MAX_EFFECT_NAME_BYTES = 64
 KEY_DERIVATION_PREFIX = b"CFX_SYNC_V1\x00"
 
 cfx_sync_ns = cg.esphome_ns.namespace("cfx_sync")
@@ -43,6 +51,96 @@ _LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
 
 def _normalize_lights(value):
     return _LIGHTS_VALIDATOR(value)
+
+
+def _id_name(value):
+    return getattr(value, "id", value)
+
+
+def _find_effect_source_config(light_id, all_lights):
+    target_id = _id_name(light_id)
+    for light_config in all_lights:
+        if _id_name(light_config.get(CONF_ID)) == target_id:
+            return light_config
+
+    for light_config in all_lights:
+        if light_config.get(CONF_PLATFORM) != "cfx_light":
+            continue
+        for segment in light_config.get(CONF_SEGMENTS, []):
+            if _id_name(segment.get(CONF_ID)) == target_id:
+                return light_config
+    return None
+
+
+def _resolve_cfx_effect_name(effect_config):
+    effect_id = effect_config[CONF_EFFECT_ID]
+    name = effect_config.get(CONF_NAME, "CFX Effect")
+    if name == "CFX Effect":
+        try:
+            from esphome.components.cfx_effect import CFX_EFFECT_NAMES
+        except ImportError:
+            from components.cfx_effect import CFX_EFFECT_NAMES
+
+        name = CFX_EFFECT_NAMES.get(effect_id, name)
+    return name
+
+
+def _validate_effect_name_bytes(name):
+    name = cv.string_strict(name)
+    if not name:
+        raise cv.Invalid("effect name must not be empty")
+    if len(name.encode("utf-8")) > MAX_EFFECT_NAME_BYTES:
+        raise cv.Invalid(
+            "effect name must be at most 64 UTF-8 bytes"
+        )
+    return name
+
+
+def _extract_cfx_effect_catalog(light_config):
+    catalog = []
+    seen_pairs = set()
+    seen_names = set()
+
+    for configured_effect in light_config.get(CONF_EFFECTS, []):
+        if not isinstance(configured_effect, dict):
+            continue
+
+        for effect_config in configured_effect.values():
+            if (
+                isinstance(effect_config, dict)
+                and CONF_NAME in effect_config
+            ):
+                _validate_effect_name_bytes(effect_config[CONF_NAME])
+
+        if CONF_ADDRESSABLE_CFX not in configured_effect:
+            continue
+
+        effect_config = configured_effect[CONF_ADDRESSABLE_CFX]
+        effect_id = effect_config[CONF_EFFECT_ID]
+        effect_name = _validate_effect_name_bytes(
+            _resolve_cfx_effect_name(effect_config)
+        )
+        if effect_name.casefold() == "none":
+            raise cv.Invalid("effect name 'None' is reserved")
+
+        pair = (effect_id, effect_name)
+        if pair in seen_pairs:
+            raise cv.Invalid(
+                f"duplicate cfx_sync effect {pair!r}"
+            )
+
+        folded_name = effect_name.casefold()
+        if folded_name in seen_names:
+            raise cv.Invalid(
+                "effect names on one light must be unique "
+                "case-insensitively"
+            )
+
+        seen_pairs.add(pair)
+        seen_names.add(folded_name)
+        catalog.append(pair)
+
+    return catalog
 
 
 def _validate_role_lights(config):
@@ -97,11 +195,23 @@ def _fnv1a_32(value):
 
 
 def _final_validate(config):
-    espnow_config = full_config.get().get_config_for_path(["espnow"])
+    final_config = full_config.get()
+    espnow_config = final_config.get_config_for_path(["espnow"])
     if espnow_config.get(CONF_AUTO_ADD_PEER, False):
         raise cv.Invalid(
             "cfx_sync requires espnow.auto_add_peer to remain false"
         )
+
+    all_lights = final_config.get_config_for_path(["light"])
+    effect_catalogs = []
+    for light_id in config[CONF_LIGHTS]:
+        source_config = _find_effect_source_config(light_id, all_lights)
+        effect_catalogs.append(
+            _extract_cfx_effect_catalog(source_config)
+            if source_config is not None
+            else []
+        )
+    config[CONF_EFFECT_CATALOGS] = effect_catalogs
     return config
 
 
@@ -140,11 +250,18 @@ async def to_code(config):
     peer = config[CONF_PEER]
     peer_bytes = [HexInt(value) for value in peer.parts]
     key_bytes = [HexInt(value) for value in _derive_key(config[CONF_KEY])]
+    effect_catalogs = config.get(
+        CONF_EFFECT_CATALOGS, [[] for _ in config[CONF_LIGHTS]]
+    )
 
     cg.add(var.set_espnow(espnow_var))
-    for light_id in config[CONF_LIGHTS]:
+    for light_index, light_id in enumerate(config[CONF_LIGHTS]):
         light_var = await cg.get_variable(light_id)
         cg.add(var.add_light(light_var))
+        for effect_id, effect_name in effect_catalogs[light_index]:
+            cg.add(
+                var.add_effect(light_index, effect_id, effect_name)
+            )
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_peer(peer_bytes))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))
