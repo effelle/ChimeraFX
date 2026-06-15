@@ -16,8 +16,19 @@ from esphome.core import CORE
 from esphome import automation
 
 DEPENDENCIES = ["light"]
-AUTO_LOAD = ["number", "select", "switch", "event"]
+AUTO_LOAD = [
+    "cfx_effect_registry",
+    "number",
+    "select",
+    "switch",
+    "event",
+]
 CODEOWNERS = ["@effelle"]
+
+try:
+    from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
+except ImportError:
+    from components.cfx_effect_registry import CFX_EFFECT_NAMES
 
 # Define the namespace and class
 chimera_fx_ns = cg.esphome_ns.namespace("chimera_fx")
@@ -117,47 +128,6 @@ CfxOnStopTrigger     = chimera_fx_ns.class_("CfxOnStopTrigger",     automation.T
 CfxOnCompleteTrigger = chimera_fx_ns.class_("CfxOnCompleteTrigger", automation.Trigger.template())
 CfxOnReachTrigger = chimera_fx_ns.class_("CfxOnReachTrigger", automation.Trigger.template(cg.float_))
 
-# Map of Effect IDs to Names
-CFX_EFFECT_NAMES = {
-    0: "Solid", 1: "Blink", 2: "Breathe", 3: "Wipe", 4: "Wipe Random", 5: "Random Colors", 6: "Sweep", 7: "Dynamic", 8: "Colorloop", 9: "Rainbow",
-    10: "Scan", 11: "Scan Dual", 12: "Fade", 13: "Theater", 14: "Theater Rainbow", 15: "Running", 16: "Saw", 17: "Twinkle", 18: "Dissolve", 19: "Dissolve Rnd",
-    20: "Sparkle", 21: "Sparkle Dark", 22: "Sparkle+", 23: "Strobe", 24: "Strobe Rainbow", 25: "Strobe Mega", 26: "Blink Rainbow", 27: "Android", 28: "Chase", 29: "Chase Random",
-    30: "Chase Rainbow", 31: "Chase Flash", 32: "Chase Flash Rnd", 33: "Chase Rainbow White", 34: "Colorful", 35: "Traffic Light", 36: "Sweep Random", 37: "Running 2", 38: "Aurora", 39: "Stream",
-    40: "Scanner", 41: "Lighthouse", 42: "Fireworks", 43: "Rain", 44: "Tetris", 45: "Fire Flicker", 46: "Gradient", 47: "Loading", 48: "Rolling Balls", 49: "Fairy",
-    150: "BPM", 151: "Dropping Time", 152: "Percent Center", 153: "Fire Dual", 154: "HeartBeat Center", 54: "Tri Chase", 55: "Tri Wipe", 56: "Tri Fade", 57: "Lightning", 58: "ICU", 59: "Multi Comet",
-    60: "Scanner Dual", 61: "Stream 2", 62: "Oscillate", 63: "Colorwaves", 64: "Juggle", 65: "Palette", 66: "Fire 2012", 67: "Colorwaves Alt", 68: "BPM", 69: "Fill Noise",
-    70: "Noise 1", 71: "Noise 2", 72: "Noise 3", 73: "Noise 4", 74: "Colortwinkles", 75: "Lake", 76: "Meteor", 77: "Meteor Smooth", 78: "Railway", 79: "Ripple",
-    80: "Twinklefox", 81: "Twinklecat", 82: "Halloween Eyes", 83: "Solid Pattern", 84: "Solid Pattern Tri", 85: "Spots", 86: "Spots Fade", 87: "Glitter", 88: "Candle", 89: "Starburst",
-    90: "Fireworks Starburst", 91: "Bouncing Balls", 92: "Sinelon", 93: "Sinelon Dual", 94: "Sinelon Rainbow", 95: "Popcorn", 96: "Drip", 97: "Plasma", 98: "Percent", 99: "Ripple Rainbow",
-    100: "Heartbeat", 101: "Ocean", 102: "Candle Multi", 103: "Solid Glitter", 104: "Sunrise", 105: "Phased", 106: "Twinkleup", 107: "Noise Pal", 108: "Sine", 109: "Phased Noise",
-    110: "Flow", 111: "Chunchun", 112: "Dancing Shadows", 113: "Washing Machine",
-    155: "Kaleidos",
-    156: "Follow Me",
-    157: "Follow Us",
-    158: "Energy",
-    159: "Chaos Theory",
-    160: "Fluid Rain",
-    161: "Horizon Sweep",
-    170: "Assembly",
-    172: "Sonar Reveal",
-    173: "Venetian",
-    174: "Crystallize",
-    175: "Deep Breathe",
-    176: "Moiré Shift",
-    177: "Resonance Fill",
-    178: "Telemetry",
-    179: "Stellar Dust",
-    180: "Interference",
-    181: "Eclipse",
-    182: "Gas Discharge",
-    183: "Harmonic Settle",
-    184: "Lithograph",
-    186: "Tidal Surge",
-    187: "Impact Flare",
-    188: "Monolith",
-    185: "--- separator ---",
-    255: "Ambient Roulette"
-}
 # ── CFX_EFFECTS — canonical ordered effect registry ───────────────────────────
 # Source of truth for effect presentation order, categories, and names.
 # Used by _inject_all_effects() in light.py to populate the effects list

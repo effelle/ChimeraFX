@@ -37,6 +37,21 @@ class _FakeFullConfig:
 
 
 class EffectCatalogTests(unittest.TestCase):
+    def test_cfx_effect_and_cfx_sync_share_effect_name_registry(self):
+        from components import cfx_effect
+        from components.cfx_effect_registry import CFX_EFFECT_NAMES
+
+        self.assertIs(cfx_effect.CFX_EFFECT_NAMES, CFX_EFFECT_NAMES)
+        self.assertIs(cfx_sync.CFX_EFFECT_NAMES, CFX_EFFECT_NAMES)
+
+    def test_cfx_sync_has_no_effect_registry_source_parsing(self):
+        source = COMPONENT.read_text(encoding="utf-8")
+
+        self.assertNotIn("import ast", source)
+        self.assertNotIn("_load_cfx_effect_names", source)
+        self.assertNotIn("ast.parse", source)
+        self.assertNotIn("read_text", source)
+
     def test_canonical_name_resolution_does_not_import_cfx_effect(self):
         real_import = __import__
 
