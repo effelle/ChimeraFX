@@ -6,6 +6,7 @@
 #include "esphome/core/log.h"
 
 #include <esp_random.h>
+#include <algorithm>
 #include <cstring>
 #include <inttypes.h>
 
@@ -142,7 +143,7 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
 
   if (this->role_ == CFXSyncRole::FOLLOWER &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
-       packet.has_color_brightness)) {
+       packet.has_color_brightness || packet.has_effect)) {
     this->has_valid_state_ = true;
     this->status_clear_warning();
     this->apply_remote_state_(packet);
@@ -337,16 +338,32 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 
 void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
   RemoteApplyGuard guard(this->applying_remote_state_);
-  for (auto *light : this->lights_) {
+  const size_t aligned_light_count =
+      std::min(this->lights_.size(),
+               std::min(this->effect_catalogs_.size(),
+                        this->effect_log_states_.size()));
+  for (size_t i = 0; i < aligned_light_count; i++) {
+    auto *light = this->lights_[i];
     if (light == nullptr) {
       continue;
     }
-    this->apply_remote_state_to_light_(packet, light);
+    this->apply_remote_state_to_light_(packet, i);
   }
 }
 
 void CFXSyncComponent::apply_remote_state_to_light_(
-    const CFXSyncPacket &packet, light::LightState *light) {
+    const CFXSyncPacket &packet, size_t light_index) {
+  if (light_index >= this->lights_.size() ||
+      light_index >= this->effect_catalogs_.size() ||
+      light_index >= this->effect_log_states_.size()) {
+    return;
+  }
+  auto *light = this->lights_[light_index];
+  if (light == nullptr) {
+    return;
+  }
+  const auto &catalog = this->effect_catalogs_[light_index];
+  auto &log_state = this->effect_log_states_[light_index];
   auto call = light->make_call();
 
   if (packet.has_power) {
@@ -381,6 +398,67 @@ void CFXSyncComponent::apply_remote_state_to_light_(
     }
   } else if (packet.has_color_brightness) {
     call.set_color_brightness(packet.color_brightness / 255.0f);
+  }
+
+  if (packet.has_effect) {
+    std::string desired_effect{"None"};
+    bool fallback = false;
+    const bool identity_changed =
+        !log_state.valid ||
+        log_state.kind != packet.effect.kind ||
+        log_state.effect_id != packet.effect.effect_id ||
+        log_state.name != packet.effect.name;
+
+    if (packet.effect.kind == CFXSyncEffectKind::CHIMERAFX) {
+      const auto *entry =
+          find_effect_entry(catalog, packet.effect.effect_id,
+                            packet.effect.name);
+      if (entry != nullptr) {
+        desired_effect = entry->name;
+      } else {
+        fallback = true;
+      }
+    } else if (packet.effect.kind ==
+               CFXSyncEffectKind::UNSUPPORTED) {
+      fallback = true;
+    }
+
+    if (fallback) {
+      const uint32_t now = millis();
+      const bool should_log =
+          identity_changed ||
+          now - log_state.last_log_ms >=
+              EFFECT_FALLBACK_LOG_INTERVAL_MS;
+
+      if (should_log) {
+        if (packet.effect.kind == CFXSyncEffectKind::CHIMERAFX) {
+          ESP_LOGI(
+              TAG,
+              "Leader effect id=%u name='%s' is missing for follower "
+              "light '%s' [%u]; using None",
+              packet.effect.effect_id, packet.effect.name.c_str(),
+              light->get_name().c_str(),
+              static_cast<unsigned>(light_index));
+        } else {
+          ESP_LOGI(
+              TAG,
+              "Leader effect '%s' is unsupported for follower light "
+              "'%s' [%u]; using None",
+              packet.effect.name.c_str(), light->get_name().c_str(),
+              static_cast<unsigned>(light_index));
+        }
+        log_state.last_log_ms = now;
+      }
+    }
+
+    log_state.valid = true;
+    log_state.kind = packet.effect.kind;
+    log_state.effect_id = packet.effect.effect_id;
+    log_state.name = packet.effect.name;
+
+    if (light->get_effect_name() != desired_effect) {
+      call.set_effect(desired_effect);
+    }
   }
 
   call.perform();

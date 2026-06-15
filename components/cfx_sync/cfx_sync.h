@@ -81,6 +81,7 @@ class CFXSyncComponent : public Component,
 
  protected:
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
+  static constexpr uint32_t EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000;
 
   struct EffectLogState {
     bool valid{false};
@@ -103,7 +104,7 @@ class CFXSyncComponent : public Component,
   void schedule_follower_recovery_();
   void apply_remote_state_(const CFXSyncPacket &packet);
   void apply_remote_state_to_light_(const CFXSyncPacket &packet,
-                                    light::LightState *light);
+                                    size_t light_index);
   light::LightState *leader_light_() const;
   bool is_peer_(const uint8_t *address) const;
   const char *role_name_() const;

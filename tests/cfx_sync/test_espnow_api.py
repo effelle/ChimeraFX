@@ -302,7 +302,19 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("std::string name;", header)
         self.assertIn("uint32_t last_log_ms{0};", header)
 
-    def test_follower_applies_one_call_without_effect_changes(self):
+    def test_effect_only_follower_state_is_actionable(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"packet\.has_power \|\| packet\.has_brightness \|\| "
+                r"packet\.has_color \|\|\s*"
+                r"packet\.has_color_brightness \|\| packet\.has_effect"
+            ),
+        )
+
+    def test_follower_folds_effect_into_existing_light_call(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("apply_remote_state_", source)
@@ -313,7 +325,9 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_color_brightness(", source)
         self.assertIn("call.set_rgb(", source)
         self.assertIn("call.set_white(", source)
-        self.assertNotIn("call.set_effect(", source)
+        self.assertIn("call.set_effect(", source)
+        self.assertEqual(source.count("light->make_call()"), 1)
+        self.assertEqual(source.count("call.perform();"), 1)
 
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -322,15 +336,89 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn(
             "void apply_remote_state_to_light_(", header
         )
-        self.assertIn("for (auto *light : this->lights_)", source)
         self.assertIn(
-            "this->apply_remote_state_to_light_(packet, light);",
+            "for (size_t i = 0; i < aligned_light_count; i++)", source
+        )
+        self.assertIn("auto *light = this->lights_[i];", source)
+        self.assertIn(
+            "this->apply_remote_state_to_light_(packet, i);",
             source,
         )
+        self.assertIn("this->lights_[light_index]", source)
+        self.assertIn("this->effect_catalogs_[light_index]", source)
+        self.assertIn("this->effect_log_states_[light_index]", source)
         self.assertIn("auto call = light->make_call();", source)
         self.assertIn("light_supports_rgb_white(*light)", source)
         self.assertIn("light_supports_rgb(*light)", source)
         self.assertEqual(source.count("call.perform();"), 1)
+
+    def test_follower_effect_lookup_is_exact_and_name_sensitive(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "find_effect_entry(catalog, packet.effect.effect_id,",
+            source,
+        )
+        self.assertIn("packet.effect.name", source)
+        self.assertIn("desired_effect = entry->name;", source)
+        self.assertNotIn("strcasecmp", source)
+        self.assertNotIn("casefold", source)
+
+    def test_follower_only_sets_effect_when_name_changes(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"light->get_effect_name\(\) != desired_effect.*?"
+                r"call\.set_effect\(desired_effect\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn('std::string desired_effect{"None"};', source)
+
+    def test_missing_and_unsupported_effects_fall_back_with_logi(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFXSyncEffectKind::CHIMERAFX", source)
+        self.assertIn("CFXSyncEffectKind::UNSUPPORTED", source)
+        self.assertGreaterEqual(source.count("ESP_LOGI("), 2)
+        self.assertIn("packet.effect.effect_id", source)
+        self.assertIn("packet.effect.name.c_str()", source)
+        self.assertIn("light->get_name().c_str()", source)
+        self.assertIn("static_cast<unsigned>(light_index)", source)
+        self.assertIn("EFFECT_FALLBACK_LOG_INTERVAL_MS", source)
+        self.assertIn(
+            "EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000", header
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"now - log_state\.last_log_ms\s*>=\s*"
+                r"EFFECT_FALLBACK_LOG_INTERVAL_MS"
+            ),
+        )
+
+    def test_effect_fallback_throttle_tracks_identity_per_light(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "auto &log_state = "
+            "this->effect_log_states_[light_index];",
+            source,
+        )
+        self.assertIn("log_state.kind != packet.effect.kind", source)
+        self.assertIn(
+            "log_state.effect_id != packet.effect.effect_id", source
+        )
+        self.assertIn("log_state.name != packet.effect.name", source)
+        self.assertIn("log_state.valid = true;", source)
+        self.assertIn("log_state.kind = packet.effect.kind;", source)
+        self.assertIn(
+            "log_state.effect_id = packet.effect.effect_id;", source
+        )
+        self.assertIn("log_state.name = packet.effect.name;", source)
 
     def test_dump_config_lists_all_bound_lights(self):
         source = SOURCE.read_text(encoding="utf-8")
@@ -357,7 +445,6 @@ class ESPNowAPITests(unittest.TestCase):
             "cfxrunner",
             "cfx_runner",
             "renderer",
-            "set_effect(",
         ):
             self.assertNotIn(forbidden, texts)
 
