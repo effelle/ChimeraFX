@@ -105,40 +105,41 @@ def _extract_cfx_effect_catalog(light_config):
         if not isinstance(configured_effect, dict):
             continue
 
-        for effect_config in configured_effect.values():
-            if (
-                isinstance(effect_config, dict)
-                and CONF_NAME in effect_config
-            ):
-                _validate_effect_name_bytes(effect_config[CONF_NAME])
+        for platform, effect_config in configured_effect.items():
+            if not isinstance(effect_config, dict):
+                continue
 
-        if CONF_ADDRESSABLE_CFX not in configured_effect:
-            continue
+            if platform == CONF_ADDRESSABLE_CFX:
+                effect_id = effect_config[CONF_EFFECT_ID]
+                effect_name = _validate_effect_name_bytes(
+                    _resolve_cfx_effect_name(effect_config)
+                )
+                pair = (effect_id, effect_name)
+                if pair in seen_pairs:
+                    raise cv.Invalid(
+                        f"duplicate cfx_sync effect {pair!r}"
+                    )
+            elif CONF_NAME in effect_config:
+                effect_name = _validate_effect_name_bytes(
+                    effect_config[CONF_NAME]
+                )
+                pair = None
+            else:
+                continue
 
-        effect_config = configured_effect[CONF_ADDRESSABLE_CFX]
-        effect_id = effect_config[CONF_EFFECT_ID]
-        effect_name = _validate_effect_name_bytes(
-            _resolve_cfx_effect_name(effect_config)
-        )
-        if effect_name.casefold() == "none":
-            raise cv.Invalid("effect name 'None' is reserved")
+            folded_name = effect_name.casefold()
+            if folded_name == "none":
+                raise cv.Invalid("effect name 'None' is reserved")
+            if folded_name in seen_names:
+                raise cv.Invalid(
+                    "effect names on one light must be unique "
+                    "case-insensitively"
+                )
 
-        pair = (effect_id, effect_name)
-        if pair in seen_pairs:
-            raise cv.Invalid(
-                f"duplicate cfx_sync effect {pair!r}"
-            )
-
-        folded_name = effect_name.casefold()
-        if folded_name in seen_names:
-            raise cv.Invalid(
-                "effect names on one light must be unique "
-                "case-insensitively"
-            )
-
-        seen_pairs.add(pair)
-        seen_names.add(folded_name)
-        catalog.append(pair)
+            seen_names.add(folded_name)
+            if pair is not None:
+                seen_pairs.add(pair)
+                catalog.append(pair)
 
     return catalog
 

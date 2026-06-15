@@ -165,12 +165,35 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(cv.Invalid):
             cfx_sync._extract_cfx_effect_catalog(light_config)
 
+    def test_non_cfx_name_cannot_shadow_cfx_effect(self):
+        light_config = {
+            "effects": [
+                cfx_effect(3),
+                {"addressable_lambda": {"name": "wipe"}},
+            ]
+        }
+
+        with self.assertRaisesRegex(cv.Invalid, "case-insensitively"):
+            cfx_sync._extract_cfx_effect_catalog(light_config)
+
     def test_reserved_none_name_is_rejected_case_insensitively(self):
         for name in ("None", "NONE", "none"):
             with self.subTest(name=name), self.assertRaises(cv.Invalid):
                 cfx_sync._extract_cfx_effect_catalog(
                     {"effects": [cfx_effect(1, name)]}
                 )
+
+    def test_non_cfx_none_name_is_rejected_case_insensitively(self):
+        for name in ("None", "NONE", "none"):
+            light_config = {
+                "effects": [
+                    {"addressable_lambda": {"name": name}},
+                ]
+            }
+            with self.subTest(name=name), self.assertRaisesRegex(
+                cv.Invalid, "reserved"
+            ):
+                cfx_sync._extract_cfx_effect_catalog(light_config)
 
     def test_addressable_cfx_name_over_64_utf8_bytes_is_rejected(self):
         with self.assertRaises(cv.Invalid):

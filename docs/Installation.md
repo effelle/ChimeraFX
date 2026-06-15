@@ -68,12 +68,13 @@ If you are developing, need to modify the code locally, or prefer not to rely on
 ```yaml
 external_components:
   - source: components
-    components: [cfx_light, cfx_effect, cfx_sequence, cfx_power, cfx_dimmer, cfx_cct_sweeper, cfx_hue_cycler, cfx_effect_selector]
+    components: [cfx_light, cfx_effect, cfx_effect_registry, cfx_sequence, cfx_power, cfx_dimmer, cfx_cct_sweeper, cfx_hue_cycler, cfx_effect_selector]
 ```
 
 If you use a local or manual allow-list, include every ChimeraFX component you
-use. For example, omitting `cfx_dimmer` from this list will make ESPHome report
-`Component not found: cfx_dimmer` even when the folder exists.
+use and their shared support components. In particular, `cfx_effect` requires
+`cfx_effect_registry`. Omitting an entry from this list makes ESPHome report
+`Component not found` even when the folder exists.
 
 ---
 ## Complete Minimal Example
