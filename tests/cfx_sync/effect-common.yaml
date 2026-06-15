@@ -1,0 +1,71 @@
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components:
+      - cfx_sync
+      - cfx_light
+      - cfx_effect
+      - cfx_effect_registry
+
+logger:
+
+espnow:
+  id: espnow_bus
+  channel: 1
+  auto_add_peer: false
+
+light:
+  - platform: cfx_light
+    id: sync_effect_parent_a
+    name: "Sync Effect Parent A"
+    pin: GPIO16
+    num_leds: 8
+    chipset: WS2812X
+    all_effects: false
+    controls: false
+    segments:
+      - id: sync_effect_segment_a
+        name: "Sync Effect Segment A"
+        start: 0
+        stop: 7
+    effects:
+      - addressable_cfx:
+          effect_id: 3
+      - addressable_cfx:
+          name: "Slow Red Wipe"
+          effect_id: 3
+          set_speed: 32
+          set_color: [100, 0, 0]
+      - addressable_lambda:
+          name: "Unsupported Diagnostic A"
+          update_interval: 50ms
+          lambda: |-
+            it.all() = Color::BLACK;
+
+  - platform: cfx_light
+    id: sync_effect_parent_b
+    name: "Sync Effect Parent B"
+    pin: GPIO17
+    num_leds: 8
+    chipset: WS2812X
+    all_effects: false
+    controls: false
+    segments:
+      - id: sync_effect_segment_b
+        name: "Sync Effect Segment B"
+        start: 0
+        stop: 7
+    effects:
+      - addressable_cfx:
+          effect_id: 3
+      - addressable_cfx:
+          name: "Slow Red Wipe"
+          effect_id: 3
+          set_speed: 32
+          set_color: [100, 0, 0]
+      - addressable_lambda:
+          name: "Unsupported Diagnostic B"
+          update_interval: 50ms
+          lambda: |-
+            it.all() = Color::BLACK;

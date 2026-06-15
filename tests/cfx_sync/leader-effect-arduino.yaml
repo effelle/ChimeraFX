@@ -1,0 +1,22 @@
+packages:
+  common: !include effect-common.yaml
+
+esphome:
+  name: cfx-sync-leader-effect-arduino
+  min_version: 2026.5.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+cfx_sync:
+  id: effect_sync
+  espnow_id: espnow_bus
+  role: leader
+  lights:
+    - sync_effect_segment_a
+  peer: "02:00:00:00:00:02"
+  group: effect_room
+  key: "effect-room-2026"
+  heartbeat: 30s
