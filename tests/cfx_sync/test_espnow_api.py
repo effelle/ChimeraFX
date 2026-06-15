@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -59,6 +60,7 @@ class ESPNowAPITests(unittest.TestCase):
 
     def test_effect_helper_is_renderer_independent(self):
         text = self._effect_header_text()
+        lowered = text.lower()
 
         self.assertIn(
             "enum class CFXSyncEffectKind : uint8_t", text
@@ -72,12 +74,28 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("uint8_t effect_id{0};", text)
         self.assertIn("std::string name;", text)
-        self.assertIn("struct CFXSyncEffectEntry", text)
-        self.assertIn("operator==", text)
+        self.assertRegex(
+            text,
+            re.compile(
+                r"struct CFXSyncEffectEntry\s*\{.*?"
+                r"uint8_t effect_id\{0\};.*?"
+                r"std::string name;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"bool operator==\(.*?\)\s+const\s*\{.*?"
+                r"this->kind == other\.kind &&.*?"
+                r"this->effect_id == other\.effect_id &&.*?"
+                r"this->name == other\.name;",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("operator!=", text)
-        self.assertNotIn("cfx_effect", text)
-        self.assertNotIn("runner", text)
-        self.assertNotIn("renderer", text)
+        for forbidden in ("cfx_effect", "cfxrunner", "runner", "renderer"):
+            self.assertNotIn(forbidden, lowered)
 
     def test_effect_lookup_requires_exact_id_and_name(self):
         text = self._effect_header_text()
@@ -94,6 +112,7 @@ class ESPNowAPITests(unittest.TestCase):
         text = self._effect_header_text()
 
         self.assertIn("capture_effect_state(", text)
+        self.assertIn("light::LightState *state", text)
         self.assertIn("state->get_effect_name()", text)
         self.assertIn('effect_name == "None"', text)
         self.assertIn("if (entry.name == effect_name)", text)
@@ -167,7 +186,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn(
             "CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};", header
         )
-        self.assertIn("uint8_t id{0};", header)
+        self.assertIn("uint8_t effect_id{0};", header)
+        self.assertNotIn("uint8_t id{0};", header)
         self.assertIn("std::string name;", header)
         self.assertIn("uint32_t last_log_ms{0};", header)
 
@@ -218,12 +238,14 @@ class ESPNowAPITests(unittest.TestCase):
         )
         texts = "\n".join(
             path.read_text(encoding="utf-8") for path in source_files
-        )
+        ).lower()
 
         for forbidden in (
             "cfx_light/",
             "cfx_effect",
+            "cfxrunner",
             "cfx_runner",
+            "renderer",
             "set_effect(",
         ):
             self.assertNotIn(forbidden, texts)

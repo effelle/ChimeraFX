@@ -40,7 +40,7 @@ struct CFXSyncEffectState {
 };
 
 struct CFXSyncEffectEntry {
-  uint8_t effect_id;
+  uint8_t effect_id{0};
   std::string name;
 };
 

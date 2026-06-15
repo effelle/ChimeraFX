@@ -85,7 +85,7 @@ class CFXSyncComponent : public Component,
   struct EffectLogState {
     bool valid{false};
     CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};
-    uint8_t id{0};
+    uint8_t effect_id{0};
     std::string name;
     uint32_t last_log_ms{0};
   };
