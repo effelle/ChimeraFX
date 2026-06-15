@@ -91,7 +91,8 @@ class CFXSyncComponent : public Component,
   };
 
   bool send_state_();
-  bool send_state_(const CFXSyncLightSnapshot &snapshot);
+  bool send_state_(const CFXSyncLightSnapshot &snapshot,
+                   const CFXSyncEffectState &effect);
   bool send_sync_request_();
   bool send_packet_(std::vector<uint8_t> &packet);
   uint32_t next_sequence_();
@@ -123,6 +124,7 @@ class CFXSyncComponent : public Component,
   bool applying_remote_state_{false};
   bool has_observed_state_{false};
   CFXSyncLightSnapshot observed_state_{};
+  CFXSyncEffectState observed_effect_{};
   bool has_valid_state_{false};
 
   bool has_rx_sequence_{false};

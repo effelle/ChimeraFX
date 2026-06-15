@@ -56,7 +56,14 @@ void CFXSyncComponent::setup() {
 
   if (this->role_ == CFXSyncRole::LEADER) {
     auto *leader = this->leader_light_();
+    if (leader == nullptr || this->effect_catalogs_.empty()) {
+      ESP_LOGE(TAG, "Leader light and effect catalog are required");
+      this->mark_failed();
+      return;
+    }
     this->observed_state_ = capture_light_snapshot(*leader);
+    this->observed_effect_ = capture_effect_state(
+        this->lights_[0], this->effect_catalogs_[0]);
     this->has_observed_state_ = true;
     leader->add_remote_values_listener(&this->light_listener_);
     this->set_interval("heartbeat", this->heartbeat_ms_,
@@ -145,17 +152,22 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
 
 void CFXSyncComponent::on_local_light_update() {
   auto *leader = this->leader_light_();
-  if (this->applying_remote_state_ || leader == nullptr) {
+  if (this->applying_remote_state_ || leader == nullptr ||
+      this->effect_catalogs_.empty()) {
     return;
   }
 
   const auto snapshot = capture_light_snapshot(*leader);
-  if (this->has_observed_state_ && snapshot == this->observed_state_) {
+  const auto effect = capture_effect_state(
+      leader, this->effect_catalogs_[0]);
+  if (this->has_observed_state_ && snapshot == this->observed_state_ &&
+      effect == this->observed_effect_) {
     return;
   }
   this->has_observed_state_ = true;
   this->observed_state_ = snapshot;
-  this->send_state_(snapshot);
+  this->observed_effect_ = effect;
+  this->send_state_(snapshot, effect);
 }
 
 bool CFXSyncComponent::send_state_() {
@@ -163,17 +175,19 @@ bool CFXSyncComponent::send_state_() {
   if (leader == nullptr) {
     return false;
   }
-  return this->send_state_(capture_light_snapshot(*leader));
+  return this->send_state_(
+      capture_light_snapshot(*leader), this->observed_effect_);
 }
 
 bool CFXSyncComponent::send_state_(
-    const CFXSyncLightSnapshot &snapshot) {
+    const CFXSyncLightSnapshot &snapshot,
+    const CFXSyncEffectState &effect) {
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
           snapshot.power, snapshot.brightness, snapshot.color_brightness,
           snapshot.red, snapshot.green, snapshot.blue, snapshot.white,
-          snapshot.has_white, this->key_, packet)) {
+          snapshot.has_white, true, effect, this->key_, packet)) {
     return false;
   }
   return this->send_packet_(packet);

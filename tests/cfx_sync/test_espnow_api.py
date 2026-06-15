@@ -178,6 +178,72 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("snapshot.color_brightness", source)
         self.assertNotIn("observed_power_", header)
 
+    def test_leader_setup_captures_effect_baseline_defensively(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFXSyncEffectState observed_effect_{};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->role_ == CFXSyncRole::LEADER\) \{.*?"
+                r"this->effect_catalogs_\.empty\(\).*?"
+                r"capture_light_snapshot\(\*leader\).*?"
+                r"this->observed_effect_ = capture_effect_state\("
+                r"\s*this->lights_\[0\], this->effect_catalogs_\[0\]\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_effect_only_leader_change_is_actionable(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"const auto effect = capture_effect_state\("
+                r"\s*leader, this->effect_catalogs_\[0\]\);.*?"
+                r"snapshot == this->observed_state_ &&\s*"
+                r"effect == this->observed_effect_.*?"
+                r"this->observed_state_ = snapshot;.*?"
+                r"this->observed_effect_ = effect;.*?"
+                r"this->send_state_\(snapshot, effect\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_all_leader_state_send_paths_include_effect(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "const CFXSyncEffectState &effect", header
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_\(\) \{.*?"
+                r"this->send_state_\(\s*capture_light_snapshot\(\*leader\),"
+                r"\s*this->observed_effect_\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_\(\s*"
+                r"const CFXSyncLightSnapshot &snapshot,\s*"
+                r"const CFXSyncEffectState &effect\).*?"
+                r"snapshot\.has_white, true, effect, this->key_, packet",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "if (packet.type == CFXSyncPacketType::SYNC_REQUEST)", source
+        )
+        self.assertIn("this->send_state_();", source)
+        self.assertIn("this->send_state_(snapshot, effect);", source)
+
     def test_runtime_stores_ordered_light_collection(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
