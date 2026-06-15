@@ -104,6 +104,11 @@ class MultiLightConfigTests(unittest.TestCase):
         self.assertIn("- sync_light_b", follower)
         self.assertIn("- sync_light_c", follower)
 
+    def test_yaml_fixtures_expose_shared_effect_registry(self):
+        for fixture in (COMMON, MULTI_FOLLOWER):
+            source = fixture.read_text(encoding="utf-8")
+            self.assertIn("cfx_effect_registry", source)
+
 
 if __name__ == "__main__":
     unittest.main()
