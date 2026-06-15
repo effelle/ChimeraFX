@@ -1,5 +1,6 @@
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from esphome import config_validation as cv
 from esphome.core import ID
@@ -22,7 +23,39 @@ def cfx_effect(effect_id, name=None):
     return {"addressable_cfx": config}
 
 
+class _FakeFullConfig:
+    def __init__(self, espnow, lights):
+        self.espnow = espnow
+        self.lights = lights
+
+    def get_config_for_path(self, path):
+        if path == ["espnow"]:
+            return self.espnow
+        if path == ["light"]:
+            return self.lights
+        raise AssertionError(f"unexpected config path: {path}")
+
+
 class EffectCatalogTests(unittest.TestCase):
+    def test_canonical_name_resolution_does_not_import_cfx_effect(self):
+        real_import = __import__
+
+        def reject_cfx_effect_import(name, *args, **kwargs):
+            if name in (
+                "components.cfx_effect",
+                "esphome.components.cfx_effect",
+            ):
+                raise AssertionError("cfx_effect module must not be imported")
+            return real_import(name, *args, **kwargs)
+
+        with patch(
+            "builtins.__import__", side_effect=reject_cfx_effect_import
+        ):
+            self.assertEqual(
+                cfx_sync._resolve_cfx_effect_name({"effect_id": 0}),
+                "Solid",
+            )
+
     def test_catalog_includes_only_addressable_cfx_entries(self):
         light_config = {
             "effects": [
@@ -95,6 +128,22 @@ class EffectCatalogTests(unittest.TestCase):
         with self.assertRaises(cv.Invalid):
             cfx_sync._extract_cfx_effect_catalog(light_config)
 
+    def test_empty_configured_effect_name_is_rejected(self):
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(
+                {"effects": [cfx_effect(1, "")]}
+            )
+
+    def test_non_string_configured_effect_name_is_rejected(self):
+        with self.assertRaises(cv.Invalid):
+            cfx_sync._extract_cfx_effect_catalog(
+                {
+                    "effects": [
+                        {"addressable_lambda": {"name": 123}},
+                    ]
+                }
+            )
+
     def test_find_effect_source_returns_direct_light_config(self):
         direct = {
             "platform": "addressable_lambda",
@@ -134,6 +183,68 @@ class EffectCatalogTests(unittest.TestCase):
             ),
             parent,
         )
+
+    def test_find_effect_source_returns_none_for_unknown_light(self):
+        self.assertIsNone(
+            cfx_sync._find_effect_source_config(
+                light_id("missing"), []
+            )
+        )
+
+    def test_final_validate_builds_aligned_effect_catalogs(self):
+        direct = {
+            "platform": "addressable_lambda",
+            "id": light_id("direct"),
+            "effects": [cfx_effect(1, "Direct Effect")],
+        }
+        parent = {
+            "platform": "cfx_light",
+            "id": light_id("parent"),
+            "segments": [{"id": light_id("segment")}],
+            "effects": [cfx_effect(2, "Segment Effect")],
+        }
+        final_config = _FakeFullConfig(
+            espnow={"auto_add_peer": False},
+            lights=[direct, parent],
+        )
+        config = {
+            "lights": [
+                light_id("direct"),
+                light_id("segment"),
+                light_id("missing"),
+            ]
+        }
+
+        token = cfx_sync.full_config.set(final_config)
+        try:
+            result = cfx_sync._final_validate(config)
+        finally:
+            cfx_sync.full_config.reset(token)
+
+        self.assertIs(result, config)
+        self.assertEqual(
+            config["_effect_catalogs"],
+            [
+                [(1, "Direct Effect")],
+                [(2, "Segment Effect")],
+                [],
+            ],
+        )
+
+    def test_final_validate_retains_auto_add_peer_policy(self):
+        final_config = _FakeFullConfig(
+            espnow={"auto_add_peer": True},
+            lights=[],
+        )
+
+        token = cfx_sync.full_config.set(final_config)
+        try:
+            with self.assertRaisesRegex(cv.Invalid, "auto_add_peer"):
+                cfx_sync._final_validate(
+                    {"lights": [light_id("missing")]}
+                )
+        finally:
+            cfx_sync.full_config.reset(token)
 
     def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
         source = COMPONENT.read_text(encoding="utf-8")

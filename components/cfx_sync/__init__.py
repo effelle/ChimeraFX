@@ -1,6 +1,9 @@
 """Authenticated ESP-NOW light-state synchronization for ChimeraFX."""
 
+import ast
+from functools import lru_cache
 import hashlib
+from pathlib import Path
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
@@ -72,16 +75,31 @@ def _find_effect_source_config(light_id, all_lights):
     return None
 
 
+@lru_cache(maxsize=1)
+def _load_cfx_effect_names():
+    effect_module = (
+        Path(__file__).resolve().parent.parent
+        / "cfx_effect"
+        / "__init__.py"
+    )
+    module = ast.parse(effect_module.read_text(encoding="utf-8"))
+    for statement in module.body:
+        if not isinstance(statement, ast.Assign):
+            continue
+        if any(
+            isinstance(target, ast.Name)
+            and target.id == "CFX_EFFECT_NAMES"
+            for target in statement.targets
+        ):
+            return ast.literal_eval(statement.value)
+    raise RuntimeError("CFX_EFFECT_NAMES registry not found")
+
+
 def _resolve_cfx_effect_name(effect_config):
     effect_id = effect_config[CONF_EFFECT_ID]
     name = effect_config.get(CONF_NAME, "CFX Effect")
     if name == "CFX Effect":
-        try:
-            from esphome.components.cfx_effect import CFX_EFFECT_NAMES
-        except ImportError:
-            from components.cfx_effect import CFX_EFFECT_NAMES
-
-        name = CFX_EFFECT_NAMES.get(effect_id, name)
+        name = _load_cfx_effect_names().get(effect_id, name)
     return name
 
 
