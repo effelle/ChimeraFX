@@ -14,7 +14,14 @@ FIELD_POWER = 0x00000001
 FIELD_BRIGHTNESS = 0x00000002
 FIELD_COLOR = 0x00000004
 FIELD_COLOR_BRIGHTNESS = 0x00000008
+FIELD_EFFECT = 0x00000010
 COLOR_CAP_WHITE = 0x01
+EFFECT_NONE = 0
+EFFECT_CHIMERAFX = 1
+EFFECT_UNSUPPORTED = 2
+MAX_EFFECT_NAME_BYTES = 64
+MAX_EFFECT_VALUE_SIZE = 67
+MAX_STATE_PACKET_SIZE = 117
 FULL_STATE_MASK = (
     FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS
 )
@@ -73,6 +80,39 @@ def full_state_payload(
     )
 
 
+def effect_value(kind, *, effect_id=0, name=""):
+    if kind == EFFECT_NONE:
+        return bytes((EFFECT_NONE,))
+    if kind not in (EFFECT_CHIMERAFX, EFFECT_UNSUPPORTED):
+        raise ValueError("effect-kind")
+
+    encoded_name = name.encode("utf-8")
+    if not encoded_name:
+        raise ValueError("effect-name-empty")
+    if len(encoded_name) > MAX_EFFECT_NAME_BYTES:
+        raise ValueError("effect-name-size")
+
+    if kind == EFFECT_CHIMERAFX:
+        return bytes((kind, effect_id, len(encoded_name))) + encoded_name
+    return bytes((kind, len(encoded_name))) + encoded_name
+
+
+def full_state_effect_payload(
+    kind,
+    *,
+    effect_id=0,
+    name="",
+):
+    base = full_state_payload(
+        True, 128, 10, 20, 30, 40, True, 158
+    )
+    return (
+        struct.pack(">I", FULL_STATE_MASK | FIELD_EFFECT)
+        + base[4:]
+        + effect_value(kind, effect_id=effect_id, name=name)
+    )
+
+
 def decode(packet, expected_group_hash=GROUP_HASH):
     if len(packet) < HEADER_SIZE + TAG_SIZE:
         raise ValueError("malformed")
@@ -106,6 +146,7 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         "has_brightness": False,
         "has_color": False,
         "has_color_brightness": False,
+        "has_effect": False,
     }
     if not boot_id or not sequence:
         raise ValueError("replay-fields")
@@ -148,11 +189,63 @@ def decode(packet, expected_group_hash=GROUP_HASH):
             result["has_color_brightness"] = True
             result["color_brightness"] = payload[offset]
             offset += 1
+        if result["field_mask"] & FIELD_EFFECT:
+            if offset + 1 > payload_size:
+                raise ValueError("effect-kind")
+            kind = payload[offset]
+            offset += 1
+            result["has_effect"] = True
+            result["effect_kind"] = kind
+            result["effect_id"] = 0
+            result["effect_name"] = ""
+
+            if kind == EFFECT_NONE:
+                pass
+            elif kind == EFFECT_CHIMERAFX:
+                if offset + 2 > payload_size:
+                    raise ValueError("effect-length")
+                result["effect_id"] = payload[offset]
+                name_length = payload[offset + 1]
+                offset += 2
+                if not name_length:
+                    raise ValueError("effect-name-empty")
+                if name_length > MAX_EFFECT_NAME_BYTES:
+                    raise ValueError("effect-name-size")
+                if offset + name_length > payload_size:
+                    raise ValueError("effect-length")
+                try:
+                    result["effect_name"] = payload[
+                        offset : offset + name_length
+                    ].decode("utf-8", errors="strict")
+                except UnicodeDecodeError as err:
+                    raise ValueError("effect-utf8") from err
+                offset += name_length
+            elif kind == EFFECT_UNSUPPORTED:
+                if offset + 1 > payload_size:
+                    raise ValueError("effect-length")
+                name_length = payload[offset]
+                offset += 1
+                if not name_length:
+                    raise ValueError("effect-name-empty")
+                if name_length > MAX_EFFECT_NAME_BYTES:
+                    raise ValueError("effect-name-size")
+                if offset + name_length > payload_size:
+                    raise ValueError("effect-length")
+                try:
+                    result["effect_name"] = payload[
+                        offset : offset + name_length
+                    ].decode("utf-8", errors="strict")
+                except UnicodeDecodeError as err:
+                    raise ValueError("effect-utf8") from err
+                offset += name_length
+            else:
+                raise ValueError("effect-kind")
         known_fields = (
             FIELD_POWER
             | FIELD_BRIGHTNESS
             | FIELD_COLOR
             | FIELD_COLOR_BRIGHTNESS
+            | FIELD_EFFECT
         )
         if not result["field_mask"] & ~known_fields and offset != payload_size:
             raise ValueError("state-length")
@@ -181,6 +274,18 @@ class ReplayState:
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_effect_protocol_size_constants_are_stable(self):
+        self.assertEqual(MAX_EFFECT_VALUE_SIZE, 67)
+        self.assertEqual(
+            HEADER_SIZE
+            + len(full_state_payload(
+                True, 128, 10, 20, 30, 40, True, 158
+            ))
+            + MAX_EFFECT_VALUE_SIZE
+            + TAG_SIZE,
+            MAX_STATE_PACKET_SIZE,
+        )
+
     def test_state_vector_is_stable(self):
         packet = encode(
             TYPE_STATE, struct.pack(">I", FIELD_POWER) + b"\x01"
@@ -233,6 +338,92 @@ class ProtocolTests(unittest.TestCase):
             (10, 20, 30, 40),
         )
 
+    def test_chimerafx_effect_vector_is_stable(self):
+        packet = encode(
+            TYPE_STATE,
+            full_state_effect_payload(
+                EFFECT_CHIMERAFX, effect_id=3, name="Wipe"
+            ),
+        )
+        self.assertEqual(len(packet), 57)
+        self.assertEqual(
+            packet.hex(),
+            "4346585301010016001312345678a1b2c3d401020304"
+            "0000001f0180010a141e289e01030457697065"
+            "a95b6db57839e0d2c9d85172c4b9d52b",
+        )
+        decoded = decode(packet)
+        self.assertTrue(decoded["has_effect"])
+        self.assertEqual(decoded["effect_kind"], EFFECT_CHIMERAFX)
+        self.assertEqual(decoded["effect_id"], 3)
+        self.assertEqual(decoded["effect_name"], "Wipe")
+
+    def test_none_effect_vector_is_stable(self):
+        packet = encode(
+            TYPE_STATE,
+            full_state_effect_payload(
+                EFFECT_NONE, effect_id=255, name="ignored"
+            ),
+        )
+        self.assertEqual(len(packet), 51)
+        self.assertEqual(
+            packet.hex(),
+            "4346585301010016000d12345678a1b2c3d401020304"
+            "0000001f0180010a141e289e00"
+            "41949784e575f93831d22833fb45e842",
+        )
+        decoded = decode(packet)
+        self.assertEqual(decoded["effect_kind"], EFFECT_NONE)
+        self.assertEqual(decoded["effect_id"], 0)
+        self.assertEqual(decoded["effect_name"], "")
+
+    def test_effect_round_trips_all_wire_kinds(self):
+        cases = (
+            (EFFECT_NONE, 0, "", 0, ""),
+            (
+                EFFECT_CHIMERAFX,
+                17,
+                "Aurora \u2728",
+                17,
+                "Aurora \u2728",
+            ),
+            (EFFECT_UNSUPPORTED, 99, "Native Glow", 0, "Native Glow"),
+        )
+        for kind, effect_id, name, expected_id, expected_name in cases:
+            with self.subTest(kind=kind):
+                decoded = decode(
+                    encode(
+                        TYPE_STATE,
+                        full_state_effect_payload(
+                            kind, effect_id=effect_id, name=name
+                        ),
+                    )
+                )
+                self.assertTrue(decoded["has_effect"])
+                self.assertEqual(decoded["effect_kind"], kind)
+                self.assertEqual(decoded["effect_id"], expected_id)
+                self.assertEqual(decoded["effect_name"], expected_name)
+
+    def test_effect_names_accept_exactly_64_utf8_bytes(self):
+        for kind in (EFFECT_CHIMERAFX, EFFECT_UNSUPPORTED):
+            with self.subTest(kind=kind):
+                packet = encode(
+                    TYPE_STATE,
+                    full_state_effect_payload(
+                        kind, effect_id=1, name="a" * 64
+                    ),
+                )
+                decoded = decode(
+                    packet
+                )
+                self.assertEqual(decoded["effect_name"], "a" * 64)
+                expected_size = (
+                    MAX_STATE_PACKET_SIZE
+                    if kind == EFFECT_CHIMERAFX
+                    else MAX_STATE_PACKET_SIZE - 1
+                )
+                self.assertEqual(len(packet), expected_size)
+
     def test_power_only_v1_packet_remains_valid(self):
         decoded = decode(
             encode(TYPE_STATE, struct.pack(">I", FIELD_POWER) + b"\x01")
@@ -241,6 +432,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(decoded["has_brightness"])
         self.assertFalse(decoded["has_color"])
         self.assertFalse(decoded["has_color_brightness"])
+        self.assertFalse(decoded["has_effect"])
 
     def test_legacy_full_state_without_color_brightness_remains_valid(self):
         legacy_mask = FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR
@@ -295,6 +487,23 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decoded["brightness"], 64)
         self.assertEqual(decoded["blue"], 3)
 
+    def test_unknown_fields_after_effect_value_are_ignored(self):
+        payload = (
+            full_state_effect_payload(
+                EFFECT_UNSUPPORTED, name="External"
+            )
+            + b"\xaa\xbb"
+        )
+        payload = (
+            struct.pack(
+                ">I",
+                FULL_STATE_MASK | FIELD_EFFECT | 0x80000000,
+            )
+            + payload[4:]
+        )
+        decoded = decode(encode(TYPE_STATE, payload))
+        self.assertEqual(decoded["effect_name"], "External")
+
     def test_state_without_power_is_valid_but_not_actionable(self):
         decoded = decode(
             encode(TYPE_STATE, struct.pack(">I", 0x80000000) + b"\xaa")
@@ -321,6 +530,83 @@ class ProtocolTests(unittest.TestCase):
     def test_truncated_color_brightness_is_rejected(self):
         payload = struct.pack(">I", FIELD_COLOR_BRIGHTNESS)
         with self.assertRaisesRegex(ValueError, "color-brightness"):
+            decode(encode(TYPE_STATE, payload))
+
+    def test_truncated_effect_values_are_rejected(self):
+        malformed_values = (
+            b"",
+            bytes((EFFECT_CHIMERAFX,)),
+            bytes((EFFECT_CHIMERAFX, 3)),
+            bytes((EFFECT_CHIMERAFX, 3, 4)) + b"Wip",
+            bytes((EFFECT_UNSUPPORTED,)),
+            bytes((EFFECT_UNSUPPORTED, 4)) + b"Wip",
+        )
+        for value in malformed_values:
+            with self.subTest(value=value):
+                payload = struct.pack(">I", FIELD_EFFECT) + value
+                with self.assertRaisesRegex(
+                    ValueError, "effect-(kind|length)"
+                ):
+                    decode(encode(TYPE_STATE, payload))
+
+    def test_bad_effect_kind_is_rejected(self):
+        payload = struct.pack(">I", FIELD_EFFECT) + b"\x03"
+        with self.assertRaisesRegex(ValueError, "effect-kind"):
+            decode(encode(TYPE_STATE, payload))
+
+    def test_invalid_effect_utf8_is_rejected(self):
+        invalid_names = (
+            b"\xc0\x80",
+            b"\xed\xa0\x80",
+            b"\xf4\x90\x80\x80",
+            b"\x80",
+        )
+        for name in invalid_names:
+            with self.subTest(name=name):
+                value = bytes(
+                    (EFFECT_UNSUPPORTED, len(name))
+                ) + name
+                payload = struct.pack(">I", FIELD_EFFECT) + value
+                with self.assertRaisesRegex(ValueError, "effect-utf8"):
+                    decode(encode(TYPE_STATE, payload))
+
+    def test_effect_name_size_and_empty_names_are_rejected(self):
+        malformed_values = (
+            bytes((EFFECT_CHIMERAFX, 3, 0)),
+            bytes((EFFECT_UNSUPPORTED, 0)),
+            bytes((EFFECT_CHIMERAFX, 3, 65)) + b"a" * 65,
+            bytes((EFFECT_UNSUPPORTED, 65)) + b"a" * 65,
+        )
+        for value in malformed_values:
+            with self.subTest(value=value[:3]):
+                payload = struct.pack(">I", FIELD_EFFECT) + value
+                with self.assertRaisesRegex(
+                    ValueError, "effect-name-(empty|size)"
+                ):
+                    decode(encode(TYPE_STATE, payload))
+
+    def test_effect_encode_rejects_invalid_values(self):
+        invalid = (
+            (3, 0, ""),
+            (EFFECT_CHIMERAFX, 1, ""),
+            (EFFECT_UNSUPPORTED, 0, ""),
+            (EFFECT_CHIMERAFX, 1, "a" * 65),
+            (EFFECT_UNSUPPORTED, 0, "a" * 65),
+        )
+        for kind, effect_id, name in invalid:
+            with self.subTest(kind=kind, name_length=len(name)):
+                with self.assertRaises(ValueError):
+                    effect_value(
+                        kind, effect_id=effect_id, name=name
+                    )
+
+    def test_known_effect_value_rejects_trailing_bytes(self):
+        payload = (
+            struct.pack(">I", FIELD_EFFECT)
+            + effect_value(EFFECT_NONE)
+            + b"\xaa"
+        )
+        with self.assertRaisesRegex(ValueError, "state-length"):
             decode(encode(TYPE_STATE, payload))
 
     def test_unknown_color_capability_bits_are_rejected(self):

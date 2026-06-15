@@ -57,6 +57,61 @@ bool CFXSyncPacketCodec::tags_equal_(const uint8_t *left,
   return difference == 0;
 }
 
+bool CFXSyncPacketCodec::is_valid_utf8_(const uint8_t *data, size_t size) {
+  size_t offset = 0;
+  while (offset < size) {
+    const uint8_t first = data[offset++];
+    if (first <= 0x7F) {
+      continue;
+    }
+
+    if (first >= 0xC2 && first <= 0xDF) {
+      if (offset >= size || (data[offset] & 0xC0) != 0x80) {
+        return false;
+      }
+      offset++;
+      continue;
+    }
+
+    if (first >= 0xE0 && first <= 0xEF) {
+      if (offset + 1 >= size) {
+        return false;
+      }
+      const uint8_t second = data[offset];
+      const uint8_t third = data[offset + 1];
+      if ((third & 0xC0) != 0x80 ||
+          (first == 0xE0 && (second < 0xA0 || second > 0xBF)) ||
+          (first == 0xED && (second < 0x80 || second > 0x9F)) ||
+          (first != 0xE0 && first != 0xED &&
+           (second & 0xC0) != 0x80)) {
+        return false;
+      }
+      offset += 2;
+      continue;
+    }
+
+    if (first >= 0xF0 && first <= 0xF4) {
+      if (offset + 2 >= size) {
+        return false;
+      }
+      const uint8_t second = data[offset];
+      if ((data[offset + 1] & 0xC0) != 0x80 ||
+          (data[offset + 2] & 0xC0) != 0x80 ||
+          (first == 0xF0 && (second < 0x90 || second > 0xBF)) ||
+          (first == 0xF4 && (second < 0x80 || second > 0x8F)) ||
+          (first != 0xF0 && first != 0xF4 &&
+           (second & 0xC0) != 0x80)) {
+        return false;
+      }
+      offset += 3;
+      continue;
+    }
+
+    return false;
+  }
+  return true;
+}
+
 bool CFXSyncPacketCodec::encode_(
     CFXSyncPacketType type, uint32_t group_hash, uint32_t boot_id,
     uint32_t sequence, const uint8_t *payload, size_t payload_size,
@@ -93,9 +148,40 @@ bool CFXSyncPacketCodec::encode_state(
     uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
     uint8_t blue, uint8_t white, bool has_white,
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  return encode_state(group_hash, boot_id, sequence, power, brightness,
+                      color_brightness, red, green, blue, white, has_white,
+                      false, {}, key, output);
+}
+
+bool CFXSyncPacketCodec::encode_state(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
+    uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
+    uint8_t blue, uint8_t white, bool has_white, bool has_effect,
+    const CFXSyncEffectState &effect, const std::array<uint8_t, 32> &key,
+    std::vector<uint8_t> &output) {
+  if (has_effect) {
+    const size_t name_size = effect.name.size();
+    switch (effect.kind) {
+      case CFXSyncEffectKind::NONE:
+        break;
+      case CFXSyncEffectKind::CHIMERAFX:
+      case CFXSyncEffectKind::UNSUPPORTED:
+        if (name_size == 0 || name_size > MAX_EFFECT_NAME_BYTES ||
+            !is_valid_utf8_(
+                reinterpret_cast<const uint8_t *>(effect.name.data()),
+                name_size)) {
+          return false;
+        }
+        break;
+      default:
+        return false;
+    }
+  }
+
   std::vector<uint8_t> payload;
-  payload.reserve(FULL_STATE_PAYLOAD_SIZE);
-  append_u32_(payload, FULL_STATE_MASK);
+  payload.reserve(has_effect ? MAX_STATE_PAYLOAD_SIZE
+                             : FULL_STATE_PAYLOAD_SIZE);
+  append_u32_(payload, FULL_STATE_MASK | (has_effect ? FIELD_EFFECT : 0));
   payload.push_back(power ? 1 : 0);
   payload.push_back(brightness);
   payload.push_back(has_white ? COLOR_CAP_WHITE : 0);
@@ -104,6 +190,26 @@ bool CFXSyncPacketCodec::encode_state(
   payload.push_back(blue);
   payload.push_back(white);
   payload.push_back(color_brightness);
+
+  if (has_effect) {
+    payload.push_back(static_cast<uint8_t>(effect.kind));
+    switch (effect.kind) {
+      case CFXSyncEffectKind::NONE:
+        break;
+      case CFXSyncEffectKind::CHIMERAFX:
+        payload.push_back(effect.effect_id);
+        payload.push_back(static_cast<uint8_t>(effect.name.size()));
+        payload.insert(payload.end(), effect.name.begin(), effect.name.end());
+        break;
+      case CFXSyncEffectKind::UNSUPPORTED:
+        payload.push_back(static_cast<uint8_t>(effect.name.size()));
+        payload.insert(payload.end(), effect.name.begin(), effect.name.end());
+        break;
+      default:
+        return false;
+    }
+  }
+
   return encode_(CFXSyncPacketType::STATE, group_hash, boot_id, sequence,
                  payload.data(), payload.size(), key, output);
 }
@@ -219,8 +325,53 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     packet.color_brightness = payload[offset++];
   }
 
+  if ((packet.field_mask & FIELD_EFFECT) != 0) {
+    if (offset + 1 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_effect = true;
+    packet.effect.kind =
+        static_cast<CFXSyncEffectKind>(payload[offset++]);
+
+    size_t name_size = 0;
+    switch (packet.effect.kind) {
+      case CFXSyncEffectKind::NONE:
+        packet.effect.effect_id = 0;
+        packet.effect.name.clear();
+        break;
+      case CFXSyncEffectKind::CHIMERAFX:
+        if (offset + 2 > payload_size) {
+          return CFXSyncDecodeResult::MALFORMED;
+        }
+        packet.effect.effect_id = payload[offset++];
+        name_size = payload[offset++];
+        break;
+      case CFXSyncEffectKind::UNSUPPORTED:
+        if (offset + 1 > payload_size) {
+          return CFXSyncDecodeResult::MALFORMED;
+        }
+        packet.effect.effect_id = 0;
+        name_size = payload[offset++];
+        break;
+      default:
+        return CFXSyncDecodeResult::MALFORMED;
+    }
+
+    if (packet.effect.kind != CFXSyncEffectKind::NONE) {
+      if (name_size == 0 || name_size > MAX_EFFECT_NAME_BYTES ||
+          offset + name_size > payload_size ||
+          !is_valid_utf8_(payload + offset, name_size)) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.effect.name.assign(
+          reinterpret_cast<const char *>(payload + offset), name_size);
+      offset += name_size;
+    }
+  }
+
   constexpr uint32_t KNOWN_FIELDS =
-      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
+      FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS |
+      FIELD_EFFECT;
   if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
     return CFXSyncDecodeResult::MALFORMED;
   }

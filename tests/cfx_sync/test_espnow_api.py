@@ -42,6 +42,51 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("packet.has_color = true", source)
         self.assertIn("packet.has_color_brightness = true", source)
 
+    def test_packet_codec_exposes_optional_effect_wire_state(self):
+        header = PACKET_HEADER.read_text(encoding="utf-8")
+        source = PACKET_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn('#include "cfx_sync_effect.h"', header)
+        self.assertIn("FIELD_EFFECT = 0x00000010UL", header)
+        self.assertIn("MAX_EFFECT_NAME_BYTES = 64", header)
+        self.assertIn("MAX_EFFECT_VALUE_SIZE = 67", header)
+        self.assertIn("MAX_STATE_PACKET_SIZE", header)
+        self.assertIn("117", header)
+        self.assertIn("bool has_effect{false};", header)
+        self.assertIn("CFXSyncEffectState effect;", header)
+        self.assertIn("bool has_effect,", header)
+        self.assertIn(
+            "const CFXSyncEffectState &effect,", header
+        )
+        self.assertIn("packet.has_effect = true", source)
+        self.assertIn("CFXSyncEffectKind::NONE", source)
+        self.assertIn("CFXSyncEffectKind::CHIMERAFX", source)
+        self.assertIn("CFXSyncEffectKind::UNSUPPORTED", source)
+
+    def test_packet_effect_codec_has_strict_utf8_without_renderer(self):
+        header = PACKET_HEADER.read_text(encoding="utf-8")
+        source = PACKET_SOURCE.read_text(encoding="utf-8")
+        combined = (header + source).lower()
+
+        self.assertIn("is_valid_utf8_", header)
+        self.assertIn("is_valid_utf8_", source)
+        self.assertNotIn("cfx_light", combined)
+        self.assertNotIn("cfx_effect/", combined)
+        self.assertNotIn("cfxrunner", combined)
+        self.assertNotIn("renderer", combined)
+
+    def test_packet_codec_uses_explicit_byte_order_without_packing(self):
+        header = PACKET_HEADER.read_text(encoding="utf-8")
+        source = PACKET_SOURCE.read_text(encoding="utf-8")
+        combined = (header + source).lower()
+
+        self.assertIn("append_u16_", source)
+        self.assertIn("append_u32_", source)
+        self.assertIn("read_u16_", source)
+        self.assertIn("read_u32_", source)
+        self.assertNotIn("#pragma pack", combined)
+        self.assertNotIn("__attribute__((packed))", combined)
+
     def test_color_helper_is_renderer_independent(self):
         text = COLOR_HEADER.read_text(encoding="utf-8")
 

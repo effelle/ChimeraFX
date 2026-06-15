@@ -8,6 +8,7 @@
 
 #ifdef USE_ESP32
 
+#include "cfx_sync_effect.h"
 #include "esphome/components/hmac_sha256/hmac_sha256.h"
 
 #include <array>
@@ -51,6 +52,8 @@ struct CFXSyncPacket {
   uint8_t green{0};
   uint8_t blue{0};
   uint8_t white{0};
+  bool has_effect{false};
+  CFXSyncEffectState effect;
 };
 
 class CFXSyncPacketCodec {
@@ -62,12 +65,19 @@ class CFXSyncPacketCodec {
   static constexpr uint32_t FIELD_BRIGHTNESS = 0x00000002UL;
   static constexpr uint32_t FIELD_COLOR = 0x00000004UL;
   static constexpr uint32_t FIELD_COLOR_BRIGHTNESS = 0x00000008UL;
+  static constexpr uint32_t FIELD_EFFECT = 0x00000010UL;
   static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
+  static constexpr size_t MAX_EFFECT_NAME_BYTES = 64;
+  static constexpr size_t MAX_EFFECT_VALUE_SIZE = 67;
+  static constexpr size_t MAX_STATE_PAYLOAD_SIZE =
+      FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE;
   static constexpr size_t STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t MAX_STATE_PACKET_SIZE =
+      HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 117 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
@@ -75,6 +85,14 @@ class CFXSyncPacketCodec {
                            uint8_t color_brightness,
                            uint8_t red, uint8_t green, uint8_t blue,
                            uint8_t white, bool has_white,
+                           const std::array<uint8_t, 32> &key,
+                           std::vector<uint8_t> &output);
+  static bool encode_state(uint32_t group_hash, uint32_t boot_id,
+                           uint32_t sequence, bool power, uint8_t brightness,
+                           uint8_t color_brightness,
+                           uint8_t red, uint8_t green, uint8_t blue,
+                           uint8_t white, bool has_white, bool has_effect,
+                           const CFXSyncEffectState &effect,
                            const std::array<uint8_t, 32> &key,
                            std::vector<uint8_t> &output);
   static bool encode_sync_request(uint32_t group_hash, uint32_t boot_id,
@@ -101,9 +119,17 @@ class CFXSyncPacketCodec {
                              uint8_t *tag);
   static bool tags_equal_(const uint8_t *left, const uint8_t *right,
                           size_t size);
+  static bool is_valid_utf8_(const uint8_t *data, size_t size);
 };
 
-static_assert(CFXSyncPacketCodec::STATE_PACKET_SIZE < 250,
+static_assert(CFXSyncPacketCodec::MAX_EFFECT_VALUE_SIZE == 67,
+              "CFX sync maximum effect value size changed");
+static_assert(CFXSyncPacketCodec::MAX_EFFECT_VALUE_SIZE ==
+                  3 + CFXSyncPacketCodec::MAX_EFFECT_NAME_BYTES,
+              "CFX sync effect value size is inconsistent");
+static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 117,
+              "CFX sync maximum state packet size changed");
+static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE < 250,
               "CFX sync state packet exceeds ESP-NOW V1 payload limit");
 static_assert(CFXSyncPacketCodec::REQUEST_PACKET_SIZE < 250,
               "CFX sync request packet exceeds ESP-NOW V1 payload limit");
