@@ -8,9 +8,17 @@ SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
 PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
 PACKET_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.cpp"
 COLOR_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
+EFFECT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_effect.h"
 
 
 class ESPNowAPITests(unittest.TestCase):
+    def _effect_header_text(self):
+        self.assertTrue(
+            EFFECT_HEADER.exists(),
+            "cfx_sync_effect.h must define the effect identity model",
+        )
+        return EFFECT_HEADER.read_text(encoding="utf-8")
+
     def test_uses_esphome_2026_5_receive_api(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
@@ -49,6 +57,54 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("cfx_effect", text)
         self.assertNotIn("runner", text)
 
+    def test_effect_helper_is_renderer_independent(self):
+        text = self._effect_header_text()
+
+        self.assertIn(
+            "enum class CFXSyncEffectKind : uint8_t", text
+        )
+        self.assertIn("NONE = 0", text)
+        self.assertIn("CHIMERAFX = 1", text)
+        self.assertIn("UNSUPPORTED = 2", text)
+        self.assertIn("struct CFXSyncEffectState", text)
+        self.assertIn(
+            "CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};", text
+        )
+        self.assertIn("uint8_t effect_id{0};", text)
+        self.assertIn("std::string name;", text)
+        self.assertIn("struct CFXSyncEffectEntry", text)
+        self.assertIn("operator==", text)
+        self.assertIn("operator!=", text)
+        self.assertNotIn("cfx_effect", text)
+        self.assertNotIn("runner", text)
+        self.assertNotIn("renderer", text)
+
+    def test_effect_lookup_requires_exact_id_and_name(self):
+        text = self._effect_header_text()
+
+        self.assertIn("find_effect_entry(", text)
+        self.assertIn(
+            "entry.effect_id == effect_id && entry.name == name",
+            text,
+        )
+        self.assertNotIn("strcasecmp", text)
+        self.assertNotIn("casefold", text)
+
+    def test_effect_capture_uses_public_light_state_api(self):
+        text = self._effect_header_text()
+
+        self.assertIn("capture_effect_state(", text)
+        self.assertIn("state->get_effect_name()", text)
+        self.assertIn('effect_name == "None"', text)
+        self.assertIn("if (entry.name == effect_name)", text)
+        self.assertIn("entry.effect_id", text)
+        self.assertIn("entry.name", text)
+        self.assertIn("CFXSyncEffectKind::CHIMERAFX", text)
+        self.assertIn("CFXSyncEffectKind::UNSUPPORTED", text)
+        self.assertIn("effect_name,", text)
+        self.assertNotIn("static_cast", text)
+        self.assertNotIn("dynamic_cast", text)
+
     def test_runtime_tracks_complete_snapshots(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
@@ -71,6 +127,49 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("void set_light(", header)
         self.assertNotIn("light::LightState *light_{", header)
         self.assertIn("this->lights_[0]", source)
+
+    def test_add_light_keeps_effect_vectors_aligned(self):
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn('#include "cfx_sync_effect.h"', header)
+        self.assertIn("this->lights_.push_back(light);", header)
+        self.assertIn("this->effect_catalogs_.emplace_back();", header)
+        self.assertIn("this->effect_log_states_.emplace_back();", header)
+        self.assertIn(
+            "std::vector<std::vector<CFXSyncEffectEntry>> "
+            "effect_catalogs_;",
+            header,
+        )
+        self.assertIn(
+            "std::vector<EffectLogState> effect_log_states_;", header
+        )
+
+    def test_add_effect_exposes_bounds_checked_codegen_contract(self):
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void add_effect(size_t light_index, uint8_t effect_id,",
+            header,
+        )
+        self.assertIn(
+            "if (light_index >= this->effect_catalogs_.size())", header
+        )
+        self.assertIn(
+            "this->effect_catalogs_[light_index].push_back(", header
+        )
+        self.assertIn("CFXSyncEffectEntry{effect_id, name}", header)
+
+    def test_effect_log_state_has_required_groundwork_fields(self):
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("struct EffectLogState", header)
+        self.assertIn("bool valid{false};", header)
+        self.assertIn(
+            "CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};", header
+        )
+        self.assertIn("uint8_t id{0};", header)
+        self.assertIn("std::string name;", header)
+        self.assertIn("uint32_t last_log_ms{0};", header)
 
     def test_follower_applies_one_call_without_effect_changes(self):
         source = SOURCE.read_text(encoding="utf-8")

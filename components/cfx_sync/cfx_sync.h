@@ -9,6 +9,7 @@
 #ifdef USE_ESP32
 
 #include "cfx_sync_color.h"
+#include "cfx_sync_effect.h"
 #include "cfx_sync_packet.h"
 #include "esphome/components/espnow/espnow_component.h"
 #include "esphome/components/light/light_state.h"
@@ -51,6 +52,16 @@ class CFXSyncComponent : public Component,
   }
   void add_light(light::LightState *light) {
     this->lights_.push_back(light);
+    this->effect_catalogs_.emplace_back();
+    this->effect_log_states_.emplace_back();
+  }
+  void add_effect(size_t light_index, uint8_t effect_id,
+                  const std::string &name) {
+    if (light_index >= this->effect_catalogs_.size()) {
+      return;
+    }
+    this->effect_catalogs_[light_index].push_back(
+        CFXSyncEffectEntry{effect_id, name});
   }
   void set_role(CFXSyncRole role) { this->role_ = role; }
   void set_peer(const std::array<uint8_t, 6> &peer) {
@@ -71,6 +82,14 @@ class CFXSyncComponent : public Component,
  protected:
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
 
+  struct EffectLogState {
+    bool valid{false};
+    CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};
+    uint8_t id{0};
+    std::string name;
+    uint32_t last_log_ms{0};
+  };
+
   bool send_state_();
   bool send_state_(const CFXSyncLightSnapshot &snapshot);
   bool send_sync_request_();
@@ -90,6 +109,8 @@ class CFXSyncComponent : public Component,
 
   espnow::ESPNowComponent *espnow_{nullptr};
   std::vector<light::LightState *> lights_;
+  std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
+  std::vector<EffectLogState> effect_log_states_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   std::array<uint8_t, 6> peer_{};
   std::array<uint8_t, 32> key_{};
