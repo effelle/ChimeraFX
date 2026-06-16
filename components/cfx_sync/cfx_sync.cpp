@@ -503,6 +503,7 @@ void CFXSyncComponent::handle_decode_failure_(
       break;
     case CFXSyncDecodeResult::BAD_AUTH:
       this->authentication_failures_++;
+      this->log_rejection_("Ignoring packet with invalid authentication");
       break;
     default:
       break;
