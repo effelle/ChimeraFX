@@ -39,6 +39,17 @@ light::LightState *CFXSyncComponent::leader_light_() const {
   return this->lights_[0];
 }
 
+CFXSyncNodeRole CFXSyncComponent::local_node_role_() const {
+  return this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::LEADER
+                                            : CFXSyncNodeRole::FOLLOWER;
+}
+
+uint16_t CFXSyncComponent::local_capabilities_() const {
+  return this->role_ == CFXSyncRole::LEADER
+             ? CFXSyncPacketCodec::CAP_LIGHT_LEADER
+             : CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+}
+
 void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
   this->peer_ = peer;
   const CFXSyncNodeRole peer_role =
@@ -64,6 +75,15 @@ void CFXSyncComponent::setup() {
     this->boot_id_ = 1;
   }
   this->espnow_->register_receive_handler(this);
+  const esp_err_t broadcast_result =
+      this->espnow_->add_peer(BROADCAST_MAC.data());
+  if (broadcast_result != ESP_OK) {
+    ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
+             esp_err_to_name(broadcast_result));
+  }
+  this->send_hello_();
+  this->set_interval("hello", HELLO_INTERVAL_MS,
+                     [this]() { this->send_hello_(); });
   const CFXSyncNodeRole peer_role =
       this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
                                          : CFXSyncNodeRole::LEADER;
@@ -130,11 +150,6 @@ void CFXSyncComponent::dump_config() {
 
 bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
                                   const uint8_t *data, uint8_t size) {
-  auto *peer = this->find_peer_(info.src_addr);
-  if (peer == nullptr) {
-    return false;
-  }
-
   CFXSyncPacket packet;
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
@@ -145,6 +160,58 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
     this->handle_decode_failure_(result);
     return true;
   }
+
+  auto *peer = this->find_peer_(info.src_addr);
+  if (packet.type == CFXSyncPacketType::HELLO) {
+    peer = this->find_or_add_peer_(info.src_addr, packet.node_role,
+                                   packet.capabilities);
+    if (peer == nullptr) {
+      return true;
+    }
+    if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
+      this->stale_packets_++;
+      this->log_rejection_("Ignoring duplicate or stale packet");
+      return true;
+    }
+    this->register_peer_(*peer);
+    this->received_packets_++;
+    this->last_valid_packet_ms_ = millis();
+    if (this->role_ == CFXSyncRole::LEADER &&
+        packet.node_role == CFXSyncNodeRole::FOLLOWER &&
+        (packet.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER)) {
+      this->send_state_to_peer_(*peer);
+    }
+    return true;
+  }
+
+  if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
+    if (peer == nullptr) {
+      peer = this->find_or_add_peer_(info.src_addr,
+                                     CFXSyncNodeRole::FOLLOWER,
+                                     CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
+    }
+    if (peer == nullptr) {
+      return true;
+    }
+    if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
+      this->stale_packets_++;
+      this->log_rejection_("Ignoring duplicate or stale packet");
+      return true;
+    }
+    this->register_peer_(*peer);
+    this->received_packets_++;
+    this->last_valid_packet_ms_ = millis();
+    if (this->role_ == CFXSyncRole::LEADER) {
+      this->send_state_to_peer_(*peer);
+    }
+    return true;
+  }
+
+  if (peer == nullptr) {
+    this->log_rejection_("Ignoring authenticated packet from unknown peer");
+    return true;
+  }
+
   peer->last_seen_ms = millis();
   if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
     this->stale_packets_++;
@@ -155,14 +222,12 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
   this->received_packets_++;
   this->last_valid_packet_ms_ = millis();
 
-  if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
-    if (this->role_ == CFXSyncRole::LEADER) {
-      this->send_state_();
-    }
+  if (packet.type == CFXSyncPacketType::STATE_ACK) {
     return true;
   }
 
-  if (this->role_ == CFXSyncRole::FOLLOWER &&
+  if (packet.type == CFXSyncPacketType::STATE &&
+      this->role_ == CFXSyncRole::FOLLOWER &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
        packet.has_color_brightness || packet.has_effect ||
        packet.has_controls)) {
@@ -227,7 +292,39 @@ bool CFXSyncComponent::send_state_(
   return this->send_packet_(packet);
 }
 
+bool CFXSyncComponent::send_state_to_peer_(PeerState &peer) {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr || this->effect_catalogs_.empty()) {
+    return false;
+  }
+
+  const auto snapshot = capture_light_snapshot(*leader);
+  const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
+  const auto controls = this->capture_control_state_(0);
+
+  std::vector<uint8_t> packet;
+  const uint32_t sequence = this->next_sequence_();
+  if (!CFXSyncPacketCodec::encode_state(
+          this->group_hash_, this->boot_id_, sequence, snapshot.power,
+          snapshot.brightness, snapshot.color_brightness, snapshot.red,
+          snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
+          true, effect, controls.has_any(), controls, this->key_, packet)) {
+    return false;
+  }
+  if (!this->send_packet_to_(peer.mac, packet)) {
+    return false;
+  }
+  peer.last_state_sent_boot_id = this->boot_id_;
+  peer.last_state_sent_sequence = sequence;
+  return true;
+}
+
 bool CFXSyncComponent::send_sync_request_() {
+  return this->send_sync_request_to_(this->peer_);
+}
+
+bool CFXSyncComponent::send_sync_request_to_(
+    const std::array<uint8_t, 6> &mac) {
   if (this->role_ != CFXSyncRole::FOLLOWER) {
     return false;
   }
@@ -238,16 +335,32 @@ bool CFXSyncComponent::send_sync_request_() {
           this->key_, packet)) {
     return false;
   }
-  return this->send_packet_(packet);
+  return this->send_packet_to_(mac, packet);
+}
+
+bool CFXSyncComponent::send_hello_() {
+  std::vector<uint8_t> packet;
+  if (!CFXSyncPacketCodec::encode_hello(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          this->local_node_role_(), this->local_capabilities_(), this->key_,
+          packet)) {
+    return false;
+  }
+  return this->send_packet_to_(BROADCAST_MAC, packet);
 }
 
 bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
+  return this->send_packet_to_(this->peer_, packet);
+}
+
+bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
+                                       std::vector<uint8_t> &packet) {
   if (this->espnow_ == nullptr) {
     return false;
   }
 
   const esp_err_t result = this->espnow_->send(
-      this->peer_.data(), packet,
+      mac.data(), packet,
       [this](esp_err_t send_result) {
         this->handle_send_result_(send_result);
       });
@@ -408,16 +521,22 @@ void CFXSyncComponent::log_rejection_(const char *message) {
 void CFXSyncComponent::schedule_follower_recovery_() {
   this->set_timeout("sync-request-1", 1000, [this]() {
     if (!this->has_valid_state_) {
+      this->send_hello_();
+      this->send_sync_request_to_(BROADCAST_MAC);
       this->send_sync_request_();
     }
   });
   this->set_timeout("sync-request-2", 2000, [this]() {
     if (!this->has_valid_state_) {
+      this->send_hello_();
+      this->send_sync_request_to_(BROADCAST_MAC);
       this->send_sync_request_();
     }
   });
   this->set_timeout("sync-request-3", 4000, [this]() {
     if (!this->has_valid_state_) {
+      this->send_hello_();
+      this->send_sync_request_to_(BROADCAST_MAC);
       this->send_sync_request_();
     }
   });

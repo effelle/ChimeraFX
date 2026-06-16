@@ -131,6 +131,8 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
   static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
+  static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
   struct PeerState {
     bool active{false};
@@ -175,8 +177,15 @@ class CFXSyncComponent : public Component,
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
                    const CFXSyncControlState &controls);
+  bool send_state_to_peer_(PeerState &peer);
   bool send_sync_request_();
+  bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
+  bool send_hello_();
   bool send_packet_(std::vector<uint8_t> &packet);
+  bool send_packet_to_(const std::array<uint8_t, 6> &mac,
+                       std::vector<uint8_t> &packet);
+  CFXSyncNodeRole local_node_role_() const;
+  uint16_t local_capabilities_() const;
   uint32_t next_sequence_();
   PeerState *find_peer_(const uint8_t *mac);
   PeerState *find_or_add_peer_(const uint8_t *mac, CFXSyncNodeRole role,
