@@ -22,6 +22,20 @@ namespace cfx_sync {
 enum class CFXSyncPacketType : uint8_t {
   STATE = 1,
   SYNC_REQUEST = 2,
+  HELLO = 3,
+  STATE_ACK = 4,
+};
+
+enum class CFXSyncNodeRole : uint8_t {
+  LEADER = 1,
+  FOLLOWER = 2,
+  REMOTE = 3,
+};
+
+enum class CFXSyncAckResult : uint8_t {
+  APPLIED = 0,
+  IGNORED_UNSUPPORTED = 1,
+  APPLY_FAILED = 2,
 };
 
 enum class CFXSyncDecodeResult : uint8_t {
@@ -104,6 +118,11 @@ struct CFXSyncPacket {
   CFXSyncEffectState effect;
   bool has_controls{false};
   CFXSyncControlState controls;
+  CFXSyncNodeRole node_role{CFXSyncNodeRole::FOLLOWER};
+  uint16_t capabilities{0};
+  uint32_t acked_boot_id{0};
+  uint32_t acked_sequence{0};
+  CFXSyncAckResult ack_result{CFXSyncAckResult::APPLIED};
 };
 
 class CFXSyncPacketCodec {
@@ -125,6 +144,9 @@ class CFXSyncPacketCodec {
   static constexpr uint16_t CONTROL_INTENSITY = 0x0020U;
   static constexpr uint16_t CONTROL_MIRROR = 0x0040U;
   static constexpr uint16_t CONTROL_PALETTE = 0x0080U;
+  static constexpr uint16_t CAP_LIGHT_LEADER = 0x0001U;
+  static constexpr uint16_t CAP_LIGHT_FOLLOWER = 0x0002U;
+  static constexpr uint16_t CAP_BINARY_REMOTE = 0x0004U;
   static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
@@ -140,9 +162,15 @@ class CFXSyncPacketCodec {
       MAX_CONTROLS_VALUE_SIZE;
   static constexpr size_t STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t HELLO_PAYLOAD_SIZE = 3;
+  static constexpr size_t STATE_ACK_PAYLOAD_SIZE = 9;
   static constexpr size_t MAX_STATE_PACKET_SIZE =
       HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 117 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t HELLO_PACKET_SIZE =
+      HEADER_SIZE + HELLO_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t STATE_ACK_PACKET_SIZE =
+      HEADER_SIZE + STATE_ACK_PAYLOAD_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
                            uint32_t sequence, bool power, uint8_t brightness,
@@ -173,6 +201,17 @@ class CFXSyncPacketCodec {
                                   uint32_t sequence,
                                   const std::array<uint8_t, 32> &key,
                                   std::vector<uint8_t> &output);
+  static bool encode_hello(uint32_t group_hash, uint32_t boot_id,
+                           uint32_t sequence, CFXSyncNodeRole role,
+                           uint16_t capabilities,
+                           const std::array<uint8_t, 32> &key,
+                           std::vector<uint8_t> &output);
+  static bool encode_state_ack(uint32_t group_hash, uint32_t boot_id,
+                               uint32_t sequence, uint32_t acked_boot_id,
+                               uint32_t acked_sequence,
+                               CFXSyncAckResult result,
+                               const std::array<uint8_t, 32> &key,
+                               std::vector<uint8_t> &output);
   static CFXSyncDecodeResult decode(const uint8_t *data, size_t size,
                                     uint32_t expected_group_hash,
                                     const std::array<uint8_t, 32> &key,
@@ -211,6 +250,14 @@ static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE < 250,
               "CFX sync state packet exceeds ESP-NOW V1 payload limit");
 static_assert(CFXSyncPacketCodec::REQUEST_PACKET_SIZE < 250,
               "CFX sync request packet exceeds ESP-NOW V1 payload limit");
+static_assert(CFXSyncPacketCodec::HELLO_PACKET_SIZE == 41,
+              "CFX sync hello packet size changed");
+static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE == 47,
+              "CFX sync state ack packet size changed");
+static_assert(CFXSyncPacketCodec::HELLO_PACKET_SIZE < 250,
+              "CFX sync hello packet exceeds ESP-NOW V1 payload limit");
+static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE < 250,
+              "CFX sync state ack packet exceeds ESP-NOW V1 payload limit");
 
 }  // namespace cfx_sync
 }  // namespace esphome

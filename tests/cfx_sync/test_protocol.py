@@ -8,6 +8,8 @@ MAGIC = b"CFXS"
 VERSION = 1
 TYPE_STATE = 1
 TYPE_SYNC_REQUEST = 2
+TYPE_HELLO = 3
+TYPE_STATE_ACK = 4
 HEADER_SIZE = 22
 TAG_SIZE = 16
 FIELD_POWER = 0x00000001
@@ -28,6 +30,15 @@ CONTROL_SPEED = 0x0010
 CONTROL_INTENSITY = 0x0020
 CONTROL_MIRROR = 0x0040
 CONTROL_PALETTE = 0x0080
+ROLE_LEADER = 1
+ROLE_FOLLOWER = 2
+ROLE_REMOTE = 3
+ACK_APPLIED = 0
+ACK_IGNORED_UNSUPPORTED = 1
+ACK_APPLY_FAILED = 2
+CAP_LIGHT_LEADER = 0x0001
+CAP_LIGHT_FOLLOWER = 0x0002
+CAP_BINARY_REMOTE = 0x0004
 MAX_EFFECT_NAME_BYTES = 64
 MAX_EFFECT_VALUE_SIZE = 67
 MAX_CONTROLS_VALUE_SIZE = 11
@@ -51,6 +62,7 @@ def encode(
     boot_id=BOOT_ID,
     sequence=SEQUENCE,
     version=VERSION,
+    key=KEY,
 ):
     header = (
         MAGIC
@@ -60,7 +72,7 @@ def encode(
         )
     )
     authenticated = header + payload
-    tag = hmac.new(KEY, authenticated, hashlib.sha256).digest()[:TAG_SIZE]
+    tag = hmac.new(key, authenticated, hashlib.sha256).digest()[:TAG_SIZE]
     return authenticated + tag
 
 
@@ -423,6 +435,32 @@ def decode(packet, expected_group_hash=GROUP_HASH):
     elif packet[5] == TYPE_SYNC_REQUEST:
         if payload_size:
             raise ValueError("request-length")
+    elif packet[5] == TYPE_HELLO:
+        if payload_size != 3:
+            raise ValueError("hello-length")
+        payload = packet[HEADER_SIZE:authenticated_size]
+        role = payload[0]
+        if role not in (ROLE_LEADER, ROLE_FOLLOWER, ROLE_REMOTE):
+            raise ValueError("hello-role")
+        result["node_role"] = role
+        result["capabilities"] = struct.unpack(">H", payload[1:3])[0]
+    elif packet[5] == TYPE_STATE_ACK:
+        if payload_size != 9:
+            raise ValueError("ack-length")
+        payload = packet[HEADER_SIZE:authenticated_size]
+        acked_boot_id, acked_sequence = struct.unpack(">II", payload[:8])
+        ack_result = payload[8]
+        if not acked_boot_id or not acked_sequence:
+            raise ValueError("ack-replay-fields")
+        if ack_result not in (
+            ACK_APPLIED,
+            ACK_IGNORED_UNSUPPORTED,
+            ACK_APPLY_FAILED,
+        ):
+            raise ValueError("ack-result")
+        result["acked_boot_id"] = acked_boot_id
+        result["acked_sequence"] = acked_sequence
+        result["ack_result"] = ack_result
     else:
         raise ValueError("type")
     return result
@@ -485,6 +523,68 @@ class ProtocolTests(unittest.TestCase):
             "1a6058ae1b6e1fdf01549973448a58ed",
         )
         self.assertEqual(decode(packet)["type"], TYPE_SYNC_REQUEST)
+
+    def test_hello_round_trips_role_and_capabilities(self):
+        payload = bytes((ROLE_LEADER,)) + struct.pack(
+            ">H", CAP_LIGHT_LEADER | CAP_BINARY_REMOTE
+        )
+        packet = encode(TYPE_HELLO, payload)
+        self.assertEqual(len(packet), 41)
+        decoded = decode(packet)
+        self.assertEqual(decoded["type"], TYPE_HELLO)
+        self.assertEqual(decoded["node_role"], ROLE_LEADER)
+        self.assertEqual(
+            decoded["capabilities"], CAP_LIGHT_LEADER | CAP_BINARY_REMOTE
+        )
+
+    def test_state_ack_round_trips_acked_state_and_result(self):
+        payload = struct.pack(
+            ">IIB", 0x11223344, 0x55667788, ACK_IGNORED_UNSUPPORTED
+        )
+        packet = encode(TYPE_STATE_ACK, payload)
+        self.assertEqual(len(packet), 47)
+        decoded = decode(packet)
+        self.assertEqual(decoded["type"], TYPE_STATE_ACK)
+        self.assertEqual(decoded["acked_boot_id"], 0x11223344)
+        self.assertEqual(decoded["acked_sequence"], 0x55667788)
+        self.assertEqual(decoded["ack_result"], ACK_IGNORED_UNSUPPORTED)
+
+    def test_hello_wrong_key_is_rejected(self):
+        payload = bytes((ROLE_FOLLOWER,)) + struct.pack(
+            ">H", CAP_LIGHT_FOLLOWER
+        )
+        with self.assertRaisesRegex(ValueError, "auth"):
+            decode(encode(TYPE_HELLO, payload, key=bytes(reversed(KEY))))
+
+    def test_hello_wrong_group_is_rejected(self):
+        payload = bytes((ROLE_REMOTE,)) + struct.pack(
+            ">H", CAP_BINARY_REMOTE
+        )
+        with self.assertRaisesRegex(ValueError, "group"):
+            decode(encode(TYPE_HELLO, payload, group_hash=0x87654321))
+
+    def test_malformed_hello_payload_size_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "hello-length"):
+            decode(encode(TYPE_HELLO, b"\x01\x00"))
+
+    def test_malformed_hello_role_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "hello-role"):
+            decode(encode(TYPE_HELLO, b"\x04\x00\x01"))
+
+    def test_malformed_ack_payload_size_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "ack-length"):
+            decode(encode(TYPE_STATE_ACK, b"\x11\x22\x33\x44"))
+
+    def test_malformed_ack_result_is_rejected(self):
+        payload = struct.pack(">IIB", 0x11223344, 0x55667788, 3)
+        with self.assertRaisesRegex(ValueError, "ack-result"):
+            decode(encode(TYPE_STATE_ACK, payload))
+
+    def test_zero_acked_boot_id_and_sequence_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "ack-replay-fields"):
+            decode(encode(TYPE_STATE_ACK, struct.pack(">IIB", 0, 1, 0)))
+        with self.assertRaisesRegex(ValueError, "ack-replay-fields"):
+            decode(encode(TYPE_STATE_ACK, struct.pack(">IIB", 1, 0, 0)))
 
     def test_full_state_vector_is_stable(self):
         packet = encode(

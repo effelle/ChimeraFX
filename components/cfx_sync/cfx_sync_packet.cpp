@@ -292,6 +292,54 @@ bool CFXSyncPacketCodec::encode_sync_request(
                  sequence, nullptr, 0, key, output);
 }
 
+bool CFXSyncPacketCodec::encode_hello(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence,
+    CFXSyncNodeRole role, uint16_t capabilities,
+    const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  switch (role) {
+    case CFXSyncNodeRole::LEADER:
+    case CFXSyncNodeRole::FOLLOWER:
+    case CFXSyncNodeRole::REMOTE:
+      break;
+    default:
+      return false;
+  }
+
+  std::vector<uint8_t> payload;
+  payload.reserve(HELLO_PAYLOAD_SIZE);
+  payload.push_back(static_cast<uint8_t>(role));
+  append_u16_(payload, capabilities);
+  return encode_(CFXSyncPacketType::HELLO, group_hash, boot_id, sequence,
+                 payload.data(), payload.size(), key, output);
+}
+
+bool CFXSyncPacketCodec::encode_state_ack(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence,
+    uint32_t acked_boot_id, uint32_t acked_sequence,
+    CFXSyncAckResult result, const std::array<uint8_t, 32> &key,
+    std::vector<uint8_t> &output) {
+  if (acked_boot_id == 0 || acked_sequence == 0) {
+    return false;
+  }
+
+  switch (result) {
+    case CFXSyncAckResult::APPLIED:
+    case CFXSyncAckResult::IGNORED_UNSUPPORTED:
+    case CFXSyncAckResult::APPLY_FAILED:
+      break;
+    default:
+      return false;
+  }
+
+  std::vector<uint8_t> payload;
+  payload.reserve(STATE_ACK_PAYLOAD_SIZE);
+  append_u32_(payload, acked_boot_id);
+  append_u32_(payload, acked_sequence);
+  payload.push_back(static_cast<uint8_t>(result));
+  return encode_(CFXSyncPacketType::STATE_ACK, group_hash, boot_id, sequence,
+                 payload.data(), payload.size(), key, output);
+}
+
 CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     const uint8_t *data, size_t size, uint32_t expected_group_hash,
     const std::array<uint8_t, 32> &key, CFXSyncPacket &packet) {
@@ -331,7 +379,9 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
   const uint8_t raw_type = data[5];
   if (raw_type != static_cast<uint8_t>(CFXSyncPacketType::STATE) &&
       raw_type !=
-          static_cast<uint8_t>(CFXSyncPacketType::SYNC_REQUEST)) {
+          static_cast<uint8_t>(CFXSyncPacketType::SYNC_REQUEST) &&
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::HELLO) &&
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::STATE_ACK)) {
     return CFXSyncDecodeResult::UNSUPPORTED_TYPE;
   }
 
@@ -349,10 +399,50 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
                              : CFXSyncDecodeResult::MALFORMED;
   }
 
+  const uint8_t *payload = data + HEADER_SIZE;
+  if (packet.type == CFXSyncPacketType::HELLO) {
+    if (payload_size != HELLO_PAYLOAD_SIZE) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    const uint8_t raw_role = payload[0];
+    switch (static_cast<CFXSyncNodeRole>(raw_role)) {
+      case CFXSyncNodeRole::LEADER:
+      case CFXSyncNodeRole::FOLLOWER:
+      case CFXSyncNodeRole::REMOTE:
+        packet.node_role = static_cast<CFXSyncNodeRole>(raw_role);
+        break;
+      default:
+        return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.capabilities = read_u16_(payload + 1);
+    return CFXSyncDecodeResult::OK;
+  }
+
+  if (packet.type == CFXSyncPacketType::STATE_ACK) {
+    if (payload_size != STATE_ACK_PAYLOAD_SIZE) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.acked_boot_id = read_u32_(payload);
+    packet.acked_sequence = read_u32_(payload + 4);
+    if (packet.acked_boot_id == 0 || packet.acked_sequence == 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    const uint8_t raw_result = payload[8];
+    switch (static_cast<CFXSyncAckResult>(raw_result)) {
+      case CFXSyncAckResult::APPLIED:
+      case CFXSyncAckResult::IGNORED_UNSUPPORTED:
+      case CFXSyncAckResult::APPLY_FAILED:
+        packet.ack_result = static_cast<CFXSyncAckResult>(raw_result);
+        break;
+      default:
+        return CFXSyncDecodeResult::MALFORMED;
+    }
+    return CFXSyncDecodeResult::OK;
+  }
+
   if (payload_size < sizeof(uint32_t)) {
     return CFXSyncDecodeResult::MALFORMED;
   }
-  const uint8_t *payload = data + HEADER_SIZE;
   packet.field_mask = read_u32_(payload);
   size_t offset = sizeof(uint32_t);
 
