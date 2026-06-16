@@ -39,6 +39,14 @@ light::LightState *CFXSyncComponent::leader_light_() const {
   return this->lights_[0];
 }
 
+void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
+  this->peer_ = peer;
+  const CFXSyncNodeRole peer_role =
+      this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
+                                         : CFXSyncNodeRole::LEADER;
+  this->find_or_add_peer_(this->peer_.data(), peer_role, 0);
+}
+
 void CFXSyncComponent::setup() {
   if (this->espnow_ == nullptr || this->lights_.empty()) {
     ESP_LOGE(TAG, "ESP-NOW and at least one light reference are required");
@@ -56,6 +64,13 @@ void CFXSyncComponent::setup() {
     this->boot_id_ = 1;
   }
   this->espnow_->register_receive_handler(this);
+  const CFXSyncNodeRole peer_role =
+      this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
+                                         : CFXSyncNodeRole::LEADER;
+  if (auto *peer = this->find_or_add_peer_(this->peer_.data(), peer_role, 0);
+      peer != nullptr) {
+    peer->registered = true;
+  }
 
   if (this->role_ == CFXSyncRole::LEADER) {
     auto *leader = this->leader_light_();
@@ -115,7 +130,8 @@ void CFXSyncComponent::dump_config() {
 
 bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
                                   const uint8_t *data, uint8_t size) {
-  if (!this->is_peer_(info.src_addr)) {
+  auto *peer = this->find_peer_(info.src_addr);
+  if (peer == nullptr) {
     return false;
   }
 
@@ -129,7 +145,8 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
     this->handle_decode_failure_(result);
     return true;
   }
-  if (!this->accept_sequence_(packet.boot_id, packet.sequence)) {
+  peer->last_seen_ms = millis();
+  if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
     this->stale_packets_++;
     this->log_rejection_("Ignoring duplicate or stale packet");
     return true;
@@ -254,18 +271,78 @@ uint32_t CFXSyncComponent::next_sequence_() {
   return this->tx_sequence_;
 }
 
-bool CFXSyncComponent::accept_sequence_(uint32_t boot_id,
-                                        uint32_t sequence) {
-  if (!this->has_rx_sequence_ || boot_id != this->rx_boot_id_) {
-    this->has_rx_sequence_ = true;
-    this->rx_boot_id_ = boot_id;
-    this->rx_sequence_ = sequence;
-    return true;
+CFXSyncComponent::PeerState *CFXSyncComponent::find_peer_(
+    const uint8_t *mac) {
+  if (mac == nullptr) {
+    return nullptr;
   }
-  if (sequence <= this->rx_sequence_) {
+  for (auto &peer : this->peers_) {
+    if (peer.active &&
+        memcmp(peer.mac.data(), mac, peer.mac.size()) == 0) {
+      return &peer;
+    }
+  }
+  return nullptr;
+}
+
+CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
+    const uint8_t *mac, CFXSyncNodeRole role, uint16_t capabilities) {
+  if (mac == nullptr || this->is_broadcast_(mac)) {
+    return nullptr;
+  }
+
+  if (auto *peer = this->find_peer_(mac); peer != nullptr) {
+    peer->node_role = role;
+    peer->capabilities = capabilities;
+    peer->last_seen_ms = millis();
+    return peer;
+  }
+
+  for (auto &peer : this->peers_) {
+    if (peer.active) {
+      continue;
+    }
+    peer = PeerState{};
+    peer.active = true;
+    memcpy(peer.mac.data(), mac, peer.mac.size());
+    peer.node_role = role;
+    peer.capabilities = capabilities;
+    peer.last_seen_ms = millis();
+    return &peer;
+  }
+
+  this->log_rejection_("Ignoring peer because runtime peer table is full");
+  return nullptr;
+}
+
+bool CFXSyncComponent::register_peer_(PeerState &peer) {
+  if (!peer.active || this->espnow_ == nullptr ||
+      this->is_broadcast_(peer.mac.data())) {
     return false;
   }
-  this->rx_sequence_ = sequence;
+  if (peer.registered) {
+    return true;
+  }
+  const esp_err_t result = this->espnow_->add_peer(peer.mac.data());
+  if (result != ESP_OK) {
+    return false;
+  }
+  peer.registered = true;
+  return true;
+}
+
+bool CFXSyncComponent::accept_sequence_(PeerState &peer, uint32_t boot_id,
+                                        uint32_t sequence) {
+  if (!peer.has_rx_sequence || boot_id != peer.rx_boot_id) {
+    peer.has_rx_sequence = true;
+    peer.rx_boot_id = boot_id;
+    peer.rx_sequence = sequence;
+    return true;
+  }
+  if (sequence <= peer.rx_sequence) {
+    return false;
+  }
+  peer.rx_sequence = sequence;
   return true;
 }
 
@@ -746,9 +823,16 @@ void CFXSyncComponent::log_control_skip_(
            static_cast<unsigned>(light_index), reason);
 }
 
-bool CFXSyncComponent::is_peer_(const uint8_t *address) const {
-  return address != nullptr &&
-         memcmp(address, this->peer_.data(), this->peer_.size()) == 0;
+bool CFXSyncComponent::is_broadcast_(const uint8_t *address) const {
+  if (address == nullptr) {
+    return false;
+  }
+  for (size_t i = 0; i < 6; i++) {
+    if (address[i] != 0xFF) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const char *CFXSyncComponent::role_name_() const {

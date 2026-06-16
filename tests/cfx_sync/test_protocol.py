@@ -1009,6 +1009,24 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(replay.accept(BOOT_ID, 100))
         self.assertTrue(replay.accept(BOOT_ID + 1, 1))
 
+    def test_replay_state_is_independent_per_peer(self):
+        peers = {
+            b"\x01\x02\x03\x04\x05\x06": ReplayState(),
+            b"\x0a\x0b\x0c\x0d\x0e\x0f": ReplayState(),
+        }
+        self.assertTrue(
+            peers[b"\x01\x02\x03\x04\x05\x06"].accept(BOOT_ID, 10)
+        )
+        self.assertTrue(
+            peers[b"\x0a\x0b\x0c\x0d\x0e\x0f"].accept(BOOT_ID, 10)
+        )
+        self.assertFalse(
+            peers[b"\x01\x02\x03\x04\x05\x06"].accept(BOOT_ID, 10)
+        )
+        self.assertFalse(
+            peers[b"\x0a\x0b\x0c\x0d\x0e\x0f"].accept(BOOT_ID, 9)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

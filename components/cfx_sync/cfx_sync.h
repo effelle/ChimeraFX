@@ -68,9 +68,7 @@ class CFXSyncComponent : public Component,
         CFXSyncEffectEntry{effect_id, name});
   }
   void set_role(CFXSyncRole role) { this->role_ = role; }
-  void set_peer(const std::array<uint8_t, 6> &peer) {
-    this->peer_ = peer;
-  }
+  void set_peer(const std::array<uint8_t, 6> &peer);
   void set_group_hash(uint32_t group_hash) {
     this->group_hash_ = group_hash;
   }
@@ -129,6 +127,28 @@ class CFXSyncComponent : public Component,
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
   static constexpr uint32_t EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000;
   static constexpr uint32_t CONTROL_SKIP_LOG_INTERVAL_MS = 30000;
+  static constexpr uint8_t CFX_SYNC_MAX_PEERS = 8;
+  static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
+  static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
+  static constexpr uint32_t ACK_WARNING_MS = 15000;
+
+  struct PeerState {
+    bool active{false};
+    std::array<uint8_t, 6> mac{};
+    CFXSyncNodeRole node_role{CFXSyncNodeRole::FOLLOWER};
+    uint16_t capabilities{0};
+    bool registered{false};
+    bool has_rx_sequence{false};
+    uint32_t rx_boot_id{0};
+    uint32_t rx_sequence{0};
+    uint32_t last_seen_ms{0};
+    uint32_t last_state_sent_boot_id{0};
+    uint32_t last_state_sent_sequence{0};
+    uint32_t last_ack_boot_id{0};
+    uint32_t last_ack_sequence{0};
+    uint32_t last_ack_ms{0};
+    uint32_t missed_acks{0};
+  };
 
   struct EffectLogState {
     bool valid{false};
@@ -158,7 +178,12 @@ class CFXSyncComponent : public Component,
   bool send_sync_request_();
   bool send_packet_(std::vector<uint8_t> &packet);
   uint32_t next_sequence_();
-  bool accept_sequence_(uint32_t boot_id, uint32_t sequence);
+  PeerState *find_peer_(const uint8_t *mac);
+  PeerState *find_or_add_peer_(const uint8_t *mac, CFXSyncNodeRole role,
+                               uint16_t capabilities);
+  bool register_peer_(PeerState &peer);
+  bool accept_sequence_(PeerState &peer, uint32_t boot_id,
+                        uint32_t sequence);
   void handle_send_result_(esp_err_t result);
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
@@ -175,7 +200,7 @@ class CFXSyncComponent : public Component,
                          size_t light_index, const char *control_name,
                          const char *reason);
   light::LightState *leader_light_() const;
-  bool is_peer_(const uint8_t *address) const;
+  bool is_broadcast_(const uint8_t *address) const;
   const char *role_name_() const;
 
   espnow::ESPNowComponent *espnow_{nullptr};
@@ -185,6 +210,7 @@ class CFXSyncComponent : public Component,
   std::vector<ControlBinding> control_bindings_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   std::array<uint8_t, 6> peer_{};
+  std::array<PeerState, CFX_SYNC_MAX_PEERS> peers_{};
   std::array<uint8_t, 32> key_{};
   uint32_t group_hash_{0};
   uint32_t heartbeat_ms_{30000};
@@ -199,9 +225,6 @@ class CFXSyncComponent : public Component,
   CFXSyncControlState observed_controls_{};
   bool has_valid_state_{false};
 
-  bool has_rx_sequence_{false};
-  uint32_t rx_boot_id_{0};
-  uint32_t rx_sequence_{0};
   uint32_t last_valid_packet_ms_{0};
 
   uint8_t consecutive_send_failures_{0};
