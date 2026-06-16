@@ -24,11 +24,15 @@ CONTROL_FORCE_WHITE = 0x0001
 CONTROL_INTRO = 0x0002
 CONTROL_OUTRO = 0x0004
 CONTROL_INOUT_DURATION = 0x0008
+CONTROL_SPEED = 0x0010
+CONTROL_INTENSITY = 0x0020
+CONTROL_MIRROR = 0x0040
+CONTROL_PALETTE = 0x0080
 MAX_EFFECT_NAME_BYTES = 64
 MAX_EFFECT_VALUE_SIZE = 67
-MAX_CONTROLS_VALUE_SIZE = 7
+MAX_CONTROLS_VALUE_SIZE = 11
 MAX_EFFECT_STATE_PACKET_SIZE = 117
-MAX_STATE_PACKET_SIZE = 124
+MAX_STATE_PACKET_SIZE = 128
 FULL_STATE_MASK = (
     FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS
 )
@@ -110,6 +114,10 @@ def controls_value(
     intro=None,
     outro=None,
     inout_duration_ds=None,
+    speed=None,
+    intensity=None,
+    mirror=None,
+    palette=None,
 ):
     control_mask = 0
     values = bytearray()
@@ -125,6 +133,18 @@ def controls_value(
     if inout_duration_ds is not None:
         control_mask |= CONTROL_INOUT_DURATION
         values.extend(struct.pack(">H", inout_duration_ds))
+    if speed is not None:
+        control_mask |= CONTROL_SPEED
+        values.append(speed)
+    if intensity is not None:
+        control_mask |= CONTROL_INTENSITY
+        values.append(intensity)
+    if mirror is not None:
+        control_mask |= CONTROL_MIRROR
+        values.append(1 if mirror else 0)
+    if palette is not None:
+        control_mask |= CONTROL_PALETTE
+        values.append(palette)
     return struct.pack(">H", control_mask) + bytes(values)
 
 
@@ -153,6 +173,10 @@ def full_state_effect_controls_payload(
     intro=None,
     outro=None,
     inout_duration_ds=None,
+    speed=None,
+    intensity=None,
+    mirror=None,
+    palette=None,
 ):
     base = full_state_payload(
         True, 128, 10, 20, 30, 40, True, 158
@@ -168,6 +192,10 @@ def full_state_effect_controls_payload(
             intro=intro,
             outro=outro,
             inout_duration_ds=inout_duration_ds,
+            speed=speed,
+            intensity=intensity,
+            mirror=mirror,
+            palette=palette,
         )
     )
 
@@ -211,6 +239,10 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         "has_intro": False,
         "has_outro": False,
         "has_inout_duration": False,
+        "has_speed": False,
+        "has_intensity": False,
+        "has_mirror": False,
+        "has_palette": False,
     }
     if not boot_id or not sequence:
         raise ValueError("replay-fields")
@@ -317,6 +349,10 @@ def decode(packet, expected_group_hash=GROUP_HASH):
                 | CONTROL_INTRO
                 | CONTROL_OUTRO
                 | CONTROL_INOUT_DURATION
+                | CONTROL_SPEED
+                | CONTROL_INTENSITY
+                | CONTROL_MIRROR
+                | CONTROL_PALETTE
             )
             if control_mask & ~known_controls:
                 raise ValueError("controls-mask")
@@ -348,6 +384,32 @@ def decode(packet, expected_group_hash=GROUP_HASH):
                     ">H", payload[offset:offset + 2]
                 )[0]
                 offset += 2
+            if control_mask & CONTROL_SPEED:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-speed")
+                result["has_speed"] = True
+                result["speed"] = payload[offset]
+                offset += 1
+            if control_mask & CONTROL_INTENSITY:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-intensity")
+                result["has_intensity"] = True
+                result["intensity"] = payload[offset]
+                offset += 1
+            if control_mask & CONTROL_MIRROR:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-mirror")
+                if payload[offset] > 1:
+                    raise ValueError("controls-mirror")
+                result["has_mirror"] = True
+                result["mirror"] = bool(payload[offset])
+                offset += 1
+            if control_mask & CONTROL_PALETTE:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-palette")
+                result["has_palette"] = True
+                result["palette"] = payload[offset]
+                offset += 1
         known_fields = (
             FIELD_POWER
             | FIELD_BRIGHTNESS
@@ -498,6 +560,36 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decoded["intro"], 2)
         self.assertEqual(decoded["outro"], 4)
         self.assertEqual(decoded["inout_duration_ds"], 25)
+
+    def test_live_effect_controls_vector_is_stable(self):
+        packet = encode(
+            TYPE_STATE,
+            full_state_effect_controls_payload(
+                EFFECT_CHIMERAFX,
+                effect_id=3,
+                name="Wipe",
+                force_white=True,
+                intro=2,
+                outro=4,
+                inout_duration_ds=25,
+                speed=33,
+                intensity=144,
+                mirror=True,
+                palette=7,
+            ),
+        )
+        self.assertEqual(len(packet), 68)
+        self.assertEqual(
+            packet.hex(),
+            "4346585301010016001e12345678a1b2c3d401020304"
+            "0000003f0180010a141e289e0103045769706500ff010204001921900107"
+            "45d7f4a6405a7709a6132b585f5f0b67",
+        )
+        decoded = decode(packet)
+        self.assertEqual(decoded["speed"], 33)
+        self.assertEqual(decoded["intensity"], 144)
+        self.assertTrue(decoded["mirror"])
+        self.assertEqual(decoded["palette"], 7)
 
     def test_none_effect_vector_is_stable(self):
         packet = encode(
@@ -770,6 +862,15 @@ class ProtocolTests(unittest.TestCase):
             + b"\x02"
         )
         with self.assertRaisesRegex(ValueError, "controls-force-white"):
+            decode(encode(TYPE_STATE, payload))
+
+    def test_controls_reject_invalid_mirror_values(self):
+        payload = (
+            struct.pack(">I", FIELD_CONTROLS)
+            + struct.pack(">H", CONTROL_MIRROR)
+            + b"\x02"
+        )
+        with self.assertRaisesRegex(ValueError, "controls-mirror"):
             decode(encode(TYPE_STATE, payload))
 
     def test_legacy_packet_without_controls_remains_valid(self):

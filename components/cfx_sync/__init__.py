@@ -43,9 +43,17 @@ CONF_FORCE_WHITE = "force_white"
 CONF_INTRO = "intro"
 CONF_OUTRO = "outro"
 CONF_INOUT_DURATION = "inout_duration"
+CONF_SPEED = "speed"
+CONF_INTENSITY = "intensity"
+CONF_MIRROR = "mirror"
+CONF_PALETTE = "palette"
 
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
+EXCLUDE_SPEED = 1
+EXCLUDE_INTENSITY = 2
+EXCLUDE_PALETTE = 3
+EXCLUDE_MIRROR = 4
 EXCLUDE_INTRO = 5
 EXCLUDE_FORCE_WHITE = 8
 
@@ -131,6 +139,14 @@ def _extract_control_ids(light_id, all_lights):
 
     if EXCLUDE_FORCE_WHITE not in exclude and _has_white_channel(light_config):
         result[CONF_FORCE_WHITE] = f"{prefix}_force_white"
+    if EXCLUDE_SPEED not in exclude:
+        result[CONF_SPEED] = f"{prefix}_speed"
+    if EXCLUDE_INTENSITY not in exclude:
+        result[CONF_INTENSITY] = f"{prefix}_intensity"
+    if EXCLUDE_MIRROR not in exclude:
+        result[CONF_MIRROR] = f"{prefix}_mirror"
+    if EXCLUDE_PALETTE not in exclude:
+        result[CONF_PALETTE] = f"{prefix}_palette"
     if EXCLUDE_INTRO not in exclude:
         result[CONF_INTRO] = f"{prefix}_intro"
         result[CONF_OUTRO] = f"{prefix}_outro"
@@ -351,6 +367,26 @@ async def to_code(config):
                 CoreID(controls[CONF_INOUT_DURATION], type=number.Number)
             )
             cg.add(var.set_inout_duration_control(light_index, control))
+        if CONF_SPEED in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_SPEED], type=number.Number)
+            )
+            cg.add(var.set_speed_control(light_index, control))
+        if CONF_INTENSITY in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_INTENSITY], type=number.Number)
+            )
+            cg.add(var.set_intensity_control(light_index, control))
+        if CONF_MIRROR in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_MIRROR], type=switch.Switch)
+            )
+            cg.add(var.set_mirror_control(light_index, control))
+        if CONF_PALETTE in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_PALETTE], type=select.Select)
+            )
+            cg.add(var.set_palette_control(light_index, control))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_peer(peer_bytes))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))

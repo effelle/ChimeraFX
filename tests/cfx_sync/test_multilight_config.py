@@ -130,6 +130,10 @@ class MultiLightConfigTests(unittest.TestCase):
                 "intro": "cfx_auto_ctrl_desk_master_2_intro",
                 "outro": "cfx_auto_ctrl_desk_master_2_outro",
                 "inout_duration": "cfx_auto_ctrl_desk_master_2_inout_dur",
+                "speed": "cfx_auto_ctrl_desk_master_2_speed",
+                "intensity": "cfx_auto_ctrl_desk_master_2_intensity",
+                "mirror": "cfx_auto_ctrl_desk_master_2_mirror",
+                "palette": "cfx_auto_ctrl_desk_master_2_palette",
             },
         )
 
@@ -152,7 +156,7 @@ class MultiLightConfigTests(unittest.TestCase):
             {
                 "platform": "cfx_light",
                 "id": light_id("plain_rgb"),
-                "ctrl_exclude": [5],
+                "ctrl_exclude": [1, 2, 3, 4, 5],
             }
         ]
 

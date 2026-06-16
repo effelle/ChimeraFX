@@ -242,6 +242,18 @@ bool CFXSyncPacketCodec::encode_state(
     if (controls.has_inout_duration) {
       control_mask |= CONTROL_INOUT_DURATION;
     }
+    if (controls.has_speed) {
+      control_mask |= CONTROL_SPEED;
+    }
+    if (controls.has_intensity) {
+      control_mask |= CONTROL_INTENSITY;
+    }
+    if (controls.has_mirror) {
+      control_mask |= CONTROL_MIRROR;
+    }
+    if (controls.has_palette) {
+      control_mask |= CONTROL_PALETTE;
+    }
     append_u16_(payload, control_mask);
     if (controls.has_force_white) {
       payload.push_back(controls.force_white ? 1 : 0);
@@ -254,6 +266,18 @@ bool CFXSyncPacketCodec::encode_state(
     }
     if (controls.has_inout_duration) {
       append_u16_(payload, controls.inout_duration_deciseconds);
+    }
+    if (controls.has_speed) {
+      payload.push_back(controls.speed);
+    }
+    if (controls.has_intensity) {
+      payload.push_back(controls.intensity);
+    }
+    if (controls.has_mirror) {
+      payload.push_back(controls.mirror ? 1 : 0);
+    }
+    if (controls.has_palette) {
+      payload.push_back(controls.palette);
     }
   }
 
@@ -423,7 +447,8 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     const uint16_t control_mask = read_u16_(payload + offset);
     constexpr uint16_t KNOWN_CONTROLS =
         CONTROL_FORCE_WHITE | CONTROL_INTRO | CONTROL_OUTRO |
-        CONTROL_INOUT_DURATION;
+        CONTROL_INOUT_DURATION | CONTROL_SPEED | CONTROL_INTENSITY |
+        CONTROL_MIRROR | CONTROL_PALETTE;
     if ((control_mask & ~KNOWN_CONTROLS) != 0) {
       return CFXSyncDecodeResult::MALFORMED;
     }
@@ -459,6 +484,34 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
       packet.controls.inout_duration_deciseconds =
           read_u16_(payload + offset);
       offset += 2;
+    }
+    if ((control_mask & CONTROL_SPEED) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_speed = true;
+      packet.controls.speed = payload[offset++];
+    }
+    if ((control_mask & CONTROL_INTENSITY) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_intensity = true;
+      packet.controls.intensity = payload[offset++];
+    }
+    if ((control_mask & CONTROL_MIRROR) != 0) {
+      if (offset + 1 > payload_size || payload[offset] > 1) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_mirror = true;
+      packet.controls.mirror = payload[offset++] != 0;
+    }
+    if ((control_mask & CONTROL_PALETTE) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_palette = true;
+      packet.controls.palette = payload[offset++];
     }
   }
 

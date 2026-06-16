@@ -557,6 +557,66 @@ void CFXSyncComponent::apply_remote_controls_to_light_(
       }
     }
   }
+
+  if (controls.has_speed) {
+    if (binding.speed == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Speed",
+                              "missing control");
+    } else {
+      const float target = controls.speed;
+      if (!binding.speed->has_state() ||
+          std::fabs(binding.speed->state - target) > 0.01f) {
+        auto call = binding.speed->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+  }
+
+  if (controls.has_intensity) {
+    if (binding.intensity == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Intensity",
+                              "missing control");
+    } else {
+      const float target = controls.intensity;
+      if (!binding.intensity->has_state() ||
+          std::fabs(binding.intensity->state - target) > 0.01f) {
+        auto call = binding.intensity->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+  }
+
+  if (controls.has_mirror) {
+    if (binding.mirror == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Mirror",
+                              "missing control");
+    } else if (binding.mirror->state != controls.mirror) {
+      if (controls.mirror) {
+        binding.mirror->turn_on();
+      } else {
+        binding.mirror->turn_off();
+      }
+    }
+  }
+
+  if (controls.has_palette) {
+    if (binding.palette == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Palette",
+                              "missing control");
+    } else if (!binding.palette->has_index(controls.palette)) {
+      this->log_control_skip_(binding, light, light_index, "Palette",
+                              "unsupported option index");
+    } else {
+      const auto active = binding.palette->active_index();
+      if (!active.has_value() || active.value() != controls.palette) {
+        auto call = binding.palette->make_call();
+        call.set_index(controls.palette);
+        call.perform();
+      }
+    }
+  }
 }
 
 void CFXSyncComponent::register_control_callbacks_(size_t light_index) {
@@ -583,6 +643,22 @@ void CFXSyncComponent::register_control_callbacks_(size_t light_index) {
   if (binding.inout_duration != nullptr) {
     binding.inout_duration->add_on_state_callback(
         [this](float) { this->on_local_control_update(); });
+  }
+  if (binding.speed != nullptr) {
+    binding.speed->add_on_state_callback(
+        [this](float) { this->on_local_control_update(); });
+  }
+  if (binding.intensity != nullptr) {
+    binding.intensity->add_on_state_callback(
+        [this](float) { this->on_local_control_update(); });
+  }
+  if (binding.mirror != nullptr) {
+    binding.mirror->add_on_state_callback(
+        [this](bool) { this->on_local_control_update(); });
+  }
+  if (binding.palette != nullptr) {
+    binding.palette->add_on_state_callback(
+        [this](size_t) { this->on_local_control_update(); });
   }
 }
 
@@ -623,6 +699,34 @@ CFXSyncControlState CFXSyncComponent::capture_control_state_(
         std::max<long>(0, std::min<long>(
                               rounded,
                               std::numeric_limits<uint16_t>::max())));
+  }
+  if (binding.speed != nullptr && binding.speed->has_state()) {
+    const long rounded = std::lround(binding.speed->state);
+    result.has_speed = true;
+    result.speed = static_cast<uint8_t>(
+        std::max<long>(0, std::min<long>(
+                              rounded,
+                              std::numeric_limits<uint8_t>::max())));
+  }
+  if (binding.intensity != nullptr && binding.intensity->has_state()) {
+    const long rounded = std::lround(binding.intensity->state);
+    result.has_intensity = true;
+    result.intensity = static_cast<uint8_t>(
+        std::max<long>(0, std::min<long>(
+                              rounded,
+                              std::numeric_limits<uint8_t>::max())));
+  }
+  if (binding.mirror != nullptr) {
+    result.has_mirror = true;
+    result.mirror = binding.mirror->state;
+  }
+  if (binding.palette != nullptr) {
+    const auto active = binding.palette->active_index();
+    if (active.has_value() &&
+        active.value() <= std::numeric_limits<uint8_t>::max()) {
+      result.has_palette = true;
+      result.palette = static_cast<uint8_t>(active.value());
+    }
   }
   return result;
 }

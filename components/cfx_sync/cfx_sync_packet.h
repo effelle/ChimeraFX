@@ -43,10 +43,19 @@ struct CFXSyncControlState {
   uint8_t outro{0};
   bool has_inout_duration{false};
   uint16_t inout_duration_deciseconds{0};
+  bool has_speed{false};
+  uint8_t speed{0};
+  bool has_intensity{false};
+  uint8_t intensity{0};
+  bool has_mirror{false};
+  bool mirror{false};
+  bool has_palette{false};
+  uint8_t palette{0};
 
   bool has_any() const {
     return this->has_force_white || this->has_intro || this->has_outro ||
-           this->has_inout_duration;
+           this->has_inout_duration || this->has_speed ||
+           this->has_intensity || this->has_mirror || this->has_palette;
   }
 
   bool operator==(const CFXSyncControlState &other) const {
@@ -58,7 +67,15 @@ struct CFXSyncControlState {
            this->outro == other.outro &&
            this->has_inout_duration == other.has_inout_duration &&
            this->inout_duration_deciseconds ==
-               other.inout_duration_deciseconds;
+               other.inout_duration_deciseconds &&
+           this->has_speed == other.has_speed &&
+           this->speed == other.speed &&
+           this->has_intensity == other.has_intensity &&
+           this->intensity == other.intensity &&
+           this->has_mirror == other.has_mirror &&
+           this->mirror == other.mirror &&
+           this->has_palette == other.has_palette &&
+           this->palette == other.palette;
   }
   bool operator!=(const CFXSyncControlState &other) const {
     return !(*this == other);
@@ -104,13 +121,17 @@ class CFXSyncPacketCodec {
   static constexpr uint16_t CONTROL_INTRO = 0x0002U;
   static constexpr uint16_t CONTROL_OUTRO = 0x0004U;
   static constexpr uint16_t CONTROL_INOUT_DURATION = 0x0008U;
+  static constexpr uint16_t CONTROL_SPEED = 0x0010U;
+  static constexpr uint16_t CONTROL_INTENSITY = 0x0020U;
+  static constexpr uint16_t CONTROL_MIRROR = 0x0040U;
+  static constexpr uint16_t CONTROL_PALETTE = 0x0080U;
   static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
   static constexpr size_t MAX_EFFECT_NAME_BYTES = 64;
   static constexpr size_t MAX_EFFECT_VALUE_SIZE = 67;
-  static constexpr size_t MAX_CONTROLS_VALUE_SIZE = 7;
+  static constexpr size_t MAX_CONTROLS_VALUE_SIZE = 11;
   static constexpr size_t MAX_EFFECT_STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE +
       AUTH_TAG_SIZE;
@@ -180,11 +201,11 @@ static_assert(CFXSyncPacketCodec::MAX_EFFECT_VALUE_SIZE == 67,
 static_assert(CFXSyncPacketCodec::MAX_EFFECT_VALUE_SIZE ==
                   3 + CFXSyncPacketCodec::MAX_EFFECT_NAME_BYTES,
               "CFX sync effect value size is inconsistent");
-static_assert(CFXSyncPacketCodec::MAX_CONTROLS_VALUE_SIZE == 7,
+static_assert(CFXSyncPacketCodec::MAX_CONTROLS_VALUE_SIZE == 11,
               "CFX sync maximum controls value size changed");
 static_assert(CFXSyncPacketCodec::MAX_EFFECT_STATE_PACKET_SIZE == 117,
               "CFX sync maximum effect state packet size changed");
-static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 124,
+static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 128,
               "CFX sync maximum state packet size changed");
 static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE < 250,
               "CFX sync state packet exceeds ESP-NOW V1 payload limit");

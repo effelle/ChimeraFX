@@ -100,6 +100,26 @@ class CFXSyncComponent : public Component,
       this->control_bindings_[light_index].inout_duration = control;
     }
   }
+  void set_speed_control(size_t light_index, number::Number *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].speed = control;
+    }
+  }
+  void set_intensity_control(size_t light_index, number::Number *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].intensity = control;
+    }
+  }
+  void set_mirror_control(size_t light_index, switch_::Switch *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].mirror = control;
+    }
+  }
+  void set_palette_control(size_t light_index, select::Select *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].palette = control;
+    }
+  }
 
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                   uint8_t size) override;
@@ -123,6 +143,10 @@ class CFXSyncComponent : public Component,
     select::Select *intro{nullptr};
     select::Select *outro{nullptr};
     number::Number *inout_duration{nullptr};
+    number::Number *speed{nullptr};
+    number::Number *intensity{nullptr};
+    switch_::Switch *mirror{nullptr};
+    select::Select *palette{nullptr};
     bool callbacks_registered{false};
     uint32_t last_skip_log_ms{0};
   };
