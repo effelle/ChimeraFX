@@ -75,6 +75,7 @@ void CFXSyncComponent::setup() {
     this->boot_id_ = 1;
   }
   this->espnow_->register_receive_handler(this);
+  this->espnow_->register_broadcast_handler(this);
   const esp_err_t broadcast_result =
       this->espnow_->add_peer(BROADCAST_MAC.data());
   if (broadcast_result != ESP_OK) {
@@ -154,6 +155,10 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
   if (result == CFXSyncDecodeResult::NOT_CFX) {
+    return false;
+  }
+  if (result == CFXSyncDecodeResult::WRONG_GROUP) {
+    this->handle_decode_failure_(result);
     return false;
   }
   if (result != CFXSyncDecodeResult::OK) {
@@ -236,6 +241,11 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
     this->apply_remote_state_(packet);
   }
   return true;
+}
+
+bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
+                                    const uint8_t *data, uint8_t size) {
+  return this->on_receive(info, data, size);
 }
 
 void CFXSyncComponent::on_local_light_update() {

@@ -42,7 +42,8 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
 };
 
 class CFXSyncComponent : public Component,
-                         public espnow::ESPNowReceivedPacketHandler {
+                         public espnow::ESPNowReceivedPacketHandler,
+                         public espnow::ESPNowBroadcastHandler {
  public:
   void setup() override;
   void dump_config() override;
@@ -121,6 +122,8 @@ class CFXSyncComponent : public Component,
 
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                   uint8_t size) override;
+  bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                    uint8_t size) override;
   void on_local_light_update();
 
  protected:

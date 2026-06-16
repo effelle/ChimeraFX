@@ -30,6 +30,36 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("on_received(", header)
         self.assertNotIn("register_received_handler", source)
 
+    def test_registers_broadcast_handler_for_discovery(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("public espnow::ESPNowBroadcastHandler", header)
+        self.assertIn("bool on_broadcast(", header)
+        self.assertIn("register_broadcast_handler(this)", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
+                r"return this->on_receive\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_wrong_group_packets_are_not_consumed(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(result == CFXSyncDecodeResult::WRONG_GROUP\) \{"
+                r"\s*this->handle_decode_failure_\(result\);"
+                r"\s*return false;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
     def test_packet_codec_exposes_full_v1_state(self):
         header = PACKET_HEADER.read_text(encoding="utf-8")
         source = PACKET_SOURCE.read_text(encoding="utf-8")
