@@ -9,6 +9,7 @@ from components.cfx_sync import (
     CONF_ROLE,
     ROLE_FOLLOWER,
     ROLE_LEADER,
+    _extract_control_ids,
     _normalize_lights,
     _validate_role_lights,
 )
@@ -108,6 +109,56 @@ class MultiLightConfigTests(unittest.TestCase):
         for fixture in (COMMON, MULTI_FOLLOWER):
             source = fixture.read_text(encoding="utf-8")
             self.assertIn("cfx_effect_registry", source)
+
+    def test_segment_control_ids_follow_generated_cfx_control_names(self):
+        lights = [
+            {
+                "platform": "cfx_light",
+                "id": light_id("desk_master"),
+                "is_rgbw": True,
+                "segments": [
+                    {"id": light_id("desk_left")},
+                    {"id": light_id("desk_right")},
+                ],
+            }
+        ]
+
+        self.assertEqual(
+            _extract_control_ids(light_id("desk_right"), lights),
+            {
+                "force_white": "cfx_auto_ctrl_desk_master_2_force_white",
+                "intro": "cfx_auto_ctrl_desk_master_2_intro",
+                "outro": "cfx_auto_ctrl_desk_master_2_outro",
+                "inout_duration": "cfx_auto_ctrl_desk_master_2_inout_dur",
+            },
+        )
+
+    def test_master_with_segments_has_no_effect_target_controls(self):
+        lights = [
+            {
+                "platform": "cfx_light",
+                "id": light_id("desk_master"),
+                "is_rgbw": True,
+                "segments": [{"id": light_id("desk_left")}],
+            }
+        ]
+
+        self.assertEqual(
+            _extract_control_ids(light_id("desk_master"), lights), {}
+        )
+
+    def test_excluded_or_missing_controls_are_not_bound(self):
+        lights = [
+            {
+                "platform": "cfx_light",
+                "id": light_id("plain_rgb"),
+                "ctrl_exclude": [5],
+            }
+        ]
+
+        self.assertEqual(
+            _extract_control_ids(light_id("plain_rgb"), lights), {}
+        )
 
 
 if __name__ == "__main__":

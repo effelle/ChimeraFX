@@ -203,11 +203,14 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"const auto effect = capture_effect_state\("
                 r"\s*leader, this->effect_catalogs_\[0\]\);.*?"
+                r"const auto controls = this->capture_control_state_\(0\);.*?"
                 r"snapshot == this->observed_state_ &&\s*"
-                r"effect == this->observed_effect_.*?"
+                r"effect == this->observed_effect_ &&\s*"
+                r"controls == this->observed_controls_.*?"
                 r"this->observed_state_ = snapshot;.*?"
                 r"this->observed_effect_ = effect;.*?"
-                r"this->send_state_\(snapshot, effect\);",
+                r"this->observed_controls_ = controls;.*?"
+                r"this->send_state_\(snapshot, effect, controls\);",
                 re.DOTALL,
             ),
         )
@@ -219,12 +222,16 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn(
             "const CFXSyncEffectState &effect", header
         )
+        self.assertIn(
+            "const CFXSyncControlState &controls", header
+        )
         self.assertRegex(
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_\(\) \{.*?"
                 r"this->send_state_\(\s*capture_light_snapshot\(\*leader\),"
-                r"\s*this->observed_effect_\);",
+                r"\s*capture_effect_state\(leader, this->effect_catalogs_\[0\]\),"
+                r"\s*this->capture_control_state_\(0\)\);",
                 re.DOTALL,
             ),
         )
@@ -233,8 +240,10 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::send_state_\(\s*"
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
-                r"const CFXSyncEffectState &effect\).*?"
-                r"snapshot\.has_white, true, effect, this->key_, packet",
+                r"const CFXSyncEffectState &effect,\s*"
+                r"const CFXSyncControlState &controls\).*?"
+                r"snapshot\.has_white, true, effect, controls\.has_any\(\), "
+                r"controls,\s*this->key_, packet",
                 re.DOTALL,
             ),
         )
@@ -242,7 +251,7 @@ class ESPNowAPITests(unittest.TestCase):
             "if (packet.type == CFXSyncPacketType::SYNC_REQUEST)", source
         )
         self.assertIn("this->send_state_();", source)
-        self.assertIn("this->send_state_(snapshot, effect);", source)
+        self.assertIn("this->send_state_(snapshot, effect, controls);", source)
 
     def test_runtime_stores_ordered_light_collection(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -265,6 +274,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->lights_.push_back(light);", header)
         self.assertIn("this->effect_catalogs_.emplace_back();", header)
         self.assertIn("this->effect_log_states_.emplace_back();", header)
+        self.assertIn("this->control_bindings_.emplace_back();", header)
         self.assertIn(
             "std::vector<std::vector<CFXSyncEffectEntry>> "
             "effect_catalogs_;",
@@ -272,6 +282,9 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn(
             "std::vector<EffectLogState> effect_log_states_;", header
+        )
+        self.assertIn(
+            "std::vector<ControlBinding> control_bindings_;", header
         )
 
     def test_add_effect_exposes_bounds_checked_codegen_contract(self):
@@ -310,7 +323,8 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"packet\.has_power \|\| packet\.has_brightness \|\| "
                 r"packet\.has_color \|\|\s*"
-                r"packet\.has_color_brightness \|\| packet\.has_effect"
+                r"packet\.has_color_brightness \|\| packet\.has_effect \|\|\s*"
+                r"packet\.has_controls"
             ),
         )
 
@@ -327,7 +341,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_white(", source)
         self.assertIn("call.set_effect(", source)
         self.assertEqual(source.count("light->make_call()"), 1)
-        self.assertEqual(source.count("call.perform();"), 1)
+        self.assertEqual(source.count("\n  call.perform();\n}"), 1)
 
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -350,7 +364,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("auto call = light->make_call();", source)
         self.assertIn("light_supports_rgb_white(*light)", source)
         self.assertIn("light_supports_rgb(*light)", source)
-        self.assertEqual(source.count("call.perform();"), 1)
+        self.assertEqual(source.count("\n  call.perform();\n}"), 1)
 
     def test_follower_effect_lookup_is_exact_and_name_sensitive(self):
         source = SOURCE.read_text(encoding="utf-8")

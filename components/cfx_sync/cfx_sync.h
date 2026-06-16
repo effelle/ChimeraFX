@@ -13,6 +13,9 @@
 #include "cfx_sync_packet.h"
 #include "esphome/components/espnow/espnow_component.h"
 #include "esphome/components/light/light_state.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/select/select.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
 
 #include <array>
@@ -54,6 +57,7 @@ class CFXSyncComponent : public Component,
     this->lights_.push_back(light);
     this->effect_catalogs_.emplace_back();
     this->effect_log_states_.emplace_back();
+    this->control_bindings_.emplace_back();
   }
   void add_effect(size_t light_index, uint8_t effect_id,
                   const std::string &name) {
@@ -74,6 +78,28 @@ class CFXSyncComponent : public Component,
   void set_heartbeat_ms(uint32_t heartbeat_ms) {
     this->heartbeat_ms_ = heartbeat_ms;
   }
+  void set_force_white_control(size_t light_index,
+                               switch_::Switch *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].force_white = control;
+    }
+  }
+  void set_intro_control(size_t light_index, select::Select *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].intro = control;
+    }
+  }
+  void set_outro_control(size_t light_index, select::Select *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].outro = control;
+    }
+  }
+  void set_inout_duration_control(size_t light_index,
+                                  number::Number *control) {
+    if (light_index < this->control_bindings_.size()) {
+      this->control_bindings_[light_index].inout_duration = control;
+    }
+  }
 
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                   uint8_t size) override;
@@ -82,6 +108,7 @@ class CFXSyncComponent : public Component,
  protected:
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
   static constexpr uint32_t EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000;
+  static constexpr uint32_t CONTROL_SKIP_LOG_INTERVAL_MS = 30000;
 
   struct EffectLogState {
     bool valid{false};
@@ -91,9 +118,19 @@ class CFXSyncComponent : public Component,
     uint32_t last_log_ms{0};
   };
 
+  struct ControlBinding {
+    switch_::Switch *force_white{nullptr};
+    select::Select *intro{nullptr};
+    select::Select *outro{nullptr};
+    number::Number *inout_duration{nullptr};
+    bool callbacks_registered{false};
+    uint32_t last_skip_log_ms{0};
+  };
+
   bool send_state_();
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
-                   const CFXSyncEffectState &effect);
+                   const CFXSyncEffectState &effect,
+                   const CFXSyncControlState &controls);
   bool send_sync_request_();
   bool send_packet_(std::vector<uint8_t> &packet);
   uint32_t next_sequence_();
@@ -105,6 +142,14 @@ class CFXSyncComponent : public Component,
   void apply_remote_state_(const CFXSyncPacket &packet);
   void apply_remote_state_to_light_(const CFXSyncPacket &packet,
                                     size_t light_index);
+  void apply_remote_controls_to_light_(const CFXSyncPacket &packet,
+                                       size_t light_index);
+  void register_control_callbacks_(size_t light_index);
+  CFXSyncControlState capture_control_state_(size_t light_index) const;
+  void on_local_control_update();
+  void log_control_skip_(ControlBinding &binding, light::LightState *light,
+                         size_t light_index, const char *control_name,
+                         const char *reason);
   light::LightState *leader_light_() const;
   bool is_peer_(const uint8_t *address) const;
   const char *role_name_() const;
@@ -113,6 +158,7 @@ class CFXSyncComponent : public Component,
   std::vector<light::LightState *> lights_;
   std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
   std::vector<EffectLogState> effect_log_states_;
+  std::vector<ControlBinding> control_bindings_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   std::array<uint8_t, 6> peer_{};
   std::array<uint8_t, 32> key_{};
@@ -126,6 +172,7 @@ class CFXSyncComponent : public Component,
   bool has_observed_state_{false};
   CFXSyncLightSnapshot observed_state_{};
   CFXSyncEffectState observed_effect_{};
+  CFXSyncControlState observed_controls_{};
   bool has_valid_state_{false};
 
   bool has_rx_sequence_{false};

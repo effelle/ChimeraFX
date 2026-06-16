@@ -159,6 +159,18 @@ bool CFXSyncPacketCodec::encode_state(
     uint8_t blue, uint8_t white, bool has_white, bool has_effect,
     const CFXSyncEffectState &effect, const std::array<uint8_t, 32> &key,
     std::vector<uint8_t> &output) {
+  return encode_state(group_hash, boot_id, sequence, power, brightness,
+                      color_brightness, red, green, blue, white, has_white,
+                      has_effect, effect, false, {}, key, output);
+}
+
+bool CFXSyncPacketCodec::encode_state(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
+    uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
+    uint8_t blue, uint8_t white, bool has_white, bool has_effect,
+    const CFXSyncEffectState &effect, bool has_controls,
+    const CFXSyncControlState &controls, const std::array<uint8_t, 32> &key,
+    std::vector<uint8_t> &output) {
   if (has_effect) {
     const size_t name_size = effect.name.size();
     switch (effect.kind) {
@@ -179,9 +191,15 @@ bool CFXSyncPacketCodec::encode_state(
   }
 
   std::vector<uint8_t> payload;
-  payload.reserve(has_effect ? MAX_STATE_PAYLOAD_SIZE
-                             : FULL_STATE_PAYLOAD_SIZE);
-  append_u32_(payload, FULL_STATE_MASK | (has_effect ? FIELD_EFFECT : 0));
+  payload.reserve(MAX_STATE_PAYLOAD_SIZE);
+  uint32_t field_mask = FULL_STATE_MASK;
+  if (has_effect) {
+    field_mask |= FIELD_EFFECT;
+  }
+  if (has_controls) {
+    field_mask |= FIELD_CONTROLS;
+  }
+  append_u32_(payload, field_mask);
   payload.push_back(power ? 1 : 0);
   payload.push_back(brightness);
   payload.push_back(has_white ? COLOR_CAP_WHITE : 0);
@@ -207,6 +225,35 @@ bool CFXSyncPacketCodec::encode_state(
         break;
       default:
         return false;
+    }
+  }
+
+  if (has_controls) {
+    uint16_t control_mask = 0;
+    if (controls.has_force_white) {
+      control_mask |= CONTROL_FORCE_WHITE;
+    }
+    if (controls.has_intro) {
+      control_mask |= CONTROL_INTRO;
+    }
+    if (controls.has_outro) {
+      control_mask |= CONTROL_OUTRO;
+    }
+    if (controls.has_inout_duration) {
+      control_mask |= CONTROL_INOUT_DURATION;
+    }
+    append_u16_(payload, control_mask);
+    if (controls.has_force_white) {
+      payload.push_back(controls.force_white ? 1 : 0);
+    }
+    if (controls.has_intro) {
+      payload.push_back(controls.intro);
+    }
+    if (controls.has_outro) {
+      payload.push_back(controls.outro);
+    }
+    if (controls.has_inout_duration) {
+      append_u16_(payload, controls.inout_duration_deciseconds);
     }
   }
 
@@ -369,9 +416,55 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     }
   }
 
+  if ((packet.field_mask & FIELD_CONTROLS) != 0) {
+    if (offset + 2 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    const uint16_t control_mask = read_u16_(payload + offset);
+    constexpr uint16_t KNOWN_CONTROLS =
+        CONTROL_FORCE_WHITE | CONTROL_INTRO | CONTROL_OUTRO |
+        CONTROL_INOUT_DURATION;
+    if ((control_mask & ~KNOWN_CONTROLS) != 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    offset += 2;
+    packet.has_controls = true;
+
+    if ((control_mask & CONTROL_FORCE_WHITE) != 0) {
+      if (offset + 1 > payload_size || payload[offset] > 1) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_force_white = true;
+      packet.controls.force_white = payload[offset++] != 0;
+    }
+    if ((control_mask & CONTROL_INTRO) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_intro = true;
+      packet.controls.intro = payload[offset++];
+    }
+    if ((control_mask & CONTROL_OUTRO) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_outro = true;
+      packet.controls.outro = payload[offset++];
+    }
+    if ((control_mask & CONTROL_INOUT_DURATION) != 0) {
+      if (offset + 2 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.controls.has_inout_duration = true;
+      packet.controls.inout_duration_deciseconds =
+          read_u16_(payload + offset);
+      offset += 2;
+    }
+  }
+
   constexpr uint32_t KNOWN_FIELDS =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS |
-      FIELD_EFFECT;
+      FIELD_EFFECT | FIELD_CONTROLS;
   if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
     return CFXSyncDecodeResult::MALFORMED;
   }

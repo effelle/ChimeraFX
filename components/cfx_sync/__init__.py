@@ -4,9 +4,9 @@ import hashlib
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import espnow, light
+from esphome.components import espnow, light, number, select, switch
 from esphome.const import CONF_ID
-from esphome.core import HexInt, TimePeriod
+from esphome.core import HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
@@ -27,15 +27,27 @@ CONF_KEY = "key"
 CONF_HEARTBEAT = "heartbeat"
 CONF_AUTO_ADD_PEER = "auto_add_peer"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
+CONF_CONTROL_IDS = "_control_ids"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_ID = "effect_id"
 CONF_NAME = "name"
 CONF_PLATFORM = "platform"
 CONF_SEGMENTS = "segments"
 CONF_ADDRESSABLE_CFX = "addressable_cfx"
+CONF_CONTROLS = "controls"
+CONF_CTRL_EXCLUDE = "ctrl_exclude"
+CONF_IS_RGBW = "is_rgbw"
+CONF_IS_WRGB = "is_wrgb"
+CONF_CHIPSET = "chipset"
+CONF_FORCE_WHITE = "force_white"
+CONF_INTRO = "intro"
+CONF_OUTRO = "outro"
+CONF_INOUT_DURATION = "inout_duration"
 
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
+EXCLUDE_INTRO = 5
+EXCLUDE_FORCE_WHITE = 8
 
 MIN_HEARTBEAT = TimePeriod(seconds=10)
 MAX_HEARTBEAT = TimePeriod(minutes=5)
@@ -75,6 +87,55 @@ def _find_effect_source_config(light_id, all_lights):
             if _id_name(segment.get(CONF_ID)) == target_id:
                 return light_config
     return None
+
+
+def _find_cfx_light_target(light_id, all_lights):
+    target_id = _id_name(light_id)
+    for light_config in all_lights:
+        if light_config.get(CONF_PLATFORM) != "cfx_light":
+            continue
+        master_id = _id_name(light_config.get(CONF_ID))
+        if master_id == target_id:
+            return light_config, master_id, 0
+        for index, segment in enumerate(light_config.get(CONF_SEGMENTS, [])):
+            if _id_name(segment.get(CONF_ID)) == target_id:
+                return light_config, master_id, index + 1
+    return None
+
+
+def _has_white_channel(light_config):
+    return (
+        light_config.get(CONF_IS_RGBW, False)
+        or light_config.get(CONF_IS_WRGB, False)
+        or light_config.get(CONF_CHIPSET) == "SK6812"
+    )
+
+
+def _extract_control_ids(light_id, all_lights):
+    target = _find_cfx_light_target(light_id, all_lights)
+    if target is None:
+        return {}
+
+    light_config, master_id, target_index = target
+    if not light_config.get(CONF_CONTROLS, True):
+        return {}
+
+    has_segments = bool(light_config.get(CONF_SEGMENTS, []))
+    is_effect_target = not has_segments or target_index > 0
+    if not is_effect_target:
+        return {}
+
+    exclude = {int(value) for value in light_config.get(CONF_CTRL_EXCLUDE, [])}
+    prefix = f"cfx_auto_ctrl_{master_id}_{target_index}"
+    result = {}
+
+    if EXCLUDE_FORCE_WHITE not in exclude and _has_white_channel(light_config):
+        result[CONF_FORCE_WHITE] = f"{prefix}_force_white"
+    if EXCLUDE_INTRO not in exclude:
+        result[CONF_INTRO] = f"{prefix}_intro"
+        result[CONF_OUTRO] = f"{prefix}_outro"
+        result[CONF_INOUT_DURATION] = f"{prefix}_inout_dur"
+    return result
 
 
 def _resolve_cfx_effect_name(effect_config):
@@ -205,6 +266,7 @@ def _final_validate(config):
 
     all_lights = final_config.get_config_for_path(["light"])
     effect_catalogs = []
+    control_ids = []
     for light_id in config[CONF_LIGHTS]:
         source_config = _find_effect_source_config(light_id, all_lights)
         effect_catalogs.append(
@@ -212,7 +274,9 @@ def _final_validate(config):
             if source_config is not None
             else []
         )
+        control_ids.append(_extract_control_ids(light_id, all_lights))
     config[CONF_EFFECT_CATALOGS] = effect_catalogs
+    config[CONF_CONTROL_IDS] = control_ids
     return config
 
 
@@ -254,6 +318,9 @@ async def to_code(config):
     effect_catalogs = config.get(
         CONF_EFFECT_CATALOGS, [[] for _ in config[CONF_LIGHTS]]
     )
+    control_ids = config.get(
+        CONF_CONTROL_IDS, [{} for _ in config[CONF_LIGHTS]]
+    )
 
     cg.add(var.set_espnow(espnow_var))
     for light_index, light_id in enumerate(config[CONF_LIGHTS]):
@@ -263,6 +330,27 @@ async def to_code(config):
             cg.add(
                 var.add_effect(light_index, effect_id, effect_name)
             )
+        controls = control_ids[light_index]
+        if CONF_FORCE_WHITE in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_FORCE_WHITE], type=switch.Switch)
+            )
+            cg.add(var.set_force_white_control(light_index, control))
+        if CONF_INTRO in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_INTRO], type=select.Select)
+            )
+            cg.add(var.set_intro_control(light_index, control))
+        if CONF_OUTRO in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_OUTRO], type=select.Select)
+            )
+            cg.add(var.set_outro_control(light_index, control))
+        if CONF_INOUT_DURATION in controls:
+            control = await cg.get_variable(
+                CoreID(controls[CONF_INOUT_DURATION], type=number.Number)
+            )
+            cg.add(var.set_inout_duration_control(light_index, control))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_peer(peer_bytes))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))

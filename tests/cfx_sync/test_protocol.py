@@ -15,13 +15,20 @@ FIELD_BRIGHTNESS = 0x00000002
 FIELD_COLOR = 0x00000004
 FIELD_COLOR_BRIGHTNESS = 0x00000008
 FIELD_EFFECT = 0x00000010
+FIELD_CONTROLS = 0x00000020
 COLOR_CAP_WHITE = 0x01
 EFFECT_NONE = 0
 EFFECT_CHIMERAFX = 1
 EFFECT_UNSUPPORTED = 2
+CONTROL_FORCE_WHITE = 0x0001
+CONTROL_INTRO = 0x0002
+CONTROL_OUTRO = 0x0004
+CONTROL_INOUT_DURATION = 0x0008
 MAX_EFFECT_NAME_BYTES = 64
 MAX_EFFECT_VALUE_SIZE = 67
-MAX_STATE_PACKET_SIZE = 117
+MAX_CONTROLS_VALUE_SIZE = 7
+MAX_EFFECT_STATE_PACKET_SIZE = 117
+MAX_STATE_PACKET_SIZE = 124
 FULL_STATE_MASK = (
     FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS
 )
@@ -97,6 +104,30 @@ def effect_value(kind, *, effect_id=0, name=""):
     return bytes((kind, len(encoded_name))) + encoded_name
 
 
+def controls_value(
+    *,
+    force_white=None,
+    intro=None,
+    outro=None,
+    inout_duration_ds=None,
+):
+    control_mask = 0
+    values = bytearray()
+    if force_white is not None:
+        control_mask |= CONTROL_FORCE_WHITE
+        values.append(1 if force_white else 0)
+    if intro is not None:
+        control_mask |= CONTROL_INTRO
+        values.append(intro)
+    if outro is not None:
+        control_mask |= CONTROL_OUTRO
+        values.append(outro)
+    if inout_duration_ds is not None:
+        control_mask |= CONTROL_INOUT_DURATION
+        values.extend(struct.pack(">H", inout_duration_ds))
+    return struct.pack(">H", control_mask) + bytes(values)
+
+
 def full_state_effect_payload(
     kind,
     *,
@@ -110,6 +141,34 @@ def full_state_effect_payload(
         struct.pack(">I", FULL_STATE_MASK | FIELD_EFFECT)
         + base[4:]
         + effect_value(kind, effect_id=effect_id, name=name)
+    )
+
+
+def full_state_effect_controls_payload(
+    kind,
+    *,
+    effect_id=0,
+    name="",
+    force_white=None,
+    intro=None,
+    outro=None,
+    inout_duration_ds=None,
+):
+    base = full_state_payload(
+        True, 128, 10, 20, 30, 40, True, 158
+    )
+    return (
+        struct.pack(
+            ">I", FULL_STATE_MASK | FIELD_EFFECT | FIELD_CONTROLS
+        )
+        + base[4:]
+        + effect_value(kind, effect_id=effect_id, name=name)
+        + controls_value(
+            force_white=force_white,
+            intro=intro,
+            outro=outro,
+            inout_duration_ds=inout_duration_ds,
+        )
     )
 
 
@@ -147,6 +206,11 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         "has_color": False,
         "has_color_brightness": False,
         "has_effect": False,
+        "has_controls": False,
+        "has_force_white": False,
+        "has_intro": False,
+        "has_outro": False,
+        "has_inout_duration": False,
     }
     if not boot_id or not sequence:
         raise ValueError("replay-fields")
@@ -240,12 +304,57 @@ def decode(packet, expected_group_hash=GROUP_HASH):
                 offset += name_length
             else:
                 raise ValueError("effect-kind")
+        if result["field_mask"] & FIELD_CONTROLS:
+            if offset + 2 > payload_size:
+                raise ValueError("controls-length")
+            control_mask = struct.unpack(">H", payload[offset:offset + 2])[0]
+            offset += 2
+            result["has_controls"] = True
+            result["control_mask"] = control_mask
+
+            known_controls = (
+                CONTROL_FORCE_WHITE
+                | CONTROL_INTRO
+                | CONTROL_OUTRO
+                | CONTROL_INOUT_DURATION
+            )
+            if control_mask & ~known_controls:
+                raise ValueError("controls-mask")
+            if control_mask & CONTROL_FORCE_WHITE:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-force-white")
+                if payload[offset] > 1:
+                    raise ValueError("controls-force-white")
+                result["has_force_white"] = True
+                result["force_white"] = bool(payload[offset])
+                offset += 1
+            if control_mask & CONTROL_INTRO:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-intro")
+                result["has_intro"] = True
+                result["intro"] = payload[offset]
+                offset += 1
+            if control_mask & CONTROL_OUTRO:
+                if offset + 1 > payload_size:
+                    raise ValueError("controls-outro")
+                result["has_outro"] = True
+                result["outro"] = payload[offset]
+                offset += 1
+            if control_mask & CONTROL_INOUT_DURATION:
+                if offset + 2 > payload_size:
+                    raise ValueError("controls-inout-duration")
+                result["has_inout_duration"] = True
+                result["inout_duration_ds"] = struct.unpack(
+                    ">H", payload[offset:offset + 2]
+                )[0]
+                offset += 2
         known_fields = (
             FIELD_POWER
             | FIELD_BRIGHTNESS
             | FIELD_COLOR
             | FIELD_COLOR_BRIGHTNESS
             | FIELD_EFFECT
+            | FIELD_CONTROLS
         )
         if not result["field_mask"] & ~known_fields and offset != payload_size:
             raise ValueError("state-length")
@@ -283,6 +392,10 @@ class ProtocolTests(unittest.TestCase):
             ))
             + MAX_EFFECT_VALUE_SIZE
             + TAG_SIZE,
+            MAX_EFFECT_STATE_PACKET_SIZE,
+        )
+        self.assertEqual(
+            MAX_EFFECT_STATE_PACKET_SIZE + MAX_CONTROLS_VALUE_SIZE,
             MAX_STATE_PACKET_SIZE,
         )
 
@@ -358,6 +471,34 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decoded["effect_id"], 3)
         self.assertEqual(decoded["effect_name"], "Wipe")
 
+    def test_controls_vector_is_stable(self):
+        packet = encode(
+            TYPE_STATE,
+            full_state_effect_controls_payload(
+                EFFECT_CHIMERAFX,
+                effect_id=3,
+                name="Wipe",
+                force_white=True,
+                intro=2,
+                outro=4,
+                inout_duration_ds=25,
+            ),
+        )
+        self.assertEqual(len(packet), 64)
+        self.assertEqual(
+            packet.hex(),
+            "4346585301010016001a12345678a1b2c3d401020304"
+            "0000003f0180010a141e289e01030457697065000f0102040019"
+            "b55681c6c282db952f89fd1acfea76fe",
+        )
+        decoded = decode(packet)
+        self.assertTrue(decoded["has_controls"])
+        self.assertTrue(decoded["has_force_white"])
+        self.assertTrue(decoded["force_white"])
+        self.assertEqual(decoded["intro"], 2)
+        self.assertEqual(decoded["outro"], 4)
+        self.assertEqual(decoded["inout_duration_ds"], 25)
+
     def test_none_effect_vector_is_stable(self):
         packet = encode(
             TYPE_STATE,
@@ -418,9 +559,9 @@ class ProtocolTests(unittest.TestCase):
                 )
                 self.assertEqual(decoded["effect_name"], "a" * 64)
                 expected_size = (
-                    MAX_STATE_PACKET_SIZE
+                    MAX_EFFECT_STATE_PACKET_SIZE
                     if kind == EFFECT_CHIMERAFX
-                    else MAX_STATE_PACKET_SIZE - 1
+                    else MAX_EFFECT_STATE_PACKET_SIZE - 1
                 )
                 self.assertEqual(len(packet), expected_size)
 
@@ -608,6 +749,39 @@ class ProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "state-length"):
             decode(encode(TYPE_STATE, payload))
+
+    def test_truncated_controls_values_are_rejected(self):
+        malformed_values = (
+            b"",
+            b"\x00",
+            struct.pack(">H", CONTROL_FORCE_WHITE),
+            struct.pack(">H", CONTROL_INOUT_DURATION) + b"\x00",
+        )
+        for value in malformed_values:
+            with self.subTest(value=value):
+                payload = struct.pack(">I", FIELD_CONTROLS) + value
+                with self.assertRaisesRegex(ValueError, "controls"):
+                    decode(encode(TYPE_STATE, payload))
+
+    def test_controls_reject_invalid_boolean_values(self):
+        payload = (
+            struct.pack(">I", FIELD_CONTROLS)
+            + struct.pack(">H", CONTROL_FORCE_WHITE)
+            + b"\x02"
+        )
+        with self.assertRaisesRegex(ValueError, "controls-force-white"):
+            decode(encode(TYPE_STATE, payload))
+
+    def test_legacy_packet_without_controls_remains_valid(self):
+        decoded = decode(
+            encode(
+                TYPE_STATE,
+                full_state_effect_payload(
+                    EFFECT_CHIMERAFX, effect_id=3, name="Wipe"
+                ),
+            )
+        )
+        self.assertFalse(decoded["has_controls"])
 
     def test_unknown_color_capability_bits_are_rejected(self):
         payload = (

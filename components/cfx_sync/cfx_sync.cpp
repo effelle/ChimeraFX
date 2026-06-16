@@ -7,8 +7,10 @@
 
 #include <esp_random.h>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <inttypes.h>
+#include <limits>
 
 namespace esphome {
 namespace cfx_sync {
@@ -65,8 +67,10 @@ void CFXSyncComponent::setup() {
     this->observed_state_ = capture_light_snapshot(*leader);
     this->observed_effect_ = capture_effect_state(
         this->lights_[0], this->effect_catalogs_[0]);
+    this->observed_controls_ = capture_control_state_(0);
     this->has_observed_state_ = true;
     leader->add_remote_values_listener(&this->light_listener_);
+    this->register_control_callbacks_(0);
     this->set_interval("heartbeat", this->heartbeat_ms_,
                        [this]() { this->send_state_(); });
   } else {
@@ -143,7 +147,8 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
 
   if (this->role_ == CFXSyncRole::FOLLOWER &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
-       packet.has_color_brightness || packet.has_effect)) {
+       packet.has_color_brightness || packet.has_effect ||
+       packet.has_controls)) {
     this->has_valid_state_ = true;
     this->status_clear_warning();
     this->apply_remote_state_(packet);
@@ -161,34 +166,45 @@ void CFXSyncComponent::on_local_light_update() {
   const auto snapshot = capture_light_snapshot(*leader);
   const auto effect = capture_effect_state(
       leader, this->effect_catalogs_[0]);
+  const auto controls = this->capture_control_state_(0);
   if (this->has_observed_state_ && snapshot == this->observed_state_ &&
-      effect == this->observed_effect_) {
+      effect == this->observed_effect_ &&
+      controls == this->observed_controls_) {
     return;
   }
   this->has_observed_state_ = true;
   this->observed_state_ = snapshot;
   this->observed_effect_ = effect;
-  this->send_state_(snapshot, effect);
+  this->observed_controls_ = controls;
+  this->send_state_(snapshot, effect, controls);
+}
+
+void CFXSyncComponent::on_local_control_update() {
+  this->on_local_light_update();
 }
 
 bool CFXSyncComponent::send_state_() {
   auto *leader = this->leader_light_();
-  if (leader == nullptr) {
+  if (leader == nullptr || this->effect_catalogs_.empty()) {
     return false;
   }
   return this->send_state_(
-      capture_light_snapshot(*leader), this->observed_effect_);
+      capture_light_snapshot(*leader),
+      capture_effect_state(leader, this->effect_catalogs_[0]),
+      this->capture_control_state_(0));
 }
 
 bool CFXSyncComponent::send_state_(
     const CFXSyncLightSnapshot &snapshot,
-    const CFXSyncEffectState &effect) {
+    const CFXSyncEffectState &effect,
+    const CFXSyncControlState &controls) {
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
           snapshot.power, snapshot.brightness, snapshot.color_brightness,
           snapshot.red, snapshot.green, snapshot.blue, snapshot.white,
-          snapshot.has_white, true, effect, this->key_, packet)) {
+          snapshot.has_white, true, effect, controls.has_any(), controls,
+          this->key_, packet)) {
     return false;
   }
   return this->send_packet_(packet);
@@ -341,7 +357,8 @@ void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
   const size_t aligned_light_count =
       std::min(this->lights_.size(),
                std::min(this->effect_catalogs_.size(),
-                        this->effect_log_states_.size()));
+                        std::min(this->effect_log_states_.size(),
+                                 this->control_bindings_.size())));
   for (size_t i = 0; i < aligned_light_count; i++) {
     auto *light = this->lights_[i];
     if (light == nullptr) {
@@ -362,6 +379,8 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   if (light == nullptr) {
     return;
   }
+  this->apply_remote_controls_to_light_(packet, light_index);
+
   const auto &catalog = this->effect_catalogs_[light_index];
   auto &log_state = this->effect_log_states_[light_index];
   auto call = light->make_call();
@@ -463,6 +482,164 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   }
 
   call.perform();
+}
+
+void CFXSyncComponent::apply_remote_controls_to_light_(
+    const CFXSyncPacket &packet, size_t light_index) {
+  if (!packet.has_controls || light_index >= this->lights_.size() ||
+      light_index >= this->control_bindings_.size()) {
+    return;
+  }
+
+  auto *light = this->lights_[light_index];
+  auto &binding = this->control_bindings_[light_index];
+  const auto &controls = packet.controls;
+
+  if (controls.has_force_white) {
+    if (binding.force_white == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Force White",
+                              "missing control");
+    } else if (binding.force_white->state != controls.force_white) {
+      if (controls.force_white) {
+        binding.force_white->turn_on();
+      } else {
+        binding.force_white->turn_off();
+      }
+    }
+  }
+
+  if (controls.has_intro) {
+    if (binding.intro == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Intro",
+                              "missing control");
+    } else if (!binding.intro->has_index(controls.intro)) {
+      this->log_control_skip_(binding, light, light_index, "Intro",
+                              "unsupported option index");
+    } else {
+      const auto active = binding.intro->active_index();
+      if (!active.has_value() || active.value() != controls.intro) {
+        auto call = binding.intro->make_call();
+        call.set_index(controls.intro);
+        call.perform();
+      }
+    }
+  }
+
+  if (controls.has_outro) {
+    if (binding.outro == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "Outro",
+                              "missing control");
+    } else if (!binding.outro->has_index(controls.outro)) {
+      this->log_control_skip_(binding, light, light_index, "Outro",
+                              "unsupported option index");
+    } else {
+      const auto active = binding.outro->active_index();
+      if (!active.has_value() || active.value() != controls.outro) {
+        auto call = binding.outro->make_call();
+        call.set_index(controls.outro);
+        call.perform();
+      }
+    }
+  }
+
+  if (controls.has_inout_duration) {
+    if (binding.inout_duration == nullptr) {
+      this->log_control_skip_(binding, light, light_index, "In/Out Duration",
+                              "missing control");
+    } else {
+      const float target =
+          controls.inout_duration_deciseconds / 10.0f;
+      if (!binding.inout_duration->has_state() ||
+          std::fabs(binding.inout_duration->state - target) > 0.01f) {
+        auto call = binding.inout_duration->make_call();
+        call.set_value(target);
+        call.perform();
+      }
+    }
+  }
+}
+
+void CFXSyncComponent::register_control_callbacks_(size_t light_index) {
+  if (light_index >= this->control_bindings_.size()) {
+    return;
+  }
+  auto &binding = this->control_bindings_[light_index];
+  if (binding.callbacks_registered) {
+    return;
+  }
+  binding.callbacks_registered = true;
+  if (binding.force_white != nullptr) {
+    binding.force_white->add_on_state_callback(
+        [this](bool) { this->on_local_control_update(); });
+  }
+  if (binding.intro != nullptr) {
+    binding.intro->add_on_state_callback(
+        [this](size_t) { this->on_local_control_update(); });
+  }
+  if (binding.outro != nullptr) {
+    binding.outro->add_on_state_callback(
+        [this](size_t) { this->on_local_control_update(); });
+  }
+  if (binding.inout_duration != nullptr) {
+    binding.inout_duration->add_on_state_callback(
+        [this](float) { this->on_local_control_update(); });
+  }
+}
+
+CFXSyncControlState CFXSyncComponent::capture_control_state_(
+    size_t light_index) const {
+  CFXSyncControlState result;
+  if (light_index >= this->control_bindings_.size()) {
+    return result;
+  }
+
+  const auto &binding = this->control_bindings_[light_index];
+  if (binding.force_white != nullptr) {
+    result.has_force_white = true;
+    result.force_white = binding.force_white->state;
+  }
+  if (binding.intro != nullptr) {
+    const auto active = binding.intro->active_index();
+    if (active.has_value() &&
+        active.value() <= std::numeric_limits<uint8_t>::max()) {
+      result.has_intro = true;
+      result.intro = static_cast<uint8_t>(active.value());
+    }
+  }
+  if (binding.outro != nullptr) {
+    const auto active = binding.outro->active_index();
+    if (active.has_value() &&
+        active.value() <= std::numeric_limits<uint8_t>::max()) {
+      result.has_outro = true;
+      result.outro = static_cast<uint8_t>(active.value());
+    }
+  }
+  if (binding.inout_duration != nullptr &&
+      binding.inout_duration->has_state()) {
+    const float deciseconds = binding.inout_duration->state * 10.0f;
+    const long rounded = std::lround(deciseconds);
+    result.has_inout_duration = true;
+    result.inout_duration_deciseconds = static_cast<uint16_t>(
+        std::max<long>(0, std::min<long>(
+                              rounded,
+                              std::numeric_limits<uint16_t>::max())));
+  }
+  return result;
+}
+
+void CFXSyncComponent::log_control_skip_(
+    ControlBinding &binding, light::LightState *light, size_t light_index,
+    const char *control_name, const char *reason) {
+  const uint32_t now = millis();
+  if (binding.last_skip_log_ms != 0 &&
+      now - binding.last_skip_log_ms < CONTROL_SKIP_LOG_INTERVAL_MS) {
+    return;
+  }
+  binding.last_skip_log_ms = now;
+  ESP_LOGI(TAG,
+           "Leader control %s is unavailable for follower light '%s' [%u]: %s",
+           control_name, light != nullptr ? light->get_name().c_str() : "<null>",
+           static_cast<unsigned>(light_index), reason);
 }
 
 bool CFXSyncComponent::is_peer_(const uint8_t *address) const {
