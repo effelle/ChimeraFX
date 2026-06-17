@@ -34,13 +34,13 @@ class ESPNowAPITests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn("public espnow::ESPNowBroadcastHandler", header)
-        self.assertIn("bool on_broadcast(", header)
-        self.assertIn("register_broadcast_handler(this)", source)
+        self.assertIn("public espnow::ESPNowBroadcastedHandler", header)
+        self.assertIn("bool on_broadcasted(", header)
+        self.assertIn("register_broadcasted_handler(this)", source)
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
+                r"bool CFXSyncComponent::on_broadcasted\(.*?\).*?"
                 r"return this->on_receive\(info, data, size\);",
                 re.DOTALL,
             ),

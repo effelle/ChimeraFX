@@ -75,7 +75,7 @@ void CFXSyncComponent::setup() {
     this->boot_id_ = 1;
   }
   this->espnow_->register_receive_handler(this);
-  this->espnow_->register_broadcast_handler(this);
+  this->espnow_->register_broadcasted_handler(this);
   const esp_err_t broadcast_result =
       this->espnow_->add_peer(BROADCAST_MAC.data());
   if (broadcast_result != ESP_OK) {
@@ -243,8 +243,8 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
   return true;
 }
 
-bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
-                                    const uint8_t *data, uint8_t size) {
+bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
+                                      const uint8_t *data, uint8_t size) {
   return this->on_receive(info, data, size);
 }
 
