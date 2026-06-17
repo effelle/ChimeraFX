@@ -115,13 +115,13 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"espnow_var = cg\.new_Pvariable\(config\[CONF_ESPNOW_ID\]\).*?"
                 r"await cg\.register_component\(espnow_var, \{\}\).*?"
-                r"socket\.require_wake_loop_threadsafe\(\).*?"
                 r'cg\.add_define\("USE_ESPNOW"\).*?'
                 r"cg\.add\(espnow_var\.set_auto_add_peer\(False\)\).*?"
                 r"cg\.add\(var\.set_espnow\(espnow_var\)\)",
                 re.DOTALL,
             ),
         )
+        self.assertNotIn("require_wake_loop_threadsafe", py_source)
         self.assertNotIn("cg.add(var.set_peer", py_source)
         self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
 

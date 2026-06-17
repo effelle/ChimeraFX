@@ -4,7 +4,7 @@ import hashlib
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import espnow, light, number, select, socket, switch
+from esphome.components import espnow, light, number, select, switch
 from esphome.const import CONF_ID
 from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
@@ -330,7 +330,6 @@ async def to_code(config):
     await cg.register_component(espnow_var, {})
     if CORE.using_arduino:
         cg.add_library("WiFi", None)
-    socket.require_wake_loop_threadsafe()
     cg.add_define("USE_ESPNOW")
     cg.add(espnow_var.set_auto_add_peer(False))
 

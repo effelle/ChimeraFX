@@ -384,7 +384,6 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch.object(cfx_sync.cg, "add_define"),
-            patch.object(cfx_sync.socket, "require_wake_loop_threadsafe"),
             patch.object(
                 cfx_sync.cg,
                 "add",
