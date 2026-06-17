@@ -44,6 +44,7 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
 
 class CFXSyncComponent : public Component,
                          public espnow::ESPNowReceivedPacketHandler,
+                         public espnow::ESPNowUnknownPeerHandler,
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
                          public espnow::ESPNowBroadcastedHandler
 #else
@@ -129,11 +130,15 @@ class CFXSyncComponent : public Component,
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
   bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                    uint8_t size) override;
+  bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                       const uint8_t *data, uint8_t size) override;
   bool on_broadcasted(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size) override;
 #else
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                   uint8_t size) override;
+  bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                       const uint8_t *data, uint8_t size) override;
   bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                     uint8_t size) override;
 #endif
@@ -227,6 +232,8 @@ class CFXSyncComponent : public Component,
   bool register_peer_(PeerState &peer);
   bool accept_sequence_(PeerState &peer, uint32_t boot_id,
                         uint32_t sequence);
+  bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,
+                           const uint8_t *data, uint8_t size);
   bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size);
   bool has_peer_send_warning_() const;

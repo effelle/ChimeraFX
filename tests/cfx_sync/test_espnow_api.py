@@ -32,12 +32,14 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn(
             "public espnow::ESPNowReceivedPacketHandler,\n"
+            "                         public espnow::ESPNowUnknownPeerHandler,\n"
             "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)\n"
             "                         public espnow::ESPNowBroadcastedHandler",
             header,
         )
         self.assertIn("bool on_received(", header)
         self.assertIn("bool on_receive(", header)
+        self.assertIn("bool on_unknown_peer(", header)
         self.assertIn("bool handle_packet_(", header)
         self.assertIn(
             "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
@@ -45,8 +47,10 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("register_received_handler(this)", source)
         self.assertIn("register_receive_handler(this)", source)
+        self.assertIn("register_unknown_peer_handler(this)", source)
         self.assertIn("CFXSyncComponent::on_received(", source)
         self.assertIn("CFXSyncComponent::on_receive(", source)
+        self.assertIn("CFXSyncComponent::on_unknown_peer(", source)
         self.assertIn("CFXSyncComponent::handle_packet_(", source)
         self.assertRegex(
             source,
@@ -61,6 +65,14 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::on_receive\(.*?\).*?"
                 r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::on_unknown_peer\(.*?\).*?"
+                r"return this->admit_unknown_peer_\(info, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -88,6 +100,35 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
                 r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_unknown_peers_are_authenticated_before_discovery_admission(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+                r"CFXSyncPacketCodec::decode\(.*?"
+                r"result == CFXSyncDecodeResult::NOT_CFX.*?"
+                r"return false;.*?"
+                r"result != CFXSyncDecodeResult::OK.*?"
+                r"this->handle_decode_failure_\(result\);.*?"
+                r"return true;.*?"
+                r"packet\.type != CFXSyncPacketType::HELLO &&"
+                r"\s*packet\.type != CFXSyncPacketType::SYNC_REQUEST.*?"
+                r"authenticated non-discovery packet from unknown peer.*?"
+                r"this->find_or_add_peer_\(info\.src_addr, peer_role, "
+                r"capabilities\).*?"
+                r"this->register_peer_\(\*peer\).*?"
+                r"return false;",
                 re.DOTALL,
             ),
         )

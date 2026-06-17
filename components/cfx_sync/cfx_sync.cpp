@@ -95,9 +95,11 @@ void CFXSyncComponent::setup() {
   }
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
   this->espnow_->register_received_handler(this);
+  this->espnow_->register_unknown_peer_handler(this);
   this->espnow_->register_broadcasted_handler(this);
 #else
   this->espnow_->register_receive_handler(this);
+  this->espnow_->register_unknown_peer_handler(this);
   this->espnow_->register_broadcast_handler(this);
 #endif
   const esp_err_t broadcast_result =
@@ -191,6 +193,11 @@ bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
   return this->handle_packet_(info, data, size);
 }
 
+bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                                       const uint8_t *data, uint8_t size) {
+  return this->admit_unknown_peer_(info, data, size);
+}
+
 bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
                                       const uint8_t *data, uint8_t size) {
   return this->handle_packet_(info, data, size);
@@ -201,11 +208,51 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
   return this->handle_packet_(info, data, size);
 }
 
+bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                                       const uint8_t *data, uint8_t size) {
+  return this->admit_unknown_peer_(info, data, size);
+}
+
 bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
                                     const uint8_t *data, uint8_t size) {
   return this->handle_packet_(info, data, size);
 }
 #endif
+
+bool CFXSyncComponent::admit_unknown_peer_(
+    const espnow::ESPNowRecvInfo &info, const uint8_t *data, uint8_t size) {
+  CFXSyncPacket packet;
+  const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
+      data, size, this->group_hash_, this->key_, packet);
+  if (result == CFXSyncDecodeResult::NOT_CFX ||
+      result == CFXSyncDecodeResult::WRONG_GROUP) {
+    return false;
+  }
+  if (result != CFXSyncDecodeResult::OK) {
+    this->handle_decode_failure_(result);
+    return true;
+  }
+  if (packet.type != CFXSyncPacketType::HELLO &&
+      packet.type != CFXSyncPacketType::SYNC_REQUEST) {
+    this->log_rejection_(
+        "Ignoring authenticated non-discovery packet from unknown peer");
+    return true;
+  }
+
+  CFXSyncNodeRole peer_role = packet.node_role;
+  uint16_t capabilities = packet.capabilities;
+  if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
+    peer_role = CFXSyncNodeRole::FOLLOWER;
+    capabilities = CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+  }
+
+  auto *peer =
+      this->find_or_add_peer_(info.src_addr, peer_role, capabilities);
+  if (peer != nullptr) {
+    this->register_peer_(*peer);
+  }
+  return false;
+}
 
 bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
                                       const uint8_t *data, uint8_t size) {
