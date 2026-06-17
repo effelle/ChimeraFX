@@ -20,28 +20,73 @@ class ESPNowAPITests(unittest.TestCase):
         )
         return EFFECT_HEADER.read_text(encoding="utf-8")
 
-    def test_uses_esphome_2026_5_receive_api(self):
+    def test_uses_version_conditional_receive_api(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn('#include "esphome/core/version.h"', header)
+        self.assertIn(
+            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
+            header,
+        )
+        self.assertIn(
+            "public espnow::ESPNowReceivedPacketHandler,\n"
+            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)\n"
+            "                         public espnow::ESPNowBroadcastedHandler",
+            header,
+        )
+        self.assertIn("bool on_received(", header)
         self.assertIn("bool on_receive(", header)
+        self.assertIn("bool handle_packet_(", header)
+        self.assertIn(
+            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
+            source,
+        )
+        self.assertIn("register_received_handler(this)", source)
         self.assertIn("register_receive_handler(this)", source)
+        self.assertIn("CFXSyncComponent::on_received(", source)
         self.assertIn("CFXSyncComponent::on_receive(", source)
-        self.assertNotIn("on_received(", header)
-        self.assertNotIn("register_received_handler", source)
+        self.assertIn("CFXSyncComponent::handle_packet_(", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::on_received\(.*?\).*?"
+                r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::on_receive\(.*?\).*?"
+                r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
 
-    def test_registers_broadcast_handler_for_discovery(self):
+    def test_registers_version_conditional_broadcast_handler_for_discovery(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("public espnow::ESPNowBroadcastedHandler", header)
+        self.assertIn("public espnow::ESPNowBroadcastHandler", header)
         self.assertIn("bool on_broadcasted(", header)
+        self.assertIn("bool on_broadcast(", header)
         self.assertIn("register_broadcasted_handler(this)", source)
+        self.assertIn("register_broadcast_handler(this)", source)
         self.assertRegex(
             source,
             re.compile(
                 r"bool CFXSyncComponent::on_broadcasted\(.*?\).*?"
-                r"return this->on_receive\(info, data, size\);",
+                r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
+                r"return this->handle_packet_\(info, data, size\);",
                 re.DOTALL,
             ),
         )

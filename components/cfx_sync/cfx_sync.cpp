@@ -74,8 +74,13 @@ void CFXSyncComponent::setup() {
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
-  this->espnow_->register_receive_handler(this);
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+  this->espnow_->register_received_handler(this);
   this->espnow_->register_broadcasted_handler(this);
+#else
+  this->espnow_->register_receive_handler(this);
+  this->espnow_->register_broadcast_handler(this);
+#endif
   const esp_err_t broadcast_result =
       this->espnow_->add_peer(BROADCAST_MAC.data());
   if (broadcast_result != ESP_OK) {
@@ -149,8 +154,30 @@ void CFXSyncComponent::dump_config() {
                 this->unsupported_packets_, this->send_failures_);
 }
 
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
+                                   const uint8_t *data, uint8_t size) {
+  return this->handle_packet_(info, data, size);
+}
+
+bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
+                                      const uint8_t *data, uint8_t size) {
+  return this->handle_packet_(info, data, size);
+}
+#else
 bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
                                   const uint8_t *data, uint8_t size) {
+  return this->handle_packet_(info, data, size);
+}
+
+bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
+                                    const uint8_t *data, uint8_t size) {
+  return this->handle_packet_(info, data, size);
+}
+#endif
+
+bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
+                                      const uint8_t *data, uint8_t size) {
   CFXSyncPacket packet;
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
@@ -241,11 +268,6 @@ bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
     this->apply_remote_state_(packet);
   }
   return true;
-}
-
-bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
-                                      const uint8_t *data, uint8_t size) {
-  return this->on_receive(info, data, size);
 }
 
 void CFXSyncComponent::on_local_light_update() {

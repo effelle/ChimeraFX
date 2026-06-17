@@ -17,6 +17,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/component.h"
+#include "esphome/core/version.h"
 
 #include <array>
 #include <cstdint>
@@ -43,7 +44,12 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
 
 class CFXSyncComponent : public Component,
                          public espnow::ESPNowReceivedPacketHandler,
-                         public espnow::ESPNowBroadcastedHandler {
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+                         public espnow::ESPNowBroadcastedHandler
+#else
+                         public espnow::ESPNowBroadcastHandler
+#endif
+{
  public:
   void setup() override;
   void dump_config() override;
@@ -120,10 +126,17 @@ class CFXSyncComponent : public Component,
     }
   }
 
-  bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                  uint8_t size) override;
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+  bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                   uint8_t size) override;
   bool on_broadcasted(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size) override;
+#else
+  bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                  uint8_t size) override;
+  bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                    uint8_t size) override;
+#endif
   void on_local_light_update();
 
  protected:
@@ -196,6 +209,8 @@ class CFXSyncComponent : public Component,
   bool register_peer_(PeerState &peer);
   bool accept_sequence_(PeerState &peer, uint32_t boot_id,
                         uint32_t sequence);
+  bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
+                      uint8_t size);
   void handle_send_result_(esp_err_t result);
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
