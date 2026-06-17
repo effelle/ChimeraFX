@@ -418,20 +418,42 @@ bool CFXSyncComponent::send_state_to_followers_(
   this->check_ack_health_();
   if (this->send_pending_) {
     this->state_send_deferred_ = true;
+    this->fanout_remaining_ = this->follower_peer_count_();
     return false;
   }
 
-  bool sent = false;
-  for (auto &peer : this->peers_) {
+  if (this->fanout_remaining_ == 0) {
+    this->fanout_remaining_ = this->follower_peer_count_();
+  }
+  if (this->fanout_remaining_ == 0) {
+    this->check_ack_health_();
+    return false;
+  }
+
+  for (uint8_t offset = 0; offset < CFX_SYNC_MAX_PEERS; offset++) {
+    const uint8_t peer_index =
+        (this->fanout_cursor_ + offset) % CFX_SYNC_MAX_PEERS;
+    auto &peer = this->peers_[peer_index];
     if (!this->peer_accepts_leader_state_(peer)) {
       continue;
     }
     if (this->send_state_to_peer_(peer, snapshot, effect, controls)) {
-      sent = true;
+      this->fanout_cursor_ = (peer_index + 1) % CFX_SYNC_MAX_PEERS;
+      if (this->fanout_remaining_ > 0) {
+        this->fanout_remaining_--;
+      }
+      if (this->fanout_remaining_ > 0) {
+        this->state_send_deferred_ = true;
+      }
+      this->check_ack_health_();
+      return true;
     }
+    this->check_ack_health_();
+    return false;
   }
+  this->fanout_remaining_ = 0;
   this->check_ack_health_();
-  return sent;
+  return false;
 }
 
 bool CFXSyncComponent::peer_accepts_leader_state_(

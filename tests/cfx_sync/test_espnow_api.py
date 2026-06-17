@@ -450,6 +450,8 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("bool send_state_to_followers_();", header)
         self.assertIn("bool peer_accepts_leader_state_(const PeerState &peer) const;", header)
+        self.assertIn("uint8_t fanout_cursor_{0};", header)
+        self.assertIn("uint8_t fanout_remaining_{0};", header)
         self.assertIn(
             "bool send_state_to_peer_(PeerState &peer,\n"
             "                           const CFXSyncLightSnapshot &snapshot,\n"
@@ -486,9 +488,14 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
                 r"const CFXSyncControlState &controls\).*?"
-                r"for \(auto &peer : this->peers_\).*?"
+                r"this->fanout_remaining_ = this->follower_peer_count_\(\);.*?"
+                r"for \(uint8_t offset = 0; "
+                r"offset < CFX_SYNC_MAX_PEERS; offset\+\+\).*?"
+                r"this->fanout_cursor_ \+ offset.*?"
                 r"this->peer_accepts_leader_state_\(peer\).*?"
-                r"this->send_state_to_peer_\(peer, snapshot, effect, controls\)",
+                r"this->send_state_to_peer_\(peer, snapshot, effect, controls\).*?"
+                r"this->fanout_cursor_ = "
+                r"\(peer_index \+ 1\) % CFX_SYNC_MAX_PEERS;",
                 re.DOTALL,
             ),
         )
@@ -592,6 +599,7 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("void flush_deferred_state_();", header)
         self.assertIn("bool state_send_deferred_{false};", header)
+        self.assertIn("uint8_t fanout_remaining_{0};", header)
         self.assertRegex(
             source,
             re.compile(
@@ -599,9 +607,11 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(.*?this->check_ack_health_\(\);"
                 r"\s*if \(this->send_pending_\) \{"
                 r"\s*this->state_send_deferred_ = true;"
+                r"\s*this->fanout_remaining_ = this->follower_peer_count_\(\);"
                 r"\s*return false;"
                 r"\s*\}.*?"
-                r"bool sent = false;",
+                r"if \(this->fanout_remaining_ == 0\) \{"
+                r"\s*this->fanout_remaining_ = this->follower_peer_count_\(\);",
                 re.DOTALL,
             ),
         )
@@ -639,11 +649,14 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
-                r"bool sent = false;.*?"
                 r"if \(this->send_state_to_peer_"
                 r"\(peer, snapshot, effect, controls\)\) \{.*?"
-                r"sent = true;.*?"
-                r"return sent;",
+                r"this->fanout_cursor_ = "
+                r"\(peer_index \+ 1\) % CFX_SYNC_MAX_PEERS;.*?"
+                r"this->fanout_remaining_--;.*?"
+                r"if \(this->fanout_remaining_ > 0\).*?"
+                r"this->state_send_deferred_ = true;.*?"
+                r"return true;",
                 re.DOTALL,
             ),
         )

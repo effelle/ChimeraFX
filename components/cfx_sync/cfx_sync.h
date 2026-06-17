@@ -282,6 +282,8 @@ class CFXSyncComponent : public Component,
   uint32_t tx_sequence_{0};
   bool send_pending_{false};
   bool state_send_deferred_{false};
+  uint8_t fanout_cursor_{0};
+  uint8_t fanout_remaining_{0};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};
