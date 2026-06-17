@@ -6,11 +6,6 @@ external_components:
 
 logger:
 
-espnow:
-  id: espnow_bus
-  channel: 1
-  auto_add_peer: false
-
 output:
   - platform: ledc
     id: sync_output
@@ -38,13 +33,11 @@ light:
 
 cfx_sync:
   id: room_sync
-  espnow_id: espnow_bus
   role: follower
   lights:
     - sync_light
     - sync_light_b
     - sync_light_c
-  peer: "02:00:00:00:00:02"
   group: living_room
   key: "living-room-2026"
   heartbeat: 30s

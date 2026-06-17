@@ -9,8 +9,3 @@ external_components:
       - cfx_effect_registry
 
 logger:
-
-espnow:
-  id: espnow_bus
-  channel: 1
-  auto_add_peer: false

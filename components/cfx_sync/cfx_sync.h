@@ -260,6 +260,7 @@ class CFXSyncComponent : public Component,
   std::vector<ControlBinding> control_bindings_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   std::array<uint8_t, 6> peer_{};
+  bool has_static_peer_{false};
   std::array<PeerState, CFX_SYNC_MAX_PEERS> peers_{};
   std::array<uint8_t, 32> key_{};
   uint32_t group_hash_{0};

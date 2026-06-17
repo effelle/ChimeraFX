@@ -52,6 +52,7 @@ uint16_t CFXSyncComponent::local_capabilities_() const {
 
 void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
   this->peer_ = peer;
+  this->has_static_peer_ = true;
   const CFXSyncNodeRole peer_role =
       this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
                                          : CFXSyncNodeRole::LEADER;
@@ -95,17 +96,19 @@ void CFXSyncComponent::setup() {
   this->send_hello_();
   this->set_interval("hello", HELLO_INTERVAL_MS,
                      [this]() { this->send_hello_(); });
-  const CFXSyncNodeRole peer_role =
-      this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
-                                         : CFXSyncNodeRole::LEADER;
-  const uint16_t peer_capabilities =
-      peer_role == CFXSyncNodeRole::FOLLOWER
-          ? CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER
-          : CFXSyncPacketCodec::CAP_LIGHT_LEADER;
-  if (auto *peer = this->find_or_add_peer_(this->peer_.data(), peer_role,
-                                           peer_capabilities);
-      peer != nullptr) {
-    peer->registered = true;
+  if (this->has_static_peer_) {
+    const CFXSyncNodeRole peer_role =
+        this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
+                                           : CFXSyncNodeRole::LEADER;
+    const uint16_t peer_capabilities =
+        peer_role == CFXSyncNodeRole::FOLLOWER
+            ? CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER
+            : CFXSyncPacketCodec::CAP_LIGHT_LEADER;
+    if (auto *peer = this->find_or_add_peer_(this->peer_.data(), peer_role,
+                                             peer_capabilities);
+        peer != nullptr) {
+      peer->registered = true;
+    }
   }
 
   if (this->role_ == CFXSyncRole::LEADER) {
@@ -132,6 +135,7 @@ void CFXSyncComponent::setup() {
 void CFXSyncComponent::dump_config() {
   char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
   format_mac_addr_upper(this->peer_.data(), peer_buf);
+  const char *peer_text = this->has_static_peer_ ? peer_buf : "<discovery>";
   const uint32_t packet_age =
       this->last_valid_packet_ms_ == 0
           ? 0
@@ -140,11 +144,11 @@ void CFXSyncComponent::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "CFX Sync:\n"
                 "  Role: %s\n"
-                "  Peer: %s\n"
+                "  Static peer: %s\n"
                 "  Group hash: %08" PRIX32 "\n"
                 "  Heartbeat: %" PRIu32 " ms\n"
                 "  Last valid packet age: %" PRIu32 " ms",
-                this->role_name_(), peer_buf, this->group_hash_,
+                this->role_name_(), peer_text, this->group_hash_,
                 this->heartbeat_ms_, packet_age);
   ESP_LOGCONFIG(TAG, "  Lights: %u",
                 static_cast<unsigned>(this->lights_.size()));
@@ -421,6 +425,9 @@ bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
 }
 
 bool CFXSyncComponent::send_sync_request_() {
+  if (!this->has_static_peer_) {
+    return false;
+  }
   return this->send_sync_request_to_(this->peer_);
 }
 
@@ -451,6 +458,9 @@ bool CFXSyncComponent::send_hello_() {
 }
 
 bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
+  if (!this->has_static_peer_) {
+    return false;
+  }
   return this->send_packet_to_(this->peer_, packet);
 }
 

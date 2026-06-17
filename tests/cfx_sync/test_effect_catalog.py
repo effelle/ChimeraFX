@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 from esphome import automation
 from esphome import config_validation as cv
@@ -38,12 +38,14 @@ def cfx_effect(effect_id, name=None):
 
 
 class _FakeFullConfig:
-    def __init__(self, espnow, lights):
+    def __init__(self, lights, espnow=None):
         self.espnow = espnow
         self.lights = lights
 
     def get_config_for_path(self, path):
         if path == ["espnow"]:
+            if self.espnow is None:
+                raise KeyError("espnow")
             return self.espnow
         if path == ["light"]:
             return self.lights
@@ -286,10 +288,7 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
             "segments": [{"id": light_id("segment")}],
             "effects": [cfx_effect(2, "Segment Effect")],
         }
-        final_config = _FakeFullConfig(
-            espnow={"auto_add_peer": False},
-            lights=[direct, parent],
-        )
+        final_config = _FakeFullConfig(lights=[direct, parent])
         config = {
             "lights": [
                 light_id("direct"),
@@ -314,15 +313,15 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    def test_final_validate_retains_auto_add_peer_policy(self):
+    def test_final_validate_rejects_manual_espnow_component(self):
         final_config = _FakeFullConfig(
-            espnow={"auto_add_peer": True},
             lights=[],
+            espnow={"auto_add_peer": False},
         )
 
         token = cfx_sync.full_config.set(final_config)
         try:
-            with self.assertRaisesRegex(cv.Invalid, "auto_add_peer"):
+            with self.assertRaisesRegex(cv.Invalid, "owns ESP-NOW"):
                 cfx_sync._final_validate(
                     {"lights": [light_id("missing")]}
                 )
@@ -340,14 +339,12 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
         espnow_var = _Var()
         light_a = object()
         light_b = object()
-        peer = SimpleNamespace(parts=[0, 1, 2, 3, 4, 5])
         heartbeat = SimpleNamespace(total_milliseconds=30_000)
         config = {
             "id": light_id("sync"),
             "espnow_id": light_id("espnow"),
             "role": "follower",
             "lights": [light_id("a"), light_id("b")],
-            "peer": peer,
             "group": "room",
             "key": "password",
             "heartbeat": heartbeat,
@@ -358,7 +355,15 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with (
-            patch.object(cfx_sync.cg, "new_Pvariable", return_value=var),
+            patch.object(
+                cfx_sync.cg, "new_Pvariable", side_effect=[var, espnow_var]
+            ),
+            patch.object(
+                type(cfx_sync.CORE),
+                "using_arduino",
+                new_callable=PropertyMock,
+                return_value=False,
+            ),
             patch.object(
                 cfx_sync.cg,
                 "register_component",
@@ -368,9 +373,11 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
                 cfx_sync.cg,
                 "get_variable",
                 new=AsyncMock(
-                    side_effect=[espnow_var, light_a, light_b]
+                    side_effect=[light_a, light_b]
                 ),
             ),
+            patch.object(cfx_sync.cg, "add_define"),
+            patch.object(cfx_sync.socket, "require_wake_loop_threadsafe"),
             patch.object(
                 cfx_sync.cg,
                 "add",
@@ -380,14 +387,19 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
             await cfx_sync.to_code(config)
 
         self.assertEqual(
-            emitted[1:6],
+            emitted[0:7],
             [
+                ("set_auto_add_peer", False),
+                ("set_espnow", espnow_var),
                 ("add_light", light_a),
                 ("add_effect", 0, 3, "Wipe"),
                 ("add_effect", 0, 3, "Slow Wipe"),
                 ("add_light", light_b),
                 ("add_effect", 1, 9, "Rainbow"),
             ],
+        )
+        self.assertTrue(
+            all(entry[0] != "set_peer" for entry in emitted)
         )
 
 

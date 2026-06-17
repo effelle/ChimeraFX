@@ -35,11 +35,9 @@ light:
 
 cfx_sync:
   id: effect_sync
-  espnow_id: espnow_bus
   role: leader
   lights:
     - sync_effect_leader
-  peer: "02:00:00:00:00:02"
   group: effect_room
   key: "effect-room-2026"
   heartbeat: 30s

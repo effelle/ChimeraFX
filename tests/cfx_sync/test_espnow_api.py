@@ -4,6 +4,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+PY_COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
 HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync.h"
 SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
 PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
@@ -87,6 +88,77 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
                 r"return this->handle_packet_\(info, data, size\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_schema_hides_espnow_and_peer_public_config(self):
+        py_source = PY_COMPONENT.read_text(encoding="utf-8")
+
+        self.assertIn('AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256", "espnow"]', py_source)
+        self.assertIn('DEPENDENCIES = ["esp32", "light"]', py_source)
+        self.assertIn(
+            'cv.GenerateID(CONF_ESPNOW_ID): cv.declare_id(\n'
+            '                espnow.ESPNowComponent\n'
+            '            )',
+            py_source,
+        )
+        self.assertIn('cv.Optional(CONF_PEER): cv.invalid(', py_source)
+        self.assertNotIn("cv.Required(CONF_PEER)", py_source)
+        self.assertNotIn("cv.Required(CONF_ESPNOW_ID)", py_source)
+
+    def test_codegen_creates_private_espnow_component(self):
+        py_source = PY_COMPONENT.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            py_source,
+            re.compile(
+                r"espnow_var = cg\.new_Pvariable\(config\[CONF_ESPNOW_ID\]\).*?"
+                r"await cg\.register_component\(espnow_var, \{\}\).*?"
+                r"socket\.require_wake_loop_threadsafe\(\).*?"
+                r'cg\.add_define\("USE_ESPNOW"\).*?'
+                r"cg\.add\(espnow_var\.set_auto_add_peer\(False\)\).*?"
+                r"cg\.add\(var\.set_espnow\(espnow_var\)\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn("cg.add(var.set_peer", py_source)
+        self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
+
+    def test_static_peer_fallback_is_disabled_without_configured_peer(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool has_static_peer_{false};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::set_peer\(.*?"
+                r"this->has_static_peer_ = true;.*?"
+                r"this->find_or_add_peer_",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_sync_request_\(\) \{"
+                r"\s*if \(!this->has_static_peer_\) \{"
+                r"\s*return false;"
+                r"\s*\}"
+                r"\s*return this->send_sync_request_to_\(this->peer_\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_packet_"
+                r"\(std::vector<uint8_t> &packet\) \{"
+                r"\s*if \(!this->has_static_peer_\) \{"
+                r"\s*return false;"
+                r"\s*\}"
+                r"\s*return this->send_packet_to_\(this->peer_, packet\);",
                 re.DOTALL,
             ),
         )

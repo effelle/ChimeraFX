@@ -85,7 +85,7 @@ class EffectFixtureTests(unittest.TestCase):
         )
         self.assertEqual(
             set(config),
-            {"external_components", "logger", "espnow"},
+            {"external_components", "logger"},
         )
 
     def test_leader_binds_one_direct_light_with_unsupported_effect(self):

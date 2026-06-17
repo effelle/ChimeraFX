@@ -4,14 +4,14 @@ import hashlib
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import espnow, light, number, select, switch
+from esphome.components import espnow, light, number, select, socket, switch
 from esphome.const import CONF_ID
-from esphome.core import HexInt, TimePeriod, ID as CoreID
+from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32", "espnow", "light"]
-AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256"]
+DEPENDENCIES = ["esp32", "light"]
+AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256", "espnow"]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
@@ -274,10 +274,15 @@ def _fnv1a_32(value):
 
 def _final_validate(config):
     final_config = full_config.get()
-    espnow_config = final_config.get_config_for_path(["espnow"])
-    if espnow_config.get(CONF_AUTO_ADD_PEER, False):
+    espnow_config = None
+    try:
+        espnow_config = final_config.get_config_for_path(["espnow"])
+    except (cv.Invalid, KeyError):
+        pass
+    if espnow_config is not None:
         raise cv.Invalid(
-            "cfx_sync requires espnow.auto_add_peer to remain false"
+            "cfx_sync owns ESP-NOW internally; remove the top-level "
+            "espnow: block"
         )
 
     all_lights = final_config.get_config_for_path(["light"])
@@ -300,12 +305,17 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFXSyncComponent),
-            cv.Required(CONF_ESPNOW_ID): cv.use_id(espnow.ESPNowComponent),
+            cv.GenerateID(CONF_ESPNOW_ID): cv.declare_id(
+                espnow.ESPNowComponent
+            ),
             cv.Required(CONF_ROLE): cv.one_of(
                 ROLE_LEADER, ROLE_FOLLOWER, lower=True
             ),
             cv.Required(CONF_LIGHTS): _normalize_lights,
-            cv.Required(CONF_PEER): cv.mac_address,
+            cv.Optional(CONF_PEER): cv.invalid(
+                "peer is no longer used; cfx_sync discovers devices by "
+                "group and key"
+            ),
             cv.Required(CONF_GROUP): _validate_group,
             cv.Required(CONF_KEY): _validate_key,
             cv.Optional(
@@ -327,9 +337,14 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    espnow_var = await cg.get_variable(config[CONF_ESPNOW_ID])
-    peer = config[CONF_PEER]
-    peer_bytes = [HexInt(value) for value in peer.parts]
+    espnow_var = cg.new_Pvariable(config[CONF_ESPNOW_ID])
+    await cg.register_component(espnow_var, {})
+    if CORE.using_arduino:
+        cg.add_library("WiFi", None)
+    socket.require_wake_loop_threadsafe()
+    cg.add_define("USE_ESPNOW")
+    cg.add(espnow_var.set_auto_add_peer(False))
+
     key_bytes = [HexInt(value) for value in _derive_key(config[CONF_KEY])]
     effect_catalogs = config.get(
         CONF_EFFECT_CATALOGS, [[] for _ in config[CONF_LIGHTS]]
@@ -388,12 +403,8 @@ async def to_code(config):
             )
             cg.add(var.set_palette_control(light_index, control))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
-    cg.add(var.set_peer(peer_bytes))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))
     cg.add(var.set_key(key_bytes))
     cg.add(
         var.set_heartbeat_ms(config[CONF_HEARTBEAT].total_milliseconds)
     )
-
-    # Register the single configured peer with ESPHome's ESP-NOW component.
-    cg.add(espnow_var.add_peer(peer.parts))
