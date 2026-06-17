@@ -240,6 +240,7 @@ class CFXSyncComponent : public Component,
   void check_ack_health_();
   void handle_send_result_(esp_err_t result);
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
+  void flush_deferred_state_();
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
   void schedule_follower_recovery_();
@@ -273,6 +274,7 @@ class CFXSyncComponent : public Component,
   uint32_t boot_id_{0};
   uint32_t tx_sequence_{0};
   bool send_pending_{false};
+  bool state_send_deferred_{false};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};

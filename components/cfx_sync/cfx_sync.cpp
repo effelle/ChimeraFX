@@ -369,6 +369,11 @@ bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
   this->check_ack_health_();
+  if (this->send_pending_) {
+    this->state_send_deferred_ = true;
+    return false;
+  }
+
   bool sent = false;
   for (auto &peer : this->peers_) {
     if (!this->peer_accepts_leader_state_(peer)) {
@@ -405,6 +410,11 @@ bool CFXSyncComponent::send_state_to_peer_(
     PeerState &peer, const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
+  if (this->send_pending_) {
+    this->state_send_deferred_ = true;
+    return false;
+  }
+
   std::vector<uint8_t> packet;
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
@@ -496,6 +506,9 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
       [this](esp_err_t send_result) {
         this->send_pending_ = false;
         this->handle_send_result_(send_result);
+        if (send_result == ESP_OK) {
+          this->flush_deferred_state_();
+        }
       });
   if (result != ESP_OK) {
     this->send_pending_ = false;
@@ -521,6 +534,9 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
       [this, &peer](esp_err_t send_result) {
         this->send_pending_ = false;
         this->handle_peer_send_result_(peer, send_result);
+        if (send_result == ESP_OK) {
+          this->flush_deferred_state_();
+        }
       });
   if (result != ESP_OK) {
     this->send_pending_ = false;
@@ -824,6 +840,15 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
           MAX_CONSECUTIVE_SEND_FAILURES) {
     this->status_set_warning();
   }
+}
+
+void CFXSyncComponent::flush_deferred_state_() {
+  if (!this->state_send_deferred_ || this->send_pending_ ||
+      this->role_ != CFXSyncRole::LEADER) {
+    return;
+  }
+  this->state_send_deferred_ = false;
+  this->send_state_();
 }
 
 void CFXSyncComponent::handle_decode_failure_(

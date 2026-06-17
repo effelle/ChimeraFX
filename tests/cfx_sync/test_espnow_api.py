@@ -523,6 +523,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("bool send_pending_{false};", header)
+        self.assertIn("bool state_send_deferred_{false};", header)
         self.assertRegex(
             source,
             re.compile(
@@ -535,9 +536,57 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\[this\]\(esp_err_t send_result\).*?"
                 r"this->send_pending_ = false;.*?"
                 r"this->handle_send_result_\(send_result\).*?"
+                r"if \(send_result == ESP_OK\) \{.*?"
+                r"this->flush_deferred_state_\(\);.*?"
                 r"if \(result != ESP_OK\) \{.*?"
                 r"this->send_pending_ = false;.*?"
                 r"this->handle_send_result_\(result\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_leader_state_send_is_deferred_under_send_backpressure(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("void flush_deferred_state_();", header)
+        self.assertIn("bool state_send_deferred_{false};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_followers_"
+                r"\(.*?this->check_ack_health_\(\);"
+                r"\s*if \(this->send_pending_\) \{"
+                r"\s*this->state_send_deferred_ = true;"
+                r"\s*return false;"
+                r"\s*\}.*?"
+                r"bool sent = false;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_peer_"
+                r"\(.*?if \(this->send_pending_\) \{"
+                r"\s*this->state_send_deferred_ = true;"
+                r"\s*return false;"
+                r"\s*\}.*?"
+                r"std::vector<uint8_t> packet;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::flush_deferred_state_\(\) \{"
+                r"\s*if \(!this->state_send_deferred_ \|\| "
+                r"this->send_pending_ \|\|"
+                r"\s*this->role_ != CFXSyncRole::LEADER\) \{"
+                r"\s*return;"
+                r"\s*\}"
+                r"\s*this->state_send_deferred_ = false;"
+                r"\s*this->send_state_\(\);",
                 re.DOTALL,
             ),
         )
