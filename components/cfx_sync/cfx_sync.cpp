@@ -486,13 +486,19 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
   if (this->espnow_ == nullptr) {
     return false;
   }
+  if (this->send_pending_) {
+    return false;
+  }
 
+  this->send_pending_ = true;
   const esp_err_t result = this->espnow_->send(
       mac.data(), packet,
       [this](esp_err_t send_result) {
+        this->send_pending_ = false;
         this->handle_send_result_(send_result);
       });
   if (result != ESP_OK) {
+    this->send_pending_ = false;
     this->handle_send_result_(result);
     return false;
   }
@@ -505,13 +511,19 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
   if (this->espnow_ == nullptr) {
     return false;
   }
+  if (this->send_pending_) {
+    return false;
+  }
 
+  this->send_pending_ = true;
   const esp_err_t result = this->espnow_->send(
       peer.mac.data(), packet,
       [this, &peer](esp_err_t send_result) {
+        this->send_pending_ = false;
         this->handle_peer_send_result_(peer, send_result);
       });
   if (result != ESP_OK) {
+    this->send_pending_ = false;
     this->handle_peer_send_result_(peer, result);
     return false;
   }

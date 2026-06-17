@@ -272,6 +272,7 @@ class CFXSyncComponent : public Component,
   uint32_t heartbeat_ms_{30000};
   uint32_t boot_id_{0};
   uint32_t tx_sequence_{0};
+  bool send_pending_{false};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};

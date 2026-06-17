@@ -475,6 +475,7 @@ class ESPNowAPITests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn("bool send_pending_{false};", header)
         self.assertIn("uint8_t consecutive_send_failures{0};", header)
         self.assertIn("uint32_t send_failures{0};", header)
         self.assertIn("uint32_t last_send_failure_log_ms{0};", header)
@@ -490,7 +491,11 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::send_packet_to_peer_"
                 r"\(\s*PeerState &peer,\s*std::vector<uint8_t> &packet\).*?"
+                r"if \(this->send_pending_\) \{.*?"
+                r"return false;.*?"
+                r"this->send_pending_ = true;.*?"
                 r"\[this, &peer\]\(esp_err_t send_result\).*?"
+                r"this->send_pending_ = false;.*?"
                 r"this->handle_peer_send_result_\(peer, send_result\)",
                 re.DOTALL,
             ),
@@ -509,6 +514,30 @@ class ESPNowAPITests(unittest.TestCase):
                 r"peer\.consecutive_send_failures >=\s*"
                 r"MAX_CONSECUTIVE_SEND_FAILURES.*?"
                 r"this->status_set_warning\(\)",
+                re.DOTALL,
+            ),
+        )
+
+    def test_direct_send_is_backpressured_until_callback(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool send_pending_{false};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_packet_to_"
+                r"\(\s*const std::array<uint8_t, 6> &mac,\s*"
+                r"std::vector<uint8_t> &packet\).*?"
+                r"if \(this->send_pending_\) \{.*?"
+                r"return false;.*?"
+                r"this->send_pending_ = true;.*?"
+                r"\[this\]\(esp_err_t send_result\).*?"
+                r"this->send_pending_ = false;.*?"
+                r"this->handle_send_result_\(send_result\).*?"
+                r"if \(result != ESP_OK\) \{.*?"
+                r"this->send_pending_ = false;.*?"
+                r"this->handle_send_result_\(result\);",
                 re.DOTALL,
             ),
         )
