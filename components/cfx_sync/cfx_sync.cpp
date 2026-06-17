@@ -599,6 +599,7 @@ void CFXSyncComponent::handle_state_ack_(PeerState &peer,
                                          const CFXSyncPacket &packet) {
   if (packet.acked_boot_id != peer.last_state_sent_boot_id ||
       packet.acked_sequence != peer.last_state_sent_sequence) {
+    this->log_rejection_("Ignoring stale or mismatched STATE_ACK");
     return;
   }
 

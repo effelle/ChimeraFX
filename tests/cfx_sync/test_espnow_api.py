@@ -547,6 +547,26 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_mismatched_state_ack_is_logged_without_clearing_pending_ack(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::handle_state_ack_"
+                r"\(\s*PeerState &peer,\s*const CFXSyncPacket &packet\).*?"
+                r"if \(packet\.acked_boot_id != peer\.last_state_sent_boot_id \|\|"
+                r"\s*packet\.acked_sequence != peer\.last_state_sent_sequence\) \{"
+                r"\s*this->log_rejection_\("
+                r"\"Ignoring stale or mismatched STATE_ACK\"\);"
+                r"\s*return;"
+                r"\s*\}.*?"
+                r"peer\.last_ack_boot_id = packet\.acked_boot_id;.*?"
+                r"this->status_clear_warning\(\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_ack_health_uses_pending_ack_and_warning_age(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
