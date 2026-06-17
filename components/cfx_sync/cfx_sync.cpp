@@ -221,6 +221,7 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     if (this->role_ == CFXSyncRole::LEADER &&
         this->peer_accepts_leader_state_(*peer)) {
       this->send_state_to_peer_(*peer);
+      this->check_ack_health_();
     }
     return true;
   }
@@ -245,6 +246,7 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     if (this->role_ == CFXSyncRole::LEADER &&
         this->peer_accepts_leader_state_(*peer)) {
       this->send_state_to_peer_(*peer);
+      this->check_ack_health_();
     }
     return true;
   }
@@ -265,6 +267,9 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
   this->last_valid_packet_ms_ = millis();
 
   if (packet.type == CFXSyncPacketType::STATE_ACK) {
+    if (this->role_ == CFXSyncRole::LEADER) {
+      this->handle_state_ack_(*peer, packet);
+    }
     return true;
   }
 
@@ -276,6 +281,8 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->has_valid_state_ = true;
     this->status_clear_warning();
     this->apply_remote_state_(packet);
+    this->send_state_ack_(info.src_addr, packet,
+                          CFXSyncAckResult::APPLIED);
   }
   return true;
 }
@@ -340,6 +347,7 @@ bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
+  this->check_ack_health_();
   bool sent = false;
   for (auto &peer : this->peers_) {
     if (!this->peer_accepts_leader_state_(peer)) {
@@ -349,6 +357,7 @@ bool CFXSyncComponent::send_state_to_followers_(
       sent = true;
     }
   }
+  this->check_ack_health_();
   return sent;
 }
 
@@ -389,7 +398,26 @@ bool CFXSyncComponent::send_state_to_peer_(
   }
   peer.last_state_sent_boot_id = this->boot_id_;
   peer.last_state_sent_sequence = sequence;
+  peer.last_state_sent_ms = millis();
   return true;
+}
+
+bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
+                                       const CFXSyncPacket &packet,
+                                       CFXSyncAckResult result) {
+  if (destination == nullptr) {
+    return false;
+  }
+  std::array<uint8_t, 6> mac{};
+  memcpy(mac.data(), destination, mac.size());
+
+  std::vector<uint8_t> ack;
+  if (!CFXSyncPacketCodec::encode_state_ack(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          packet.boot_id, packet.sequence, result, this->key_, ack)) {
+    return false;
+  }
+  return this->send_packet_to_(mac, ack);
 }
 
 bool CFXSyncComponent::send_sync_request_() {
@@ -561,11 +589,85 @@ bool CFXSyncComponent::has_peer_send_warning_() const {
   return false;
 }
 
+bool CFXSyncComponent::has_pending_ack_(const PeerState &peer) const {
+  return peer.last_state_sent_sequence != 0 &&
+         (peer.last_ack_boot_id != peer.last_state_sent_boot_id ||
+          peer.last_ack_sequence != peer.last_state_sent_sequence);
+}
+
+void CFXSyncComponent::handle_state_ack_(PeerState &peer,
+                                         const CFXSyncPacket &packet) {
+  if (packet.acked_boot_id != peer.last_state_sent_boot_id ||
+      packet.acked_sequence != peer.last_state_sent_sequence) {
+    return;
+  }
+
+  peer.last_ack_boot_id = packet.acked_boot_id;
+  peer.last_ack_sequence = packet.acked_sequence;
+  peer.last_ack_ms = millis();
+  peer.missed_acks = 0;
+
+  bool has_pending = false;
+  for (const auto &candidate : this->peers_) {
+    if (this->peer_accepts_leader_state_(candidate) &&
+        this->has_pending_ack_(candidate)) {
+      has_pending = true;
+      break;
+    }
+  }
+  if (!this->has_peer_send_warning_() && !has_pending &&
+      this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES) {
+    this->status_clear_warning();
+  } else {
+    this->check_ack_health_();
+  }
+}
+
+void CFXSyncComponent::check_ack_health_() {
+  if (this->role_ != CFXSyncRole::LEADER) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  uint8_t missing = 0;
+  for (auto &peer : this->peers_) {
+    if (!this->peer_accepts_leader_state_(peer) ||
+        !this->has_pending_ack_(peer)) {
+      continue;
+    }
+    if (now - peer.last_state_sent_ms >= ACK_WARNING_MS) {
+      missing++;
+      if (peer.missed_acks < UINT32_MAX) {
+        peer.missed_acks++;
+      }
+    }
+  }
+
+  if (missing == 0) {
+    return;
+  }
+  if (this->last_ack_warning_log_ms_ == 0 ||
+      now - this->last_ack_warning_log_ms_ >= 5000) {
+    ESP_LOGW(TAG, "CFX Sync follower ACK missing from %u peer(s)",
+             static_cast<unsigned>(missing));
+    this->last_ack_warning_log_ms_ = now;
+  }
+  this->status_set_warning();
+}
+
 void CFXSyncComponent::handle_send_result_(esp_err_t result) {
   if (result == ESP_OK) {
     this->consecutive_send_failures_ = 0;
+    bool has_pending = false;
+    for (const auto &peer : this->peers_) {
+      if (this->peer_accepts_leader_state_(peer) &&
+          this->has_pending_ack_(peer)) {
+        has_pending = true;
+        break;
+      }
+    }
     if (this->role_ == CFXSyncRole::LEADER &&
-        !this->has_peer_send_warning_()) {
+        !this->has_peer_send_warning_() && !has_pending) {
       this->status_clear_warning();
     }
     return;
@@ -592,9 +694,17 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
                                                 esp_err_t result) {
   if (result == ESP_OK) {
     peer.consecutive_send_failures = 0;
+    bool has_pending = false;
+    for (const auto &candidate : this->peers_) {
+      if (this->peer_accepts_leader_state_(candidate) &&
+          this->has_pending_ack_(candidate)) {
+        has_pending = true;
+        break;
+      }
+    }
     if (this->role_ == CFXSyncRole::LEADER &&
         this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES &&
-        !this->has_peer_send_warning_()) {
+        !this->has_peer_send_warning_() && !has_pending) {
       this->status_clear_warning();
     }
     return;

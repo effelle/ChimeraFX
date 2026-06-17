@@ -162,6 +162,7 @@ class CFXSyncComponent : public Component,
     uint32_t last_seen_ms{0};
     uint32_t last_state_sent_boot_id{0};
     uint32_t last_state_sent_sequence{0};
+    uint32_t last_state_sent_ms{0};
     uint32_t last_ack_boot_id{0};
     uint32_t last_ack_sequence{0};
     uint32_t last_ack_ms{0};
@@ -206,6 +207,9 @@ class CFXSyncComponent : public Component,
                            const CFXSyncLightSnapshot &snapshot,
                            const CFXSyncEffectState &effect,
                            const CFXSyncControlState &controls);
+  bool send_state_ack_(const uint8_t *destination,
+                       const CFXSyncPacket &packet,
+                       CFXSyncAckResult result);
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
@@ -226,6 +230,9 @@ class CFXSyncComponent : public Component,
   bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size);
   bool has_peer_send_warning_() const;
+  bool has_pending_ack_(const PeerState &peer) const;
+  void handle_state_ack_(PeerState &peer, const CFXSyncPacket &packet);
+  void check_ack_health_();
   void handle_send_result_(esp_err_t result);
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
   void handle_decode_failure_(CFXSyncDecodeResult result);
@@ -273,6 +280,7 @@ class CFXSyncComponent : public Component,
   uint8_t consecutive_send_failures_{0};
   uint32_t last_rejection_log_ms_{0};
   uint32_t last_send_failure_log_ms_{0};
+  uint32_t last_ack_warning_log_ms_{0};
   uint32_t sent_packets_{0};
   uint32_t received_packets_{0};
   uint32_t malformed_packets_{0};

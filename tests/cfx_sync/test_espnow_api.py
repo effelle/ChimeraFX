@@ -459,6 +459,124 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->send_packet_to_peer_(peer, packet)", source)
         self.assertNotIn("attempted = true;", source)
 
+    def test_follower_state_ack_is_sent_after_remote_apply(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bool send_state_ack_(const uint8_t *destination,\n"
+            "                       const CFXSyncPacket &packet,\n"
+            "                       CFXSyncAckResult result);",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"packet\.type == CFXSyncPacketType::STATE &&.*?"
+                r"this->apply_remote_state_\(packet\);"
+                r"\s*this->send_state_ack_\(info\.src_addr, packet,\s*"
+                r"CFXSyncAckResult::APPLIED\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_state_ack_is_encoded_to_destination_mac(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_ack_"
+                r"\(\s*const uint8_t \*destination,\s*"
+                r"const CFXSyncPacket &packet,\s*"
+                r"CFXSyncAckResult result\).*?"
+                r"std::array<uint8_t, 6> mac\{\};.*?"
+                r"memcpy\(mac\.data\(\), destination, mac\.size\(\)\);.*?"
+                r"CFXSyncPacketCodec::encode_state_ack\("
+                r"\s*this->group_hash_, this->boot_id_, "
+                r"this->next_sequence_\(\),\s*"
+                r"packet\.boot_id, packet\.sequence, result, "
+                r"this->key_, ack\).*?"
+                r"return this->send_packet_to_\(mac, ack\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_state_ack_path_is_leader_only(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void handle_state_ack_(PeerState &peer, const CFXSyncPacket &packet);",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::STATE_ACK\) \{"
+                r"\s*if \(this->role_ == CFXSyncRole::LEADER\) \{"
+                r"\s*this->handle_state_ack_\(\*peer, packet\);"
+                r"\s*\}"
+                r"\s*return true;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_handle_state_ack_matches_last_sent_before_clearing(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool has_pending_ack_(const PeerState &peer) const;", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::handle_state_ack_"
+                r"\(\s*PeerState &peer,\s*const CFXSyncPacket &packet\).*?"
+                r"packet\.acked_boot_id != peer\.last_state_sent_boot_id \|\|"
+                r"\s*packet\.acked_sequence != peer\.last_state_sent_sequence.*?"
+                r"return;.*?"
+                r"peer\.last_ack_boot_id = packet\.acked_boot_id;.*?"
+                r"peer\.last_ack_sequence = packet\.acked_sequence;.*?"
+                r"peer\.last_ack_ms = millis\(\);.*?"
+                r"peer\.missed_acks = 0;.*?"
+                r"!this->has_peer_send_warning_\(\).*?"
+                r"!this->has_pending_ack_\(.*?"
+                r"this->status_clear_warning\(\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_ack_health_uses_pending_ack_and_warning_age(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("void check_ack_health_();", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::has_pending_ack_"
+                r"\(\s*const PeerState &peer\) const \{.*?"
+                r"peer\.last_state_sent_sequence != 0.*?"
+                r"peer\.last_ack_boot_id != peer\.last_state_sent_boot_id \|\|"
+                r"\s*peer\.last_ack_sequence != peer\.last_state_sent_sequence",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::check_ack_health_\(\).*?"
+                r"this->peer_accepts_leader_state_\(peer\).*?"
+                r"this->has_pending_ack_\(peer\).*?"
+                r"now - peer\.last_state_sent_ms >= ACK_WARNING_MS.*?"
+                r"peer\.missed_acks\+\+.*?"
+                r"ESP_LOGW\(TAG, \"CFX Sync follower ACK missing.*?"
+                r"this->status_set_warning\(\)",
+                re.DOTALL,
+            ),
+        )
+
     def test_runtime_stores_ordered_light_collection(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
