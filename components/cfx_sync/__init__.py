@@ -10,8 +10,8 @@ from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32", "light"]
-AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256", "espnow"]
+DEPENDENCIES = ["esp32", "espnow", "light"]
+AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256"]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
@@ -294,7 +294,7 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFXSyncComponent),
-            cv.GenerateID(CONF_ESPNOW_ID): cv.declare_id(
+            cv.Required(CONF_ESPNOW_ID): cv.use_id(
                 espnow.ESPNowComponent
             ),
             cv.Required(CONF_ROLE): cv.one_of(
@@ -326,8 +326,7 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    espnow_var = cg.new_Pvariable(config[CONF_ESPNOW_ID])
-    await cg.register_component(espnow_var, {})
+    espnow_var = await cg.get_variable(config[CONF_ESPNOW_ID])
     if CORE.using_arduino:
         cg.add_library("WiFi", None)
     cg.add_define("USE_ESPNOW")

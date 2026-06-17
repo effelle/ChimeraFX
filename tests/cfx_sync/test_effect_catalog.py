@@ -363,7 +363,7 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                cfx_sync.cg, "new_Pvariable", side_effect=[var, espnow_var]
+                cfx_sync.cg, "new_Pvariable", return_value=var
             ),
             patch.object(
                 type(cfx_sync.CORE),
@@ -380,7 +380,7 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
                 cfx_sync.cg,
                 "get_variable",
                 new=AsyncMock(
-                    side_effect=[light_a, light_b]
+                    side_effect=[espnow_var, light_a, light_b]
                 ),
             ),
             patch.object(cfx_sync.cg, "add_define"),

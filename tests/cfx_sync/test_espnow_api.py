@@ -92,35 +92,35 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_schema_hides_espnow_and_peer_public_config(self):
+    def test_schema_requires_public_espnow_and_hides_peer_config(self):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
-        self.assertIn('AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256", "espnow"]', py_source)
-        self.assertIn('DEPENDENCIES = ["esp32", "light"]', py_source)
+        self.assertIn('AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256"]', py_source)
+        self.assertIn('DEPENDENCIES = ["esp32", "espnow", "light"]', py_source)
         self.assertIn(
-            'cv.GenerateID(CONF_ESPNOW_ID): cv.declare_id(\n'
+            'cv.Required(CONF_ESPNOW_ID): cv.use_id(\n'
             '                espnow.ESPNowComponent\n'
             '            )',
             py_source,
         )
         self.assertIn('cv.Optional(CONF_PEER): cv.invalid(', py_source)
         self.assertNotIn("cv.Required(CONF_PEER)", py_source)
-        self.assertNotIn("cv.Required(CONF_ESPNOW_ID)", py_source)
 
-    def test_codegen_creates_private_espnow_component(self):
+    def test_codegen_uses_public_espnow_component(self):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
         self.assertRegex(
             py_source,
             re.compile(
-                r"espnow_var = cg\.new_Pvariable\(config\[CONF_ESPNOW_ID\]\).*?"
-                r"await cg\.register_component\(espnow_var, \{\}\).*?"
+                r"espnow_var = await cg\.get_variable\(config\[CONF_ESPNOW_ID\]\).*?"
                 r'cg\.add_define\("USE_ESPNOW"\).*?'
                 r"cg\.add\(espnow_var\.set_auto_add_peer\(False\)\).*?"
                 r"cg\.add\(var\.set_espnow\(espnow_var\)\)",
                 re.DOTALL,
             ),
         )
+        self.assertNotIn("cg.new_Pvariable(config[CONF_ESPNOW_ID])", py_source)
+        self.assertNotIn("await cg.register_component(espnow_var, {})", py_source)
         self.assertNotIn("require_wake_loop_threadsafe", py_source)
         self.assertNotIn("cg.add(var.set_peer", py_source)
         self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
