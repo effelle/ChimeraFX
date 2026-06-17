@@ -340,15 +340,16 @@ bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
-  bool attempted = false;
+  bool sent = false;
   for (auto &peer : this->peers_) {
     if (!this->peer_accepts_leader_state_(peer)) {
       continue;
     }
-    attempted = true;
-    this->send_state_to_peer_(peer, snapshot, effect, controls);
+    if (this->send_state_to_peer_(peer, snapshot, effect, controls)) {
+      sent = true;
+    }
   }
-  return attempted;
+  return sent;
 }
 
 bool CFXSyncComponent::peer_accepts_leader_state_(
@@ -383,7 +384,7 @@ bool CFXSyncComponent::send_state_to_peer_(
           true, effect, controls.has_any(), controls, this->key_, packet)) {
     return false;
   }
-  if (!this->send_packet_to_(peer.mac, packet)) {
+  if (!this->send_packet_to_peer_(peer, packet)) {
     return false;
   }
   peer.last_state_sent_boot_id = this->boot_id_;
@@ -438,6 +439,25 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
       });
   if (result != ESP_OK) {
     this->handle_send_result_(result);
+    return false;
+  }
+  this->sent_packets_++;
+  return true;
+}
+
+bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
+                                            std::vector<uint8_t> &packet) {
+  if (this->espnow_ == nullptr) {
+    return false;
+  }
+
+  const esp_err_t result = this->espnow_->send(
+      peer.mac.data(), packet,
+      [this, &peer](esp_err_t send_result) {
+        this->handle_peer_send_result_(peer, send_result);
+      });
+  if (result != ESP_OK) {
+    this->handle_peer_send_result_(peer, result);
     return false;
   }
   this->sent_packets_++;
@@ -531,10 +551,21 @@ bool CFXSyncComponent::accept_sequence_(PeerState &peer, uint32_t boot_id,
   return true;
 }
 
+bool CFXSyncComponent::has_peer_send_warning_() const {
+  for (const auto &peer : this->peers_) {
+    if (peer.active && peer.consecutive_send_failures >=
+                           MAX_CONSECUTIVE_SEND_FAILURES) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void CFXSyncComponent::handle_send_result_(esp_err_t result) {
   if (result == ESP_OK) {
     this->consecutive_send_failures_ = 0;
-    if (this->role_ == CFXSyncRole::LEADER) {
+    if (this->role_ == CFXSyncRole::LEADER &&
+        !this->has_peer_send_warning_()) {
       this->status_clear_warning();
     }
     return;
@@ -552,6 +583,39 @@ void CFXSyncComponent::handle_send_result_(esp_err_t result) {
   }
   if (this->role_ == CFXSyncRole::LEADER &&
       this->consecutive_send_failures_ >=
+          MAX_CONSECUTIVE_SEND_FAILURES) {
+    this->status_set_warning();
+  }
+}
+
+void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
+                                                esp_err_t result) {
+  if (result == ESP_OK) {
+    peer.consecutive_send_failures = 0;
+    if (this->role_ == CFXSyncRole::LEADER &&
+        this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES &&
+        !this->has_peer_send_warning_()) {
+      this->status_clear_warning();
+    }
+    return;
+  }
+
+  peer.send_failures++;
+  this->send_failures_++;
+  if (peer.consecutive_send_failures < UINT8_MAX) {
+    peer.consecutive_send_failures++;
+  }
+  const uint32_t now = millis();
+  if (peer.last_send_failure_log_ms == 0 ||
+      now - peer.last_send_failure_log_ms >= 5000) {
+    char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+    format_mac_addr_upper(peer.mac.data(), peer_buf);
+    ESP_LOGW(TAG, "ESP-NOW send to peer %s failed: %s", peer_buf,
+             esp_err_to_name(result));
+    peer.last_send_failure_log_ms = now;
+  }
+  if (this->role_ == CFXSyncRole::LEADER &&
+      peer.consecutive_send_failures >=
           MAX_CONSECUTIVE_SEND_FAILURES) {
     this->status_set_warning();
   }

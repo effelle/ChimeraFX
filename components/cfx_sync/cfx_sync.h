@@ -166,6 +166,9 @@ class CFXSyncComponent : public Component,
     uint32_t last_ack_sequence{0};
     uint32_t last_ack_ms{0};
     uint32_t missed_acks{0};
+    uint8_t consecutive_send_failures{0};
+    uint32_t send_failures{0};
+    uint32_t last_send_failure_log_ms{0};
   };
 
   struct EffectLogState {
@@ -209,6 +212,8 @@ class CFXSyncComponent : public Component,
   bool send_packet_(std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,
                        std::vector<uint8_t> &packet);
+  bool send_packet_to_peer_(PeerState &peer,
+                            std::vector<uint8_t> &packet);
   CFXSyncNodeRole local_node_role_() const;
   uint16_t local_capabilities_() const;
   uint32_t next_sequence_();
@@ -220,7 +225,9 @@ class CFXSyncComponent : public Component,
                         uint32_t sequence);
   bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size);
+  bool has_peer_send_warning_() const;
   void handle_send_result_(esp_err_t result);
+  void handle_peer_send_result_(PeerState &peer, esp_err_t result);
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
   void schedule_follower_recovery_();

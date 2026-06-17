@@ -399,6 +399,66 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("peer.last_state_sent_sequence = sequence;", source)
         self.assertIn("CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER", source)
 
+    def test_fanout_state_send_health_is_tracked_per_peer(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("uint8_t consecutive_send_failures{0};", header)
+        self.assertIn("uint32_t send_failures{0};", header)
+        self.assertIn("uint32_t last_send_failure_log_ms{0};", header)
+        self.assertIn("bool has_peer_send_warning_() const;", header)
+        self.assertIn("void handle_peer_send_result_(PeerState &peer, esp_err_t result);", header)
+        self.assertIn(
+            "bool send_packet_to_peer_(PeerState &peer,\n"
+            "                            std::vector<uint8_t> &packet);",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_packet_to_peer_"
+                r"\(\s*PeerState &peer,\s*std::vector<uint8_t> &packet\).*?"
+                r"\[this, &peer\]\(esp_err_t send_result\).*?"
+                r"this->handle_peer_send_result_\(peer, send_result\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::handle_peer_send_result_"
+                r"\(\s*PeerState &peer,\s*esp_err_t result\).*?"
+                r"peer\.consecutive_send_failures = 0;.*?"
+                r"!this->has_peer_send_warning_\(\).*?"
+                r"this->status_clear_warning\(\).*?"
+                r"peer\.send_failures\+\+;.*?"
+                r"peer\.consecutive_send_failures\+\+;.*?"
+                r"format_mac_addr_upper\(peer\.mac\.data\(\), peer_buf\).*?"
+                r"peer\.consecutive_send_failures >=\s*"
+                r"MAX_CONSECUTIVE_SEND_FAILURES.*?"
+                r"this->status_set_warning\(\)",
+                re.DOTALL,
+            ),
+        )
+
+    def test_fanout_return_value_reflects_successfully_queued_peer_send(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
+                r"bool sent = false;.*?"
+                r"if \(this->send_state_to_peer_"
+                r"\(peer, snapshot, effect, controls\)\) \{.*?"
+                r"sent = true;.*?"
+                r"return sent;",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("this->send_packet_to_peer_(peer, packet)", source)
+        self.assertNotIn("attempted = true;", source)
+
     def test_runtime_stores_ordered_light_collection(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
