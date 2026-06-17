@@ -118,6 +118,7 @@ CONF_ON_BEGIN    = "on_begin"
 CONF_ON_STOP     = "on_stop"
 CONF_ON_COMPLETE = "on_complete"
 CONF_ON_REACH = "on_reach"
+CONF_CFX_STRIP_TAG = "_cfx_strip_tag"
 
 CONF_POSITION = "position"
 
@@ -247,6 +248,7 @@ CFX_EFFECTS = [
         cv.Optional(CONF_SET_INOUT_DURATION): cv.float_range(min=0.0),
         cv.Optional(CONF_SET_OUTRO): cv.int_range(min=0, max=27),  # CFX-024: IntroMode enum now has 28 entries (0-27)
         cv.Optional(CONF_SET_FORCE_WHITE): cv.boolean,
+        cv.Optional(CONF_CFX_STRIP_TAG): cv.string_strict,
         cv.Optional(CONF_ON_START): automation.validate_automation(
             {
                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(CfxOnStartTrigger),
@@ -289,6 +291,8 @@ async def cfx_effect_to_code(config, effect_id, is_virtual_segment=False):
     
     if is_virtual_segment:
         cg.add(effect.set_virtual_segment(True))
+    if CONF_CFX_STRIP_TAG in config:
+        cg.add(effect.set_strip_tag(config[CONF_CFX_STRIP_TAG]))
         
     if CONF_SPEED in config:
         speed_var = await cg.get_variable(config[CONF_SPEED])

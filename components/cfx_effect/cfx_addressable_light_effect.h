@@ -724,7 +724,11 @@ public:
   static const std::vector<CfxOnReachTrigger *> empty_reach_triggers_;
 
 
-  void set_strip_tag(const std::string &tag) { if (act_) act_->strip_tag = tag; }
+  void set_strip_tag(const std::string &tag) {
+    this->configured_strip_tag_ = tag;
+    if (act_)
+      act_->strip_tag = tag;
+  }
 
   void set_is_sequence_outro(bool v) { if (act_) act_->is_sequence_outro = v; }
   void set_suppress_positional_events(bool v) {
@@ -759,6 +763,7 @@ public:
   // controller_ is set at codegen time via set_controller(), before start()
   // is ever called. Copied into act_->controller on each start().
   CFXControl *controller_{nullptr};
+  std::string configured_strip_tag_{};
 
 
 

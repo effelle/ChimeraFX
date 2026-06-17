@@ -1034,11 +1034,13 @@ void CFXAddressableLightEffect::start() {
   }
 
 #ifdef USE_CFX_EVENTS
-  // Derive act_->strip_tag early — needed by both cfx_begin and cfx_start
-  // events.
+  // Resolve act_->strip_tag early — needed by both cfx_begin and cfx_start
+  // events. Prefer the codegen-provided ChimeraFX event tag because ESPHome's
+  // object id normalization can differ from the tag registered for events.
   {
-    auto *ls = this->get_light_state();
-    if (ls != nullptr) {
+    if (!this->configured_strip_tag_.empty()) {
+      act_->strip_tag = this->configured_strip_tag_;
+    } else if (auto *ls = this->get_light_state(); ls != nullptr) {
       char id_buf[128] = {};
       ls->get_object_id_to(std::span(id_buf));
       act_->strip_tag = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));

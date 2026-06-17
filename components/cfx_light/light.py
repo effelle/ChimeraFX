@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 22
+CFX_LIGHT_SCHEMA_REV = 23
 
 import esphome.codegen as cg
 from esphome.components import light, event, sensor, select, text_sensor
@@ -106,6 +106,17 @@ CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
 AUTO_LOAD = ["event", "cfx_effect", "sensor", "select", "text_sensor"]
 _LOGGER = logging.getLogger(__name__)
+
+
+def _cfx_slugify(name: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+
+
+def _cfx_event_tag(config_id, name: str) -> str:
+    if name:
+        return _cfx_slugify(str(name))
+    return str(getattr(config_id, "id", config_id))
+
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
@@ -1216,6 +1227,7 @@ def _inject_all_effects(config):
             light_update_interval = "14ms"
 
     user_effects = list(config.get(CONF_EFFECTS, []))
+    strip_tag = _cfx_event_tag(config.get(CONF_ID), config.get(CONF_NAME, ""))
 
     for eff in user_effects:
         if not isinstance(eff, dict):
@@ -1223,6 +1235,8 @@ def _inject_all_effects(config):
         eff_cfx = eff.get("addressable_cfx")
         if isinstance(eff_cfx, dict) and light_update_interval is not None:
             eff_cfx.setdefault(CONF_UPDATE_INTERVAL, light_update_interval)
+        if isinstance(eff_cfx, dict) and strip_tag:
+            eff_cfx.setdefault("_cfx_strip_tag", strip_tag)
 
     if not config.get(CONF_ALL_EFFECTS, True):
         config[CONF_EFFECTS] = user_effects
@@ -1274,6 +1288,8 @@ def _inject_all_effects(config):
         if name in user_names:
             continue
         effect_data = {"effect_id": eid, CONF_NAME: name}
+        if strip_tag:
+            effect_data["_cfx_strip_tag"] = strip_tag
         if light_update_interval is not None:
             effect_data[CONF_UPDATE_INTERVAL] = light_update_interval
         if cat != "sep" and eid not in [158, 159, 161]:
@@ -2149,6 +2165,12 @@ async def to_code(config):
         )
         singleton_var = cg.new_Pvariable(singleton_id, "CFX Segment Singleton")
         cg.add(singleton_var.set_virtual_segment(True))
+        seg_tag = _cfx_event_tag(
+            seg[CONF_SEGMENT_ID],
+            seg.get(CONF_SEGMENT_NAME, ""),
+        )
+        if seg_tag:
+            cg.add(singleton_var.set_strip_tag(seg_tag))
 
         # Ensure the stub header is included in the generated C++ output
         cg.add_global(
@@ -2189,10 +2211,6 @@ async def to_code(config):
         cg.add(var.add_segment_light_state(light_state))
 
     # --- Phase 3: Event Entity Setup (CFX-037) ---
-    import re
-    def _cfx_slugify(name: str) -> str:
-        return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
-        
     import esphome.core as core
     progress_step = 10
     milestones = list(range(progress_step, 101, progress_step))
@@ -2207,12 +2225,12 @@ async def to_code(config):
         for seg in segments:
             seg_id_obj = seg[CONF_SEGMENT_ID]
             seg_name = seg.get(CONF_SEGMENT_NAME, "")
-            seg_tag = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
+            seg_tag = _cfx_event_tag(seg_id_obj, seg_name)
             tags_to_register.append(seg_tag)
     else:
         parent_obj = config[CONF_ID]
         parent_name = config.get(CONF_NAME, "")
-        parent_tag = _cfx_slugify(str(parent_name)) if parent_name else str(parent_obj.id)
+        parent_tag = _cfx_event_tag(parent_obj, parent_name)
         tags_to_register.append(parent_tag)
         
     for tag in tags_to_register:
