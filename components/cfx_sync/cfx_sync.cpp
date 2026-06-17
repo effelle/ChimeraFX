@@ -17,6 +17,19 @@ namespace cfx_sync {
 
 static const char *const TAG = "cfx_sync";
 
+const char *node_role_name(CFXSyncNodeRole role) {
+  switch (role) {
+    case CFXSyncNodeRole::LEADER:
+      return "leader";
+    case CFXSyncNodeRole::FOLLOWER:
+      return "follower";
+    case CFXSyncNodeRole::REMOTE:
+      return "remote";
+    default:
+      return "unknown";
+  }
+}
+
 class RemoteApplyGuard {
  public:
   explicit RemoteApplyGuard(bool &flag) : flag_(flag) { this->flag_ = true; }
@@ -133,9 +146,6 @@ void CFXSyncComponent::setup() {
 }
 
 void CFXSyncComponent::dump_config() {
-  char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
-  format_mac_addr_upper(this->peer_.data(), peer_buf);
-  const char *peer_text = this->has_static_peer_ ? peer_buf : "<discovery>";
   const uint32_t packet_age =
       this->last_valid_packet_ms_ == 0
           ? 0
@@ -144,12 +154,19 @@ void CFXSyncComponent::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "CFX Sync:\n"
                 "  Role: %s\n"
-                "  Static peer: %s\n"
+                "  Discovery: group authenticated\n"
                 "  Group hash: %08" PRIX32 "\n"
                 "  Heartbeat: %" PRIu32 " ms\n"
-                "  Last valid packet age: %" PRIu32 " ms",
-                this->role_name_(), peer_text, this->group_hash_,
-                this->heartbeat_ms_, packet_age);
+                "  Last valid packet age: %" PRIu32 " ms\n"
+                "  Peers: active=%u followers=%u remotes=%u\n"
+                "  ACK: pending=%u missed=%" PRIu32,
+                this->role_name_(), this->group_hash_,
+                this->heartbeat_ms_, packet_age,
+                static_cast<unsigned>(this->active_peer_count_()),
+                static_cast<unsigned>(this->follower_peer_count_()),
+                static_cast<unsigned>(this->remote_peer_count_()),
+                static_cast<unsigned>(this->pending_ack_count_()),
+                this->missed_ack_count_());
   ESP_LOGCONFIG(TAG, "  Lights: %u",
                 static_cast<unsigned>(this->lights_.size()));
   for (size_t i = 0; i < this->lights_.size(); i++) {
@@ -551,10 +568,16 @@ CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
     peer.node_role = role;
     peer.capabilities = capabilities;
     peer.last_seen_ms = millis();
+    char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+    format_mac_addr_upper(peer.mac.data(), peer_buf);
+    ESP_LOGI(TAG, "Discovered CFX Sync %s peer %s in group %08" PRIX32,
+             node_role_name(role), peer_buf, this->group_hash_);
     return &peer;
   }
 
-  this->log_rejection_("Ignoring peer because runtime peer table is full");
+  char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+  format_mac_addr_upper(mac, peer_buf);
+  ESP_LOGW(TAG, "CFX Sync peer table full; ignoring %s", peer_buf);
   return nullptr;
 }
 
@@ -603,6 +626,55 @@ bool CFXSyncComponent::has_pending_ack_(const PeerState &peer) const {
   return peer.last_state_sent_sequence != 0 &&
          (peer.last_ack_boot_id != peer.last_state_sent_boot_id ||
           peer.last_ack_sequence != peer.last_state_sent_sequence);
+}
+
+uint8_t CFXSyncComponent::active_peer_count_() const {
+  uint8_t count = 0;
+  for (const auto &peer : this->peers_) {
+    if (peer.active) {
+      count++;
+    }
+  }
+  return count;
+}
+
+uint8_t CFXSyncComponent::follower_peer_count_() const {
+  uint8_t count = 0;
+  for (const auto &peer : this->peers_) {
+    if (peer.active && peer.node_role == CFXSyncNodeRole::FOLLOWER) {
+      count++;
+    }
+  }
+  return count;
+}
+
+uint8_t CFXSyncComponent::remote_peer_count_() const {
+  uint8_t count = 0;
+  for (const auto &peer : this->peers_) {
+    if (peer.active && peer.node_role == CFXSyncNodeRole::REMOTE) {
+      count++;
+    }
+  }
+  return count;
+}
+
+uint8_t CFXSyncComponent::pending_ack_count_() const {
+  uint8_t count = 0;
+  for (const auto &peer : this->peers_) {
+    if (this->peer_accepts_leader_state_(peer) &&
+        this->has_pending_ack_(peer)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+uint32_t CFXSyncComponent::missed_ack_count_() const {
+  uint32_t count = 0;
+  for (const auto &peer : this->peers_) {
+    count += peer.missed_acks;
+  }
+  return count;
 }
 
 void CFXSyncComponent::handle_state_ack_(PeerState &peer,

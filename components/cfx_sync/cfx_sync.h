@@ -231,6 +231,11 @@ class CFXSyncComponent : public Component,
                       uint8_t size);
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
+  uint8_t active_peer_count_() const;
+  uint8_t follower_peer_count_() const;
+  uint8_t remote_peer_count_() const;
+  uint8_t pending_ack_count_() const;
+  uint32_t missed_ack_count_() const;
   void handle_state_ack_(PeerState &peer, const CFXSyncPacket &packet);
   void check_ack_health_();
   void handle_send_result_(esp_err_t result);

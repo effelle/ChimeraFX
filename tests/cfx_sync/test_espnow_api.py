@@ -865,12 +865,42 @@ class ESPNowAPITests(unittest.TestCase):
     def test_dump_config_lists_all_bound_lights(self):
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn('"  Discovery: group authenticated\\n"', source)
+        self.assertIn('"  Peers: active=%u followers=%u remotes=%u\\n"', source)
+        self.assertIn('"  ACK: pending=%u missed=%"', source)
+        self.assertIn("this->active_peer_count_()", source)
+        self.assertIn("this->follower_peer_count_()", source)
+        self.assertIn("this->remote_peer_count_()", source)
+        self.assertIn("this->pending_ack_count_()", source)
+        self.assertIn("this->missed_ack_count_()", source)
         self.assertIn('"  Lights: %u"', source)
         self.assertIn(
             "for (size_t i = 0; i < this->lights_.size(); i++)",
             source,
         )
         self.assertIn('"    [%u] %s"', source)
+
+    def test_runtime_reports_discovered_peer_health(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        for helper in (
+            "uint8_t active_peer_count_() const;",
+            "uint8_t follower_peer_count_() const;",
+            "uint8_t remote_peer_count_() const;",
+            "uint8_t pending_ack_count_() const;",
+            "uint32_t missed_ack_count_() const;",
+        ):
+            self.assertIn(helper, header)
+
+        self.assertIn(
+            'ESP_LOGI(TAG, "Discovered CFX Sync %s peer %s in group %08" PRIX32',
+            source,
+        )
+        self.assertIn(
+            'ESP_LOGW(TAG, "CFX Sync peer table full; ignoring %s", peer_buf);',
+            source,
+        )
 
     def test_sync_component_has_no_renderer_or_effect_dependency(self):
         component_dir = ROOT / "components" / "cfx_sync"
