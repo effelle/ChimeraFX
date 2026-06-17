@@ -55,7 +55,12 @@ void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
   const CFXSyncNodeRole peer_role =
       this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
                                          : CFXSyncNodeRole::LEADER;
-  this->find_or_add_peer_(this->peer_.data(), peer_role, 0);
+  const uint16_t peer_capabilities =
+      peer_role == CFXSyncNodeRole::FOLLOWER
+          ? CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER
+          : CFXSyncPacketCodec::CAP_LIGHT_LEADER;
+  this->find_or_add_peer_(this->peer_.data(), peer_role,
+                          peer_capabilities);
 }
 
 void CFXSyncComponent::setup() {
@@ -93,7 +98,12 @@ void CFXSyncComponent::setup() {
   const CFXSyncNodeRole peer_role =
       this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
                                          : CFXSyncNodeRole::LEADER;
-  if (auto *peer = this->find_or_add_peer_(this->peer_.data(), peer_role, 0);
+  const uint16_t peer_capabilities =
+      peer_role == CFXSyncNodeRole::FOLLOWER
+          ? CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER
+          : CFXSyncPacketCodec::CAP_LIGHT_LEADER;
+  if (auto *peer = this->find_or_add_peer_(this->peer_.data(), peer_role,
+                                           peer_capabilities);
       peer != nullptr) {
     peer->registered = true;
   }
@@ -209,8 +219,7 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
     if (this->role_ == CFXSyncRole::LEADER &&
-        packet.node_role == CFXSyncNodeRole::FOLLOWER &&
-        (packet.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER)) {
+        this->peer_accepts_leader_state_(*peer)) {
       this->send_state_to_peer_(*peer);
     }
     return true;
@@ -233,7 +242,8 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->register_peer_(*peer);
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
-    if (this->role_ == CFXSyncRole::LEADER) {
+    if (this->role_ == CFXSyncRole::LEADER &&
+        this->peer_accepts_leader_state_(*peer)) {
       this->send_state_to_peer_(*peer);
     }
     return true;
@@ -302,26 +312,50 @@ bool CFXSyncComponent::send_state_() {
   if (leader == nullptr || this->effect_catalogs_.empty()) {
     return false;
   }
-  return this->send_state_(
-      capture_light_snapshot(*leader),
-      capture_effect_state(leader, this->effect_catalogs_[0]),
-      this->capture_control_state_(0));
+  const auto snapshot = capture_light_snapshot(*leader);
+  const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
+  const auto controls = this->capture_control_state_(0);
+  return this->send_state_to_followers_(snapshot, effect, controls);
 }
 
 bool CFXSyncComponent::send_state_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
-  std::vector<uint8_t> packet;
-  if (!CFXSyncPacketCodec::encode_state(
-          this->group_hash_, this->boot_id_, this->next_sequence_(),
-          snapshot.power, snapshot.brightness, snapshot.color_brightness,
-          snapshot.red, snapshot.green, snapshot.blue, snapshot.white,
-          snapshot.has_white, true, effect, controls.has_any(), controls,
-          this->key_, packet)) {
+  return this->send_state_to_followers_(snapshot, effect, controls);
+}
+
+bool CFXSyncComponent::send_state_to_followers_() {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr || this->effect_catalogs_.empty()) {
     return false;
   }
-  return this->send_packet_(packet);
+  const auto snapshot = capture_light_snapshot(*leader);
+  const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
+  const auto controls = this->capture_control_state_(0);
+  return this->send_state_to_followers_(snapshot, effect, controls);
+}
+
+bool CFXSyncComponent::send_state_to_followers_(
+    const CFXSyncLightSnapshot &snapshot,
+    const CFXSyncEffectState &effect,
+    const CFXSyncControlState &controls) {
+  bool attempted = false;
+  for (auto &peer : this->peers_) {
+    if (!this->peer_accepts_leader_state_(peer)) {
+      continue;
+    }
+    attempted = true;
+    this->send_state_to_peer_(peer, snapshot, effect, controls);
+  }
+  return attempted;
+}
+
+bool CFXSyncComponent::peer_accepts_leader_state_(
+    const PeerState &peer) const {
+  return peer.active && peer.registered &&
+         peer.node_role == CFXSyncNodeRole::FOLLOWER &&
+         (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
 }
 
 bool CFXSyncComponent::send_state_to_peer_(PeerState &peer) {
@@ -333,7 +367,13 @@ bool CFXSyncComponent::send_state_to_peer_(PeerState &peer) {
   const auto snapshot = capture_light_snapshot(*leader);
   const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
   const auto controls = this->capture_control_state_(0);
+  return this->send_state_to_peer_(peer, snapshot, effect, controls);
+}
 
+bool CFXSyncComponent::send_state_to_peer_(
+    PeerState &peer, const CFXSyncLightSnapshot &snapshot,
+    const CFXSyncEffectState &effect,
+    const CFXSyncControlState &controls) {
   std::vector<uint8_t> packet;
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(

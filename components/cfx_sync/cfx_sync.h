@@ -193,7 +193,16 @@ class CFXSyncComponent : public Component,
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
                    const CFXSyncControlState &controls);
+  bool send_state_to_followers_();
+  bool send_state_to_followers_(const CFXSyncLightSnapshot &snapshot,
+                                const CFXSyncEffectState &effect,
+                                const CFXSyncControlState &controls);
+  bool peer_accepts_leader_state_(const PeerState &peer) const;
   bool send_state_to_peer_(PeerState &peer);
+  bool send_state_to_peer_(PeerState &peer,
+                           const CFXSyncLightSnapshot &snapshot,
+                           const CFXSyncEffectState &effect,
+                           const CFXSyncControlState &controls);
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();

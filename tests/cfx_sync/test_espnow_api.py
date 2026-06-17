@@ -304,9 +304,10 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_\(\) \{.*?"
-                r"this->send_state_\(\s*capture_light_snapshot\(\*leader\),"
-                r"\s*capture_effect_state\(leader, this->effect_catalogs_\[0\]\),"
-                r"\s*this->capture_control_state_\(0\)\);",
+                r"const auto snapshot = capture_light_snapshot\(\*leader\);.*?"
+                r"const auto effect = capture_effect_state\(leader, this->effect_catalogs_\[0\]\);.*?"
+                r"const auto controls = this->capture_control_state_\(0\);.*?"
+                r"this->send_state_to_followers_\(snapshot, effect, controls\);",
                 re.DOTALL,
             ),
         )
@@ -317,8 +318,10 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
                 r"const CFXSyncControlState &controls\).*?"
-                r"snapshot\.has_white, true, effect, controls\.has_any\(\), "
-                r"controls,\s*this->key_, packet",
+                r"this->send_state_to_followers_\(snapshot, effect, controls\);.*?"
+                r"bool CFXSyncComponent::send_state_to_peer_\(.*?"
+                r"snapshot\.has_white,\s*true,\s*effect,\s*"
+                r"controls\.has_any\(\),\s*controls,\s*this->key_, packet",
                 re.DOTALL,
             ),
         )
@@ -327,6 +330,74 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("this->send_state_();", source)
         self.assertIn("this->send_state_(snapshot, effect, controls);", source)
+
+    def test_leader_state_send_paths_fan_out_to_discovered_followers(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool send_state_to_followers_();", header)
+        self.assertIn("bool peer_accepts_leader_state_(const PeerState &peer) const;", header)
+        self.assertIn(
+            "bool send_state_to_peer_(PeerState &peer,\n"
+            "                           const CFXSyncLightSnapshot &snapshot,\n"
+            "                           const CFXSyncEffectState &effect,\n"
+            "                           const CFXSyncControlState &controls);",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_\(\) \{.*?"
+                r"const auto snapshot = capture_light_snapshot\(\*leader\);.*?"
+                r"const auto effect = capture_effect_state\(leader, this->effect_catalogs_\[0\]\);.*?"
+                r"const auto controls = this->capture_control_state_\(0\);.*?"
+                r"return this->send_state_to_followers_\(snapshot, effect, controls\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_\(\s*"
+                r"const CFXSyncLightSnapshot &snapshot,\s*"
+                r"const CFXSyncEffectState &effect,\s*"
+                r"const CFXSyncControlState &controls\).*?"
+                r"return this->send_state_to_followers_\(snapshot, effect, controls\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_followers_\(\s*"
+                r"const CFXSyncLightSnapshot &snapshot,\s*"
+                r"const CFXSyncEffectState &effect,\s*"
+                r"const CFXSyncControlState &controls\).*?"
+                r"for \(auto &peer : this->peers_\).*?"
+                r"this->peer_accepts_leader_state_\(peer\).*?"
+                r"this->send_state_to_peer_\(peer, snapshot, effect, controls\)",
+                re.DOTALL,
+            ),
+        )
+
+    def test_leader_state_target_selection_requires_registered_light_followers(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::peer_accepts_leader_state_"
+                r"\(\s*const PeerState &peer\) const \{.*?"
+                r"peer\.active.*?"
+                r"peer\.registered.*?"
+                r"peer\.node_role == CFXSyncNodeRole::FOLLOWER.*?"
+                r"peer\.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("peer.last_state_sent_boot_id = this->boot_id_;", source)
+        self.assertIn("peer.last_state_sent_sequence = sequence;", source)
+        self.assertIn("CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER", source)
 
     def test_runtime_stores_ordered_light_collection(self):
         header = HEADER.read_text(encoding="utf-8")
