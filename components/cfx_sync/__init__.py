@@ -274,17 +274,6 @@ def _fnv1a_32(value):
 
 def _final_validate(config):
     final_config = full_config.get()
-    espnow_config = None
-    try:
-        espnow_config = final_config.get_config_for_path(["espnow"])
-    except (cv.Invalid, KeyError):
-        pass
-    if espnow_config is not None:
-        raise cv.Invalid(
-            "cfx_sync owns ESP-NOW internally; remove the top-level "
-            "espnow: block"
-        )
-
     all_lights = final_config.get_config_for_path(["light"])
     effect_catalogs = []
     control_ids = []

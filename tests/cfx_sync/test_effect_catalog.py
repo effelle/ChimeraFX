@@ -313,20 +313,27 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    def test_final_validate_rejects_manual_espnow_component(self):
+    def test_final_validate_allows_autoloaded_espnow_domain(self):
         final_config = _FakeFullConfig(
-            lights=[],
+            lights=[
+                {
+                    "platform": "addressable_lambda",
+                    "id": light_id("direct"),
+                    "effects": [],
+                }
+            ],
             espnow={"auto_add_peer": False},
         )
+        config = {"lights": [light_id("direct")]}
 
         token = cfx_sync.full_config.set(final_config)
         try:
-            with self.assertRaisesRegex(cv.Invalid, "owns ESP-NOW"):
-                cfx_sync._final_validate(
-                    {"lights": [light_id("missing")]}
-                )
+            result = cfx_sync._final_validate(config)
         finally:
             cfx_sync.full_config.reset(token)
+
+        self.assertIs(result, config)
+        self.assertEqual(config["_effect_catalogs"], [[]])
 
     async def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
         emitted = []
