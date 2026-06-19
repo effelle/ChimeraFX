@@ -152,6 +152,8 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
   static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
+  static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
+  static constexpr uint32_t ACK_JITTER_SPREAD_MS = 40;
   static constexpr uint32_t PEER_SEND_COOLDOWN_MS = 10000;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -209,6 +211,7 @@ class CFXSyncComponent : public Component,
   bool send_state_to_followers_(const CFXSyncLightSnapshot &snapshot,
                                 const CFXSyncEffectState &effect,
                                 const CFXSyncControlState &controls);
+  void mark_state_sent_to_followers_(uint32_t sequence);
   bool peer_accepts_leader_state_(const PeerState &peer) const;
   bool send_state_to_peer_(PeerState &peer);
   bool send_state_to_peer_(PeerState &peer,
@@ -218,6 +221,9 @@ class CFXSyncComponent : public Component,
   bool send_state_ack_(const uint8_t *destination,
                        const CFXSyncPacket &packet,
                        CFXSyncAckResult result);
+  void schedule_state_ack_(const uint8_t *destination,
+                           const CFXSyncPacket &packet,
+                           CFXSyncAckResult result);
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
@@ -244,6 +250,9 @@ class CFXSyncComponent : public Component,
                       uint8_t size);
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
+  bool is_current_broadcast_ack_(const CFXSyncPacket &packet) const;
+  void seed_peer_sent_state_from_ack_(PeerState &peer,
+                                      const CFXSyncPacket &packet);
   bool is_peer_send_suspended_(const PeerState &peer) const;
   uint8_t active_peer_count_() const;
   uint8_t follower_peer_count_() const;
@@ -289,8 +298,9 @@ class CFXSyncComponent : public Component,
   uint32_t tx_sequence_{0};
   bool send_pending_{false};
   bool state_send_deferred_{false};
-  uint8_t fanout_cursor_{0};
-  uint8_t fanout_remaining_{0};
+  uint32_t last_broadcast_state_boot_id_{0};
+  uint32_t last_broadcast_state_sequence_{0};
+  uint32_t last_broadcast_state_ms_{0};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};

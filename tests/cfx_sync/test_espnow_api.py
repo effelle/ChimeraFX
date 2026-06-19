@@ -239,7 +239,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*peer->rx_boot_id != packet\.boot_id;.*?"
                 r"this->should_send_state_for_hello_"
                 r"\(\*peer, new_peer,\s*peer_rebooted\).*?"
-                r"this->send_state_to_peer_\(\*peer\);",
+                r"this->send_state_\(\);.*?"
+                r"this->check_ack_health_\(\);",
                 re.DOTALL,
             ),
         )
@@ -259,7 +260,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_heartbeat_only_resends_unsynced_or_unacked_followers(self):
+    def test_heartbeat_broadcasts_current_state_snapshot(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
@@ -277,11 +278,8 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_heartbeat_state_\(\) \{"
-                r".*?for \(const auto &peer : this->peers_\) \{"
-                r".*?this->peer_accepts_leader_state_\(peer\).*?"
-                r"peer\.last_state_sent_sequence == 0.*?"
-                r"this->has_pending_ack_\(peer\).*?"
-                r"return this->send_state_\(\);",
+                r"\s*return this->send_state_\(\);"
+                r"\s*\}",
                 re.DOTALL,
             ),
         )
@@ -514,7 +512,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const CFXSyncEffectState &effect,\s*"
                 r"const CFXSyncControlState &controls\).*?"
                 r"this->send_state_to_followers_\(snapshot, effect, controls\);.*?"
-                r"bool CFXSyncComponent::send_state_to_peer_\(.*?"
+                r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
                 r"snapshot\.has_white,\s*true,\s*effect,\s*"
                 r"controls\.has_any\(\),\s*controls,\s*this->key_, packet",
                 re.DOTALL,
@@ -526,21 +524,15 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->send_state_();", source)
         self.assertIn("this->send_state_(snapshot, effect, controls);", source)
 
-    def test_leader_state_send_paths_fan_out_to_discovered_followers(self):
+    def test_leader_state_send_paths_broadcast_to_group(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("bool send_state_to_followers_();", header)
         self.assertIn("bool peer_accepts_leader_state_(const PeerState &peer) const;", header)
-        self.assertIn("uint8_t fanout_cursor_{0};", header)
-        self.assertIn("uint8_t fanout_remaining_{0};", header)
-        self.assertIn(
-            "bool send_state_to_peer_(PeerState &peer,\n"
-            "                           const CFXSyncLightSnapshot &snapshot,\n"
-            "                           const CFXSyncEffectState &effect,\n"
-            "                           const CFXSyncControlState &controls);",
-            header,
-        )
+        self.assertIn("void mark_state_sent_to_followers_(uint32_t sequence);", header)
+        self.assertNotIn("uint8_t fanout_cursor_{0};", header)
+        self.assertNotIn("uint8_t fanout_remaining_{0};", header)
         self.assertRegex(
             source,
             re.compile(
@@ -570,19 +562,41 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
                 r"const CFXSyncControlState &controls\).*?"
-                r"this->fanout_remaining_ = this->follower_peer_count_\(\);.*?"
-                r"for \(uint8_t offset = 0; "
-                r"offset < CFX_SYNC_MAX_PEERS; offset\+\+\).*?"
-                r"this->fanout_cursor_ \+ offset.*?"
-                r"this->peer_accepts_leader_state_\(peer\).*?"
-                r"this->send_state_to_peer_\(peer, snapshot, effect, controls\).*?"
-                r"this->fanout_cursor_ = "
-                r"\(peer_index \+ 1\) % CFX_SYNC_MAX_PEERS;",
+                r"const uint32_t sequence = this->next_sequence_\(\);.*?"
+                r"CFXSyncPacketCodec::encode_state\(.*?"
+                r"this->send_packet_to_\(BROADCAST_MAC, packet\).*?"
+                r"this->mark_state_sent_to_followers_\(sequence\);",
                 re.DOTALL,
             ),
         )
+        self.assertNotIn("this->send_state_to_peer_(*peer);", source)
+
+    def test_hello_and_sync_request_use_broadcast_state_response(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::HELLO\).*?"
+                r"this->should_send_state_for_hello_"
+                r"\(\*peer, new_peer,\s*peer_rebooted\).*?"
+                r"this->send_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST\).*?"
+                r"this->peer_accepts_leader_state_\(\*peer\).*?"
+                r"this->send_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn("this->send_state_to_peer_(*peer);", source)
 
     def test_leader_state_target_selection_requires_registered_light_followers(self):
+        header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
@@ -597,53 +611,65 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+        self.assertIn("void mark_state_sent_to_followers_(uint32_t sequence);", header)
         self.assertIn("peer.last_state_sent_boot_id = this->boot_id_;", source)
         self.assertIn("peer.last_state_sent_sequence = sequence;", source)
         self.assertIn("CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER", source)
 
-    def test_fanout_state_send_health_is_tracked_per_peer(self):
+    def test_broadcast_state_send_health_is_tracked_per_known_follower(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("bool send_pending_{false};", header)
-        self.assertIn("uint8_t consecutive_send_failures{0};", header)
-        self.assertIn("uint32_t send_failures{0};", header)
-        self.assertIn("uint32_t last_send_failure_log_ms{0};", header)
-        self.assertIn("bool has_peer_send_warning_() const;", header)
-        self.assertIn("void handle_peer_send_result_(PeerState &peer, esp_err_t result);", header)
-        self.assertIn(
-            "bool send_packet_to_peer_(PeerState &peer,\n"
-            "                            std::vector<uint8_t> &packet);",
-            header,
-        )
+        self.assertIn("uint32_t last_broadcast_state_sequence_{0};", header)
+        self.assertIn("uint32_t last_broadcast_state_ms_{0};", header)
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::send_packet_to_peer_"
-                r"\(\s*PeerState &peer,\s*std::vector<uint8_t> &packet\).*?"
-                r"if \(this->send_pending_\) \{.*?"
-                r"return false;.*?"
-                r"this->send_pending_ = true;.*?"
-                r"\[this, &peer\]\(esp_err_t send_result\).*?"
-                r"this->send_pending_ = false;.*?"
-                r"this->handle_peer_send_result_\(peer, send_result\)",
+                r"void CFXSyncComponent::mark_state_sent_to_followers_"
+                r"\(uint32_t sequence\).*?"
+                r"this->last_broadcast_state_boot_id_ = this->boot_id_;.*?"
+                r"this->last_broadcast_state_sequence_ = sequence;.*?"
+                r"this->last_broadcast_state_ms_ = now;.*?"
+                r"for \(auto &peer : this->peers_\).*?"
+                r"this->peer_accepts_leader_state_\(peer\).*?"
+                r"peer\.last_state_sent_boot_id = this->boot_id_;.*?"
+                r"peer\.last_state_sent_sequence = sequence;.*?"
+                r"peer\.last_state_sent_ms = now;",
                 re.DOTALL,
             ),
         )
+
+    def test_authenticated_broadcast_state_discovers_unknown_leader(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
         self.assertRegex(
             source,
             re.compile(
-                r"void CFXSyncComponent::handle_peer_send_result_"
-                r"\(\s*PeerState &peer,\s*esp_err_t result\).*?"
-                r"peer\.consecutive_send_failures = 0;.*?"
-                r"!this->has_peer_send_warning_\(\).*?"
-                r"this->status_clear_warning\(\).*?"
-                r"peer\.send_failures\+\+;.*?"
-                r"peer\.consecutive_send_failures\+\+;.*?"
-                r"format_mac_addr_upper\(peer\.mac\.data\(\), peer_buf\).*?"
-                r"peer\.consecutive_send_failures >=\s*"
-                r"MAX_CONSECUTIVE_SEND_FAILURES.*?"
-                r"this->status_set_warning\(\)",
+                r"if \(peer == nullptr &&"
+                r"\s*packet\.type == CFXSyncPacketType::STATE &&"
+                r"\s*this->role_ == CFXSyncRole::FOLLOWER\).*?"
+                r"this->find_or_add_peer_\(info\.src_addr,"
+                r"\s*CFXSyncNodeRole::LEADER,"
+                r"\s*CFXSyncPacketCodec::CAP_LIGHT_LEADER\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_authenticated_state_ack_discovers_unknown_follower(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(peer == nullptr &&"
+                r"\s*packet\.type == CFXSyncPacketType::STATE_ACK &&"
+                r"\s*this->role_ == CFXSyncRole::LEADER &&"
+                r"\s*this->is_current_broadcast_ack_\(packet\)\).*?"
+                r"this->find_or_add_peer_\(info\.src_addr,"
+                r"\s*CFXSyncNodeRole::FOLLOWER,"
+                r"\s*CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER\);.*?"
+                r"this->seed_peer_sent_state_from_ack_\(.*?packet\);",
                 re.DOTALL,
             ),
         )
@@ -675,13 +701,13 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_leader_state_send_is_deferred_under_send_backpressure(self):
+    def test_leader_broadcast_state_is_deferred_under_send_backpressure(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("void flush_deferred_state_();", header)
         self.assertIn("bool state_send_deferred_{false};", header)
-        self.assertIn("uint8_t fanout_remaining_{0};", header)
+        self.assertNotIn("uint8_t fanout_remaining_{0};", header)
         self.assertRegex(
             source,
             re.compile(
@@ -689,23 +715,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(.*?this->check_ack_health_\(\);"
                 r"\s*if \(this->send_pending_\) \{"
                 r"\s*this->state_send_deferred_ = true;"
-                r"\s*this->fanout_remaining_ = this->follower_peer_count_\(\);"
                 r"\s*return false;"
-                r"\s*\}.*?"
-                r"if \(this->fanout_remaining_ == 0\) \{"
-                r"\s*this->fanout_remaining_ = this->follower_peer_count_\(\);",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            source,
-            re.compile(
-                r"bool CFXSyncComponent::send_state_to_peer_"
-                r"\(.*?if \(this->send_pending_\) \{"
-                r"\s*this->state_send_deferred_ = true;"
-                r"\s*return false;"
-                r"\s*\}.*?"
-                r"std::vector<uint8_t> packet;",
+                r"\s*\}",
                 re.DOTALL,
             ),
         )
@@ -724,129 +735,67 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_fanout_return_value_reflects_successfully_queued_peer_send(self):
+    def test_broadcast_state_return_value_reflects_successfully_queued_send(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
-                r"if \(this->send_state_to_peer_"
-                r"\(peer, snapshot, effect, controls\)\) \{.*?"
-                r"this->fanout_cursor_ = "
-                r"\(peer_index \+ 1\) % CFX_SYNC_MAX_PEERS;.*?"
-                r"this->fanout_remaining_--;.*?"
-                r"if \(this->fanout_remaining_ > 0\).*?"
-                r"this->state_send_deferred_ = true;.*?"
-                r"return true;",
-                re.DOTALL,
-            ),
-        )
-        self.assertIn("this->send_packet_to_peer_(peer, packet)", source)
-        self.assertNotIn("attempted = true;", source)
-
-    def test_failed_peer_send_enters_cooldown_and_rejoins_on_hello(self):
-        header = HEADER.read_text(encoding="utf-8")
-        source = SOURCE.read_text(encoding="utf-8")
-
-        self.assertIn("PEER_SEND_COOLDOWN_MS = 10000", header)
-        self.assertIn("uint32_t tx_suspended_until_ms{0};", header)
-        self.assertIn("bool is_peer_send_suspended_(const PeerState &peer) const;", header)
-        self.assertRegex(
-            source,
-            re.compile(
-                r"bool CFXSyncComponent::peer_accepts_leader_state_"
-                r"\(\s*const PeerState &peer\) const \{.*?"
-                r"!this->is_peer_send_suspended_\(peer\)",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            source,
-            re.compile(
-                r"void CFXSyncComponent::handle_peer_send_result_"
-                r"\(\s*PeerState &peer,\s*esp_err_t result\).*?"
-                r"const uint32_t now = millis\(\);.*?"
-                r"peer\.tx_suspended_until_ms = now \+ "
-                r"PEER_SEND_COOLDOWN_MS;",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            source,
-            re.compile(
-                r"if \(auto \*peer = this->find_peer_\(mac\); "
-                r"peer != nullptr\) \{.*?"
-                r"peer->tx_suspended_until_ms = 0;",
+                r"if \(!this->send_packet_to_\(BROADCAST_MAC, packet\)\) \{"
+                r"\s*return false;"
+                r"\s*\}"
+                r"\s*this->mark_state_sent_to_followers_\(sequence\);"
+                r"\s*return true;",
                 re.DOTALL,
             ),
         )
 
-    def test_failed_peer_send_still_flushes_deferred_fanout(self):
-        source = SOURCE.read_text(encoding="utf-8")
-
-        self.assertRegex(
-            source,
-            re.compile(
-                r"this->espnow_->send\("
-                r"\s*peer\.mac\.data\(\), packet,"
-                r"\s*\[this, &peer\]\(esp_err_t send_result\) \{"
-                r"\s*this->send_pending_ = false;"
-                r"\s*this->handle_peer_send_result_\(peer, send_result\);"
-                r"\s*this->flush_deferred_state_\(\);",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            source,
-            re.compile(
-                r"if \(result != ESP_OK\) \{"
-                r"\s*this->send_pending_ = false;"
-                r"\s*this->handle_peer_send_result_\(peer, result\);"
-                r"\s*this->flush_deferred_state_\(\);",
-                re.DOTALL,
-            ),
-        )
-
-    def test_follower_state_ack_is_sent_after_remote_apply(self):
+    def test_follower_state_ack_is_scheduled_after_remote_apply(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn(
-            "bool send_state_ack_(const uint8_t *destination,\n"
-            "                       const CFXSyncPacket &packet,\n"
-            "                       CFXSyncAckResult result);",
+            "void schedule_state_ack_(const uint8_t *destination,\n"
+            "                           const CFXSyncPacket &packet,\n"
+            "                           CFXSyncAckResult result);",
             header,
         )
+        self.assertIn("ACK_JITTER_MIN_MS", header)
+        self.assertIn("ACK_JITTER_SPREAD_MS", header)
         self.assertRegex(
             source,
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
                 r"this->apply_remote_state_\(packet\);"
-                r"\s*this->send_state_ack_\(info\.src_addr, packet,\s*"
+                r"\s*this->schedule_state_ack_\(info\.src_addr, packet,\s*"
                 r"CFXSyncAckResult::APPLIED\);",
                 re.DOTALL,
             ),
         )
 
-    def test_state_ack_is_encoded_to_destination_mac(self):
+    def test_state_ack_is_encoded_to_destination_mac_after_jitter(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::send_state_ack_"
+                r"void CFXSyncComponent::schedule_state_ack_"
                 r"\(\s*const uint8_t \*destination,\s*"
                 r"const CFXSyncPacket &packet,\s*"
                 r"CFXSyncAckResult result\).*?"
                 r"std::array<uint8_t, 6> mac\{\};.*?"
                 r"memcpy\(mac\.data\(\), destination, mac\.size\(\)\);.*?"
+                r"const uint32_t delay_ms\s*=\s*ACK_JITTER_MIN_MS \+"
+                r"\s*\(esp_random\(\) % \(ACK_JITTER_SPREAD_MS \+ 1\)\);.*?"
+                r"this->set_timeout\(\s*\"state-ack\",\s*delay_ms,\s*"
+                r"\[this, mac, acked_boot_id, acked_sequence, result\]\(\) \{.*?"
                 r"CFXSyncPacketCodec::encode_state_ack\("
-                r"\s*this->group_hash_, this->boot_id_, "
+                r"\s*this->group_hash_,\s*this->boot_id_,\s*"
                 r"this->next_sequence_\(\),\s*"
-                r"packet\.boot_id, packet\.sequence, result, "
-                r"this->key_, ack\).*?"
-                r"return this->send_packet_to_\(mac, ack\);",
+                r"acked_boot_id,\s*acked_sequence,\s*result,\s*"
+                r"this->key_,\s*ack\).*?"
+                r"this->send_packet_to_\(mac, ack\);",
                 re.DOTALL,
             ),
         )

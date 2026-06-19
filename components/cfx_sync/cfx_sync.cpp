@@ -245,7 +245,9 @@ bool CFXSyncComponent::admit_unknown_peer_(
     return true;
   }
   if (packet.type != CFXSyncPacketType::HELLO &&
-      packet.type != CFXSyncPacketType::SYNC_REQUEST) {
+      packet.type != CFXSyncPacketType::SYNC_REQUEST &&
+      packet.type != CFXSyncPacketType::STATE &&
+      packet.type != CFXSyncPacketType::STATE_ACK) {
     this->log_rejection_(
         "Ignoring authenticated non-discovery packet from unknown peer");
     return true;
@@ -256,12 +258,28 @@ bool CFXSyncComponent::admit_unknown_peer_(
   if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
     peer_role = CFXSyncNodeRole::FOLLOWER;
     capabilities = CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+  } else if (packet.type == CFXSyncPacketType::STATE &&
+             this->role_ == CFXSyncRole::FOLLOWER) {
+    peer_role = CFXSyncNodeRole::LEADER;
+    capabilities = CFXSyncPacketCodec::CAP_LIGHT_LEADER;
+  } else if (packet.type == CFXSyncPacketType::STATE_ACK &&
+             this->role_ == CFXSyncRole::LEADER &&
+             this->is_current_broadcast_ack_(packet)) {
+    peer_role = CFXSyncNodeRole::FOLLOWER;
+    capabilities = CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+  } else if (packet.type == CFXSyncPacketType::STATE ||
+             packet.type == CFXSyncPacketType::STATE_ACK) {
+    this->log_rejection_("Ignoring authenticated packet for incompatible role");
+    return true;
   }
 
   auto *peer =
       this->find_or_add_peer_(info.src_addr, peer_role, capabilities);
   if (peer != nullptr) {
     this->register_peer_(*peer);
+    if (packet.type == CFXSyncPacketType::STATE_ACK) {
+      this->seed_peer_sent_state_from_ack_(*peer, packet);
+    }
   }
   return false;
 }
@@ -305,7 +323,7 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     if (this->role_ == CFXSyncRole::LEADER &&
         this->should_send_state_for_hello_(*peer, new_peer,
                                            peer_rebooted)) {
-      this->send_state_to_peer_(*peer);
+      this->send_state_();
       this->check_ack_health_();
     }
     return true;
@@ -330,12 +348,30 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->last_valid_packet_ms_ = millis();
     if (this->role_ == CFXSyncRole::LEADER &&
         this->peer_accepts_leader_state_(*peer)) {
-      this->send_state_to_peer_(*peer);
+      this->send_state_();
       this->check_ack_health_();
     }
     return true;
   }
 
+  if (peer == nullptr && packet.type == CFXSyncPacketType::STATE &&
+      this->role_ == CFXSyncRole::FOLLOWER) {
+    peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::LEADER,
+                                   CFXSyncPacketCodec::CAP_LIGHT_LEADER);
+    if (peer != nullptr) {
+      this->register_peer_(*peer);
+    }
+  }
+  if (peer == nullptr && packet.type == CFXSyncPacketType::STATE_ACK &&
+      this->role_ == CFXSyncRole::LEADER &&
+      this->is_current_broadcast_ack_(packet)) {
+    peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::FOLLOWER,
+                                   CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
+    if (peer != nullptr) {
+      this->register_peer_(*peer);
+      this->seed_peer_sent_state_from_ack_(*peer, packet);
+    }
+  }
   if (peer == nullptr) {
     this->log_rejection_("Ignoring authenticated packet from unknown peer");
     return true;
@@ -366,8 +402,8 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->has_valid_state_ = true;
     this->status_clear_warning();
     this->apply_remote_state_(packet);
-    this->send_state_ack_(info.src_addr, packet,
-                          CFXSyncAckResult::APPLIED);
+    this->schedule_state_ack_(info.src_addr, packet,
+                              CFXSyncAckResult::APPLIED);
   }
   return true;
 }
@@ -418,16 +454,7 @@ bool CFXSyncComponent::send_state_(
 }
 
 bool CFXSyncComponent::send_heartbeat_state_() {
-  for (const auto &peer : this->peers_) {
-    if (!this->peer_accepts_leader_state_(peer)) {
-      continue;
-    }
-    if (peer.last_state_sent_sequence == 0 ||
-        this->has_pending_ack_(peer)) {
-      return this->send_state_();
-    }
-  }
-  return false;
+  return this->send_state_();
 }
 
 bool CFXSyncComponent::send_state_to_followers_() {
@@ -448,50 +475,45 @@ bool CFXSyncComponent::send_state_to_followers_(
   this->check_ack_health_();
   if (this->send_pending_) {
     this->state_send_deferred_ = true;
-    this->fanout_remaining_ = this->follower_peer_count_();
     return false;
   }
 
-  if (this->fanout_remaining_ == 0) {
-    this->fanout_remaining_ = this->follower_peer_count_();
-  }
-  if (this->fanout_remaining_ == 0) {
-    this->check_ack_health_();
+  std::vector<uint8_t> packet;
+  const uint32_t sequence = this->next_sequence_();
+  if (!CFXSyncPacketCodec::encode_state(
+          this->group_hash_, this->boot_id_, sequence, snapshot.power,
+          snapshot.brightness, snapshot.color_brightness, snapshot.red,
+          snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
+          true, effect, controls.has_any(), controls, this->key_, packet)) {
     return false;
   }
+  if (!this->send_packet_to_(BROADCAST_MAC, packet)) {
+    return false;
+  }
+  this->mark_state_sent_to_followers_(sequence);
+  return true;
+}
 
-  for (uint8_t offset = 0; offset < CFX_SYNC_MAX_PEERS; offset++) {
-    const uint8_t peer_index =
-        (this->fanout_cursor_ + offset) % CFX_SYNC_MAX_PEERS;
-    auto &peer = this->peers_[peer_index];
+void CFXSyncComponent::mark_state_sent_to_followers_(uint32_t sequence) {
+  const uint32_t now = millis();
+  this->last_broadcast_state_boot_id_ = this->boot_id_;
+  this->last_broadcast_state_sequence_ = sequence;
+  this->last_broadcast_state_ms_ = now;
+  for (auto &peer : this->peers_) {
     if (!this->peer_accepts_leader_state_(peer)) {
       continue;
     }
-    if (this->send_state_to_peer_(peer, snapshot, effect, controls)) {
-      this->fanout_cursor_ = (peer_index + 1) % CFX_SYNC_MAX_PEERS;
-      if (this->fanout_remaining_ > 0) {
-        this->fanout_remaining_--;
-      }
-      if (this->fanout_remaining_ > 0) {
-        this->state_send_deferred_ = true;
-      }
-      this->check_ack_health_();
-      return true;
-    }
-    this->check_ack_health_();
-    return false;
+    peer.last_state_sent_boot_id = this->boot_id_;
+    peer.last_state_sent_sequence = sequence;
+    peer.last_state_sent_ms = now;
   }
-  this->fanout_remaining_ = 0;
-  this->check_ack_health_();
-  return false;
 }
 
 bool CFXSyncComponent::peer_accepts_leader_state_(
     const PeerState &peer) const {
   return peer.active && peer.registered &&
          peer.node_role == CFXSyncNodeRole::FOLLOWER &&
-         (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER) &&
-         !this->is_peer_send_suspended_(peer);
+         (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
 }
 
 bool CFXSyncComponent::send_state_to_peer_(PeerState &peer) {
@@ -549,6 +571,31 @@ bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
     return false;
   }
   return this->send_packet_to_(mac, ack);
+}
+
+void CFXSyncComponent::schedule_state_ack_(const uint8_t *destination,
+                                           const CFXSyncPacket &packet,
+                                           CFXSyncAckResult result) {
+  if (destination == nullptr) {
+    return;
+  }
+  std::array<uint8_t, 6> mac{};
+  memcpy(mac.data(), destination, mac.size());
+  const uint32_t acked_boot_id = packet.boot_id;
+  const uint32_t acked_sequence = packet.sequence;
+  const uint32_t delay_ms =
+      ACK_JITTER_MIN_MS + (esp_random() % (ACK_JITTER_SPREAD_MS + 1));
+  this->set_timeout(
+      "state-ack", delay_ms,
+      [this, mac, acked_boot_id, acked_sequence, result]() {
+        std::vector<uint8_t> ack;
+        if (!CFXSyncPacketCodec::encode_state_ack(
+                this->group_hash_, this->boot_id_, this->next_sequence_(),
+                acked_boot_id, acked_sequence, result, this->key_, ack)) {
+          return;
+        }
+        this->send_packet_to_(mac, ack);
+      });
 }
 
 bool CFXSyncComponent::send_sync_request_() {
@@ -755,6 +802,22 @@ bool CFXSyncComponent::has_pending_ack_(const PeerState &peer) const {
   return peer.last_state_sent_sequence != 0 &&
          (peer.last_ack_boot_id != peer.last_state_sent_boot_id ||
           peer.last_ack_sequence != peer.last_state_sent_sequence);
+}
+
+bool CFXSyncComponent::is_current_broadcast_ack_(
+    const CFXSyncPacket &packet) const {
+  return this->last_broadcast_state_boot_id_ != 0 &&
+         packet.acked_boot_id == this->last_broadcast_state_boot_id_ &&
+         packet.acked_sequence == this->last_broadcast_state_sequence_;
+}
+
+void CFXSyncComponent::seed_peer_sent_state_from_ack_(
+    PeerState &peer, const CFXSyncPacket &packet) {
+  peer.last_state_sent_boot_id = packet.acked_boot_id;
+  peer.last_state_sent_sequence = packet.acked_sequence;
+  peer.last_state_sent_ms =
+      this->last_broadcast_state_ms_ != 0 ? this->last_broadcast_state_ms_
+                                          : millis();
 }
 
 bool CFXSyncComponent::is_peer_send_suspended_(
