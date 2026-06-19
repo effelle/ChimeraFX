@@ -204,6 +204,61 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_leader_does_not_schedule_periodic_hello_transmit(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->send_hello_\(\);"
+                r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
+                r"\s*this->set_interval\(\"hello\", HELLO_INTERVAL_MS,"
+                r"\s*\[this\]\(\) \{ this->send_hello_\(\); \}\);"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_hello_only_resyncs_new_or_rebooted_followers(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bool should_send_state_for_hello_(const PeerState &peer,\n"
+            "                                    bool new_peer,\n"
+            "                                    bool peer_rebooted) const;",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::HELLO\) \{"
+                r"\s*const bool new_peer = peer == nullptr;"
+                r"\s*const bool peer_rebooted ="
+                r"\s*peer != nullptr && peer->has_rx_sequence &&"
+                r"\s*peer->rx_boot_id != packet\.boot_id;.*?"
+                r"this->should_send_state_for_hello_"
+                r"\(\*peer, new_peer,\s*peer_rebooted\).*?"
+                r"this->send_state_to_peer_\(\*peer\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::should_send_state_for_hello_"
+                r"\(\s*const PeerState &peer, bool new_peer, "
+                r"bool peer_rebooted\) const \{"
+                r"\s*if \(this->role_ != CFXSyncRole::LEADER \|\|"
+                r"\s*!this->peer_accepts_leader_state_\(peer\)\) \{"
+                r"\s*return false;"
+                r"\s*\}"
+                r"\s*return new_peer \|\| peer_rebooted \|\|"
+                r"\s*peer\.last_state_sent_sequence == 0;",
+                re.DOTALL,
+            ),
+        )
+
     def test_wrong_group_packets_are_not_consumed(self):
         source = SOURCE.read_text(encoding="utf-8")
 

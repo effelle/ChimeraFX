@@ -63,6 +63,16 @@ uint16_t CFXSyncComponent::local_capabilities_() const {
              : CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
 }
 
+bool CFXSyncComponent::should_send_state_for_hello_(
+    const PeerState &peer, bool new_peer, bool peer_rebooted) const {
+  if (this->role_ != CFXSyncRole::LEADER ||
+      !this->peer_accepts_leader_state_(peer)) {
+    return false;
+  }
+  return new_peer || peer_rebooted ||
+         peer.last_state_sent_sequence == 0;
+}
+
 void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
   this->peer_ = peer;
   this->has_static_peer_ = true;
@@ -109,8 +119,10 @@ void CFXSyncComponent::setup() {
              esp_err_to_name(broadcast_result));
   }
   this->send_hello_();
-  this->set_interval("hello", HELLO_INTERVAL_MS,
-                     [this]() { this->send_hello_(); });
+  if (this->role_ != CFXSyncRole::LEADER) {
+    this->set_interval("hello", HELLO_INTERVAL_MS,
+                       [this]() { this->send_hello_(); });
+  }
   if (this->has_static_peer_) {
     const CFXSyncNodeRole peer_role =
         this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::FOLLOWER
@@ -273,6 +285,10 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
 
   auto *peer = this->find_peer_(info.src_addr);
   if (packet.type == CFXSyncPacketType::HELLO) {
+    const bool new_peer = peer == nullptr;
+    const bool peer_rebooted =
+        peer != nullptr && peer->has_rx_sequence &&
+        peer->rx_boot_id != packet.boot_id;
     peer = this->find_or_add_peer_(info.src_addr, packet.node_role,
                                    packet.capabilities);
     if (peer == nullptr) {
@@ -287,7 +303,8 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
     if (this->role_ == CFXSyncRole::LEADER &&
-        this->peer_accepts_leader_state_(*peer)) {
+        this->should_send_state_for_hello_(*peer, new_peer,
+                                           peer_rebooted)) {
       this->send_state_to_peer_(*peer);
       this->check_ack_health_();
     }

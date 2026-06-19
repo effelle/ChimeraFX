@@ -225,6 +225,9 @@ class CFXSyncComponent : public Component,
                             std::vector<uint8_t> &packet);
   CFXSyncNodeRole local_node_role_() const;
   uint16_t local_capabilities_() const;
+  bool should_send_state_for_hello_(const PeerState &peer,
+                                    bool new_peer,
+                                    bool peer_rebooted) const;
   uint32_t next_sequence_();
   PeerState *find_peer_(const uint8_t *mac);
   PeerState *find_or_add_peer_(const uint8_t *mac, CFXSyncNodeRole role,
