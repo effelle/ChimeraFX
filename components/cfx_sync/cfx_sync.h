@@ -152,6 +152,7 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
   static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
+  static constexpr uint32_t PEER_SEND_COOLDOWN_MS = 10000;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -175,6 +176,7 @@ class CFXSyncComponent : public Component,
     uint8_t consecutive_send_failures{0};
     uint32_t send_failures{0};
     uint32_t last_send_failure_log_ms{0};
+    uint32_t tx_suspended_until_ms{0};
   };
 
   struct EffectLogState {
@@ -242,6 +244,7 @@ class CFXSyncComponent : public Component,
                       uint8_t size);
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
+  bool is_peer_send_suspended_(const PeerState &peer) const;
   uint8_t active_peer_count_() const;
   uint8_t follower_peer_count_() const;
   uint8_t remote_peer_count_() const;

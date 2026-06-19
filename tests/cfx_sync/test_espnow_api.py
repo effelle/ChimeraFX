@@ -745,6 +745,69 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->send_packet_to_peer_(peer, packet)", source)
         self.assertNotIn("attempted = true;", source)
 
+    def test_failed_peer_send_enters_cooldown_and_rejoins_on_hello(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("PEER_SEND_COOLDOWN_MS = 10000", header)
+        self.assertIn("uint32_t tx_suspended_until_ms{0};", header)
+        self.assertIn("bool is_peer_send_suspended_(const PeerState &peer) const;", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::peer_accepts_leader_state_"
+                r"\(\s*const PeerState &peer\) const \{.*?"
+                r"!this->is_peer_send_suspended_\(peer\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::handle_peer_send_result_"
+                r"\(\s*PeerState &peer,\s*esp_err_t result\).*?"
+                r"const uint32_t now = millis\(\);.*?"
+                r"peer\.tx_suspended_until_ms = now \+ "
+                r"PEER_SEND_COOLDOWN_MS;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(auto \*peer = this->find_peer_\(mac\); "
+                r"peer != nullptr\) \{.*?"
+                r"peer->tx_suspended_until_ms = 0;",
+                re.DOTALL,
+            ),
+        )
+
+    def test_failed_peer_send_still_flushes_deferred_fanout(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->espnow_->send\("
+                r"\s*peer\.mac\.data\(\), packet,"
+                r"\s*\[this, &peer\]\(esp_err_t send_result\) \{"
+                r"\s*this->send_pending_ = false;"
+                r"\s*this->handle_peer_send_result_\(peer, send_result\);"
+                r"\s*this->flush_deferred_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(result != ESP_OK\) \{"
+                r"\s*this->send_pending_ = false;"
+                r"\s*this->handle_peer_send_result_\(peer, result\);"
+                r"\s*this->flush_deferred_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_follower_state_ack_is_sent_after_remote_apply(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

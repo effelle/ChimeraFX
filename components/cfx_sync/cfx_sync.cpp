@@ -490,7 +490,8 @@ bool CFXSyncComponent::peer_accepts_leader_state_(
     const PeerState &peer) const {
   return peer.active && peer.registered &&
          peer.node_role == CFXSyncNodeRole::FOLLOWER &&
-         (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
+         (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER) &&
+         !this->is_peer_send_suspended_(peer);
 }
 
 bool CFXSyncComponent::send_state_to_peer_(PeerState &peer) {
@@ -633,13 +634,12 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
       [this, &peer](esp_err_t send_result) {
         this->send_pending_ = false;
         this->handle_peer_send_result_(peer, send_result);
-        if (send_result == ESP_OK) {
-          this->flush_deferred_state_();
-        }
+        this->flush_deferred_state_();
       });
   if (result != ESP_OK) {
     this->send_pending_ = false;
     this->handle_peer_send_result_(peer, result);
+    this->flush_deferred_state_();
     return false;
   }
   this->sent_packets_++;
@@ -682,6 +682,8 @@ CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
     peer->node_role = role;
     peer->capabilities = capabilities;
     peer->last_seen_ms = millis();
+    peer->tx_suspended_until_ms = 0;
+    peer->consecutive_send_failures = 0;
     return peer;
   }
 
@@ -753,6 +755,12 @@ bool CFXSyncComponent::has_pending_ack_(const PeerState &peer) const {
   return peer.last_state_sent_sequence != 0 &&
          (peer.last_ack_boot_id != peer.last_state_sent_boot_id ||
           peer.last_ack_sequence != peer.last_state_sent_sequence);
+}
+
+bool CFXSyncComponent::is_peer_send_suspended_(
+    const PeerState &peer) const {
+  return peer.tx_suspended_until_ms != 0 &&
+         static_cast<int32_t>(peer.tx_suspended_until_ms - millis()) > 0;
 }
 
 uint8_t CFXSyncComponent::active_peer_count_() const {
@@ -926,6 +934,7 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
     peer.consecutive_send_failures++;
   }
   const uint32_t now = millis();
+  peer.tx_suspended_until_ms = now + PEER_SEND_COOLDOWN_MS;
   if (peer.last_send_failure_log_ms == 0 ||
       now - peer.last_send_failure_log_ms >= 5000) {
     char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
