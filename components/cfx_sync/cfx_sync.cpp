@@ -77,7 +77,8 @@ bool CFXSyncComponent::should_send_state_for_hello_(
     return false;
   }
   return new_peer || peer_rebooted ||
-         peer.last_state_sent_sequence == 0;
+         peer.last_state_sent_sequence == 0 ||
+         this->has_pending_ack_(peer);
 }
 
 void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
@@ -242,8 +243,11 @@ bool CFXSyncComponent::admit_unknown_peer_(
   CFXSyncPacket packet;
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
-  if (result == CFXSyncDecodeResult::NOT_CFX ||
-      result == CFXSyncDecodeResult::WRONG_GROUP) {
+  if (result == CFXSyncDecodeResult::NOT_CFX) {
+    return false;
+  }
+  if (result == CFXSyncDecodeResult::WRONG_GROUP) {
+    this->handle_decode_failure_(result);
     return false;
   }
   if (result != CFXSyncDecodeResult::OK) {
@@ -787,6 +791,10 @@ bool CFXSyncComponent::register_peer_(PeerState &peer) {
   }
   const esp_err_t result = this->espnow_->add_peer(peer.mac.data());
   if (result != ESP_OK) {
+    char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+    format_mac_addr_upper(peer.mac.data(), peer_buf);
+    ESP_LOGW(TAG, "CFX Sync failed to register peer %s: %s", peer_buf,
+             esp_err_to_name(result));
     return false;
   }
   peer.registered = true;

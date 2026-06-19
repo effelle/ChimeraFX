@@ -133,6 +133,35 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_wrong_group_unknown_cfx_packets_are_logged_but_not_consumed(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        admit_body = re.search(
+            r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(admit_body)
+        self.assertNotIn(
+            "result == CFXSyncDecodeResult::NOT_CFX ||",
+            admit_body.group(0),
+        )
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+                r"if \(result == CFXSyncDecodeResult::NOT_CFX\) \{"
+                r"\s*return false;"
+                r"\s*\}.*?"
+                r"if \(result == CFXSyncDecodeResult::WRONG_GROUP\) \{"
+                r"\s*this->handle_decode_failure_\(result\);"
+                r"\s*return false;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
     def test_schema_requires_public_espnow_and_hides_peer_config(self):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
@@ -328,7 +357,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*return false;"
                 r"\s*\}"
                 r"\s*return new_peer \|\| peer_rebooted \|\|"
-                r"\s*peer\.last_state_sent_sequence == 0;",
+                r"\s*peer\.last_state_sent_sequence == 0 \|\|"
+                r"\s*this->has_pending_ack_\(peer\);",
                 re.DOTALL,
             ),
         )
@@ -962,6 +992,27 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*this->log_rejection_\("
                 r"\"Ignoring HELLO from incompatible role\"\);"
                 r"\s*return true;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_peer_registration_failure_is_logged(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::register_peer_"
+                r"\(\s*PeerState &peer\).*?"
+                r"const esp_err_t result = this->espnow_->add_peer"
+                r"\(peer\.mac\.data\(\)\);"
+                r"\s*if \(result != ESP_OK\) \{"
+                r".*?format_mac_addr_upper\(peer\.mac\.data\(\), peer_buf\);"
+                r".*?ESP_LOGW\(TAG,"
+                r"\s*\"CFX Sync failed to register peer %s: %s\""
+                r".*?esp_err_to_name\(result\)"
+                r".*?return false;"
                 r"\s*\}",
                 re.DOTALL,
             ),
