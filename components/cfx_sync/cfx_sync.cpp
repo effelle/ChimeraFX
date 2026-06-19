@@ -153,7 +153,7 @@ void CFXSyncComponent::setup() {
     leader->add_remote_values_listener(&this->light_listener_);
     this->register_control_callbacks_(0);
     this->set_interval("heartbeat", this->heartbeat_ms_,
-                       [this]() { this->send_state_(); });
+                       [this]() { this->send_heartbeat_state_(); });
   } else {
     this->schedule_follower_recovery_();
   }
@@ -415,6 +415,19 @@ bool CFXSyncComponent::send_state_(
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
   return this->send_state_to_followers_(snapshot, effect, controls);
+}
+
+bool CFXSyncComponent::send_heartbeat_state_() {
+  for (const auto &peer : this->peers_) {
+    if (!this->peer_accepts_leader_state_(peer)) {
+      continue;
+    }
+    if (peer.last_state_sent_sequence == 0 ||
+        this->has_pending_ack_(peer)) {
+      return this->send_state_();
+    }
+  }
+  return false;
 }
 
 bool CFXSyncComponent::send_state_to_followers_() {

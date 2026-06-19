@@ -259,6 +259,33 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_heartbeat_only_resends_unsynced_or_unacked_followers(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool send_heartbeat_state_();", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->set_interval\(\"heartbeat\", this->heartbeat_ms_,"
+                r"\s*\[this\]\(\) \{ this->send_heartbeat_state_\(\); \}\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn('[this]() { this->send_state_(); });', source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_heartbeat_state_\(\) \{"
+                r".*?for \(const auto &peer : this->peers_\) \{"
+                r".*?this->peer_accepts_leader_state_\(peer\).*?"
+                r"peer\.last_state_sent_sequence == 0.*?"
+                r"this->has_pending_ack_\(peer\).*?"
+                r"return this->send_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_wrong_group_packets_are_not_consumed(self):
         source = SOURCE.read_text(encoding="utf-8")
 

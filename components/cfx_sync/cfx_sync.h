@@ -202,6 +202,7 @@ class CFXSyncComponent : public Component,
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
                    const CFXSyncControlState &controls);
+  bool send_heartbeat_state_();
   bool send_state_to_followers_();
   bool send_state_to_followers_(const CFXSyncLightSnapshot &snapshot,
                                 const CFXSyncEffectState &effect,
