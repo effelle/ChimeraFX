@@ -205,19 +205,91 @@ class ESPNowAPITests(unittest.TestCase):
         )
 
     def test_leader_does_not_schedule_periodic_hello_transmit(self):
+        header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn("void schedule_follower_hello_();", header)
         self.assertRegex(
             source,
             re.compile(
                 r"this->send_hello_\(\);"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
-                r"\s*this->set_interval\(\"hello\", HELLO_INTERVAL_MS,"
-                r"\s*\[this\]\(\) \{ this->send_hello_\(\); \}\);"
+                r"\s*this->schedule_follower_hello_\(\);"
                 r"\s*\}",
                 re.DOTALL,
             ),
         )
+        self.assertNotIn('set_interval("hello"', source)
+
+    def test_follower_hello_schedule_is_jittered(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("HELLO_JITTER_SPREAD_MS", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_hello_\(\) \{"
+                r"\s*if \(this->role_ == CFXSyncRole::LEADER\) \{"
+                r"\s*return;"
+                r"\s*\}.*?"
+                r"HELLO_INTERVAL_MS \+"
+                r"\s*\(esp_random\(\) % \(HELLO_JITTER_SPREAD_MS \+ 1\)\).*?"
+                r"this->set_timeout\(\s*\"hello\".*?"
+                r"this->send_hello_\(\);.*?"
+                r"this->schedule_follower_hello_\(\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_startup_recovery_requests_are_jittered_and_not_back_to_back(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("RECOVERY_JITTER_SPREAD_MS", header)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"void schedule_follower_recovery_attempt_"
+                r"\(const char \*name,\s*uint32_t base_delay_ms\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_"
+                r"\(\).*?"
+                r"this->schedule_follower_recovery_attempt_"
+                r"\(\"sync-request-1\", 1000\);.*?"
+                r"this->schedule_follower_recovery_attempt_"
+                r"\(\"sync-request-2\", 2000\);.*?"
+                r"this->schedule_follower_recovery_attempt_"
+                r"\(\"sync-request-3\", 4000\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_attempt_"
+                r"\(\s*const char \*name,\s*uint32_t base_delay_ms\).*?"
+                r"base_delay_ms \+"
+                r"\s*\(esp_random\(\) % \(RECOVERY_JITTER_SPREAD_MS \+ 1\)\).*?"
+                r"this->set_timeout\(name, delay_ms.*?"
+                r"this->send_sync_request_to_\(BROADCAST_MAC\);",
+                re.DOTALL,
+            ),
+        )
+        recovery_section = re.search(
+            r"void CFXSyncComponent::schedule_follower_recovery_attempt_"
+            r"\(.*?\n\}",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(recovery_section)
+        self.assertNotIn("send_hello_();", recovery_section.group(0))
+        self.assertNotIn("send_sync_request_();", recovery_section.group(0))
 
     def test_hello_only_resyncs_new_or_rebooted_followers(self):
         header = HEADER.read_text(encoding="utf-8")

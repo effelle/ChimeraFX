@@ -151,6 +151,8 @@ class CFXSyncComponent : public Component,
   static constexpr uint8_t CFX_SYNC_MAX_PEERS = 8;
   static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
   static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
+  static constexpr uint32_t HELLO_JITTER_SPREAD_MS = 3000;
+  static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
   static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
   static constexpr uint32_t ACK_JITTER_SPREAD_MS = 40;
@@ -266,7 +268,10 @@ class CFXSyncComponent : public Component,
   void flush_deferred_state_();
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
+  void schedule_follower_hello_();
   void schedule_follower_recovery_();
+  void schedule_follower_recovery_attempt_(const char *name,
+                                           uint32_t base_delay_ms);
   void apply_remote_state_(const CFXSyncPacket &packet);
   void apply_remote_state_to_light_(const CFXSyncPacket &packet,
                                     size_t light_index);

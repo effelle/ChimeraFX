@@ -120,8 +120,7 @@ void CFXSyncComponent::setup() {
   }
   this->send_hello_();
   if (this->role_ != CFXSyncRole::LEADER) {
-    this->set_interval("hello", HELLO_INTERVAL_MS,
-                       [this]() { this->send_hello_(); });
+    this->schedule_follower_hello_();
   }
   if (this->has_static_peer_) {
     const CFXSyncNodeRole peer_role =
@@ -1056,32 +1055,40 @@ void CFXSyncComponent::log_rejection_(const char *message) {
   }
 }
 
+void CFXSyncComponent::schedule_follower_hello_() {
+  if (this->role_ == CFXSyncRole::LEADER) {
+    return;
+  }
+  const uint32_t delay_ms =
+      HELLO_INTERVAL_MS + (esp_random() % (HELLO_JITTER_SPREAD_MS + 1));
+  this->set_timeout("hello", delay_ms, [this]() {
+    if (this->role_ == CFXSyncRole::LEADER) {
+      return;
+    }
+    this->send_hello_();
+    this->schedule_follower_hello_();
+  });
+}
+
 void CFXSyncComponent::schedule_follower_recovery_() {
-  this->set_timeout("sync-request-1", 1000, [this]() {
-    if (!this->has_valid_state_) {
-      this->send_hello_();
-      this->send_sync_request_to_(BROADCAST_MAC);
-      this->send_sync_request_();
-    }
-  });
-  this->set_timeout("sync-request-2", 2000, [this]() {
-    if (!this->has_valid_state_) {
-      this->send_hello_();
-      this->send_sync_request_to_(BROADCAST_MAC);
-      this->send_sync_request_();
-    }
-  });
-  this->set_timeout("sync-request-3", 4000, [this]() {
-    if (!this->has_valid_state_) {
-      this->send_hello_();
-      this->send_sync_request_to_(BROADCAST_MAC);
-      this->send_sync_request_();
-    }
-  });
+  this->schedule_follower_recovery_attempt_("sync-request-1", 1000);
+  this->schedule_follower_recovery_attempt_("sync-request-2", 2000);
+  this->schedule_follower_recovery_attempt_("sync-request-3", 4000);
   this->set_timeout("sync-recovery-expired", 6000, [this]() {
     if (!this->has_valid_state_) {
       ESP_LOGW(TAG, "No valid leader state received during startup recovery");
       this->status_set_warning();
+    }
+  });
+}
+
+void CFXSyncComponent::schedule_follower_recovery_attempt_(
+    const char *name, uint32_t base_delay_ms) {
+  const uint32_t delay_ms =
+      base_delay_ms + (esp_random() % (RECOVERY_JITTER_SPREAD_MS + 1));
+  this->set_timeout(name, delay_ms, [this]() {
+    if (!this->has_valid_state_) {
+      this->send_sync_request_to_(BROADCAST_MAC);
     }
   });
 }
