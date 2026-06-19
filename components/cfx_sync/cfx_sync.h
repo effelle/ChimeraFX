@@ -156,6 +156,8 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t ACK_WARNING_MS = 15000;
   static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
   static constexpr uint32_t ACK_JITTER_SPREAD_MS = 40;
+  static constexpr uint32_t STATE_RETRY_DELAY_MS = 500;
+  static constexpr uint8_t STATE_RETRY_MAX_ATTEMPTS = 3;
   static constexpr uint32_t PEER_SEND_COOLDOWN_MS = 10000;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -236,6 +238,7 @@ class CFXSyncComponent : public Component,
                             std::vector<uint8_t> &packet);
   CFXSyncNodeRole local_node_role_() const;
   uint16_t local_capabilities_() const;
+  bool accepts_peer_role_(CFXSyncNodeRole role) const;
   bool should_send_state_for_hello_(const PeerState &peer,
                                     bool new_peer,
                                     bool peer_rebooted) const;
@@ -266,6 +269,7 @@ class CFXSyncComponent : public Component,
   void handle_send_result_(esp_err_t result);
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
   void flush_deferred_state_();
+  void schedule_state_retry_();
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
   void schedule_follower_hello_();
@@ -303,6 +307,9 @@ class CFXSyncComponent : public Component,
   uint32_t tx_sequence_{0};
   bool send_pending_{false};
   bool state_send_deferred_{false};
+  uint8_t state_retry_attempts_{0};
+  bool state_retry_active_{false};
+  bool state_retry_scheduled_{false};
   uint32_t last_broadcast_state_boot_id_{0};
   uint32_t last_broadcast_state_sequence_{0};
   uint32_t last_broadcast_state_ms_{0};

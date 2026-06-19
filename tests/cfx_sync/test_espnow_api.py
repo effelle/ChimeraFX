@@ -305,6 +305,7 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::HELLO\) \{"
+                r".*?"
                 r"\s*const bool new_peer = peer == nullptr;"
                 r"\s*const bool peer_rebooted ="
                 r"\s*peer != nullptr && peer->has_rx_sequence &&"
@@ -817,7 +818,9 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(!this->send_packet_to_\(BROADCAST_MAC, packet\)\) \{"
                 r"\s*return false;"
                 r"\s*\}"
+                r".*?"
                 r"\s*this->mark_state_sent_to_followers_\(sequence\);"
+                r"\s*this->schedule_state_retry_\(\);"
                 r"\s*return true;",
                 re.DOTALL,
             ),
@@ -846,7 +849,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_state_ack_is_encoded_to_destination_mac_after_jitter(self):
+    def test_state_ack_is_broadcast_after_jitter(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
@@ -856,18 +859,110 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(\s*const uint8_t \*destination,\s*"
                 r"const CFXSyncPacket &packet,\s*"
                 r"CFXSyncAckResult result\).*?"
-                r"std::array<uint8_t, 6> mac\{\};.*?"
-                r"memcpy\(mac\.data\(\), destination, mac\.size\(\)\);.*?"
+                r"\(void\) destination;.*?"
                 r"const uint32_t delay_ms\s*=\s*ACK_JITTER_MIN_MS \+"
                 r"\s*\(esp_random\(\) % \(ACK_JITTER_SPREAD_MS \+ 1\)\);.*?"
                 r"this->set_timeout\(\s*\"state-ack\",\s*delay_ms,\s*"
-                r"\[this, mac, acked_boot_id, acked_sequence, result\]\(\) \{.*?"
+                r"\[this, acked_boot_id, acked_sequence, result\]\(\) \{.*?"
                 r"CFXSyncPacketCodec::encode_state_ack\("
                 r"\s*this->group_hash_,\s*this->boot_id_,\s*"
                 r"this->next_sequence_\(\),\s*"
                 r"acked_boot_id,\s*acked_sequence,\s*result,\s*"
                 r"this->key_,\s*ack\).*?"
-                r"this->send_packet_to_\(mac, ack\);",
+                r"this->send_packet_to_\(BROADCAST_MAC, ack\);",
+                re.DOTALL,
+            ),
+        )
+        ack_body = re.search(
+            r"void CFXSyncComponent::schedule_state_ack_.*?"
+            r"\n\}\n\nbool CFXSyncComponent::send_sync_request_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(ack_body)
+        self.assertNotIn("this->send_packet_to_(mac, ack);", ack_body.group(0))
+
+    def test_broadcast_state_is_retried_until_current_state_is_acked(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("static constexpr uint32_t STATE_RETRY_DELAY_MS", header)
+        self.assertIn("static constexpr uint8_t STATE_RETRY_MAX_ATTEMPTS", header)
+        self.assertIn("void schedule_state_retry_();", header)
+        self.assertIn("uint8_t state_retry_attempts_{0};", header)
+        self.assertIn("bool state_retry_active_{false};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
+                r"this->mark_state_sent_to_followers_\(sequence\);"
+                r"\s*this->schedule_state_retry_\(\);"
+                r"\s*return true;",
+                re.DOTALL,
+            ),
+        )
+        retry_body = re.search(
+            r"void CFXSyncComponent::schedule_state_retry_\(\).*?"
+            r"\n\}\n\nvoid CFXSyncComponent::handle_decode_failure_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(retry_body)
+        retry_text = retry_body.group(0)
+        self.assertIn("this->role_ != CFXSyncRole::LEADER", retry_text)
+        self.assertIn("this->state_retry_scheduled_", retry_text)
+        self.assertIn("this->pending_ack_count_() == 0", retry_text)
+        self.assertIn(
+            'this->set_timeout("state-retry", STATE_RETRY_DELAY_MS, [this]() {',
+            retry_text,
+        )
+        self.assertIn(
+            "this->state_retry_attempts_ >= STATE_RETRY_MAX_ATTEMPTS",
+            retry_text,
+        )
+        self.assertIn("this->send_pending_", retry_text)
+        self.assertIn("this->state_retry_attempts_++;", retry_text)
+        self.assertIn("this->state_retry_active_ = true;", retry_text)
+        self.assertIn("this->send_state_();", retry_text)
+        self.assertIn("this->state_retry_active_ = false;", retry_text)
+
+    def test_hello_discovery_ignores_incompatible_roles(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool accepts_peer_role_(CFXSyncNodeRole role) const;", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::accepts_peer_role_"
+                r"\(\s*CFXSyncNodeRole role\) const \{.*?"
+                r"if \(this->role_ == CFXSyncRole::LEADER\).*?"
+                r"role == CFXSyncNodeRole::FOLLOWER.*?"
+                r"return role == CFXSyncNodeRole::LEADER;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST &&"
+                r"\s*this->role_ != CFXSyncRole::LEADER\) \{"
+                r"\s*this->log_rejection_\("
+                r"\"Ignoring SYNC_REQUEST for incompatible role\"\);"
+                r"\s*return true;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::HELLO &&"
+                r"\s*!this->accepts_peer_role_\(packet\.node_role\)\) \{"
+                r"\s*this->log_rejection_\("
+                r"\"Ignoring HELLO from incompatible role\"\);"
+                r"\s*return true;"
+                r"\s*\}",
                 re.DOTALL,
             ),
         )
