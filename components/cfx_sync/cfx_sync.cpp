@@ -170,6 +170,22 @@ void CFXSyncComponent::setup() {
   }
 }
 
+void CFXSyncComponent::loop() {
+  const uint8_t channel = this->current_wifi_channel_();
+  const bool connected = channel != 0;
+  if (connected &&
+      (!this->last_wifi_connected_ ||
+       (this->last_wifi_channel_ != 0 &&
+        channel != this->last_wifi_channel_))) {
+    this->last_wifi_connected_ = connected;
+    this->last_wifi_channel_ = channel;
+    this->schedule_espnow_rearm_("wifi-channel");
+    return;
+  }
+  this->last_wifi_connected_ = connected;
+  this->last_wifi_channel_ = channel;
+}
+
 void CFXSyncComponent::dump_config() {
   const uint32_t packet_age =
       this->last_valid_packet_ms_ == 0
@@ -194,6 +210,8 @@ void CFXSyncComponent::dump_config() {
                 this->missed_ack_count_());
   ESP_LOGCONFIG(TAG, "  Lights: %u",
                 static_cast<unsigned>(this->lights_.size()));
+  ESP_LOGCONFIG(TAG, "  Wi-Fi channel: %u",
+                static_cast<unsigned>(this->current_wifi_channel_()));
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *light = this->lights_[i];
     ESP_LOGCONFIG(TAG, "    [%u] %s", static_cast<unsigned>(i),
@@ -1126,6 +1144,54 @@ bool CFXSyncComponent::boot_radio_ready_() const {
   return true;
 }
 
+uint8_t CFXSyncComponent::current_wifi_channel_() const {
+#ifdef USE_WIFI
+  if (wifi::global_wifi_component != nullptr &&
+      wifi::global_wifi_component->is_connected()) {
+    const int32_t channel = wifi::global_wifi_component->get_wifi_channel();
+    if (channel > 0 && channel <= UINT8_MAX) {
+      return static_cast<uint8_t>(channel);
+    }
+  }
+#endif
+  return 0;
+}
+
+void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
+  if (this->espnow_ == nullptr || this->espnow_rearm_scheduled_) {
+    return;
+  }
+  uint32_t delay_ms = ESPNOW_REARM_DELAY_MS;
+  const uint32_t now = millis();
+  if (this->last_espnow_rearm_ms_ != 0 &&
+      now - this->last_espnow_rearm_ms_ < ESPNOW_REARM_MIN_INTERVAL_MS) {
+    delay_ms += ESPNOW_REARM_MIN_INTERVAL_MS -
+                (now - this->last_espnow_rearm_ms_);
+  }
+  this->espnow_rearm_scheduled_ = true;
+  this->set_timeout("espnow-rearm", delay_ms, [this, reason]() {
+    this->espnow_rearm_scheduled_ = false;
+    if (this->espnow_ == nullptr) {
+      return;
+    }
+    if (this->send_pending_ || !this->boot_radio_ready_()) {
+      this->schedule_espnow_rearm_(reason);
+      return;
+    }
+    const uint8_t channel = this->current_wifi_channel_();
+    ESP_LOGI(TAG, "Re-arming ESP-NOW after %s on Wi-Fi channel %u", reason,
+             static_cast<unsigned>(channel));
+    this->espnow_->disable();
+    this->espnow_->enable();
+    this->last_espnow_rearm_ms_ = millis();
+    this->boot_discovery_started_ms_ = millis();
+    this->schedule_boot_discovery_();
+    if (this->role_ == CFXSyncRole::FOLLOWER && !this->has_valid_state_) {
+      this->schedule_follower_recovery_loop_();
+    }
+  });
+}
+
 void CFXSyncComponent::schedule_follower_hello_() {
   if (this->role_ == CFXSyncRole::LEADER) {
     return;
@@ -1153,7 +1219,9 @@ void CFXSyncComponent::schedule_follower_recovery_() {
                       if (!this->has_valid_state_) {
                         ESP_LOGW(TAG,
                                  "No valid leader state received during "
-                                 "startup recovery");
+                                 "startup recovery (Wi-Fi channel %u)",
+                                 static_cast<unsigned>(
+                                     this->current_wifi_channel_()));
                         this->status_set_warning();
                         this->schedule_follower_recovery_loop_();
                       }
@@ -1170,6 +1238,11 @@ void CFXSyncComponent::schedule_follower_recovery_loop_() {
   this->set_timeout("sync-recovery-loop", delay_ms, [this]() {
     if (this->role_ == CFXSyncRole::LEADER || this->has_valid_state_) {
       return;
+    }
+    const uint32_t now = millis();
+    if (this->last_espnow_rearm_ms_ == 0 ||
+        now - this->last_espnow_rearm_ms_ >= FOLLOWER_RECOVERY_REARM_MS) {
+      this->schedule_espnow_rearm_("follower-recovery");
     }
     if (this->boot_radio_ready_()) {
       this->send_sync_request_to_(BROADCAST_MAC);

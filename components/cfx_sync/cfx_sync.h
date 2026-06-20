@@ -53,6 +53,7 @@ class CFXSyncComponent : public Component,
 {
  public:
   void setup() override;
+  void loop() override;
   void dump_config() override;
   float get_setup_priority() const override {
     return setup_priority::LATE - 1.0f;
@@ -162,7 +163,10 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t FOLLOWER_RECOVERY_EXPIRE_MS = 22000;
   static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_MS = 15000;
   static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS = 5000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_REARM_MS = 60000;
   static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
+  static constexpr uint32_t ESPNOW_REARM_DELAY_MS = 750;
+  static constexpr uint32_t ESPNOW_REARM_MIN_INTERVAL_MS = 30000;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
   static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
   static constexpr uint32_t ACK_JITTER_SPREAD_MS = 40;
@@ -288,6 +292,8 @@ class CFXSyncComponent : public Component,
   void schedule_boot_discovery_();
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
+  uint8_t current_wifi_channel_() const;
+  void schedule_espnow_rearm_(const char *reason);
   void schedule_follower_hello_();
   void schedule_follower_recovery_();
   void schedule_follower_recovery_loop_();
@@ -331,6 +337,10 @@ class CFXSyncComponent : public Component,
   uint32_t last_broadcast_state_boot_id_{0};
   uint32_t last_broadcast_state_sequence_{0};
   uint32_t last_broadcast_state_ms_{0};
+  uint8_t last_wifi_channel_{0};
+  bool last_wifi_connected_{false};
+  bool espnow_rearm_scheduled_{false};
+  uint32_t last_espnow_rearm_ms_{0};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};

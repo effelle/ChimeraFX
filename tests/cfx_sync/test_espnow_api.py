@@ -455,6 +455,59 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIsNotNone(recovery_loop)
         self.assertNotIn("send_hello_();", recovery_loop.group(0))
 
+    def test_radio_rearm_follows_wifi_channel_changes_and_stuck_recovery(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("void loop() override;", header)
+        self.assertIn("ESPNOW_REARM_DELAY_MS", header)
+        self.assertIn("ESPNOW_REARM_MIN_INTERVAL_MS", header)
+        self.assertIn("FOLLOWER_RECOVERY_REARM_MS", header)
+        self.assertIn("uint8_t current_wifi_channel_() const;", header)
+        self.assertIn("void schedule_espnow_rearm_(const char *reason);", header)
+        self.assertIn("uint8_t last_wifi_channel_{0};", header)
+        self.assertIn("bool last_wifi_connected_{false};", header)
+        self.assertIn("bool espnow_rearm_scheduled_{false};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::loop\(\) \{.*?"
+                r"const uint8_t channel = this->current_wifi_channel_\(\);.*?"
+                r"const bool connected = channel != 0;.*?"
+                r"channel != this->last_wifi_channel_.*?"
+                r"this->last_wifi_connected_ = connected;.*?"
+                r"this->last_wifi_channel_ = channel;.*?"
+                r"this->schedule_espnow_rearm_\(\"wifi-channel\"\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_espnow_rearm_"
+                r"\(const char \*reason\) \{.*?"
+                r"this->espnow_rearm_scheduled_.*?"
+                r"ESPNOW_REARM_MIN_INTERVAL_MS.*?"
+                r"this->set_timeout\(\"espnow-rearm\", delay_ms.*?"
+                r"this->send_pending_.*?"
+                r"this->espnow_->disable\(\);.*?"
+                r"this->espnow_->enable\(\);.*?"
+                r"this->schedule_boot_discovery_\(\);.*?"
+                r"this->schedule_follower_recovery_loop_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_loop_"
+                r"\(\) \{.*?"
+                r"FOLLOWER_RECOVERY_REARM_MS.*?"
+                r"this->schedule_espnow_rearm_\(\"follower-recovery\"\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_hello_only_resyncs_new_or_rebooted_followers(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
