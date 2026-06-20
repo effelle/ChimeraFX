@@ -1022,7 +1022,7 @@ class ESPNowAPITests(unittest.TestCase):
             decoded_body.group(0),
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::HELLO\) \{"
-                r"\s*if \(!this->accepts_peer_role_\(packet\.node_role\)\) \{"
+                r".*?if \(!this->accepts_peer_role_\(packet\.node_role\)\) \{"
                 r"\s*this->log_rejection_\("
                 r"\"Ignoring HELLO from incompatible role\"\);"
                 r"\s*return true;"
@@ -1030,6 +1030,32 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+
+    def test_follower_silently_consumes_other_follower_hello(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
+        hello_index = decoded_body.group(0).find(
+            "if (packet.type == CFXSyncPacketType::HELLO) {"
+        )
+        self.assertGreaterEqual(hello_index, 0)
+        same_follower_index = decoded_body.group(0).find(
+            "this->role_ == CFXSyncRole::FOLLOWER &&\n"
+            "        packet.node_role == CFXSyncNodeRole::FOLLOWER",
+            hello_index,
+        )
+        rejection_index = decoded_body.group(0).find(
+            'this->log_rejection_("Ignoring HELLO from incompatible role");',
+            hello_index,
+        )
+        self.assertGreaterEqual(same_follower_index, 0)
+        self.assertGreaterEqual(rejection_index, 0)
+        self.assertLess(same_follower_index, rejection_index)
 
     def test_peer_registration_failure_is_logged(self):
         source = SOURCE.read_text(encoding="utf-8")
@@ -1072,6 +1098,26 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+
+    def test_follower_silently_consumes_other_follower_state_ack(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
+        unknown_index = decoded_body.group(0).find(
+            'this->log_rejection_("Ignoring authenticated packet from unknown peer");'
+        )
+        self.assertGreaterEqual(unknown_index, 0)
+        ignore_index = decoded_body.group(0).find(
+            "packet.type == CFXSyncPacketType::STATE_ACK &&\n"
+            "      this->role_ != CFXSyncRole::LEADER"
+        )
+        self.assertGreaterEqual(ignore_index, 0)
+        self.assertLess(ignore_index, unknown_index)
 
     def test_handle_state_ack_matches_last_sent_before_clearing(self):
         header = HEADER.read_text(encoding="utf-8")

@@ -290,6 +290,10 @@ bool CFXSyncComponent::handle_decoded_packet_(
     const espnow::ESPNowRecvInfo &info, const CFXSyncPacket &packet) {
   auto *peer = this->find_peer_(info.src_addr);
   if (packet.type == CFXSyncPacketType::HELLO) {
+    if (this->role_ == CFXSyncRole::FOLLOWER &&
+        packet.node_role == CFXSyncNodeRole::FOLLOWER) {
+      return true;
+    }
     if (!this->accepts_peer_role_(packet.node_role)) {
       this->log_rejection_("Ignoring HELLO from incompatible role");
       return true;
@@ -366,6 +370,10 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->register_peer_(*peer);
       this->seed_peer_sent_state_from_ack_(*peer, packet);
     }
+  }
+  if (packet.type == CFXSyncPacketType::STATE_ACK &&
+      this->role_ != CFXSyncRole::LEADER) {
+    return true;
   }
   if (peer == nullptr) {
     this->log_rejection_("Ignoring authenticated packet from unknown peer");
