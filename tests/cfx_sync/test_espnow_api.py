@@ -11,6 +11,9 @@ PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
 PACKET_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.cpp"
 COLOR_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
 EFFECT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_effect.h"
+CFX_BUTTON_PY = ROOT / "components" / "cfx_button" / "__init__.py"
+CFX_BUTTON_HEADER = ROOT / "components" / "cfx_button" / "cfx_button.h"
+CFX_BUTTON_SOURCE = ROOT / "components" / "cfx_button" / "cfx_button.cpp"
 
 
 class ESPNowAPITests(unittest.TestCase):
@@ -189,27 +192,47 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_schema_requires_public_espnow_and_hides_peer_config(self):
+    def test_schema_uses_singleton_espnow_and_controller_inputs(self):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
-        self.assertIn('AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256"]', py_source)
-        self.assertIn('DEPENDENCIES = ["esp32", "espnow", "light"]', py_source)
         self.assertIn(
-            'cv.Required(CONF_ESPNOW_ID): cv.use_id(\n'
-            '                espnow.ESPNowComponent\n'
-            '            )',
+            'AUTO_LOAD = ["espnow", "cfx_effect_registry", "hmac_sha256"]',
             py_source,
         )
+        self.assertIn('DEPENDENCIES = ["esp32"]', py_source)
+        self.assertIn("CONF_INTERNAL_ESPNOW_ID", py_source)
+        self.assertIn(
+            "cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(\n"
+            "                espnow.ESPNowComponent\n"
+            "            )",
+            py_source,
+        )
+        self.assertIn("cv.Optional(CONF_ESPNOW_ID): cv.invalid(", py_source)
         self.assertIn('cv.Optional(CONF_PEER): cv.invalid(', py_source)
+        self.assertIn('CONF_LOCAL_INPUT = "local_input"', py_source)
+        self.assertIn('CONF_REMOTE_INPUT = "remote_input"', py_source)
+        self.assertIn('ROLE_CONTROLLER = "controller"', py_source)
+        self.assertIn(
+            "cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor)",
+            py_source,
+        )
+        self.assertIn(
+            "cv.Optional(CONF_REMOTE_INPUT): cv.use_id(cfx_button.CFXButton)",
+            py_source,
+        )
+        self.assertIn(
+            "ROLE_CONTROLLER: CFXSyncRole.CFX_SYNC_ROLE_CONTROLLER",
+            py_source,
+        )
         self.assertNotIn("cv.Required(CONF_PEER)", py_source)
 
-    def test_codegen_uses_public_espnow_component(self):
+    def test_codegen_uses_singleton_espnow_and_input_bindings(self):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
         self.assertRegex(
             py_source,
             re.compile(
-                r"espnow_var = await cg\.get_variable\(config\[CONF_ESPNOW_ID\]\).*?"
+                r"espnow_var = await cg\.get_variable\(config\[CONF_INTERNAL_ESPNOW_ID\]\).*?"
                 r'cg\.add_define\("USE_ESPNOW"\).*?'
                 r"cg\.add\(espnow_var\.set_auto_add_peer\(False\)\).*?"
                 r"cg\.add\(var\.set_espnow\(espnow_var\)\)",
@@ -221,6 +244,40 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("require_wake_loop_threadsafe", py_source)
         self.assertNotIn("cg.add(var.set_peer", py_source)
         self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
+        self.assertIn(
+            "local_input = await cg.get_variable(config[CONF_LOCAL_INPUT])",
+            py_source,
+        )
+        self.assertIn("cg.add(var.set_local_input(local_input))", py_source)
+        self.assertIn(
+            "remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])",
+            py_source,
+        )
+        self.assertIn("cg.add(var.set_remote_input(remote_input))", py_source)
+
+    def test_cfx_button_can_host_remote_input_without_local_binary_sensor(self):
+        py_source = CFX_BUTTON_PY.read_text(encoding="utf-8")
+        header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
+        source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "cv.Optional(CONF_BUTTON): cv.use_id(binary_sensor.BinarySensor)",
+            py_source,
+        )
+        self.assertIn("void inject_remote_state(bool pressed)", header)
+        self.assertNotIn("button_ == nullptr ||", source)
+        self.assertIn("this->inject_remote_state", source)
+
+    def test_controller_role_is_declared_in_runtime_contract(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFX_SYNC_ROLE_CONTROLLER", header)
+        self.assertIn("set_local_input(binary_sensor::BinarySensor *input)", header)
+        self.assertIn("set_remote_input(cfx_button::CFXButton *input)", header)
+        self.assertIn("CFXSyncNodeRole::REMOTE", source)
+        self.assertIn("CAP_BINARY_REMOTE", source)
+        self.assertIn('return "controller"', source)
 
     def test_static_peer_fallback_is_disabled_without_configured_peer(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -430,14 +487,14 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"void CFXSyncComponent::schedule_follower_recovery_loop_"
                 r"\(\) \{.*?"
-                r"this->role_ == CFXSyncRole::LEADER \|\|"
+                r"this->role_ != CFXSyncRole::FOLLOWER \|\|"
                 r"\s*this->has_valid_state_.*?"
                 r"FOLLOWER_RECOVERY_REPEAT_MS \+"
                 r"\s*\(esp_random\(\) %"
                 r"\s*\(FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS \+ 1\)\).*?"
                 r"this->set_timeout\("
                 r"\"sync-recovery-loop\", delay_ms.*?"
-                r"this->role_ == CFXSyncRole::LEADER \|\|"
+                r"this->role_ != CFXSyncRole::FOLLOWER \|\|"
                 r"\s*this->has_valid_state_.*?"
                 r"if \(this->boot_radio_ready_\(\)\) \{"
                 r"\s*this->send_sync_request_to_\(BROADCAST_MAC\);"

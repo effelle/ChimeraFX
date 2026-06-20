@@ -6,7 +6,10 @@ from esphome.core import ID
 
 from components.cfx_sync import (
     CONF_LIGHTS,
+    CONF_LOCAL_INPUT,
+    CONF_REMOTE_INPUT,
     CONF_ROLE,
+    ROLE_CONTROLLER,
     ROLE_FOLLOWER,
     ROLE_LEADER,
     _extract_control_ids,
@@ -80,6 +83,63 @@ class MultiLightConfigTests(unittest.TestCase):
             CONF_LIGHTS: [light_id("one"), light_id("two")],
         }
         self.assertIs(_validate_role_lights(config), config)
+
+    def test_controller_requires_one_local_input_and_no_lights(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "controller requires local_input"
+        ):
+            _validate_role_lights(
+                {CONF_ROLE: ROLE_CONTROLLER, CONF_LIGHTS: []}
+            )
+
+        with self.assertRaisesRegex(
+            cv.Invalid, "controller cannot declare lights"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_CONTROLLER,
+                    CONF_LIGHTS: [light_id("unexpected_light")],
+                    CONF_LOCAL_INPUT: light_id("wall_button"),
+                }
+            )
+
+        config = {
+            CONF_ROLE: ROLE_CONTROLLER,
+            CONF_LIGHTS: [],
+            CONF_LOCAL_INPUT: light_id("wall_button"),
+        }
+        self.assertIs(_validate_role_lights(config), config)
+
+    def test_local_input_is_controller_only(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "local_input can only be used with role: controller"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_LEADER,
+                    CONF_LIGHTS: [light_id("leader_light")],
+                    CONF_LOCAL_INPUT: light_id("wall_button"),
+                }
+            )
+
+    def test_remote_input_is_leader_only(self):
+        leader_config = {
+            CONF_ROLE: ROLE_LEADER,
+            CONF_LIGHTS: [light_id("leader_light")],
+            CONF_REMOTE_INPUT: light_id("remote_button_host"),
+        }
+        self.assertIs(_validate_role_lights(leader_config), leader_config)
+
+        with self.assertRaisesRegex(
+            cv.Invalid, "remote_input can only be used with role: leader"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_FOLLOWER,
+                    CONF_LIGHTS: [light_id("follower_light")],
+                    CONF_REMOTE_INPUT: light_id("remote_button_host"),
+                }
+            )
 
     def test_legacy_light_id_option_is_removed(self):
         source = COMPONENT.read_text(encoding="utf-8")

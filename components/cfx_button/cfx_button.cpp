@@ -8,8 +8,12 @@ namespace cfx_button {
 static const char *const TAG = "cfx_button";
 
 void CFXButton::setup() {
-  if (this->button_ == nullptr || !this->press_ || !this->release_) {
+  if (!this->press_ || !this->release_) {
     this->mark_failed();
+    return;
+  }
+
+  if (this->button_ == nullptr) {
     return;
   }
 
@@ -18,7 +22,7 @@ void CFXButton::setup() {
   }
 
   this->button_->add_on_state_callback(
-      [this](bool pressed) { this->handle_state_(pressed); });
+      [this](bool pressed) { this->inject_remote_state(pressed); });
 }
 
 void CFXButton::loop() {
@@ -34,6 +38,10 @@ void CFXButton::dump_config() {
     ESP_LOGCONFIG(TAG, "  Binary Sensor: %s",
                   this->button_->get_name().c_str());
   }
+}
+
+void CFXButton::inject_remote_state(bool pressed) {
+  this->handle_state_(pressed);
 }
 
 void CFXButton::handle_state_(bool pressed) {

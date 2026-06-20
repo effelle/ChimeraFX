@@ -5,7 +5,7 @@ from esphome.const import CONF_ID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["binary_sensor"]
+DEPENDENCIES = []
 AUTO_LOAD = [
     "cfx_dimmer",
     "cfx_cct_sweeper",
@@ -213,7 +213,7 @@ CONFIG_SCHEMA = cv.ensure_list(
         cv.Schema(
             {
                 cv.GenerateID(): cv.declare_id(CFXButton),
-                cv.Required(CONF_BUTTON): cv.use_id(binary_sensor.BinarySensor),
+                cv.Optional(CONF_BUTTON): cv.use_id(binary_sensor.BinarySensor),
                 cv.Optional(CONF_DIMMER): DIMMER_SCHEMA,
                 cv.Optional(CONF_CCT_SWEEPER): CCT_SWEEPER_SCHEMA,
                 cv.Optional(CONF_HUE_CYCLER): HUE_CYCLER_SCHEMA,
@@ -347,8 +347,9 @@ async def to_code(config):
         var = cg.new_Pvariable(conf[CONF_ID])
         await cg.register_component(var, conf)
 
-        button = await cg.get_variable(conf[CONF_BUTTON])
-        cg.add(var.set_button(button))
+        if CONF_BUTTON in conf:
+            button = await cg.get_variable(conf[CONF_BUTTON])
+            cg.add(var.set_button(button))
 
         controller_key = next(key for key in CONTROLLER_KEYS if key in conf)
         controller = await CONTROLLER_BUILDERS[controller_key](

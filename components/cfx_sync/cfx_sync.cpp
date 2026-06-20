@@ -56,19 +56,29 @@ light::LightState *CFXSyncComponent::leader_light_() const {
 }
 
 CFXSyncNodeRole CFXSyncComponent::local_node_role_() const {
-  return this->role_ == CFXSyncRole::LEADER ? CFXSyncNodeRole::LEADER
-                                            : CFXSyncNodeRole::FOLLOWER;
+  if (this->role_ == CFXSyncRole::LEADER) {
+    return CFXSyncNodeRole::LEADER;
+  }
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    return CFXSyncNodeRole::REMOTE;
+  }
+  return CFXSyncNodeRole::FOLLOWER;
 }
 
 uint16_t CFXSyncComponent::local_capabilities_() const {
-  return this->role_ == CFXSyncRole::LEADER
-             ? CFXSyncPacketCodec::CAP_LIGHT_LEADER
-             : CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+  if (this->role_ == CFXSyncRole::LEADER) {
+    return CFXSyncPacketCodec::CAP_LIGHT_LEADER;
+  }
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    return CFXSyncPacketCodec::CAP_BINARY_REMOTE;
+  }
+  return CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
 }
 
 bool CFXSyncComponent::accepts_peer_role_(CFXSyncNodeRole role) const {
   if (this->role_ == CFXSyncRole::LEADER) {
-    return role == CFXSyncNodeRole::FOLLOWER;
+    return role == CFXSyncNodeRole::FOLLOWER ||
+           role == CFXSyncNodeRole::REMOTE;
   }
   return role == CFXSyncNodeRole::LEADER;
 }
@@ -99,8 +109,24 @@ void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
 }
 
 void CFXSyncComponent::setup() {
-  if (this->espnow_ == nullptr || this->lights_.empty()) {
-    ESP_LOGE(TAG, "ESP-NOW and at least one light reference are required");
+  if (this->espnow_ == nullptr) {
+    ESP_LOGE(TAG, "ESP-NOW is required");
+    this->mark_failed();
+    return;
+  }
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    if (this->local_input_ == nullptr) {
+      ESP_LOGE(TAG, "Controller requires one local input");
+      this->mark_failed();
+      return;
+    }
+    if (!this->lights_.empty()) {
+      ESP_LOGE(TAG, "Controller cannot declare light references");
+      this->mark_failed();
+      return;
+    }
+  } else if (this->lights_.empty()) {
+    ESP_LOGE(TAG, "At least one light reference is required");
     this->mark_failed();
     return;
   }
@@ -165,8 +191,15 @@ void CFXSyncComponent::setup() {
     this->register_control_callbacks_(0);
     this->set_interval("heartbeat", this->heartbeat_ms_,
                        [this]() { this->send_heartbeat_state_(); });
-  } else {
+  } else if (this->role_ == CFXSyncRole::FOLLOWER) {
     this->schedule_follower_recovery_();
+  } else if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    if (this->local_input_->has_state()) {
+      this->local_input_has_state_ = true;
+      this->local_input_pressed_ = this->local_input_->state;
+    }
+    this->local_input_->add_on_state_callback(
+        [this](bool pressed) { this->on_local_input_update_(pressed); });
   }
 }
 
@@ -279,7 +312,8 @@ bool CFXSyncComponent::admit_unknown_peer_(
   if (packet.type != CFXSyncPacketType::HELLO &&
       packet.type != CFXSyncPacketType::SYNC_REQUEST &&
       packet.type != CFXSyncPacketType::STATE &&
-      packet.type != CFXSyncPacketType::STATE_ACK) {
+      packet.type != CFXSyncPacketType::STATE_ACK &&
+      packet.type != CFXSyncPacketType::INPUT_STATE) {
     this->log_rejection_(
         "Ignoring authenticated non-discovery packet from unknown peer");
     return true;
@@ -395,6 +429,48 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->role_ != CFXSyncRole::LEADER) {
     return true;
   }
+
+  if (packet.type == CFXSyncPacketType::INPUT_STATE) {
+    if (this->role_ != CFXSyncRole::LEADER) {
+      return true;
+    }
+    if (peer == nullptr) {
+      peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::REMOTE,
+                                     CFXSyncPacketCodec::CAP_BINARY_REMOTE);
+      if (peer != nullptr) {
+        this->register_peer_(*peer);
+      }
+    }
+    if (peer == nullptr) {
+      return true;
+    }
+    if (peer->node_role != CFXSyncNodeRole::REMOTE &&
+        (peer->capabilities & CFXSyncPacketCodec::CAP_BINARY_REMOTE) == 0) {
+      return true;
+    }
+    peer->last_seen_ms = millis();
+    if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
+      this->stale_packets_++;
+      this->log_rejection_("Ignoring duplicate or stale packet");
+      return true;
+    }
+    this->received_packets_++;
+    this->last_valid_packet_ms_ = millis();
+    if (this->remote_input_ == nullptr) {
+      const uint32_t now = millis();
+      if (this->last_missing_remote_input_log_ms_ == 0 ||
+          now - this->last_missing_remote_input_log_ms_ >= 30000) {
+        ESP_LOGI(TAG,
+                 "Received CFX Sync remote input but no remote_input is "
+                 "configured");
+        this->last_missing_remote_input_log_ms_ = now;
+      }
+      return true;
+    }
+    this->inject_remote_input_(packet.input_pressed);
+    return true;
+  }
+
   if (peer == nullptr) {
     this->log_rejection_("Ignoring authenticated packet from unknown peer");
     return true;
@@ -647,6 +723,93 @@ bool CFXSyncComponent::send_hello_() {
     return false;
   }
   return this->send_packet_to_(BROADCAST_MAC, packet);
+}
+
+bool CFXSyncComponent::send_input_state_(bool pressed) {
+  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    return false;
+  }
+  std::vector<uint8_t> packet;
+  if (!CFXSyncPacketCodec::encode_input_state(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          pressed, this->key_, packet)) {
+    return false;
+  }
+  return this->send_packet_to_(BROADCAST_MAC, packet);
+}
+
+void CFXSyncComponent::on_local_input_update_(bool pressed) {
+  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    return;
+  }
+  if (this->local_input_has_state_ &&
+      this->local_input_pressed_ == pressed) {
+    return;
+  }
+  this->local_input_has_state_ = true;
+  this->local_input_pressed_ = pressed;
+  this->send_input_state_(pressed);
+  if (pressed) {
+    this->schedule_local_input_hold_repeat_();
+  } else {
+    this->schedule_local_input_release_repeat_(INPUT_RELEASE_REPEAT_COUNT);
+  }
+}
+
+void CFXSyncComponent::schedule_local_input_hold_repeat_() {
+  this->set_timeout("input-hold-repeat", INPUT_HOLD_REPEAT_MS, [this]() {
+    if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+        !this->local_input_pressed_) {
+      return;
+    }
+    this->send_input_state_(true);
+    this->schedule_local_input_hold_repeat_();
+  });
+}
+
+void CFXSyncComponent::schedule_local_input_release_repeat_(
+    uint8_t remaining) {
+  if (remaining == 0) {
+    return;
+  }
+  this->set_timeout("input-release-repeat", INPUT_RELEASE_REPEAT_MS,
+                    [this, remaining]() {
+                      if (this->role_ !=
+                          CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+                        return;
+                      }
+                      this->send_input_state_(false);
+                      this->schedule_local_input_release_repeat_(
+                          remaining - 1);
+                    });
+}
+
+void CFXSyncComponent::inject_remote_input_(bool pressed) {
+  if (this->role_ != CFXSyncRole::LEADER || this->remote_input_ == nullptr) {
+    return;
+  }
+  this->remote_input_pressed_ = pressed;
+  this->last_remote_input_ms_ = millis();
+  this->remote_input_->inject_remote_state(pressed);
+  if (pressed) {
+    this->schedule_remote_input_timeout_();
+  }
+}
+
+void CFXSyncComponent::schedule_remote_input_timeout_() {
+  this->set_timeout("remote-input-timeout", REMOTE_INPUT_TIMEOUT_MS,
+                    [this]() {
+                      if (!this->remote_input_pressed_) {
+                        return;
+                      }
+                      const uint32_t now = millis();
+                      if (now - this->last_remote_input_ms_ <
+                          REMOTE_INPUT_TIMEOUT_MS) {
+                        this->schedule_remote_input_timeout_();
+                        return;
+                      }
+                      this->inject_remote_input_(false);
+                    });
 }
 
 bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
@@ -1235,6 +1398,9 @@ void CFXSyncComponent::schedule_follower_hello_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_() {
+  if (this->role_ != CFXSyncRole::FOLLOWER) {
+    return;
+  }
   this->schedule_follower_recovery_attempt_("sync-request-1",
                                             FOLLOWER_RECOVERY_FIRST_MS);
   this->schedule_follower_recovery_attempt_("sync-request-2",
@@ -1261,14 +1427,14 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_loop_() {
-  if (this->role_ == CFXSyncRole::LEADER || this->has_valid_state_) {
+  if (this->role_ != CFXSyncRole::FOLLOWER || this->has_valid_state_) {
     return;
   }
   const uint32_t delay_ms =
       FOLLOWER_RECOVERY_REPEAT_MS +
       (esp_random() % (FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS + 1));
   this->set_timeout("sync-recovery-loop", delay_ms, [this]() {
-    if (this->role_ == CFXSyncRole::LEADER || this->has_valid_state_) {
+    if (this->role_ != CFXSyncRole::FOLLOWER || this->has_valid_state_) {
       return;
     }
     const uint32_t now = millis();
@@ -1701,7 +1867,13 @@ bool CFXSyncComponent::is_broadcast_(const uint8_t *address) const {
 }
 
 const char *CFXSyncComponent::role_name_() const {
-  return this->role_ == CFXSyncRole::LEADER ? "leader" : "follower";
+  if (this->role_ == CFXSyncRole::LEADER) {
+    return "leader";
+  }
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+    return "controller";
+  }
+  return "follower";
 }
 
 }  // namespace cfx_sync

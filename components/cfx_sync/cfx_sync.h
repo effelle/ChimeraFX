@@ -11,6 +11,8 @@
 #include "cfx_sync_color.h"
 #include "cfx_sync_effect.h"
 #include "cfx_sync_packet.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/cfx_button/cfx_button.h"
 #include "esphome/components/espnow/espnow_component.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
@@ -29,6 +31,7 @@ namespace cfx_sync {
 enum CFXSyncRole : uint8_t {
   LEADER = 0,
   FOLLOWER = 1,
+  CFX_SYNC_ROLE_CONTROLLER = 2,
 };
 
 class CFXSyncComponent;
@@ -77,6 +80,12 @@ class CFXSyncComponent : public Component,
         CFXSyncEffectEntry{effect_id, name});
   }
   void set_role(CFXSyncRole role) { this->role_ = role; }
+  void set_local_input(binary_sensor::BinarySensor *input) {
+    this->local_input_ = input;
+  }
+  void set_remote_input(cfx_button::CFXButton *input) {
+    this->remote_input_ = input;
+  }
   void set_peer(const std::array<uint8_t, 6> &peer);
   void set_group_hash(uint32_t group_hash) {
     this->group_hash_ = group_hash;
@@ -173,6 +182,10 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t STATE_RETRY_DELAY_MS = 500;
   static constexpr uint8_t STATE_RETRY_MAX_ATTEMPTS = 3;
   static constexpr uint32_t PEER_SEND_COOLDOWN_MS = 10000;
+  static constexpr uint32_t INPUT_HOLD_REPEAT_MS = 750;
+  static constexpr uint32_t INPUT_RELEASE_REPEAT_MS = 120;
+  static constexpr uint8_t INPUT_RELEASE_REPEAT_COUNT = 3;
+  static constexpr uint32_t REMOTE_INPUT_TIMEOUT_MS = 2500;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -245,6 +258,12 @@ class CFXSyncComponent : public Component,
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
+  bool send_input_state_(bool pressed);
+  void on_local_input_update_(bool pressed);
+  void schedule_local_input_hold_repeat_();
+  void schedule_local_input_release_repeat_(uint8_t remaining);
+  void inject_remote_input_(bool pressed);
+  void schedule_remote_input_timeout_();
   bool send_packet_(std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,
                        std::vector<uint8_t> &packet);
@@ -321,6 +340,8 @@ class CFXSyncComponent : public Component,
   std::vector<EffectLogState> effect_log_states_;
   std::vector<ControlBinding> control_bindings_;
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
+  binary_sensor::BinarySensor *local_input_{nullptr};
+  cfx_button::CFXButton *remote_input_{nullptr};
   std::array<uint8_t, 6> peer_{};
   bool has_static_peer_{false};
   std::array<PeerState, CFX_SYNC_MAX_PEERS> peers_{};
@@ -342,6 +363,10 @@ class CFXSyncComponent : public Component,
   bool last_wifi_connected_{false};
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
+  bool local_input_has_state_{false};
+  bool local_input_pressed_{false};
+  bool remote_input_pressed_{false};
+  uint32_t last_remote_input_ms_{0};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};
@@ -355,6 +380,7 @@ class CFXSyncComponent : public Component,
 
   uint8_t consecutive_send_failures_{0};
   uint32_t last_rejection_log_ms_{0};
+  uint32_t last_missing_remote_input_log_ms_{0};
   uint32_t last_send_failure_log_ms_{0};
   uint32_t last_ack_warning_log_ms_{0};
   uint32_t sent_packets_{0};

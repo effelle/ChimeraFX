@@ -4,23 +4,38 @@ import hashlib
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import espnow, light, number, select, switch
+from esphome.components import (
+    binary_sensor,
+    espnow,
+    light,
+    number,
+    select,
+    switch,
+)
 from esphome.const import CONF_ID
 from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32", "espnow", "light"]
-AUTO_LOAD = ["cfx_effect_registry", "hmac_sha256"]
+DEPENDENCIES = ["esp32"]
+AUTO_LOAD = ["espnow", "cfx_effect_registry", "hmac_sha256"]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
 except ImportError:
     from components.cfx_effect_registry import CFX_EFFECT_NAMES
 
+try:
+    from esphome.components import cfx_button
+except ImportError:
+    from components import cfx_button
+
 CONF_ESPNOW_ID = "espnow_id"
+CONF_INTERNAL_ESPNOW_ID = "_espnow_id"
 CONF_ROLE = "role"
 CONF_LIGHTS = "lights"
+CONF_LOCAL_INPUT = "local_input"
+CONF_REMOTE_INPUT = "remote_input"
 CONF_PEER = "peer"
 CONF_GROUP = "group"
 CONF_KEY = "key"
@@ -50,6 +65,7 @@ CONF_PALETTE = "palette"
 
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
+ROLE_CONTROLLER = "controller"
 EXCLUDE_SPEED = 1
 EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
@@ -69,6 +85,7 @@ CFXSyncRole = cfx_sync_ns.enum("CFXSyncRole")
 ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,
     ROLE_FOLLOWER: CFXSyncRole.FOLLOWER,
+    ROLE_CONTROLLER: CFXSyncRole.CFX_SYNC_ROLE_CONTROLLER,
 }
 
 _LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
@@ -222,11 +239,28 @@ def _extract_cfx_effect_catalog(light_config):
 
 
 def _validate_role_lights(config):
-    lights = config[CONF_LIGHTS]
-    if config[CONF_ROLE] == ROLE_LEADER and len(lights) != 1:
+    role = config[CONF_ROLE]
+    lights = config.get(CONF_LIGHTS, [])
+    if role == ROLE_CONTROLLER:
+        if lights:
+            raise cv.Invalid("cfx_sync controller cannot declare lights")
+        if CONF_LOCAL_INPUT not in config:
+            raise cv.Invalid("cfx_sync controller requires local_input")
+        if CONF_REMOTE_INPUT in config:
+            raise cv.Invalid(
+                "remote_input can only be used with role: leader"
+            )
+    elif CONF_LOCAL_INPUT in config:
+        raise cv.Invalid(
+            "local_input can only be used with role: controller"
+        )
+
+    if role == ROLE_LEADER and len(lights) != 1:
         raise cv.Invalid("cfx_sync leader requires exactly one light")
-    if config[CONF_ROLE] == ROLE_FOLLOWER and not lights:
+    if role == ROLE_FOLLOWER and not lights:
         raise cv.Invalid("cfx_sync follower requires at least one light")
+    if role == ROLE_FOLLOWER and CONF_REMOTE_INPUT in config:
+        raise cv.Invalid("remote_input can only be used with role: leader")
 
     seen = set()
     for light_id in lights:
@@ -294,13 +328,19 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFXSyncComponent),
-            cv.Required(CONF_ESPNOW_ID): cv.use_id(
+            cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(
                 espnow.ESPNowComponent
             ),
             cv.Required(CONF_ROLE): cv.one_of(
-                ROLE_LEADER, ROLE_FOLLOWER, lower=True
+                ROLE_LEADER, ROLE_FOLLOWER, ROLE_CONTROLLER, lower=True
             ),
-            cv.Required(CONF_LIGHTS): _normalize_lights,
+            cv.Optional(CONF_LIGHTS, default=[]): _normalize_lights,
+            cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor),
+            cv.Optional(CONF_REMOTE_INPUT): cv.use_id(cfx_button.CFXButton),
+            cv.Optional(CONF_ESPNOW_ID): cv.invalid(
+                "espnow_id is no longer used; cfx_sync uses ESP-NOW "
+                "automatically"
+            ),
             cv.Optional(CONF_PEER): cv.invalid(
                 "peer is no longer used; cfx_sync discovers devices by "
                 "group and key"
@@ -326,7 +366,7 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    espnow_var = await cg.get_variable(config[CONF_ESPNOW_ID])
+    espnow_var = await cg.get_variable(config[CONF_INTERNAL_ESPNOW_ID])
     if CORE.using_arduino:
         cg.add_library("WiFi", None)
     cg.add_define("USE_ESPNOW")
@@ -389,6 +429,12 @@ async def to_code(config):
                 CoreID(controls[CONF_PALETTE], type=select.Select)
             )
             cg.add(var.set_palette_control(light_index, control))
+    if CONF_LOCAL_INPUT in config:
+        local_input = await cg.get_variable(config[CONF_LOCAL_INPUT])
+        cg.add(var.set_local_input(local_input))
+    if CONF_REMOTE_INPUT in config:
+        remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
+        cg.add(var.set_remote_input(remote_input))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))
     cg.add(var.set_key(key_bytes))

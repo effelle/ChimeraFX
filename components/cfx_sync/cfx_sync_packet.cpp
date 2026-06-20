@@ -340,6 +340,14 @@ bool CFXSyncPacketCodec::encode_state_ack(
                  payload.data(), payload.size(), key, output);
 }
 
+bool CFXSyncPacketCodec::encode_input_state(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool pressed,
+    const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  const uint8_t payload = pressed ? 1 : 0;
+  return encode_(CFXSyncPacketType::INPUT_STATE, group_hash, boot_id,
+                 sequence, &payload, INPUT_STATE_PAYLOAD_SIZE, key, output);
+}
+
 CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     const uint8_t *data, size_t size, uint32_t expected_group_hash,
     const std::array<uint8_t, 32> &key, CFXSyncPacket &packet) {
@@ -381,7 +389,8 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
       raw_type !=
           static_cast<uint8_t>(CFXSyncPacketType::SYNC_REQUEST) &&
       raw_type != static_cast<uint8_t>(CFXSyncPacketType::HELLO) &&
-      raw_type != static_cast<uint8_t>(CFXSyncPacketType::STATE_ACK)) {
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::STATE_ACK) &&
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::INPUT_STATE)) {
     return CFXSyncDecodeResult::UNSUPPORTED_TYPE;
   }
 
@@ -437,6 +446,14 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
       default:
         return CFXSyncDecodeResult::MALFORMED;
     }
+    return CFXSyncDecodeResult::OK;
+  }
+
+  if (packet.type == CFXSyncPacketType::INPUT_STATE) {
+    if (payload_size != INPUT_STATE_PAYLOAD_SIZE || payload[0] > 1) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.input_pressed = payload[0] != 0;
     return CFXSyncDecodeResult::OK;
   }
 

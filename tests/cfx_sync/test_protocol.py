@@ -10,6 +10,7 @@ TYPE_STATE = 1
 TYPE_SYNC_REQUEST = 2
 TYPE_HELLO = 3
 TYPE_STATE_ACK = 4
+TYPE_INPUT_STATE = 5
 HEADER_SIZE = 22
 TAG_SIZE = 16
 FIELD_POWER = 0x00000001
@@ -461,6 +462,13 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         result["acked_boot_id"] = acked_boot_id
         result["acked_sequence"] = acked_sequence
         result["ack_result"] = ack_result
+    elif packet[5] == TYPE_INPUT_STATE:
+        if payload_size != 1:
+            raise ValueError("input-length")
+        payload = packet[HEADER_SIZE:authenticated_size]
+        if payload[0] > 1:
+            raise ValueError("input-state")
+        result["input_pressed"] = bool(payload[0])
     else:
         raise ValueError("type")
     return result
@@ -523,6 +531,22 @@ class ProtocolTests(unittest.TestCase):
             "1a6058ae1b6e1fdf01549973448a58ed",
         )
         self.assertEqual(decode(packet)["type"], TYPE_SYNC_REQUEST)
+
+    def test_input_state_vector_is_stable(self):
+        pressed = encode(TYPE_INPUT_STATE, b"\x01")
+        self.assertEqual(len(pressed), 39)
+        decoded = decode(pressed)
+        self.assertEqual(decoded["type"], TYPE_INPUT_STATE)
+        self.assertTrue(decoded["input_pressed"])
+
+        released = decode(encode(TYPE_INPUT_STATE, b"\x00"))
+        self.assertFalse(released["input_pressed"])
+
+    def test_malformed_input_state_is_rejected(self):
+        for payload in (b"", b"\x00\x00", b"\x02"):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(ValueError, "input"):
+                    decode(encode(TYPE_INPUT_STATE, payload))
 
     def test_hello_round_trips_role_and_capabilities(self):
         payload = bytes((ROLE_LEADER,)) + struct.pack(

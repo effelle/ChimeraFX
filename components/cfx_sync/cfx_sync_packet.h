@@ -24,6 +24,7 @@ enum class CFXSyncPacketType : uint8_t {
   SYNC_REQUEST = 2,
   HELLO = 3,
   STATE_ACK = 4,
+  INPUT_STATE = 5,
 };
 
 enum class CFXSyncNodeRole : uint8_t {
@@ -123,6 +124,7 @@ struct CFXSyncPacket {
   uint32_t acked_boot_id{0};
   uint32_t acked_sequence{0};
   CFXSyncAckResult ack_result{CFXSyncAckResult::APPLIED};
+  bool input_pressed{false};
 };
 
 class CFXSyncPacketCodec {
@@ -164,6 +166,7 @@ class CFXSyncPacketCodec {
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t HELLO_PAYLOAD_SIZE = 3;
   static constexpr size_t STATE_ACK_PAYLOAD_SIZE = 9;
+  static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;
   static constexpr size_t MAX_STATE_PACKET_SIZE =
       HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 117 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
@@ -171,6 +174,8 @@ class CFXSyncPacketCodec {
       HEADER_SIZE + HELLO_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t STATE_ACK_PACKET_SIZE =
       HEADER_SIZE + STATE_ACK_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t INPUT_STATE_PACKET_SIZE =
+      HEADER_SIZE + INPUT_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
                            uint32_t sequence, bool power, uint8_t brightness,
@@ -212,6 +217,10 @@ class CFXSyncPacketCodec {
                                CFXSyncAckResult result,
                                const std::array<uint8_t, 32> &key,
                                std::vector<uint8_t> &output);
+  static bool encode_input_state(uint32_t group_hash, uint32_t boot_id,
+                                 uint32_t sequence, bool pressed,
+                                 const std::array<uint8_t, 32> &key,
+                                 std::vector<uint8_t> &output);
   static CFXSyncDecodeResult decode(const uint8_t *data, size_t size,
                                     uint32_t expected_group_hash,
                                     const std::array<uint8_t, 32> &key,
@@ -254,10 +263,14 @@ static_assert(CFXSyncPacketCodec::HELLO_PACKET_SIZE == 41,
               "CFX sync hello packet size changed");
 static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE == 47,
               "CFX sync state ack packet size changed");
+static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE == 39,
+              "CFX sync input state packet size changed");
 static_assert(CFXSyncPacketCodec::HELLO_PACKET_SIZE < 250,
               "CFX sync hello packet exceeds ESP-NOW V1 payload limit");
 static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE < 250,
               "CFX sync state ack packet exceeds ESP-NOW V1 payload limit");
+static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE < 250,
+              "CFX sync input state packet exceeds ESP-NOW V1 payload limit");
 
 }  // namespace cfx_sync
 }  // namespace esphome

@@ -25,6 +25,8 @@ class CFXButton : public Component {
     this->release_ = [controller]() { controller->release(); };
   }
 
+  void inject_remote_state(bool pressed);
+
   void setup() override;
   void loop() override;
   void dump_config() override;
