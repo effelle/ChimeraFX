@@ -1155,8 +1155,27 @@ void CFXSyncComponent::schedule_follower_recovery_() {
                                  "No valid leader state received during "
                                  "startup recovery");
                         this->status_set_warning();
+                        this->schedule_follower_recovery_loop_();
                       }
                     });
+}
+
+void CFXSyncComponent::schedule_follower_recovery_loop_() {
+  if (this->role_ == CFXSyncRole::LEADER || this->has_valid_state_) {
+    return;
+  }
+  const uint32_t delay_ms =
+      FOLLOWER_RECOVERY_REPEAT_MS +
+      (esp_random() % (FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS + 1));
+  this->set_timeout("sync-recovery-loop", delay_ms, [this]() {
+    if (this->role_ == CFXSyncRole::LEADER || this->has_valid_state_) {
+      return;
+    }
+    if (this->boot_radio_ready_()) {
+      this->send_sync_request_to_(BROADCAST_MAC);
+    }
+    this->schedule_follower_recovery_loop_();
+  });
 }
 
 void CFXSyncComponent::schedule_follower_recovery_attempt_(

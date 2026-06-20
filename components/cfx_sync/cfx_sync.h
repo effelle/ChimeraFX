@@ -160,6 +160,8 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t FOLLOWER_RECOVERY_SECOND_MS = 12000;
   static constexpr uint32_t FOLLOWER_RECOVERY_THIRD_MS = 16000;
   static constexpr uint32_t FOLLOWER_RECOVERY_EXPIRE_MS = 22000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_MS = 15000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS = 5000;
   static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
   static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
@@ -288,6 +290,7 @@ class CFXSyncComponent : public Component,
   bool boot_radio_ready_() const;
   void schedule_follower_hello_();
   void schedule_follower_recovery_();
+  void schedule_follower_recovery_loop_();
   void schedule_follower_recovery_attempt_(const char *name,
                                            uint32_t base_delay_ms);
   void apply_remote_state_(const CFXSyncPacket &packet);

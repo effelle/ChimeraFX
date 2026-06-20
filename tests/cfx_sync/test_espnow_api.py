@@ -408,6 +408,53 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("send_hello_();", recovery_section.group(0))
         self.assertNotIn("send_sync_request_();", recovery_section.group(0))
 
+    def test_follower_keeps_requesting_state_after_recovery_expiry(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("FOLLOWER_RECOVERY_REPEAT_MS", header)
+        self.assertIn("FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS", header)
+        self.assertIn("void schedule_follower_recovery_loop_();", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_"
+                r"\(\).*?"
+                r"this->status_set_warning\(\);"
+                r"\s*this->schedule_follower_recovery_loop_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_loop_"
+                r"\(\) \{.*?"
+                r"this->role_ == CFXSyncRole::LEADER \|\|"
+                r"\s*this->has_valid_state_.*?"
+                r"FOLLOWER_RECOVERY_REPEAT_MS \+"
+                r"\s*\(esp_random\(\) %"
+                r"\s*\(FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS \+ 1\)\).*?"
+                r"this->set_timeout\("
+                r"\"sync-recovery-loop\", delay_ms.*?"
+                r"this->role_ == CFXSyncRole::LEADER \|\|"
+                r"\s*this->has_valid_state_.*?"
+                r"if \(this->boot_radio_ready_\(\)\) \{"
+                r"\s*this->send_sync_request_to_\(BROADCAST_MAC\);"
+                r"\s*\}.*?"
+                r"this->schedule_follower_recovery_loop_\(\);",
+                re.DOTALL,
+            ),
+        )
+        recovery_loop = re.search(
+            r"void CFXSyncComponent::schedule_follower_recovery_loop_"
+            r"\(.*?\n\}",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(recovery_loop)
+        self.assertNotIn("send_hello_();", recovery_loop.group(0))
+
     def test_hello_only_resyncs_new_or_rebooted_followers(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
