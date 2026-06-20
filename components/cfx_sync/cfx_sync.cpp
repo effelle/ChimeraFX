@@ -263,45 +263,7 @@ bool CFXSyncComponent::admit_unknown_peer_(
     return true;
   }
 
-  CFXSyncNodeRole peer_role = packet.node_role;
-  uint16_t capabilities = packet.capabilities;
-  if (packet.type == CFXSyncPacketType::HELLO &&
-      !this->accepts_peer_role_(packet.node_role)) {
-    this->log_rejection_("Ignoring HELLO from incompatible role");
-    return true;
-  }
-  if (packet.type == CFXSyncPacketType::SYNC_REQUEST &&
-      this->role_ != CFXSyncRole::LEADER) {
-    this->log_rejection_("Ignoring SYNC_REQUEST for incompatible role");
-    return true;
-  }
-  if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
-    peer_role = CFXSyncNodeRole::FOLLOWER;
-    capabilities = CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
-  } else if (packet.type == CFXSyncPacketType::STATE &&
-             this->role_ == CFXSyncRole::FOLLOWER) {
-    peer_role = CFXSyncNodeRole::LEADER;
-    capabilities = CFXSyncPacketCodec::CAP_LIGHT_LEADER;
-  } else if (packet.type == CFXSyncPacketType::STATE_ACK &&
-             this->role_ == CFXSyncRole::LEADER &&
-             this->is_current_broadcast_ack_(packet)) {
-    peer_role = CFXSyncNodeRole::FOLLOWER;
-    capabilities = CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
-  } else if (packet.type == CFXSyncPacketType::STATE ||
-             packet.type == CFXSyncPacketType::STATE_ACK) {
-    this->log_rejection_("Ignoring authenticated packet for incompatible role");
-    return true;
-  }
-
-  auto *peer =
-      this->find_or_add_peer_(info.src_addr, peer_role, capabilities);
-  if (peer != nullptr) {
-    this->register_peer_(*peer);
-    if (packet.type == CFXSyncPacketType::STATE_ACK) {
-      this->seed_peer_sent_state_from_ack_(*peer, packet);
-    }
-  }
-  return false;
+  return this->handle_decoded_packet_(info, packet);
 }
 
 bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
@@ -321,6 +283,11 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     return true;
   }
 
+  return this->handle_decoded_packet_(info, packet);
+}
+
+bool CFXSyncComponent::handle_decoded_packet_(
+    const espnow::ESPNowRecvInfo &info, const CFXSyncPacket &packet) {
   auto *peer = this->find_peer_(info.src_addr);
   if (packet.type == CFXSyncPacketType::HELLO) {
     if (!this->accepts_peer_role_(packet.node_role)) {

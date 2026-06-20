@@ -253,6 +253,8 @@ class CFXSyncComponent : public Component,
                            const uint8_t *data, uint8_t size);
   bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                       uint8_t size);
+  bool handle_decoded_packet_(const espnow::ESPNowRecvInfo &info,
+                              const CFXSyncPacket &packet);
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
   bool is_current_broadcast_ack_(const CFXSyncPacket &packet) const;

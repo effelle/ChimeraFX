@@ -104,13 +104,29 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_unknown_peers_are_authenticated_before_discovery_admission(self):
+    def test_unknown_peers_are_authenticated_then_dispatched_directly(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn(
             "bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,",
             header,
+        )
+        self.assertIn(
+            "bool handle_decoded_packet_(const espnow::ESPNowRecvInfo &info,",
+            header,
+        )
+
+        admit_body = re.search(
+            r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(admit_body)
+        self.assertNotIn(
+            "this->find_or_add_peer_(info.src_addr",
+            admit_body.group(0),
         )
         self.assertRegex(
             source,
@@ -125,10 +141,21 @@ class ESPNowAPITests(unittest.TestCase):
                 r"packet\.type != CFXSyncPacketType::HELLO &&"
                 r"\s*packet\.type != CFXSyncPacketType::SYNC_REQUEST.*?"
                 r"authenticated non-discovery packet from unknown peer.*?"
-                r"this->find_or_add_peer_\(info\.src_addr, peer_role, "
-                r"capabilities\).*?"
-                r"this->register_peer_\(\*peer\).*?"
-                r"return false;",
+                r"return this->handle_decoded_packet_\(info, packet\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::handle_packet_\(.*?"
+                r"CFXSyncPacketCodec::decode\(.*?"
+                r"if \(result != CFXSyncDecodeResult::OK\) \{"
+                r"\s*this->handle_decode_failure_\(result\);"
+                r"\s*return true;"
+                r"\s*\}"
+                r"\s*return this->handle_decoded_packet_\(info, packet\);"
+                r"\s*\}",
                 re.DOTALL,
             ),
         )
@@ -959,6 +986,13 @@ class ESPNowAPITests(unittest.TestCase):
     def test_hello_discovery_ignores_incompatible_roles(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
 
         self.assertIn("bool accepts_peer_role_(CFXSyncNodeRole role) const;", header)
         self.assertRegex(
@@ -973,10 +1007,10 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertRegex(
-            source,
+            decoded_body.group(0),
             re.compile(
-                r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST &&"
-                r"\s*this->role_ != CFXSyncRole::LEADER\) \{"
+                r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST\) \{"
+                r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*this->log_rejection_\("
                 r"\"Ignoring SYNC_REQUEST for incompatible role\"\);"
                 r"\s*return true;"
@@ -985,10 +1019,10 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertRegex(
-            source,
+            decoded_body.group(0),
             re.compile(
-                r"if \(packet\.type == CFXSyncPacketType::HELLO &&"
-                r"\s*!this->accepts_peer_role_\(packet\.node_role\)\) \{"
+                r"if \(packet\.type == CFXSyncPacketType::HELLO\) \{"
+                r"\s*if \(!this->accepts_peer_role_\(packet\.node_role\)\) \{"
                 r"\s*this->log_rejection_\("
                 r"\"Ignoring HELLO from incompatible role\"\);"
                 r"\s*return true;"
