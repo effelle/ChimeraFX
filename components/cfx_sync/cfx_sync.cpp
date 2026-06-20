@@ -319,7 +319,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
         this->should_send_state_for_hello_(*peer, new_peer,
                                            peer_rebooted)) {
       this->send_state_();
-      this->check_ack_health_();
     }
     return true;
   }
@@ -348,7 +347,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
     if (this->role_ == CFXSyncRole::LEADER &&
         this->peer_accepts_leader_state_(*peer)) {
       this->send_state_();
-      this->check_ack_health_();
     }
     return true;
   }
@@ -475,7 +473,6 @@ bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls) {
-  this->check_ack_health_();
   if (this->send_pending_) {
     this->state_send_deferred_ = true;
     return false;

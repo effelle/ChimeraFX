@@ -368,11 +368,18 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*peer->rx_boot_id != packet\.boot_id;.*?"
                 r"this->should_send_state_for_hello_"
                 r"\(\*peer, new_peer,\s*peer_rebooted\).*?"
-                r"this->send_state_\(\);.*?"
-                r"this->check_ack_health_\(\);",
+                r"this->send_state_\(\);",
                 re.DOTALL,
             ),
         )
+        hello_body = re.search(
+            r"if \(packet\.type == CFXSyncPacketType::HELLO\) \{.*?"
+            r"\n  \}\n\n  if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST\)",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(hello_body)
+        self.assertNotIn("this->check_ack_health_();", hello_body.group(0))
         self.assertRegex(
             source,
             re.compile(
@@ -842,14 +849,25 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_to_followers_"
-                r"\(.*?this->check_ack_health_\(\);"
-                r"\s*if \(this->send_pending_\) \{"
+                r"\(.*?if \(this->send_pending_\) \{"
                 r"\s*this->state_send_deferred_ = true;"
                 r"\s*return false;"
                 r"\s*\}",
                 re.DOTALL,
             ),
         )
+        broadcast_body = re.search(
+            r"bool CFXSyncComponent::send_state_to_followers_"
+            r"\(\s*const CFXSyncLightSnapshot &snapshot,.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::mark_state_sent_to_followers_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(broadcast_body)
+        pre_send_pending = broadcast_body.group(0).split(
+            "if (this->send_pending_) {", 1
+        )[0]
+        self.assertNotIn("this->check_ack_health_();", pre_send_pending)
         self.assertRegex(
             source,
             re.compile(
@@ -982,6 +1000,38 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->state_retry_active_ = true;", retry_text)
         self.assertIn("this->send_state_();", retry_text)
         self.assertIn("this->state_retry_active_ = false;", retry_text)
+        self.assertRegex(
+            retry_text,
+            re.compile(
+                r"if \(this->state_retry_attempts_ >= "
+                r"STATE_RETRY_MAX_ATTEMPTS\) \{"
+                r"\s*this->check_ack_health_\(\);"
+                r"\s*return;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_ack_warning_waits_for_retry_exhaustion(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
+        self.assertNotIn("this->check_ack_health_();", decoded_body.group(0))
+
+        broadcast_body = re.search(
+            r"bool CFXSyncComponent::send_state_to_followers_"
+            r"\(\s*const CFXSyncLightSnapshot &snapshot,.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::mark_state_sent_to_followers_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(broadcast_body)
+        self.assertNotIn("this->check_ack_health_();", broadcast_body.group(0))
 
     def test_hello_discovery_ignores_incompatible_roles(self):
         header = HEADER.read_text(encoding="utf-8")
