@@ -508,6 +508,38 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_leader_discovery_failure_logs_bssid_and_channel(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void format_current_wifi_bssid_(char *buffer, size_t size) const;",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::format_current_wifi_bssid_"
+                r"\(\s*char \*buffer,\s*size_t size\) const \{.*?"
+                r"wifi::global_wifi_component->wifi_bssid\(\).*?"
+                r"format_mac_addr_upper\(bssid\.data\(\), buffer\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_follower_recovery_"
+                r"\(\) \{.*?"
+                r"char bssid_buf\[MAC_ADDRESS_PRETTY_BUFFER_SIZE\];.*?"
+                r"this->format_current_wifi_bssid_"
+                r"\(\s*bssid_buf,\s*sizeof\(bssid_buf\)\s*\);.*?"
+                r"Discovered CFX Sync leader failed on BSSID %s.*?"
+                r"channel %u",
+                re.DOTALL,
+            ),
+        )
+
     def test_hello_only_resyncs_new_or_rebooted_followers(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

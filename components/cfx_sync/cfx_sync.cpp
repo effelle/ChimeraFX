@@ -1157,6 +1157,33 @@ uint8_t CFXSyncComponent::current_wifi_channel_() const {
   return 0;
 }
 
+void CFXSyncComponent::format_current_wifi_bssid_(char *buffer,
+                                                  size_t size) const {
+  if (buffer == nullptr || size == 0) {
+    return;
+  }
+  strncpy(buffer, "unknown", size);
+  buffer[size - 1] = '\0';
+#ifdef USE_WIFI
+  if (wifi::global_wifi_component == nullptr ||
+      !wifi::global_wifi_component->is_connected() ||
+      size < MAC_ADDRESS_PRETTY_BUFFER_SIZE) {
+    return;
+  }
+  const auto bssid = wifi::global_wifi_component->wifi_bssid();
+  bool has_bssid = false;
+  for (auto byte : bssid) {
+    if (byte != 0) {
+      has_bssid = true;
+      break;
+    }
+  }
+  if (has_bssid) {
+    format_mac_addr_upper(bssid.data(), buffer);
+  }
+#endif
+}
+
 void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
   if (this->espnow_ == nullptr || this->espnow_rearm_scheduled_) {
     return;
@@ -1217,11 +1244,16 @@ void CFXSyncComponent::schedule_follower_recovery_() {
   this->set_timeout("sync-recovery-expired", FOLLOWER_RECOVERY_EXPIRE_MS,
                     [this]() {
                       if (!this->has_valid_state_) {
-                        ESP_LOGW(TAG,
-                                 "No valid leader state received during "
-                                 "startup recovery (Wi-Fi channel %u)",
-                                 static_cast<unsigned>(
-                                     this->current_wifi_channel_()));
+                        char bssid_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+                        this->format_current_wifi_bssid_(
+                            bssid_buf, sizeof(bssid_buf));
+                        ESP_LOGW(
+                            TAG,
+                            "Discovered CFX Sync leader failed on BSSID %s "
+                            "channel %u",
+                            bssid_buf,
+                            static_cast<unsigned>(
+                                this->current_wifi_channel_()));
                         this->status_set_warning();
                         this->schedule_follower_recovery_loop_();
                       }

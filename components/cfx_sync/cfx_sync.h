@@ -293,6 +293,7 @@ class CFXSyncComponent : public Component,
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
   uint8_t current_wifi_channel_() const;
+  void format_current_wifi_bssid_(char *buffer, size_t size) const;
   void schedule_espnow_rearm_(const char *reason);
   void schedule_follower_hello_();
   void schedule_follower_recovery_();
