@@ -4,6 +4,9 @@
 
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#ifdef USE_WIFI
+#include "esphome/components/wifi/wifi_component.h"
+#endif
 
 #include <esp_random.h>
 #include <algorithm>
@@ -126,7 +129,8 @@ void CFXSyncComponent::setup() {
     ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
              esp_err_to_name(broadcast_result));
   }
-  this->send_hello_();
+  this->boot_discovery_started_ms_ = millis();
+  this->schedule_boot_discovery_();
   if (this->role_ != CFXSyncRole::LEADER) {
     this->schedule_follower_hello_();
   }
@@ -401,7 +405,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
        packet.has_color_brightness || packet.has_effect ||
        packet.has_controls)) {
     this->has_valid_state_ = true;
-    this->status_clear_warning();
+    this->clear_warning_if_set_();
     this->apply_remote_state_(packet);
     this->schedule_state_ack_(info.src_addr, packet,
                               CFXSyncAckResult::APPLIED);
@@ -899,7 +903,7 @@ void CFXSyncComponent::handle_state_ack_(PeerState &peer,
   if (!this->has_peer_send_warning_() && !has_pending &&
       this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES) {
     this->state_retry_attempts_ = 0;
-    this->status_clear_warning();
+    this->clear_warning_if_set_();
   } else {
     this->check_ack_health_();
   }
@@ -950,7 +954,7 @@ void CFXSyncComponent::handle_send_result_(esp_err_t result) {
     }
     if (this->role_ == CFXSyncRole::LEADER &&
         !this->has_peer_send_warning_() && !has_pending) {
-      this->status_clear_warning();
+      this->clear_warning_if_set_();
     }
     return;
   }
@@ -987,7 +991,7 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
     if (this->role_ == CFXSyncRole::LEADER &&
         this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES &&
         !this->has_peer_send_warning_() && !has_pending) {
-      this->status_clear_warning();
+      this->clear_warning_if_set_();
     }
     return;
   }
@@ -1011,6 +1015,12 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
       peer.consecutive_send_failures >=
           MAX_CONSECUTIVE_SEND_FAILURES) {
     this->status_set_warning();
+  }
+}
+
+void CFXSyncComponent::clear_warning_if_set_() {
+  if (this->status_has_warning()) {
+    this->status_clear_warning();
   }
 }
 
@@ -1088,6 +1098,34 @@ void CFXSyncComponent::log_rejection_(const char *message) {
   }
 }
 
+void CFXSyncComponent::schedule_boot_discovery_() {
+  const uint32_t delay_ms =
+      BOOT_DISCOVERY_DELAY_MS +
+      (esp_random() % (BOOT_DISCOVERY_JITTER_SPREAD_MS + 1));
+  this->set_timeout("boot-discovery", delay_ms,
+                    [this]() { this->run_boot_discovery_(); });
+}
+
+void CFXSyncComponent::run_boot_discovery_() {
+  if (!this->boot_radio_ready_() &&
+      millis() - this->boot_discovery_started_ms_ <
+          BOOT_DISCOVERY_MAX_WAIT_MS) {
+    this->set_timeout("boot-discovery-retry", BOOT_DISCOVERY_RETRY_MS,
+                      [this]() { this->run_boot_discovery_(); });
+    return;
+  }
+  this->send_hello_();
+}
+
+bool CFXSyncComponent::boot_radio_ready_() const {
+#ifdef USE_WIFI
+  if (wifi::global_wifi_component != nullptr) {
+    return wifi::global_wifi_component->is_connected();
+  }
+#endif
+  return true;
+}
+
 void CFXSyncComponent::schedule_follower_hello_() {
   if (this->role_ == CFXSyncRole::LEADER) {
     return;
@@ -1104,15 +1142,21 @@ void CFXSyncComponent::schedule_follower_hello_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_() {
-  this->schedule_follower_recovery_attempt_("sync-request-1", 1000);
-  this->schedule_follower_recovery_attempt_("sync-request-2", 2000);
-  this->schedule_follower_recovery_attempt_("sync-request-3", 4000);
-  this->set_timeout("sync-recovery-expired", 6000, [this]() {
-    if (!this->has_valid_state_) {
-      ESP_LOGW(TAG, "No valid leader state received during startup recovery");
-      this->status_set_warning();
-    }
-  });
+  this->schedule_follower_recovery_attempt_("sync-request-1",
+                                            FOLLOWER_RECOVERY_FIRST_MS);
+  this->schedule_follower_recovery_attempt_("sync-request-2",
+                                            FOLLOWER_RECOVERY_SECOND_MS);
+  this->schedule_follower_recovery_attempt_("sync-request-3",
+                                            FOLLOWER_RECOVERY_THIRD_MS);
+  this->set_timeout("sync-recovery-expired", FOLLOWER_RECOVERY_EXPIRE_MS,
+                    [this]() {
+                      if (!this->has_valid_state_) {
+                        ESP_LOGW(TAG,
+                                 "No valid leader state received during "
+                                 "startup recovery");
+                        this->status_set_warning();
+                      }
+                    });
 }
 
 void CFXSyncComponent::schedule_follower_recovery_attempt_(
@@ -1120,7 +1164,7 @@ void CFXSyncComponent::schedule_follower_recovery_attempt_(
   const uint32_t delay_ms =
       base_delay_ms + (esp_random() % (RECOVERY_JITTER_SPREAD_MS + 1));
   this->set_timeout(name, delay_ms, [this]() {
-    if (!this->has_valid_state_) {
+    if (!this->has_valid_state_ && this->boot_radio_ready_()) {
       this->send_sync_request_to_(BROADCAST_MAC);
     }
   });

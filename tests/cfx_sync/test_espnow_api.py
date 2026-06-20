@@ -260,22 +260,80 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_leader_does_not_schedule_periodic_hello_transmit(self):
+    def test_setup_defers_initial_hello_until_boot_discovery_window(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn("void schedule_boot_discovery_();", header)
+        self.assertIn("void run_boot_discovery_();", header)
+        self.assertIn("bool boot_radio_ready_() const;", header)
         self.assertIn("void schedule_follower_hello_();", header)
         self.assertRegex(
             source,
             re.compile(
-                r"this->send_hello_\(\);"
+                r"this->schedule_boot_discovery_\(\);"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*this->schedule_follower_hello_\(\);"
                 r"\s*\}",
                 re.DOTALL,
             ),
         )
+        setup_section = re.search(
+            r"void CFXSyncComponent::setup\(\).*?^\}",
+            source,
+            re.DOTALL | re.MULTILINE,
+        )
+        self.assertIsNotNone(setup_section)
+        self.assertNotIn("this->send_hello_();", setup_section.group(0))
         self.assertNotIn('set_interval("hello"', source)
+
+    def test_boot_discovery_waits_for_wifi_channel_ready_before_first_hello(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("#include \"esphome/components/wifi/wifi_component.h\"", source)
+        self.assertIn("BOOT_DISCOVERY_DELAY_MS", header)
+        self.assertIn("BOOT_DISCOVERY_JITTER_SPREAD_MS", header)
+        self.assertIn("BOOT_DISCOVERY_RETRY_MS", header)
+        self.assertIn("BOOT_DISCOVERY_MAX_WAIT_MS", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::boot_radio_ready_"
+                r"\(\) const \{.*?"
+                r"#ifdef USE_WIFI.*?"
+                r"wifi::global_wifi_component != nullptr.*?"
+                r"return wifi::global_wifi_component->is_connected\(\);.*?"
+                r"#endif.*?"
+                r"return true;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_boot_discovery_\(\) \{.*?"
+                r"BOOT_DISCOVERY_DELAY_MS \+"
+                r"\s*\(esp_random\(\) % \(BOOT_DISCOVERY_JITTER_SPREAD_MS \+ 1\)\).*?"
+                r"this->set_timeout\(\s*\"boot-discovery\".*?"
+                r"this->run_boot_discovery_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::run_boot_discovery_\(\) \{.*?"
+                r"!this->boot_radio_ready_\(\).*?"
+                r"millis\(\) - this->boot_discovery_started_ms_ <"
+                r"\s*BOOT_DISCOVERY_MAX_WAIT_MS.*?"
+                r"this->set_timeout\(\s*\"boot-discovery-retry\""
+                r".*?BOOT_DISCOVERY_RETRY_MS.*?"
+                r"this->run_boot_discovery_\(\);.*?"
+                r"this->send_hello_\(\);",
+                re.DOTALL,
+            ),
+        )
 
     def test_follower_hello_schedule_is_jittered(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -317,11 +375,13 @@ class ESPNowAPITests(unittest.TestCase):
                 r"void CFXSyncComponent::schedule_follower_recovery_"
                 r"\(\).*?"
                 r"this->schedule_follower_recovery_attempt_"
-                r"\(\"sync-request-1\", 1000\);.*?"
+                r"\(\"sync-request-1\",\s*FOLLOWER_RECOVERY_FIRST_MS\);.*?"
                 r"this->schedule_follower_recovery_attempt_"
-                r"\(\"sync-request-2\", 2000\);.*?"
+                r"\(\"sync-request-2\",\s*FOLLOWER_RECOVERY_SECOND_MS\);.*?"
                 r"this->schedule_follower_recovery_attempt_"
-                r"\(\"sync-request-3\", 4000\);",
+                r"\(\"sync-request-3\",\s*FOLLOWER_RECOVERY_THIRD_MS\);.*?"
+                r"this->set_timeout\("
+                r"\"sync-recovery-expired\",\s*FOLLOWER_RECOVERY_EXPIRE_MS",
                 re.DOTALL,
             ),
         )
@@ -333,6 +393,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"base_delay_ms \+"
                 r"\s*\(esp_random\(\) % \(RECOVERY_JITTER_SPREAD_MS \+ 1\)\).*?"
                 r"this->set_timeout\(name, delay_ms.*?"
+                r"!this->has_valid_state_ && this->boot_radio_ready_\(\).*?"
                 r"this->send_sync_request_to_\(BROADCAST_MAC\);",
                 re.DOTALL,
             ),
@@ -1174,6 +1235,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("bool has_pending_ack_(const PeerState &peer) const;", header)
+        self.assertIn("void clear_warning_if_set_();", header)
         self.assertRegex(
             source,
             re.compile(
@@ -1188,10 +1250,26 @@ class ESPNowAPITests(unittest.TestCase):
                 r"peer\.missed_acks = 0;.*?"
                 r"!this->has_peer_send_warning_\(\).*?"
                 r"!this->has_pending_ack_\(.*?"
-                r"this->status_clear_warning\(\);",
+                r"this->clear_warning_if_set_\(\);",
                 re.DOTALL,
             ),
         )
+
+    def test_warning_clear_is_guarded_to_avoid_startup_noise(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::clear_warning_if_set_\(\) \{"
+                r"\s*if \(this->status_has_warning\(\)\) \{"
+                r"\s*this->status_clear_warning\(\);"
+                r"\s*\}"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertEqual(source.count("status_clear_warning()"), 1)
 
     def test_mismatched_state_ack_is_logged_without_clearing_pending_ack(self):
         source = SOURCE.read_text(encoding="utf-8")
@@ -1208,7 +1286,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*return;"
                 r"\s*\}.*?"
                 r"peer\.last_ack_boot_id = packet\.acked_boot_id;.*?"
-                r"this->status_clear_warning\(\);",
+                r"this->clear_warning_if_set_\(\);",
                 re.DOTALL,
             ),
         )

@@ -152,6 +152,14 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t PEER_TIMEOUT_MS = 120000;
   static constexpr uint32_t HELLO_INTERVAL_MS = 10000;
   static constexpr uint32_t HELLO_JITTER_SPREAD_MS = 3000;
+  static constexpr uint32_t BOOT_DISCOVERY_DELAY_MS = 6000;
+  static constexpr uint32_t BOOT_DISCOVERY_JITTER_SPREAD_MS = 1500;
+  static constexpr uint32_t BOOT_DISCOVERY_RETRY_MS = 1000;
+  static constexpr uint32_t BOOT_DISCOVERY_MAX_WAIT_MS = 20000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_FIRST_MS = 8000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_SECOND_MS = 12000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_THIRD_MS = 16000;
+  static constexpr uint32_t FOLLOWER_RECOVERY_EXPIRE_MS = 22000;
   static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
   static constexpr uint32_t ACK_WARNING_MS = 15000;
   static constexpr uint32_t ACK_JITTER_MIN_MS = 5;
@@ -270,10 +278,14 @@ class CFXSyncComponent : public Component,
   void check_ack_health_();
   void handle_send_result_(esp_err_t result);
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
+  void clear_warning_if_set_();
   void flush_deferred_state_();
   void schedule_state_retry_();
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
+  void schedule_boot_discovery_();
+  void run_boot_discovery_();
+  bool boot_radio_ready_() const;
   void schedule_follower_hello_();
   void schedule_follower_recovery_();
   void schedule_follower_recovery_attempt_(const char *name,
@@ -307,6 +319,7 @@ class CFXSyncComponent : public Component,
   uint32_t heartbeat_ms_{30000};
   uint32_t boot_id_{0};
   uint32_t tx_sequence_{0};
+  uint32_t boot_discovery_started_ms_{0};
   bool send_pending_{false};
   bool state_send_deferred_{false};
   uint8_t state_retry_attempts_{0};
