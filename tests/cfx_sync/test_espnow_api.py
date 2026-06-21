@@ -14,6 +14,10 @@ EFFECT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_effect.h"
 CFX_BUTTON_PY = ROOT / "components" / "cfx_button" / "__init__.py"
 CFX_BUTTON_HEADER = ROOT / "components" / "cfx_button" / "cfx_button.h"
 CFX_BUTTON_SOURCE = ROOT / "components" / "cfx_button" / "cfx_button.cpp"
+CFX_DIMMER_SOURCE = ROOT / "components" / "cfx_dimmer" / "cfx_dimmer.cpp"
+CFX_DIMMER_TIMING_HEADER = (
+    ROOT / "components" / "cfx_dimmer" / "cfx_dimmer_timing.h"
+)
 
 
 class ESPNowAPITests(unittest.TestCase):
@@ -201,6 +205,10 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn(
             '"cfx_button",',
+            py_source,
+        )
+        self.assertIn(
+            '"cfx_dimmer",',
             py_source,
         )
         self.assertIn(
@@ -724,6 +732,36 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("packet.has_color = true", source)
         self.assertIn("packet.has_color_brightness = true", source)
 
+    def test_packet_codec_exposes_transition_and_ramp_timing(self):
+        header = PACKET_HEADER.read_text(encoding="utf-8")
+        source = PACKET_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("FIELD_TRANSITION = 0x00000040UL", header)
+        self.assertIn("FIELD_RAMP = 0x00000080UL", header)
+        self.assertIn("MAX_TIMING_VALUE_SIZE = 4", header)
+        self.assertIn("MAX_STATE_PACKET_SIZE == 132", header)
+        self.assertIn("bool has_transition{false};", header)
+        self.assertIn("uint16_t transition_ms{0};", header)
+        self.assertIn("bool has_ramp{false};", header)
+        self.assertIn("uint16_t ramp_ms{0};", header)
+        self.assertIn("struct CFXSyncTimingState", header)
+        self.assertIn("const CFXSyncTimingState &timing", header)
+        self.assertIn("field_mask |= FIELD_TRANSITION;", source)
+        self.assertIn("field_mask |= FIELD_RAMP;", source)
+        self.assertIn("append_u16_(payload, timing.transition_ms);", source)
+        self.assertIn("append_u16_(payload, timing.ramp_ms);", source)
+        self.assertIn("packet.has_transition = true;", source)
+        self.assertIn("packet.transition_ms = read_u16_", source)
+        self.assertIn("packet.has_ramp = true;", source)
+        self.assertIn("packet.ramp_ms = read_u16_", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"FIELD_EFFECT \| FIELD_CONTROLS \|"
+                r"\s*FIELD_TRANSITION \| FIELD_RAMP"
+            ),
+        )
+
     def test_packet_codec_exposes_optional_effect_wire_state(self):
         header = PACKET_HEADER.read_text(encoding="utf-8")
         source = PACKET_SOURCE.read_text(encoding="utf-8")
@@ -928,7 +966,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"this->send_state_to_followers_\(snapshot, effect, controls\);.*?"
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
                 r"snapshot\.has_white,\s*true,\s*effect,\s*"
-                r"controls\.has_any\(\),\s*controls,\s*this->key_, packet",
+                r"controls\.has_any\(\),\s*controls,\s*timing,\s*"
+                r"this->key_,\s*packet",
                 re.DOTALL,
             ),
         )
@@ -1626,6 +1665,44 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_effect(", source)
         self.assertEqual(source.count("light->make_call()"), 1)
         self.assertEqual(source.count("\n  call.perform();\n}"), 1)
+
+    def test_follower_applies_ramp_or_transition_before_perform(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.has_ramp && packet\.has_brightness\) \{"
+                r"\s*call\.set_transition_length\(packet\.ramp_ms\);"
+                r"\s*\} else if \(packet\.has_transition\) \{"
+                r"\s*call\.set_transition_length\(packet\.transition_ms\);"
+                r"\s*\}.*?"
+                r"call\.perform\(\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_cfx_dimmer_publishes_sync_ramp_timing_hints(self):
+        self.assertTrue(
+            CFX_DIMMER_TIMING_HEADER.exists(),
+            "cfx_dimmer_timing.h must expose the shared dimmer timing hint",
+        )
+        timing_header = CFX_DIMMER_TIMING_HEADER.read_text(encoding="utf-8")
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+        sync_source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("struct CFXDimmerTimingHint", timing_header)
+        self.assertIn("publish_light_ramp_hint", timing_header)
+        self.assertIn("capture_light_timing_hint", timing_header)
+        self.assertIn("clear_light_timing_hint", timing_header)
+        self.assertIn('#include "cfx_dimmer_timing.h"', dimmer_source)
+        self.assertIn("publish_light_ramp_hint(state, now + duration);", dimmer_source)
+        self.assertIn("clear_light_timing_hint(state);", dimmer_source)
+        self.assertIn(
+            '#include "../cfx_dimmer/cfx_dimmer_timing.h"',
+            sync_source,
+        )
+        self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")

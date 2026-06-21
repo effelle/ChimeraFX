@@ -150,7 +150,7 @@ bool CFXSyncPacketCodec::encode_state(
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
   return encode_state(group_hash, boot_id, sequence, power, brightness,
                       color_brightness, red, green, blue, white, has_white,
-                      false, {}, key, output);
+                      false, {}, false, {}, {}, key, output);
 }
 
 bool CFXSyncPacketCodec::encode_state(
@@ -161,7 +161,7 @@ bool CFXSyncPacketCodec::encode_state(
     std::vector<uint8_t> &output) {
   return encode_state(group_hash, boot_id, sequence, power, brightness,
                       color_brightness, red, green, blue, white, has_white,
-                      has_effect, effect, false, {}, key, output);
+                      has_effect, effect, false, {}, {}, key, output);
 }
 
 bool CFXSyncPacketCodec::encode_state(
@@ -169,8 +169,8 @@ bool CFXSyncPacketCodec::encode_state(
     uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
     uint8_t blue, uint8_t white, bool has_white, bool has_effect,
     const CFXSyncEffectState &effect, bool has_controls,
-    const CFXSyncControlState &controls, const std::array<uint8_t, 32> &key,
-    std::vector<uint8_t> &output) {
+    const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
+    const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
   if (has_effect) {
     const size_t name_size = effect.name.size();
     switch (effect.kind) {
@@ -198,6 +198,12 @@ bool CFXSyncPacketCodec::encode_state(
   }
   if (has_controls) {
     field_mask |= FIELD_CONTROLS;
+  }
+  if (timing.has_transition) {
+    field_mask |= FIELD_TRANSITION;
+  }
+  if (timing.has_ramp) {
+    field_mask |= FIELD_RAMP;
   }
   append_u32_(payload, field_mask);
   payload.push_back(power ? 1 : 0);
@@ -279,6 +285,12 @@ bool CFXSyncPacketCodec::encode_state(
     if (controls.has_palette) {
       payload.push_back(controls.palette);
     }
+  }
+  if (timing.has_transition) {
+    append_u16_(payload, timing.transition_ms);
+  }
+  if (timing.has_ramp) {
+    append_u16_(payload, timing.ramp_ms);
   }
 
   return encode_(CFXSyncPacketType::STATE, group_hash, boot_id, sequence,
@@ -621,10 +633,27 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
       packet.controls.palette = payload[offset++];
     }
   }
+  if ((packet.field_mask & FIELD_TRANSITION) != 0) {
+    if (offset + 2 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_transition = true;
+    packet.transition_ms = read_u16_(payload + offset);
+    offset += 2;
+  }
+
+  if ((packet.field_mask & FIELD_RAMP) != 0) {
+    if (offset + 2 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_ramp = true;
+    packet.ramp_ms = read_u16_(payload + offset);
+    offset += 2;
+  }
 
   constexpr uint32_t KNOWN_FIELDS =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS |
-      FIELD_EFFECT | FIELD_CONTROLS;
+      FIELD_EFFECT | FIELD_CONTROLS | FIELD_TRANSITION | FIELD_RAMP;
   if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
     return CFXSyncDecodeResult::MALFORMED;
   }

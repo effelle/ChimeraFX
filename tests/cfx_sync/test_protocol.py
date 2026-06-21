@@ -19,6 +19,8 @@ FIELD_COLOR = 0x00000004
 FIELD_COLOR_BRIGHTNESS = 0x00000008
 FIELD_EFFECT = 0x00000010
 FIELD_CONTROLS = 0x00000020
+FIELD_TRANSITION = 0x00000040
+FIELD_RAMP = 0x00000080
 COLOR_CAP_WHITE = 0x01
 EFFECT_NONE = 0
 EFFECT_CHIMERAFX = 1
@@ -43,8 +45,9 @@ CAP_BINARY_REMOTE = 0x0004
 MAX_EFFECT_NAME_BYTES = 64
 MAX_EFFECT_VALUE_SIZE = 67
 MAX_CONTROLS_VALUE_SIZE = 11
+MAX_TIMING_VALUE_SIZE = 4
 MAX_EFFECT_STATE_PACKET_SIZE = 117
-MAX_STATE_PACKET_SIZE = 128
+MAX_STATE_PACKET_SIZE = 132
 FULL_STATE_MASK = (
     FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS
 )
@@ -248,6 +251,8 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         "has_color_brightness": False,
         "has_effect": False,
         "has_controls": False,
+        "has_transition": False,
+        "has_ramp": False,
         "has_force_white": False,
         "has_intro": False,
         "has_outro": False,
@@ -423,6 +428,22 @@ def decode(packet, expected_group_hash=GROUP_HASH):
                 result["has_palette"] = True
                 result["palette"] = payload[offset]
                 offset += 1
+        if result["field_mask"] & FIELD_TRANSITION:
+            if offset + 2 > payload_size:
+                raise ValueError("transition")
+            result["has_transition"] = True
+            result["transition_ms"] = struct.unpack(
+                ">H", payload[offset:offset + 2]
+            )[0]
+            offset += 2
+        if result["field_mask"] & FIELD_RAMP:
+            if offset + 2 > payload_size:
+                raise ValueError("ramp")
+            result["has_ramp"] = True
+            result["ramp_ms"] = struct.unpack(
+                ">H", payload[offset:offset + 2]
+            )[0]
+            offset += 2
         known_fields = (
             FIELD_POWER
             | FIELD_BRIGHTNESS
@@ -430,6 +451,8 @@ def decode(packet, expected_group_hash=GROUP_HASH):
             | FIELD_COLOR_BRIGHTNESS
             | FIELD_EFFECT
             | FIELD_CONTROLS
+            | FIELD_TRANSITION
+            | FIELD_RAMP
         )
         if not result["field_mask"] & ~known_fields and offset != payload_size:
             raise ValueError("state-length")
@@ -503,7 +526,9 @@ class ProtocolTests(unittest.TestCase):
             MAX_EFFECT_STATE_PACKET_SIZE,
         )
         self.assertEqual(
-            MAX_EFFECT_STATE_PACKET_SIZE + MAX_CONTROLS_VALUE_SIZE,
+            MAX_EFFECT_STATE_PACKET_SIZE
+            + MAX_CONTROLS_VALUE_SIZE
+            + MAX_TIMING_VALUE_SIZE,
             MAX_STATE_PACKET_SIZE,
         )
 
@@ -714,6 +739,41 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decoded["intensity"], 144)
         self.assertTrue(decoded["mirror"])
         self.assertEqual(decoded["palette"], 7)
+
+    def test_transition_and_ramp_vector_is_stable(self):
+        payload = (
+            full_state_effect_controls_payload(
+                EFFECT_CHIMERAFX,
+                effect_id=3,
+                name="Wipe",
+                force_white=True,
+            )
+        )
+        payload = (
+            struct.pack(
+                ">I",
+                FULL_STATE_MASK
+                | FIELD_EFFECT
+                | FIELD_CONTROLS
+                | FIELD_TRANSITION
+                | FIELD_RAMP,
+            )
+            + payload[4:]
+            + struct.pack(">HH", 500, 1500)
+        )
+        packet = encode(TYPE_STATE, payload)
+        self.assertEqual(len(packet), 64)
+        self.assertEqual(
+            packet.hex(),
+            "4346585301010016001a12345678a1b2c3d401020304"
+            "000000ff0180010a141e289e0103045769706500010101f405dc"
+            "508a8b9415b89028bb382fd0b8711de8",
+        )
+        decoded = decode(packet)
+        self.assertTrue(decoded["has_transition"])
+        self.assertEqual(decoded["transition_ms"], 500)
+        self.assertTrue(decoded["has_ramp"])
+        self.assertEqual(decoded["ramp_ms"], 1500)
 
     def test_none_effect_vector_is_stable(self):
         packet = encode(
@@ -996,6 +1056,17 @@ class ProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "controls-mirror"):
             decode(encode(TYPE_STATE, payload))
+
+    def test_truncated_transition_and_ramp_values_are_rejected(self):
+        malformed = (
+            (FIELD_TRANSITION, b"\x01", "transition"),
+            (FIELD_RAMP, b"\x01", "ramp"),
+        )
+        for field, value, message in malformed:
+            with self.subTest(field=field):
+                payload = struct.pack(">I", field) + value
+                with self.assertRaisesRegex(ValueError, message):
+                    decode(encode(TYPE_STATE, payload))
 
     def test_legacy_packet_without_controls_remains_valid(self):
         decoded = decode(

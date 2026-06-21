@@ -2,6 +2,7 @@
 
 #ifdef USE_ESP32
 
+#include "../cfx_dimmer/cfx_dimmer_timing.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #ifdef USE_WIFI
@@ -17,6 +18,17 @@
 
 namespace esphome {
 namespace cfx_sync {
+
+static CFXSyncTimingState capture_sync_timing_state(
+    light::LightState *leader) {
+  CFXSyncTimingState timing;
+  const auto hint = cfx_dimmer::capture_light_timing_hint(leader, millis());
+  timing.has_transition = hint.has_transition;
+  timing.transition_ms = hint.transition_ms;
+  timing.has_ramp = hint.has_ramp;
+  timing.ramp_ms = hint.ramp_ms;
+  return timing;
+}
 
 static const char *const TAG = "cfx_sync";
 
@@ -577,12 +589,15 @@ bool CFXSyncComponent::send_state_to_followers_(
   }
 
   std::vector<uint8_t> packet;
+  auto *leader = this->leader_light_();
+  const auto timing = capture_sync_timing_state(leader);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,
           snapshot.brightness, snapshot.color_brightness, snapshot.red,
           snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
-          true, effect, controls.has_any(), controls, this->key_, packet)) {
+          true, effect, controls.has_any(), controls, timing, this->key_,
+          packet)) {
     return false;
   }
   if (!this->send_packet_to_(BROADCAST_MAC, packet)) {
@@ -640,12 +655,15 @@ bool CFXSyncComponent::send_state_to_peer_(
   }
 
   std::vector<uint8_t> packet;
+  auto *leader = this->leader_light_();
+  const auto timing = capture_sync_timing_state(leader);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,
           snapshot.brightness, snapshot.color_brightness, snapshot.red,
           snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
-          true, effect, controls.has_any(), controls, this->key_, packet)) {
+          true, effect, controls.has_any(), controls, timing, this->key_,
+          packet)) {
     return false;
   }
   if (!this->send_packet_to_peer_(peer, packet)) {
@@ -1587,6 +1605,11 @@ void CFXSyncComponent::apply_remote_state_to_light_(
     if (light->get_effect_name() != desired_effect) {
       call.set_effect(desired_effect);
     }
+  }
+  if (packet.has_ramp && packet.has_brightness) {
+    call.set_transition_length(packet.ramp_ms);
+  } else if (packet.has_transition) {
+    call.set_transition_length(packet.transition_ms);
   }
 
   call.perform();

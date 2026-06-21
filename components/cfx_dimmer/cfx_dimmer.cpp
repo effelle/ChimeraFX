@@ -1,4 +1,5 @@
 #include "cfx_dimmer.h"
+#include "cfx_dimmer_timing.h"
 
 #include "esphome/core/helpers.h"
 #include <algorithm>
@@ -130,6 +131,9 @@ void CFXDimmer::start_ramp_(uint32_t now) {
     this->ramp_durations_ms_.push_back(duration);
     this->ramp_manual_.push_back(manual);
     this->ramp_end_ms_ = std::max(this->ramp_end_ms_, now + duration);
+    if (!manual && duration != 0) {
+      publish_light_ramp_hint(state, now + duration);
+    }
     this->apply_brightness_(state, manual ? start : target,
                             manual ? 0 : duration);
   }
@@ -189,6 +193,9 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
                                   uint32_t transition_ms) {
   if (state == nullptr) {
     return;
+  }
+  if (transition_ms == 0) {
+    clear_light_timing_hint(state);
   }
   auto call = state->make_call();
   call.set_transition_length(transition_ms);

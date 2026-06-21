@@ -349,7 +349,7 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
         heartbeat = SimpleNamespace(total_milliseconds=30_000)
         config = {
             "id": light_id("sync"),
-            "espnow_id": light_id("espnow"),
+            "_espnow_id": light_id("espnow"),
             "role": "follower",
             "lights": [light_id("a"), light_id("b")],
             "group": "room",

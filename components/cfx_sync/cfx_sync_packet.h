@@ -97,6 +97,13 @@ struct CFXSyncControlState {
   }
 };
 
+struct CFXSyncTimingState {
+  bool has_transition{false};
+  uint16_t transition_ms{0};
+  bool has_ramp{false};
+  uint16_t ramp_ms{0};
+};
+
 struct CFXSyncPacket {
   CFXSyncPacketType type{CFXSyncPacketType::STATE};
   uint8_t flags{0};
@@ -119,6 +126,10 @@ struct CFXSyncPacket {
   CFXSyncEffectState effect;
   bool has_controls{false};
   CFXSyncControlState controls;
+  bool has_transition{false};
+  uint16_t transition_ms{0};
+  bool has_ramp{false};
+  uint16_t ramp_ms{0};
   CFXSyncNodeRole node_role{CFXSyncNodeRole::FOLLOWER};
   uint16_t capabilities{0};
   uint32_t acked_boot_id{0};
@@ -138,6 +149,8 @@ class CFXSyncPacketCodec {
   static constexpr uint32_t FIELD_COLOR_BRIGHTNESS = 0x00000008UL;
   static constexpr uint32_t FIELD_EFFECT = 0x00000010UL;
   static constexpr uint32_t FIELD_CONTROLS = 0x00000020UL;
+  static constexpr uint32_t FIELD_TRANSITION = 0x00000040UL;
+  static constexpr uint32_t FIELD_RAMP = 0x00000080UL;
   static constexpr uint16_t CONTROL_FORCE_WHITE = 0x0001U;
   static constexpr uint16_t CONTROL_INTRO = 0x0002U;
   static constexpr uint16_t CONTROL_OUTRO = 0x0004U;
@@ -156,19 +169,20 @@ class CFXSyncPacketCodec {
   static constexpr size_t MAX_EFFECT_NAME_BYTES = 64;
   static constexpr size_t MAX_EFFECT_VALUE_SIZE = 67;
   static constexpr size_t MAX_CONTROLS_VALUE_SIZE = 11;
+  static constexpr size_t MAX_TIMING_VALUE_SIZE = 4;
   static constexpr size_t MAX_EFFECT_STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE +
       AUTH_TAG_SIZE;
   static constexpr size_t MAX_STATE_PAYLOAD_SIZE =
       FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE +
-      MAX_CONTROLS_VALUE_SIZE;
+      MAX_CONTROLS_VALUE_SIZE + MAX_TIMING_VALUE_SIZE;
   static constexpr size_t STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t HELLO_PAYLOAD_SIZE = 3;
   static constexpr size_t STATE_ACK_PAYLOAD_SIZE = 9;
   static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;
   static constexpr size_t MAX_STATE_PACKET_SIZE =
-      HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 117 bytes.
+      HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 132 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t HELLO_PACKET_SIZE =
       HEADER_SIZE + HELLO_PAYLOAD_SIZE + AUTH_TAG_SIZE;
@@ -200,6 +214,7 @@ class CFXSyncPacketCodec {
                            const CFXSyncEffectState &effect,
                            bool has_controls,
                            const CFXSyncControlState &controls,
+                           const CFXSyncTimingState &timing,
                            const std::array<uint8_t, 32> &key,
                            std::vector<uint8_t> &output);
   static bool encode_sync_request(uint32_t group_hash, uint32_t boot_id,
@@ -251,9 +266,11 @@ static_assert(CFXSyncPacketCodec::MAX_EFFECT_VALUE_SIZE ==
               "CFX sync effect value size is inconsistent");
 static_assert(CFXSyncPacketCodec::MAX_CONTROLS_VALUE_SIZE == 11,
               "CFX sync maximum controls value size changed");
+static_assert(CFXSyncPacketCodec::MAX_TIMING_VALUE_SIZE == 4,
+              "CFX sync maximum timing value size changed");
 static_assert(CFXSyncPacketCodec::MAX_EFFECT_STATE_PACKET_SIZE == 117,
               "CFX sync maximum effect state packet size changed");
-static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 128,
+static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 132,
               "CFX sync maximum state packet size changed");
 static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE < 250,
               "CFX sync state packet exceeds ESP-NOW V1 payload limit");
