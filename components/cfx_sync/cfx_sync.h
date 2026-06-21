@@ -233,15 +233,17 @@ class CFXSyncComponent : public Component,
     uint32_t last_skip_log_ms{0};
   };
 
-  bool send_state_();
+  bool send_state_(bool include_default_transition = false);
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
-                   const CFXSyncControlState &controls);
+                   const CFXSyncControlState &controls,
+                   bool include_default_transition);
   bool send_heartbeat_state_();
   bool send_state_to_followers_();
   bool send_state_to_followers_(const CFXSyncLightSnapshot &snapshot,
                                 const CFXSyncEffectState &effect,
-                                const CFXSyncControlState &controls);
+                                const CFXSyncControlState &controls,
+                                bool include_default_transition);
   void mark_state_sent_to_followers_(uint32_t sequence);
   bool peer_accepts_leader_state_(const PeerState &peer) const;
   bool send_state_to_peer_(PeerState &peer);
@@ -353,6 +355,7 @@ class CFXSyncComponent : public Component,
   uint32_t boot_discovery_started_ms_{0};
   bool send_pending_{false};
   bool state_send_deferred_{false};
+  bool state_send_deferred_with_transition_{false};
   uint8_t state_retry_attempts_{0};
   bool state_retry_active_{false};
   bool state_retry_scheduled_{false};

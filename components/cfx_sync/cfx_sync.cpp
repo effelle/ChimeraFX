@@ -20,13 +20,28 @@ namespace esphome {
 namespace cfx_sync {
 
 static CFXSyncTimingState capture_sync_timing_state(
-    light::LightState *leader) {
+    light::LightState *leader, const CFXSyncEffectState &effect,
+    bool include_default_transition) {
   CFXSyncTimingState timing;
   const auto hint = cfx_dimmer::capture_light_timing_hint(leader, millis());
   timing.has_transition = hint.has_transition;
   timing.transition_ms = hint.transition_ms;
   timing.has_ramp = hint.has_ramp;
   timing.ramp_ms = hint.ramp_ms;
+  if (hint.has_ramp) {
+    return timing;
+  }
+
+  if (include_default_transition && leader != nullptr &&
+      effect.kind == CFXSyncEffectKind::NONE) {
+    const uint32_t transition_ms = leader->get_default_transition_length();
+    if (transition_ms > 0) {
+      timing.has_transition = true;
+      timing.transition_ms = static_cast<uint16_t>(
+          std::min<uint32_t>(transition_ms,
+                             std::numeric_limits<uint16_t>::max()));
+    }
+  }
   return timing;
 }
 
@@ -539,14 +554,14 @@ void CFXSyncComponent::on_local_light_update() {
   this->observed_state_ = snapshot;
   this->observed_effect_ = effect;
   this->observed_controls_ = controls;
-  this->send_state_(snapshot, effect, controls);
+  this->send_state_(snapshot, effect, controls, true);
 }
 
 void CFXSyncComponent::on_local_control_update() {
   this->on_local_light_update();
 }
 
-bool CFXSyncComponent::send_state_() {
+bool CFXSyncComponent::send_state_(bool include_default_transition) {
   auto *leader = this->leader_light_();
   if (leader == nullptr || this->effect_catalogs_.empty()) {
     return false;
@@ -554,14 +569,17 @@ bool CFXSyncComponent::send_state_() {
   const auto snapshot = capture_light_snapshot(*leader);
   const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
   const auto controls = this->capture_control_state_(0);
-  return this->send_state_to_followers_(snapshot, effect, controls);
+  return this->send_state_to_followers_(snapshot, effect, controls,
+                                        include_default_transition);
 }
 
 bool CFXSyncComponent::send_state_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
-    const CFXSyncControlState &controls) {
-  return this->send_state_to_followers_(snapshot, effect, controls);
+    const CFXSyncControlState &controls,
+    bool include_default_transition) {
+  return this->send_state_to_followers_(snapshot, effect, controls,
+                                        include_default_transition);
 }
 
 bool CFXSyncComponent::send_heartbeat_state_() {
@@ -576,21 +594,26 @@ bool CFXSyncComponent::send_state_to_followers_() {
   const auto snapshot = capture_light_snapshot(*leader);
   const auto effect = capture_effect_state(leader, this->effect_catalogs_[0]);
   const auto controls = this->capture_control_state_(0);
-  return this->send_state_to_followers_(snapshot, effect, controls);
+  return this->send_state_to_followers_(snapshot, effect, controls, false);
 }
 
 bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect,
-    const CFXSyncControlState &controls) {
+    const CFXSyncControlState &controls,
+    bool include_default_transition) {
   if (this->send_pending_) {
     this->state_send_deferred_ = true;
+    this->state_send_deferred_with_transition_ =
+        this->state_send_deferred_with_transition_ ||
+        include_default_transition;
     return false;
   }
 
   std::vector<uint8_t> packet;
   auto *leader = this->leader_light_();
-  const auto timing = capture_sync_timing_state(leader);
+  const auto timing = capture_sync_timing_state(
+      leader, effect, include_default_transition);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,
@@ -656,7 +679,7 @@ bool CFXSyncComponent::send_state_to_peer_(
 
   std::vector<uint8_t> packet;
   auto *leader = this->leader_light_();
-  const auto timing = capture_sync_timing_state(leader);
+  const auto timing = capture_sync_timing_state(leader, effect, false);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,
@@ -1228,8 +1251,11 @@ void CFXSyncComponent::flush_deferred_state_() {
       this->role_ != CFXSyncRole::LEADER) {
     return;
   }
+  const bool include_default_transition =
+      this->state_send_deferred_with_transition_;
   this->state_send_deferred_ = false;
-  this->send_state_();
+  this->state_send_deferred_with_transition_ = false;
+  this->send_state_(include_default_transition);
 }
 
 void CFXSyncComponent::schedule_state_retry_() {

@@ -930,7 +930,57 @@ class ESPNowAPITests(unittest.TestCase):
                 r"this->observed_state_ = snapshot;.*?"
                 r"this->observed_effect_ = effect;.*?"
                 r"this->observed_controls_ = controls;.*?"
-                r"this->send_state_\(snapshot, effect, controls\);",
+                r"this->send_state_\(snapshot, effect, controls, true\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_local_leader_events_emit_default_transition_timing(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool include_default_transition", header)
+        self.assertIn(
+            "bool state_send_deferred_with_transition_{false};",
+            header,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"static CFXSyncTimingState capture_sync_timing_state"
+                r"\(.*?const CFXSyncEffectState &effect,\s*"
+                r"bool include_default_transition.*?"
+                r"cfx_dimmer::capture_light_timing_hint.*?"
+                r"if \(hint\.has_ramp\).*?return timing;.*?"
+                r"if \(include_default_transition &&.*?"
+                r"effect\.kind == CFXSyncEffectKind::NONE.*?"
+                r"leader->get_default_transition_length\(\).*?"
+                r"timing\.has_transition = true;.*?"
+                r"timing\.transition_ms =",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "this->send_state_(snapshot, effect, controls, true);",
+            source,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_heartbeat_state_\(\) \{"
+                r"\s*return this->send_state_\(\);"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::flush_deferred_state_\(\).*?"
+                r"const bool include_default_transition ="
+                r"\s*this->state_send_deferred_with_transition_;.*?"
+                r"this->state_send_deferred_with_transition_ = false;.*?"
+                r"this->send_state_\(include_default_transition\);",
                 re.DOTALL,
             ),
         )
@@ -948,11 +998,14 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::send_state_\(\) \{.*?"
+                r"bool CFXSyncComponent::send_state_\(\s*"
+                r"bool include_default_transition\) \{.*?"
                 r"const auto snapshot = capture_light_snapshot\(\*leader\);.*?"
                 r"const auto effect = capture_effect_state\(leader, this->effect_catalogs_\[0\]\);.*?"
                 r"const auto controls = this->capture_control_state_\(0\);.*?"
-                r"this->send_state_to_followers_\(snapshot, effect, controls\);",
+                r"return this->send_state_to_followers_"
+                r"\(snapshot, effect, controls,\s*"
+                r"include_default_transition\);",
                 re.DOTALL,
             ),
         )
@@ -962,8 +1015,11 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool CFXSyncComponent::send_state_\(\s*"
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
-                r"const CFXSyncControlState &controls\).*?"
-                r"this->send_state_to_followers_\(snapshot, effect, controls\);.*?"
+                r"const CFXSyncControlState &controls,\s*"
+                r"bool include_default_transition\).*?"
+                r"this->send_state_to_followers_"
+                r"\(snapshot, effect, controls,\s*"
+                r"include_default_transition\);.*?"
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
                 r"snapshot\.has_white,\s*true,\s*effect,\s*"
                 r"controls\.has_any\(\),\s*controls,\s*timing,\s*"
@@ -975,7 +1031,10 @@ class ESPNowAPITests(unittest.TestCase):
             "if (packet.type == CFXSyncPacketType::SYNC_REQUEST)", source
         )
         self.assertIn("this->send_state_();", source)
-        self.assertIn("this->send_state_(snapshot, effect, controls);", source)
+        self.assertIn(
+            "this->send_state_(snapshot, effect, controls, true);",
+            source,
+        )
 
     def test_leader_state_send_paths_broadcast_to_group(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -989,11 +1048,14 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::send_state_\(\) \{.*?"
+                r"bool CFXSyncComponent::send_state_\(\s*"
+                r"bool include_default_transition\) \{.*?"
                 r"const auto snapshot = capture_light_snapshot\(\*leader\);.*?"
                 r"const auto effect = capture_effect_state\(leader, this->effect_catalogs_\[0\]\);.*?"
                 r"const auto controls = this->capture_control_state_\(0\);.*?"
-                r"return this->send_state_to_followers_\(snapshot, effect, controls\);",
+                r"return this->send_state_to_followers_"
+                r"\(snapshot, effect, controls,\s*"
+                r"include_default_transition\);",
                 re.DOTALL,
             ),
         )
@@ -1003,8 +1065,11 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool CFXSyncComponent::send_state_\(\s*"
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
-                r"const CFXSyncControlState &controls\).*?"
-                r"return this->send_state_to_followers_\(snapshot, effect, controls\);",
+                r"const CFXSyncControlState &controls,\s*"
+                r"bool include_default_transition\).*?"
+                r"return this->send_state_to_followers_"
+                r"\(snapshot, effect, controls,\s*"
+                r"include_default_transition\);",
                 re.DOTALL,
             ),
         )
@@ -1014,7 +1079,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool CFXSyncComponent::send_state_to_followers_\(\s*"
                 r"const CFXSyncLightSnapshot &snapshot,\s*"
                 r"const CFXSyncEffectState &effect,\s*"
-                r"const CFXSyncControlState &controls\).*?"
+                r"const CFXSyncControlState &controls,\s*"
+                r"bool include_default_transition\).*?"
                 r"const uint32_t sequence = this->next_sequence_\(\);.*?"
                 r"CFXSyncPacketCodec::encode_state\(.*?"
                 r"this->send_packet_to_\(BROADCAST_MAC, packet\).*?"
@@ -1167,6 +1233,9 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool CFXSyncComponent::send_state_to_followers_"
                 r"\(.*?if \(this->send_pending_\) \{"
                 r"\s*this->state_send_deferred_ = true;"
+                r"\s*this->state_send_deferred_with_transition_ ="
+                r"\s*this->state_send_deferred_with_transition_ \|\|"
+                r"\s*include_default_transition;"
                 r"\s*return false;"
                 r"\s*\}",
                 re.DOTALL,
@@ -1193,8 +1262,11 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*return;"
                 r"\s*\}"
+                r"\s*const bool include_default_transition ="
+                r"\s*this->state_send_deferred_with_transition_;"
                 r"\s*this->state_send_deferred_ = false;"
-                r"\s*this->send_state_\(\);",
+                r"\s*this->state_send_deferred_with_transition_ = false;"
+                r"\s*this->send_state_\(include_default_transition\);",
                 re.DOTALL,
             ),
         )
