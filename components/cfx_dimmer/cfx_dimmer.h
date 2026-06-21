@@ -49,6 +49,8 @@ class CFXDimmer : public Component {
   float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
   float ramp_current_brightness_(size_t index, uint32_t now) const;
+  float freeze_brightness_(light::LightState *state, size_t index,
+                           uint32_t now) const;
   bool target_has_effect_(light::LightState *state) const;
   float clamp_brightness_(float value) const;
 

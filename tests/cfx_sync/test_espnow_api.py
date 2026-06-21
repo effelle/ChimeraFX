@@ -1704,6 +1704,36 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
+    def test_cfx_dimmer_freezes_native_ramps_from_current_light_output(self):
+        dimmer_header = (ROOT / "components" / "cfx_dimmer" / "cfx_dimmer.h").read_text(
+            encoding="utf-8"
+        )
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "float freeze_brightness_(light::LightState *state,",
+            dimmer_header,
+        )
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"const float current = this->freeze_brightness_"
+                r"\(state, i, now\);.*?"
+                r"this->apply_brightness_\(state, current, 0\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"float CFXDimmer::freeze_brightness_"
+                r"\(.*?state->current_values\.get_brightness\(\).*?"
+                r"state->current_values\.get_state\(\).*?"
+                r"this->ramp_current_brightness_\(index, now\)",
+                re.DOTALL,
+            ),
+        )
+
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

@@ -38,7 +38,7 @@ def cfx_effect(effect_id, name=None):
 
 
 class _FakeFullConfig:
-    def __init__(self, lights, espnow=None):
+    def __init__(self, lights=None, espnow=None):
         self.espnow = espnow
         self.lights = lights
 
@@ -48,6 +48,8 @@ class _FakeFullConfig:
                 raise KeyError("espnow")
             return self.espnow
         if path == ["light"]:
+            if self.lights is None:
+                raise KeyError("light")
             return self.lights
         raise AssertionError(f"unexpected config path: {path}")
 
@@ -334,6 +336,20 @@ class EffectCatalogTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(result, config)
         self.assertEqual(config["_effect_catalogs"], [[]])
+
+    def test_final_validate_allows_controller_without_light_domain(self):
+        final_config = _FakeFullConfig(lights=None, espnow={"auto_add_peer": False})
+        config = {"lights": []}
+
+        token = cfx_sync.full_config.set(final_config)
+        try:
+            result = cfx_sync._final_validate(config)
+        finally:
+            cfx_sync.full_config.reset(token)
+
+        self.assertIs(result, config)
+        self.assertEqual(config["_effect_catalogs"], [])
+        self.assertEqual(config["_control_ids"], [])
 
     async def test_codegen_emits_each_catalog_entry_for_its_light_index(self):
         emitted = []

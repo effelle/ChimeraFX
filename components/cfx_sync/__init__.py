@@ -318,6 +318,11 @@ def _fnv1a_32(value):
 
 
 def _final_validate(config):
+    if not config.get(CONF_LIGHTS, []):
+        config[CONF_EFFECT_CATALOGS] = []
+        config[CONF_CONTROL_IDS] = []
+        return config
+
     final_config = full_config.get()
     all_lights = final_config.get_config_for_path(["light"])
     effect_catalogs = []
