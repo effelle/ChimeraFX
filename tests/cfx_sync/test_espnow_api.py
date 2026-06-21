@@ -196,7 +196,7 @@ class ESPNowAPITests(unittest.TestCase):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
         self.assertIn(
-            'AUTO_LOAD = ["espnow", "cfx_effect_registry", "hmac_sha256"]',
+            'AUTO_LOAD = ["espnow", "cfx_button", "cfx_effect_registry", "hmac_sha256"]',
             py_source,
         )
         self.assertIn('DEPENDENCIES = ["esp32"]', py_source)
@@ -273,6 +273,8 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("CFX_SYNC_ROLE_CONTROLLER", header)
+        self.assertIn('#include "../cfx_button/cfx_button.h"', header)
+        self.assertNotIn("esphome/components/cfx_button/cfx_button.h", header)
         self.assertIn("set_local_input(binary_sensor::BinarySensor *input)", header)
         self.assertIn("set_remote_input(cfx_button::CFXButton *input)", header)
         self.assertIn("CFXSyncNodeRole::REMOTE", source)
