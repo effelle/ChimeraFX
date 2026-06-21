@@ -18,7 +18,17 @@ from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
-AUTO_LOAD = ["espnow", "cfx_button", "cfx_effect_registry", "hmac_sha256"]
+AUTO_LOAD = [
+    "binary_sensor",
+    "cfx_button",
+    "cfx_effect_registry",
+    "espnow",
+    "hmac_sha256",
+    "light",
+    "number",
+    "select",
+    "switch",
+]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES

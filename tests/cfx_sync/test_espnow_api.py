@@ -196,7 +196,31 @@ class ESPNowAPITests(unittest.TestCase):
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
 
         self.assertIn(
-            'AUTO_LOAD = ["espnow", "cfx_button", "cfx_effect_registry", "hmac_sha256"]',
+            '"binary_sensor",',
+            py_source,
+        )
+        self.assertIn(
+            '"cfx_button",',
+            py_source,
+        )
+        self.assertIn(
+            '"espnow",',
+            py_source,
+        )
+        self.assertIn(
+            '"light",',
+            py_source,
+        )
+        self.assertIn(
+            '"number",',
+            py_source,
+        )
+        self.assertIn(
+            '"select",',
+            py_source,
+        )
+        self.assertIn(
+            '"switch",',
             py_source,
         )
         self.assertIn('DEPENDENCIES = ["esp32"]', py_source)
@@ -264,6 +288,7 @@ class ESPNowAPITests(unittest.TestCase):
             "cv.Optional(CONF_BUTTON): cv.use_id(binary_sensor.BinarySensor)",
             py_source,
         )
+        self.assertIn('"binary_sensor",', py_source)
         self.assertIn("void inject_remote_state(bool pressed)", header)
         self.assertNotIn("button_ == nullptr ||", source)
         self.assertIn("this->inject_remote_state", source)

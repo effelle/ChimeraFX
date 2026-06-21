@@ -7,6 +7,7 @@ from esphome.final_validate import full_config
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = []
 AUTO_LOAD = [
+    "binary_sensor",
     "cfx_dimmer",
     "cfx_cct_sweeper",
     "cfx_hue_cycler",
