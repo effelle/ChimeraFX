@@ -185,6 +185,7 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS = 5000;
   static constexpr uint32_t FOLLOWER_RECOVERY_REARM_MS = 60000;
   static constexpr uint32_t WIFI_OFFLINE_GRACE_MS = 5000;
+  static constexpr uint32_t WIFI_CHANNEL_STABLE_MS = 1500;
   static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
   static constexpr uint32_t ESPNOW_REARM_DELAY_MS = 750;
   static constexpr uint32_t ESPNOW_REARM_MIN_INTERVAL_MS = 30000;
@@ -195,6 +196,7 @@ class CFXSyncComponent : public Component,
   static constexpr uint8_t STATE_RETRY_MAX_ATTEMPTS = 3;
   static constexpr uint32_t PEER_SEND_COOLDOWN_MS = 10000;
   static constexpr uint32_t INPUT_HOLD_REPEAT_MS = 750;
+  static constexpr uint32_t INPUT_MAINTAINED_SETTLE_MS = 150;
   static constexpr uint32_t INPUT_RELEASE_REPEAT_MS = 120;
   static constexpr uint8_t INPUT_RELEASE_REPEAT_COUNT = 3;
   static constexpr uint32_t REMOTE_INPUT_TIMEOUT_MS = 2500;
@@ -380,6 +382,8 @@ class CFXSyncComponent : public Component,
   uint32_t last_broadcast_state_sequence_{0};
   uint32_t last_broadcast_state_ms_{0};
   uint8_t last_wifi_channel_{0};
+  uint8_t pending_wifi_channel_{0};
+  uint32_t pending_wifi_channel_since_ms_{0};
   bool last_wifi_connected_{false};
   uint8_t fallback_channel_{6};
   bool offline_fallback_active_{false};
@@ -389,6 +393,9 @@ class CFXSyncComponent : public Component,
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
   bool local_input_has_state_{false};
   bool local_input_pressed_{false};
+  bool local_input_sent_has_state_{false};
+  bool local_input_sent_pressed_{false};
+  uint32_t local_input_maintained_generation_{0};
   bool remote_input_pressed_{false};
   uint32_t last_remote_input_ms_{0};
 

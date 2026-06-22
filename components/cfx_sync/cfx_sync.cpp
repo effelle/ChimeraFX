@@ -241,16 +241,35 @@ void CFXSyncComponent::loop() {
       this->exit_offline_fallback_(channel);
     }
   }
-  if (connected &&
-      (!this->last_wifi_connected_ ||
-       (this->last_wifi_channel_ != 0 &&
-        channel != this->last_wifi_channel_))) {
+  if (connected && !this->last_wifi_connected_) {
+    this->pending_wifi_channel_ = 0;
+    this->pending_wifi_channel_since_ms_ = 0;
     this->last_wifi_connected_ = connected;
     this->last_wifi_channel_ = channel;
     this->schedule_espnow_rearm_("wifi-channel");
     return;
   }
+  if (connected && this->last_wifi_channel_ != 0 &&
+      channel != this->last_wifi_channel_) {
+    if (this->pending_wifi_channel_ != channel) {
+      this->pending_wifi_channel_ = channel;
+      this->pending_wifi_channel_since_ms_ = now;
+      return;
+    }
+    if (now - this->pending_wifi_channel_since_ms_ <
+        WIFI_CHANNEL_STABLE_MS) {
+      return;
+    }
+    this->last_wifi_connected_ = connected;
+    this->last_wifi_channel_ = channel;
+    this->pending_wifi_channel_ = 0;
+    this->pending_wifi_channel_since_ms_ = 0;
+    this->schedule_espnow_rearm_("wifi-channel");
+    return;
+  }
   if (!connected) {
+    this->pending_wifi_channel_ = 0;
+    this->pending_wifi_channel_since_ms_ = 0;
     if (this->last_wifi_connected_ ||
         this->wifi_disconnected_since_ms_ == 0) {
       this->wifi_disconnected_since_ms_ = now;
@@ -261,6 +280,8 @@ void CFXSyncComponent::loop() {
       return;
     }
   }
+  this->pending_wifi_channel_ = 0;
+  this->pending_wifi_channel_since_ms_ = 0;
   this->last_wifi_connected_ = connected;
   this->last_wifi_channel_ = channel;
 }
@@ -816,10 +837,34 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   this->local_input_pressed_ = pressed;
   const bool maintained =
       this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED;
-  this->send_input_state_(pressed, maintained);
   if (maintained) {
+    const uint32_t generation = ++this->local_input_maintained_generation_;
+    this->set_timeout("input-maintained-settle",
+                      INPUT_MAINTAINED_SETTLE_MS,
+                      [this, pressed, generation]() {
+                        if (this->role_ !=
+                                CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+                            this->input_mode_ !=
+                                CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED ||
+                            generation !=
+                                this->local_input_maintained_generation_ ||
+                            !this->local_input_has_state_ ||
+                            this->local_input_pressed_ != pressed) {
+                          return;
+                        }
+                        if (this->local_input_sent_has_state_ &&
+                            this->local_input_sent_pressed_ == pressed) {
+                          return;
+                        }
+                        this->local_input_sent_has_state_ = true;
+                        this->local_input_sent_pressed_ = pressed;
+                        this->send_input_state_(pressed, maintained);
+                      });
     return;
   }
+  this->local_input_sent_has_state_ = true;
+  this->local_input_sent_pressed_ = pressed;
+  this->send_input_state_(pressed, maintained);
   if (pressed) {
     this->schedule_local_input_hold_repeat_();
   } else {

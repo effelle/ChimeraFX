@@ -379,6 +379,10 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED", source)
         self.assertIn("this->send_input_state_(pressed, maintained);", source)
         self.assertIn("this->inject_remote_input_(packet.input_pressed, packet.input_maintained);", source)
+        self.assertIn("INPUT_MAINTAINED_SETTLE_MS", header)
+        self.assertIn("uint32_t local_input_maintained_generation_{0};", header)
+        self.assertIn('this->set_timeout("input-maintained-settle"', source)
+        self.assertIn("const uint32_t generation = ++this->local_input_maintained_generation_;", source)
         self.assertRegex(
             source,
             re.compile(
@@ -634,6 +638,9 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("uint8_t current_wifi_channel_() const;", header)
         self.assertIn("void schedule_espnow_rearm_(const char *reason);", header)
         self.assertIn("uint8_t last_wifi_channel_{0};", header)
+        self.assertIn("uint8_t pending_wifi_channel_{0};", header)
+        self.assertIn("uint32_t pending_wifi_channel_since_ms_{0};", header)
+        self.assertIn("WIFI_CHANNEL_STABLE_MS", header)
         self.assertIn("bool last_wifi_connected_{false};", header)
         self.assertIn("bool espnow_rearm_scheduled_{false};", header)
         self.assertIn("uint8_t fallback_channel_{6};", header)
@@ -653,6 +660,10 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const bool connected = channel != 0;.*?"
                 r"this->exit_offline_fallback_\(channel\).*?"
                 r"channel != this->last_wifi_channel_.*?"
+                r"this->pending_wifi_channel_ != channel.*?"
+                r"this->pending_wifi_channel_since_ms_ = now;.*?"
+                r"now - this->pending_wifi_channel_since_ms_ <"
+                r"\s*WIFI_CHANNEL_STABLE_MS.*?"
                 r"this->last_wifi_connected_ = connected;.*?"
                 r"this->last_wifi_channel_ = channel;.*?"
                 r"this->schedule_espnow_rearm_\(\"wifi-channel\"\);.*?"
