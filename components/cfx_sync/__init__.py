@@ -97,7 +97,7 @@ KEY_DERIVATION_PREFIX = b"CFX_SYNC_V1\x00"
 cfx_sync_ns = cg.esphome_ns.namespace("cfx_sync")
 CFXSyncComponent = cfx_sync_ns.class_("CFXSyncComponent", cg.Component)
 CFXSyncRole = cfx_sync_ns.enum("CFXSyncRole")
-CFXSyncInputMode = cfx_sync_ns.enum("CFXSyncInputMode")
+CFXSyncInputMode = cfx_sync_ns.enum("CFXSyncInputMode", is_class=True)
 
 ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,

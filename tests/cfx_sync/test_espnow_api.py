@@ -288,6 +288,10 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("cg.add(var.set_remote_input(remote_input))", py_source)
         self.assertIn("CONF_FALLBACK_CHANNEL = \"fallback_channel\"", py_source)
         self.assertIn("CONF_INPUT_MODE = \"input_mode\"", py_source)
+        self.assertIn(
+            "CFXSyncInputMode = cfx_sync_ns.enum(\"CFXSyncInputMode\", is_class=True)",
+            py_source,
+        )
         self.assertIn("DEFAULT_FALLBACK_CHANNEL = 6", py_source)
         self.assertIn("INPUT_MODE_MOMENTARY = \"momentary\"", py_source)
         self.assertIn("INPUT_MODE_MAINTAINED = \"maintained\"", py_source)
