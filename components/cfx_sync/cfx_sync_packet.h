@@ -136,6 +136,7 @@ struct CFXSyncPacket {
   uint32_t acked_sequence{0};
   CFXSyncAckResult ack_result{CFXSyncAckResult::APPLIED};
   bool input_pressed{false};
+  bool input_maintained{false};
 };
 
 class CFXSyncPacketCodec {
@@ -163,6 +164,8 @@ class CFXSyncPacketCodec {
   static constexpr uint16_t CAP_LIGHT_FOLLOWER = 0x0002U;
   static constexpr uint16_t CAP_BINARY_REMOTE = 0x0004U;
   static constexpr uint8_t COLOR_CAP_WHITE = 0x01;
+  static constexpr uint8_t INPUT_FLAG_PRESSED = 0x01;
+  static constexpr uint8_t INPUT_FLAG_MAINTAINED = 0x02;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
@@ -233,7 +236,7 @@ class CFXSyncPacketCodec {
                                const std::array<uint8_t, 32> &key,
                                std::vector<uint8_t> &output);
   static bool encode_input_state(uint32_t group_hash, uint32_t boot_id,
-                                 uint32_t sequence, bool pressed,
+                                 uint32_t sequence, bool pressed, bool maintained,
                                  const std::array<uint8_t, 32> &key,
                                  std::vector<uint8_t> &output);
   static CFXSyncDecodeResult decode(const uint8_t *data, size_t size,

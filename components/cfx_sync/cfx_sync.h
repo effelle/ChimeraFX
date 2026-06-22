@@ -34,6 +34,11 @@ enum CFXSyncRole : uint8_t {
   CFX_SYNC_ROLE_CONTROLLER = 2,
 };
 
+enum class CFXSyncInputMode : uint8_t {
+  CFX_SYNC_INPUT_MOMENTARY = 0,
+  CFX_SYNC_INPUT_MAINTAINED = 1,
+};
+
 class CFXSyncComponent;
 
 class CFXSyncLightListener : public light::LightRemoteValuesListener {
@@ -85,6 +90,12 @@ class CFXSyncComponent : public Component,
   }
   void set_remote_input(cfx_button::CFXButton *input) {
     this->remote_input_ = input;
+  }
+  void set_input_mode(CFXSyncInputMode mode) {
+    this->input_mode_ = mode;
+  }
+  void set_fallback_channel(uint8_t channel) {
+    this->fallback_channel_ = channel;
   }
   void set_peer(const std::array<uint8_t, 6> &peer);
   void set_group_hash(uint32_t group_hash) {
@@ -173,6 +184,7 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_MS = 15000;
   static constexpr uint32_t FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS = 5000;
   static constexpr uint32_t FOLLOWER_RECOVERY_REARM_MS = 60000;
+  static constexpr uint32_t WIFI_OFFLINE_GRACE_MS = 5000;
   static constexpr uint32_t RECOVERY_JITTER_SPREAD_MS = 750;
   static constexpr uint32_t ESPNOW_REARM_DELAY_MS = 750;
   static constexpr uint32_t ESPNOW_REARM_MIN_INTERVAL_MS = 30000;
@@ -260,11 +272,11 @@ class CFXSyncComponent : public Component,
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
-  bool send_input_state_(bool pressed);
+  bool send_input_state_(bool pressed, bool maintained);
   void on_local_input_update_(bool pressed);
   void schedule_local_input_hold_repeat_();
   void schedule_local_input_release_repeat_(uint8_t remaining);
-  void inject_remote_input_(bool pressed);
+  void inject_remote_input_(bool pressed, bool maintained);
   void schedule_remote_input_timeout_();
   bool send_packet_(std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,
@@ -314,6 +326,11 @@ class CFXSyncComponent : public Component,
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
   uint8_t current_wifi_channel_() const;
+  uint8_t active_sync_channel_() const;
+  const char *sync_mode_name_() const;
+  void enter_offline_fallback_();
+  void exit_offline_fallback_(uint8_t channel);
+  bool apply_fallback_channel_();
   void format_current_wifi_bssid_(char *buffer, size_t size) const;
   void schedule_espnow_rearm_(const char *reason);
   void schedule_follower_hello_();
@@ -364,8 +381,12 @@ class CFXSyncComponent : public Component,
   uint32_t last_broadcast_state_ms_{0};
   uint8_t last_wifi_channel_{0};
   bool last_wifi_connected_{false};
+  uint8_t fallback_channel_{6};
+  bool offline_fallback_active_{false};
+  uint32_t wifi_disconnected_since_ms_{0};
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
+  CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
   bool local_input_has_state_{false};
   bool local_input_pressed_{false};
   bool remote_input_pressed_{false};

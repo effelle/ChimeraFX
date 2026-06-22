@@ -10,6 +10,7 @@
 #endif
 
 #include <esp_random.h>
+#include <esp_wifi.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -233,6 +234,13 @@ void CFXSyncComponent::setup() {
 void CFXSyncComponent::loop() {
   const uint8_t channel = this->current_wifi_channel_();
   const bool connected = channel != 0;
+  const uint32_t now = millis();
+  if (connected) {
+    this->wifi_disconnected_since_ms_ = 0;
+    if (this->offline_fallback_active_) {
+      this->exit_offline_fallback_(channel);
+    }
+  }
   if (connected &&
       (!this->last_wifi_connected_ ||
        (this->last_wifi_channel_ != 0 &&
@@ -241,6 +249,17 @@ void CFXSyncComponent::loop() {
     this->last_wifi_channel_ = channel;
     this->schedule_espnow_rearm_("wifi-channel");
     return;
+  }
+  if (!connected) {
+    if (this->last_wifi_connected_ ||
+        this->wifi_disconnected_since_ms_ == 0) {
+      this->wifi_disconnected_since_ms_ = now;
+    }
+    if (!this->offline_fallback_active_ &&
+        now - this->wifi_disconnected_since_ms_ >= WIFI_OFFLINE_GRACE_MS) {
+      this->enter_offline_fallback_();
+      return;
+    }
   }
   this->last_wifi_connected_ = connected;
   this->last_wifi_channel_ = channel;
@@ -258,11 +277,17 @@ void CFXSyncComponent::dump_config() {
                 "  Discovery: group authenticated\n"
                 "  Group hash: %08" PRIX32 "\n"
                 "  Heartbeat: %" PRIu32 " ms\n"
+                "  Sync mode: %s\n"
+                "  Fallback channel: %u\n"
+                "  Active sync channel: %u\n"
                 "  Last valid packet age: %" PRIu32 " ms\n"
                 "  Peers: active=%u followers=%u remotes=%u\n"
                 "  ACK: pending=%u missed=%" PRIu32,
                 this->role_name_(), this->group_hash_,
-                this->heartbeat_ms_, packet_age,
+                this->heartbeat_ms_, this->sync_mode_name_(),
+                static_cast<unsigned>(this->fallback_channel_),
+                static_cast<unsigned>(this->active_sync_channel_()),
+                packet_age,
                 static_cast<unsigned>(this->active_peer_count_()),
                 static_cast<unsigned>(this->follower_peer_count_()),
                 static_cast<unsigned>(this->remote_peer_count_()),
@@ -494,7 +519,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       }
       return true;
     }
-    this->inject_remote_input_(packet.input_pressed);
+    this->inject_remote_input_(packet.input_pressed, packet.input_maintained);
     return true;
   }
 
@@ -766,14 +791,14 @@ bool CFXSyncComponent::send_hello_() {
   return this->send_packet_to_(BROADCAST_MAC, packet);
 }
 
-bool CFXSyncComponent::send_input_state_(bool pressed) {
+bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained) {
   if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return false;
   }
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_input_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
-          pressed, this->key_, packet)) {
+          pressed, maintained, this->key_, packet)) {
     return false;
   }
   return this->send_packet_to_(BROADCAST_MAC, packet);
@@ -789,7 +814,12 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_has_state_ = true;
   this->local_input_pressed_ = pressed;
-  this->send_input_state_(pressed);
+  const bool maintained =
+      this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED;
+  this->send_input_state_(pressed, maintained);
+  if (maintained) {
+    return;
+  }
   if (pressed) {
     this->schedule_local_input_hold_repeat_();
   } else {
@@ -803,7 +833,7 @@ void CFXSyncComponent::schedule_local_input_hold_repeat_() {
         !this->local_input_pressed_) {
       return;
     }
-    this->send_input_state_(true);
+    this->send_input_state_(true, false);
     this->schedule_local_input_hold_repeat_();
   });
 }
@@ -819,20 +849,20 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
                           CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
                         return;
                       }
-                      this->send_input_state_(false);
+                      this->send_input_state_(false, false);
                       this->schedule_local_input_release_repeat_(
                           remaining - 1);
                     });
 }
 
-void CFXSyncComponent::inject_remote_input_(bool pressed) {
+void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained) {
   if (this->role_ != CFXSyncRole::LEADER || this->remote_input_ == nullptr) {
     return;
   }
   this->remote_input_pressed_ = pressed;
   this->last_remote_input_ms_ = millis();
   this->remote_input_->inject_remote_state(pressed);
-  if (pressed) {
+  if (pressed && !maintained) {
     this->schedule_remote_input_timeout_();
   }
 }
@@ -849,7 +879,7 @@ void CFXSyncComponent::schedule_remote_input_timeout_() {
                         this->schedule_remote_input_timeout_();
                         return;
                       }
-                      this->inject_remote_input_(false);
+                      this->inject_remote_input_(false, false);
                     });
 }
 
@@ -1343,6 +1373,9 @@ void CFXSyncComponent::run_boot_discovery_() {
 }
 
 bool CFXSyncComponent::boot_radio_ready_() const {
+  if (this->offline_fallback_active_) {
+    return true;
+  }
 #ifdef USE_WIFI
   if (wifi::global_wifi_component != nullptr) {
     return wifi::global_wifi_component->is_connected();
@@ -1362,6 +1395,80 @@ uint8_t CFXSyncComponent::current_wifi_channel_() const {
   }
 #endif
   return 0;
+}
+
+uint8_t CFXSyncComponent::active_sync_channel_() const {
+  if (this->offline_fallback_active_) {
+    return this->fallback_channel_;
+  }
+  return this->current_wifi_channel_();
+}
+
+const char *CFXSyncComponent::sync_mode_name_() const {
+  return this->offline_fallback_active_ ? "offline fallback" : "infrastructure";
+}
+
+void CFXSyncComponent::enter_offline_fallback_() {
+  if (this->offline_fallback_active_) {
+    return;
+  }
+  this->offline_fallback_active_ = true;
+  ESP_LOGW(TAG,
+           "CFX Sync entering offline fallback on channel %u; ESPHome Wi-Fi reboot policy still applies",
+           static_cast<unsigned>(this->fallback_channel_));
+  this->apply_fallback_channel_();
+  this->schedule_espnow_rearm_("offline-fallback");
+  this->send_hello_();
+  if (this->role_ == CFXSyncRole::LEADER) {
+    this->send_state_();
+  } else if (this->role_ == CFXSyncRole::FOLLOWER &&
+             !this->has_valid_state_) {
+    this->schedule_follower_recovery_loop_();
+  }
+}
+
+void CFXSyncComponent::exit_offline_fallback_(uint8_t channel) {
+  if (!this->offline_fallback_active_) {
+    return;
+  }
+  this->offline_fallback_active_ = false;
+  ESP_LOGI(TAG,
+           "CFX Sync exiting offline fallback; infrastructure channel %u restored",
+           static_cast<unsigned>(channel));
+  this->schedule_espnow_rearm_("wifi-restored");
+  this->send_hello_();
+  if (this->role_ == CFXSyncRole::LEADER) {
+    this->send_state_();
+  }
+}
+
+bool CFXSyncComponent::apply_fallback_channel_() {
+  if (!this->offline_fallback_active_ ||
+      this->fallback_channel_ == 0) {
+    return false;
+  }
+#ifdef USE_WIFI
+  if (wifi::global_wifi_component != nullptr &&
+      wifi::global_wifi_component->is_connected()) {
+    return false;
+  }
+#endif
+  esp_err_t err = esp_wifi_set_promiscuous(true);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to prepare ESP-NOW fallback channel %u: %s",
+             static_cast<unsigned>(this->fallback_channel_),
+             esp_err_to_name(err));
+    return false;
+  }
+  err = esp_wifi_set_channel(this->fallback_channel_, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(false);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to set ESP-NOW fallback channel %u: %s",
+             static_cast<unsigned>(this->fallback_channel_),
+             esp_err_to_name(err));
+    return false;
+  }
+  return true;
 }
 
 void CFXSyncComponent::format_current_wifi_bssid_(char *buffer,
@@ -1412,10 +1519,11 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
       this->schedule_espnow_rearm_(reason);
       return;
     }
-    const uint8_t channel = this->current_wifi_channel_();
-    ESP_LOGI(TAG, "Re-arming ESP-NOW after %s on Wi-Fi channel %u", reason,
-             static_cast<unsigned>(channel));
+    const uint8_t channel = this->active_sync_channel_();
+    ESP_LOGI(TAG, "Re-arming ESP-NOW after %s on %s channel %u", reason,
+             this->sync_mode_name_(), static_cast<unsigned>(channel));
     this->espnow_->disable();
+    this->apply_fallback_channel_();
     this->espnow_->enable();
     this->last_espnow_rearm_ms_ = millis();
     this->boot_discovery_started_ms_ = millis();

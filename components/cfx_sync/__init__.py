@@ -51,6 +51,8 @@ CONF_PEER = "peer"
 CONF_GROUP = "group"
 CONF_KEY = "key"
 CONF_HEARTBEAT = "heartbeat"
+CONF_FALLBACK_CHANNEL = "fallback_channel"
+CONF_INPUT_MODE = "input_mode"
 CONF_AUTO_ADD_PEER = "auto_add_peer"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
 CONF_CONTROL_IDS = "_control_ids"
@@ -77,6 +79,8 @@ CONF_PALETTE = "palette"
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
 ROLE_CONTROLLER = "controller"
+INPUT_MODE_MOMENTARY = "momentary"
+INPUT_MODE_MAINTAINED = "maintained"
 EXCLUDE_SPEED = 1
 EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
@@ -87,16 +91,23 @@ EXCLUDE_FORCE_WHITE = 8
 MIN_HEARTBEAT = TimePeriod(seconds=10)
 MAX_HEARTBEAT = TimePeriod(minutes=5)
 MAX_EFFECT_NAME_BYTES = 64
+DEFAULT_FALLBACK_CHANNEL = 6
 KEY_DERIVATION_PREFIX = b"CFX_SYNC_V1\x00"
 
 cfx_sync_ns = cg.esphome_ns.namespace("cfx_sync")
 CFXSyncComponent = cfx_sync_ns.class_("CFXSyncComponent", cg.Component)
 CFXSyncRole = cfx_sync_ns.enum("CFXSyncRole")
+CFXSyncInputMode = cfx_sync_ns.enum("CFXSyncInputMode")
 
 ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,
     ROLE_FOLLOWER: CFXSyncRole.FOLLOWER,
     ROLE_CONTROLLER: CFXSyncRole.CFX_SYNC_ROLE_CONTROLLER,
+}
+
+INPUT_MODE_MAP = {
+    INPUT_MODE_MOMENTARY: CFXSyncInputMode.CFX_SYNC_INPUT_MOMENTARY,
+    INPUT_MODE_MAINTAINED: CFXSyncInputMode.CFX_SYNC_INPUT_MAINTAINED,
 }
 
 _LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
@@ -369,6 +380,12 @@ CONFIG_SCHEMA = cv.All(
                 cv.positive_time_period_milliseconds,
                 cv.Range(min=MIN_HEARTBEAT, max=MAX_HEARTBEAT),
             ),
+            cv.Optional(CONF_FALLBACK_CHANNEL, default=DEFAULT_FALLBACK_CHANNEL): cv.All(
+                cv.int_, cv.Range(min=1, max=14)
+            ),
+            cv.Optional(CONF_INPUT_MODE, default=INPUT_MODE_MOMENTARY): cv.one_of(
+                INPUT_MODE_MOMENTARY, INPUT_MODE_MAINTAINED, lower=True
+            ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _validate_role_lights,
@@ -379,6 +396,8 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config):
+    config.setdefault(CONF_INPUT_MODE, INPUT_MODE_MOMENTARY)
+    config.setdefault(CONF_FALLBACK_CHANNEL, DEFAULT_FALLBACK_CHANNEL)
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
@@ -452,6 +471,8 @@ async def to_code(config):
         remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
         cg.add(var.set_remote_input(remote_input))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
+    cg.add(var.set_input_mode(INPUT_MODE_MAP[config[CONF_INPUT_MODE]]))
+    cg.add(var.set_fallback_channel(config[CONF_FALLBACK_CHANNEL]))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))
     cg.add(var.set_key(key_bytes))
     cg.add(

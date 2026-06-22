@@ -286,6 +286,27 @@ class ESPNowAPITests(unittest.TestCase):
             py_source,
         )
         self.assertIn("cg.add(var.set_remote_input(remote_input))", py_source)
+        self.assertIn("CONF_FALLBACK_CHANNEL = \"fallback_channel\"", py_source)
+        self.assertIn("CONF_INPUT_MODE = \"input_mode\"", py_source)
+        self.assertIn("DEFAULT_FALLBACK_CHANNEL = 6", py_source)
+        self.assertIn("INPUT_MODE_MOMENTARY = \"momentary\"", py_source)
+        self.assertIn("INPUT_MODE_MAINTAINED = \"maintained\"", py_source)
+        self.assertIn(
+            "cv.Optional(CONF_FALLBACK_CHANNEL, default=DEFAULT_FALLBACK_CHANNEL)",
+            py_source,
+        )
+        self.assertIn(
+            "cv.Optional(CONF_INPUT_MODE, default=INPUT_MODE_MOMENTARY)",
+            py_source,
+        )
+        self.assertIn(
+            "cg.add(var.set_fallback_channel(config[CONF_FALLBACK_CHANNEL]))",
+            py_source,
+        )
+        self.assertIn(
+            "cg.add(var.set_input_mode(INPUT_MODE_MAP[config[CONF_INPUT_MODE]]))",
+            py_source,
+        )
 
     def test_cfx_button_can_host_remote_input_without_local_binary_sensor(self):
         py_source = CFX_BUTTON_PY.read_text(encoding="utf-8")
@@ -306,13 +327,64 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("CFX_SYNC_ROLE_CONTROLLER", header)
+        self.assertIn("CFX_SYNC_INPUT_MOMENTARY", header)
+        self.assertIn("CFX_SYNC_INPUT_MAINTAINED", header)
         self.assertIn('#include "../cfx_button/cfx_button.h"', header)
         self.assertNotIn("esphome/components/cfx_button/cfx_button.h", header)
         self.assertIn("set_local_input(binary_sensor::BinarySensor *input)", header)
         self.assertIn("set_remote_input(cfx_button::CFXButton *input)", header)
+        self.assertIn("void set_input_mode(CFXSyncInputMode mode)", header)
         self.assertIn("CFXSyncNodeRole::REMOTE", source)
         self.assertIn("CAP_BINARY_REMOTE", source)
         self.assertIn('return "controller"', source)
+
+    def test_input_state_carries_maintained_mode_without_growing_packet(self):
+        header = HEADER.read_text(encoding="utf-8")
+        packet_header = PACKET_HEADER.read_text(encoding="utf-8")
+        packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool input_maintained{false};", packet_header)
+        self.assertIn("static constexpr uint8_t INPUT_FLAG_PRESSED = 0x01;", packet_header)
+        self.assertIn("static constexpr uint8_t INPUT_FLAG_MAINTAINED = 0x02;", packet_header)
+        self.assertIn("static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;", packet_header)
+        self.assertIn("static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE == 39", packet_header)
+        self.assertRegex(
+            packet_header,
+            re.compile(
+                r"static bool encode_input_state\(uint32_t group_hash, uint32_t boot_id,"
+                r"\s*uint32_t sequence, bool pressed, bool maintained,"
+                r"\s*const std::array<uint8_t, 32> &key,"
+                r"\s*std::vector<uint8_t> &output\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            packet_source,
+            re.compile(
+                r"const uint8_t payload = \(pressed \? INPUT_FLAG_PRESSED : 0\) \|"
+                r"\s*\(maintained \? INPUT_FLAG_MAINTAINED : 0\);.*?"
+                r"payload\[0\] & ~\(INPUT_FLAG_PRESSED \| INPUT_FLAG_MAINTAINED\).*?"
+                r"packet\.input_pressed = \(payload\[0\] & INPUT_FLAG_PRESSED\) != 0;.*?"
+                r"packet\.input_maintained ="
+                r"\s*\(payload\[0\] & INPUT_FLAG_MAINTAINED\) != 0;",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};", header)
+        self.assertIn("this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED", source)
+        self.assertIn("this->send_input_state_(pressed, maintained);", source)
+        self.assertIn("this->inject_remote_input_(packet.input_pressed, packet.input_maintained);", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::inject_remote_input_"
+                r"\(bool pressed, bool maintained\).*?"
+                r"if \(pressed && !maintained\) \{"
+                r"\s*this->schedule_remote_input_timeout_\(\);",
+                re.DOTALL,
+            ),
+        )
 
     def test_static_peer_fallback_is_disabled_without_configured_peer(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -560,16 +632,27 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("uint8_t last_wifi_channel_{0};", header)
         self.assertIn("bool last_wifi_connected_{false};", header)
         self.assertIn("bool espnow_rearm_scheduled_{false};", header)
+        self.assertIn("uint8_t fallback_channel_{6};", header)
+        self.assertIn("bool offline_fallback_active_{false};", header)
+        self.assertIn("uint32_t wifi_disconnected_since_ms_{0};", header)
+        self.assertIn("WIFI_OFFLINE_GRACE_MS", header)
+        self.assertIn("void enter_offline_fallback_();", header)
+        self.assertIn("void exit_offline_fallback_(uint8_t channel);", header)
+        self.assertIn("bool apply_fallback_channel_();", header)
+        self.assertIn("uint8_t active_sync_channel_() const;", header)
+        self.assertIn("const char *sync_mode_name_() const;", header)
         self.assertRegex(
             source,
             re.compile(
                 r"void CFXSyncComponent::loop\(\) \{.*?"
                 r"const uint8_t channel = this->current_wifi_channel_\(\);.*?"
                 r"const bool connected = channel != 0;.*?"
+                r"this->exit_offline_fallback_\(channel\).*?"
                 r"channel != this->last_wifi_channel_.*?"
                 r"this->last_wifi_connected_ = connected;.*?"
                 r"this->last_wifi_channel_ = channel;.*?"
-                r"this->schedule_espnow_rearm_\(\"wifi-channel\"\);",
+                r"this->schedule_espnow_rearm_\(\"wifi-channel\"\);.*?"
+                r"this->enter_offline_fallback_\(\);",
                 re.DOTALL,
             ),
         )
@@ -583,6 +666,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"this->set_timeout\(\"espnow-rearm\", delay_ms.*?"
                 r"this->send_pending_.*?"
                 r"this->espnow_->disable\(\);.*?"
+                r"this->apply_fallback_channel_\(\);.*?"
                 r"this->espnow_->enable\(\);.*?"
                 r"this->schedule_boot_discovery_\(\);.*?"
                 r"this->schedule_follower_recovery_loop_\(\);",
@@ -599,6 +683,54 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+
+    def test_offline_fallback_is_visible_and_does_not_override_wifi_policy(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn('#include <esp_wifi.h>', source)
+        self.assertIn("void set_fallback_channel(uint8_t channel)", header)
+        self.assertIn("Sync mode: %s", source)
+        self.assertIn("Fallback channel: %u", source)
+        self.assertIn("Active sync channel: %u", source)
+        self.assertIn('return this->offline_fallback_active_ ? "offline fallback" : "infrastructure";', source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::enter_offline_fallback_\(\).*?"
+                r"CFX Sync entering offline fallback on channel %u.*?"
+                r"ESPHome Wi-Fi reboot policy still applies.*?"
+                r"this->apply_fallback_channel_\(\);.*?"
+                r"this->schedule_espnow_rearm_\(\"offline-fallback\"\);.*?"
+                r"this->send_hello_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::exit_offline_fallback_"
+                r"\(uint8_t channel\).*?"
+                r"CFX Sync exiting offline fallback; infrastructure channel %u restored.*?"
+                r"this->schedule_espnow_rearm_\(\"wifi-restored\"\);.*?"
+                r"this->send_hello_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::apply_fallback_channel_\(\).*?"
+                r"if \(!this->offline_fallback_active_ \|\|"
+                r"\s*this->fallback_channel_ == 0\).*?"
+                r"esp_wifi_set_promiscuous\(true\).*?"
+                r"esp_wifi_set_channel\(this->fallback_channel_,"
+                r"\s*WIFI_SECOND_CHAN_NONE\).*?"
+                r"esp_wifi_set_promiscuous\(false\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn("reboot_timeout", source)
 
     def test_leader_discovery_failure_logs_bssid_and_channel(self):
         header = HEADER.read_text(encoding="utf-8")
