@@ -841,7 +841,7 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
     const uint32_t generation = ++this->local_input_maintained_generation_;
     this->set_timeout("input-maintained-settle",
                       INPUT_MAINTAINED_SETTLE_MS,
-                      [this, pressed, generation]() {
+                      [this, pressed, maintained, generation]() {
                         if (this->role_ !=
                                 CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
                             this->input_mode_ !=

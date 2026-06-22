@@ -383,6 +383,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("uint32_t local_input_maintained_generation_{0};", header)
         self.assertIn('this->set_timeout("input-maintained-settle"', source)
         self.assertIn("const uint32_t generation = ++this->local_input_maintained_generation_;", source)
+        self.assertIn("[this, pressed, maintained, generation]", source)
         self.assertRegex(
             source,
             re.compile(
