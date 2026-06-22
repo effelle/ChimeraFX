@@ -67,6 +67,35 @@ cfx_button:
         - desk_lamp_segment_4
 ```
 
+For rocker dimmers or wall controls with separate brighten/dim contacts, the
+dimmer can also bind directional inputs. The main `button` remains optional and
+keeps the normal short-press toggle plus alternating long-press dimming when it
+is present. `inputs.up` and `inputs.down` start ramping immediately while held
+and never perform a short-press toggle.
+
+```yaml
+binary_sensor:
+  - platform: gpio
+    id: desk_lamp_toggle
+    pin: GPIO05
+  - platform: gpio
+    id: desk_lamp_up
+    pin: GPIO06
+  - platform: gpio
+    id: desk_lamp_down
+    pin: GPIO07
+
+cfx_button:
+  - id: desk_lamp_dimmer_binding
+    button: desk_lamp_toggle
+    dimmer:
+      lights:
+        - desk_lamp
+      inputs:
+        up: desk_lamp_up
+        down: desk_lamp_down
+```
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `id` | optional | Internal dimmer helper ID. Generated automatically when omitted. |
@@ -75,6 +104,8 @@ cfx_button:
 | `ramp_time` | `2s` | Time to ramp from minimum to maximum brightness. |
 | `min_brightness` | `15%` | Lowest brightness used by the ramp. Values below 15% are rejected. |
 | `max_brightness` | `100%` | Highest brightness used by the ramp. |
+| `inputs.up` | unset | Optional binary sensor that ramps brightness upward immediately while held. |
+| `inputs.down` | unset | Optional binary sensor that ramps brightness downward immediately while held. |
 
 Brightness changes use ESPHome light transitions, preserve the currently
 selected ChimeraFX effect, and stop sending updates when the ramp reaches the
@@ -102,6 +133,10 @@ release, the dimmer freezes at the brightness selected at that exact time. A
 completed down-ramp stops at `min_brightness` and leaves the light on; only a
 short press turns it off. The minimum applies to dimmer ramps and does not
 rewrite a lower brightness deliberately selected through Home Assistant.
+Directional `inputs.up` can turn an off target on and brighten it from
+`min_brightness`. Directional `inputs.down` is ignored when all targets are
+off. Directional inputs do not change the alternating direction remembered by
+the main one-button long-press gesture.
 The first long press after boot defaults to ramping down. At 70% brightness or
 higher, the dimmer always ramps down; at 30% or lower, it always ramps up.
 Between those barriers, consecutive long presses alternate direction.

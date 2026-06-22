@@ -45,7 +45,7 @@ external_components:
 
 Do not add a `components:` list for the normal GitHub install. If you keep an
 old allow-list, ESPHome will only import those named components; using
-`cfx_dimmer:` then requires `cfx_dimmer` to be present in that list.
+`cfx_button:` then requires `cfx_button` to be present in that list.
 
 ⚠️ **About `refresh: always`**
 
@@ -68,7 +68,7 @@ If you are developing, need to modify the code locally, or prefer not to rely on
 ```yaml
 external_components:
   - source: components
-    components: [cfx_light, cfx_effect, cfx_effect_registry, cfx_sequence, cfx_power, cfx_dimmer, cfx_cct_sweeper, cfx_hue_cycler, cfx_effect_selector]
+    components: [cfx_light, cfx_effect, cfx_effect_registry, cfx_sequence, cfx_power, cfx_button]
 ```
 
 If you use a local or manual allow-list, include every ChimeraFX component you

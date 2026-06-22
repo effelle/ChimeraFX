@@ -22,8 +22,18 @@ class CFXDimmer : public Component {
 
   void press();
   void release();
+  void press_up();
+  void release_up();
+  void press_down();
+  void release_down();
 
  protected:
+  enum class DirectionalPress : uint8_t {
+    NONE,
+    UP,
+    DOWN,
+  };
+
   struct SavedState {
     light::LightColorValues values{};
     std::string effect{};
@@ -35,7 +45,12 @@ class CFXDimmer : public Component {
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
 
   void finalize_release_(DimmerReleaseAction action, uint32_t released_at_ms);
+  void finalize_directional_release_(uint32_t released_at_ms);
   void start_ramp_(uint32_t now);
+  void start_ramp_(uint32_t now, bool forced_direction_up,
+                   bool forced_direction);
+  void press_direction_(bool direction_up);
+  void release_direction_(bool direction_up);
   void finish_ramp_();
   void freeze_ramp_(uint32_t now);
   void service_manual_ramp_(uint32_t now);
@@ -70,6 +85,7 @@ class CFXDimmer : public Component {
   bool ramp_finished_{false};
   bool ramp_direction_up_{true};
   bool first_ramp_after_boot_{true};
+  DirectionalPress directional_press_{DirectionalPress::NONE};
   DimmerGesture gesture_{};
   uint32_t press_started_ms_{0};
   uint32_t ramp_started_ms_{0};

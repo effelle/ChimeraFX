@@ -6,13 +6,7 @@ from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
 DEPENDENCIES = []
-AUTO_LOAD = [
-    "binary_sensor",
-    "cfx_dimmer",
-    "cfx_cct_sweeper",
-    "cfx_hue_cycler",
-    "cfx_effect_selector",
-]
+AUTO_LOAD = ["binary_sensor"]
 
 cfx_button_ns = cg.esphome_ns.namespace("cfx_button")
 CFXButton = cfx_button_ns.class_("CFXButton", cg.Component)
@@ -30,6 +24,9 @@ CFXEffectSelector = cfx_effect_selector_ns.class_(
 
 CONF_BUTTON = "button"
 CONF_DIMMER = "dimmer"
+CONF_INPUTS = "inputs"
+CONF_UP = "up"
+CONF_DOWN = "down"
 CONF_CCT_SWEEPER = "cct_sweeper"
 CONF_HUE_CYCLER = "hue_cycler"
 CONF_EFFECT_SELECTOR = "effect_selector"
@@ -113,6 +110,23 @@ def _validate_brightness_bounds(config):
     return config
 
 
+def _validate_dimmer_inputs(config):
+    if CONF_INPUTS not in config:
+        return config
+    inputs = config[CONF_INPUTS]
+    if CONF_UP not in inputs and CONF_DOWN not in inputs:
+        raise cv.Invalid("inputs must contain at least one of up or down")
+    if (
+        CONF_UP in inputs
+        and CONF_DOWN in inputs
+        and _id_name(inputs[CONF_UP]) == _id_name(inputs[CONF_DOWN])
+    ):
+        raise cv.Invalid(
+            "inputs.up and inputs.down must use different binary sensors"
+        )
+    return config
+
+
 def _resolve_preferred_white(config):
     if CONF_PREFERRED_WHITE in config and CONF_FAVORITE_WHITE in config:
         raise cv.Invalid(
@@ -129,6 +143,13 @@ LIGHTS_SCHEMA = {
     cv.Required(CONF_LIGHTS): cv.ensure_list(cv.use_id(light.LightState))
 }
 
+DIMMER_INPUTS_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_UP): cv.use_id(binary_sensor.BinarySensor),
+        cv.Optional(CONF_DOWN): cv.use_id(binary_sensor.BinarySensor),
+    }
+)
+
 DIMMER_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -142,9 +163,11 @@ DIMMER_SCHEMA = cv.All(
             ): cv.positive_time_period_milliseconds,
             cv.Optional(CONF_MIN_BRIGHTNESS, default="15%"): cv.percentage,
             cv.Optional(CONF_MAX_BRIGHTNESS, default="100%"): cv.percentage,
+            cv.Optional(CONF_INPUTS): DIMMER_INPUTS_SCHEMA,
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _validate_brightness_bounds,
+    _validate_dimmer_inputs,
 )
 
 CCT_SWEEPER_SCHEMA = cv.All(
@@ -222,12 +245,33 @@ CONFIG_SCHEMA = cv.ensure_list(
             }
         ).extend(cv.COMPONENT_SCHEMA),
         cv.has_exactly_one_key(*CONTROLLER_KEYS),
+        lambda config: _validate_button_inputs(config),
     )
 )
 
 
 def _id_name(value):
     return getattr(value, "id", value)
+
+
+def _validate_button_inputs(config):
+    if CONF_DIMMER not in config or CONF_INPUTS not in config[CONF_DIMMER]:
+        return config
+
+    role_ids = {}
+    if CONF_BUTTON in config:
+        role_ids[CONF_BUTTON] = _id_name(config[CONF_BUTTON])
+    for role, value in config[CONF_DIMMER][CONF_INPUTS].items():
+        role_ids[f"{CONF_INPUTS}.{role}"] = _id_name(value)
+
+    seen = {}
+    for role, sensor_id in role_ids.items():
+        if sensor_id in seen:
+            raise cv.Invalid(
+                f"{role} and {seen[sensor_id]} must use different binary sensors"
+            )
+        seen[sensor_id] = role
+    return config
 
 
 def _final_validate(config):
@@ -351,6 +395,15 @@ async def to_code(config):
         if CONF_BUTTON in conf:
             button = await cg.get_variable(conf[CONF_BUTTON])
             cg.add(var.set_button(button))
+
+        if CONF_DIMMER in conf and CONF_INPUTS in conf[CONF_DIMMER]:
+            inputs = conf[CONF_DIMMER][CONF_INPUTS]
+            if CONF_UP in inputs:
+                button = await cg.get_variable(inputs[CONF_UP])
+                cg.add(var.set_dimmer_up_button(button))
+            if CONF_DOWN in inputs:
+                button = await cg.get_variable(inputs[CONF_DOWN])
+                cg.add(var.set_dimmer_down_button(button))
 
         controller_key = next(key for key in CONTROLLER_KEYS if key in conf)
         controller = await CONTROLLER_BUILDERS[controller_key](

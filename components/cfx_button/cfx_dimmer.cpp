@@ -9,7 +9,8 @@ namespace esphome {
 namespace cfx_dimmer {
 
 void CFXDimmer::press() {
-  if (this->pressed_) {
+  if (this->pressed_ ||
+      this->directional_press_ != DirectionalPress::NONE) {
     return;
   }
   const uint32_t now = millis();
@@ -36,6 +37,9 @@ void CFXDimmer::add_light(light::LightState *state) {
 }
 
 void CFXDimmer::release() {
+  if (this->directional_press_ != DirectionalPress::NONE) {
+    return;
+  }
   if (!this->pressed_) {
     const uint32_t now = millis();
     if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
@@ -53,6 +57,22 @@ void CFXDimmer::release() {
     this->start_ramp_(this->press_started_ms_ + this->long_press_ms_);
   }
   this->finalize_release_(action, released_at_ms);
+}
+
+void CFXDimmer::press_up() {
+  this->press_direction_(true);
+}
+
+void CFXDimmer::release_up() {
+  this->release_direction_(true);
+}
+
+void CFXDimmer::press_down() {
+  this->press_direction_(false);
+}
+
+void CFXDimmer::release_down() {
+  this->release_direction_(false);
 }
 
 void CFXDimmer::finalize_release_(DimmerReleaseAction action,
@@ -77,6 +97,24 @@ void CFXDimmer::finalize_release_(DimmerReleaseAction action,
   } else if (action == DimmerReleaseAction::TURN_ON) {
     this->turn_on_targets_();
   }
+}
+
+void CFXDimmer::finalize_directional_release_(uint32_t released_at_ms) {
+  if (this->ramping_) {
+    this->freeze_ramp_(released_at_ms);
+  }
+  this->pressed_ = false;
+  this->ramping_ = false;
+  this->ramp_finished_ = false;
+  this->ramp_started_ms_ = 0;
+  this->ramp_end_ms_ = 0;
+  this->last_ramp_update_ms_ = 0;
+  this->ignore_press_until_ms_ = millis() + POST_ACTION_QUIET_MS;
+  this->directional_press_ = DirectionalPress::NONE;
+  this->ramp_start_brightness_.clear();
+  this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
+  this->gesture_.reset();
 }
 
 void CFXDimmer::loop() {
@@ -105,17 +143,29 @@ void CFXDimmer::loop() {
 }
 
 void CFXDimmer::start_ramp_(uint32_t now) {
-  if (!this->gesture_.can_start_ramp()) {
+  this->start_ramp_(now, false, false);
+}
+
+void CFXDimmer::start_ramp_(uint32_t now, bool forced_direction_up,
+                            bool forced_direction) {
+  if (!forced_direction && !this->gesture_.can_start_ramp()) {
+    return;
+  }
+  if (forced_direction && !forced_direction_up && !this->any_target_on_()) {
     return;
   }
   this->ramping_ = true;
   this->ramp_finished_ = false;
-  this->gesture_.mark_long_press_started();
-  this->ramp_direction_up_ = select_ramp_direction_up(
-      this->average_target_brightness_(), this->next_direction_up_,
-      this->first_ramp_after_boot_);
-  this->first_ramp_after_boot_ = false;
-  this->next_direction_up_ = !this->ramp_direction_up_;
+  if (forced_direction) {
+    this->ramp_direction_up_ = forced_direction_up;
+  } else {
+    this->gesture_.mark_long_press_started();
+    this->ramp_direction_up_ = select_ramp_direction_up(
+        this->average_target_brightness_(), this->next_direction_up_,
+        this->first_ramp_after_boot_);
+    this->first_ramp_after_boot_ = false;
+    this->next_direction_up_ = !this->ramp_direction_up_;
+  }
   this->ramp_started_ms_ = now;
   this->ramp_end_ms_ = now;
   this->last_ramp_update_ms_ = 0;
@@ -138,6 +188,44 @@ void CFXDimmer::start_ramp_(uint32_t now) {
                             manual ? 0 : duration);
   }
   this->service_manual_ramp_(now);
+}
+
+void CFXDimmer::press_direction_(bool direction_up) {
+  if (this->pressed_ ||
+      this->directional_press_ != DirectionalPress::NONE) {
+    return;
+  }
+  const uint32_t now = millis();
+  if ((int32_t) (now - this->ignore_press_until_ms_) < 0) {
+    this->ignore_press_until_ms_ = now + POST_ACTION_QUIET_MS;
+    return;
+  }
+  if (!direction_up && !this->any_target_on_()) {
+    return;
+  }
+  this->pressed_ = true;
+  this->directional_press_ =
+      direction_up ? DirectionalPress::UP : DirectionalPress::DOWN;
+  this->ramping_ = false;
+  this->ramp_finished_ = false;
+  this->press_started_ms_ = now;
+  this->ramp_started_ms_ = 0;
+  this->ramp_end_ms_ = 0;
+  this->last_ramp_update_ms_ = 0;
+  this->ramp_start_brightness_.clear();
+  this->ramp_durations_ms_.clear();
+  this->ramp_manual_.clear();
+  this->gesture_.reset();
+  this->start_ramp_(now, direction_up, true);
+}
+
+void CFXDimmer::release_direction_(bool direction_up) {
+  const DirectionalPress expected =
+      direction_up ? DirectionalPress::UP : DirectionalPress::DOWN;
+  if (this->directional_press_ != expected) {
+    return;
+  }
+  this->finalize_directional_release_(millis());
 }
 
 void CFXDimmer::finish_ramp_() {
