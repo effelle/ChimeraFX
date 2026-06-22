@@ -395,6 +395,68 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_remote_inputs_have_default_leader_light_actions(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("void apply_remote_power_input_(bool pressed);", header)
+        self.assertIn("void apply_remote_toggle_input_();", header)
+        self.assertNotIn(
+            "Received CFX Sync remote input but no remote_input is ",
+            source,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
+                r"this->inject_remote_input_"
+                r"\(packet\.input_pressed, packet\.input_maintained\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::inject_remote_input_"
+                r"\(bool pressed, bool maintained\).*?"
+                r"if \(maintained\) \{"
+                r"\s*this->apply_remote_power_input_\(pressed\);"
+                r"\s*return;"
+                r"\s*\}.*?"
+                r"if \(this->remote_input_ == nullptr\) \{"
+                r"\s*if \(pressed\) \{"
+                r"\s*this->apply_remote_toggle_input_\(\);"
+                r"\s*\}"
+                r"\s*return;"
+                r"\s*\}.*?"
+                r"this->remote_input_->inject_remote_state\(pressed\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::apply_remote_power_input_"
+                r"\(bool pressed\).*?"
+                r"auto \*leader = this->leader_light_\(\);.*?"
+                r"auto call = leader->make_call\(\);.*?"
+                r"call\.set_state\(pressed\);.*?"
+                r"call\.perform\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::apply_remote_toggle_input_\(\).*?"
+                r"auto \*leader = this->leader_light_\(\);.*?"
+                r"auto call = leader->make_call\(\);.*?"
+                r"call\.set_state\(!leader->remote_values\.is_on\(\)\);.*?"
+                r"call\.perform\(\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_static_peer_fallback_is_disabled_without_configured_peer(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
@@ -1873,18 +1935,26 @@ class ESPNowAPITests(unittest.TestCase):
 
     def test_follower_folds_effect_into_existing_light_call(self):
         source = SOURCE.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
 
         self.assertIn("apply_remote_state_", source)
-        self.assertIn("if (packet.has_power)", source)
-        self.assertIn("if (packet.has_brightness)", source)
-        self.assertIn("if (packet.has_color)", source)
-        self.assertIn("call.set_brightness(", source)
-        self.assertIn("call.set_color_brightness(", source)
-        self.assertIn("call.set_rgb(", source)
-        self.assertIn("call.set_white(", source)
-        self.assertIn("call.set_effect(", source)
-        self.assertEqual(source.count("light->make_call()"), 1)
-        self.assertEqual(source.count("\n  call.perform();\n}"), 1)
+        self.assertIn("if (packet.has_power)", apply_light_source)
+        self.assertIn("if (packet.has_brightness)", apply_light_source)
+        self.assertIn("if (packet.has_color)", apply_light_source)
+        self.assertIn("call.set_brightness(", apply_light_source)
+        self.assertIn("call.set_color_brightness(", apply_light_source)
+        self.assertIn("call.set_rgb(", apply_light_source)
+        self.assertIn("call.set_white(", apply_light_source)
+        self.assertIn("call.set_effect(", apply_light_source)
+        self.assertEqual(apply_light_source.count("light->make_call()"), 1)
+        self.assertEqual(apply_light_source.count("call.perform();"), 1)
 
     def test_follower_applies_ramp_or_transition_before_perform(self):
         source = SOURCE.read_text(encoding="utf-8")
@@ -1957,6 +2027,14 @@ class ESPNowAPITests(unittest.TestCase):
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
 
         self.assertIn(
             "void apply_remote_state_to_light_(", header
@@ -1969,13 +2047,13 @@ class ESPNowAPITests(unittest.TestCase):
             "this->apply_remote_state_to_light_(packet, i);",
             source,
         )
-        self.assertIn("this->lights_[light_index]", source)
-        self.assertIn("this->effect_catalogs_[light_index]", source)
-        self.assertIn("this->effect_log_states_[light_index]", source)
-        self.assertIn("auto call = light->make_call();", source)
-        self.assertIn("light_supports_rgb_white(*light)", source)
-        self.assertIn("light_supports_rgb(*light)", source)
-        self.assertEqual(source.count("\n  call.perform();\n}"), 1)
+        self.assertIn("this->lights_[light_index]", apply_light_source)
+        self.assertIn("this->effect_catalogs_[light_index]", apply_light_source)
+        self.assertIn("this->effect_log_states_[light_index]", apply_light_source)
+        self.assertIn("auto call = light->make_call();", apply_light_source)
+        self.assertIn("light_supports_rgb_white(*light)", apply_light_source)
+        self.assertIn("light_supports_rgb(*light)", apply_light_source)
+        self.assertEqual(apply_light_source.count("call.perform();"), 1)
 
     def test_follower_effect_lookup_is_exact_and_name_sensitive(self):
         source = SOURCE.read_text(encoding="utf-8")

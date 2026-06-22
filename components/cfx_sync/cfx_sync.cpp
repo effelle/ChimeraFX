@@ -529,17 +529,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
-    if (this->remote_input_ == nullptr) {
-      const uint32_t now = millis();
-      if (this->last_missing_remote_input_log_ms_ == 0 ||
-          now - this->last_missing_remote_input_log_ms_ >= 30000) {
-        ESP_LOGI(TAG,
-                 "Received CFX Sync remote input but no remote_input is "
-                 "configured");
-        this->last_missing_remote_input_log_ms_ = now;
-      }
-      return true;
-    }
     this->inject_remote_input_(packet.input_pressed, packet.input_maintained);
     return true;
   }
@@ -901,7 +890,17 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
 }
 
 void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained) {
-  if (this->role_ != CFXSyncRole::LEADER || this->remote_input_ == nullptr) {
+  if (this->role_ != CFXSyncRole::LEADER) {
+    return;
+  }
+  if (maintained) {
+    this->apply_remote_power_input_(pressed);
+    return;
+  }
+  if (this->remote_input_ == nullptr) {
+    if (pressed) {
+      this->apply_remote_toggle_input_();
+    }
     return;
   }
   this->remote_input_pressed_ = pressed;
@@ -910,6 +909,26 @@ void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained) {
   if (pressed && !maintained) {
     this->schedule_remote_input_timeout_();
   }
+}
+
+void CFXSyncComponent::apply_remote_power_input_(bool pressed) {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr) {
+    return;
+  }
+  auto call = leader->make_call();
+  call.set_state(pressed);
+  call.perform();
+}
+
+void CFXSyncComponent::apply_remote_toggle_input_() {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr) {
+    return;
+  }
+  auto call = leader->make_call();
+  call.set_state(!leader->remote_values.is_on());
+  call.perform();
 }
 
 void CFXSyncComponent::schedule_remote_input_timeout_() {

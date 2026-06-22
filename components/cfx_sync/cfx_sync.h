@@ -279,6 +279,8 @@ class CFXSyncComponent : public Component,
   void schedule_local_input_hold_repeat_();
   void schedule_local_input_release_repeat_(uint8_t remaining);
   void inject_remote_input_(bool pressed, bool maintained);
+  void apply_remote_power_input_(bool pressed);
+  void apply_remote_toggle_input_();
   void schedule_remote_input_timeout_();
   bool send_packet_(std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,
@@ -411,7 +413,6 @@ class CFXSyncComponent : public Component,
 
   uint8_t consecutive_send_failures_{0};
   uint32_t last_rejection_log_ms_{0};
-  uint32_t last_missing_remote_input_log_ms_{0};
   uint32_t last_send_failure_log_ms_{0};
   uint32_t last_ack_warning_log_ms_{0};
   uint32_t sent_packets_{0};
