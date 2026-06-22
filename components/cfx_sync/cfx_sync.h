@@ -37,6 +37,7 @@ enum CFXSyncRole : uint8_t {
 enum class CFXSyncInputMode : uint8_t {
   CFX_SYNC_INPUT_MOMENTARY = 0,
   CFX_SYNC_INPUT_MAINTAINED = 1,
+  CFX_SYNC_INPUT_TOGGLE = 2,
 };
 
 class CFXSyncComponent;
@@ -274,11 +275,11 @@ class CFXSyncComponent : public Component,
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
-  bool send_input_state_(bool pressed, bool maintained);
+  bool send_input_state_(bool pressed, bool maintained, bool toggle);
   void on_local_input_update_(bool pressed);
   void schedule_local_input_hold_repeat_();
   void schedule_local_input_release_repeat_(uint8_t remaining);
-  void inject_remote_input_(bool pressed, bool maintained);
+  void inject_remote_input_(bool pressed, bool maintained, bool toggle);
   void apply_remote_power_input_(bool pressed);
   void apply_remote_toggle_input_();
   void schedule_remote_input_timeout_();

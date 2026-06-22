@@ -529,7 +529,8 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
-    this->inject_remote_input_(packet.input_pressed, packet.input_maintained);
+    this->inject_remote_input_(packet.input_pressed, packet.input_maintained,
+                               packet.input_toggle);
     return true;
   }
 
@@ -801,14 +802,15 @@ bool CFXSyncComponent::send_hello_() {
   return this->send_packet_to_(BROADCAST_MAC, packet);
 }
 
-bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained) {
+bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
+                                         bool toggle) {
   if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return false;
   }
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_input_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
-          pressed, maintained, this->key_, packet)) {
+          pressed, maintained, toggle, this->key_, packet)) {
     return false;
   }
   return this->send_packet_to_(BROADCAST_MAC, packet);
@@ -826,15 +828,22 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   this->local_input_pressed_ = pressed;
   const bool maintained =
       this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED;
-  if (maintained) {
+  const bool toggle =
+      this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_TOGGLE;
+  if (maintained || toggle) {
     const uint32_t generation = ++this->local_input_maintained_generation_;
     this->set_timeout("input-maintained-settle",
                       INPUT_MAINTAINED_SETTLE_MS,
-                      [this, pressed, maintained, generation]() {
+                      [this, pressed, maintained, toggle, generation]() {
                         if (this->role_ !=
                                 CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
-                            this->input_mode_ !=
-                                CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED ||
+                            !((maintained &&
+                               this->input_mode_ ==
+                                   CFXSyncInputMode::
+                                       CFX_SYNC_INPUT_MAINTAINED) ||
+                              (toggle &&
+                               this->input_mode_ ==
+                                   CFXSyncInputMode::CFX_SYNC_INPUT_TOGGLE)) ||
                             generation !=
                                 this->local_input_maintained_generation_ ||
                             !this->local_input_has_state_ ||
@@ -847,13 +856,13 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
                         }
                         this->local_input_sent_has_state_ = true;
                         this->local_input_sent_pressed_ = pressed;
-                        this->send_input_state_(pressed, maintained);
+                        this->send_input_state_(pressed, maintained, toggle);
                       });
     return;
   }
   this->local_input_sent_has_state_ = true;
   this->local_input_sent_pressed_ = pressed;
-  this->send_input_state_(pressed, maintained);
+  this->send_input_state_(pressed, maintained, false);
   if (pressed) {
     this->schedule_local_input_hold_repeat_();
   } else {
@@ -867,7 +876,7 @@ void CFXSyncComponent::schedule_local_input_hold_repeat_() {
         !this->local_input_pressed_) {
       return;
     }
-    this->send_input_state_(true, false);
+    this->send_input_state_(true, false, false);
     this->schedule_local_input_hold_repeat_();
   });
 }
@@ -883,14 +892,19 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
                           CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
                         return;
                       }
-                      this->send_input_state_(false, false);
+                      this->send_input_state_(false, false, false);
                       this->schedule_local_input_release_repeat_(
                           remaining - 1);
                     });
 }
 
-void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained) {
+void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
+                                           bool toggle) {
   if (this->role_ != CFXSyncRole::LEADER) {
+    return;
+  }
+  if (toggle) {
+    this->apply_remote_toggle_input_();
     return;
   }
   if (maintained) {
@@ -943,7 +957,7 @@ void CFXSyncComponent::schedule_remote_input_timeout_() {
                         this->schedule_remote_input_timeout_();
                         return;
                       }
-                      this->inject_remote_input_(false, false);
+                      this->inject_remote_input_(false, false, false);
                     });
 }
 

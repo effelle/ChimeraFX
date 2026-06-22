@@ -81,6 +81,7 @@ ROLE_FOLLOWER = "follower"
 ROLE_CONTROLLER = "controller"
 INPUT_MODE_MOMENTARY = "momentary"
 INPUT_MODE_MAINTAINED = "maintained"
+INPUT_MODE_TOGGLE = "toggle"
 EXCLUDE_SPEED = 1
 EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
@@ -108,6 +109,7 @@ ROLE_MAP = {
 INPUT_MODE_MAP = {
     INPUT_MODE_MOMENTARY: CFXSyncInputMode.CFX_SYNC_INPUT_MOMENTARY,
     INPUT_MODE_MAINTAINED: CFXSyncInputMode.CFX_SYNC_INPUT_MAINTAINED,
+    INPUT_MODE_TOGGLE: CFXSyncInputMode.CFX_SYNC_INPUT_TOGGLE,
 }
 
 _LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
@@ -384,7 +386,10 @@ CONFIG_SCHEMA = cv.All(
                 cv.int_, cv.Range(min=1, max=14)
             ),
             cv.Optional(CONF_INPUT_MODE, default=INPUT_MODE_MOMENTARY): cv.one_of(
-                INPUT_MODE_MOMENTARY, INPUT_MODE_MAINTAINED, lower=True
+                INPUT_MODE_MOMENTARY,
+                INPUT_MODE_MAINTAINED,
+                INPUT_MODE_TOGGLE,
+                lower=True,
             ),
         }
     ).extend(cv.COMPONENT_SCHEMA),

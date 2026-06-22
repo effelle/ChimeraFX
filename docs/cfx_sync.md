@@ -158,6 +158,29 @@ With `maintained` mode:
 - Switch ON turns the leader light ON.
 - Switch OFF turns the leader light OFF.
 
+Use `maintained` only when the physical switch position should be the source of
+truth. If Home Assistant or another controller may also turn the leader light on
+or off, a maintained switch can become out of sync with the real light state.
+For a normal wall rocker that should act like a command on every state change,
+use `input_mode: toggle` instead.
+
+With `toggle` mode, cfx_sync still waits for the rocker input to settle, but
+both stable switch edges toggle the leader:
+
+```yaml
+cfx_sync:
+  id: room_sync
+  role: controller
+  group: living_room
+  key: !secret cfx_sync_key
+  local_input: wall_switch
+  input_mode: toggle
+```
+
+- Switch ON toggles the leader light.
+- Switch OFF toggles the leader light.
+- The physical switch position is not treated as the desired light state.
+
 ## Add A Remote Dimmer Or Magic Button
 
 If the remote button should dim, change CCT, cycle colors, or select effects,
@@ -329,7 +352,7 @@ Use the same fallback channel on every device in the group.
 | `heartbeat` | `30s` | leader, follower | Regular full-state update. Valid range: `10s` to `5min`. |
 | `fallback_channel` | `6` | all | ESP-NOW channel used while Wi-Fi is offline. |
 | `local_input` | none | controller | Binary sensor used by a controller device. |
-| `input_mode` | `momentary` | controller | `momentary` for push buttons, `maintained` for rocker switches. |
+| `input_mode` | `momentary` | controller | `momentary` for push buttons, `toggle` for rocker switches that should toggle on both edges, or `maintained` when switch position must be authoritative. |
 | `remote_input` | none | leader | Optional leader-side `cfx_button` for remote dimmer or magic-button behavior. |
 
 Important rules:
@@ -354,7 +377,8 @@ Remote button does nothing:
 - Check that the button device uses `role: controller`.
 - Check that `local_input` points to the binary sensor ID.
 - For a simple push button, leave `input_mode` as `momentary`.
-- For a rocker switch, use `input_mode: maintained`.
+- For a rocker switch used like a normal wall toggle, use `input_mode: toggle`.
+- Use `input_mode: maintained` only when the physical ON/OFF position should be authoritative.
 
 Remote dimmer does not dim:
 
