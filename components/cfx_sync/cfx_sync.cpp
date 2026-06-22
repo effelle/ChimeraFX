@@ -2,7 +2,7 @@
 
 #ifdef USE_ESP32
 
-#include "../cfx_dimmer/cfx_dimmer_timing.h"
+#include "../cfx_button/cfx_dimmer_timing.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #ifdef USE_WIFI

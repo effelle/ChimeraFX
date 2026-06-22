@@ -21,7 +21,6 @@ DEPENDENCIES = ["esp32"]
 AUTO_LOAD = [
     "binary_sensor",
     "cfx_button",
-    "cfx_dimmer",
     "cfx_effect_registry",
     "espnow",
     "hmac_sha256",
