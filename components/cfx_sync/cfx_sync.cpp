@@ -21,8 +21,8 @@ namespace esphome {
 namespace cfx_sync {
 
 static CFXSyncTimingState capture_sync_timing_state(
-    light::LightState *leader, const CFXSyncEffectState &effect,
-    bool include_default_transition) {
+    light::LightState *leader, const CFXSyncLightSnapshot &snapshot,
+    const CFXSyncEffectState &effect, bool include_default_transition) {
   CFXSyncTimingState timing;
   const auto hint = cfx_dimmer::capture_light_timing_hint(leader, millis());
   timing.has_transition = hint.has_transition;
@@ -33,8 +33,10 @@ static CFXSyncTimingState capture_sync_timing_state(
     return timing;
   }
 
+  const bool should_include_default_transition =
+      effect.kind == CFXSyncEffectKind::NONE || !snapshot.power;
   if (include_default_transition && leader != nullptr &&
-      effect.kind == CFXSyncEffectKind::NONE) {
+      should_include_default_transition) {
     const uint32_t transition_ms = leader->get_default_transition_length();
     if (transition_ms > 0) {
       timing.has_transition = true;
@@ -649,7 +651,7 @@ bool CFXSyncComponent::send_state_to_followers_(
   std::vector<uint8_t> packet;
   auto *leader = this->leader_light_();
   const auto timing = capture_sync_timing_state(
-      leader, effect, include_default_transition);
+      leader, snapshot, effect, include_default_transition);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,
@@ -1726,6 +1728,13 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   const bool turning_off_effect =
       turning_off && light->get_effect_name() != "None";
   const bool apply_visual_state = !turning_off;
+  const bool use_remote_effect_off_transition =
+      turning_off_effect && packet.has_transition &&
+      light->get_default_transition_length() == 0;
+  const uint32_t saved_default_transition =
+      use_remote_effect_off_transition
+          ? light->get_default_transition_length()
+          : 0;
   auto call = light->make_call();
 
   if (packet.has_power) {
@@ -1825,14 +1834,21 @@ void CFXSyncComponent::apply_remote_state_to_light_(
     }
   }
   if (turning_off_effect) {
+    if (use_remote_effect_off_transition) {
+      light->set_default_transition_length(packet.transition_ms);
+    }
     call.set_transition_length(0);
   } else if (packet.has_ramp && packet.has_brightness) {
     call.set_transition_length(packet.ramp_ms);
-  } else if (packet.has_transition) {
+  } else if (packet.has_transition &&
+             light->get_default_transition_length() == 0) {
     call.set_transition_length(packet.transition_ms);
   }
 
   call.perform();
+  if (use_remote_effect_off_transition) {
+    light->set_default_transition_length(saved_default_transition);
+  }
 }
 
 void CFXSyncComponent::apply_remote_controls_to_light_(

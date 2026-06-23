@@ -1158,12 +1158,16 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"static CFXSyncTimingState capture_sync_timing_state"
-                r"\(.*?const CFXSyncEffectState &effect,\s*"
+                r"\(.*?const CFXSyncLightSnapshot &snapshot,\s*"
+                r"const CFXSyncEffectState &effect,\s*"
                 r"bool include_default_transition.*?"
                 r"cfx_dimmer::capture_light_timing_hint.*?"
                 r"if \(hint\.has_ramp\).*?return timing;.*?"
+                r"const bool should_include_default_transition =.*?"
+                r"effect\.kind == CFXSyncEffectKind::NONE \|\| !snapshot\.power"
+                r".*?"
                 r"if \(include_default_transition &&.*?"
-                r"effect\.kind == CFXSyncEffectKind::NONE.*?"
+                r"should_include_default_transition.*?"
                 r"leader->get_default_transition_length\(\).*?"
                 r"timing\.has_transition = true;.*?"
                 r"timing\.transition_ms =",
@@ -1970,7 +1974,8 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"if \(packet\.has_ramp && packet\.has_brightness\) \{"
                 r"\s*call\.set_transition_length\(packet\.ramp_ms\);"
-                r"\s*\} else if \(packet\.has_transition\) \{"
+                r"\s*\} else if \(packet\.has_transition &&"
+                r"\s*light->get_default_transition_length\(\) == 0\) \{"
                 r"\s*call\.set_transition_length\(packet\.transition_ms\);"
                 r"\s*\}.*?"
                 r"call\.perform\(\);",
@@ -2039,12 +2044,28 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             apply_light_source,
             re.compile(
+                r"const bool use_remote_effect_off_transition ="
+                r"\s*turning_off_effect && packet\.has_transition &&"
+                r"\s*light->get_default_transition_length\(\) == 0;.*?"
+                r"const uint32_t saved_default_transition ="
+                r"\s*use_remote_effect_off_transition"
+                r"\s*\? light->get_default_transition_length\(\)"
+                r"\s*: 0;.*?"
                 r"if \(turning_off_effect\) \{"
+                r"\s*if \(use_remote_effect_off_transition\) \{"
+                r"\s*light->set_default_transition_length\(packet\.transition_ms\);"
+                r"\s*\}"
                 r"\s*call\.set_transition_length\(0\);"
                 r"\s*\} else if \(packet\.has_ramp && packet\.has_brightness\) \{"
                 r"\s*call\.set_transition_length\(packet\.ramp_ms\);"
-                r"\s*\} else if \(packet\.has_transition\) \{"
-                r"\s*call\.set_transition_length\(packet\.transition_ms\);",
+                r"\s*\} else if \(packet\.has_transition &&"
+                r"\s*light->get_default_transition_length\(\) == 0\) \{"
+                r"\s*call\.set_transition_length\(packet\.transition_ms\);"
+                r"\s*\}.*?"
+                r"call\.perform\(\);"
+                r"\s*if \(use_remote_effect_off_transition\) \{"
+                r"\s*light->set_default_transition_length"
+                r"\(saved_default_transition\);",
                 re.DOTALL,
             ),
         )
