@@ -1723,6 +1723,8 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   auto &log_state = this->effect_log_states_[light_index];
   const bool turning_off =
       packet.has_power && !packet.power && light->remote_values.is_on();
+  const bool turning_off_effect =
+      turning_off && light->get_effect_name() != "None";
   const bool apply_visual_state = !turning_off;
   auto call = light->make_call();
 
@@ -1822,7 +1824,9 @@ void CFXSyncComponent::apply_remote_state_to_light_(
       call.set_effect(desired_effect);
     }
   }
-  if (packet.has_ramp && packet.has_brightness) {
+  if (turning_off_effect) {
+    call.set_transition_length(0);
+  } else if (packet.has_ramp && packet.has_brightness) {
     call.set_transition_length(packet.ramp_ms);
   } else if (packet.has_transition) {
     call.set_transition_length(packet.transition_ms);

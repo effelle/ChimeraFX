@@ -1995,7 +1995,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const bool turning_off =\s*"
                 r"packet\.has_power && !packet\.power &&"
                 r"\s*light->remote_values\.is_on\(\);"
-                r"\s*const bool apply_visual_state = !turning_off;",
+                r".*?const bool apply_visual_state = !turning_off;",
                 re.DOTALL,
             ),
         )
@@ -2018,6 +2018,35 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn(
             "apply_visual_state && (!packet.has_power || packet.power);",
             apply_light_source,
+        )
+
+    def test_follower_bypasses_native_transition_when_turning_off_effect(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
+
+        self.assertIn(
+            'const bool turning_off_effect =\n'
+            '      turning_off && light->get_effect_name() != "None";',
+            apply_light_source,
+        )
+        self.assertRegex(
+            apply_light_source,
+            re.compile(
+                r"if \(turning_off_effect\) \{"
+                r"\s*call\.set_transition_length\(0\);"
+                r"\s*\} else if \(packet\.has_ramp && packet\.has_brightness\) \{"
+                r"\s*call\.set_transition_length\(packet\.ramp_ms\);"
+                r"\s*\} else if \(packet\.has_transition\) \{"
+                r"\s*call\.set_transition_length\(packet\.transition_ms\);",
+                re.DOTALL,
+            ),
         )
 
     def test_cfx_dimmer_publishes_sync_ramp_timing_hints(self):
