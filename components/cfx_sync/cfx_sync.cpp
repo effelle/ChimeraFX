@@ -1721,15 +1721,18 @@ void CFXSyncComponent::apply_remote_state_to_light_(
 
   const auto &catalog = this->effect_catalogs_[light_index];
   auto &log_state = this->effect_log_states_[light_index];
+  const bool turning_off =
+      packet.has_power && !packet.power && light->remote_values.is_on();
+  const bool apply_visual_state = !turning_off;
   auto call = light->make_call();
 
   if (packet.has_power) {
     call.set_state(packet.power);
   }
-  if (packet.has_brightness) {
+  if (packet.has_brightness && apply_visual_state) {
     call.set_brightness(packet.brightness / 255.0f);
   }
-  if (packet.has_color) {
+  if (packet.has_color && apply_visual_state) {
     CFXSyncLightSnapshot snapshot;
     snapshot.red = packet.red;
     snapshot.green = packet.green;
@@ -1753,11 +1756,12 @@ void CFXSyncComponent::apply_remote_state_to_light_(
       call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
                    converted.blue / 255.0f);
     }
-  } else if (packet.has_color_brightness) {
+  } else if (packet.has_color_brightness && apply_visual_state) {
     call.set_color_brightness(packet.color_brightness / 255.0f);
   }
 
-  const bool may_select_effect = !packet.has_power || packet.power;
+  const bool may_select_effect =
+      apply_visual_state && (!packet.has_power || packet.power);
   if (packet.has_effect && may_select_effect) {
     std::string desired_effect{"None"};
     bool fallback = false;

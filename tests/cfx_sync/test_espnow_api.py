@@ -1946,8 +1946,14 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("apply_remote_state_", source)
         self.assertIn("if (packet.has_power)", apply_light_source)
-        self.assertIn("if (packet.has_brightness)", apply_light_source)
-        self.assertIn("if (packet.has_color)", apply_light_source)
+        self.assertIn(
+            "if (packet.has_brightness && apply_visual_state)",
+            apply_light_source,
+        )
+        self.assertIn(
+            "if (packet.has_color && apply_visual_state)",
+            apply_light_source,
+        )
         self.assertIn("call.set_brightness(", apply_light_source)
         self.assertIn("call.set_color_brightness(", apply_light_source)
         self.assertIn("call.set_rgb(", apply_light_source)
@@ -1970,6 +1976,48 @@ class ESPNowAPITests(unittest.TestCase):
                 r"call\.perform\(\);",
                 re.DOTALL,
             ),
+        )
+
+    def test_follower_does_not_repaint_static_state_while_turning_off(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
+
+        self.assertRegex(
+            apply_light_source,
+            re.compile(
+                r"const bool turning_off =\s*"
+                r"packet\.has_power && !packet\.power &&"
+                r"\s*light->remote_values\.is_on\(\);"
+                r"\s*const bool apply_visual_state = !turning_off;",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "if (packet.has_brightness && apply_visual_state)",
+            apply_light_source,
+        )
+        self.assertIn(
+            "if (packet.has_color && apply_visual_state)",
+            apply_light_source,
+        )
+        self.assertIn(
+            "} else if (packet.has_color_brightness && apply_visual_state)",
+            apply_light_source,
+        )
+        self.assertIn(
+            "const bool may_select_effect =",
+            apply_light_source,
+        )
+        self.assertIn(
+            "apply_visual_state && (!packet.has_power || packet.power);",
+            apply_light_source,
         )
 
     def test_cfx_dimmer_publishes_sync_ramp_timing_hints(self):
@@ -2084,8 +2132,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn(
-            "const bool may_select_effect = "
-            "!packet.has_power || packet.power;",
+            "apply_visual_state && (!packet.has_power || packet.power);",
             source,
         )
         self.assertIn(
