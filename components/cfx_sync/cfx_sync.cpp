@@ -717,7 +717,7 @@ bool CFXSyncComponent::send_state_to_peer_(
 
   std::vector<uint8_t> packet;
   auto *leader = this->leader_light_();
-  const auto timing = capture_sync_timing_state(leader, effect, false);
+  const auto timing = capture_sync_timing_state(leader, snapshot, effect, false);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state(
           this->group_hash_, this->boot_id_, sequence, snapshot.power,

@@ -1198,6 +1198,15 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"send_state_to_peer_\(.*?"
+                r"const auto timing = capture_sync_timing_state"
+                r"\(leader, snapshot, effect, false\);",
+                re.DOTALL,
+            ),
+        )
 
     def test_all_leader_state_send_paths_include_effect(self):
         header = HEADER.read_text(encoding="utf-8")
