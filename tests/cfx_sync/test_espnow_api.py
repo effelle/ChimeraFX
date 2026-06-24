@@ -355,6 +355,20 @@ class ESPNowAPITests(unittest.TestCase):
             source,
         )
         self.assertIn("this->parent_->on_sync_enabled_switch(state);", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->role_ == CFXSyncRole::FOLLOWER && "
+                r"this->sync_switch_ != nullptr\) \{"
+                r"\s*const auto initial_state ="
+                r"\s*this->sync_switch_->get_initial_state_with_restore_mode\(\);"
+                r"\s*this->sync_enabled_ = initial_state\.has_value\(\)"
+                r"\s*\? initial_state\.value\(\) : true;"
+                r"\s*this->sync_switch_->publish_state\(this->sync_enabled_\);"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
 
     def test_disabled_follower_ignores_state_and_resyncs_on_enable(self):
         source = SOURCE.read_text(encoding="utf-8")

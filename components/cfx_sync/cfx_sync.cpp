@@ -211,6 +211,12 @@ void CFXSyncComponent::setup() {
       peer->registered = true;
     }
   }
+  if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_switch_ != nullptr) {
+    const auto initial_state =
+        this->sync_switch_->get_initial_state_with_restore_mode();
+    this->sync_enabled_ = initial_state.has_value() ? initial_state.value() : true;
+    this->sync_switch_->publish_state(this->sync_enabled_);
+  }
 
   if (this->role_ == CFXSyncRole::LEADER) {
     auto *leader = this->leader_light_();
