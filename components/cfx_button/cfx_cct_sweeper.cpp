@@ -1,5 +1,6 @@
 #include "cfx_cct_sweeper.h"
 
+#include "cfx_dimmer_timing.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include <algorithm>
@@ -312,8 +313,17 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
     // ESPHome's addressable default transformer snapshots the previous RGB
     // channels. Native white must switch immediately to keep RGB fully off.
     call.set_transition_length(0);
+    cfx_dimmer::clear_light_timing_hint(state);
   } else if (!use_default_transition) {
     call.set_transition_length(effective_transition_ms);
+    if (effective_transition_ms > 0) {
+      cfx_dimmer::publish_light_ramp_hint(state,
+                                          millis() + effective_transition_ms);
+    } else {
+      cfx_dimmer::clear_light_timing_hint(state);
+    }
+  } else {
+    cfx_dimmer::clear_light_timing_hint(state);
   }
   call.set_state(true);
   call.set_effect("None");

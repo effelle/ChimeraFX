@@ -1,5 +1,6 @@
 #include "cfx_hue_cycler.h"
 
+#include "cfx_dimmer_timing.h"
 #include "esphome/core/helpers.h"
 #include <algorithm>
 #include <cmath>
@@ -217,6 +218,13 @@ void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,
   auto call = state->make_call();
   if (transition_ms != USE_DEFAULT_TRANSITION) {
     call.set_transition_length(transition_ms);
+    if (transition_ms > 0) {
+      cfx_dimmer::publish_light_ramp_hint(state, millis() + transition_ms);
+    } else {
+      cfx_dimmer::clear_light_timing_hint(state);
+    }
+  } else {
+    cfx_dimmer::clear_light_timing_hint(state);
   }
   call.set_state(true);
   call.set_effect("None");
