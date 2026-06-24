@@ -312,6 +312,93 @@ class ESPNowAPITests(unittest.TestCase):
             py_source,
         )
 
+    def test_followers_get_generated_enable_sync_switch(self):
+        py_source = PY_COMPONENT.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFXSyncEnableSwitch", header)
+        self.assertIn("void write_state(bool state) override;", header)
+        self.assertIn("void on_sync_enabled_switch(bool enabled);", header)
+        self.assertIn("bool sync_enabled_{true};", header)
+        self.assertIn('CONF_SYNC_SWITCH_ID = "_sync_switch_id"', py_source)
+        self.assertIn(
+            "CFXSyncEnableSwitch = cfx_sync_ns.class_(\n"
+            '    "CFXSyncEnableSwitch", switch.Switch\n'
+            ")",
+            py_source,
+        )
+        self.assertIn(
+            "cv.GenerateID(CONF_SYNC_SWITCH_ID): cv.declare_id(\n"
+            "                CFXSyncEnableSwitch\n"
+            "            )",
+            py_source,
+        )
+        self.assertRegex(
+            py_source,
+            re.compile(
+                r"if config\[CONF_ROLE\] == ROLE_FOLLOWER and "
+                r"CONF_SYNC_SWITCH_ID in config:.*?"
+                r"CONF_NAME: \"Enable Sync\".*?"
+                r"CONF_RESTORE_MODE: cg\.RawExpression"
+                r"\(\s*\"switch_::SWITCH_RESTORE_DEFAULT_ON\"\s*\).*?"
+                r"await switch\.register_switch\(sync_switch, switch_conf\).*?"
+                r"cg\.add\(sync_switch\.set_parent\(var\)\).*?"
+                r"cg\.add\(var\.set_sync_switch\(sync_switch\)\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "void CFXSyncEnableSwitch::write_state(bool state)",
+            source,
+        )
+        self.assertIn("this->parent_->on_sync_enabled_switch(state);", source)
+
+    def test_disabled_follower_ignores_state_and_resyncs_on_enable(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("void schedule_enable_resync_();", header)
+        self.assertIn("void schedule_enable_resync_attempt_(", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::STATE &&"
+                r"\s*this->role_ == CFXSyncRole::FOLLOWER &&"
+                r"\s*!this->sync_enabled_\) \{"
+                r"\s*this->log_rejection_\(\"Ignoring STATE while sync is disabled\"\);"
+                r"\s*return true;"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::on_sync_enabled_switch\(bool enabled\).*?"
+                r"this->sync_enabled_ = enabled;.*?"
+                r"this->has_valid_state_ = false;.*?"
+                r"this->clear_warning_if_set_\(\);.*?"
+                r"if \(enabled\).*?"
+                r"this->schedule_enable_resync_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_enable_resync_\(\).*?"
+                r"this->send_sync_request_to_\(BROADCAST_MAC\);.*?"
+                r"this->schedule_enable_resync_attempt_"
+                r"\(\"enable-sync-1\", 1000\);.*?"
+                r"this->schedule_enable_resync_attempt_"
+                r"\(\"enable-sync-2\", 2000\);.*?"
+                r"this->schedule_enable_resync_attempt_"
+                r"\(\"enable-sync-4\", 4000\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_cfx_button_can_host_remote_input_without_local_binary_sensor(self):
         py_source = CFX_BUTTON_PY.read_text(encoding="utf-8")
         header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")

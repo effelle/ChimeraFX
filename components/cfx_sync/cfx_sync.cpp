@@ -78,6 +78,13 @@ void CFXSyncLightListener::on_light_remote_values_update() {
   }
 }
 
+void CFXSyncEnableSwitch::write_state(bool state) {
+  if (this->parent_ != nullptr) {
+    this->parent_->on_sync_enabled_switch(state);
+  }
+  this->publish_state(state);
+}
+
 light::LightState *CFXSyncComponent::leader_light_() const {
   if (this->role_ != CFXSyncRole::LEADER || this->lights_.size() != 1) {
     return nullptr;
@@ -560,6 +567,13 @@ bool CFXSyncComponent::handle_decoded_packet_(
 
   if (packet.type == CFXSyncPacketType::STATE &&
       this->role_ == CFXSyncRole::FOLLOWER &&
+      !this->sync_enabled_) {
+    this->log_rejection_("Ignoring STATE while sync is disabled");
+    return true;
+  }
+
+  if (packet.type == CFXSyncPacketType::STATE &&
+      this->role_ == CFXSyncRole::FOLLOWER &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
        packet.has_color_brightness || packet.has_effect ||
        packet.has_controls)) {
@@ -593,6 +607,18 @@ void CFXSyncComponent::on_local_light_update() {
   this->observed_effect_ = effect;
   this->observed_controls_ = controls;
   this->send_state_(snapshot, effect, controls, true);
+}
+
+void CFXSyncComponent::on_sync_enabled_switch(bool enabled) {
+  this->sync_enabled_ = enabled;
+  if (this->role_ != CFXSyncRole::FOLLOWER) {
+    return;
+  }
+  this->has_valid_state_ = false;
+  this->clear_warning_if_set_();
+  if (enabled) {
+    this->schedule_enable_resync_();
+  }
 }
 
 void CFXSyncComponent::on_local_control_update() {
@@ -1608,7 +1634,8 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
     this->last_espnow_rearm_ms_ = millis();
     this->boot_discovery_started_ms_ = millis();
     this->schedule_boot_discovery_();
-    if (this->role_ == CFXSyncRole::FOLLOWER && !this->has_valid_state_) {
+    if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_enabled_ &&
+        !this->has_valid_state_) {
       this->schedule_follower_recovery_loop_();
     }
   });
@@ -1641,7 +1668,7 @@ void CFXSyncComponent::schedule_follower_recovery_() {
                                             FOLLOWER_RECOVERY_THIRD_MS);
   this->set_timeout("sync-recovery-expired", FOLLOWER_RECOVERY_EXPIRE_MS,
                     [this]() {
-                      if (!this->has_valid_state_) {
+                      if (this->sync_enabled_ && !this->has_valid_state_) {
                         char bssid_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
                         this->format_current_wifi_bssid_(
                             bssid_buf, sizeof(bssid_buf));
@@ -1659,14 +1686,16 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_loop_() {
-  if (this->role_ != CFXSyncRole::FOLLOWER || this->has_valid_state_) {
+  if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_ ||
+      this->has_valid_state_) {
     return;
   }
   const uint32_t delay_ms =
       FOLLOWER_RECOVERY_REPEAT_MS +
       (esp_random() % (FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS + 1));
   this->set_timeout("sync-recovery-loop", delay_ms, [this]() {
-    if (this->role_ != CFXSyncRole::FOLLOWER || this->has_valid_state_) {
+    if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_ ||
+        this->has_valid_state_) {
       return;
     }
     const uint32_t now = millis();
@@ -1686,7 +1715,30 @@ void CFXSyncComponent::schedule_follower_recovery_attempt_(
   const uint32_t delay_ms =
       base_delay_ms + (esp_random() % (RECOVERY_JITTER_SPREAD_MS + 1));
   this->set_timeout(name, delay_ms, [this]() {
-    if (!this->has_valid_state_ && this->boot_radio_ready_()) {
+    if (this->sync_enabled_ && !this->has_valid_state_ &&
+        this->boot_radio_ready_()) {
+      this->send_sync_request_to_(BROADCAST_MAC);
+    }
+  });
+}
+
+void CFXSyncComponent::schedule_enable_resync_() {
+  if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_) {
+    return;
+  }
+  if (this->boot_radio_ready_()) {
+    this->send_sync_request_to_(BROADCAST_MAC);
+  }
+  this->schedule_enable_resync_attempt_("enable-sync-1", 1000);
+  this->schedule_enable_resync_attempt_("enable-sync-2", 2000);
+  this->schedule_enable_resync_attempt_("enable-sync-4", 4000);
+}
+
+void CFXSyncComponent::schedule_enable_resync_attempt_(const char *name,
+                                                       uint32_t delay_ms) {
+  this->set_timeout(name, delay_ms, [this]() {
+    if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_enabled_ &&
+        !this->has_valid_state_ && this->boot_radio_ready_()) {
       this->send_sync_request_to_(BROADCAST_MAC);
     }
   });

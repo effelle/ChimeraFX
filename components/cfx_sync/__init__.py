@@ -12,7 +12,7 @@ from esphome.components import (
     select,
     switch,
 )
-from esphome.const import CONF_ID
+from esphome.const import CONF_ICON, CONF_ID, CONF_NAME, CONF_RESTORE_MODE
 from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
@@ -53,6 +53,7 @@ CONF_HEARTBEAT = "heartbeat"
 CONF_FALLBACK_CHANNEL = "fallback_channel"
 CONF_INPUT_MODE = "input_mode"
 CONF_AUTO_ADD_PEER = "auto_add_peer"
+CONF_SYNC_SWITCH_ID = "_sync_switch_id"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
 CONF_CONTROL_IDS = "_control_ids"
 CONF_EFFECTS = "effects"
@@ -96,6 +97,9 @@ KEY_DERIVATION_PREFIX = b"CFX_SYNC_V1\x00"
 
 cfx_sync_ns = cg.esphome_ns.namespace("cfx_sync")
 CFXSyncComponent = cfx_sync_ns.class_("CFXSyncComponent", cg.Component)
+CFXSyncEnableSwitch = cfx_sync_ns.class_(
+    "CFXSyncEnableSwitch", switch.Switch
+)
 CFXSyncRole = cfx_sync_ns.enum("CFXSyncRole")
 CFXSyncInputMode = cfx_sync_ns.enum("CFXSyncInputMode", is_class=True)
 
@@ -359,6 +363,9 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(
                 espnow.ESPNowComponent
             ),
+            cv.GenerateID(CONF_SYNC_SWITCH_ID): cv.declare_id(
+                CFXSyncEnableSwitch
+            ),
             cv.Required(CONF_ROLE): cv.one_of(
                 ROLE_LEADER, ROLE_FOLLOWER, ROLE_CONTROLLER, lower=True
             ),
@@ -474,6 +481,20 @@ async def to_code(config):
     if CONF_REMOTE_INPUT in config:
         remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
         cg.add(var.set_remote_input(remote_input))
+    if config[CONF_ROLE] == ROLE_FOLLOWER and CONF_SYNC_SWITCH_ID in config:
+        switch_conf = {
+            CONF_ID: config[CONF_SYNC_SWITCH_ID],
+            CONF_NAME: "Enable Sync",
+            CONF_ICON: "mdi:sync",
+            "optimistic": True,
+            CONF_RESTORE_MODE: cg.RawExpression(
+                "switch_::SWITCH_RESTORE_DEFAULT_ON"
+            ),
+        }
+        sync_switch = cg.new_Pvariable(config[CONF_SYNC_SWITCH_ID])
+        await switch.register_switch(sync_switch, switch_conf)
+        cg.add(sync_switch.set_parent(var))
+        cg.add(var.set_sync_switch(sync_switch))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
     cg.add(var.set_input_mode(INPUT_MODE_MAP[config[CONF_INPUT_MODE]]))
     cg.add(var.set_fallback_channel(config[CONF_FALLBACK_CHANNEL]))

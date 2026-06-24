@@ -85,6 +85,27 @@ cfx_sync:
 This is useful when the follower device has multiple segments and they should
 all follow the same leader.
 
+## Temporarily Stop One Follower
+
+Every follower automatically gets an **Enable Sync** switch in ESPHome and
+Home Assistant.
+
+Turn **Enable Sync** off when you want that follower to stop copying the
+leader for a while.
+
+Turn **Enable Sync** on again when you want it back in the group.
+
+When it is turned on, the follower immediately asks the group for the current
+leader state. It does not wait for the next heartbeat, so this also works when
+`heartbeat` is set to a long value.
+
+While **Enable Sync** is off:
+
+- The follower keeps ESP-NOW discovery active.
+- The follower ignores leader state updates.
+- Local light control still works.
+- The device remains in the same `group`.
+
 ## Add A Remote Push Button
 
 A controller device can have only a button and no ChimeraFX light.
@@ -362,12 +383,14 @@ Important rules:
 - A controller must have `local_input` and no `lights`.
 - `remote_input` is only for leaders.
 - Do not use `espnow_id` or `peer`; discovery is automatic.
+- Followers get an automatic **Enable Sync** switch. It is not a YAML option.
 
 ## Troubleshooting
 
 Follower does nothing:
 
 - Check that `group` and `key` are identical on every device.
+- Check that the follower **Enable Sync** switch is on.
 - Check that every device is ESP32.
 - Check that the devices are on the same 2.4 GHz Wi-Fi channel.
 - On mesh Wi-Fi, check that the BSSID/channel did not split between mesh nodes.

@@ -42,6 +42,15 @@ enum class CFXSyncInputMode : uint8_t {
 
 class CFXSyncComponent;
 
+class CFXSyncEnableSwitch : public switch_::Switch {
+ public:
+  void set_parent(CFXSyncComponent *parent) { this->parent_ = parent; }
+  void write_state(bool state) override;
+
+ protected:
+  CFXSyncComponent *parent_{nullptr};
+};
+
 class CFXSyncLightListener : public light::LightRemoteValuesListener {
  public:
   explicit CFXSyncLightListener(CFXSyncComponent *parent) : parent_(parent) {}
@@ -91,6 +100,9 @@ class CFXSyncComponent : public Component,
   }
   void set_remote_input(cfx_button::CFXButton *input) {
     this->remote_input_ = input;
+  }
+  void set_sync_switch(CFXSyncEnableSwitch *sync_switch) {
+    this->sync_switch_ = sync_switch;
   }
   void set_input_mode(CFXSyncInputMode mode) {
     this->input_mode_ = mode;
@@ -165,6 +177,7 @@ class CFXSyncComponent : public Component,
                     uint8_t size) override;
 #endif
   void on_local_light_update();
+  void on_sync_enabled_switch(bool enabled);
 
  protected:
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
@@ -343,6 +356,8 @@ class CFXSyncComponent : public Component,
   void schedule_follower_recovery_loop_();
   void schedule_follower_recovery_attempt_(const char *name,
                                            uint32_t base_delay_ms);
+  void schedule_enable_resync_();
+  void schedule_enable_resync_attempt_(const char *name, uint32_t delay_ms);
   void apply_remote_state_(const CFXSyncPacket &packet);
   void apply_remote_state_to_light_(const CFXSyncPacket &packet,
                                     size_t light_index);
@@ -366,6 +381,7 @@ class CFXSyncComponent : public Component,
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   binary_sensor::BinarySensor *local_input_{nullptr};
   cfx_button::CFXButton *remote_input_{nullptr};
+  CFXSyncEnableSwitch *sync_switch_{nullptr};
   std::array<uint8_t, 6> peer_{};
   bool has_static_peer_{false};
   std::array<PeerState, CFX_SYNC_MAX_PEERS> peers_{};
@@ -401,6 +417,7 @@ class CFXSyncComponent : public Component,
   uint32_t local_input_maintained_generation_{0};
   bool remote_input_pressed_{false};
   uint32_t last_remote_input_ms_{0};
+  bool sync_enabled_{true};
 
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};
