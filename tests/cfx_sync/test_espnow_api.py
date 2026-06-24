@@ -340,6 +340,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if config\[CONF_ROLE\] == ROLE_FOLLOWER and "
                 r"CONF_SYNC_SWITCH_ID in config:.*?"
                 r"CONF_NAME: \"Enable Sync\".*?"
+                r"CONF_DISABLED_BY_DEFAULT: False,.*?"
+                r"CONF_INTERNAL: False,.*?"
                 r"CONF_RESTORE_MODE: cg\.RawExpression"
                 r"\(\s*\"switch_::SWITCH_RESTORE_DEFAULT_ON\"\s*\).*?"
                 r"await switch\.register_switch\(sync_switch, switch_conf\).*?"

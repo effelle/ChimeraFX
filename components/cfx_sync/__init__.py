@@ -12,7 +12,14 @@ from esphome.components import (
     select,
     switch,
 )
-from esphome.const import CONF_ICON, CONF_ID, CONF_NAME, CONF_RESTORE_MODE
+from esphome.const import (
+    CONF_DISABLED_BY_DEFAULT,
+    CONF_ICON,
+    CONF_ID,
+    CONF_INTERNAL,
+    CONF_NAME,
+    CONF_RESTORE_MODE,
+)
 from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
@@ -486,6 +493,8 @@ async def to_code(config):
             CONF_ID: config[CONF_SYNC_SWITCH_ID],
             CONF_NAME: "Enable Sync",
             CONF_ICON: "mdi:sync",
+            CONF_DISABLED_BY_DEFAULT: False,
+            CONF_INTERNAL: False,
             "optimistic": True,
             CONF_RESTORE_MODE: cg.RawExpression(
                 "switch_::SWITCH_RESTORE_DEFAULT_ON"
