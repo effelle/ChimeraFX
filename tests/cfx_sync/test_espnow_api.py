@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY_COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
 HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync.h"
 SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
+TRANSPORT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_transport.h"
 PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
 PACKET_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.cpp"
 COLOR_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
@@ -20,6 +21,129 @@ CFX_DIMMER_TIMING_HEADER = (
 )
 CFX_CCT_SWEEPER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_cct_sweeper.cpp"
 CFX_HUE_CYCLER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_hue_cycler.cpp"
+
+
+class CFXSyncTransportBoundaryTests(unittest.TestCase):
+    def test_transport_header_declares_shared_source_identity(self):
+        self.assertTrue(
+            TRANSPORT_HEADER.exists(),
+            "cfx_sync_transport.h must expose transport-neutral source identity",
+        )
+        header = TRANSPORT_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "enum class CFXSyncTransportKind : uint8_t { ESPNOW = 0, UDP = 1 };",
+            header,
+        )
+        self.assertIn("struct CFXSyncSource", header)
+        self.assertIn(
+            "CFXSyncTransportKind transport{CFXSyncTransportKind::ESPNOW};",
+            header,
+        )
+        self.assertIn("std::array<uint8_t, 6> mac{{0, 0, 0, 0, 0, 0}};", header)
+        self.assertIn("uint32_t ipv4{0};", header)
+        self.assertIn("uint16_t port{0};", header)
+        self.assertIn("bool identity_valid{false};", header)
+        self.assertIn(
+            "static CFXSyncSource from_espnow(const uint8_t *mac_addr)", header
+        )
+        self.assertIn(
+            "static CFXSyncSource from_udp(uint32_t ipv4_addr, uint16_t udp_port)",
+            header,
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"static CFXSyncSource from_espnow\(const uint8_t \*mac_addr\)"
+                r".*?if \(mac_addr != nullptr\).*?"
+                r"source\.identity_valid = true;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"static CFXSyncSource from_udp\(uint32_t ipv4_addr, "
+                r"uint16_t udp_port\).*?"
+                r"source\.identity_valid = true;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"const uint8_t \*espnow_mac_or_null\(\) const.*?"
+                r"if \(this->transport != CFXSyncTransportKind::ESPNOW \|\|"
+                r"\s*!this->identity_valid\).*?"
+                r"return nullptr;.*?"
+                r"return this->mac\.data\(\);",
+                re.DOTALL,
+            ),
+        )
+
+    def test_runtime_header_uses_shared_transport_packet_signatures(self):
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn('#include "cfx_sync_transport.h"', header)
+        self.assertIn(
+            "bool handle_packet_(const CFXSyncSource &source, const uint8_t *data,",
+            header,
+        )
+        self.assertIn(
+            "bool handle_decoded_packet_(const CFXSyncSource &source,",
+            header,
+        )
+        self.assertNotIn(
+            "bool handle_packet_(const espnow::ESPNowRecvInfo &info,",
+            header,
+        )
+        self.assertNotIn(
+            "bool handle_decoded_packet_(const espnow::ESPNowRecvInfo &info,",
+            header,
+        )
+
+    def test_espnow_callbacks_wrap_source_before_packet_decode(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        for callback in ("on_received", "on_receive", "on_broadcasted", "on_broadcast"):
+            with self.subTest(callback=callback):
+                self.assertRegex(
+                    source,
+                    re.compile(
+                        rf"bool CFXSyncComponent::{callback}\(.*?\).*?"
+                        r"CFXSyncSource source = "
+                        r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                        r"return this->handle_packet_\(source, data, size\);",
+                        re.DOTALL,
+                    ),
+                )
+        self.assertIn(
+            "return this->handle_decoded_packet_(source, packet);",
+            source,
+        )
+        self.assertIn("source.espnow_mac_or_null()", source)
+
+    def test_decoded_packet_rejects_missing_espnow_identity_before_peer_paths(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+                r"const uint8_t \*source_mac = "
+                r"source\.espnow_mac_or_null\(\);"
+                r"\s*if \(source_mac == nullptr\) \{"
+                r"\s*this->log_rejection_"
+                r"\(\"Ignoring packet without ESP-NOW source identity\"\);"
+                r"\s*return true;"
+                r"\s*\}"
+                r"\s*auto \*peer = this->find_peer_\(source_mac\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn("this->find_peer_(source.mac.data())", source)
+        self.assertNotIn("this->find_or_add_peer_(source.mac.data()", source)
+        self.assertNotIn("this->schedule_state_ack_(source.mac.data()", source)
 
 
 class ESPNowAPITests(unittest.TestCase):
@@ -65,7 +189,9 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::on_received\(.*?\).*?"
-                r"return this->handle_packet_\(info, data, size\);",
+                r"CFXSyncSource source = "
+                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                r"return this->handle_packet_\(source, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -73,7 +199,9 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::on_receive\(.*?\).*?"
-                r"return this->handle_packet_\(info, data, size\);",
+                r"CFXSyncSource source = "
+                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                r"return this->handle_packet_\(source, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -100,7 +228,9 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::on_broadcasted\(.*?\).*?"
-                r"return this->handle_packet_\(info, data, size\);",
+                r"CFXSyncSource source = "
+                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                r"return this->handle_packet_\(source, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -108,7 +238,9 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
-                r"return this->handle_packet_\(info, data, size\);",
+                r"CFXSyncSource source = "
+                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                r"return this->handle_packet_\(source, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -122,7 +254,7 @@ class ESPNowAPITests(unittest.TestCase):
             header,
         )
         self.assertIn(
-            "bool handle_decoded_packet_(const espnow::ESPNowRecvInfo &info,",
+            "bool handle_decoded_packet_(const CFXSyncSource &source,",
             header,
         )
 
@@ -150,7 +282,9 @@ class ESPNowAPITests(unittest.TestCase):
                 r"packet\.type != CFXSyncPacketType::HELLO &&"
                 r"\s*packet\.type != CFXSyncPacketType::SYNC_REQUEST.*?"
                 r"authenticated non-discovery packet from unknown peer.*?"
-                r"return this->handle_decoded_packet_\(info, packet\);",
+                r"CFXSyncSource source = "
+                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
+                r"return this->handle_decoded_packet_\(source, packet\);",
                 re.DOTALL,
             ),
         )
@@ -163,7 +297,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*this->handle_decode_failure_\(result\);"
                 r"\s*return true;"
                 r"\s*\}"
-                r"\s*return this->handle_decoded_packet_\(info, packet\);"
+                r"\s*return this->handle_decoded_packet_\(source, packet\);"
                 r"\s*\}",
                 re.DOTALL,
             ),
@@ -210,10 +344,7 @@ class ESPNowAPITests(unittest.TestCase):
             py_source,
         )
         self.assertNotIn('"cfx_dimmer",', py_source)
-        self.assertIn(
-            '"espnow",',
-            py_source,
-        )
+        self.assertIn('return BASE_AUTO_LOAD + ["espnow"]', py_source)
         self.assertIn(
             '"light",',
             py_source,
@@ -230,13 +361,16 @@ class ESPNowAPITests(unittest.TestCase):
             '"switch",',
             py_source,
         )
-        self.assertIn('DEPENDENCIES = ["esp32"]', py_source)
+        self.assertIn("DEPENDENCIES = []", py_source)
+        self.assertIn('cv.only_on(["esp32", "esp8266"])', py_source)
         self.assertIn("CONF_INTERNAL_ESPNOW_ID", py_source)
-        self.assertIn(
-            "cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(\n"
-            "                espnow.ESPNowComponent\n"
-            "            )",
+        self.assertRegex(
             py_source,
+            re.compile(
+                r"cv\.GenerateID\(CONF_INTERNAL_ESPNOW_ID\): "
+                r"cv\.use_id\(\s*espnow\.ESPNowComponent\s*\)",
+                re.DOTALL,
+            ),
         )
         self.assertIn("cv.Optional(CONF_ESPNOW_ID): cv.invalid(", py_source)
         self.assertIn('cv.Optional(CONF_PEER): cv.invalid(', py_source)
@@ -1539,7 +1673,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(peer == nullptr &&"
                 r"\s*packet\.type == CFXSyncPacketType::STATE &&"
                 r"\s*this->role_ == CFXSyncRole::FOLLOWER\).*?"
-                r"this->find_or_add_peer_\(info\.src_addr,"
+                r"this->find_or_add_peer_\(source_mac,"
                 r"\s*CFXSyncNodeRole::LEADER,"
                 r"\s*CFXSyncPacketCodec::CAP_LIGHT_LEADER\);",
                 re.DOTALL,
@@ -1556,7 +1690,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*packet\.type == CFXSyncPacketType::STATE_ACK &&"
                 r"\s*this->role_ == CFXSyncRole::LEADER &&"
                 r"\s*this->is_current_broadcast_ack_\(packet\)\).*?"
-                r"this->find_or_add_peer_\(info\.src_addr,"
+                r"this->find_or_add_peer_\(source_mac,"
                 r"\s*CFXSyncNodeRole::FOLLOWER,"
                 r"\s*CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER\);.*?"
                 r"this->seed_peer_sent_state_from_ack_\(.*?packet\);",
@@ -1677,7 +1811,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
                 r"this->apply_remote_state_\(packet\);"
-                r"\s*this->schedule_state_ack_\(info\.src_addr, packet,\s*"
+                r"\s*this->schedule_state_ack_\(source_mac, packet,\s*"
                 r"CFXSyncAckResult::APPLIED\);",
                 re.DOTALL,
             ),

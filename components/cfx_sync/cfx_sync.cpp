@@ -352,7 +352,8 @@ void CFXSyncComponent::dump_config() {
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
 bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
                                    const uint8_t *data, uint8_t size) {
-  return this->handle_packet_(info, data, size);
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->handle_packet_(source, data, size);
 }
 
 bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
@@ -362,12 +363,14 @@ bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
 
 bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
                                       const uint8_t *data, uint8_t size) {
-  return this->handle_packet_(info, data, size);
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->handle_packet_(source, data, size);
 }
 #else
 bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
                                   const uint8_t *data, uint8_t size) {
-  return this->handle_packet_(info, data, size);
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->handle_packet_(source, data, size);
 }
 
 bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
@@ -377,7 +380,8 @@ bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
 
 bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
                                     const uint8_t *data, uint8_t size) {
-  return this->handle_packet_(info, data, size);
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->handle_packet_(source, data, size);
 }
 #endif
 
@@ -407,11 +411,12 @@ bool CFXSyncComponent::admit_unknown_peer_(
     return true;
   }
 
-  return this->handle_decoded_packet_(info, packet);
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->handle_decoded_packet_(source, packet);
 }
 
-bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
-                                      const uint8_t *data, uint8_t size) {
+bool CFXSyncComponent::handle_packet_(const CFXSyncSource &source,
+                                      const uint8_t *data, size_t size) {
   CFXSyncPacket packet;
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
@@ -427,12 +432,18 @@ bool CFXSyncComponent::handle_packet_(const espnow::ESPNowRecvInfo &info,
     return true;
   }
 
-  return this->handle_decoded_packet_(info, packet);
+  return this->handle_decoded_packet_(source, packet);
 }
 
 bool CFXSyncComponent::handle_decoded_packet_(
-    const espnow::ESPNowRecvInfo &info, const CFXSyncPacket &packet) {
-  auto *peer = this->find_peer_(info.src_addr);
+    const CFXSyncSource &source, const CFXSyncPacket &packet) {
+  const uint8_t *source_mac = source.espnow_mac_or_null();
+  if (source_mac == nullptr) {
+    this->log_rejection_("Ignoring packet without ESP-NOW source identity");
+    return true;
+  }
+
+  auto *peer = this->find_peer_(source_mac);
   if (packet.type == CFXSyncPacketType::HELLO) {
     if (this->role_ == CFXSyncRole::FOLLOWER &&
         packet.node_role == CFXSyncNodeRole::FOLLOWER) {
@@ -446,7 +457,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     const bool peer_rebooted =
         peer != nullptr && peer->has_rx_sequence &&
         peer->rx_boot_id != packet.boot_id;
-    peer = this->find_or_add_peer_(info.src_addr, packet.node_role,
+    peer = this->find_or_add_peer_(source_mac, packet.node_role,
                                    packet.capabilities);
     if (peer == nullptr) {
       return true;
@@ -473,8 +484,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       return true;
     }
     if (peer == nullptr) {
-      peer = this->find_or_add_peer_(info.src_addr,
-                                     CFXSyncNodeRole::FOLLOWER,
+      peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::FOLLOWER,
                                      CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
     }
     if (peer == nullptr) {
@@ -497,7 +507,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
 
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE &&
       this->role_ == CFXSyncRole::FOLLOWER) {
-    peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::LEADER,
+    peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::LEADER,
                                    CFXSyncPacketCodec::CAP_LIGHT_LEADER);
     if (peer != nullptr) {
       this->register_peer_(*peer);
@@ -506,7 +516,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE_ACK &&
       this->role_ == CFXSyncRole::LEADER &&
       this->is_current_broadcast_ack_(packet)) {
-    peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::FOLLOWER,
+    peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::FOLLOWER,
                                    CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
     if (peer != nullptr) {
       this->register_peer_(*peer);
@@ -523,7 +533,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       return true;
     }
     if (peer == nullptr) {
-      peer = this->find_or_add_peer_(info.src_addr, CFXSyncNodeRole::REMOTE,
+      peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::REMOTE,
                                      CFXSyncPacketCodec::CAP_BINARY_REMOTE);
       if (peer != nullptr) {
         this->register_peer_(*peer);
@@ -586,8 +596,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->has_valid_state_ = true;
     this->clear_warning_if_set_();
     this->apply_remote_state_(packet);
-    this->schedule_state_ack_(info.src_addr, packet,
-                              CFXSyncAckResult::APPLIED);
+    this->schedule_state_ack_(source_mac, packet, CFXSyncAckResult::APPLIED);
   }
   return true;
 }

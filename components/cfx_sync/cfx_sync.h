@@ -11,6 +11,7 @@
 #include "cfx_sync_color.h"
 #include "cfx_sync_effect.h"
 #include "cfx_sync_packet.h"
+#include "cfx_sync_transport.h"
 #include "../cfx_button/cfx_button.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/espnow/espnow_component.h"
@@ -316,9 +317,9 @@ class CFXSyncComponent : public Component,
                         uint32_t sequence);
   bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,
                            const uint8_t *data, uint8_t size);
-  bool handle_packet_(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                      uint8_t size);
-  bool handle_decoded_packet_(const espnow::ESPNowRecvInfo &info,
+  bool handle_packet_(const CFXSyncSource &source, const uint8_t *data,
+                      size_t size);
+  bool handle_decoded_packet_(const CFXSyncSource &source,
                               const CFXSyncPacket &packet);
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
