@@ -24,12 +24,11 @@ from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
-DEPENDENCIES = ["esp32"]
-AUTO_LOAD = [
+DEPENDENCIES = []
+BASE_AUTO_LOAD = [
     "binary_sensor",
     "cfx_button",
     "cfx_effect_registry",
-    "espnow",
     "hmac_sha256",
     "light",
     "number",
@@ -59,6 +58,7 @@ CONF_KEY = "key"
 CONF_HEARTBEAT = "heartbeat"
 CONF_FALLBACK_CHANNEL = "fallback_channel"
 CONF_INPUT_MODE = "input_mode"
+CONF_TRANSPORT = "transport"
 CONF_AUTO_ADD_PEER = "auto_add_peer"
 CONF_SYNC_SWITCH_ID = "_sync_switch_id"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
@@ -89,6 +89,8 @@ ROLE_CONTROLLER = "controller"
 INPUT_MODE_MOMENTARY = "momentary"
 INPUT_MODE_MAINTAINED = "maintained"
 INPUT_MODE_TOGGLE = "toggle"
+TRANSPORT_ESPNOW = "espnow"
+TRANSPORT_UDP = "udp"
 EXCLUDE_SPEED = 1
 EXCLUDE_INTENSITY = 2
 EXCLUDE_PALETTE = 3
@@ -109,6 +111,7 @@ CFXSyncEnableSwitch = cfx_sync_ns.class_(
 )
 CFXSyncRole = cfx_sync_ns.enum("CFXSyncRole")
 CFXSyncInputMode = cfx_sync_ns.enum("CFXSyncInputMode", is_class=True)
+CFXSyncTransport = cfx_sync_ns.enum("CFXSyncTransport", is_class=True)
 
 ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,
@@ -122,7 +125,30 @@ INPUT_MODE_MAP = {
     INPUT_MODE_TOGGLE: CFXSyncInputMode.CFX_SYNC_INPUT_TOGGLE,
 }
 
+TRANSPORT_MAP = {
+    TRANSPORT_ESPNOW: CFXSyncTransport.CFX_SYNC_TRANSPORT_ESPNOW,
+    TRANSPORT_UDP: CFXSyncTransport.CFX_SYNC_TRANSPORT_UDP,
+}
+
 _LIGHTS_VALIDATOR = cv.ensure_list(cv.use_id(light.LightState))
+_ESPNOW_ID_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(
+            espnow.ESPNowComponent
+        ),
+    },
+    extra=cv.ALLOW_EXTRA,
+)
+
+
+def AUTO_LOAD(config):
+    transport = TRANSPORT_ESPNOW
+    if config:
+        transport = config.get(CONF_TRANSPORT, TRANSPORT_ESPNOW)
+
+    if transport == TRANSPORT_UDP:
+        return BASE_AUTO_LOAD
+    return BASE_AUTO_LOAD + ["espnow"]
 
 
 def _normalize_lights(value):
@@ -363,13 +389,34 @@ def _final_validate(config):
     return config
 
 
+def _validate_platform_support(config):
+    if not CORE.is_esp8266:
+        return config
+
+    if (
+        config[CONF_ROLE] != ROLE_CONTROLLER
+        or config[CONF_TRANSPORT] != TRANSPORT_UDP
+        or config.get(CONF_LIGHTS, [])
+        or CONF_REMOTE_INPUT in config
+    ):
+        raise cv.Invalid(
+            "ESP8266 cfx_sync support is controller-only over UDP"
+        )
+    return config
+
+
+def _validate_transport_dependencies(config):
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+        return _ESPNOW_ID_SCHEMA(config)
+
+    config.pop(CONF_INTERNAL_ESPNOW_ID, None)
+    return config
+
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFXSyncComponent),
-            cv.GenerateID(CONF_INTERNAL_ESPNOW_ID): cv.use_id(
-                espnow.ESPNowComponent
-            ),
             cv.GenerateID(CONF_SYNC_SWITCH_ID): cv.declare_id(
                 CFXSyncEnableSwitch
             ),
@@ -404,10 +451,17 @@ CONFIG_SCHEMA = cv.All(
                 INPUT_MODE_TOGGLE,
                 lower=True,
             ),
+            cv.Optional(CONF_TRANSPORT, default=TRANSPORT_ESPNOW): cv.one_of(
+                TRANSPORT_ESPNOW,
+                TRANSPORT_UDP,
+                lower=True,
+            ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
+    cv.only_on(["esp32", "esp8266"]),
+    _validate_transport_dependencies,
+    _validate_platform_support,
     _validate_role_lights,
-    cv.only_on_esp32,
 )
 
 FINAL_VALIDATE_SCHEMA = _final_validate
@@ -416,14 +470,16 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 async def to_code(config):
     config.setdefault(CONF_INPUT_MODE, INPUT_MODE_MOMENTARY)
     config.setdefault(CONF_FALLBACK_CHANNEL, DEFAULT_FALLBACK_CHANNEL)
+    config.setdefault(CONF_TRANSPORT, TRANSPORT_ESPNOW)
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    espnow_var = await cg.get_variable(config[CONF_INTERNAL_ESPNOW_ID])
-    if CORE.using_arduino:
-        cg.add_library("WiFi", None)
-    cg.add_define("USE_ESPNOW")
-    cg.add(espnow_var.set_auto_add_peer(False))
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+        espnow_var = await cg.get_variable(config[CONF_INTERNAL_ESPNOW_ID])
+        if CORE.using_arduino:
+            cg.add_library("WiFi", None)
+        cg.add_define("USE_ESPNOW")
+        cg.add(espnow_var.set_auto_add_peer(False))
 
     key_bytes = [HexInt(value) for value in _derive_key(config[CONF_KEY])]
     effect_catalogs = config.get(
@@ -433,7 +489,8 @@ async def to_code(config):
         CONF_CONTROL_IDS, [{} for _ in config[CONF_LIGHTS]]
     )
 
-    cg.add(var.set_espnow(espnow_var))
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+        cg.add(var.set_espnow(espnow_var))
     for light_index, light_id in enumerate(config[CONF_LIGHTS]):
         light_var = await cg.get_variable(light_id)
         cg.add(var.add_light(light_var))
@@ -505,6 +562,7 @@ async def to_code(config):
         cg.add(sync_switch.set_parent(var))
         cg.add(var.set_sync_switch(sync_switch))
     cg.add(var.set_role(ROLE_MAP[config[CONF_ROLE]]))
+    cg.add(var.set_transport(TRANSPORT_MAP[config[CONF_TRANSPORT]]))
     cg.add(var.set_input_mode(INPUT_MODE_MAP[config[CONF_INPUT_MODE]]))
     cg.add(var.set_fallback_channel(config[CONF_FALLBACK_CHANNEL]))
     cg.add(var.set_group_hash(_fnv1a_32(config[CONF_GROUP])))
