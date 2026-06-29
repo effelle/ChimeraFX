@@ -39,12 +39,27 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("TRANSPORT_UDP,", source)
         self.assertIn("lower=True", source)
 
-    def test_autoload_includes_espnow_only_for_espnow_transport(self):
-        base_autoload = cfx_sync.AUTO_LOAD({"transport": "udp"})
+    def test_autoload_keeps_espnow_for_esp32_until_cpp_isolation(self):
+        with patch.object(
+            type(cfx_sync.CORE),
+            "is_esp8266",
+            new_callable=PropertyMock,
+            return_value=False,
+        ):
+            base_autoload = cfx_sync.AUTO_LOAD({"transport": "udp"})
 
-        self.assertNotIn("espnow", base_autoload)
-        self.assertIn("espnow", cfx_sync.AUTO_LOAD({}))
-        self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "espnow"}))
+            self.assertIn("espnow", base_autoload)
+            self.assertIn("espnow", cfx_sync.AUTO_LOAD({}))
+            self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "espnow"}))
+
+    def test_autoload_omits_espnow_for_esp8266_udp_controller(self):
+        with patch.object(
+            type(cfx_sync.CORE),
+            "is_esp8266",
+            new_callable=PropertyMock,
+            return_value=True,
+        ):
+            self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({"transport": "udp"}))
 
     async def test_codegen_emits_espnow_transport_enum(self):
         emitted = []
@@ -108,10 +123,13 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 return lambda *args: (name, *args)
 
         var = _Var()
-        get_variable = AsyncMock(side_effect=[object()])
+        espnow_var = _Var()
+        local_input = object()
+        get_variable = AsyncMock(side_effect=[espnow_var, local_input])
         heartbeat = SimpleNamespace(total_milliseconds=30_000)
         config = {
             "id": light_id("sync"),
+            "_espnow_id": light_id("espnow"),
             "role": "controller",
             "lights": [],
             "local_input": light_id("wall_button"),
@@ -140,12 +158,10 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         ):
             await cfx_sync.to_code(config)
 
-        get_variable.assert_awaited_once_with(light_id("wall_button"))
-        self.assertNotIn("USE_ESPNOW", defines)
-        self.assertTrue(
-            all(entry[0] != "set_auto_add_peer" for entry in emitted)
-        )
-        self.assertTrue(all(entry[0] != "set_espnow" for entry in emitted))
+        self.assertEqual(get_variable.await_count, 2)
+        self.assertIn("USE_ESPNOW", defines)
+        self.assertIn(("set_auto_add_peer", False), emitted)
+        self.assertIn(("set_espnow", espnow_var), emitted)
         self.assertIn(
             (
                 "set_transport",
