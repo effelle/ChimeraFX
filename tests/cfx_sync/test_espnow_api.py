@@ -690,7 +690,17 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('AUTO_LOAD = ["binary_sensor"]', py_source)
         self.assertIn("void inject_remote_state(bool pressed)", header)
         self.assertNotIn("button_ == nullptr ||", source)
-        self.assertIn("this->inject_remote_state", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->bind_button_\(\s*"
+                r"this->button_, &this->state_,\s*"
+                r"\[this\]\(bool pressed\) \{\s*"
+                r"this->handle_state_\(pressed\);\s*"
+                r"\}\);",
+                re.DOTALL,
+            ),
+        )
 
     def test_remote_cfx_button_press_is_not_swallowed_by_startup_arming(self):
         header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
@@ -699,6 +709,7 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("void prime(bool pressed)", state_header)
         self.assertIn("CFXButtonState remote_state_;", header)
+        self.assertIn("this->remote_input_->inject_remote_state(pressed);", SOURCE.read_text(encoding="utf-8"))
         self.assertRegex(
             source,
             re.compile(

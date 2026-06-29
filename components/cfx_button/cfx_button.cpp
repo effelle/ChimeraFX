@@ -22,7 +22,7 @@ void CFXButton::setup() {
 
   this->bind_button_(
       this->button_, &this->state_,
-      [this](bool pressed) { this->inject_remote_state(pressed); });
+      [this](bool pressed) { this->handle_state_(pressed); });
   this->bind_button_(this->dimmer_up_button_, &this->dimmer_up_state_,
                      [this](bool pressed) {
                        this->handle_dimmer_up_state_(pressed);
@@ -84,6 +84,7 @@ void CFXButton::inject_remote_state(bool pressed) {
   if (!this->remote_state_.is_armed()) {
     this->remote_state_.prime(!pressed);
   }
+  ESP_LOGD(TAG, "Remote input %s", pressed ? "pressed" : "released");
   this->handle_state_(pressed, &this->remote_state_);
 }
 
@@ -94,8 +95,10 @@ void CFXButton::handle_state_(bool pressed) {
 void CFXButton::handle_state_(bool pressed, CFXButtonState *state) {
   const CFXButtonEvent event = state->on_state(pressed);
   if (event == CFXButtonEvent::PRESS) {
+    ESP_LOGD(TAG, "Button press");
     this->press_();
   } else if (event == CFXButtonEvent::RELEASE) {
+    ESP_LOGD(TAG, "Button release");
     this->release_();
   }
 }
