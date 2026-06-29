@@ -911,6 +911,95 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_udp_input_state_retries_same_packet_without_new_sequence(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("static constexpr uint32_t UDP_INPUT_RETRY_DELAY_MS = 25;", header)
+        self.assertIn("static constexpr uint8_t UDP_INPUT_RETRY_COUNT = 1;", header)
+        self.assertIn(
+            "void schedule_udp_input_retry_(std::vector<uint8_t> packet, uint8_t remaining);",
+            header,
+        )
+        send_input_state = re.search(
+            r"bool CFXSyncComponent::send_input_state_"
+            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\nvoid CFXSyncComponent::queue_input_state_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(send_input_state)
+        send_input_state = send_input_state.group(0)
+        self.assertIn("const uint32_t sequence = this->next_sequence_();", send_input_state)
+        self.assertRegex(
+            send_input_state,
+            re.compile(
+                r"CFXSyncPacketCodec::encode_input_state\(.*?"
+                r"this->group_hash_, this->boot_id_, sequence,",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            send_input_state,
+            re.compile(
+                r"const bool sent = this->send_packet_to_"
+                r"\(BROADCAST_MAC, packet\);.*?"
+                r"if \(sent && this->use_udp_transport_\(\)\) \{.*?"
+                r"this->schedule_udp_input_retry_\(packet, UDP_INPUT_RETRY_COUNT\);.*?"
+                r"\}.*?return sent;",
+                re.DOTALL,
+            ),
+        )
+
+        retry = re.search(
+            r"void CFXSyncComponent::schedule_udp_input_retry_"
+            r"\(std::vector<uint8_t> packet,\s*uint8_t remaining\).*?"
+            r"\nvoid CFXSyncComponent::queue_input_state_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(retry)
+        retry = retry.group(0)
+        self.assertIn('this->set_timeout("udp-input-retry"', retry)
+        self.assertIn("UDP_INPUT_RETRY_DELAY_MS", retry)
+        self.assertIn("[this, packet, remaining]() mutable", retry)
+        self.assertIn("this->send_packet_to_(BROADCAST_MAC, packet)", retry)
+        self.assertNotIn("this->next_sequence_()", retry)
+        self.assertNotIn("encode_input_state", retry)
+
+    def test_udp_input_latency_counters_are_reported(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        for field in (
+            "uint32_t udp_input_sent_{0};",
+            "uint32_t udp_input_retried_{0};",
+            "uint32_t udp_input_received_{0};",
+            "uint32_t udp_input_applied_{0};",
+        ):
+            self.assertIn(field, header)
+        self.assertIn('"  UDP input: sent=%" PRIu32 " retried=%" PRIu32', source)
+        self.assertIn('" received=%" PRIu32 " applied=%" PRIu32', source)
+        self.assertIn("this->udp_input_sent_", source)
+        self.assertIn("this->udp_input_retried_", source)
+        self.assertIn("this->udp_input_received_", source)
+        self.assertIn("this->udp_input_applied_", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
+                r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
+                r"this->udp_input_received_\+\+;\s*"
+                r"\}.*?"
+                r"this->inject_remote_input_"
+                r"\(packet\.input_pressed, packet\.input_maintained,\s*"
+                r"packet\.input_toggle\);.*?"
+                r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
+                r"this->udp_input_applied_\+\+;",
+                re.DOTALL,
+            ),
+        )
+
     def test_remote_inputs_have_default_leader_light_actions(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

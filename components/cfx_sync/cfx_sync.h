@@ -247,6 +247,8 @@ class CFXSyncComponent : public Component
   static constexpr uint32_t INPUT_MAINTAINED_SETTLE_MS = 150;
   static constexpr uint32_t INPUT_RELEASE_REPEAT_MS = 120;
   static constexpr uint8_t INPUT_RELEASE_REPEAT_COUNT = 3;
+  static constexpr uint32_t UDP_INPUT_RETRY_DELAY_MS = 25;
+  static constexpr uint8_t UDP_INPUT_RETRY_COUNT = 1;
   static constexpr uint32_t REMOTE_INPUT_TIMEOUT_MS = 2500;
   static constexpr uint8_t PENDING_INPUT_QUEUE_SIZE = 8;
   static constexpr uint16_t DEFAULT_UDP_PORT = 39580;
@@ -338,6 +340,7 @@ class CFXSyncComponent : public Component
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
   bool send_input_state_(bool pressed, bool maintained, bool toggle);
+  void schedule_udp_input_retry_(std::vector<uint8_t> packet, uint8_t remaining);
   void queue_input_state_(bool pressed, bool maintained, bool toggle);
   void flush_deferred_input_();
   void on_local_input_update_(bool pressed);
@@ -528,6 +531,10 @@ class CFXSyncComponent : public Component
   uint32_t stale_packets_{0};
   uint32_t unsupported_packets_{0};
   uint32_t send_failures_{0};
+  uint32_t udp_input_sent_{0};
+  uint32_t udp_input_retried_{0};
+  uint32_t udp_input_received_{0};
+  uint32_t udp_input_applied_{0};
 };
 
 }  // namespace cfx_sync

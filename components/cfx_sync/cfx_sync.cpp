@@ -453,6 +453,11 @@ void CFXSyncComponent::dump_config() {
                 this->malformed_packets_, this->authentication_failures_,
                 this->wrong_group_packets_, this->stale_packets_,
                 this->unsupported_packets_, this->send_failures_);
+  ESP_LOGCONFIG(TAG,
+                "  UDP input: sent=%" PRIu32 " retried=%" PRIu32
+                " received=%" PRIu32 " applied=%" PRIu32,
+                this->udp_input_sent_, this->udp_input_retried_,
+                this->udp_input_received_, this->udp_input_applied_);
 }
 
 #ifdef USE_ESPNOW
@@ -661,8 +666,15 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
+    if (source.transport == CFXSyncTransportKind::UDP) {
+      this->udp_input_received_++;
+    }
     this->inject_remote_input_(packet.input_pressed, packet.input_maintained,
                                packet.input_toggle);
+    if (source.transport == CFXSyncTransportKind::UDP) {
+      this->udp_input_applied_++;
+      ESP_LOGD(TAG, "UDP input applied");
+    }
     return true;
   }
 
@@ -963,8 +975,9 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
     return false;
   }
   std::vector<uint8_t> packet;
+  const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_input_state(
-          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          this->group_hash_, this->boot_id_, sequence,
           pressed, maintained, toggle, this->key_, packet)) {
     return false;
   }
@@ -972,7 +985,32 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
            pressed ? "pressed" : "released",
            maintained ? " maintained" : "",
            toggle ? " toggle" : "");
-  return this->send_packet_to_(BROADCAST_MAC, packet);
+  const bool sent = this->send_packet_to_(BROADCAST_MAC, packet);
+  if (sent && this->use_udp_transport_()) {
+    this->udp_input_sent_++;
+    this->schedule_udp_input_retry_(packet, UDP_INPUT_RETRY_COUNT);
+  }
+  return sent;
+}
+
+void CFXSyncComponent::schedule_udp_input_retry_(std::vector<uint8_t> packet,
+                                                 uint8_t remaining) {
+  if (!this->use_udp_transport_() || remaining == 0) {
+    return;
+  }
+  this->set_timeout("udp-input-retry", UDP_INPUT_RETRY_DELAY_MS,
+                    [this, packet, remaining]() mutable {
+                      if (!this->use_udp_transport_()) {
+                        return;
+                      }
+                      if (this->send_packet_to_(BROADCAST_MAC, packet)) {
+                        this->udp_input_retried_++;
+                        ESP_LOGD(TAG, "UDP input burst resend");
+                      }
+                      if (remaining > 1) {
+                        this->schedule_udp_input_retry_(packet, remaining - 1);
+                      }
+                    });
 }
 
 void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
