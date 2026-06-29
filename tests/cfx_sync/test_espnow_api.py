@@ -59,6 +59,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         source = UDP_SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("#include <lwip/inet.h>", source)
+        self.assertIn("#include <lwip/netif.h>", source)
         self.assertIn("#include <lwip/sockets.h>", source)
         self.assertIn("::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP)", source)
         self.assertIn("SO_REUSEADDR", source)
@@ -93,10 +94,11 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncUDPTransport::send_broadcast"
                 r"\(const std::vector<uint8_t> &packet\)"
-                r".*?destination\.sin_addr\.s_addr = INADDR_BROADCAST;.*?"
-                r"::sendto\(this->socket_fd_, packet\.data\(\), "
-                r"packet\.size\(\), 0,.*?"
-                r"return sent == static_cast<ssize_t>\(packet\.size\(\)\);",
+                r".*?for \(netif \*interface = netif_list;.*?"
+                r"const uint32_t subnet_broadcast = "
+                r"ip->addr \| ~netmask->addr;.*?"
+                r"this->send_to_\(subnet_broadcast, packet\).*?"
+                r"return this->send_to_\(INADDR_BROADCAST, packet\)",
                 re.DOTALL,
             ),
         )

@@ -27,6 +27,7 @@ class CFXSyncUDPTransport {
 
  protected:
   void close_();
+  bool send_to_(uint32_t address, const std::vector<uint8_t> &packet);
 
   int socket_fd_{-1};
   bool ready_{false};

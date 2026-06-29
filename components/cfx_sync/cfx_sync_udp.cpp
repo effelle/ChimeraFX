@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <lwip/inet.h>
+#include <lwip/netif.h>
 #include <lwip/sockets.h>
 #include <unistd.h>
 
@@ -98,7 +99,8 @@ void CFXSyncUDPTransport::poll(CFXSyncComponent *parent) {
   }
 }
 
-bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
+bool CFXSyncUDPTransport::send_to_(uint32_t address,
+                                   const std::vector<uint8_t> &packet) {
   if (!this->ready_ || this->socket_fd_ < 0 || packet.empty()) {
     return false;
   }
@@ -106,13 +108,36 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
   sockaddr_in destination{};
   destination.sin_family = AF_INET;
   destination.sin_port = htons(this->port_);
-  destination.sin_addr.s_addr = INADDR_BROADCAST;
+  destination.sin_addr.s_addr = address;
 
   const ssize_t sent =
       ::sendto(this->socket_fd_, packet.data(), packet.size(), 0,
                reinterpret_cast<const sockaddr *>(&destination),
                sizeof(destination));
   return sent == static_cast<ssize_t>(packet.size());
+}
+
+bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
+  bool sent = false;
+
+  for (netif *interface = netif_list; interface != nullptr;
+       interface = interface->next) {
+    if (!netif_is_up(interface)) {
+      continue;
+    }
+    const ip4_addr_t *ip = netif_ip4_addr(interface);
+    const ip4_addr_t *netmask = netif_ip4_netmask(interface);
+    if (ip == nullptr || netmask == nullptr || ip4_addr_isany_val(*ip)) {
+      continue;
+    }
+    const uint32_t subnet_broadcast = ip->addr | ~netmask->addr;
+    if (subnet_broadcast == 0 || subnet_broadcast == INADDR_BROADCAST) {
+      continue;
+    }
+    sent = this->send_to_(subnet_broadcast, packet) || sent;
+  }
+
+  return this->send_to_(INADDR_BROADCAST, packet) || sent;
 }
 
 }  // namespace cfx_sync
