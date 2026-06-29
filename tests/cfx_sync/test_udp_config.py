@@ -24,22 +24,24 @@ def light_id(name):
 class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
     def test_transport_constants_are_exported(self):
         self.assertEqual(cfx_sync.CONF_TRANSPORT, "transport")
+        self.assertEqual(cfx_sync.TRANSPORT_AUTO, "auto")
         self.assertEqual(cfx_sync.TRANSPORT_ESPNOW, "espnow")
         self.assertEqual(cfx_sync.TRANSPORT_UDP, "udp")
 
-    def test_schema_defaults_to_espnow_and_accepts_udp(self):
+    def test_schema_defaults_to_auto_and_accepts_explicit_transports(self):
         source = component_source()
 
         self.assertIn(
-            "cv.Optional(CONF_TRANSPORT, default=TRANSPORT_ESPNOW): "
+            "cv.Optional(CONF_TRANSPORT, default=TRANSPORT_AUTO): "
             "cv.one_of(",
             source,
         )
+        self.assertIn("TRANSPORT_AUTO,", source)
         self.assertIn("TRANSPORT_ESPNOW,", source)
         self.assertIn("TRANSPORT_UDP,", source)
         self.assertIn("lower=True", source)
 
-    def test_autoload_omits_espnow_for_udp(self):
+    def test_autoload_uses_espnow_for_auto_on_esp32(self):
         with patch.object(
             type(cfx_sync.CORE),
             "is_esp8266",
@@ -50,15 +52,18 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertNotIn("espnow", base_autoload)
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({}))
+            self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "auto"}))
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "espnow"}))
 
-    def test_autoload_omits_espnow_for_esp8266_udp_controller(self):
+    def test_autoload_omits_espnow_for_esp8266_auto_or_udp_controller(self):
         with patch.object(
             type(cfx_sync.CORE),
             "is_esp8266",
             new_callable=PropertyMock,
             return_value=True,
         ):
+            self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({}))
+            self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({"transport": "auto"}))
             self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({"transport": "udp"}))
 
     async def test_codegen_emits_espnow_transport_enum(self):
@@ -168,8 +173,66 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             emitted,
         )
 
+    async def test_codegen_emits_auto_transport_enum_and_espnow_for_esp32(self):
+        emitted = []
+        defines = []
+
+        class _Var:
+            def __getattr__(self, name):
+                return lambda *args: (name, *args)
+
+        var = _Var()
+        espnow_var = _Var()
+        heartbeat = SimpleNamespace(total_milliseconds=30_000)
+        config = {
+            "id": light_id("sync"),
+            "_espnow_id": light_id("espnow"),
+            "role": "controller",
+            "lights": [],
+            "local_input": light_id("wall_button"),
+            "group": "room",
+            "key": "password",
+            "heartbeat": heartbeat,
+            "transport": "auto",
+        }
+
+        with (
+            patch.object(cfx_sync.cg, "new_Pvariable", return_value=var),
+            patch.object(
+                type(cfx_sync.CORE),
+                "using_arduino",
+                new_callable=PropertyMock,
+                return_value=False,
+            ),
+            patch.object(cfx_sync.cg, "register_component", new=AsyncMock()),
+            patch.object(
+                cfx_sync.cg,
+                "get_variable",
+                new=AsyncMock(side_effect=[espnow_var, object()]),
+            ),
+            patch.object(cfx_sync.cg, "add_define", side_effect=defines.append),
+            patch.object(cfx_sync.cg, "add", side_effect=emitted.append),
+        ):
+            await cfx_sync.to_code(config)
+
+        self.assertIn("USE_ESPNOW", defines)
+        self.assertIn(("set_espnow", espnow_var), emitted)
+        self.assertIn(
+            (
+                "set_transport",
+                cfx_sync.CFXSyncTransport.CFX_SYNC_TRANSPORT_AUTO,
+            ),
+            emitted,
+        )
+
     def test_esp8266_support_is_controller_only_over_udp(self):
         valid = {
+            "role": "controller",
+            "transport": "auto",
+            "lights": [],
+            "local_input": light_id("wall_button"),
+        }
+        valid_udp = {
             "role": "controller",
             "transport": "udp",
             "lights": [],
@@ -209,6 +272,9 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             return_value=True,
         ):
             self.assertIs(cfx_sync._validate_platform_support(valid), valid)
+            self.assertIs(
+                cfx_sync._validate_platform_support(valid_udp), valid_udp
+            )
 
             for config in invalid_configs:
                 with self.subTest(config=config), self.assertRaisesRegex(

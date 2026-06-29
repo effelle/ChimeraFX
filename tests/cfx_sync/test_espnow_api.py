@@ -110,8 +110,9 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertIn('#include "cfx_sync_udp.h"', header)
         self.assertIn(
             "enum class CFXSyncTransport : uint8_t {\n"
-            "  CFX_SYNC_TRANSPORT_ESPNOW = 0,\n"
-            "  CFX_SYNC_TRANSPORT_UDP = 1,\n"
+            "  CFX_SYNC_TRANSPORT_AUTO = 0,\n"
+            "  CFX_SYNC_TRANSPORT_ESPNOW = 1,\n"
+            "  CFX_SYNC_TRANSPORT_UDP = 2,\n"
             "};",
             header,
         )
@@ -127,7 +128,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         )
         self.assertIn(
             "CFXSyncTransport transport_{"
-            "CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW};",
+            "CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};",
             header,
         )
         self.assertIn("CFXSyncUDPTransport udp_;", header)

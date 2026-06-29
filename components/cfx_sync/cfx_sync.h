@@ -45,8 +45,9 @@ enum class CFXSyncInputMode : uint8_t {
 };
 
 enum class CFXSyncTransport : uint8_t {
-  CFX_SYNC_TRANSPORT_ESPNOW = 0,
-  CFX_SYNC_TRANSPORT_UDP = 1,
+  CFX_SYNC_TRANSPORT_AUTO = 0,
+  CFX_SYNC_TRANSPORT_ESPNOW = 1,
+  CFX_SYNC_TRANSPORT_UDP = 2,
 };
 
 class CFXSyncComponent;
@@ -454,7 +455,7 @@ class CFXSyncComponent : public Component
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
-  CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW};
+  CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};
   CFXSyncUDPTransport udp_;
   uint16_t udp_port_{DEFAULT_UDP_PORT};
   bool local_input_has_state_{false};

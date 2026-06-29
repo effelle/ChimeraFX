@@ -89,6 +89,7 @@ ROLE_CONTROLLER = "controller"
 INPUT_MODE_MOMENTARY = "momentary"
 INPUT_MODE_MAINTAINED = "maintained"
 INPUT_MODE_TOGGLE = "toggle"
+TRANSPORT_AUTO = "auto"
 TRANSPORT_ESPNOW = "espnow"
 TRANSPORT_UDP = "udp"
 EXCLUDE_SPEED = 1
@@ -126,6 +127,7 @@ INPUT_MODE_MAP = {
 }
 
 TRANSPORT_MAP = {
+    TRANSPORT_AUTO: CFXSyncTransport.CFX_SYNC_TRANSPORT_AUTO,
     TRANSPORT_ESPNOW: CFXSyncTransport.CFX_SYNC_TRANSPORT_ESPNOW,
     TRANSPORT_UDP: CFXSyncTransport.CFX_SYNC_TRANSPORT_UDP,
 }
@@ -149,11 +151,13 @@ def _is_esp8266_target():
 
 
 def AUTO_LOAD(config):
-    transport = TRANSPORT_ESPNOW
+    transport = TRANSPORT_AUTO
     if config:
-        transport = config.get(CONF_TRANSPORT, TRANSPORT_ESPNOW)
+        transport = config.get(CONF_TRANSPORT, TRANSPORT_AUTO)
 
     if transport == TRANSPORT_UDP:
+        return BASE_AUTO_LOAD
+    if transport == TRANSPORT_AUTO and _is_esp8266_target():
         return BASE_AUTO_LOAD
     return BASE_AUTO_LOAD + ["espnow"]
 
@@ -402,7 +406,7 @@ def _validate_platform_support(config):
 
     if (
         config[CONF_ROLE] != ROLE_CONTROLLER
-        or config[CONF_TRANSPORT] != TRANSPORT_UDP
+        or config[CONF_TRANSPORT] not in (TRANSPORT_AUTO, TRANSPORT_UDP)
         or config.get(CONF_LIGHTS, [])
         or CONF_REMOTE_INPUT in config
     ):
@@ -413,7 +417,10 @@ def _validate_platform_support(config):
 
 
 def _validate_transport_dependencies(config):
-    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+    transport = config[CONF_TRANSPORT]
+    if transport == TRANSPORT_ESPNOW:
+        return _ESPNOW_ID_SCHEMA(config)
+    if transport == TRANSPORT_AUTO and not _is_esp8266_target():
         return _ESPNOW_ID_SCHEMA(config)
 
     config.pop(CONF_INTERNAL_ESPNOW_ID, None)
@@ -458,7 +465,8 @@ CONFIG_SCHEMA = cv.All(
                 INPUT_MODE_TOGGLE,
                 lower=True,
             ),
-            cv.Optional(CONF_TRANSPORT, default=TRANSPORT_ESPNOW): cv.one_of(
+            cv.Optional(CONF_TRANSPORT, default=TRANSPORT_AUTO): cv.one_of(
+                TRANSPORT_AUTO,
                 TRANSPORT_ESPNOW,
                 TRANSPORT_UDP,
                 lower=True,
@@ -477,11 +485,14 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 async def to_code(config):
     config.setdefault(CONF_INPUT_MODE, INPUT_MODE_MOMENTARY)
     config.setdefault(CONF_FALLBACK_CHANNEL, DEFAULT_FALLBACK_CHANNEL)
-    config.setdefault(CONF_TRANSPORT, TRANSPORT_ESPNOW)
+    config.setdefault(CONF_TRANSPORT, TRANSPORT_AUTO)
+    use_espnow = config[CONF_TRANSPORT] == TRANSPORT_ESPNOW or (
+        config[CONF_TRANSPORT] == TRANSPORT_AUTO and not _is_esp8266_target()
+    )
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+    if use_espnow:
         espnow_var = await cg.get_variable(config[CONF_INTERNAL_ESPNOW_ID])
         if CORE.using_arduino:
             cg.add_library("WiFi", None)
@@ -496,7 +507,7 @@ async def to_code(config):
         CONF_CONTROL_IDS, [{} for _ in config[CONF_LIGHTS]]
     )
 
-    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
+    if use_espnow:
         cg.add(var.set_espnow(espnow_var))
     for light_index, light_id in enumerate(config[CONF_LIGHTS]):
         light_var = await cg.get_variable(light_id)
