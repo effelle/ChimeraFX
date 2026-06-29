@@ -9,6 +9,7 @@
 #include "esphome/components/wifi/wifi_component.h"
 #endif
 
+#include <esp_err.h>
 #include <esp_random.h>
 #include <esp_wifi.h>
 #include <algorithm>
@@ -146,11 +147,6 @@ void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
 }
 
 void CFXSyncComponent::setup() {
-  if (this->espnow_ == nullptr) {
-    ESP_LOGE(TAG, "ESP-NOW is required");
-    this->mark_failed();
-    return;
-  }
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     if (this->local_input_ == nullptr) {
       ESP_LOGE(TAG, "Controller requires one local input");
@@ -177,20 +173,40 @@ void CFXSyncComponent::setup() {
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
+
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+    if (!this->udp_.begin(this->udp_port_)) {
+      ESP_LOGE(TAG, "UDP transport is required");
+      this->mark_failed();
+      return;
+    }
+  } else {
+#ifdef USE_ESPNOW
+    if (this->espnow_ == nullptr) {
+      ESP_LOGE(TAG, "ESP-NOW is required");
+      this->mark_failed();
+      return;
+    }
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-  this->espnow_->register_received_handler(this);
-  this->espnow_->register_unknown_peer_handler(this);
-  this->espnow_->register_broadcasted_handler(this);
+    this->espnow_->register_received_handler(this);
+    this->espnow_->register_unknown_peer_handler(this);
+    this->espnow_->register_broadcasted_handler(this);
 #else
-  this->espnow_->register_receive_handler(this);
-  this->espnow_->register_unknown_peer_handler(this);
-  this->espnow_->register_broadcast_handler(this);
+    this->espnow_->register_receive_handler(this);
+    this->espnow_->register_unknown_peer_handler(this);
+    this->espnow_->register_broadcast_handler(this);
 #endif
-  const esp_err_t broadcast_result =
-      this->espnow_->add_peer(BROADCAST_MAC.data());
-  if (broadcast_result != ESP_OK) {
-    ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
-             esp_err_to_name(broadcast_result));
+    const esp_err_t broadcast_result =
+        this->espnow_->add_peer(BROADCAST_MAC.data());
+    if (broadcast_result != ESP_OK) {
+      ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
+               esp_err_to_name(broadcast_result));
+    }
+#else
+    ESP_LOGE(TAG, "ESP-NOW transport was not compiled");
+    this->mark_failed();
+    return;
+#endif
   }
   this->boot_discovery_started_ms_ = millis();
   this->schedule_boot_discovery_();
@@ -249,6 +265,7 @@ void CFXSyncComponent::setup() {
 void CFXSyncComponent::loop() {
   if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
     this->udp_.poll(this);
+    return;
   }
   const uint8_t channel = this->current_wifi_channel_();
   const bool connected = channel != 0;
@@ -352,6 +369,7 @@ void CFXSyncComponent::dump_config() {
                 this->unsupported_packets_, this->send_failures_);
 }
 
+#ifdef USE_ESPNOW
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
 bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
                                    const uint8_t *data, uint8_t size) {
@@ -417,6 +435,7 @@ bool CFXSyncComponent::admit_unknown_peer_(
   CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
   return this->handle_decoded_packet_(source, packet);
 }
+#endif
 
 bool CFXSyncComponent::handle_packet_(const CFXSyncSource &source,
                                       const uint8_t *data, size_t size) {
@@ -440,13 +459,12 @@ bool CFXSyncComponent::handle_packet_(const CFXSyncSource &source,
 
 bool CFXSyncComponent::handle_decoded_packet_(
     const CFXSyncSource &source, const CFXSyncPacket &packet) {
-  const uint8_t *source_mac = source.espnow_mac_or_null();
-  if (source_mac == nullptr) {
-    this->log_rejection_("Ignoring packet without ESP-NOW source identity");
+  if (!source.identity_valid) {
+    this->log_rejection_("Ignoring packet without source identity");
     return true;
   }
 
-  auto *peer = this->find_peer_(source_mac);
+  auto *peer = this->find_peer_(source);
   if (packet.type == CFXSyncPacketType::HELLO) {
     if (this->role_ == CFXSyncRole::FOLLOWER &&
         packet.node_role == CFXSyncNodeRole::FOLLOWER) {
@@ -460,7 +478,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     const bool peer_rebooted =
         peer != nullptr && peer->has_rx_sequence &&
         peer->rx_boot_id != packet.boot_id;
-    peer = this->find_or_add_peer_(source_mac, packet.node_role,
+    peer = this->find_or_add_peer_(source, packet.node_role,
                                    packet.capabilities);
     if (peer == nullptr) {
       return true;
@@ -487,7 +505,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       return true;
     }
     if (peer == nullptr) {
-      peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::FOLLOWER,
+      peer = this->find_or_add_peer_(source, CFXSyncNodeRole::FOLLOWER,
                                      CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
     }
     if (peer == nullptr) {
@@ -510,7 +528,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
 
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE &&
       this->role_ == CFXSyncRole::FOLLOWER) {
-    peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::LEADER,
+    peer = this->find_or_add_peer_(source, CFXSyncNodeRole::LEADER,
                                    CFXSyncPacketCodec::CAP_LIGHT_LEADER);
     if (peer != nullptr) {
       this->register_peer_(*peer);
@@ -519,7 +537,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE_ACK &&
       this->role_ == CFXSyncRole::LEADER &&
       this->is_current_broadcast_ack_(packet)) {
-    peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::FOLLOWER,
+    peer = this->find_or_add_peer_(source, CFXSyncNodeRole::FOLLOWER,
                                    CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
     if (peer != nullptr) {
       this->register_peer_(*peer);
@@ -536,7 +554,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       return true;
     }
     if (peer == nullptr) {
-      peer = this->find_or_add_peer_(source_mac, CFXSyncNodeRole::REMOTE,
+      peer = this->find_or_add_peer_(source, CFXSyncNodeRole::REMOTE,
                                      CFXSyncPacketCodec::CAP_BINARY_REMOTE);
       if (peer != nullptr) {
         this->register_peer_(*peer);
@@ -599,7 +617,8 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->has_valid_state_ = true;
     this->clear_warning_if_set_();
     this->apply_remote_state_(packet);
-    this->schedule_state_ack_(source_mac, packet, CFXSyncAckResult::APPLIED);
+    this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
+                              CFXSyncAckResult::APPLIED);
   }
   return true;
 }
@@ -1016,6 +1035,18 @@ bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
 
 bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
                                        std::vector<uint8_t> &packet) {
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+    (void) mac;
+    if (!this->udp_.send_broadcast(packet)) {
+      this->handle_send_result_(ESP_FAIL);
+      return false;
+    }
+    this->handle_send_result_(ESP_OK);
+    this->sent_packets_++;
+    this->flush_deferred_state_();
+    return true;
+  }
+#ifdef USE_ESPNOW
   if (this->espnow_ == nullptr) {
     return false;
   }
@@ -1040,10 +1071,20 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
   }
   this->sent_packets_++;
   return true;
+#else
+  (void) mac;
+  (void) packet;
+  return false;
+#endif
 }
 
 bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
                                             std::vector<uint8_t> &packet) {
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP ||
+      peer.transport == CFXSyncTransportKind::UDP) {
+    return this->send_packet_to_(BROADCAST_MAC, packet);
+  }
+#ifdef USE_ESPNOW
   if (this->espnow_ == nullptr) {
     return false;
   }
@@ -1067,6 +1108,11 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
   }
   this->sent_packets_++;
   return true;
+#else
+  (void) peer;
+  (void) packet;
+  return false;
+#endif
 }
 
 uint32_t CFXSyncComponent::next_sequence_() {
@@ -1095,6 +1141,31 @@ CFXSyncComponent::PeerState *CFXSyncComponent::find_peer_(
   return nullptr;
 }
 
+bool CFXSyncComponent::peer_matches_source_(
+    const PeerState &peer, const CFXSyncSource &source) const {
+  if (!peer.active || !source.identity_valid ||
+      peer.transport != source.transport) {
+    return false;
+  }
+  if (source.transport == CFXSyncTransportKind::ESPNOW) {
+    return memcmp(peer.mac.data(), source.mac.data(), peer.mac.size()) == 0;
+  }
+  return peer.ipv4 == source.ipv4;
+}
+
+CFXSyncComponent::PeerState *CFXSyncComponent::find_peer_(
+    const CFXSyncSource &source) {
+  if (!source.identity_valid) {
+    return nullptr;
+  }
+  for (auto &peer : this->peers_) {
+    if (this->peer_matches_source_(peer, source)) {
+      return &peer;
+    }
+  }
+  return nullptr;
+}
+
 CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
     const uint8_t *mac, CFXSyncNodeRole role, uint16_t capabilities) {
   if (mac == nullptr || this->is_broadcast_(mac)) {
@@ -1116,6 +1187,7 @@ CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
     }
     peer = PeerState{};
     peer.active = true;
+    peer.transport = CFXSyncTransportKind::ESPNOW;
     memcpy(peer.mac.data(), mac, peer.mac.size());
     peer.node_role = role;
     peer.capabilities = capabilities;
@@ -1133,7 +1205,57 @@ CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
   return nullptr;
 }
 
+CFXSyncComponent::PeerState *CFXSyncComponent::find_or_add_peer_(
+    const CFXSyncSource &source, CFXSyncNodeRole role,
+    uint16_t capabilities) {
+  if (!source.identity_valid) {
+    return nullptr;
+  }
+  if (source.transport == CFXSyncTransportKind::ESPNOW) {
+    return this->find_or_add_peer_(source.mac.data(), role, capabilities);
+  }
+
+  if (auto *peer = this->find_peer_(source); peer != nullptr) {
+    peer->node_role = role;
+    peer->capabilities = capabilities;
+    peer->udp_port = source.port;
+    peer->last_seen_ms = millis();
+    peer->tx_suspended_until_ms = 0;
+    peer->consecutive_send_failures = 0;
+    return peer;
+  }
+
+  for (auto &peer : this->peers_) {
+    if (peer.active) {
+      continue;
+    }
+    peer = PeerState{};
+    peer.active = true;
+    peer.transport = CFXSyncTransportKind::UDP;
+    peer.ipv4 = source.ipv4;
+    peer.udp_port = source.port;
+    peer.node_role = role;
+    peer.capabilities = capabilities;
+    peer.registered = true;
+    peer.last_seen_ms = millis();
+    const uint8_t *addr = reinterpret_cast<const uint8_t *>(&peer.ipv4);
+    ESP_LOGI(TAG,
+             "Discovered CFX Sync %s peer %u.%u.%u.%u:%u in group %08" PRIX32,
+             node_role_name(role), addr[0], addr[1], addr[2], addr[3],
+             static_cast<unsigned>(peer.udp_port), this->group_hash_);
+    return &peer;
+  }
+
+  ESP_LOGW(TAG, "CFX Sync peer table full; ignoring UDP peer");
+  return nullptr;
+}
+
 bool CFXSyncComponent::register_peer_(PeerState &peer) {
+  if (peer.transport == CFXSyncTransportKind::UDP) {
+    peer.registered = true;
+    return peer.active;
+  }
+#ifdef USE_ESPNOW
   if (!peer.active || this->espnow_ == nullptr ||
       this->is_broadcast_(peer.mac.data())) {
     return false;
@@ -1151,6 +1273,9 @@ bool CFXSyncComponent::register_peer_(PeerState &peer) {
   }
   peer.registered = true;
   return true;
+#else
+  return false;
+#endif
 }
 
 bool CFXSyncComponent::accept_sequence_(PeerState &peer, uint32_t boot_id,
@@ -1623,6 +1748,7 @@ void CFXSyncComponent::format_current_wifi_bssid_(char *buffer,
 }
 
 void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
+#ifdef USE_ESPNOW
   if (this->espnow_ == nullptr || this->espnow_rearm_scheduled_) {
     return;
   }
@@ -1657,6 +1783,9 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
       this->schedule_follower_recovery_loop_();
     }
   });
+#else
+  (void) reason;
+#endif
 }
 
 void CFXSyncComponent::schedule_follower_hello_() {

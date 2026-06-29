@@ -153,7 +153,7 @@ def AUTO_LOAD(config):
     if config:
         transport = config.get(CONF_TRANSPORT, TRANSPORT_ESPNOW)
 
-    if transport == TRANSPORT_UDP and _is_esp8266_target():
+    if transport == TRANSPORT_UDP:
         return BASE_AUTO_LOAD
     return BASE_AUTO_LOAD + ["espnow"]
 
@@ -413,10 +413,7 @@ def _validate_platform_support(config):
 
 
 def _validate_transport_dependencies(config):
-    if (
-        config[CONF_TRANSPORT] == TRANSPORT_ESPNOW
-        or not _is_esp8266_target()
-    ):
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
         return _ESPNOW_ID_SCHEMA(config)
 
     config.pop(CONF_INTERNAL_ESPNOW_ID, None)
@@ -484,10 +481,7 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    if (
-        config[CONF_TRANSPORT] == TRANSPORT_ESPNOW
-        or not _is_esp8266_target()
-    ):
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
         espnow_var = await cg.get_variable(config[CONF_INTERNAL_ESPNOW_ID])
         if CORE.using_arduino:
             cg.add_library("WiFi", None)
@@ -502,10 +496,7 @@ async def to_code(config):
         CONF_CONTROL_IDS, [{} for _ in config[CONF_LIGHTS]]
     )
 
-    if (
-        config[CONF_TRANSPORT] == TRANSPORT_ESPNOW
-        or not _is_esp8266_target()
-    ):
+    if config[CONF_TRANSPORT] == TRANSPORT_ESPNOW:
         cg.add(var.set_espnow(espnow_var))
     for light_index, light_id in enumerate(config[CONF_LIGHTS]):
         light_var = await cg.get_variable(light_id)

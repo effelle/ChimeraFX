@@ -26,14 +26,14 @@ CFX_HUE_CYCLER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_hue_cycler.cpp
 
 
 class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
-    def test_udp_transport_helper_shell_files_exist(self):
+    def test_udp_transport_helper_files_exist(self):
         self.assertTrue(
             UDP_HEADER.exists(),
-            "cfx_sync_udp.h must declare the UDP transport runtime helper shell",
+            "cfx_sync_udp.h must declare the UDP transport runtime helper",
         )
         self.assertTrue(
             UDP_SOURCE.exists(),
-            "cfx_sync_udp.cpp must define the inactive UDP transport shell",
+            "cfx_sync_udp.cpp must define the UDP transport runtime",
         )
 
     def test_udp_transport_helper_declares_runtime_contract(self):
@@ -48,38 +48,55 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             header,
         )
         self.assertIn("bool is_ready() const", header)
+        self.assertIn("~CFXSyncUDPTransport();", header)
+        self.assertIn("void close_();", header)
+        self.assertIn("int socket_fd_{-1};", header)
         self.assertIn("bool ready_{false};", header)
         self.assertIn("uint16_t port_{0};", header)
 
-    def test_udp_transport_shell_stays_inactive_until_socket_task(self):
+    def test_udp_transport_opens_nonblocking_broadcast_socket(self):
         self.assertTrue(UDP_SOURCE.exists())
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("#include <lwip/inet.h>", source)
+        self.assertIn("#include <lwip/sockets.h>", source)
+        self.assertIn("::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP)", source)
+        self.assertIn("SO_REUSEADDR", source)
+        self.assertIn("SO_BROADCAST", source)
+        self.assertIn("::bind(this->socket_fd_", source)
+        self.assertIn("O_NONBLOCK", source)
+        self.assertIn("this->ready_ = true;", source)
+        self.assertNotIn("UDP transport shell initialized", source)
+        self.assertNotIn("return false;\n}", source.split("bool CFXSyncUDPTransport::begin", 1)[1].split("void CFXSyncUDPTransport::poll", 1)[0])
+
+    def test_udp_transport_dispatches_received_packets_with_udp_identity(self):
         source = UDP_SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncUDPTransport::begin\(uint16_t port\).*?"
-                r"this->port_ = port;.*?"
-                r"this->ready_ = false;.*?"
-                r"ESP_LOGD\(TAG,.*?"
-                r"return false;",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            source,
-            re.compile(
                 r"void CFXSyncUDPTransport::poll\(CFXSyncComponent \*parent\)"
-                r"\s*\{\s*\(void\) parent;\s*\}",
+                r".*?::recvfrom\(this->socket_fd_.*?"
+                r"CFXSyncSource source =\s*CFXSyncSource::from_udp"
+                r"\(addr\.sin_addr\.s_addr, ntohs\(addr\.sin_port\)\);"
+                r".*?parent->handle_packet_\(source, buffer, "
+                r"static_cast<size_t>\(received\)\);",
                 re.DOTALL,
             ),
         )
+
+    def test_udp_transport_sends_broadcast_datagrams(self):
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
         self.assertRegex(
             source,
             re.compile(
                 r"bool CFXSyncUDPTransport::send_broadcast"
                 r"\(const std::vector<uint8_t> &packet\)"
-                r"\s*\{\s*\(void\) packet;\s*return false;\s*\}",
+                r".*?destination\.sin_addr\.s_addr = INADDR_BROADCAST;.*?"
+                r"::sendto\(this->socket_fd_, packet\.data\(\), "
+                r"packet\.size\(\), 0,.*?"
+                r"return sent == static_cast<ssize_t>\(packet\.size\(\)\);",
                 re.DOTALL,
             ),
         )
@@ -123,6 +140,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
                 r"if \(this->transport_ == "
                 r"CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP\) \{\s*"
                 r"this->udp_\.poll\(this\);\s*"
+                r"return;\s*"
                 r"\}",
                 re.DOTALL,
             ),
@@ -227,29 +245,32 @@ class CFXSyncTransportBoundaryTests(unittest.TestCase):
             "return this->handle_decoded_packet_(source, packet);",
             source,
         )
-        self.assertIn("source.espnow_mac_or_null()", source)
+        self.assertIn("CFXSyncSource::from_espnow(info.src_addr)", source)
 
-    def test_decoded_packet_rejects_missing_espnow_identity_before_peer_paths(self):
+    def test_decoded_packet_uses_transport_neutral_peer_identity(self):
         source = SOURCE.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
 
+        self.assertIn("bool peer_matches_source_(const PeerState &peer,", header)
+        self.assertIn("PeerState *find_peer_(const CFXSyncSource &source);", header)
+        self.assertIn(
+            "PeerState *find_or_add_peer_(const CFXSyncSource &source,",
+            header,
+        )
         self.assertRegex(
             source,
             re.compile(
                 r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
-                r"const uint8_t \*source_mac = "
-                r"source\.espnow_mac_or_null\(\);"
-                r"\s*if \(source_mac == nullptr\) \{"
+                r"if \(!source\.identity_valid\) \{"
                 r"\s*this->log_rejection_"
-                r"\(\"Ignoring packet without ESP-NOW source identity\"\);"
+                r"\(\"Ignoring packet without source identity\"\);"
                 r"\s*return true;"
                 r"\s*\}"
-                r"\s*auto \*peer = this->find_peer_\(source_mac\);",
+                r"\s*auto \*peer = this->find_peer_\(source\);",
                 re.DOTALL,
             ),
         )
-        self.assertNotIn("this->find_peer_(source.mac.data())", source)
-        self.assertNotIn("this->find_or_add_peer_(source.mac.data()", source)
-        self.assertNotIn("this->schedule_state_ack_(source.mac.data()", source)
+        self.assertNotIn("Ignoring packet without ESP-NOW source identity", source)
 
 
 class ESPNowAPITests(unittest.TestCase):
@@ -366,7 +387,7 @@ class ESPNowAPITests(unittest.TestCase):
 
         admit_body = re.search(
             r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
-            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
+            r"\n\}\n#endif\n\nbool CFXSyncComponent::handle_packet_",
             source,
             re.DOTALL,
         )
@@ -413,7 +434,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         admit_body = re.search(
             r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
-            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
+            r"\n\}\n#endif\n\nbool CFXSyncComponent::handle_packet_",
             source,
             re.DOTALL,
         )
@@ -1779,7 +1800,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(peer == nullptr &&"
                 r"\s*packet\.type == CFXSyncPacketType::STATE &&"
                 r"\s*this->role_ == CFXSyncRole::FOLLOWER\).*?"
-                r"this->find_or_add_peer_\(source_mac,"
+                r"this->find_or_add_peer_\(source,"
                 r"\s*CFXSyncNodeRole::LEADER,"
                 r"\s*CFXSyncPacketCodec::CAP_LIGHT_LEADER\);",
                 re.DOTALL,
@@ -1796,7 +1817,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*packet\.type == CFXSyncPacketType::STATE_ACK &&"
                 r"\s*this->role_ == CFXSyncRole::LEADER &&"
                 r"\s*this->is_current_broadcast_ack_\(packet\)\).*?"
-                r"this->find_or_add_peer_\(source_mac,"
+                r"this->find_or_add_peer_\(source,"
                 r"\s*CFXSyncNodeRole::FOLLOWER,"
                 r"\s*CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER\);.*?"
                 r"this->seed_peer_sent_state_from_ack_\(.*?packet\);",
@@ -1917,7 +1938,8 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
                 r"this->apply_remote_state_\(packet\);"
-                r"\s*this->schedule_state_ack_\(source_mac, packet,\s*"
+                r"\s*this->schedule_state_ack_"
+                r"\(source\.espnow_mac_or_null\(\), packet,\s*"
                 r"CFXSyncAckResult::APPLIED\);",
                 re.DOTALL,
             ),

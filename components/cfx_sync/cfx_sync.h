@@ -15,7 +15,9 @@
 #include "cfx_sync_udp.h"
 #include "../cfx_button/cfx_button.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#ifdef USE_ESPNOW
 #include "esphome/components/espnow/espnow_component.h"
+#endif
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
@@ -67,13 +69,16 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
   CFXSyncComponent *parent_;
 };
 
-class CFXSyncComponent : public Component,
+class CFXSyncComponent : public Component
+#ifdef USE_ESPNOW
+                         ,
                          public espnow::ESPNowReceivedPacketHandler,
                          public espnow::ESPNowUnknownPeerHandler,
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
                          public espnow::ESPNowBroadcastedHandler
 #else
                          public espnow::ESPNowBroadcastHandler
+#endif
 #endif
 {
  public:
@@ -84,9 +89,11 @@ class CFXSyncComponent : public Component,
     return setup_priority::LATE - 1.0f;
   }
 
+#ifdef USE_ESPNOW
   void set_espnow(espnow::ESPNowComponent *espnow) {
     this->espnow_ = espnow;
   }
+#endif
   void add_light(light::LightState *light) {
     this->lights_.push_back(light);
     this->effect_catalogs_.emplace_back();
@@ -171,6 +178,7 @@ class CFXSyncComponent : public Component,
     }
   }
 
+#ifdef USE_ESPNOW
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
   bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                    uint8_t size) override;
@@ -186,10 +194,13 @@ class CFXSyncComponent : public Component,
   bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                     uint8_t size) override;
 #endif
+#endif
   void on_local_light_update();
   void on_sync_enabled_switch(bool enabled);
 
  protected:
+  friend class CFXSyncUDPTransport;
+
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
   static constexpr uint32_t EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000;
   static constexpr uint32_t CONTROL_SKIP_LOG_INTERVAL_MS = 30000;
@@ -230,7 +241,10 @@ class CFXSyncComponent : public Component,
 
   struct PeerState {
     bool active{false};
+    CFXSyncTransportKind transport{CFXSyncTransportKind::ESPNOW};
     std::array<uint8_t, 6> mac{};
+    uint32_t ipv4{0};
+    uint16_t udp_port{0};
     CFXSyncNodeRole node_role{CFXSyncNodeRole::FOLLOWER};
     uint16_t capabilities{0};
     bool registered{false};
@@ -320,13 +334,21 @@ class CFXSyncComponent : public Component,
                                     bool peer_rebooted) const;
   uint32_t next_sequence_();
   PeerState *find_peer_(const uint8_t *mac);
+  PeerState *find_peer_(const CFXSyncSource &source);
   PeerState *find_or_add_peer_(const uint8_t *mac, CFXSyncNodeRole role,
                                uint16_t capabilities);
+  PeerState *find_or_add_peer_(const CFXSyncSource &source,
+                               CFXSyncNodeRole role,
+                               uint16_t capabilities);
+  bool peer_matches_source_(const PeerState &peer,
+                            const CFXSyncSource &source) const;
   bool register_peer_(PeerState &peer);
   bool accept_sequence_(PeerState &peer, uint32_t boot_id,
                         uint32_t sequence);
+#ifdef USE_ESPNOW
   bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,
                            const uint8_t *data, uint8_t size);
+#endif
   bool handle_packet_(const CFXSyncSource &source, const uint8_t *data,
                       size_t size);
   bool handle_decoded_packet_(const CFXSyncSource &source,
@@ -384,7 +406,9 @@ class CFXSyncComponent : public Component,
   bool is_broadcast_(const uint8_t *address) const;
   const char *role_name_() const;
 
+#ifdef USE_ESPNOW
   espnow::ESPNowComponent *espnow_{nullptr};
+#endif
   std::vector<light::LightState *> lights_;
   std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
   std::vector<EffectLogState> effect_log_states_;

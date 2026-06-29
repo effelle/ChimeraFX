@@ -39,7 +39,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("TRANSPORT_UDP,", source)
         self.assertIn("lower=True", source)
 
-    def test_autoload_keeps_espnow_for_esp32_until_cpp_isolation(self):
+    def test_autoload_omits_espnow_for_udp(self):
         with patch.object(
             type(cfx_sync.CORE),
             "is_esp8266",
@@ -48,7 +48,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         ):
             base_autoload = cfx_sync.AUTO_LOAD({"transport": "udp"})
 
-            self.assertIn("espnow", base_autoload)
+            self.assertNotIn("espnow", base_autoload)
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({}))
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "espnow"}))
 
@@ -114,7 +114,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             emitted,
         )
 
-    async def test_codegen_emits_udp_transport_enum(self):
+    async def test_codegen_emits_udp_transport_enum_without_espnow(self):
         emitted = []
         defines = []
 
@@ -123,13 +123,11 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 return lambda *args: (name, *args)
 
         var = _Var()
-        espnow_var = _Var()
         local_input = object()
-        get_variable = AsyncMock(side_effect=[espnow_var, local_input])
+        get_variable = AsyncMock(side_effect=[local_input])
         heartbeat = SimpleNamespace(total_milliseconds=30_000)
         config = {
             "id": light_id("sync"),
-            "_espnow_id": light_id("espnow"),
             "role": "controller",
             "lights": [],
             "local_input": light_id("wall_button"),
@@ -158,10 +156,10 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         ):
             await cfx_sync.to_code(config)
 
-        self.assertEqual(get_variable.await_count, 2)
-        self.assertIn("USE_ESPNOW", defines)
-        self.assertIn(("set_auto_add_peer", False), emitted)
-        self.assertIn(("set_espnow", espnow_var), emitted)
+        self.assertEqual(get_variable.await_count, 1)
+        self.assertNotIn("USE_ESPNOW", defines)
+        self.assertNotIn(("set_auto_add_peer", False), emitted)
+        self.assertFalse(any(item[0] == "set_espnow" for item in emitted))
         self.assertIn(
             (
                 "set_transport",
