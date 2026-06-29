@@ -247,6 +247,9 @@ void CFXSyncComponent::setup() {
 }
 
 void CFXSyncComponent::loop() {
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+    this->udp_.poll(this);
+  }
   const uint8_t channel = this->current_wifi_channel_();
   const bool connected = channel != 0;
   const uint32_t now = millis();

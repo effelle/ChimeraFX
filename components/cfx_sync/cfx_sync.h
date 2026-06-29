@@ -12,6 +12,7 @@
 #include "cfx_sync_effect.h"
 #include "cfx_sync_packet.h"
 #include "cfx_sync_transport.h"
+#include "cfx_sync_udp.h"
 #include "../cfx_button/cfx_button.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/espnow/espnow_component.h"
@@ -39,6 +40,11 @@ enum class CFXSyncInputMode : uint8_t {
   CFX_SYNC_INPUT_MOMENTARY = 0,
   CFX_SYNC_INPUT_MAINTAINED = 1,
   CFX_SYNC_INPUT_TOGGLE = 2,
+};
+
+enum class CFXSyncTransport : uint8_t {
+  CFX_SYNC_TRANSPORT_ESPNOW = 0,
+  CFX_SYNC_TRANSPORT_UDP = 1,
 };
 
 class CFXSyncComponent;
@@ -107,6 +113,9 @@ class CFXSyncComponent : public Component,
   }
   void set_input_mode(CFXSyncInputMode mode) {
     this->input_mode_ = mode;
+  }
+  void set_transport(CFXSyncTransport transport) {
+    this->transport_ = transport;
   }
   void set_fallback_channel(uint8_t channel) {
     this->fallback_channel_ = channel;
@@ -215,6 +224,7 @@ class CFXSyncComponent : public Component,
   static constexpr uint32_t INPUT_RELEASE_REPEAT_MS = 120;
   static constexpr uint8_t INPUT_RELEASE_REPEAT_COUNT = 3;
   static constexpr uint32_t REMOTE_INPUT_TIMEOUT_MS = 2500;
+  static constexpr uint16_t DEFAULT_UDP_PORT = 39580;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -411,6 +421,9 @@ class CFXSyncComponent : public Component,
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
+  CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW};
+  CFXSyncUDPTransport udp_;
+  uint16_t udp_port_{DEFAULT_UDP_PORT};
   bool local_input_has_state_{false};
   bool local_input_pressed_{false};
   bool local_input_sent_has_state_{false};

@@ -8,6 +8,8 @@ PY_COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
 HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync.h"
 SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
 TRANSPORT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_transport.h"
+UDP_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_udp.h"
+UDP_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_udp.cpp"
 PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
 PACKET_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.cpp"
 COLOR_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
@@ -21,6 +23,110 @@ CFX_DIMMER_TIMING_HEADER = (
 )
 CFX_CCT_SWEEPER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_cct_sweeper.cpp"
 CFX_HUE_CYCLER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_hue_cycler.cpp"
+
+
+class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
+    def test_udp_transport_helper_shell_files_exist(self):
+        self.assertTrue(
+            UDP_HEADER.exists(),
+            "cfx_sync_udp.h must declare the UDP transport runtime helper shell",
+        )
+        self.assertTrue(
+            UDP_SOURCE.exists(),
+            "cfx_sync_udp.cpp must define the inactive UDP transport shell",
+        )
+
+    def test_udp_transport_helper_declares_runtime_contract(self):
+        self.assertTrue(UDP_HEADER.exists())
+        header = UDP_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("class CFXSyncUDPTransport", header)
+        self.assertIn("bool begin(uint16_t port);", header)
+        self.assertIn("void poll(CFXSyncComponent *parent);", header)
+        self.assertIn(
+            "bool send_broadcast(const std::vector<uint8_t> &packet);",
+            header,
+        )
+        self.assertIn("bool is_ready() const", header)
+        self.assertIn("bool ready_{false};", header)
+        self.assertIn("uint16_t port_{0};", header)
+
+    def test_udp_transport_shell_stays_inactive_until_socket_task(self):
+        self.assertTrue(UDP_SOURCE.exists())
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncUDPTransport::begin\(uint16_t port\).*?"
+                r"this->port_ = port;.*?"
+                r"this->ready_ = false;.*?"
+                r"ESP_LOGD\(TAG,.*?"
+                r"return false;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncUDPTransport::poll\(CFXSyncComponent \*parent\)"
+                r"\s*\{\s*\(void\) parent;\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncUDPTransport::send_broadcast"
+                r"\(const std::vector<uint8_t> &packet\)"
+                r"\s*\{\s*\(void\) packet;\s*return false;\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_component_exposes_transport_enum_setter_and_udp_members(self):
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn('#include "cfx_sync_udp.h"', header)
+        self.assertIn(
+            "enum class CFXSyncTransport : uint8_t {\n"
+            "  CFX_SYNC_TRANSPORT_ESPNOW = 0,\n"
+            "  CFX_SYNC_TRANSPORT_UDP = 1,\n"
+            "};",
+            header,
+        )
+        self.assertIn(
+            "void set_transport(CFXSyncTransport transport) {\n"
+            "    this->transport_ = transport;\n"
+            "  }",
+            header,
+        )
+        self.assertIn(
+            "static constexpr uint16_t DEFAULT_UDP_PORT = 39580;",
+            header,
+        )
+        self.assertIn(
+            "CFXSyncTransport transport_{"
+            "CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW};",
+            header,
+        )
+        self.assertIn("CFXSyncUDPTransport udp_;", header)
+        self.assertIn("uint16_t udp_port_{DEFAULT_UDP_PORT};", header)
+
+    def test_loop_polls_udp_transport_only_when_selected(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::loop\(\) \{\s*"
+                r"if \(this->transport_ == "
+                r"CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP\) \{\s*"
+                r"this->udp_\.poll\(this\);\s*"
+                r"\}",
+                re.DOTALL,
+            ),
+        )
 
 
 class CFXSyncTransportBoundaryTests(unittest.TestCase):
