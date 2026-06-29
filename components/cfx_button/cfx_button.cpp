@@ -81,11 +81,18 @@ void CFXButton::dump_config() {
 }
 
 void CFXButton::inject_remote_state(bool pressed) {
-  this->handle_state_(pressed);
+  if (!this->remote_state_.is_armed()) {
+    this->remote_state_.prime(!pressed);
+  }
+  this->handle_state_(pressed, &this->remote_state_);
 }
 
 void CFXButton::handle_state_(bool pressed) {
-  const CFXButtonEvent event = this->state_.on_state(pressed);
+  this->handle_state_(pressed, &this->state_);
+}
+
+void CFXButton::handle_state_(bool pressed, CFXButtonState *state) {
+  const CFXButtonEvent event = state->on_state(pressed);
   if (event == CFXButtonEvent::PRESS) {
     this->press_();
   } else if (event == CFXButtonEvent::RELEASE) {

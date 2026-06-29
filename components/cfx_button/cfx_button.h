@@ -51,6 +51,7 @@ class CFXButton : public Component {
 
  protected:
   void handle_state_(bool pressed);
+  void handle_state_(bool pressed, CFXButtonState *state);
   void handle_dimmer_up_state_(bool pressed);
   void handle_dimmer_down_state_(bool pressed);
   void bind_button_(binary_sensor::BinarySensor *button, CFXButtonState *state,
@@ -66,6 +67,7 @@ class CFXButton : public Component {
   std::function<void()> dimmer_press_down_;
   std::function<void()> dimmer_release_down_;
   CFXButtonState state_;
+  CFXButtonState remote_state_;
   CFXButtonState dimmer_up_state_;
   CFXButtonState dimmer_down_state_;
 };

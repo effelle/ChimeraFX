@@ -17,6 +17,7 @@ EFFECT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_effect.h"
 CFX_BUTTON_PY = ROOT / "components" / "cfx_button" / "__init__.py"
 CFX_BUTTON_HEADER = ROOT / "components" / "cfx_button" / "cfx_button.h"
 CFX_BUTTON_SOURCE = ROOT / "components" / "cfx_button" / "cfx_button.cpp"
+CFX_BUTTON_STATE_HEADER = ROOT / "components" / "cfx_button" / "cfx_button_state.h"
 CFX_DIMMER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_dimmer.cpp"
 CFX_DIMMER_TIMING_HEADER = (
     ROOT / "components" / "cfx_button" / "cfx_dimmer_timing.h"
@@ -690,6 +691,34 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("void inject_remote_state(bool pressed)", header)
         self.assertNotIn("button_ == nullptr ||", source)
         self.assertIn("this->inject_remote_state", source)
+
+    def test_remote_cfx_button_press_is_not_swallowed_by_startup_arming(self):
+        header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
+        source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+        state_header = CFX_BUTTON_STATE_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("void prime(bool pressed)", state_header)
+        self.assertIn("CFXButtonState remote_state_;", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXButton::inject_remote_state\(bool pressed\).*?"
+                r"if \(!this->remote_state_\.is_armed\(\)\) \{\s*"
+                r"this->remote_state_\.prime\(!pressed\);\s*"
+                r"\}.*?"
+                r"this->handle_state_\(pressed, &this->remote_state_\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXButton::handle_state_"
+                r"\(bool pressed, CFXButtonState \*state\).*?"
+                r"state->on_state\(pressed\)",
+                re.DOTALL,
+            ),
+        )
 
     def test_controller_role_is_declared_in_runtime_contract(self):
         header = HEADER.read_text(encoding="utf-8")
