@@ -235,6 +235,7 @@ class CFXSyncComponent : public Component
   static constexpr uint32_t INPUT_RELEASE_REPEAT_MS = 120;
   static constexpr uint8_t INPUT_RELEASE_REPEAT_COUNT = 3;
   static constexpr uint32_t REMOTE_INPUT_TIMEOUT_MS = 2500;
+  static constexpr uint8_t PENDING_INPUT_QUEUE_SIZE = 8;
   static constexpr uint16_t DEFAULT_UDP_PORT = 39580;
   static constexpr std::array<uint8_t, 6> BROADCAST_MAC{
       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -286,6 +287,12 @@ class CFXSyncComponent : public Component
     uint32_t last_skip_log_ms{0};
   };
 
+  struct PendingInputEvent {
+    bool pressed{false};
+    bool maintained{false};
+    bool toggle{false};
+  };
+
   bool send_state_(bool include_default_transition = false);
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
@@ -314,6 +321,8 @@ class CFXSyncComponent : public Component
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
   bool send_input_state_(bool pressed, bool maintained, bool toggle);
+  void queue_input_state_(bool pressed, bool maintained, bool toggle);
+  void flush_deferred_input_();
   void on_local_input_update_(bool pressed);
   void schedule_local_input_hold_repeat_();
   void schedule_local_input_release_repeat_(uint8_t remaining);
@@ -453,6 +462,9 @@ class CFXSyncComponent : public Component
   bool local_input_sent_has_state_{false};
   bool local_input_sent_pressed_{false};
   uint32_t local_input_maintained_generation_{0};
+  PendingInputEvent pending_input_events_[PENDING_INPUT_QUEUE_SIZE];
+  uint8_t pending_input_head_{0};
+  uint8_t pending_input_count_{0};
   bool remote_input_pressed_{false};
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};

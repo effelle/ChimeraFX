@@ -799,6 +799,30 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('this->set_timeout("input-maintained-settle"', source)
         self.assertIn("const uint32_t generation = ++this->local_input_maintained_generation_;", source)
         self.assertIn("[this, pressed, maintained, toggle, generation]", source)
+        self.assertIn("void queue_input_state_(bool pressed, bool maintained, bool toggle);", header)
+        self.assertIn("void flush_deferred_input_();", header)
+        self.assertIn("PendingInputEvent pending_input_events_[PENDING_INPUT_QUEUE_SIZE];", header)
+        self.assertIn("static constexpr uint8_t PENDING_INPUT_QUEUE_SIZE = 8;", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_input_state_"
+                r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+                r"if \(this->send_pending_\) \{\s*"
+                r"this->queue_input_state_\(pressed, maintained, toggle\);"
+                r"\s*return false;\s*\}",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->send_pending_ = false;\s*"
+                r"this->handle_send_result_\(send_result\);.*?"
+                r"this->flush_deferred_input_\(\);",
+                re.DOTALL,
+            ),
+        )
         inject_remote_input = re.search(
             r"void CFXSyncComponent::inject_remote_input_"
             r"\(bool pressed, bool maintained,\s*bool toggle\).*?"

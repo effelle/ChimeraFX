@@ -257,6 +257,8 @@ void CFXSyncComponent::setup() {
       this->local_input_has_state_ = true;
       this->local_input_pressed_ = this->local_input_->state;
     }
+    ESP_LOGD(TAG, "Controller input bound to %s",
+             this->local_input_->get_name().c_str());
     this->local_input_->add_on_state_callback(
         [this](bool pressed) { this->on_local_input_update_(pressed); });
   }
@@ -872,13 +874,53 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
   if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return false;
   }
+  if (this->send_pending_) {
+    this->queue_input_state_(pressed, maintained, toggle);
+    return false;
+  }
   std::vector<uint8_t> packet;
   if (!CFXSyncPacketCodec::encode_input_state(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
           pressed, maintained, toggle, this->key_, packet)) {
     return false;
   }
+  ESP_LOGD(TAG, "Sending CFX Sync input %s%s%s",
+           pressed ? "pressed" : "released",
+           maintained ? " maintained" : "",
+           toggle ? " toggle" : "");
   return this->send_packet_to_(BROADCAST_MAC, packet);
+}
+
+void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
+                                          bool toggle) {
+  if (this->pending_input_count_ >= PENDING_INPUT_QUEUE_SIZE) {
+    this->pending_input_head_ =
+        (this->pending_input_head_ + 1) % PENDING_INPUT_QUEUE_SIZE;
+    this->pending_input_count_--;
+    ESP_LOGW(TAG, "CFX Sync input queue full; dropping oldest input edge");
+  }
+  const uint8_t index =
+      (this->pending_input_head_ + this->pending_input_count_) %
+      PENDING_INPUT_QUEUE_SIZE;
+  this->pending_input_events_[index] =
+      PendingInputEvent{pressed, maintained, toggle};
+  this->pending_input_count_++;
+  ESP_LOGD(TAG, "Queued CFX Sync input %s%s%s",
+           pressed ? "pressed" : "released",
+           maintained ? " maintained" : "",
+           toggle ? " toggle" : "");
+}
+
+void CFXSyncComponent::flush_deferred_input_() {
+  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+      this->send_pending_ || this->pending_input_count_ == 0) {
+    return;
+  }
+  const auto event = this->pending_input_events_[this->pending_input_head_];
+  this->pending_input_head_ =
+      (this->pending_input_head_ + 1) % PENDING_INPUT_QUEUE_SIZE;
+  this->pending_input_count_--;
+  this->send_input_state_(event.pressed, event.maintained, event.toggle);
 }
 
 void CFXSyncComponent::on_local_input_update_(bool pressed) {
@@ -891,6 +933,8 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_has_state_ = true;
   this->local_input_pressed_ = pressed;
+  ESP_LOGD(TAG, "Controller local input %s",
+           pressed ? "pressed" : "released");
   const bool maintained =
       this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED;
   const bool toggle =
@@ -984,6 +1028,8 @@ void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
   }
   this->remote_input_pressed_ = pressed;
   this->last_remote_input_ms_ = millis();
+  ESP_LOGD(TAG, "Applying CFX Sync remote input %s",
+           pressed ? "pressed" : "released");
   this->remote_input_->inject_remote_state(pressed);
   if (pressed && !maintained) {
     this->schedule_remote_input_timeout_();
@@ -1060,6 +1106,7 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
       [this](esp_err_t send_result) {
         this->send_pending_ = false;
         this->handle_send_result_(send_result);
+        this->flush_deferred_input_();
         if (send_result == ESP_OK) {
           this->flush_deferred_state_();
         }
@@ -1098,6 +1145,7 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
       [this, &peer](esp_err_t send_result) {
         this->send_pending_ = false;
         this->handle_peer_send_result_(peer, send_result);
+        this->flush_deferred_input_();
         this->flush_deferred_state_();
       });
   if (result != ESP_OK) {
