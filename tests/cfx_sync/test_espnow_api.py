@@ -141,13 +141,67 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             source,
             re.compile(
                 r"void CFXSyncComponent::loop\(\) \{\s*"
-                r"if \(this->transport_ == "
-                r"CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP\) \{\s*"
+                r"if \(this->use_udp_transport_\(\)\) \{\s*"
                 r"this->udp_\.poll\(this\);\s*"
                 r"return;\s*"
                 r"\}",
                 re.DOTALL,
             ),
+        )
+
+    def test_esp8266_controller_runtime_is_not_hidden_behind_esp32_guard(self):
+        header = HEADER.read_text(encoding="utf-8")
+        packet_header = PACKET_HEADER.read_text(encoding="utf-8")
+        packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertNotIn("#ifdef USE_ESP32\n\n#include \"cfx_sync_color.h\"", header)
+        self.assertIn("#if defined(USE_ESP32)", header)
+        self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", header)
+        self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", source)
+        self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", packet_header)
+        self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", packet_source)
+
+    def test_esp8266_controller_runtime_omits_light_and_effect_bindings(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP32\).*?"
+                r'#include "cfx_sync_color.h".*?'
+                r'#include "cfx_sync_effect.h".*?'
+                r'#include "../cfx_button/cfx_button.h".*?'
+                r"#endif",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("#if defined(USE_ESP32)\n  void add_light", header)
+        self.assertIn("#if defined(USE_ESP32)\n  void set_remote_input", header)
+        self.assertIn("#if defined(USE_ESP32)\n  std::vector<light::LightState *> lights_;", header)
+        self.assertIn("#if defined(USE_ESP32)\n  cfx_button::CFXButton *remote_input_", header)
+        self.assertIn("#if defined(USE_ESP32)\nstatic CFXSyncTimingState", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"#if defined\(USE_ESP32\).*?"
+                r"light::LightState \*CFXSyncComponent::leader_light_"
+                r".*?#endif",
+                re.DOTALL,
+            ),
+        )
+
+    def test_dump_config_reports_esp8266_udp_controller_transport(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'ESP_LOGCONFIG(TAG, "  Transport: UDP (ESP8266 controller)");',
+            source,
+        )
+        self.assertIn(
+            'ESP_LOGI(TAG, "CFX Sync transport auto selected UDP");',
+            source,
         )
 
 
@@ -980,7 +1034,9 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
                 r"this->schedule_boot_discovery_\(\);"
+                r"\s*#endif"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*this->schedule_follower_hello_\(\);"
                 r"\s*\}",
@@ -1357,6 +1413,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool CFXSyncComponent::should_send_state_for_hello_"
                 r"\(\s*const PeerState &peer, bool new_peer, "
                 r"bool peer_rebooted\) const \{"
+                r"\s*#if defined\(USE_ESP32\)"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER \|\|"
                 r"\s*!this->peer_accepts_leader_state_\(peer\)\) \{"
                 r"\s*return false;"

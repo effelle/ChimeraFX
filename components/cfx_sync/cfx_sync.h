@@ -6,22 +6,26 @@
 
 #pragma once
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
+#if defined(USE_ESP32)
 #include "cfx_sync_color.h"
 #include "cfx_sync_effect.h"
+#include "../cfx_button/cfx_button.h"
+#endif
 #include "cfx_sync_packet.h"
 #include "cfx_sync_transport.h"
 #include "cfx_sync_udp.h"
-#include "../cfx_button/cfx_button.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #ifdef USE_ESPNOW
 #include "esphome/components/espnow/espnow_component.h"
 #endif
+#if defined(USE_ESP32)
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
+#endif
 #include "esphome/core/component.h"
 #include "esphome/core/version.h"
 
@@ -52,6 +56,7 @@ enum class CFXSyncTransport : uint8_t {
 
 class CFXSyncComponent;
 
+#if defined(USE_ESP32)
 class CFXSyncEnableSwitch : public switch_::Switch {
  public:
   void set_parent(CFXSyncComponent *parent) { this->parent_ = parent; }
@@ -69,6 +74,7 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
  protected:
   CFXSyncComponent *parent_;
 };
+#endif
 
 class CFXSyncComponent : public Component
 #ifdef USE_ESPNOW
@@ -95,6 +101,7 @@ class CFXSyncComponent : public Component
     this->espnow_ = espnow;
   }
 #endif
+#if defined(USE_ESP32)
   void add_light(light::LightState *light) {
     this->lights_.push_back(light);
     this->effect_catalogs_.emplace_back();
@@ -109,16 +116,19 @@ class CFXSyncComponent : public Component
     this->effect_catalogs_[light_index].push_back(
         CFXSyncEffectEntry{effect_id, name});
   }
+#endif
   void set_role(CFXSyncRole role) { this->role_ = role; }
   void set_local_input(binary_sensor::BinarySensor *input) {
     this->local_input_ = input;
   }
+#if defined(USE_ESP32)
   void set_remote_input(cfx_button::CFXButton *input) {
     this->remote_input_ = input;
   }
   void set_sync_switch(CFXSyncEnableSwitch *sync_switch) {
     this->sync_switch_ = sync_switch;
   }
+#endif
   void set_input_mode(CFXSyncInputMode mode) {
     this->input_mode_ = mode;
   }
@@ -136,6 +146,7 @@ class CFXSyncComponent : public Component
   void set_heartbeat_ms(uint32_t heartbeat_ms) {
     this->heartbeat_ms_ = heartbeat_ms;
   }
+#if defined(USE_ESP32)
   void set_force_white_control(size_t light_index,
                                switch_::Switch *control) {
     if (light_index < this->control_bindings_.size()) {
@@ -178,6 +189,7 @@ class CFXSyncComponent : public Component
       this->control_bindings_[light_index].palette = control;
     }
   }
+#endif
 
 #ifdef USE_ESPNOW
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
@@ -267,6 +279,7 @@ class CFXSyncComponent : public Component
     uint32_t tx_suspended_until_ms{0};
   };
 
+#if defined(USE_ESP32)
   struct EffectLogState {
     bool valid{false};
     CFXSyncEffectKind kind{CFXSyncEffectKind::NONE};
@@ -287,6 +300,7 @@ class CFXSyncComponent : public Component
     bool callbacks_registered{false};
     uint32_t last_skip_log_ms{0};
   };
+#endif
 
   struct PendingInputEvent {
     bool pressed{false};
@@ -294,6 +308,7 @@ class CFXSyncComponent : public Component
     bool toggle{false};
   };
 
+#if defined(USE_ESP32)
   bool send_state_(bool include_default_transition = false);
   bool send_state_(const CFXSyncLightSnapshot &snapshot,
                    const CFXSyncEffectState &effect,
@@ -312,6 +327,7 @@ class CFXSyncComponent : public Component
                            const CFXSyncLightSnapshot &snapshot,
                            const CFXSyncEffectState &effect,
                            const CFXSyncControlState &controls);
+#endif
   bool send_state_ack_(const uint8_t *destination,
                        const CFXSyncPacket &packet,
                        CFXSyncAckResult result);
@@ -336,6 +352,8 @@ class CFXSyncComponent : public Component
                        std::vector<uint8_t> &packet);
   bool send_packet_to_peer_(PeerState &peer,
                             std::vector<uint8_t> &packet);
+  bool use_udp_transport_() const;
+  bool use_espnow_transport_() const;
   CFXSyncNodeRole local_node_role_() const;
   uint16_t local_capabilities_() const;
   bool accepts_peer_role_(CFXSyncNodeRole role) const;
@@ -363,11 +381,13 @@ class CFXSyncComponent : public Component
                       size_t size);
   bool handle_decoded_packet_(const CFXSyncSource &source,
                               const CFXSyncPacket &packet);
+#if defined(USE_ESP32)
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
   bool is_current_broadcast_ack_(const CFXSyncPacket &packet) const;
   void seed_peer_sent_state_from_ack_(PeerState &peer,
                                       const CFXSyncPacket &packet);
+#endif
   bool is_peer_send_suspended_(const PeerState &peer) const;
   uint8_t active_peer_count_() const;
   uint8_t follower_peer_count_() const;
@@ -375,17 +395,24 @@ class CFXSyncComponent : public Component
   uint8_t pending_ack_count_() const;
   uint32_t missed_ack_count_() const;
   void handle_state_ack_(PeerState &peer, const CFXSyncPacket &packet);
+#if defined(USE_ESP32)
   void check_ack_health_();
+#endif
   void handle_send_result_(esp_err_t result);
+#if defined(USE_ESP32)
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
+#endif
   void clear_warning_if_set_();
   void flush_deferred_state_();
+#if defined(USE_ESP32)
   void schedule_state_retry_();
+#endif
   void handle_decode_failure_(CFXSyncDecodeResult result);
   void log_rejection_(const char *message);
   void schedule_boot_discovery_();
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
+#if defined(USE_ESP32)
   uint8_t current_wifi_channel_() const;
   uint8_t active_sync_channel_() const;
   const char *sync_mode_name_() const;
@@ -413,20 +440,25 @@ class CFXSyncComponent : public Component
                          size_t light_index, const char *control_name,
                          const char *reason);
   light::LightState *leader_light_() const;
+#endif
   bool is_broadcast_(const uint8_t *address) const;
   const char *role_name_() const;
 
 #ifdef USE_ESPNOW
   espnow::ESPNowComponent *espnow_{nullptr};
 #endif
+#if defined(USE_ESP32)
   std::vector<light::LightState *> lights_;
   std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
   std::vector<EffectLogState> effect_log_states_;
   std::vector<ControlBinding> control_bindings_;
+#endif
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   binary_sensor::BinarySensor *local_input_{nullptr};
+#if defined(USE_ESP32)
   cfx_button::CFXButton *remote_input_{nullptr};
   CFXSyncEnableSwitch *sync_switch_{nullptr};
+#endif
   std::array<uint8_t, 6> peer_{};
   bool has_static_peer_{false};
   std::array<PeerState, CFX_SYNC_MAX_PEERS> peers_{};
@@ -437,6 +469,7 @@ class CFXSyncComponent : public Component
   uint32_t tx_sequence_{0};
   uint32_t boot_discovery_started_ms_{0};
   bool send_pending_{false};
+#if defined(USE_ESP32)
   bool state_send_deferred_{false};
   bool state_send_deferred_with_transition_{false};
   uint8_t state_retry_attempts_{0};
@@ -454,6 +487,7 @@ class CFXSyncComponent : public Component
   uint32_t wifi_disconnected_since_ms_{0};
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
+#endif
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
   CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};
   CFXSyncUDPTransport udp_;
@@ -470,6 +504,7 @@ class CFXSyncComponent : public Component
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};
 
+#if defined(USE_ESP32)
   CFXSyncLightListener light_listener_{this};
   bool applying_remote_state_{false};
   bool has_observed_state_{false};
@@ -477,6 +512,7 @@ class CFXSyncComponent : public Component
   CFXSyncEffectState observed_effect_{};
   CFXSyncControlState observed_controls_{};
   bool has_valid_state_{false};
+#endif
 
   uint32_t last_valid_packet_ms_{0};
 
@@ -497,4 +533,4 @@ class CFXSyncComponent : public Component
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

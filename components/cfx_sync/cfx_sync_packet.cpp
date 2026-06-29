@@ -1,6 +1,6 @@
 #include "cfx_sync_packet.h"
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
 #include <cstring>
 
@@ -673,4 +673,4 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

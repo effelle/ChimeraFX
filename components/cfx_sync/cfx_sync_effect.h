@@ -6,9 +6,11 @@
 
 #pragma once
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
+#if defined(USE_ESP32)
 #include "esphome/components/light/light_state.h"
+#endif
 
 #include <cstdint>
 #include <string>
@@ -55,6 +57,7 @@ inline const CFXSyncEffectEntry *find_effect_entry(
   return nullptr;
 }
 
+#if defined(USE_ESP32)
 inline CFXSyncEffectState capture_effect_state(
     light::LightState *state,
     const std::vector<CFXSyncEffectEntry> &catalog) {
@@ -83,8 +86,9 @@ inline CFXSyncEffectState capture_effect_state(
       effect_name,
   };
 }
+#endif
 
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

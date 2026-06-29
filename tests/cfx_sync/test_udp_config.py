@@ -66,6 +66,27 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({"transport": "auto"}))
             self.assertNotIn("espnow", cfx_sync.AUTO_LOAD({"transport": "udp"}))
 
+    def test_esp8266_controller_autoload_is_minimal(self):
+        with patch.object(
+            type(cfx_sync.CORE),
+            "is_esp8266",
+            new_callable=PropertyMock,
+            return_value=True,
+        ):
+            autoload = cfx_sync.AUTO_LOAD(
+                {"role": "controller", "transport": "auto"}
+            )
+
+        self.assertIn("binary_sensor", autoload)
+        self.assertIn("hmac_sha256", autoload)
+        self.assertNotIn("espnow", autoload)
+        self.assertNotIn("cfx_button", autoload)
+        self.assertNotIn("cfx_effect_registry", autoload)
+        self.assertNotIn("light", autoload)
+        self.assertNotIn("number", autoload)
+        self.assertNotIn("select", autoload)
+        self.assertNotIn("switch", autoload)
+
     async def test_codegen_emits_espnow_transport_enum(self):
         emitted = []
         defines = []

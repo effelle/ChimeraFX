@@ -6,7 +6,7 @@
 
 #pragma once
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
 #include "cfx_sync_effect.h"
 #include "esphome/components/hmac_sha256/hmac_sha256.h"
@@ -298,4 +298,4 @@ static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE < 250,
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

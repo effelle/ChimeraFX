@@ -35,6 +35,10 @@ BASE_AUTO_LOAD = [
     "select",
     "switch",
 ]
+ESP8266_CONTROLLER_AUTO_LOAD = [
+    "binary_sensor",
+    "hmac_sha256",
+]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
@@ -155,9 +159,9 @@ def AUTO_LOAD(config):
     if config:
         transport = config.get(CONF_TRANSPORT, TRANSPORT_AUTO)
 
+    if _is_esp8266_target():
+        return ESP8266_CONTROLLER_AUTO_LOAD
     if transport == TRANSPORT_UDP:
-        return BASE_AUTO_LOAD
-    if transport == TRANSPORT_AUTO and _is_esp8266_target():
         return BASE_AUTO_LOAD
     return BASE_AUTO_LOAD + ["espnow"]
 

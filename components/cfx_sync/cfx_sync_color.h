@@ -6,9 +6,11 @@
 
 #pragma once
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
+#if defined(USE_ESP32)
 #include "esphome/components/light/light_state.h"
+#endif
 
 #include <algorithm>
 #include <cstdint>
@@ -45,6 +47,7 @@ inline uint8_t quantize_light_value(float value) {
   return static_cast<uint8_t>(clamped * 255.0f + 0.5f);
 }
 
+#if defined(USE_ESP32)
 inline bool light_supports_white(light::LightState &state) {
   const auto traits = state.get_traits();
   return traits.supports_color_mode(light::ColorMode::RGB_WHITE) ||
@@ -128,8 +131,9 @@ inline CFXSyncLightSnapshot convert_color_for_follower(
   snapshot.has_white = follower_has_white;
   return snapshot;
 }
+#endif
 
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

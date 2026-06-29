@@ -1,17 +1,24 @@
 #include "cfx_sync.h"
 
-#ifdef USE_ESP32
+#if defined(USE_ESP32) || defined(USE_ESP8266)
 
+#if defined(USE_ESP32)
 #include "../cfx_button/cfx_dimmer_timing.h"
+#endif
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
-#ifdef USE_WIFI
+#if defined(USE_ESP32) && defined(USE_WIFI)
 #include "esphome/components/wifi/wifi_component.h"
 #endif
 
 #include <esp_err.h>
+#if defined(USE_ESP32)
 #include <esp_random.h>
 #include <esp_wifi.h>
+#elif defined(USE_ESP8266)
+#include <Arduino.h>
+static uint32_t esp_random() { return static_cast<uint32_t>(::random()); }
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -21,6 +28,7 @@
 namespace esphome {
 namespace cfx_sync {
 
+#if defined(USE_ESP32)
 static CFXSyncTimingState capture_sync_timing_state(
     light::LightState *leader, const CFXSyncLightSnapshot &snapshot,
     const CFXSyncEffectState &effect, bool include_default_transition) {
@@ -48,6 +56,7 @@ static CFXSyncTimingState capture_sync_timing_state(
   }
   return timing;
 }
+#endif
 
 static const char *const TAG = "cfx_sync";
 
@@ -73,6 +82,7 @@ class RemoteApplyGuard {
   bool &flag_;
 };
 
+#if defined(USE_ESP32)
 void CFXSyncLightListener::on_light_remote_values_update() {
   if (this->parent_ != nullptr) {
     this->parent_->on_local_light_update();
@@ -91,6 +101,29 @@ light::LightState *CFXSyncComponent::leader_light_() const {
     return nullptr;
   }
   return this->lights_[0];
+}
+#endif
+
+bool CFXSyncComponent::use_udp_transport_() const {
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+    return true;
+  }
+#if defined(USE_ESP8266)
+  return this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO;
+#else
+  return false;
+#endif
+}
+
+bool CFXSyncComponent::use_espnow_transport_() const {
+  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW) {
+    return true;
+  }
+#if defined(USE_ESP32)
+  return this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO;
+#else
+  return false;
+#endif
 }
 
 CFXSyncNodeRole CFXSyncComponent::local_node_role_() const {
@@ -123,6 +156,7 @@ bool CFXSyncComponent::accepts_peer_role_(CFXSyncNodeRole role) const {
 
 bool CFXSyncComponent::should_send_state_for_hello_(
     const PeerState &peer, bool new_peer, bool peer_rebooted) const {
+#if defined(USE_ESP32)
   if (this->role_ != CFXSyncRole::LEADER ||
       !this->peer_accepts_leader_state_(peer)) {
     return false;
@@ -130,6 +164,9 @@ bool CFXSyncComponent::should_send_state_for_hello_(
   return new_peer || peer_rebooted ||
          peer.last_state_sent_sequence == 0 ||
          this->has_pending_ack_(peer);
+#else
+  return false;
+#endif
 }
 
 void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
@@ -153,11 +190,21 @@ void CFXSyncComponent::setup() {
       this->mark_failed();
       return;
     }
+#if defined(USE_ESP32)
     if (!this->lights_.empty()) {
       ESP_LOGE(TAG, "Controller cannot declare light references");
       this->mark_failed();
       return;
     }
+#endif
+#if defined(USE_ESP8266)
+    if (!this->use_udp_transport_()) {
+      ESP_LOGE(TAG, "ESP8266 controller requires UDP transport");
+      this->mark_failed();
+      return;
+    }
+#endif
+#if defined(USE_ESP32)
   } else if (this->lights_.empty()) {
     ESP_LOGE(TAG, "At least one light reference is required");
     this->mark_failed();
@@ -168,20 +215,33 @@ void CFXSyncComponent::setup() {
     this->mark_failed();
     return;
   }
+#else
+  } else {
+    ESP_LOGE(TAG, "ESP8266 cfx_sync support is controller-only over UDP");
+    this->mark_failed();
+    return;
+  }
+#endif
 
   this->boot_id_ = esp_random();
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
 
-  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+  if (this->use_udp_transport_()) {
+    if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
+      ESP_LOGI(TAG, "CFX Sync transport auto selected UDP");
+    }
     if (!this->udp_.begin(this->udp_port_)) {
       ESP_LOGE(TAG, "UDP transport is required");
       this->mark_failed();
       return;
     }
-  } else {
+  } else if (this->use_espnow_transport_()) {
 #ifdef USE_ESPNOW
+    if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
+      ESP_LOGI(TAG, "CFX Sync transport auto selected ESP-NOW");
+    }
     if (this->espnow_ == nullptr) {
       ESP_LOGE(TAG, "ESP-NOW is required");
       this->mark_failed();
@@ -207,9 +267,15 @@ void CFXSyncComponent::setup() {
     this->mark_failed();
     return;
 #endif
+  } else {
+    ESP_LOGE(TAG, "No supported CFX Sync transport is available");
+    this->mark_failed();
+    return;
   }
   this->boot_discovery_started_ms_ = millis();
+#if defined(USE_ESP32)
   this->schedule_boot_discovery_();
+#endif
   if (this->role_ != CFXSyncRole::LEADER) {
     this->schedule_follower_hello_();
   }
@@ -227,6 +293,7 @@ void CFXSyncComponent::setup() {
       peer->registered = true;
     }
   }
+#if defined(USE_ESP32)
   if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_switch_ != nullptr) {
     const auto initial_state =
         this->sync_switch_->get_initial_state_with_restore_mode();
@@ -252,7 +319,9 @@ void CFXSyncComponent::setup() {
                        [this]() { this->send_heartbeat_state_(); });
   } else if (this->role_ == CFXSyncRole::FOLLOWER) {
     this->schedule_follower_recovery_();
-  } else if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+  } else
+#endif
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     if (this->local_input_->has_state()) {
       this->local_input_has_state_ = true;
       this->local_input_pressed_ = this->local_input_->state;
@@ -265,10 +334,11 @@ void CFXSyncComponent::setup() {
 }
 
 void CFXSyncComponent::loop() {
-  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+  if (this->use_udp_transport_()) {
     this->udp_.poll(this);
     return;
   }
+#if defined(USE_ESP32)
   const uint8_t channel = this->current_wifi_channel_();
   const bool connected = channel != 0;
   const uint32_t now = millis();
@@ -321,6 +391,7 @@ void CFXSyncComponent::loop() {
   this->pending_wifi_channel_since_ms_ = 0;
   this->last_wifi_connected_ = connected;
   this->last_wifi_channel_ = channel;
+#endif
 }
 
 void CFXSyncComponent::dump_config() {
@@ -335,22 +406,34 @@ void CFXSyncComponent::dump_config() {
                 "  Discovery: group authenticated\n"
                 "  Group hash: %08" PRIX32 "\n"
                 "  Heartbeat: %" PRIu32 " ms\n"
+#if defined(USE_ESP32)
                 "  Sync mode: %s\n"
                 "  Fallback channel: %u\n"
                 "  Active sync channel: %u\n"
+#endif
                 "  Last valid packet age: %" PRIu32 " ms\n"
                 "  Peers: active=%u followers=%u remotes=%u\n"
                 "  ACK: pending=%u missed=%" PRIu32,
                 this->role_name_(), this->group_hash_,
-                this->heartbeat_ms_, this->sync_mode_name_(),
+                this->heartbeat_ms_,
+#if defined(USE_ESP32)
+                this->sync_mode_name_(),
                 static_cast<unsigned>(this->fallback_channel_),
                 static_cast<unsigned>(this->active_sync_channel_()),
+#endif
                 packet_age,
                 static_cast<unsigned>(this->active_peer_count_()),
                 static_cast<unsigned>(this->follower_peer_count_()),
                 static_cast<unsigned>(this->remote_peer_count_()),
                 static_cast<unsigned>(this->pending_ack_count_()),
                 this->missed_ack_count_());
+#if defined(USE_ESP8266)
+  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER &&
+      this->use_udp_transport_()) {
+    ESP_LOGCONFIG(TAG, "  Transport: UDP (ESP8266 controller)");
+  }
+#endif
+#if defined(USE_ESP32)
   ESP_LOGCONFIG(TAG, "  Lights: %u",
                 static_cast<unsigned>(this->lights_.size()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi channel: %u",
@@ -360,6 +443,7 @@ void CFXSyncComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "    [%u] %s", static_cast<unsigned>(i),
                   light != nullptr ? light->get_name().c_str() : "<null>");
   }
+#endif
   ESP_LOGCONFIG(TAG,
                 "  Packets: sent=%" PRIu32 " received=%" PRIu32
                 " malformed=%" PRIu32 " auth_failed=%" PRIu32
@@ -1081,7 +1165,7 @@ bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
 
 bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
                                        std::vector<uint8_t> &packet) {
-  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
+  if (this->use_udp_transport_()) {
     (void) mac;
     if (!this->udp_.send_broadcast(packet)) {
       this->handle_send_result_(ESP_FAIL);
@@ -1127,7 +1211,7 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
 
 bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
                                             std::vector<uint8_t> &packet) {
-  if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP ||
+  if (this->use_udp_transport_() ||
       peer.transport == CFXSyncTransportKind::UDP) {
     return this->send_packet_to_(BROADCAST_MAC, packet);
   }
@@ -2385,4 +2469,4 @@ const char *CFXSyncComponent::role_name_() const {
 }  // namespace cfx_sync
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)
