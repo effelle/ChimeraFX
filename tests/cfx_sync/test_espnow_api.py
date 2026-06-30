@@ -53,6 +53,24 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertIn("espnow::ESPNowComponent *espnow_{nullptr};", header)
         self.assertIn("CFXSyncBus &global_cfx_sync_bus();", header)
 
+    def test_shared_bus_loads_esphome_defines_before_espnow_guards(self):
+        header = BUS_HEADER.read_text(encoding="utf-8")
+
+        defines_include = header.find('#include "esphome/core/defines.h"')
+        espnow_guard = header.find("#ifdef USE_ESPNOW")
+
+        self.assertNotEqual(
+            defines_include,
+            -1,
+            "cfx_sync_bus.h must include ESPHome generated defines directly",
+        )
+        self.assertNotEqual(espnow_guard, -1)
+        self.assertLess(
+            defines_include,
+            espnow_guard,
+            "USE_ESPNOW guards must not run before ESPHome defines are visible",
+        )
+
     def test_bus_callbacks_dispatch_packets_to_registered_groups(self):
         self.assertTrue(BUS_SOURCE.exists())
         source = BUS_SOURCE.read_text(encoding="utf-8")

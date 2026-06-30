@@ -10,6 +10,7 @@
 
 #include "cfx_sync_transport.h"
 #include "cfx_sync_udp.h"
+#include "esphome/core/defines.h"
 #ifdef USE_ESPNOW
 #include "esphome/components/espnow/espnow_component.h"
 #include <esp_err.h>
