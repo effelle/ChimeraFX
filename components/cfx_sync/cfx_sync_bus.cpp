@@ -1,0 +1,171 @@
+#include "cfx_sync_bus.h"
+#include "cfx_sync.h"
+
+#if defined(USE_ESP32) || defined(USE_ESP8266)
+
+#include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
+
+#ifdef USE_ESPNOW
+#include <esp_err.h>
+#endif
+#include <cstring>
+
+namespace esphome {
+namespace cfx_sync {
+
+static const char *const TAG = "cfx_sync.bus";
+
+CFXSyncBus &global_cfx_sync_bus() {
+  static CFXSyncBus bus;
+  return bus;
+}
+
+void CFXSyncBus::register_group(CFXSyncComponent *group) {
+  if (group == nullptr) {
+    return;
+  }
+  for (size_t i = 0; i < this->group_count_; i++) {
+    if (this->groups_[i] == group) {
+      return;
+    }
+  }
+  if (this->group_count_ >= MAX_GROUPS) {
+    ESP_LOGW(TAG, "Only one CFX Sync group is supported in this phase");
+    return;
+  }
+  this->groups_[this->group_count_++] = group;
+}
+
+bool CFXSyncBus::begin_udp(uint16_t port) {
+  if (this->udp_.is_ready() && this->udp_port_ == port) {
+    return true;
+  }
+  if (!this->udp_.begin(port)) {
+    return false;
+  }
+  this->udp_port_ = port;
+  return true;
+}
+
+void CFXSyncBus::poll() { this->udp_.poll(this); }
+
+bool CFXSyncBus::send_udp(const std::vector<uint8_t> &packet) {
+  return this->udp_.send_broadcast(packet);
+}
+
+bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
+                                 const uint8_t *data, size_t size) {
+  bool handled = false;
+  for (auto *group : this->groups_) {
+    if (group == nullptr) {
+      continue;
+    }
+    handled = group->handle_packet_(source, data, size) || handled;
+  }
+  return handled;
+}
+
+bool CFXSyncBus::dispatch_unknown_packet(const CFXSyncSource &source,
+                                         const uint8_t *data, size_t size) {
+  bool handled = false;
+  for (auto *group : this->groups_) {
+    if (group == nullptr) {
+      continue;
+    }
+    handled = group->handle_unknown_packet_(source, data, size) || handled;
+  }
+  return handled;
+}
+
+#ifdef USE_ESPNOW
+bool CFXSyncBus::begin_espnow() {
+  if (this->espnow_ == nullptr) {
+    return false;
+  }
+  if (!this->espnow_registered_) {
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+    this->espnow_->register_received_handler(this);
+    this->espnow_->register_unknown_peer_handler(this);
+    this->espnow_->register_broadcasted_handler(this);
+#else
+    this->espnow_->register_receive_handler(this);
+    this->espnow_->register_unknown_peer_handler(this);
+    this->espnow_->register_broadcast_handler(this);
+#endif
+    this->espnow_registered_ = true;
+  }
+  const uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF,
+                                0xFF, 0xFF, 0xFF};
+  const esp_err_t result = this->espnow_->add_peer(broadcast);
+  if (result != ESP_OK) {
+    ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
+             esp_err_to_name(result));
+  }
+  return true;
+}
+
+bool CFXSyncBus::add_espnow_peer(const uint8_t *mac) {
+  if (this->espnow_ == nullptr || mac == nullptr) {
+    return false;
+  }
+  return this->espnow_->add_peer(mac) == ESP_OK;
+}
+
+void CFXSyncBus::disable_espnow() {
+  if (this->espnow_ == nullptr) {
+    return;
+  }
+  this->espnow_->disable();
+}
+
+void CFXSyncBus::enable_espnow() {
+  if (this->espnow_ == nullptr) {
+    return;
+  }
+  this->espnow_->enable();
+}
+
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
+bool CFXSyncBus::on_received(const espnow::ESPNowRecvInfo &info,
+                             const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_packet(source, data, size);
+}
+
+bool CFXSyncBus::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                                 const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_unknown_packet(source, data, size);
+}
+
+bool CFXSyncBus::on_broadcasted(const espnow::ESPNowRecvInfo &info,
+                                const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_packet(source, data, size);
+}
+#else
+bool CFXSyncBus::on_receive(const espnow::ESPNowRecvInfo &info,
+                            const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_packet(source, data, size);
+}
+
+bool CFXSyncBus::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
+                                 const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_unknown_packet(source, data, size);
+}
+
+bool CFXSyncBus::on_broadcast(const espnow::ESPNowRecvInfo &info,
+                              const uint8_t *data, uint8_t size) {
+  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
+  return this->dispatch_packet(source, data, size);
+}
+#endif
+#endif
+
+}  // namespace cfx_sync
+}  // namespace esphome
+
+#endif  // defined(USE_ESP32) || defined(USE_ESP8266)

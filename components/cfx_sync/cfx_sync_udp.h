@@ -14,14 +14,14 @@
 namespace esphome {
 namespace cfx_sync {
 
-class CFXSyncComponent;
+class CFXSyncBus;
 
 class CFXSyncUDPTransport {
  public:
   ~CFXSyncUDPTransport();
 
   bool begin(uint16_t port);
-  void poll(CFXSyncComponent *parent);
+  void poll(CFXSyncBus *bus);
   bool send_broadcast(const std::vector<uint8_t> &packet);
   bool is_ready() const { return this->ready_; }
 

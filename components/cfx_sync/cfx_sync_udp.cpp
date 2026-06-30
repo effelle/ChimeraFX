@@ -1,5 +1,5 @@
 #include "cfx_sync_udp.h"
-#include "cfx_sync.h"
+#include "cfx_sync_bus.h"
 
 #include "esphome/core/log.h"
 
@@ -71,8 +71,8 @@ bool CFXSyncUDPTransport::begin(uint16_t port) {
   return true;
 }
 
-void CFXSyncUDPTransport::poll(CFXSyncComponent *parent) {
-  if (!this->ready_ || parent == nullptr) {
+void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
+  if (!this->ready_ || bus == nullptr) {
     return;
   }
 
@@ -95,7 +95,7 @@ void CFXSyncUDPTransport::poll(CFXSyncComponent *parent) {
 
     CFXSyncSource source =
         CFXSyncSource::from_udp(addr.sin_addr.s_addr, ntohs(addr.sin_port));
-    parent->handle_packet_(source, buffer, static_cast<size_t>(received));
+    bus->dispatch_packet(source, buffer, static_cast<size_t>(received));
   }
 }
 

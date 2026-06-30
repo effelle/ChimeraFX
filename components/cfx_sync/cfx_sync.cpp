@@ -227,12 +227,13 @@ void CFXSyncComponent::setup() {
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
+  this->bus_->register_group(this);
 
   if (this->use_udp_transport_()) {
     if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
       ESP_LOGI(TAG, "CFX Sync transport auto selected UDP");
     }
-    if (!this->udp_.begin(this->udp_port_)) {
+    if (!this->bus_->begin_udp(this->udp_port_)) {
       ESP_LOGE(TAG, "UDP transport is required");
       this->mark_failed();
       return;
@@ -242,25 +243,15 @@ void CFXSyncComponent::setup() {
     if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
       ESP_LOGI(TAG, "CFX Sync transport auto selected ESP-NOW");
     }
-    if (this->espnow_ == nullptr) {
+    if (!this->bus_->has_espnow()) {
       ESP_LOGE(TAG, "ESP-NOW is required");
       this->mark_failed();
       return;
     }
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-    this->espnow_->register_received_handler(this);
-    this->espnow_->register_unknown_peer_handler(this);
-    this->espnow_->register_broadcasted_handler(this);
-#else
-    this->espnow_->register_receive_handler(this);
-    this->espnow_->register_unknown_peer_handler(this);
-    this->espnow_->register_broadcast_handler(this);
-#endif
-    const esp_err_t broadcast_result =
-        this->espnow_->add_peer(BROADCAST_MAC.data());
-    if (broadcast_result != ESP_OK) {
-      ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
-               esp_err_to_name(broadcast_result));
+    if (!this->bus_->begin_espnow()) {
+      ESP_LOGE(TAG, "ESP-NOW is required");
+      this->mark_failed();
+      return;
     }
 #else
     ESP_LOGE(TAG, "ESP-NOW transport was not compiled");
@@ -335,7 +326,7 @@ void CFXSyncComponent::setup() {
 
 void CFXSyncComponent::loop() {
   if (this->use_udp_transport_()) {
-    this->udp_.poll(this);
+    this->bus_->poll();
     return;
   }
 #if defined(USE_ESP32)
@@ -460,45 +451,9 @@ void CFXSyncComponent::dump_config() {
                 this->udp_input_received_, this->udp_input_applied_);
 }
 
-#ifdef USE_ESPNOW
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-bool CFXSyncComponent::on_received(const espnow::ESPNowRecvInfo &info,
-                                   const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->handle_packet_(source, data, size);
-}
-
-bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                                       const uint8_t *data, uint8_t size) {
-  return this->admit_unknown_peer_(info, data, size);
-}
-
-bool CFXSyncComponent::on_broadcasted(const espnow::ESPNowRecvInfo &info,
-                                      const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->handle_packet_(source, data, size);
-}
-#else
-bool CFXSyncComponent::on_receive(const espnow::ESPNowRecvInfo &info,
-                                  const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->handle_packet_(source, data, size);
-}
-
-bool CFXSyncComponent::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                                       const uint8_t *data, uint8_t size) {
-  return this->admit_unknown_peer_(info, data, size);
-}
-
-bool CFXSyncComponent::on_broadcast(const espnow::ESPNowRecvInfo &info,
-                                    const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->handle_packet_(source, data, size);
-}
-#endif
-
-bool CFXSyncComponent::admit_unknown_peer_(
-    const espnow::ESPNowRecvInfo &info, const uint8_t *data, uint8_t size) {
+bool CFXSyncComponent::handle_unknown_packet_(const CFXSyncSource &source,
+                                              const uint8_t *data,
+                                              size_t size) {
   CFXSyncPacket packet;
   const CFXSyncDecodeResult result = CFXSyncPacketCodec::decode(
       data, size, this->group_hash_, this->key_, packet);
@@ -523,10 +478,8 @@ bool CFXSyncComponent::admit_unknown_peer_(
     return true;
   }
 
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
   return this->handle_decoded_packet_(source, packet);
 }
-#endif
 
 bool CFXSyncComponent::handle_packet_(const CFXSyncSource &source,
                                       const uint8_t *data, size_t size) {
@@ -1219,7 +1172,7 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
                                        std::vector<uint8_t> &packet) {
   if (this->use_udp_transport_()) {
     (void) mac;
-    if (!this->udp_.send_broadcast(packet)) {
+    if (!this->bus_->send_udp(packet)) {
       this->handle_send_result_(ESP_FAIL);
       return false;
     }
@@ -1229,7 +1182,7 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
     return true;
   }
 #ifdef USE_ESPNOW
-  if (this->espnow_ == nullptr) {
+  if (!this->bus_->has_espnow()) {
     return false;
   }
   if (this->send_pending_) {
@@ -1237,7 +1190,7 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
   }
 
   this->send_pending_ = true;
-  const esp_err_t result = this->espnow_->send(
+  const esp_err_t result = this->bus_->send_espnow(
       mac.data(), packet,
       [this](esp_err_t send_result) {
         this->send_pending_ = false;
@@ -1268,7 +1221,7 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
     return this->send_packet_to_(BROADCAST_MAC, packet);
   }
 #ifdef USE_ESPNOW
-  if (this->espnow_ == nullptr) {
+  if (!this->bus_->has_espnow()) {
     return false;
   }
   if (this->send_pending_) {
@@ -1276,7 +1229,7 @@ bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
   }
 
   this->send_pending_ = true;
-  const esp_err_t result = this->espnow_->send(
+  const esp_err_t result = this->bus_->send_espnow(
       peer.mac.data(), packet,
       [this, &peer](esp_err_t send_result) {
         this->send_pending_ = false;
@@ -1440,19 +1393,17 @@ bool CFXSyncComponent::register_peer_(PeerState &peer) {
     return peer.active;
   }
 #ifdef USE_ESPNOW
-  if (!peer.active || this->espnow_ == nullptr ||
+  if (!peer.active || !this->bus_->has_espnow() ||
       this->is_broadcast_(peer.mac.data())) {
     return false;
   }
   if (peer.registered) {
     return true;
   }
-  const esp_err_t result = this->espnow_->add_peer(peer.mac.data());
-  if (result != ESP_OK) {
+  if (!this->bus_->add_espnow_peer(peer.mac.data())) {
     char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
     format_mac_addr_upper(peer.mac.data(), peer_buf);
-    ESP_LOGW(TAG, "CFX Sync failed to register peer %s: %s", peer_buf,
-             esp_err_to_name(result));
+    ESP_LOGW(TAG, "CFX Sync failed to register peer %s", peer_buf);
     return false;
   }
   peer.registered = true;
@@ -1933,7 +1884,7 @@ void CFXSyncComponent::format_current_wifi_bssid_(char *buffer,
 
 void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
 #ifdef USE_ESPNOW
-  if (this->espnow_ == nullptr || this->espnow_rearm_scheduled_) {
+  if (!this->bus_->has_espnow() || this->espnow_rearm_scheduled_) {
     return;
   }
   uint32_t delay_ms = ESPNOW_REARM_DELAY_MS;
@@ -1946,7 +1897,7 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
   this->espnow_rearm_scheduled_ = true;
   this->set_timeout("espnow-rearm", delay_ms, [this, reason]() {
     this->espnow_rearm_scheduled_ = false;
-    if (this->espnow_ == nullptr) {
+    if (!this->bus_->has_espnow()) {
       return;
     }
     if (this->send_pending_ || !this->boot_radio_ready_()) {
@@ -1956,9 +1907,9 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
     const uint8_t channel = this->active_sync_channel_();
     ESP_LOGI(TAG, "Re-arming ESP-NOW after %s on %s channel %u", reason,
              this->sync_mode_name_(), static_cast<unsigned>(channel));
-    this->espnow_->disable();
+    this->bus_->disable_espnow();
     this->apply_fallback_channel_();
-    this->espnow_->enable();
+    this->bus_->enable_espnow();
     this->last_espnow_rearm_ms_ = millis();
     this->boot_discovery_started_ms_ = millis();
     this->schedule_boot_discovery_();

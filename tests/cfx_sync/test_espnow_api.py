@@ -8,6 +8,8 @@ PY_COMPONENT = ROOT / "components" / "cfx_sync" / "__init__.py"
 HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync.h"
 SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
 TRANSPORT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_transport.h"
+BUS_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.h"
+BUS_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.cpp"
 UDP_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_udp.h"
 UDP_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_udp.cpp"
 PACKET_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.h"
@@ -27,6 +29,58 @@ CFX_HUE_CYCLER_SOURCE = ROOT / "components" / "cfx_button" / "cfx_hue_cycler.cpp
 
 
 class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
+    def test_shared_bus_files_exist(self):
+        self.assertTrue(
+            BUS_HEADER.exists(),
+            "cfx_sync_bus.h must declare the shared Group Bus runtime",
+        )
+        self.assertTrue(
+            BUS_SOURCE.exists(),
+            "cfx_sync_bus.cpp must define the shared Group Bus runtime",
+        )
+
+    def test_shared_bus_owns_transport_resources(self):
+        self.assertTrue(BUS_HEADER.exists())
+        header = BUS_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("class CFXSyncBus", header)
+        self.assertIn("void set_espnow(espnow::ESPNowComponent *espnow)", header)
+        self.assertIn("bool begin_espnow();", header)
+        self.assertIn("bool begin_udp(uint16_t port);", header)
+        self.assertIn("void register_group(CFXSyncComponent *group);", header)
+        self.assertIn("void poll();", header)
+        self.assertIn("CFXSyncUDPTransport udp_;", header)
+        self.assertIn("espnow::ESPNowComponent *espnow_{nullptr};", header)
+        self.assertIn("CFXSyncBus &global_cfx_sync_bus();", header)
+
+    def test_bus_callbacks_dispatch_packets_to_registered_groups(self):
+        self.assertTrue(BUS_SOURCE.exists())
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFXSyncBus &global_cfx_sync_bus()", source)
+        self.assertIn("this->udp_.poll(this);", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncBus::dispatch_packet"
+                r"\(const CFXSyncSource &source,\s*"
+                r"const uint8_t \*data, size_t size\).*?"
+                r"for \(auto \*group : this->groups_\).*?"
+                r"group->handle_packet_\(source, data, size\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncBus::dispatch_unknown_packet"
+                r"\(const CFXSyncSource &source,\s*"
+                r"const uint8_t \*data, size_t size\).*?"
+                r"group->handle_unknown_packet_\(source, data, size\)",
+                re.DOTALL,
+            ),
+        )
+
     def test_udp_transport_helper_files_exist(self):
         self.assertTrue(
             UDP_HEADER.exists(),
@@ -43,7 +97,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
 
         self.assertIn("class CFXSyncUDPTransport", header)
         self.assertIn("bool begin(uint16_t port);", header)
-        self.assertIn("void poll(CFXSyncComponent *parent);", header)
+        self.assertIn("void poll(CFXSyncBus *bus);", header)
         self.assertIn(
             "bool send_broadcast(const std::vector<uint8_t> &packet);",
             header,
@@ -77,11 +131,11 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"void CFXSyncUDPTransport::poll\(CFXSyncComponent \*parent\)"
+                r"void CFXSyncUDPTransport::poll\(CFXSyncBus \*bus\)"
                 r".*?::recvfrom\(this->socket_fd_.*?"
                 r"CFXSyncSource source =\s*CFXSyncSource::from_udp"
                 r"\(addr\.sin_addr\.s_addr, ntohs\(addr\.sin_port\)\);"
-                r".*?parent->handle_packet_\(source, buffer, "
+                r".*?bus->dispatch_packet\(source, buffer, "
                 r"static_cast<size_t>\(received\)\);",
                 re.DOTALL,
             ),
@@ -107,7 +161,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
     def test_component_exposes_transport_enum_setter_and_udp_members(self):
         header = HEADER.read_text(encoding="utf-8")
 
-        self.assertIn('#include "cfx_sync_udp.h"', header)
+        self.assertIn('#include "cfx_sync_bus.h"', header)
         self.assertIn(
             "enum class CFXSyncTransport : uint8_t {\n"
             "  CFX_SYNC_TRANSPORT_AUTO = 0,\n"
@@ -131,7 +185,8 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             "CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};",
             header,
         )
-        self.assertIn("CFXSyncUDPTransport udp_;", header)
+        self.assertIn("CFXSyncBus *bus_{&global_cfx_sync_bus()};", header)
+        self.assertNotIn("CFXSyncUDPTransport udp_;", header)
         self.assertIn("uint16_t udp_port_{DEFAULT_UDP_PORT};", header)
 
     def test_loop_polls_udp_transport_only_when_selected(self):
@@ -142,7 +197,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             re.compile(
                 r"void CFXSyncComponent::loop\(\) \{\s*"
                 r"if \(this->use_udp_transport_\(\)\) \{\s*"
-                r"this->udp_\.poll\(this\);\s*"
+                r"this->bus_->poll\(\);\s*"
                 r"return;\s*"
                 r"\}",
                 re.DOTALL,
@@ -285,23 +340,23 @@ class CFXSyncTransportBoundaryTests(unittest.TestCase):
         )
 
     def test_espnow_callbacks_wrap_source_before_packet_decode(self):
-        source = SOURCE.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
 
         for callback in ("on_received", "on_receive", "on_broadcasted", "on_broadcast"):
             with self.subTest(callback=callback):
                 self.assertRegex(
                     source,
                     re.compile(
-                        rf"bool CFXSyncComponent::{callback}\(.*?\).*?"
+                        rf"bool CFXSyncBus::{callback}\(.*?\).*?"
                         r"CFXSyncSource source = "
                         r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                        r"return this->handle_packet_\(source, data, size\);",
+                        r"return this->dispatch_packet\(source, data, size\);",
                         re.DOTALL,
                     ),
                 )
         self.assertIn(
             "return this->handle_decoded_packet_(source, packet);",
-            source,
+            SOURCE.read_text(encoding="utf-8"),
         )
         self.assertIn("CFXSyncSource::from_espnow(info.src_addr)", source)
 
@@ -340,8 +395,8 @@ class ESPNowAPITests(unittest.TestCase):
         return EFFECT_HEADER.read_text(encoding="utf-8")
 
     def test_uses_version_conditional_receive_api(self):
-        header = HEADER.read_text(encoding="utf-8")
-        source = SOURCE.read_text(encoding="utf-8")
+        header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
 
         self.assertIn('#include "esphome/core/version.h"', header)
         self.assertIn(
@@ -350,15 +405,15 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn(
             "public espnow::ESPNowReceivedPacketHandler,\n"
-            "                         public espnow::ESPNowUnknownPeerHandler,\n"
+            "      public espnow::ESPNowUnknownPeerHandler,\n"
             "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)\n"
-            "                         public espnow::ESPNowBroadcastedHandler",
+            "      public espnow::ESPNowBroadcastedHandler",
             header,
         )
         self.assertIn("bool on_received(", header)
         self.assertIn("bool on_receive(", header)
         self.assertIn("bool on_unknown_peer(", header)
-        self.assertIn("bool handle_packet_(", header)
+        self.assertIn("bool dispatch_packet(", header)
         self.assertIn(
             "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
             source,
@@ -366,42 +421,42 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("register_received_handler(this)", source)
         self.assertIn("register_receive_handler(this)", source)
         self.assertIn("register_unknown_peer_handler(this)", source)
-        self.assertIn("CFXSyncComponent::on_received(", source)
-        self.assertIn("CFXSyncComponent::on_receive(", source)
-        self.assertIn("CFXSyncComponent::on_unknown_peer(", source)
-        self.assertIn("CFXSyncComponent::handle_packet_(", source)
+        self.assertIn("CFXSyncBus::on_received(", source)
+        self.assertIn("CFXSyncBus::on_receive(", source)
+        self.assertIn("CFXSyncBus::on_unknown_peer(", source)
+        self.assertIn("CFXSyncBus::dispatch_packet(", source)
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_received\(.*?\).*?"
+                r"bool CFXSyncBus::on_received\(.*?\).*?"
                 r"CFXSyncSource source = "
                 r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->handle_packet_\(source, data, size\);",
+                r"return this->dispatch_packet\(source, data, size\);",
                 re.DOTALL,
             ),
         )
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_receive\(.*?\).*?"
+                r"bool CFXSyncBus::on_receive\(.*?\).*?"
                 r"CFXSyncSource source = "
                 r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->handle_packet_\(source, data, size\);",
+                r"return this->dispatch_packet\(source, data, size\);",
                 re.DOTALL,
             ),
         )
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_unknown_peer\(.*?\).*?"
-                r"return this->admit_unknown_peer_\(info, data, size\);",
+                r"bool CFXSyncBus::on_unknown_peer\(.*?\).*?"
+                r"return this->dispatch_unknown_packet\(source, data, size\);",
                 re.DOTALL,
             ),
         )
 
     def test_registers_version_conditional_broadcast_handler_for_discovery(self):
-        header = HEADER.read_text(encoding="utf-8")
-        source = SOURCE.read_text(encoding="utf-8")
+        header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
 
         self.assertIn("public espnow::ESPNowBroadcastedHandler", header)
         self.assertIn("public espnow::ESPNowBroadcastHandler", header)
@@ -412,20 +467,20 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_broadcasted\(.*?\).*?"
+                r"bool CFXSyncBus::on_broadcasted\(.*?\).*?"
                 r"CFXSyncSource source = "
                 r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->handle_packet_\(source, data, size\);",
+                r"return this->dispatch_packet\(source, data, size\);",
                 re.DOTALL,
             ),
         )
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::on_broadcast\(.*?\).*?"
+                r"bool CFXSyncBus::on_broadcast\(.*?\).*?"
                 r"CFXSyncSource source = "
                 r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->handle_packet_\(source, data, size\);",
+                r"return this->dispatch_packet\(source, data, size\);",
                 re.DOTALL,
             ),
         )
@@ -434,18 +489,15 @@ class ESPNowAPITests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn(
-            "bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,",
-            header,
-        )
+        self.assertIn("bool handle_unknown_packet_(const CFXSyncSource &source,", header)
         self.assertIn(
             "bool handle_decoded_packet_(const CFXSyncSource &source,",
             header,
         )
 
         admit_body = re.search(
-            r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
-            r"\n\}\n#endif\n\nbool CFXSyncComponent::handle_packet_",
+            r"bool CFXSyncComponent::handle_unknown_packet_\(.*?"
+            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
             source,
             re.DOTALL,
         )
@@ -457,7 +509,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+                r"bool CFXSyncComponent::handle_unknown_packet_\(.*?"
                 r"CFXSyncPacketCodec::decode\(.*?"
                 r"result == CFXSyncDecodeResult::NOT_CFX.*?"
                 r"return false;.*?"
@@ -467,8 +519,6 @@ class ESPNowAPITests(unittest.TestCase):
                 r"packet\.type != CFXSyncPacketType::HELLO &&"
                 r"\s*packet\.type != CFXSyncPacketType::SYNC_REQUEST.*?"
                 r"authenticated non-discovery packet from unknown peer.*?"
-                r"CFXSyncSource source = "
-                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
                 r"return this->handle_decoded_packet_\(source, packet\);",
                 re.DOTALL,
             ),
@@ -491,8 +541,8 @@ class ESPNowAPITests(unittest.TestCase):
     def test_wrong_group_unknown_cfx_packets_are_logged_but_not_consumed(self):
         source = SOURCE.read_text(encoding="utf-8")
         admit_body = re.search(
-            r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
-            r"\n\}\n#endif\n\nbool CFXSyncComponent::handle_packet_",
+            r"bool CFXSyncComponent::handle_unknown_packet_\(.*?"
+            r"\n\}\n\nbool CFXSyncComponent::handle_packet_",
             source,
             re.DOTALL,
         )
@@ -505,7 +555,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::admit_unknown_peer_\(.*?"
+                r"bool CFXSyncComponent::handle_unknown_packet_\(.*?"
                 r"if \(result == CFXSyncDecodeResult::NOT_CFX\) \{"
                 r"\s*return false;"
                 r"\s*\}.*?"
@@ -1439,9 +1489,9 @@ class ESPNowAPITests(unittest.TestCase):
                 r"ESPNOW_REARM_MIN_INTERVAL_MS.*?"
                 r"this->set_timeout\(\"espnow-rearm\", delay_ms.*?"
                 r"this->send_pending_.*?"
-                r"this->espnow_->disable\(\);.*?"
+                r"this->bus_->disable_espnow\(\);.*?"
                 r"this->apply_fallback_channel_\(\);.*?"
-                r"this->espnow_->enable\(\);.*?"
+                r"this->bus_->enable_espnow\(\);.*?"
                 r"this->schedule_boot_discovery_\(\);.*?"
                 r"this->schedule_follower_recovery_loop_\(\);",
                 re.DOTALL,
@@ -2424,13 +2474,11 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool CFXSyncComponent::register_peer_"
                 r"\(\s*PeerState &peer\).*?"
-                r"const esp_err_t result = this->espnow_->add_peer"
-                r"\(peer\.mac\.data\(\)\);"
-                r"\s*if \(result != ESP_OK\) \{"
+                r"if \(!this->bus_->add_espnow_peer"
+                r"\(peer\.mac\.data\(\)\)\) \{"
                 r".*?format_mac_addr_upper\(peer\.mac\.data\(\), peer_buf\);"
                 r".*?ESP_LOGW\(TAG,"
-                r"\s*\"CFX Sync failed to register peer %s: %s\""
-                r".*?esp_err_to_name\(result\)"
+                r"\s*\"CFX Sync failed to register peer %s\""
                 r".*?return false;"
                 r"\s*\}",
                 re.DOTALL,

@@ -13,9 +13,9 @@
 #include "cfx_sync_effect.h"
 #include "../cfx_button/cfx_button.h"
 #endif
+#include "cfx_sync_bus.h"
 #include "cfx_sync_packet.h"
 #include "cfx_sync_transport.h"
-#include "cfx_sync_udp.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #ifdef USE_ESPNOW
 #include "esphome/components/espnow/espnow_component.h"
@@ -76,18 +76,7 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
 };
 #endif
 
-class CFXSyncComponent : public Component
-#ifdef USE_ESPNOW
-                         ,
-                         public espnow::ESPNowReceivedPacketHandler,
-                         public espnow::ESPNowUnknownPeerHandler,
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-                         public espnow::ESPNowBroadcastedHandler
-#else
-                         public espnow::ESPNowBroadcastHandler
-#endif
-#endif
-{
+class CFXSyncComponent : public Component {
  public:
   void setup() override;
   void loop() override;
@@ -98,7 +87,7 @@ class CFXSyncComponent : public Component
 
 #ifdef USE_ESPNOW
   void set_espnow(espnow::ESPNowComponent *espnow) {
-    this->espnow_ = espnow;
+    this->bus_->set_espnow(espnow);
   }
 #endif
 #if defined(USE_ESP32)
@@ -191,28 +180,11 @@ class CFXSyncComponent : public Component
   }
 #endif
 
-#ifdef USE_ESPNOW
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-  bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                   uint8_t size) override;
-  bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                       const uint8_t *data, uint8_t size) override;
-  bool on_broadcasted(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                      uint8_t size) override;
-#else
-  bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                  uint8_t size) override;
-  bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                       const uint8_t *data, uint8_t size) override;
-  bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                    uint8_t size) override;
-#endif
-#endif
   void on_local_light_update();
   void on_sync_enabled_switch(bool enabled);
 
  protected:
-  friend class CFXSyncUDPTransport;
+  friend class CFXSyncBus;
 
   static constexpr uint8_t MAX_CONSECUTIVE_SEND_FAILURES = 3;
   static constexpr uint32_t EFFECT_FALLBACK_LOG_INTERVAL_MS = 30000;
@@ -377,10 +349,8 @@ class CFXSyncComponent : public Component
   bool register_peer_(PeerState &peer);
   bool accept_sequence_(PeerState &peer, uint32_t boot_id,
                         uint32_t sequence);
-#ifdef USE_ESPNOW
-  bool admit_unknown_peer_(const espnow::ESPNowRecvInfo &info,
-                           const uint8_t *data, uint8_t size);
-#endif
+  bool handle_unknown_packet_(const CFXSyncSource &source,
+                              const uint8_t *data, size_t size);
   bool handle_packet_(const CFXSyncSource &source, const uint8_t *data,
                       size_t size);
   bool handle_decoded_packet_(const CFXSyncSource &source,
@@ -448,9 +418,7 @@ class CFXSyncComponent : public Component
   bool is_broadcast_(const uint8_t *address) const;
   const char *role_name_() const;
 
-#ifdef USE_ESPNOW
-  espnow::ESPNowComponent *espnow_{nullptr};
-#endif
+  CFXSyncBus *bus_{&global_cfx_sync_bus()};
 #if defined(USE_ESP32)
   std::vector<light::LightState *> lights_;
   std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
@@ -494,7 +462,6 @@ class CFXSyncComponent : public Component
 #endif
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
   CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};
-  CFXSyncUDPTransport udp_;
   uint16_t udp_port_{DEFAULT_UDP_PORT};
   bool local_input_has_state_{false};
   bool local_input_pressed_{false};
