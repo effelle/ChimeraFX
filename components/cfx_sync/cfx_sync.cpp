@@ -108,7 +108,10 @@ bool CFXSyncComponent::use_udp_transport_() const {
   if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_UDP) {
     return true;
   }
-#if defined(USE_ESP8266)
+#if defined(USE_ESP32)
+  return this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO &&
+         this->role_ == CFXSyncRole::LEADER;
+#elif defined(USE_ESP8266)
   return this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO;
 #else
   return false;
@@ -119,7 +122,9 @@ bool CFXSyncComponent::use_espnow_transport_() const {
   if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_ESPNOW) {
     return true;
   }
-#if defined(USE_ESP32)
+#if defined(USE_ESP8266)
+  return false;
+#elif defined(USE_ESP32)
   return this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO;
 #else
   return false;
@@ -229,6 +234,7 @@ void CFXSyncComponent::setup() {
   }
   this->bus_->register_group(this);
 
+  bool transport_started = false;
   if (this->use_udp_transport_()) {
     if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
       ESP_LOGI(TAG, "CFX Sync transport auto selected UDP");
@@ -238,7 +244,9 @@ void CFXSyncComponent::setup() {
       this->mark_failed();
       return;
     }
-  } else if (this->use_espnow_transport_()) {
+    transport_started = true;
+  }
+  if (this->use_espnow_transport_()) {
 #ifdef USE_ESPNOW
     if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
       ESP_LOGI(TAG, "CFX Sync transport auto selected ESP-NOW");
@@ -253,12 +261,14 @@ void CFXSyncComponent::setup() {
       this->mark_failed();
       return;
     }
+    transport_started = true;
 #else
     ESP_LOGE(TAG, "ESP-NOW transport was not compiled");
     this->mark_failed();
     return;
 #endif
-  } else {
+  }
+  if (!transport_started) {
     ESP_LOGE(TAG, "No supported CFX Sync transport is available");
     this->mark_failed();
     return;
@@ -327,6 +337,8 @@ void CFXSyncComponent::setup() {
 void CFXSyncComponent::loop() {
   if (this->use_udp_transport_()) {
     this->bus_->poll();
+  }
+  if (!this->use_espnow_transport_()) {
     return;
   }
 #if defined(USE_ESP32)
@@ -449,6 +461,9 @@ void CFXSyncComponent::dump_config() {
                 " received=%" PRIu32 " applied=%" PRIu32,
                 this->udp_input_sent_, this->udp_input_retried_,
                 this->udp_input_received_, this->udp_input_applied_);
+  ESP_LOGCONFIG(TAG,
+                "  State fanout: espnow=%" PRIu32 " udp=%" PRIu32,
+                this->espnow_state_sent_, this->udp_state_sent_);
 }
 
 bool CFXSyncComponent::handle_unknown_packet_(const CFXSyncSource &source,
@@ -775,7 +790,7 @@ bool CFXSyncComponent::send_state_to_followers_(
           packet)) {
     return false;
   }
-  if (!this->send_packet_to_(BROADCAST_MAC, packet)) {
+  if (!this->send_state_packet_to_followers_(packet)) {
     return false;
   }
   if (!this->state_retry_active_) {
@@ -1168,19 +1183,19 @@ bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
   return this->send_packet_to_(this->peer_, packet);
 }
 
-bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
-                                       std::vector<uint8_t> &packet) {
-  if (this->use_udp_transport_()) {
-    (void) mac;
-    if (!this->bus_->send_udp(packet)) {
-      this->handle_send_result_(ESP_FAIL);
-      return false;
-    }
-    this->handle_send_result_(ESP_OK);
-    this->sent_packets_++;
-    this->flush_deferred_state_();
-    return true;
+bool CFXSyncComponent::send_udp_packet_(std::vector<uint8_t> &packet) {
+  if (!this->bus_->send_udp(packet)) {
+    this->handle_send_result_(ESP_FAIL);
+    return false;
   }
+  this->handle_send_result_(ESP_OK);
+  this->sent_packets_++;
+  this->flush_deferred_state_();
+  return true;
+}
+
+bool CFXSyncComponent::send_espnow_packet_to_(
+    const std::array<uint8_t, 6> &mac, std::vector<uint8_t> &packet) {
 #ifdef USE_ESPNOW
   if (!this->bus_->has_espnow()) {
     return false;
@@ -1214,11 +1229,40 @@ bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
 #endif
 }
 
+bool CFXSyncComponent::send_packet_to_(const std::array<uint8_t, 6> &mac,
+                                       std::vector<uint8_t> &packet) {
+  if (this->use_udp_transport_() && !this->use_espnow_transport_()) {
+    (void) mac;
+    return this->send_udp_packet_(packet);
+  }
+  return this->send_espnow_packet_to_(mac, packet);
+}
+
+bool CFXSyncComponent::send_state_packet_to_followers_(
+    std::vector<uint8_t> &packet) {
+  bool sent = false;
+  if (this->use_udp_transport_()) {
+    if (this->send_udp_packet_(packet)) {
+      this->udp_state_sent_++;
+      sent = true;
+    }
+  }
+  if (this->use_espnow_transport_()) {
+    if (this->send_espnow_packet_to_(BROADCAST_MAC, packet)) {
+      this->espnow_state_sent_++;
+      sent = true;
+    }
+  }
+  return sent;
+}
+
 bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
                                             std::vector<uint8_t> &packet) {
-  if (this->use_udp_transport_() ||
-      peer.transport == CFXSyncTransportKind::UDP) {
-    return this->send_packet_to_(BROADCAST_MAC, packet);
+  if (peer.transport == CFXSyncTransportKind::UDP) {
+    return this->send_udp_packet_(packet);
+  }
+  if (this->use_udp_transport_() && !this->use_espnow_transport_()) {
+    return this->send_udp_packet_(packet);
   }
 #ifdef USE_ESPNOW
   if (!this->bus_->has_espnow()) {

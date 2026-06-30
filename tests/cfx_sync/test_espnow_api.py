@@ -207,7 +207,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertNotIn("CFXSyncUDPTransport udp_;", header)
         self.assertIn("uint16_t udp_port_{DEFAULT_UDP_PORT};", header)
 
-    def test_loop_polls_udp_transport_only_when_selected(self):
+    def test_loop_polls_udp_transport_without_skipping_espnow_maintenance(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
@@ -216,8 +216,72 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
                 r"void CFXSyncComponent::loop\(\) \{\s*"
                 r"if \(this->use_udp_transport_\(\)\) \{\s*"
                 r"this->bus_->poll\(\);\s*"
-                r"return;\s*"
-                r"\}",
+                r"\}\s*"
+                r"if \(!this->use_espnow_transport_\(\)\) \{\s*"
+                r"return;",
+                re.DOTALL,
+            ),
+        )
+
+    def test_auto_transport_leader_enables_udp_bridge_on_esp32(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::use_udp_transport_\(\) const \{.*?"
+                r"#if defined\(USE_ESP32\).*?"
+                r"this->transport_ =="
+                r"\s*CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO &&"
+                r"\s*this->role_ == CFXSyncRole::LEADER",
+                re.DOTALL,
+            ),
+        )
+        setup_body = re.search(
+            r"void CFXSyncComponent::setup\(\).*?"
+            r"\nvoid CFXSyncComponent::loop\(\)",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(setup_body)
+        setup_body = setup_body.group(0)
+        self.assertIn("if (this->use_udp_transport_())", setup_body)
+        self.assertIn("if (this->use_espnow_transport_())", setup_body)
+        self.assertNotIn("} else if (this->use_espnow_transport_())", setup_body)
+
+    def test_leader_state_fans_out_to_all_active_transports(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool send_udp_packet_(std::vector<uint8_t> &packet);", header)
+        self.assertIn(
+            "bool send_espnow_packet_to_(const std::array<uint8_t, 6> &mac,",
+            header,
+        )
+        self.assertIn("bool send_state_packet_to_followers_(std::vector<uint8_t> &packet);", header)
+        self.assertIn("uint32_t udp_state_sent_{0};", header)
+        self.assertIn("uint32_t espnow_state_sent_{0};", header)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_to_followers_"
+                r"\(.*?"
+                r"if \(!this->send_state_packet_to_followers_\(packet\)\) \{"
+                r"\s*return false;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_state_packet_to_followers_"
+                r"\(\s*std::vector<uint8_t> &packet\).*?"
+                r"if \(this->use_udp_transport_\(\)\).*?"
+                r"this->send_udp_packet_\(packet\).*?"
+                r"this->udp_state_sent_\+\+.*?"
+                r"if \(this->use_espnow_transport_\(\)\).*?"
+                r"this->send_espnow_packet_to_\(BROADCAST_MAC, packet\).*?"
+                r"this->espnow_state_sent_\+\+",
                 re.DOTALL,
             ),
         )
@@ -2071,7 +2135,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"bool include_default_transition\).*?"
                 r"const uint32_t sequence = this->next_sequence_\(\);.*?"
                 r"CFXSyncPacketCodec::encode_state\(.*?"
-                r"this->send_packet_to_\(BROADCAST_MAC, packet\).*?"
+                r"this->send_state_packet_to_followers_\(packet\).*?"
                 r"this->mark_state_sent_to_followers_\(sequence\);",
                 re.DOTALL,
             ),
@@ -2190,7 +2254,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"bool CFXSyncComponent::send_packet_to_"
+                r"bool CFXSyncComponent::send_espnow_packet_to_"
                 r"\(\s*const std::array<uint8_t, 6> &mac,\s*"
                 r"std::vector<uint8_t> &packet\).*?"
                 r"if \(this->send_pending_\) \{.*?"
@@ -2266,7 +2330,7 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
-                r"if \(!this->send_packet_to_\(BROADCAST_MAC, packet\)\) \{"
+                r"if \(!this->send_state_packet_to_followers_\(packet\)\) \{"
                 r"\s*return false;"
                 r"\s*\}"
                 r".*?"

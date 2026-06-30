@@ -324,8 +324,12 @@ class CFXSyncComponent : public Component {
   void apply_remote_toggle_input_();
   void schedule_remote_input_timeout_();
   bool send_packet_(std::vector<uint8_t> &packet);
+  bool send_udp_packet_(std::vector<uint8_t> &packet);
+  bool send_espnow_packet_to_(const std::array<uint8_t, 6> &mac,
+                              std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,
                        std::vector<uint8_t> &packet);
+  bool send_state_packet_to_followers_(std::vector<uint8_t> &packet);
   bool send_packet_to_peer_(PeerState &peer,
                             std::vector<uint8_t> &packet);
   bool use_udp_transport_() const;
@@ -504,6 +508,8 @@ class CFXSyncComponent : public Component {
   uint32_t udp_input_retried_{0};
   uint32_t udp_input_received_{0};
   uint32_t udp_input_applied_{0};
+  uint32_t udp_state_sent_{0};
+  uint32_t espnow_state_sent_{0};
 };
 
 }  // namespace cfx_sync
