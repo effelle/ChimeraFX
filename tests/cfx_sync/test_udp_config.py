@@ -304,17 +304,14 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 ):
                     cfx_sync._validate_platform_support(config)
 
-    def test_toggle_mode_only_transmits_on_pressed_edge(self):
+    def test_toggle_mode_preserves_settled_release_edge(self):
         source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
             encoding="utf-8"
         )
 
+        self.assertNotIn("if (toggle && !pressed)", source)
         self.assertIn(
-            "if (toggle && !pressed) {\n"
-            "                          this->local_input_sent_has_state_ = true;\n"
-            "                          this->local_input_sent_pressed_ = false;\n"
-            "                          return;\n"
-            "                        }",
+            "this->send_input_state_(pressed, maintained, toggle);",
             source,
         )
 

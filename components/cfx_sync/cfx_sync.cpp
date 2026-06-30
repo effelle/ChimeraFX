@@ -1085,11 +1085,6 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
                             this->local_input_sent_pressed_ == pressed) {
                           return;
                         }
-                        if (toggle && !pressed) {
-                          this->local_input_sent_has_state_ = true;
-                          this->local_input_sent_pressed_ = false;
-                          return;
-                        }
                         this->local_input_sent_has_state_ = true;
                         this->local_input_sent_pressed_ = pressed;
                         this->send_input_state_(pressed, maintained, toggle);
