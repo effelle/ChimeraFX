@@ -666,12 +666,12 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
+    const bool applied = this->inject_remote_input_(
+        packet.input_pressed, packet.input_maintained, packet.input_toggle);
     if (source.transport == CFXSyncTransportKind::UDP) {
       this->udp_input_received_++;
     }
-    this->inject_remote_input_(packet.input_pressed, packet.input_maintained,
-                               packet.input_toggle);
-    if (source.transport == CFXSyncTransportKind::UDP) {
+    if (source.transport == CFXSyncTransportKind::UDP && applied) {
       this->udp_input_applied_++;
       ESP_LOGD(TAG, "UDP input applied");
     }
@@ -1093,64 +1093,73 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_sent_has_state_ = true;
   this->local_input_sent_pressed_ = pressed;
+  const uint32_t repeat_generation =
+      ++this->local_input_repeat_generation_;
   this->send_input_state_(pressed, maintained, false);
   if (pressed) {
-    this->schedule_local_input_hold_repeat_();
+    this->schedule_local_input_hold_repeat_(repeat_generation);
   } else {
-    this->schedule_local_input_release_repeat_(INPUT_RELEASE_REPEAT_COUNT);
+    this->schedule_local_input_release_repeat_(INPUT_RELEASE_REPEAT_COUNT,
+                                               repeat_generation);
   }
 }
 
-void CFXSyncComponent::schedule_local_input_hold_repeat_() {
-  this->set_timeout("input-hold-repeat", INPUT_HOLD_REPEAT_MS, [this]() {
+void CFXSyncComponent::schedule_local_input_hold_repeat_(
+    uint32_t generation) {
+  this->set_timeout("input-hold-repeat", INPUT_HOLD_REPEAT_MS,
+                    [this, generation]() {
     if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+        generation != this->local_input_repeat_generation_ ||
         !this->local_input_pressed_) {
       return;
     }
     this->send_input_state_(true, false, false);
-    this->schedule_local_input_hold_repeat_();
+    this->schedule_local_input_hold_repeat_(generation);
   });
 }
 
 void CFXSyncComponent::schedule_local_input_release_repeat_(
-    uint8_t remaining) {
+    uint8_t remaining, uint32_t generation) {
   if (remaining == 0) {
     return;
   }
   this->set_timeout("input-release-repeat", INPUT_RELEASE_REPEAT_MS,
-                    [this, remaining]() {
+                    [this, remaining, generation]() {
                       if (this->role_ !=
-                          CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+                              CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+                          generation != this->local_input_repeat_generation_ ||
+                          this->local_input_pressed_) {
                         return;
                       }
                       this->send_input_state_(false, false, false);
                       this->schedule_local_input_release_repeat_(
-                          remaining - 1);
+                          remaining - 1, generation);
                     });
 }
 
-void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
+bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
                                            bool toggle) {
   if (this->role_ != CFXSyncRole::LEADER) {
-    return;
+    return false;
   }
   if (toggle) {
     this->apply_remote_toggle_input_();
-    return;
+    return true;
   }
   if (maintained) {
     this->apply_remote_power_input_(pressed);
-    return;
+    return true;
   }
   if (this->remote_input_ == nullptr) {
     if (pressed) {
       this->apply_remote_toggle_input_();
+      return true;
     }
-    return;
+    return false;
   }
   if (!pressed && !this->remote_input_pressed_) {
     ESP_LOGD(TAG, "Ignoring duplicate CFX Sync remote release");
-    return;
+    return false;
   }
   this->remote_input_pressed_ = pressed;
   this->last_remote_input_ms_ = millis();
@@ -1160,6 +1169,7 @@ void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
   if (pressed && !maintained) {
     this->schedule_remote_input_timeout_();
   }
+  return true;
 }
 
 void CFXSyncComponent::apply_remote_power_input_(bool pressed) {

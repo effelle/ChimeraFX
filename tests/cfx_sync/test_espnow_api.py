@@ -854,8 +854,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"this->inject_remote_input_"
-                r"\(packet\.input_pressed, packet\.input_maintained,\s*"
+                r"const bool applied = this->inject_remote_input_\(\s*"
+                r"packet\.input_pressed, packet\.input_maintained,\s*"
                 r"packet\.input_toggle\);",
                 re.DOTALL,
             ),
@@ -869,6 +869,19 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("void flush_deferred_input_();", header)
         self.assertIn("PendingInputEvent pending_input_events_[PENDING_INPUT_QUEUE_SIZE];", header)
         self.assertIn("static constexpr uint8_t PENDING_INPUT_QUEUE_SIZE = 8;", header)
+        self.assertIn("uint32_t local_input_repeat_generation_{0};", header)
+        self.assertIn(
+            "void schedule_local_input_hold_repeat_(uint32_t generation);",
+            header,
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"void schedule_local_input_release_repeat_"
+                r"\(uint8_t remaining,\s*uint32_t generation\);",
+                re.DOTALL,
+            ),
+        )
         self.assertRegex(
             source,
             re.compile(
@@ -883,6 +896,42 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
+                r"const uint32_t repeat_generation ="
+                r"\s*\+\+this->local_input_repeat_generation_;.*?"
+                r"this->send_input_state_\(pressed, maintained, false\);.*?"
+                r"if \(pressed\) \{\s*"
+                r"this->schedule_local_input_hold_repeat_\(repeat_generation\);"
+                r"\s*\} else \{\s*"
+                r"this->schedule_local_input_release_repeat_"
+                r"\(INPUT_RELEASE_REPEAT_COUNT,\s*repeat_generation\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_local_input_hold_repeat_"
+                r"\(\s*uint32_t generation\).*?"
+                r"generation != this->local_input_repeat_generation_.*?"
+                r"this->schedule_local_input_hold_repeat_\(generation\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_local_input_release_repeat_"
+                r"\(\s*uint8_t remaining,\s*uint32_t generation\).*?"
+                r"generation != this->local_input_repeat_generation_.*?"
+                r"this->local_input_pressed_.*?"
+                r"this->schedule_local_input_release_repeat_"
+                r"\(\s*remaining - 1,\s*generation\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
                 r"this->send_pending_ = false;\s*"
                 r"this->handle_send_result_\(send_result\);.*?"
                 r"this->flush_deferred_input_\(\);",
@@ -890,7 +939,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         inject_remote_input = re.search(
-            r"void CFXSyncComponent::inject_remote_input_"
+            r"bool CFXSyncComponent::inject_remote_input_"
             r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
@@ -900,7 +949,7 @@ class ESPNowAPITests(unittest.TestCase):
         inject_remote_input = inject_remote_input.group(0)
         self.assertRegex(
             inject_remote_input,
-            re.compile(r"if \(toggle\) \{.*?return;\s*\}", re.DOTALL),
+            re.compile(r"if \(toggle\) \{.*?return true;\s*\}", re.DOTALL),
         )
         self.assertRegex(
             inject_remote_input,
@@ -988,13 +1037,13 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
+                r"const bool applied = this->inject_remote_input_\(\s*"
+                r"packet\.input_pressed, packet\.input_maintained,\s*"
+                r"packet\.input_toggle\);.*?"
                 r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
                 r"this->udp_input_received_\+\+;\s*"
                 r"\}.*?"
-                r"this->inject_remote_input_"
-                r"\(packet\.input_pressed, packet\.input_maintained,\s*"
-                r"packet\.input_toggle\);.*?"
-                r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
+                r"if \(source\.transport == CFXSyncTransportKind::UDP && applied\) \{\s*"
                 r"this->udp_input_applied_\+\+;",
                 re.DOTALL,
             ),
@@ -1014,14 +1063,14 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
-                r"this->inject_remote_input_"
-                r"\(packet\.input_pressed, packet\.input_maintained,\s*"
+                r"const bool applied = this->inject_remote_input_\(\s*"
+                r"packet\.input_pressed, packet\.input_maintained,\s*"
                 r"packet\.input_toggle\);",
                 re.DOTALL,
             ),
         )
         inject_remote_input = re.search(
-            r"void CFXSyncComponent::inject_remote_input_"
+            r"bool CFXSyncComponent::inject_remote_input_"
             r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
@@ -1034,7 +1083,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"if \(toggle\) \{\s*"
                 r"this->apply_remote_toggle_input_\(\);\s*"
-                r"return;\s*\}",
+                r"return true;\s*\}",
                 re.DOTALL,
             ),
         )
@@ -1043,7 +1092,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"if \(maintained\) \{\s*"
                 r"this->apply_remote_power_input_\(pressed\);\s*"
-                r"return;\s*\}",
+                r"return true;\s*\}",
                 re.DOTALL,
             ),
         )
@@ -1078,7 +1127,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         inject_remote_input = re.search(
-            r"void CFXSyncComponent::inject_remote_input_"
+            r"bool CFXSyncComponent::inject_remote_input_"
             r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
@@ -1091,10 +1140,11 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"if \(!pressed && !this->remote_input_pressed_\) \{\s*"
                 r"ESP_LOGD\(TAG, \"Ignoring duplicate CFX Sync remote release\"\);\s*"
-                r"return;\s*"
+                r"return false;\s*"
                 r"\}.*?"
                 r"this->remote_input_pressed_ = pressed;.*?"
-                r"this->remote_input_->inject_remote_state\(pressed\);",
+                r"this->remote_input_->inject_remote_state\(pressed\);.*?"
+                r"return true;",
                 re.DOTALL,
             ),
         )
