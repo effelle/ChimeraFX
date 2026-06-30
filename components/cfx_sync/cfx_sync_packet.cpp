@@ -312,6 +312,7 @@ bool CFXSyncPacketCodec::encode_hello(
     case CFXSyncNodeRole::LEADER:
     case CFXSyncNodeRole::FOLLOWER:
     case CFXSyncNodeRole::REMOTE:
+    case CFXSyncNodeRole::SATELLITE:
       break;
     default:
       return false;
@@ -433,6 +434,7 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
       case CFXSyncNodeRole::LEADER:
       case CFXSyncNodeRole::FOLLOWER:
       case CFXSyncNodeRole::REMOTE:
+      case CFXSyncNodeRole::SATELLITE:
         packet.node_role = static_cast<CFXSyncNodeRole>(raw_role);
         break;
       default:

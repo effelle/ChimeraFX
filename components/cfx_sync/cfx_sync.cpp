@@ -68,6 +68,8 @@ const char *node_role_name(CFXSyncNodeRole role) {
       return "follower";
     case CFXSyncNodeRole::REMOTE:
       return "remote";
+    case CFXSyncNodeRole::SATELLITE:
+      return "satellite";
     default:
       return "unknown";
   }
@@ -138,6 +140,9 @@ CFXSyncNodeRole CFXSyncComponent::local_node_role_() const {
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return CFXSyncNodeRole::REMOTE;
   }
+  if (this->role_ == CFXSyncRole::SATELLITE) {
+    return CFXSyncNodeRole::SATELLITE;
+  }
   return CFXSyncNodeRole::FOLLOWER;
 }
 
@@ -148,13 +153,28 @@ uint16_t CFXSyncComponent::local_capabilities_() const {
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return CFXSyncPacketCodec::CAP_BINARY_REMOTE;
   }
+  if (this->role_ == CFXSyncRole::SATELLITE) {
+    return CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER |
+           CFXSyncPacketCodec::CAP_BINARY_REMOTE;
+  }
   return CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER;
+}
+
+bool CFXSyncComponent::is_state_receiver_role_() const {
+  return this->role_ == CFXSyncRole::FOLLOWER ||
+         this->role_ == CFXSyncRole::SATELLITE;
+}
+
+bool CFXSyncComponent::is_input_sender_role_() const {
+  return this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+         this->role_ == CFXSyncRole::SATELLITE;
 }
 
 bool CFXSyncComponent::accepts_peer_role_(CFXSyncNodeRole role) const {
   if (this->role_ == CFXSyncRole::LEADER) {
     return role == CFXSyncNodeRole::FOLLOWER ||
-           role == CFXSyncNodeRole::REMOTE;
+           role == CFXSyncNodeRole::REMOTE ||
+           role == CFXSyncNodeRole::SATELLITE;
   }
   return role == CFXSyncNodeRole::LEADER;
 }
@@ -295,7 +315,7 @@ void CFXSyncComponent::setup() {
     }
   }
 #if defined(USE_ESP32)
-  if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_switch_ != nullptr) {
+  if (this->is_state_receiver_role_() && this->sync_switch_ != nullptr) {
     const auto initial_state =
         this->sync_switch_->get_initial_state_with_restore_mode();
     this->sync_enabled_ = initial_state.has_value() ? initial_state.value() : true;
@@ -318,16 +338,18 @@ void CFXSyncComponent::setup() {
     this->register_control_callbacks_(0);
     this->set_interval("heartbeat", this->heartbeat_ms_,
                        [this]() { this->send_heartbeat_state_(); });
-  } else if (this->role_ == CFXSyncRole::FOLLOWER) {
+  } else if (this->is_state_receiver_role_()) {
     this->schedule_follower_recovery_();
-  } else
+  }
 #endif
-  if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+  if (this->is_input_sender_role_() && this->local_input_ != nullptr) {
     if (this->local_input_->has_state()) {
       this->local_input_has_state_ = true;
       this->local_input_pressed_ = this->local_input_->state;
     }
-    ESP_LOGD(TAG, "Controller input bound to %s",
+    ESP_LOGD(TAG, "%s input bound to %s",
+             this->role_ == CFXSyncRole::SATELLITE ? "Satellite"
+                                                    : "Controller",
              this->local_input_->get_name().c_str());
     this->local_input_->add_on_state_callback(
         [this](bool pressed) { this->on_local_input_update_(pressed); });
@@ -526,8 +548,9 @@ bool CFXSyncComponent::handle_decoded_packet_(
 
   auto *peer = this->find_peer_(source);
   if (packet.type == CFXSyncPacketType::HELLO) {
-    if (this->role_ == CFXSyncRole::FOLLOWER &&
-        packet.node_role == CFXSyncNodeRole::FOLLOWER) {
+    if (this->is_state_receiver_role_() &&
+        (packet.node_role == CFXSyncNodeRole::FOLLOWER ||
+         packet.node_role == CFXSyncNodeRole::SATELLITE)) {
       return true;
     }
     if (!this->accepts_peer_role_(packet.node_role)) {
@@ -587,9 +610,9 @@ bool CFXSyncComponent::handle_decoded_packet_(
   }
 
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE &&
-      this->role_ == CFXSyncRole::FOLLOWER) {
+      this->is_state_receiver_role_()) {
     peer = this->find_or_add_peer_(source, CFXSyncNodeRole::LEADER,
-                                   CFXSyncPacketCodec::CAP_LIGHT_LEADER);
+                                    CFXSyncPacketCodec::CAP_LIGHT_LEADER);
     if (peer != nullptr) {
       this->register_peer_(*peer);
     }
@@ -624,6 +647,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       return true;
     }
     if (peer->node_role != CFXSyncNodeRole::REMOTE &&
+        peer->node_role != CFXSyncNodeRole::SATELLITE &&
         (peer->capabilities & CFXSyncPacketCodec::CAP_BINARY_REMOTE) == 0) {
       return true;
     }
@@ -670,19 +694,22 @@ bool CFXSyncComponent::handle_decoded_packet_(
   }
 
   if (packet.type == CFXSyncPacketType::STATE &&
-      this->role_ == CFXSyncRole::FOLLOWER &&
+      this->is_state_receiver_role_() &&
       !this->sync_enabled_) {
     this->log_rejection_("Ignoring STATE while sync is disabled");
     return true;
   }
 
   if (packet.type == CFXSyncPacketType::STATE &&
-      this->role_ == CFXSyncRole::FOLLOWER &&
+      this->is_state_receiver_role_() &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
        packet.has_color_brightness || packet.has_effect ||
        packet.has_controls)) {
     this->has_valid_state_ = true;
     this->clear_warning_if_set_();
+    if (this->role_ == CFXSyncRole::SATELLITE) {
+      ESP_LOGD(TAG, "Satellite applying leader state");
+    }
     this->apply_remote_state_(packet);
     this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
                               CFXSyncAckResult::APPLIED);
@@ -715,7 +742,7 @@ void CFXSyncComponent::on_local_light_update() {
 
 void CFXSyncComponent::on_sync_enabled_switch(bool enabled) {
   this->sync_enabled_ = enabled;
-  if (this->role_ != CFXSyncRole::FOLLOWER) {
+  if (!this->is_state_receiver_role_()) {
     return;
   }
   this->has_valid_state_ = false;
@@ -820,7 +847,8 @@ void CFXSyncComponent::mark_state_sent_to_followers_(uint32_t sequence) {
 bool CFXSyncComponent::peer_accepts_leader_state_(
     const PeerState &peer) const {
   return peer.active && peer.registered &&
-         peer.node_role == CFXSyncNodeRole::FOLLOWER &&
+         (peer.node_role == CFXSyncNodeRole::FOLLOWER ||
+          peer.node_role == CFXSyncNodeRole::SATELLITE) &&
          (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER);
 }
 
@@ -910,7 +938,7 @@ bool CFXSyncComponent::send_sync_request_() {
 
 bool CFXSyncComponent::send_sync_request_to_(
     const std::array<uint8_t, 6> &mac) {
-  if (this->role_ != CFXSyncRole::FOLLOWER) {
+  if (!this->is_state_receiver_role_()) {
     return false;
   }
 
@@ -936,7 +964,7 @@ bool CFXSyncComponent::send_hello_() {
 
 bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
                                          bool toggle) {
-  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+  if (!this->is_input_sender_role_()) {
     return false;
   }
   if (this->send_pending_) {
@@ -1003,7 +1031,7 @@ void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
 }
 
 void CFXSyncComponent::flush_deferred_input_() {
-  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+  if (!this->is_input_sender_role_() ||
       this->send_pending_ || this->pending_input_count_ == 0) {
     return;
   }
@@ -1015,7 +1043,7 @@ void CFXSyncComponent::flush_deferred_input_() {
 }
 
 void CFXSyncComponent::on_local_input_update_(bool pressed) {
-  if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
+  if (!this->is_input_sender_role_()) {
     return;
   }
   if (this->local_input_has_state_ &&
@@ -1024,7 +1052,8 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_has_state_ = true;
   this->local_input_pressed_ = pressed;
-  ESP_LOGD(TAG, "Controller local input %s",
+  ESP_LOGD(TAG, "%s local input %s",
+           this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller",
            pressed ? "pressed" : "released");
   const bool maintained =
       this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED;
@@ -1035,8 +1064,7 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
     this->set_timeout("input-maintained-settle",
                       INPUT_MAINTAINED_SETTLE_MS,
                       [this, pressed, maintained, toggle, generation]() {
-                        if (this->role_ !=
-                                CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+                        if (!this->is_input_sender_role_() ||
                             !((maintained &&
                                this->input_mode_ ==
                                    CFXSyncInputMode::
@@ -1077,7 +1105,7 @@ void CFXSyncComponent::schedule_local_input_hold_repeat_(
     uint32_t generation) {
   this->set_timeout("input-hold-repeat", INPUT_HOLD_REPEAT_MS,
                     [this, generation]() {
-    if (this->role_ != CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+    if (!this->is_input_sender_role_() ||
         generation != this->local_input_repeat_generation_ ||
         !this->local_input_pressed_) {
       return;
@@ -1094,8 +1122,7 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
   }
   this->set_timeout("input-release-repeat", INPUT_RELEASE_REPEAT_MS,
                     [this, remaining, generation]() {
-                      if (this->role_ !=
-                              CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER ||
+                      if (!this->is_input_sender_role_() ||
                           generation != this->local_input_repeat_generation_ ||
                           this->local_input_pressed_) {
                         return;
@@ -1850,7 +1877,7 @@ void CFXSyncComponent::enter_offline_fallback_() {
   this->send_hello_();
   if (this->role_ == CFXSyncRole::LEADER) {
     this->send_state_();
-  } else if (this->role_ == CFXSyncRole::FOLLOWER &&
+  } else if (this->is_state_receiver_role_() &&
              !this->has_valid_state_) {
     this->schedule_follower_recovery_loop_();
   }
@@ -1958,7 +1985,7 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
     this->last_espnow_rearm_ms_ = millis();
     this->boot_discovery_started_ms_ = millis();
     this->schedule_boot_discovery_();
-    if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_enabled_ &&
+    if (this->is_state_receiver_role_() && this->sync_enabled_ &&
         !this->has_valid_state_) {
       this->schedule_follower_recovery_loop_();
     }
@@ -1984,7 +2011,7 @@ void CFXSyncComponent::schedule_follower_hello_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_() {
-  if (this->role_ != CFXSyncRole::FOLLOWER) {
+  if (!this->is_state_receiver_role_()) {
     return;
   }
   this->schedule_follower_recovery_attempt_("sync-request-1",
@@ -2013,7 +2040,7 @@ void CFXSyncComponent::schedule_follower_recovery_() {
 }
 
 void CFXSyncComponent::schedule_follower_recovery_loop_() {
-  if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_ ||
+  if (!this->is_state_receiver_role_() || !this->sync_enabled_ ||
       this->has_valid_state_) {
     return;
   }
@@ -2021,7 +2048,7 @@ void CFXSyncComponent::schedule_follower_recovery_loop_() {
       FOLLOWER_RECOVERY_REPEAT_MS +
       (esp_random() % (FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS + 1));
   this->set_timeout("sync-recovery-loop", delay_ms, [this]() {
-    if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_ ||
+    if (!this->is_state_receiver_role_() || !this->sync_enabled_ ||
         this->has_valid_state_) {
       return;
     }
@@ -2050,7 +2077,7 @@ void CFXSyncComponent::schedule_follower_recovery_attempt_(
 }
 
 void CFXSyncComponent::schedule_enable_resync_() {
-  if (this->role_ != CFXSyncRole::FOLLOWER || !this->sync_enabled_) {
+  if (!this->is_state_receiver_role_() || !this->sync_enabled_) {
     return;
   }
   if (this->boot_radio_ready_()) {
@@ -2064,7 +2091,7 @@ void CFXSyncComponent::schedule_enable_resync_() {
 void CFXSyncComponent::schedule_enable_resync_attempt_(const char *name,
                                                        uint32_t delay_ms) {
   this->set_timeout(name, delay_ms, [this]() {
-    if (this->role_ == CFXSyncRole::FOLLOWER && this->sync_enabled_ &&
+    if (this->is_state_receiver_role_() && this->sync_enabled_ &&
         !this->has_valid_state_ && this->boot_radio_ready_()) {
       this->send_sync_request_to_(BROADCAST_MAC);
     }
@@ -2510,6 +2537,9 @@ const char *CFXSyncComponent::role_name_() const {
   }
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     return "controller";
+  }
+  if (this->role_ == CFXSyncRole::SATELLITE) {
+    return "satellite";
   }
   return "follower";
 }

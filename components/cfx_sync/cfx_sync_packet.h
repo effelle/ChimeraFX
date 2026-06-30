@@ -31,6 +31,7 @@ enum class CFXSyncNodeRole : uint8_t {
   LEADER = 1,
   FOLLOWER = 2,
   REMOTE = 3,
+  SATELLITE = 4,
 };
 
 enum class CFXSyncAckResult : uint8_t {

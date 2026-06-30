@@ -704,6 +704,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('CONF_LOCAL_INPUT = "local_input"', py_source)
         self.assertIn('CONF_REMOTE_INPUT = "remote_input"', py_source)
         self.assertIn('ROLE_CONTROLLER = "controller"', py_source)
+        self.assertIn('ROLE_SATELLITE = "satellite"', py_source)
         self.assertIn(
             "cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor)",
             py_source,
@@ -716,6 +717,7 @@ class ESPNowAPITests(unittest.TestCase):
             "ROLE_CONTROLLER: CFXSyncRole.CFX_SYNC_ROLE_CONTROLLER",
             py_source,
         )
+        self.assertIn("ROLE_SATELLITE: CFXSyncRole.SATELLITE", py_source)
         self.assertNotIn("cv.Required(CONF_PEER)", py_source)
 
     def test_codegen_uses_singleton_espnow_and_input_bindings(self):
@@ -797,8 +799,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             py_source,
             re.compile(
-                r"if config\[CONF_ROLE\] == ROLE_FOLLOWER and "
-                r"CONF_SYNC_SWITCH_ID in config:.*?"
+                r"config\[CONF_ROLE\] in \(ROLE_FOLLOWER, ROLE_SATELLITE\)"
+                r".*?CONF_SYNC_SWITCH_ID in config.*?"
                 r"CONF_NAME: \"Enable Sync\".*?"
                 r"CONF_DISABLED_BY_DEFAULT: False,.*?"
                 r"CONF_INTERNAL: False,.*?"
@@ -818,7 +820,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"if \(this->role_ == CFXSyncRole::FOLLOWER && "
+                r"if \(this->is_state_receiver_role_\(\) && "
                 r"this->sync_switch_ != nullptr\) \{"
                 r"\s*const auto initial_state ="
                 r"\s*this->sync_switch_->get_initial_state_with_restore_mode\(\);"
@@ -840,7 +842,7 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::STATE &&"
-                r"\s*this->role_ == CFXSyncRole::FOLLOWER &&"
+                r"\s*this->is_state_receiver_role_\(\) &&"
                 r"\s*!this->sync_enabled_\) \{"
                 r"\s*this->log_rejection_\(\"Ignoring STATE while sync is disabled\"\);"
                 r"\s*return true;"
@@ -943,6 +945,73 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("CFXSyncNodeRole::REMOTE", source)
         self.assertIn("CAP_BINARY_REMOTE", source)
         self.assertIn('return "controller"', source)
+
+    def test_satellite_role_is_follower_plus_input_contract(self):
+        header = HEADER.read_text(encoding="utf-8")
+        packet_header = PACKET_HEADER.read_text(encoding="utf-8")
+        packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("SATELLITE = 3", header)
+        self.assertIn("SATELLITE = 4", packet_header)
+        self.assertIn("case CFXSyncNodeRole::SATELLITE:", packet_source)
+        self.assertIn("CFXSyncNodeRole::SATELLITE", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->role_ == CFXSyncRole::SATELLITE.*?"
+                r"return CFXSyncNodeRole::SATELLITE;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"this->role_ == CFXSyncRole::SATELLITE.*?"
+                r"CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER \|"
+                r"\s*CFXSyncPacketCodec::CAP_BINARY_REMOTE",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"peer\.node_role == CFXSyncNodeRole::FOLLOWER \|\|"
+                r"\s*peer\.node_role == CFXSyncNodeRole::SATELLITE",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            'this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller"',
+            source,
+        )
+        self.assertIn('ESP_LOGD(TAG, "Satellite applying leader state")', source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(!this->is_input_sender_role_\(\)\) \{\s*"
+                r"return false;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"light::LightState \*CFXSyncComponent::leader_light_\(\) const"
+                r".*?this->role_ != CFXSyncRole::LEADER.*?"
+                r"return nullptr;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->role_ == CFXSyncRole::LEADER\) \{.*?"
+                r"leader->add_remote_values_listener\(&this->light_listener_\);"
+                r".*?\} else if \(this->is_state_receiver_role_\(\)\)",
+                re.DOTALL,
+            ),
+        )
 
     def test_input_state_carries_maintained_mode_without_growing_packet(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -1501,7 +1570,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"void CFXSyncComponent::schedule_follower_recovery_loop_"
                 r"\(\) \{.*?"
-                r"this->role_ != CFXSyncRole::FOLLOWER \|\|"
+                r"!this->is_state_receiver_role_\(\) \|\|"
                 r"\s*!this->sync_enabled_ \|\|"
                 r"\s*this->has_valid_state_.*?"
                 r"FOLLOWER_RECOVERY_REPEAT_MS \+"
@@ -1509,7 +1578,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*\(FOLLOWER_RECOVERY_REPEAT_JITTER_SPREAD_MS \+ 1\)\).*?"
                 r"this->set_timeout\("
                 r"\"sync-recovery-loop\", delay_ms.*?"
-                r"this->role_ != CFXSyncRole::FOLLOWER \|\|"
+                r"!this->is_state_receiver_role_\(\) \|\|"
                 r"\s*!this->sync_enabled_ \|\|"
                 r"\s*this->has_valid_state_.*?"
                 r"if \(this->boot_radio_ready_\(\)\) \{"
@@ -2188,6 +2257,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"peer\.active.*?"
                 r"peer\.registered.*?"
                 r"peer\.node_role == CFXSyncNodeRole::FOLLOWER.*?"
+                r"peer\.node_role == CFXSyncNodeRole::SATELLITE.*?"
                 r"peer\.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER",
                 re.DOTALL,
             ),
@@ -2229,7 +2299,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"if \(peer == nullptr &&"
                 r"\s*packet\.type == CFXSyncPacketType::STATE &&"
-                r"\s*this->role_ == CFXSyncRole::FOLLOWER\).*?"
+                r"\s*this->is_state_receiver_role_\(\)\).*?"
                 r"this->find_or_add_peer_\(source,"
                 r"\s*CFXSyncNodeRole::LEADER,"
                 r"\s*CFXSyncPacketCodec::CAP_LIGHT_LEADER\);",
@@ -2503,6 +2573,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(\s*CFXSyncNodeRole role\) const \{.*?"
                 r"if \(this->role_ == CFXSyncRole::LEADER\).*?"
                 r"role == CFXSyncNodeRole::FOLLOWER.*?"
+                r"role == CFXSyncNodeRole::SATELLITE.*?"
                 r"return role == CFXSyncNodeRole::LEADER;",
                 re.DOTALL,
             ),
@@ -2546,8 +2617,9 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertGreaterEqual(hello_index, 0)
         same_follower_index = decoded_body.group(0).find(
-            "this->role_ == CFXSyncRole::FOLLOWER &&\n"
-            "        packet.node_role == CFXSyncNodeRole::FOLLOWER",
+            "this->is_state_receiver_role_() &&\n"
+            "        (packet.node_role == CFXSyncNodeRole::FOLLOWER ||\n"
+            "         packet.node_role == CFXSyncNodeRole::SATELLITE)",
             hello_index,
         )
         rejection_index = decoded_body.group(0).find(

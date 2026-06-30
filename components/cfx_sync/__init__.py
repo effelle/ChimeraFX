@@ -90,6 +90,7 @@ CONF_PALETTE = "palette"
 ROLE_LEADER = "leader"
 ROLE_FOLLOWER = "follower"
 ROLE_CONTROLLER = "controller"
+ROLE_SATELLITE = "satellite"
 INPUT_MODE_MOMENTARY = "momentary"
 INPUT_MODE_MAINTAINED = "maintained"
 INPUT_MODE_TOGGLE = "toggle"
@@ -122,6 +123,7 @@ ROLE_MAP = {
     ROLE_LEADER: CFXSyncRole.LEADER,
     ROLE_FOLLOWER: CFXSyncRole.FOLLOWER,
     ROLE_CONTROLLER: CFXSyncRole.CFX_SYNC_ROLE_CONTROLLER,
+    ROLE_SATELLITE: CFXSyncRole.SATELLITE,
 }
 
 INPUT_MODE_MAP = {
@@ -325,16 +327,18 @@ def _validate_role_lights(config):
             raise cv.Invalid(
                 "remote_input can only be used with role: leader"
             )
-    elif CONF_LOCAL_INPUT in config:
+    elif role != ROLE_SATELLITE and CONF_LOCAL_INPUT in config:
         raise cv.Invalid(
-            "local_input can only be used with role: controller"
+            "local_input can only be used with role: controller or satellite"
         )
 
     if role == ROLE_LEADER and len(lights) != 1:
         raise cv.Invalid("cfx_sync leader requires exactly one light")
     if role == ROLE_FOLLOWER and not lights:
         raise cv.Invalid("cfx_sync follower requires at least one light")
-    if role == ROLE_FOLLOWER and CONF_REMOTE_INPUT in config:
+    if role == ROLE_SATELLITE and not lights:
+        raise cv.Invalid("cfx_sync satellite requires at least one light")
+    if role in (ROLE_FOLLOWER, ROLE_SATELLITE) and CONF_REMOTE_INPUT in config:
         raise cv.Invalid("remote_input can only be used with role: leader")
 
     seen = set()
@@ -439,7 +443,11 @@ CONFIG_SCHEMA = cv.All(
                 CFXSyncEnableSwitch
             ),
             cv.Required(CONF_ROLE): cv.one_of(
-                ROLE_LEADER, ROLE_FOLLOWER, ROLE_CONTROLLER, lower=True
+                ROLE_LEADER,
+                ROLE_FOLLOWER,
+                ROLE_CONTROLLER,
+                ROLE_SATELLITE,
+                lower=True,
             ),
             cv.Optional(CONF_LIGHTS, default=[]): _normalize_lights,
             cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor),
@@ -567,7 +575,10 @@ async def to_code(config):
     if CONF_REMOTE_INPUT in config:
         remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
         cg.add(var.set_remote_input(remote_input))
-    if config[CONF_ROLE] == ROLE_FOLLOWER and CONF_SYNC_SWITCH_ID in config:
+    if (
+        config[CONF_ROLE] in (ROLE_FOLLOWER, ROLE_SATELLITE)
+        and CONF_SYNC_SWITCH_ID in config
+    ):
         switch_conf = {
             CONF_ID: config[CONF_SYNC_SWITCH_ID],
             CONF_NAME: "Enable Sync",

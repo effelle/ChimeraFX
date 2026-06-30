@@ -36,6 +36,7 @@ CONTROL_PALETTE = 0x0080
 ROLE_LEADER = 1
 ROLE_FOLLOWER = 2
 ROLE_REMOTE = 3
+ROLE_SATELLITE = 4
 ACK_APPLIED = 0
 ACK_IGNORED_UNSUPPORTED = 1
 ACK_APPLY_FAILED = 2
@@ -464,7 +465,12 @@ def decode(packet, expected_group_hash=GROUP_HASH):
             raise ValueError("hello-length")
         payload = packet[HEADER_SIZE:authenticated_size]
         role = payload[0]
-        if role not in (ROLE_LEADER, ROLE_FOLLOWER, ROLE_REMOTE):
+        if role not in (
+            ROLE_LEADER,
+            ROLE_FOLLOWER,
+            ROLE_REMOTE,
+            ROLE_SATELLITE,
+        ):
             raise ValueError("hello-role")
         result["node_role"] = role
         result["capabilities"] = struct.unpack(">H", payload[1:3])[0]
@@ -586,6 +592,15 @@ class ProtocolTests(unittest.TestCase):
             decoded["capabilities"], CAP_LIGHT_LEADER | CAP_BINARY_REMOTE
         )
 
+        payload = bytes((ROLE_SATELLITE,)) + struct.pack(
+            ">H", CAP_LIGHT_FOLLOWER | CAP_BINARY_REMOTE
+        )
+        decoded = decode(encode(TYPE_HELLO, payload))
+        self.assertEqual(decoded["node_role"], ROLE_SATELLITE)
+        self.assertEqual(
+            decoded["capabilities"], CAP_LIGHT_FOLLOWER | CAP_BINARY_REMOTE
+        )
+
     def test_state_ack_round_trips_acked_state_and_result(self):
         payload = struct.pack(
             ">IIB", 0x11223344, 0x55667788, ACK_IGNORED_UNSUPPORTED
@@ -618,7 +633,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_malformed_hello_role_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "hello-role"):
-            decode(encode(TYPE_HELLO, b"\x04\x00\x01"))
+            decode(encode(TYPE_HELLO, b"\x05\x00\x01"))
 
     def test_malformed_ack_payload_size_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "ack-length"):

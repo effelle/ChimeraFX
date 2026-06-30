@@ -40,6 +40,7 @@ enum CFXSyncRole : uint8_t {
   LEADER = 0,
   FOLLOWER = 1,
   CFX_SYNC_ROLE_CONTROLLER = 2,
+  SATELLITE = 3,
 };
 
 enum class CFXSyncInputMode : uint8_t {
@@ -336,6 +337,8 @@ class CFXSyncComponent : public Component {
   bool use_espnow_transport_() const;
   CFXSyncNodeRole local_node_role_() const;
   uint16_t local_capabilities_() const;
+  bool is_state_receiver_role_() const;
+  bool is_input_sender_role_() const;
   bool accepts_peer_role_(CFXSyncNodeRole role) const;
   bool should_send_state_for_hello_(const PeerState &peer,
                                     bool new_peer,

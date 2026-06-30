@@ -12,6 +12,7 @@ from components.cfx_sync import (
     ROLE_CONTROLLER,
     ROLE_FOLLOWER,
     ROLE_LEADER,
+    ROLE_SATELLITE,
     _extract_control_ids,
     _normalize_lights,
     _validate_role_lights,
@@ -110,15 +111,43 @@ class MultiLightConfigTests(unittest.TestCase):
         }
         self.assertIs(_validate_role_lights(config), config)
 
-    def test_local_input_is_controller_only(self):
+    def test_local_input_is_controller_or_satellite_only(self):
         with self.assertRaisesRegex(
-            cv.Invalid, "local_input can only be used with role: controller"
+            cv.Invalid,
+            "local_input can only be used with role: controller or satellite",
         ):
             _validate_role_lights(
                 {
                     CONF_ROLE: ROLE_LEADER,
                     CONF_LIGHTS: [light_id("leader_light")],
                     CONF_LOCAL_INPUT: light_id("wall_button"),
+                }
+            )
+
+    def test_satellite_requires_lights_and_may_have_local_input(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "satellite requires at least one light"
+        ):
+            _validate_role_lights(
+                {CONF_ROLE: ROLE_SATELLITE, CONF_LIGHTS: []}
+            )
+
+        config = {
+            CONF_ROLE: ROLE_SATELLITE,
+            CONF_LIGHTS: [light_id("local_light")],
+            CONF_LOCAL_INPUT: light_id("wall_button"),
+        }
+        self.assertIs(_validate_role_lights(config), config)
+
+    def test_satellite_rejects_remote_input(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "remote_input can only be used with role: leader"
+        ):
+            _validate_role_lights(
+                {
+                    CONF_ROLE: ROLE_SATELLITE,
+                    CONF_LIGHTS: [light_id("local_light")],
+                    CONF_REMOTE_INPUT: light_id("leader_button_host"),
                 }
             )
 
