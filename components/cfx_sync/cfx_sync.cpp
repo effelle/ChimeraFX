@@ -1148,6 +1148,10 @@ void CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     }
     return;
   }
+  if (!pressed && !this->remote_input_pressed_) {
+    ESP_LOGD(TAG, "Ignoring duplicate CFX Sync remote release");
+    return;
+  }
   this->remote_input_pressed_ = pressed;
   this->last_remote_input_ms_ = millis();
   ESP_LOGD(TAG, "Applying CFX Sync remote input %s",

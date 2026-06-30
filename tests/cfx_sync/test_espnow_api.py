@@ -1074,6 +1074,31 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_duplicate_remote_release_does_not_reenter_magic_button(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        inject_remote_input = re.search(
+            r"void CFXSyncComponent::inject_remote_input_"
+            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\nvoid CFXSyncComponent::apply_remote_power_input_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(inject_remote_input)
+        inject_remote_input = inject_remote_input.group(0)
+        self.assertRegex(
+            inject_remote_input,
+            re.compile(
+                r"if \(!pressed && !this->remote_input_pressed_\) \{\s*"
+                r"ESP_LOGD\(TAG, \"Ignoring duplicate CFX Sync remote release\"\);\s*"
+                r"return;\s*"
+                r"\}.*?"
+                r"this->remote_input_pressed_ = pressed;.*?"
+                r"this->remote_input_->inject_remote_state\(pressed\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_static_peer_fallback_is_disabled_without_configured_peer(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
