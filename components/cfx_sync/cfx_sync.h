@@ -322,7 +322,10 @@ class CFXSyncComponent : public Component {
   void schedule_local_input_hold_repeat_(uint32_t generation);
   void schedule_local_input_release_repeat_(uint8_t remaining,
                                             uint32_t generation);
+  bool handle_remote_input_(PeerState &peer, bool pressed, bool maintained,
+                            bool toggle);
   bool inject_remote_input_(bool pressed, bool maintained, bool toggle);
+  void clear_remote_input_owner_();
   void apply_remote_power_input_(bool pressed);
   void apply_remote_toggle_input_();
   void schedule_remote_input_timeout_();
@@ -482,6 +485,7 @@ class CFXSyncComponent : public Component {
   PendingInputEvent pending_input_events_[PENDING_INPUT_QUEUE_SIZE];
   uint8_t pending_input_head_{0};
   uint8_t pending_input_count_{0};
+  PeerState *remote_input_owner_{nullptr};
   bool remote_input_pressed_{false};
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};

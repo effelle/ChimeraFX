@@ -1067,8 +1067,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"const bool applied = this->inject_remote_input_\(\s*"
-                r"packet\.input_pressed, packet\.input_maintained,\s*"
+                r"const bool applied = this->handle_remote_input_\(\s*"
+                r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
                 r"packet\.input_toggle\);",
                 re.DOTALL,
             ),
@@ -1250,8 +1250,8 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
-                r"const bool applied = this->inject_remote_input_\(\s*"
-                r"packet\.input_pressed, packet\.input_maintained,\s*"
+                r"const bool applied = this->handle_remote_input_\(\s*"
+                r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
                 r"packet\.input_toggle\);.*?"
                 r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
                 r"this->udp_input_received_\+\+;\s*"
@@ -1276,8 +1276,8 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
-                r"const bool applied = this->inject_remote_input_\(\s*"
-                r"packet\.input_pressed, packet\.input_maintained,\s*"
+                r"const bool applied = this->handle_remote_input_\(\s*"
+                r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
                 r"packet\.input_toggle\);",
                 re.DOTALL,
             ),
@@ -2599,6 +2599,78 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\"Ignoring HELLO from incompatible role\"\);"
                 r"\s*return true;"
                 r"\s*\}",
+                re.DOTALL,
+            ),
+        )
+
+    def test_remote_input_hold_is_owned_by_one_controller(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
+
+        self.assertRegex(
+            header,
+            re.compile(
+                r"bool handle_remote_input_"
+                r"\(PeerState &peer, bool pressed, bool maintained,\s*"
+                r"bool toggle\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("PeerState *remote_input_owner_{nullptr};", header)
+        self.assertIn("void clear_remote_input_owner_();", header)
+        self.assertRegex(
+            decoded_body.group(0),
+            re.compile(
+                r"this->handle_remote_input_\(\s*"
+                r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
+                r"packet\.input_toggle\)",
+                re.DOTALL,
+            ),
+        )
+        handler_body = re.search(
+            r"bool CFXSyncComponent::handle_remote_input_"
+            r"\(PeerState &peer, bool pressed,\s*"
+            r"bool maintained, bool toggle\).*?"
+            r"\n\}\n\nvoid CFXSyncComponent::clear_remote_input_owner_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(handler_body)
+        handler_source = handler_body.group(0)
+        self.assertIn("if (toggle || maintained)", handler_source)
+        self.assertIn(
+            "return this->inject_remote_input_(pressed, maintained, toggle);",
+            handler_source,
+        )
+        self.assertIn("if (pressed)", handler_source)
+        self.assertIn("this->remote_input_owner_ = &peer;", handler_source)
+        self.assertIn("this->remote_input_owner_ != &peer", handler_source)
+        self.assertIn(
+            "Ignoring remote input while another controller is active",
+            handler_source,
+        )
+        self.assertIn("const bool applied = this->inject_remote_input_", handler_source)
+        self.assertIn("this->clear_remote_input_owner_();", handler_source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::clear_remote_input_owner_\(\)"
+                r".*?this->remote_input_owner_ = nullptr;",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"void CFXSyncComponent::schedule_remote_input_timeout_\(\)"
+                r".*?this->clear_remote_input_owner_\(\);",
                 re.DOTALL,
             ),
         )

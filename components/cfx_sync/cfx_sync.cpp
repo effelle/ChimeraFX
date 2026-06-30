@@ -668,8 +668,9 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
-    const bool applied = this->inject_remote_input_(
-        packet.input_pressed, packet.input_maintained, packet.input_toggle);
+    const bool applied = this->handle_remote_input_(
+        *peer, packet.input_pressed, packet.input_maintained,
+        packet.input_toggle);
     if (source.transport == CFXSyncTransportKind::UDP) {
       this->udp_input_received_++;
     }
@@ -1177,6 +1178,36 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
   return true;
 }
 
+bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
+                                           bool maintained, bool toggle) {
+  if (toggle || maintained) {
+    return this->inject_remote_input_(pressed, maintained, toggle);
+  }
+  if (pressed) {
+    if (this->remote_input_owner_ == nullptr) {
+      this->remote_input_owner_ = &peer;
+    } else if (this->remote_input_owner_ != &peer) {
+      this->log_rejection_(
+          "Ignoring remote input while another controller is active");
+      return false;
+    }
+    return this->inject_remote_input_(pressed, maintained, toggle);
+  }
+  if (this->remote_input_owner_ != nullptr &&
+      this->remote_input_owner_ != &peer) {
+    this->log_rejection_(
+        "Ignoring remote input while another controller is active");
+    return false;
+  }
+  const bool applied = this->inject_remote_input_(pressed, maintained, toggle);
+  this->clear_remote_input_owner_();
+  return applied;
+}
+
+void CFXSyncComponent::clear_remote_input_owner_() {
+  this->remote_input_owner_ = nullptr;
+}
+
 void CFXSyncComponent::apply_remote_power_input_(bool pressed) {
   auto *leader = this->leader_light_();
   if (leader == nullptr) {
@@ -1210,6 +1241,7 @@ void CFXSyncComponent::schedule_remote_input_timeout_() {
                         return;
                       }
                       this->inject_remote_input_(false, false, false);
+                      this->clear_remote_input_owner_();
                     });
 }
 
