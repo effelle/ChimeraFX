@@ -421,6 +421,7 @@ class CFXSyncComponent : public Component {
 #endif
   bool is_broadcast_(const uint8_t *address) const;
   const char *role_name_() const;
+  const char *transport_name_() const;
 
   CFXSyncBus *bus_{&global_cfx_sync_bus()};
 #if defined(USE_ESP32)

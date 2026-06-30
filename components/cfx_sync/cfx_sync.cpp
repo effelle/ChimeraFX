@@ -456,6 +456,7 @@ void CFXSyncComponent::dump_config() {
                 this->malformed_packets_, this->authentication_failures_,
                 this->wrong_group_packets_, this->stale_packets_,
                 this->unsupported_packets_, this->send_failures_);
+  ESP_LOGCONFIG(TAG, "  Transport: %s", this->transport_name_());
   ESP_LOGCONFIG(TAG,
                 "  UDP input: sent=%" PRIu32 " retried=%" PRIu32
                 " received=%" PRIu32 " applied=%" PRIu32,
@@ -2511,6 +2512,21 @@ const char *CFXSyncComponent::role_name_() const {
     return "controller";
   }
   return "follower";
+}
+
+const char *CFXSyncComponent::transport_name_() const {
+  const bool udp = this->use_udp_transport_();
+  const bool espnow = this->use_espnow_transport_();
+  if (udp && espnow) {
+    return "ESP-NOW + UDP bridge";
+  }
+  if (espnow) {
+    return "ESP-NOW";
+  }
+  if (udp) {
+    return "UDP";
+  }
+  return "none";
 }
 
 }  // namespace cfx_sync

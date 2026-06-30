@@ -341,6 +341,16 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             source,
         )
 
+    def test_dump_config_reports_active_transport_selection(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("const char *transport_name_() const;", HEADER.read_text(encoding="utf-8"))
+        self.assertIn("const char *CFXSyncComponent::transport_name_() const", source)
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Transport: %s", this->transport_name_());', source)
+        self.assertIn('return "ESP-NOW + UDP bridge";', source)
+        self.assertIn('return "ESP-NOW";', source)
+        self.assertIn('return "UDP";', source)
+
 
 class CFXSyncTransportBoundaryTests(unittest.TestCase):
     def test_transport_header_declares_shared_source_identity(self):
