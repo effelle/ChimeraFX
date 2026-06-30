@@ -240,9 +240,20 @@ void CFXSyncComponent::setup() {
     this->mark_failed();
     return;
   }
-#else
+#elif defined(USE_ESP8266)
+  } else if (this->role_ == CFXSyncRole::SATELLITE) {
+    if (this->lights_.empty()) {
+      ESP_LOGE(TAG, "Satellite requires at least one light reference");
+      this->mark_failed();
+      return;
+    }
+    if (!this->use_udp_transport_()) {
+      ESP_LOGE(TAG, "ESP8266 satellite requires UDP transport");
+      this->mark_failed();
+      return;
+    }
   } else {
-    ESP_LOGE(TAG, "ESP8266 cfx_sync support is controller-only over UDP");
+    ESP_LOGE(TAG, "ESP8266 cfx_sync support is controller-or-satellite over UDP");
     this->mark_failed();
     return;
   }
@@ -294,9 +305,7 @@ void CFXSyncComponent::setup() {
     return;
   }
   this->boot_discovery_started_ms_ = millis();
-#if defined(USE_ESP32)
   this->schedule_boot_discovery_();
-#endif
   if (this->role_ != CFXSyncRole::LEADER) {
     this->schedule_follower_hello_();
   }
@@ -1829,6 +1838,7 @@ void CFXSyncComponent::run_boot_discovery_() {
 }
 
 bool CFXSyncComponent::boot_radio_ready_() const {
+#if defined(USE_ESP32)
   if (this->offline_fallback_active_) {
     return true;
   }
@@ -1837,9 +1847,11 @@ bool CFXSyncComponent::boot_radio_ready_() const {
     return wifi::global_wifi_component->is_connected();
   }
 #endif
+#endif
   return true;
 }
 
+#if defined(USE_ESP32)
 uint8_t CFXSyncComponent::current_wifi_channel_() const {
 #ifdef USE_WIFI
   if (wifi::global_wifi_component != nullptr &&
@@ -1995,6 +2007,8 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
 #endif
 }
 
+#endif  // defined(USE_ESP32)
+
 void CFXSyncComponent::schedule_follower_hello_() {
   if (this->role_ == CFXSyncRole::LEADER) {
     return;
@@ -2010,6 +2024,7 @@ void CFXSyncComponent::schedule_follower_hello_() {
   });
 }
 
+#if defined(USE_ESP32)
 void CFXSyncComponent::schedule_follower_recovery_() {
   if (!this->is_state_receiver_role_()) {
     return;
@@ -2098,8 +2113,19 @@ void CFXSyncComponent::schedule_enable_resync_attempt_(const char *name,
   });
 }
 
+#endif  // defined(USE_ESP32)
+
 void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
   RemoteApplyGuard guard(this->applying_remote_state_);
+#if defined(USE_ESP8266)
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *light = this->lights_[i];
+    if (light == nullptr) {
+      continue;
+    }
+    this->apply_remote_state_to_light_(packet, i);
+  }
+#else
   const size_t aligned_light_count =
       std::min(this->lights_.size(),
                std::min(this->effect_catalogs_.size(),
@@ -2112,10 +2138,45 @@ void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
     }
     this->apply_remote_state_to_light_(packet, i);
   }
+#endif
 }
 
 void CFXSyncComponent::apply_remote_state_to_light_(
     const CFXSyncPacket &packet, size_t light_index) {
+#if defined(USE_ESP8266)
+  if (light_index >= this->lights_.size()) {
+    return;
+  }
+  auto *light = this->lights_[light_index];
+  if (light == nullptr) {
+    return;
+  }
+
+  auto call = light->make_call();
+  bool has_action = false;
+  if (packet.has_power) {
+    call.set_state(packet.power);
+    has_action = true;
+  }
+  if (packet.has_brightness) {
+    call.set_brightness(packet.brightness / 255.0f);
+    has_action = true;
+  }
+  if (packet.has_color || packet.has_color_brightness ||
+      packet.has_effect || packet.has_controls || packet.has_transition ||
+      packet.has_ramp) {
+    const uint32_t now = millis();
+    if (this->last_unsupported_visual_log_ms_ == 0 ||
+        now - this->last_unsupported_visual_log_ms_ >=
+            CONTROL_SKIP_LOG_INTERVAL_MS) {
+      ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields");
+      this->last_unsupported_visual_log_ms_ = now;
+    }
+  }
+  if (has_action) {
+    call.perform();
+  }
+#else
   if (light_index >= this->lights_.size() ||
       light_index >= this->effect_catalogs_.size() ||
       light_index >= this->effect_log_states_.size()) {
@@ -2255,8 +2316,10 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   if (use_remote_effect_off_transition) {
     light->set_default_transition_length(saved_default_transition);
   }
+#endif
 }
 
+#if defined(USE_ESP32)
 void CFXSyncComponent::apply_remote_controls_to_light_(
     const CFXSyncPacket &packet, size_t light_index) {
   if (!packet.has_controls || light_index >= this->lights_.size() ||
@@ -2518,6 +2581,8 @@ void CFXSyncComponent::log_control_skip_(
            control_name, light != nullptr ? light->get_name().c_str() : "<null>",
            static_cast<unsigned>(light_index), reason);
 }
+
+#endif  // defined(USE_ESP32)
 
 bool CFXSyncComponent::is_broadcast_(const uint8_t *address) const {
   if (address == nullptr) {

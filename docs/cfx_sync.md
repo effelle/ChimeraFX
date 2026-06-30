@@ -166,6 +166,8 @@ cfx_sync:
 
 This behaves like a follower for the light, but any local button you configure outside `cfx_sync` stays private to that device.
 
+ESP8266 devices can also be satellites when they use UDP transport. This is intentionally limited: an ESP8266 satellite follows the leader's ON/OFF state and brightness, and can send `local_input` button events. It does not run ChimeraFX effects and does not apply synced RGB/RGBW color, palettes, speed, intensity, Force White, intro, or outro controls.
+
 Satellite with `local_input`:
 
 ```yaml
@@ -382,7 +384,7 @@ It does not yet copy:
 - Exact animation phase.
 - Random effect seed.
 - Multiple sync groups on the same device.
-- ESP8266 lights. ESP8266 controller-only devices are supported over UDP.
+- Full ChimeraFX light behavior on ESP8266. ESP8266 satellites are basic UDP light followers for ON/OFF and brightness only.
 
 ---
 
@@ -446,7 +448,7 @@ Default `auto` behavior:
 
 - ESP32 leaders can bridge ESP-NOW and UDP.
 - ESP32 followers, satellites, and controllers can use ESP-NOW.
-- ESP8266 controller-only devices use UDP.
+- ESP8266 controllers and basic satellites use UDP.
 
 You can force a transport when you know what you need:
 
@@ -465,7 +467,7 @@ cfx_sync:
 Use UDP when:
 
 - The device has Ethernet or cannot use ESP-NOW.
-- You are testing future ESP8266 or non-ESP32 controller support.
+- You are using an ESP8266 controller or basic satellite.
 - Your Wi-Fi mesh makes ESP-NOW channel alignment difficult.
 
 Use ESP-NOW when:
@@ -519,7 +521,8 @@ Important rules:
 - A controller must have `local_input` and no `lights`.
 - `remote_input` is only for leaders.
 - Do not use `espnow_id` or `peer`; discovery is automatic.
-- Followers and satellites get an automatic **Enable Sync** switch. It is not a YAML option.
+- ESP32 followers and satellites get an automatic **Enable Sync** switch. It is not a YAML option.
+- ESP8266 satellites use UDP and do not get the automatic **Enable Sync** switch in this first version.
 
 ---
 
@@ -527,8 +530,8 @@ Important rules:
 
 ### Follower does nothing:
 *   [ ] Verify `group` and `key` are spelled exactly the same on all devices.
-*   [ ] Make sure the follower or satellite **Enable Sync** switch is turned on in Home Assistant or ESPHome.
-*   [ ] Confirm the light devices are ESP32s.
+*   [ ] On ESP32 followers or satellites, make sure the **Enable Sync** switch is turned on in Home Assistant or ESPHome.
+*   [ ] Confirm full ChimeraFX light followers are ESP32s. ESP8266 satellites only support basic ON/OFF and brightness over UDP.
 *   [ ] If using ESP-NOW, check that the devices are on the same 2.4 GHz Wi-Fi channel.
 *   [ ] If using mesh Wi-Fi with ESP-NOW, check that the BSSID/channel did not split between mesh nodes.
 *   [ ] If using UDP, check that the devices are on the same network and can reach each other.

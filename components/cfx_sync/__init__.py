@@ -39,6 +39,11 @@ ESP8266_CONTROLLER_AUTO_LOAD = [
     "binary_sensor",
     "hmac_sha256",
 ]
+ESP8266_SATELLITE_AUTO_LOAD = [
+    "binary_sensor",
+    "hmac_sha256",
+    "light",
+]
 
 try:
     from esphome.components.cfx_effect_registry import CFX_EFFECT_NAMES
@@ -162,6 +167,8 @@ def AUTO_LOAD(config):
         transport = config.get(CONF_TRANSPORT, TRANSPORT_AUTO)
 
     if _is_esp8266_target():
+        if config and config.get(CONF_ROLE) == ROLE_SATELLITE:
+            return ESP8266_SATELLITE_AUTO_LOAD
         return ESP8266_CONTROLLER_AUTO_LOAD
     if transport == TRANSPORT_UDP:
         return BASE_AUTO_LOAD
@@ -412,14 +419,22 @@ def _validate_platform_support(config):
     if not _is_esp8266_target():
         return config
 
-    if (
-        config[CONF_ROLE] != ROLE_CONTROLLER
-        or config[CONF_TRANSPORT] not in (TRANSPORT_AUTO, TRANSPORT_UDP)
-        or config.get(CONF_LIGHTS, [])
+    role = config[CONF_ROLE]
+    lights = config.get(CONF_LIGHTS, [])
+    invalid = (
+        config[CONF_TRANSPORT] not in (TRANSPORT_AUTO, TRANSPORT_UDP)
         or CONF_REMOTE_INPUT in config
-    ):
+    )
+    if role == ROLE_CONTROLLER:
+        invalid = invalid or bool(lights)
+    elif role == ROLE_SATELLITE:
+        invalid = invalid or not lights
+    else:
+        invalid = True
+
+    if invalid:
         raise cv.Invalid(
-            "ESP8266 cfx_sync support is controller-only over UDP"
+            "ESP8266 cfx_sync support is controller-or-satellite over UDP"
         )
     return config
 
@@ -578,6 +593,7 @@ async def to_code(config):
     if (
         config[CONF_ROLE] in (ROLE_FOLLOWER, ROLE_SATELLITE)
         and CONF_SYNC_SWITCH_ID in config
+        and not _is_esp8266_target()
     ):
         switch_conf = {
             CONF_ID: config[CONF_SYNC_SWITCH_ID],

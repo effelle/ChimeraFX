@@ -299,7 +299,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", packet_header)
         self.assertIn("#if defined(USE_ESP32) || defined(USE_ESP8266)", packet_source)
 
-    def test_esp8266_controller_runtime_omits_light_and_effect_bindings(self):
+    def test_esp8266_runtime_keeps_effect_bindings_esp32_only(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
@@ -314,11 +314,13 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
-        self.assertIn("#if defined(USE_ESP32)\n  void add_light", header)
+        self.assertIn("void add_light(light::LightState *light)", header)
         self.assertIn("#if defined(USE_ESP32)\n  void set_remote_input", header)
-        self.assertIn("#if defined(USE_ESP32)\n  std::vector<light::LightState *> lights_;", header)
+        self.assertIn("std::vector<light::LightState *> lights_;", header)
         self.assertIn("#if defined(USE_ESP32)\n  cfx_button::CFXButton *remote_input_", header)
         self.assertIn("#if defined(USE_ESP32)\nstatic CFXSyncTimingState", source)
+        self.assertIn("#if defined(USE_ESP32)\n  void add_effect", header)
+        self.assertIn("#if defined(USE_ESP32)\n  std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;", header)
         self.assertRegex(
             source,
             re.compile(
@@ -1409,9 +1411,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(
-                r"#if defined\(USE_ESP32\)\s*"
                 r"this->schedule_boot_discovery_\(\);"
-                r"\s*#endif"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*this->schedule_follower_hello_\(\);"
                 r"\s*\}",
@@ -2860,7 +2860,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
             r"void CFXSyncComponent::apply_remote_state_to_light_"
-            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
         )
@@ -2882,8 +2882,9 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_rgb(", apply_light_source)
         self.assertIn("call.set_white(", apply_light_source)
         self.assertIn("call.set_effect(", apply_light_source)
-        self.assertEqual(apply_light_source.count("light->make_call()"), 1)
-        self.assertEqual(apply_light_source.count("call.perform();"), 1)
+        esp32_apply_branch = apply_light_source.split("#else", 1)[1]
+        self.assertEqual(esp32_apply_branch.count("light->make_call()"), 1)
+        self.assertEqual(esp32_apply_branch.count("call.perform();"), 1)
 
     def test_follower_applies_ramp_or_transition_before_perform(self):
         source = SOURCE.read_text(encoding="utf-8")
@@ -2906,7 +2907,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
             r"void CFXSyncComponent::apply_remote_state_to_light_"
-            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
         )
@@ -2948,7 +2949,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
             r"void CFXSyncComponent::apply_remote_state_to_light_"
-            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
         )
@@ -3086,7 +3087,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
             r"void CFXSyncComponent::apply_remote_state_to_light_"
-            r"\(.*?\n\}\n\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
         )
@@ -3110,7 +3111,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("auto call = light->make_call();", apply_light_source)
         self.assertIn("light_supports_rgb_white(*light)", apply_light_source)
         self.assertIn("light_supports_rgb(*light)", apply_light_source)
-        self.assertEqual(apply_light_source.count("call.perform();"), 1)
+        esp32_apply_branch = apply_light_source.split("#else", 1)[1]
+        self.assertEqual(esp32_apply_branch.count("call.perform();"), 1)
 
     def test_follower_effect_lookup_is_exact_and_name_sensitive(self):
         source = SOURCE.read_text(encoding="utf-8")

@@ -87,6 +87,26 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("select", autoload)
         self.assertNotIn("switch", autoload)
 
+    def test_esp8266_satellite_autoload_includes_light_without_espnow(self):
+        with patch.object(
+            type(cfx_sync.CORE),
+            "is_esp8266",
+            new_callable=PropertyMock,
+            return_value=True,
+        ):
+            autoload = cfx_sync.AUTO_LOAD(
+                {"role": "satellite", "transport": "auto"}
+            )
+
+        self.assertIn("binary_sensor", autoload)
+        self.assertIn("hmac_sha256", autoload)
+        self.assertIn("light", autoload)
+        self.assertNotIn("espnow", autoload)
+        self.assertNotIn("cfx_button", autoload)
+        self.assertNotIn("cfx_effect_registry", autoload)
+        self.assertNotIn("number", autoload)
+        self.assertNotIn("select", autoload)
+
     async def test_codegen_emits_espnow_transport_enum(self):
         emitted = []
         defines = []
@@ -246,7 +266,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             emitted,
         )
 
-    def test_esp8266_support_is_controller_only_over_udp(self):
+    def test_esp8266_support_is_controller_or_satellite_over_udp(self):
         valid = {
             "role": "controller",
             "transport": "auto",
@@ -257,6 +277,17 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             "role": "controller",
             "transport": "udp",
             "lights": [],
+            "local_input": light_id("wall_button"),
+        }
+        valid_satellite = {
+            "role": "satellite",
+            "transport": "auto",
+            "lights": [light_id("tuya_light")],
+        }
+        valid_satellite_udp = {
+            "role": "satellite",
+            "transport": "udp",
+            "lights": [light_id("tuya_light")],
             "local_input": light_id("wall_button"),
         }
         invalid_configs = [
@@ -284,6 +315,22 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 "local_input": light_id("wall_button"),
                 "remote_input": light_id("remote_button_host"),
             },
+            {
+                "role": "satellite",
+                "transport": "espnow",
+                "lights": [light_id("tuya_light")],
+            },
+            {
+                "role": "satellite",
+                "transport": "udp",
+                "lights": [],
+            },
+            {
+                "role": "satellite",
+                "transport": "udp",
+                "lights": [light_id("tuya_light")],
+                "remote_input": light_id("remote_button_host"),
+            },
         ]
 
         with patch.object(
@@ -296,13 +343,99 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             self.assertIs(
                 cfx_sync._validate_platform_support(valid_udp), valid_udp
             )
+            self.assertIs(
+                cfx_sync._validate_platform_support(valid_satellite),
+                valid_satellite,
+            )
+            self.assertIs(
+                cfx_sync._validate_platform_support(valid_satellite_udp),
+                valid_satellite_udp,
+            )
 
             for config in invalid_configs:
                 with self.subTest(config=config), self.assertRaisesRegex(
                     cv.Invalid,
-                    "ESP8266 cfx_sync support is controller-only over UDP",
+                    "ESP8266 cfx_sync support is controller-or-satellite over UDP",
                 ):
                     cfx_sync._validate_platform_support(config)
+
+    async def test_codegen_emits_esp8266_satellite_light_and_udp_transport(self):
+        emitted = []
+
+        class _Var:
+            def __getattr__(self, name):
+                return lambda *args: (name, *args)
+
+        var = _Var()
+        light = object()
+        local_input = object()
+        heartbeat = SimpleNamespace(total_milliseconds=30_000)
+        config = {
+            "id": light_id("sync"),
+            "role": "satellite",
+            "lights": [light_id("tuya_light")],
+            "local_input": light_id("wall_button"),
+            "group": "room",
+            "key": "password",
+            "heartbeat": heartbeat,
+            "transport": "auto",
+            "_effect_catalogs": [[]],
+            "_control_ids": [{}],
+        }
+
+        with (
+            patch.object(
+                type(cfx_sync.CORE),
+                "is_esp8266",
+                new_callable=PropertyMock,
+                return_value=True,
+            ),
+            patch.object(cfx_sync.cg, "new_Pvariable", return_value=var),
+            patch.object(
+                type(cfx_sync.CORE),
+                "using_arduino",
+                new_callable=PropertyMock,
+                return_value=False,
+            ),
+            patch.object(cfx_sync.cg, "register_component", new=AsyncMock()),
+            patch.object(
+                cfx_sync.cg,
+                "get_variable",
+                new=AsyncMock(side_effect=[light, local_input]),
+            ),
+            patch.object(cfx_sync.cg, "add", side_effect=emitted.append),
+        ):
+            await cfx_sync.to_code(config)
+
+        self.assertIn(("add_light", light), emitted)
+        self.assertIn(("set_local_input", local_input), emitted)
+        self.assertIn(
+            (
+                "set_transport",
+                cfx_sync.CFXSyncTransport.CFX_SYNC_TRANSPORT_AUTO,
+            ),
+            emitted,
+        )
+
+    def test_esp8266_satellite_runtime_applies_basic_power_and_brightness(self):
+        header = (ROOT / "components" / "cfx_sync" / "cfx_sync.h").read_text(
+            encoding="utf-8"
+        )
+        source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("#include \"esphome/components/light/light_state.h\"", header)
+        self.assertIn("void add_light(light::LightState *light)", header)
+        self.assertIn("std::vector<light::LightState *> lights_;", header)
+        self.assertIn("void apply_remote_state_(const CFXSyncPacket &packet);", header)
+        self.assertIn("#if defined(USE_ESP8266)", source)
+        self.assertIn("call.set_state(packet.power);", source)
+        self.assertIn("call.set_brightness(packet.brightness / 255.0f);", source)
+        self.assertIn(
+            'ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields")',
+            source,
+        )
 
     def test_toggle_mode_preserves_settled_release_edge(self):
         source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(

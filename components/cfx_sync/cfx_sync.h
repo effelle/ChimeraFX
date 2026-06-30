@@ -20,8 +20,8 @@
 #ifdef USE_ESPNOW
 #include "esphome/components/espnow/espnow_component.h"
 #endif
-#if defined(USE_ESP32)
 #include "esphome/components/light/light_state.h"
+#if defined(USE_ESP32)
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
@@ -91,13 +91,15 @@ class CFXSyncComponent : public Component {
     this->bus_->set_espnow(espnow);
   }
 #endif
-#if defined(USE_ESP32)
   void add_light(light::LightState *light) {
     this->lights_.push_back(light);
+#if defined(USE_ESP32)
     this->effect_catalogs_.emplace_back();
     this->effect_log_states_.emplace_back();
     this->control_bindings_.emplace_back();
+#endif
   }
+#if defined(USE_ESP32)
   void add_effect(size_t light_index, uint8_t effect_id,
                   const std::string &name) {
     if (light_index >= this->effect_catalogs_.size()) {
@@ -393,6 +395,10 @@ class CFXSyncComponent : public Component {
   void schedule_boot_discovery_();
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
+  void schedule_follower_hello_();
+  void apply_remote_state_(const CFXSyncPacket &packet);
+  void apply_remote_state_to_light_(const CFXSyncPacket &packet,
+                                    size_t light_index);
 #if defined(USE_ESP32)
   uint8_t current_wifi_channel_() const;
   uint8_t active_sync_channel_() const;
@@ -402,16 +408,12 @@ class CFXSyncComponent : public Component {
   bool apply_fallback_channel_();
   void format_current_wifi_bssid_(char *buffer, size_t size) const;
   void schedule_espnow_rearm_(const char *reason);
-  void schedule_follower_hello_();
   void schedule_follower_recovery_();
   void schedule_follower_recovery_loop_();
   void schedule_follower_recovery_attempt_(const char *name,
                                            uint32_t base_delay_ms);
   void schedule_enable_resync_();
   void schedule_enable_resync_attempt_(const char *name, uint32_t delay_ms);
-  void apply_remote_state_(const CFXSyncPacket &packet);
-  void apply_remote_state_to_light_(const CFXSyncPacket &packet,
-                                    size_t light_index);
   void apply_remote_controls_to_light_(const CFXSyncPacket &packet,
                                        size_t light_index);
   void register_control_callbacks_(size_t light_index);
@@ -427,8 +429,8 @@ class CFXSyncComponent : public Component {
   const char *transport_name_() const;
 
   CFXSyncBus *bus_{&global_cfx_sync_bus()};
-#if defined(USE_ESP32)
   std::vector<light::LightState *> lights_;
+#if defined(USE_ESP32)
   std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;
   std::vector<EffectLogState> effect_log_states_;
   std::vector<ControlBinding> control_bindings_;
@@ -483,15 +485,16 @@ class CFXSyncComponent : public Component {
   bool remote_input_pressed_{false};
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};
+  bool applying_remote_state_{false};
+  bool has_valid_state_{false};
+  uint32_t last_unsupported_visual_log_ms_{0};
 
 #if defined(USE_ESP32)
   CFXSyncLightListener light_listener_{this};
-  bool applying_remote_state_{false};
   bool has_observed_state_{false};
   CFXSyncLightSnapshot observed_state_{};
   CFXSyncEffectState observed_effect_{};
   CFXSyncControlState observed_controls_{};
-  bool has_valid_state_{false};
 #endif
 
   uint32_t last_valid_packet_ms_{0};
