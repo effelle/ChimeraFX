@@ -3322,6 +3322,38 @@ class ESPNowAPITests(unittest.TestCase):
             "dimming must copy the current light values before overriding brightness",
         )
 
+    def test_cfx_dimmer_turn_on_fallback_preserves_current_color_mode(self):
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+        turn_on_body = re.search(
+            r"void CFXDimmer::turn_on_targets_\(.*?\n\}\n\nvoid CFXDimmer::turn_off_targets_",
+            dimmer_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(turn_on_body)
+        source = turn_on_body.group(0)
+
+        fallback = re.search(
+            r"if \(i >= this->saved_states_\.size\(\) \|\|.*?"
+            r"!this->saved_states_\[i\]\.valid\) \{(?P<body>.*?)continue;",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(fallback)
+        body = fallback.group("body")
+        from_values = body.find("call.from_light_color_values(state->remote_values);")
+        set_state = body.find("call.set_state(true);")
+        self.assertNotEqual(
+            from_values,
+            -1,
+            "first dimmer ON must not let ESPHome choose White mode",
+        )
+        self.assertNotEqual(set_state, -1)
+        self.assertLess(
+            from_values,
+            set_state,
+            "first dimmer ON must copy the current color values before state ON",
+        )
+
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

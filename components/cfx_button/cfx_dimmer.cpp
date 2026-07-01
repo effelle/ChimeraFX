@@ -302,6 +302,7 @@ void CFXDimmer::turn_on_targets_() {
     auto call = state->make_call();
     if (i >= this->saved_states_.size() ||
         !this->saved_states_[i].valid) {
+      call.from_light_color_values(state->remote_values);
       call.set_state(true);
       call.perform();
       continue;
