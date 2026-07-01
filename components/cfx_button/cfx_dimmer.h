@@ -47,6 +47,7 @@ class CFXDimmer : public Component {
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
   static constexpr float RAMP_MEASURED_EDGE_EPSILON = 0.005f;
   static constexpr float RAMP_MEASURED_EDGE_PROGRESS = 0.98f;
+  static constexpr float RAMP_MEASURED_MAX_DRIFT = 0.08f;
 
   void finalize_release_(DimmerReleaseAction action, uint32_t released_at_ms);
   void finalize_directional_release_(uint32_t released_at_ms);

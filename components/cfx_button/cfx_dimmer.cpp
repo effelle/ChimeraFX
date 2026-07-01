@@ -459,6 +459,8 @@ bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
   const uint32_t elapsed = now - this->ramp_started_ms_;
   const float progress =
       std::min(1.0f, static_cast<float>(elapsed) / duration);
+  const float estimated =
+      this->clamp_brightness_(start + ((target - start) * progress));
   measured = this->clamp_brightness_(
       state->current_values.get_brightness() *
       state->current_values.get_state());
@@ -468,6 +470,9 @@ bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
   const float high =
       std::max(start, target) + RAMP_MEASURED_EDGE_EPSILON;
   if (measured < low || measured > high) {
+    return false;
+  }
+  if (std::abs(measured - estimated) > RAMP_MEASURED_MAX_DRIFT) {
     return false;
   }
   if (progress < RAMP_MEASURED_EDGE_PROGRESS &&

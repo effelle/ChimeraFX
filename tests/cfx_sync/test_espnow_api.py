@@ -3303,6 +3303,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("state->current_values.get_brightness()", body)
         self.assertIn("state->current_values.get_state()", body)
         self.assertIn("std::abs(measured - target)", body)
+        self.assertIn("RAMP_MEASURED_MAX_DRIFT", body)
+        self.assertIn("std::abs(measured - estimated)", body)
         self.assertIn("RAMP_MEASURED_EDGE_EPSILON", body)
         self.assertIn(
             "progress < RAMP_MEASURED_EDGE_PROGRESS",
