@@ -417,7 +417,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             emitted,
         )
 
-    def test_esp8266_satellite_runtime_applies_basic_power_and_brightness(self):
+    def test_esp8266_satellite_runtime_applies_basic_power_and_supported_brightness(self):
         header = (ROOT / "components" / "cfx_sync" / "cfx_sync.h").read_text(
             encoding="utf-8"
         )
@@ -431,6 +431,16 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("void apply_remote_state_(const CFXSyncPacket &packet);", header)
         self.assertIn("#if defined(USE_ESP8266)", source)
         self.assertIn("call.set_state(packet.power);", source)
+        self.assertIn("const auto traits = light->get_traits();", source)
+        self.assertIn("const bool supports_brightness =", source)
+        self.assertIn("traits.supports_color_mode(light::ColorMode::BRIGHTNESS)", source)
+        self.assertIn("traits.supports_color_mode(light::ColorMode::WHITE)", source)
+        self.assertIn("traits.supports_color_mode(light::ColorMode::RGB)", source)
+        self.assertIn("traits.supports_color_mode(light::ColorMode::RGB_WHITE)", source)
+        self.assertIn(
+            "if (packet.has_brightness && supports_brightness)",
+            source,
+        )
         self.assertIn("call.set_brightness(packet.brightness / 255.0f);", source)
         self.assertIn(
             'ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields")',

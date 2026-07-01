@@ -2235,7 +2235,13 @@ void CFXSyncComponent::apply_remote_state_to_light_(
     call.set_state(packet.power);
     has_action = true;
   }
-  if (packet.has_brightness) {
+  const auto traits = light->get_traits();
+  const bool supports_brightness =
+      traits.supports_color_mode(light::ColorMode::BRIGHTNESS) ||
+      traits.supports_color_mode(light::ColorMode::WHITE) ||
+      traits.supports_color_mode(light::ColorMode::RGB) ||
+      traits.supports_color_mode(light::ColorMode::RGB_WHITE);
+  if (packet.has_brightness && supports_brightness) {
     call.set_brightness(packet.brightness / 255.0f);
     has_action = true;
   }
