@@ -321,6 +321,27 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertIn("#if defined(USE_ESP32)\nstatic CFXSyncTimingState", source)
         self.assertIn("#if defined(USE_ESP32)\n  void add_effect", header)
         self.assertIn("#if defined(USE_ESP32)\n  std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;", header)
+        self.assertNotIn("\n#include <esp_err.h>\n#if defined(USE_ESP32)", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
+                r"#include <esp_err\.h>\s*"
+                r"#include <esp_random\.h>",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP32\).*?"
+                r"void handle_send_result_\(esp_err_t result\);.*?"
+                r"void handle_peer_send_result_\(PeerState &peer, esp_err_t result\);.*?"
+                r"#endif",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("uint8_t fallback_channel_{6};", header)
         self.assertRegex(
             source,
             re.compile(
@@ -341,6 +362,41 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertIn(
             'ESP_LOGI(TAG, "CFX Sync transport auto selected UDP");',
             source,
+        )
+
+    def test_udp_transport_uses_wifiudp_on_esp8266(self):
+        header = UDP_HEADER.read_text(encoding="utf-8")
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP8266\).*?"
+                r"#include <WiFiUdp\.h>.*?"
+                r"#endif",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP8266\).*?"
+                r"WiFiUDP udp_;.*?"
+                r"#else.*?"
+                r"int socket_fd_\{-1\};.*?"
+                r"#endif",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"#if defined\(USE_ESP8266\).*?"
+                r"this->udp_\.begin\(port\).*?"
+                r"this->udp_\.parsePacket\(\).*?"
+                r"this->udp_\.beginPacket\(broadcast, this->port_\)",
+                re.DOTALL,
+            ),
         )
 
     def test_dump_config_reports_active_transport_selection(self):
@@ -2499,7 +2555,7 @@ class ESPNowAPITests(unittest.TestCase):
         )
         retry_body = re.search(
             r"void CFXSyncComponent::schedule_state_retry_\(\).*?"
-            r"\n\}\n\nvoid CFXSyncComponent::handle_decode_failure_",
+            r"\n\}\n#endif\n\nvoid CFXSyncComponent::handle_decode_failure_",
             source,
             re.DOTALL,
         )
@@ -2733,9 +2789,11 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::STATE_ACK\) \{"
+                r"\s*#if defined\(USE_ESP32\)"
                 r"\s*if \(this->role_ == CFXSyncRole::LEADER\) \{"
                 r"\s*this->handle_state_ack_\(\*peer, packet\);"
                 r"\s*\}"
+                r"\s*#endif"
                 r"\s*return true;"
                 r"\s*\}",
                 re.DOTALL,

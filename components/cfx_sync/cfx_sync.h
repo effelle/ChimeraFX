@@ -367,9 +367,9 @@ class CFXSyncComponent : public Component {
                       size_t size);
   bool handle_decoded_packet_(const CFXSyncSource &source,
                               const CFXSyncPacket &packet);
-#if defined(USE_ESP32)
   bool has_peer_send_warning_() const;
   bool has_pending_ack_(const PeerState &peer) const;
+#if defined(USE_ESP32)
   bool is_current_broadcast_ack_(const CFXSyncPacket &packet) const;
   void seed_peer_sent_state_from_ack_(PeerState &peer,
                                       const CFXSyncPacket &packet);
@@ -380,12 +380,10 @@ class CFXSyncComponent : public Component {
   uint8_t remote_peer_count_() const;
   uint8_t pending_ack_count_() const;
   uint32_t missed_ack_count_() const;
+#if defined(USE_ESP32)
   void handle_state_ack_(PeerState &peer, const CFXSyncPacket &packet);
-#if defined(USE_ESP32)
   void check_ack_health_();
-#endif
   void handle_send_result_(esp_err_t result);
-#if defined(USE_ESP32)
   void handle_peer_send_result_(PeerState &peer, esp_err_t result);
 #endif
   void clear_warning_if_set_();
@@ -467,12 +465,12 @@ class CFXSyncComponent : public Component {
   uint8_t pending_wifi_channel_{0};
   uint32_t pending_wifi_channel_since_ms_{0};
   bool last_wifi_connected_{false};
-  uint8_t fallback_channel_{6};
   bool offline_fallback_active_{false};
   uint32_t wifi_disconnected_since_ms_{0};
   bool espnow_rearm_scheduled_{false};
   uint32_t last_espnow_rearm_ms_{0};
 #endif
+  uint8_t fallback_channel_{6};
   CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};
   CFXSyncTransport transport_{CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO};
   uint16_t udp_port_{DEFAULT_UDP_PORT};

@@ -11,8 +11,8 @@
 #include "esphome/components/wifi/wifi_component.h"
 #endif
 
-#include <esp_err.h>
 #if defined(USE_ESP32)
+#include <esp_err.h>
 #include <esp_random.h>
 #include <esp_wifi.h>
 #elif defined(USE_ESP8266)
@@ -626,6 +626,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->register_peer_(*peer);
     }
   }
+#if defined(USE_ESP32)
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE_ACK &&
       this->role_ == CFXSyncRole::LEADER &&
       this->is_current_broadcast_ack_(packet)) {
@@ -636,6 +637,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->seed_peer_sent_state_from_ack_(*peer, packet);
     }
   }
+#endif
   if (packet.type == CFXSyncPacketType::STATE_ACK &&
       this->role_ != CFXSyncRole::LEADER) {
     return true;
@@ -697,9 +699,11 @@ bool CFXSyncComponent::handle_decoded_packet_(
   this->last_valid_packet_ms_ = millis();
 
   if (packet.type == CFXSyncPacketType::STATE_ACK) {
+#if defined(USE_ESP32)
     if (this->role_ == CFXSyncRole::LEADER) {
       this->handle_state_ack_(*peer, packet);
     }
+#endif
     return true;
   }
 
@@ -728,6 +732,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
 }
 
 void CFXSyncComponent::on_local_light_update() {
+#if defined(USE_ESP32)
   auto *leader = this->leader_light_();
   if (this->applying_remote_state_ || leader == nullptr ||
       this->effect_catalogs_.empty()) {
@@ -748,9 +753,11 @@ void CFXSyncComponent::on_local_light_update() {
   this->observed_effect_ = effect;
   this->observed_controls_ = controls;
   this->send_state_(snapshot, effect, controls, true);
+#endif
 }
 
 void CFXSyncComponent::on_sync_enabled_switch(bool enabled) {
+#if defined(USE_ESP32)
   this->sync_enabled_ = enabled;
   if (!this->is_state_receiver_role_()) {
     return;
@@ -760,12 +767,18 @@ void CFXSyncComponent::on_sync_enabled_switch(bool enabled) {
   if (enabled) {
     this->schedule_enable_resync_();
   }
+#else
+  this->sync_enabled_ = enabled;
+#endif
 }
 
 void CFXSyncComponent::on_local_control_update() {
+#if defined(USE_ESP32)
   this->on_local_light_update();
+#endif
 }
 
+#if defined(USE_ESP32)
 bool CFXSyncComponent::send_state_(bool include_default_transition) {
   auto *leader = this->leader_light_();
   if (leader == nullptr || this->effect_catalogs_.empty()) {
@@ -903,6 +916,7 @@ bool CFXSyncComponent::send_state_to_peer_(
   peer.last_state_sent_ms = millis();
   return true;
 }
+#endif
 
 bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
                                        const CFXSyncPacket &packet,
@@ -1254,12 +1268,20 @@ bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
 
 bool CFXSyncComponent::send_udp_packet_(std::vector<uint8_t> &packet) {
   if (!this->bus_->send_udp(packet)) {
+#if defined(USE_ESP32)
     this->handle_send_result_(ESP_FAIL);
+#else
+    this->send_failures_++;
+#endif
     return false;
   }
+#if defined(USE_ESP32)
   this->handle_send_result_(ESP_OK);
+#endif
   this->sent_packets_++;
+#if defined(USE_ESP32)
   this->flush_deferred_state_();
+#endif
   return true;
 }
 
@@ -1557,6 +1579,7 @@ bool CFXSyncComponent::has_pending_ack_(const PeerState &peer) const {
           peer.last_ack_sequence != peer.last_state_sent_sequence);
 }
 
+#if defined(USE_ESP32)
 bool CFXSyncComponent::is_current_broadcast_ack_(
     const CFXSyncPacket &packet) const {
   return this->last_broadcast_state_boot_id_ != 0 &&
@@ -1572,6 +1595,7 @@ void CFXSyncComponent::seed_peer_sent_state_from_ack_(
       this->last_broadcast_state_ms_ != 0 ? this->last_broadcast_state_ms_
                                           : millis();
 }
+#endif
 
 bool CFXSyncComponent::is_peer_send_suspended_(
     const PeerState &peer) const {
@@ -1628,6 +1652,7 @@ uint32_t CFXSyncComponent::missed_ack_count_() const {
   return count;
 }
 
+#if defined(USE_ESP32)
 void CFXSyncComponent::handle_state_ack_(PeerState &peer,
                                          const CFXSyncPacket &packet) {
   if (packet.acked_boot_id != peer.last_state_sent_boot_id ||
@@ -1766,6 +1791,7 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
     this->status_set_warning();
   }
 }
+#endif
 
 void CFXSyncComponent::clear_warning_if_set_() {
   if (this->status_has_warning()) {
@@ -1773,6 +1799,7 @@ void CFXSyncComponent::clear_warning_if_set_() {
   }
 }
 
+#if defined(USE_ESP32)
 void CFXSyncComponent::flush_deferred_state_() {
   if (!this->state_send_deferred_ || this->send_pending_ ||
       this->role_ != CFXSyncRole::LEADER) {
@@ -1815,6 +1842,7 @@ void CFXSyncComponent::schedule_state_retry_() {
     this->state_retry_active_ = false;
   });
 }
+#endif
 
 void CFXSyncComponent::handle_decode_failure_(
     CFXSyncDecodeResult result) {

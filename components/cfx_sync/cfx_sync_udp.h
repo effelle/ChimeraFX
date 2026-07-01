@@ -8,6 +8,10 @@
 
 #include "cfx_sync_transport.h"
 
+#if defined(USE_ESP8266)
+#include <WiFiUdp.h>
+#endif
+
 #include <cstdint>
 #include <vector>
 
@@ -29,7 +33,11 @@ class CFXSyncUDPTransport {
   void close_();
   bool send_to_(uint32_t address, const std::vector<uint8_t> &packet);
 
+#if defined(USE_ESP8266)
+  WiFiUDP udp_;
+#else
   int socket_fd_{-1};
+#endif
   bool ready_{false};
   uint16_t port_{0};
 };

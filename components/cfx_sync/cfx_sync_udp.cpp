@@ -3,6 +3,9 @@
 
 #include "esphome/core/log.h"
 
+#if defined(USE_ESP8266)
+#include <ESP8266WiFi.h>
+#else
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -10,6 +13,7 @@
 #include <lwip/netif.h>
 #include <lwip/sockets.h>
 #include <unistd.h>
+#endif
 
 namespace esphome {
 namespace cfx_sync {
@@ -20,16 +24,27 @@ static constexpr size_t UDP_RX_BUFFER_SIZE = 250;
 CFXSyncUDPTransport::~CFXSyncUDPTransport() { this->close_(); }
 
 void CFXSyncUDPTransport::close_() {
+#if defined(USE_ESP8266)
+  this->udp_.stop();
+#else
   if (this->socket_fd_ >= 0) {
     ::close(this->socket_fd_);
     this->socket_fd_ = -1;
   }
+#endif
   this->ready_ = false;
 }
 
 bool CFXSyncUDPTransport::begin(uint16_t port) {
   this->close_();
   this->port_ = port;
+#if defined(USE_ESP8266)
+  if (!this->udp_.begin(port)) {
+    ESP_LOGW(TAG, "Failed to bind UDP sync socket on port %u",
+             static_cast<unsigned>(port));
+    return false;
+  }
+#else
   this->socket_fd_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (this->socket_fd_ < 0) {
     ESP_LOGW(TAG, "Failed to create UDP socket: errno=%d", errno);
@@ -64,6 +79,7 @@ bool CFXSyncUDPTransport::begin(uint16_t port) {
     this->close_();
     return false;
   }
+#endif
 
   this->ready_ = true;
   ESP_LOGI(TAG, "UDP transport listening on port %u",
@@ -77,6 +93,23 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
   }
 
   uint8_t buffer[UDP_RX_BUFFER_SIZE];
+#if defined(USE_ESP8266)
+  while (true) {
+    const int packet_size = this->udp_.parsePacket();
+    if (packet_size <= 0) {
+      return;
+    }
+    const int received = this->udp_.read(buffer, sizeof(buffer));
+    if (received <= 0) {
+      continue;
+    }
+    const IPAddress remote_ip = this->udp_.remoteIP();
+    CFXSyncSource source =
+        CFXSyncSource::from_udp(static_cast<uint32_t>(remote_ip),
+                                this->udp_.remotePort());
+    bus->dispatch_packet(source, buffer, static_cast<size_t>(received));
+  }
+#else
   while (true) {
     sockaddr_in addr{};
     socklen_t addr_len = sizeof(addr);
@@ -97,10 +130,23 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
         CFXSyncSource::from_udp(addr.sin_addr.s_addr, ntohs(addr.sin_port));
     bus->dispatch_packet(source, buffer, static_cast<size_t>(received));
   }
+#endif
 }
 
 bool CFXSyncUDPTransport::send_to_(uint32_t address,
                                    const std::vector<uint8_t> &packet) {
+#if defined(USE_ESP8266)
+  if (!this->ready_ || packet.empty()) {
+    return false;
+  }
+
+  IPAddress destination(address);
+  if (!this->udp_.beginPacket(destination, this->port_)) {
+    return false;
+  }
+  const size_t written = this->udp_.write(packet.data(), packet.size());
+  return written == packet.size() && this->udp_.endPacket() == 1;
+#else
   if (!this->ready_ || this->socket_fd_ < 0 || packet.empty()) {
     return false;
   }
@@ -115,9 +161,31 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address,
                reinterpret_cast<const sockaddr *>(&destination),
                sizeof(destination));
   return sent == static_cast<ssize_t>(packet.size());
+#endif
 }
 
 bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
+#if defined(USE_ESP8266)
+  bool sent = false;
+  if (WiFi.status() == WL_CONNECTED) {
+    const IPAddress local_ip = WiFi.localIP();
+    const IPAddress subnet = WiFi.subnetMask();
+    const uint32_t broadcast =
+        static_cast<uint32_t>(local_ip) | ~static_cast<uint32_t>(subnet);
+    if (broadcast != 0 && broadcast != 0xFFFFFFFFUL) {
+      sent = this->send_to_(broadcast, packet);
+    }
+  }
+  const IPAddress broadcast(255, 255, 255, 255);
+  if (!this->ready_ || packet.empty()) {
+    return sent;
+  }
+  if (!this->udp_.beginPacket(broadcast, this->port_)) {
+    return sent;
+  }
+  const size_t written = this->udp_.write(packet.data(), packet.size());
+  return (written == packet.size() && this->udp_.endPacket() == 1) || sent;
+#else
   bool sent = false;
 
   for (netif *interface = netif_list; interface != nullptr;
@@ -138,6 +206,7 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
   }
 
   return this->send_to_(INADDR_BROADCAST, packet) || sent;
+#endif
 }
 
 }  // namespace cfx_sync
