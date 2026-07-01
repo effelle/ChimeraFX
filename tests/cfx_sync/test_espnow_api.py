@@ -3207,11 +3207,18 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn("struct CFXDimmerTimingHint", timing_header)
         self.assertIn("publish_light_ramp_hint", timing_header)
+        self.assertIn("publish_light_ramp_duration_hint", timing_header)
+        self.assertIn("bool has_ramp_duration{false};", timing_header)
         self.assertIn("capture_light_timing_hint", timing_header)
         self.assertIn("clear_light_timing_hint", timing_header)
         self.assertIn('#include "cfx_dimmer_timing.h"', dimmer_source)
         self.assertIn("publish_light_ramp_hint(state, now + duration);", dimmer_source)
         self.assertIn("clear_light_timing_hint(state);", dimmer_source)
+        self.assertIn(
+            "publish_light_ramp_duration_hint(state, transition_ms);",
+            dimmer_source,
+            "immediate dimmer freeze must tell followers to cancel the active ramp",
+        )
         self.assertIn('#include "cfx_dimmer_timing.h"', cct_source)
         self.assertRegex(
             cct_source,

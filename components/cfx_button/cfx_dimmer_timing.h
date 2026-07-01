@@ -20,6 +20,8 @@ struct CFXDimmerTimingHint {
 struct CFXDimmerTimingEntry {
   light::LightState *light{nullptr};
   uint32_t ramp_end_ms{0};
+  bool has_ramp_duration{false};
+  uint16_t ramp_ms{0};
 };
 
 inline std::array<CFXDimmerTimingEntry, 8> CFX_DIMMER_TIMING_HINTS{};
@@ -60,12 +62,26 @@ inline void publish_light_ramp_hint(light::LightState *light,
   if (auto *entry = find_or_create_light_timing_entry_(light);
       entry != nullptr) {
     entry->ramp_end_ms = ramp_end_ms;
+    entry->has_ramp_duration = false;
+    entry->ramp_ms = 0;
+  }
+}
+
+inline void publish_light_ramp_duration_hint(light::LightState *light,
+                                             uint32_t ramp_ms) {
+  if (auto *entry = find_or_create_light_timing_entry_(light);
+      entry != nullptr) {
+    entry->ramp_end_ms = 0;
+    entry->has_ramp_duration = true;
+    entry->ramp_ms = clamp_timing_ms_(ramp_ms);
   }
 }
 
 inline void clear_light_timing_hint(light::LightState *light) {
   if (auto *entry = find_light_timing_entry_(light); entry != nullptr) {
     entry->ramp_end_ms = 0;
+    entry->has_ramp_duration = false;
+    entry->ramp_ms = 0;
   }
 }
 
@@ -73,7 +89,17 @@ inline CFXDimmerTimingHint capture_light_timing_hint(light::LightState *light,
                                                      uint32_t now) {
   CFXDimmerTimingHint hint;
   auto *entry = find_light_timing_entry_(light);
-  if (entry == nullptr || entry->ramp_end_ms == 0) {
+  if (entry == nullptr) {
+    return hint;
+  }
+  if (entry->has_ramp_duration) {
+    hint.has_ramp = true;
+    hint.ramp_ms = entry->ramp_ms;
+    entry->has_ramp_duration = false;
+    entry->ramp_ms = 0;
+    return hint;
+  }
+  if (entry->ramp_end_ms == 0) {
     return hint;
   }
   if (static_cast<int32_t>(entry->ramp_end_ms - now) <= 0) {

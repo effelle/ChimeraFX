@@ -284,6 +284,7 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   }
   if (transition_ms == 0) {
     clear_light_timing_hint(state);
+    publish_light_ramp_duration_hint(state, transition_ms);
   }
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
