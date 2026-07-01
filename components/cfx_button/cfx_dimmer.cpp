@@ -287,10 +287,48 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   }
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
-  call.from_light_color_values(state->remote_values);
+  this->apply_color_values_(call, state, state->remote_values);
   call.set_state(true);
   call.set_brightness(this->clamp_brightness_(brightness));
   call.perform();
+}
+
+void CFXDimmer::apply_color_values_(
+    light::LightCall &call, light::LightState *state,
+    const light::LightColorValues &values) const {
+  if (state == nullptr) {
+    return;
+  }
+
+  const auto traits = state->get_traits();
+  const auto mode = values.get_color_mode();
+  const bool wants_white =
+      mode == light::ColorMode::WHITE ||
+      mode == light::ColorMode::RGB_WHITE ||
+      mode == light::ColorMode::UNKNOWN;
+  const bool wants_rgb =
+      mode == light::ColorMode::RGB ||
+      mode == light::ColorMode::RGB_WHITE ||
+      mode == light::ColorMode::UNKNOWN;
+
+  if (wants_rgb &&
+      traits.supports_color_mode(light::ColorMode::RGB_WHITE)) {
+    call.set_color_mode(light::ColorMode::RGB_WHITE);
+    call.set_color_brightness(values.get_color_brightness());
+    call.set_rgb(values.get_red(), values.get_green(), values.get_blue());
+    call.set_white(values.get_white());
+    return;
+  }
+  if (wants_rgb && traits.supports_color_mode(light::ColorMode::RGB)) {
+    call.set_color_mode(light::ColorMode::RGB);
+    call.set_color_brightness(values.get_color_brightness());
+    call.set_rgb(values.get_red(), values.get_green(), values.get_blue());
+    return;
+  }
+  if (wants_white && traits.supports_color_mode(light::ColorMode::WHITE)) {
+    call.set_color_mode(light::ColorMode::WHITE);
+    call.set_white(values.get_white());
+  }
 }
 
 void CFXDimmer::turn_on_targets_() {
@@ -302,7 +340,7 @@ void CFXDimmer::turn_on_targets_() {
     auto call = state->make_call();
     if (i >= this->saved_states_.size() ||
         !this->saved_states_[i].valid) {
-      call.from_light_color_values(state->remote_values);
+      this->apply_color_values_(call, state, state->remote_values);
       call.set_state(true);
       call.perform();
       continue;
@@ -311,7 +349,7 @@ void CFXDimmer::turn_on_targets_() {
     const auto &saved = this->saved_states_[i];
     if (saved.effect.empty()) {
       call.set_effect("None");
-      call.from_light_color_values(saved.values);
+      this->apply_color_values_(call, state, saved.values);
       call.set_state(true);
     } else {
       call.set_state(true);

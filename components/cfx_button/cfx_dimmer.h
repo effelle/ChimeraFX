@@ -1,6 +1,8 @@
 #pragma once
 
 #include "cfx_dimmer_gesture.h"
+#include "esphome/components/light/light_call.h"
+#include "esphome/components/light/light_color_values.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/component.h"
 #include <string>
@@ -56,6 +58,8 @@ class CFXDimmer : public Component {
   void service_manual_ramp_(uint32_t now);
   void apply_brightness_(light::LightState *state, float brightness,
                          uint32_t transition_ms);
+  void apply_color_values_(light::LightCall &call, light::LightState *state,
+                           const light::LightColorValues &values) const;
   void turn_on_targets_();
   void turn_off_targets_();
   bool any_target_on_() const;

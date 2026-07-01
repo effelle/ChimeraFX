@@ -3308,7 +3308,9 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIsNotNone(apply_body)
         source = apply_body.group(0)
 
-        from_values = source.find("call.from_light_color_values(state->remote_values);")
+        from_values = source.find(
+            "this->apply_color_values_(call, state, state->remote_values);"
+        )
         set_brightness = source.find("call.set_brightness(")
         self.assertNotEqual(
             from_values,
@@ -3321,6 +3323,25 @@ class ESPNowAPITests(unittest.TestCase):
             set_brightness,
             "dimming must copy the current light values before overriding brightness",
         )
+
+    def test_cfx_dimmer_color_preserve_sets_explicit_color_mode(self):
+        dimmer_header = (
+            ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
+        ).read_text(encoding="utf-8")
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void apply_color_values_(light::LightCall &call,",
+            dimmer_header,
+        )
+        self.assertIn("values.get_color_mode()", dimmer_source)
+        self.assertIn("light::ColorMode::UNKNOWN", dimmer_source)
+        self.assertIn("call.set_color_mode(light::ColorMode::RGB_WHITE);", dimmer_source)
+        self.assertIn("call.set_color_mode(light::ColorMode::RGB);", dimmer_source)
+        self.assertIn("call.set_color_mode(light::ColorMode::WHITE);", dimmer_source)
+        self.assertIn("call.set_color_brightness(", dimmer_source)
+        self.assertIn("call.set_rgb(", dimmer_source)
+        self.assertIn("call.set_white(", dimmer_source)
 
     def test_cfx_dimmer_turn_on_fallback_preserves_current_color_mode(self):
         dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
@@ -3340,7 +3361,9 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIsNotNone(fallback)
         body = fallback.group("body")
-        from_values = body.find("call.from_light_color_values(state->remote_values);")
+        from_values = body.find(
+            "this->apply_color_values_(call, state, state->remote_values);"
+        )
         set_state = body.find("call.set_state(true);")
         self.assertNotEqual(
             from_values,
