@@ -2533,7 +2533,8 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
-                r"this->apply_remote_state_\(packet\);"
+                r"const bool applied = this->apply_remote_state_\(packet\);"
+                r".*?"
                 r"\s*this->schedule_state_ack_"
                 r"\(source\.espnow_mac_or_null\(\), packet,\s*"
                 r"CFXSyncAckResult::APPLIED\);",
@@ -3030,7 +3031,7 @@ class ESPNowAPITests(unittest.TestCase):
     def test_follower_folds_effect_into_existing_light_call(self):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
-            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
             r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
@@ -3077,7 +3078,7 @@ class ESPNowAPITests(unittest.TestCase):
     def test_follower_does_not_repaint_static_state_while_turning_off(self):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
-            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
             r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
@@ -3119,7 +3120,7 @@ class ESPNowAPITests(unittest.TestCase):
     def test_follower_bypasses_native_transition_when_turning_off_effect(self):
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
-            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
             r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
@@ -3257,7 +3258,7 @@ class ESPNowAPITests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
         apply_light_body = re.search(
-            r"void CFXSyncComponent::apply_remote_state_to_light_"
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
             r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
             source,
             re.DOTALL,
@@ -3266,14 +3267,14 @@ class ESPNowAPITests(unittest.TestCase):
         apply_light_source = apply_light_body.group(0)
 
         self.assertIn(
-            "void apply_remote_state_to_light_(", header
+            "bool apply_remote_state_to_light_(", header
         )
         self.assertIn(
             "for (size_t i = 0; i < aligned_light_count; i++)", source
         )
         self.assertIn("auto *light = this->lights_[i];", source)
         self.assertIn(
-            "this->apply_remote_state_to_light_(packet, i);",
+            "applied |= this->apply_remote_state_to_light_(packet, i);",
             source,
         )
         self.assertIn("this->lights_[light_index]", apply_light_source)

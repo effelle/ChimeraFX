@@ -397,8 +397,8 @@ class CFXSyncComponent : public Component {
   void run_boot_discovery_();
   bool boot_radio_ready_() const;
   void schedule_follower_hello_();
-  void apply_remote_state_(const CFXSyncPacket &packet);
-  void apply_remote_state_to_light_(const CFXSyncPacket &packet,
+  bool apply_remote_state_(const CFXSyncPacket &packet);
+  bool apply_remote_state_to_light_(const CFXSyncPacket &packet,
                                     size_t light_index);
 #if defined(USE_ESP32)
   uint8_t current_wifi_channel_() const;

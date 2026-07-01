@@ -727,10 +727,10 @@ bool CFXSyncComponent::handle_decoded_packet_(
        packet.has_controls)) {
     this->has_valid_state_ = true;
     this->clear_warning_if_set_();
-    if (this->role_ == CFXSyncRole::SATELLITE) {
+    const bool applied = this->apply_remote_state_(packet);
+    if (this->role_ == CFXSyncRole::SATELLITE && applied) {
       ESP_LOGD(TAG, "Satellite applying leader state");
     }
-    this->apply_remote_state_(packet);
     this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
                               CFXSyncAckResult::APPLIED);
   }
@@ -2192,15 +2192,16 @@ void CFXSyncComponent::schedule_enable_resync_attempt_(const char *name,
 
 #endif  // defined(USE_ESP32)
 
-void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
+bool CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
   RemoteApplyGuard guard(this->applying_remote_state_);
+  bool applied = false;
 #if defined(USE_ESP8266)
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *light = this->lights_[i];
     if (light == nullptr) {
       continue;
     }
-    this->apply_remote_state_to_light_(packet, i);
+    applied |= this->apply_remote_state_to_light_(packet, i);
   }
 #else
   const size_t aligned_light_count =
@@ -2213,27 +2214,30 @@ void CFXSyncComponent::apply_remote_state_(const CFXSyncPacket &packet) {
     if (light == nullptr) {
       continue;
     }
-    this->apply_remote_state_to_light_(packet, i);
+    applied |= this->apply_remote_state_to_light_(packet, i);
   }
 #endif
+  return applied;
 }
 
-void CFXSyncComponent::apply_remote_state_to_light_(
+bool CFXSyncComponent::apply_remote_state_to_light_(
     const CFXSyncPacket &packet, size_t light_index) {
 #if defined(USE_ESP8266)
   if (light_index >= this->lights_.size()) {
-    return;
+    return false;
   }
   auto *light = this->lights_[light_index];
   if (light == nullptr) {
-    return;
+    return false;
   }
 
   auto call = light->make_call();
   bool has_action = false;
   if (packet.has_power) {
-    call.set_state(packet.power);
-    has_action = true;
+    if (light->remote_values.is_on() != packet.power) {
+      call.set_state(packet.power);
+      has_action = true;
+    }
   }
   const auto traits = light->get_traits();
   const bool supports_brightness =
@@ -2242,8 +2246,12 @@ void CFXSyncComponent::apply_remote_state_to_light_(
       traits.supports_color_mode(light::ColorMode::RGB) ||
       traits.supports_color_mode(light::ColorMode::RGB_WHITE);
   if (packet.has_brightness && supports_brightness) {
-    call.set_brightness(packet.brightness / 255.0f);
-    has_action = true;
+    const float desired_brightness = packet.brightness / 255.0f;
+    if (std::fabs(light->remote_values.get_brightness() -
+                  desired_brightness) > (0.5f / 255.0f)) {
+      call.set_brightness(desired_brightness);
+      has_action = true;
+    }
   }
   if (packet.has_color || packet.has_color_brightness ||
       packet.has_effect || packet.has_controls || packet.has_transition ||
@@ -2259,15 +2267,16 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   if (has_action) {
     call.perform();
   }
+  return has_action;
 #else
   if (light_index >= this->lights_.size() ||
       light_index >= this->effect_catalogs_.size() ||
       light_index >= this->effect_log_states_.size()) {
-    return;
+    return false;
   }
   auto *light = this->lights_[light_index];
   if (light == nullptr) {
-    return;
+    return false;
   }
   this->apply_remote_controls_to_light_(packet, light_index);
 
@@ -2399,6 +2408,7 @@ void CFXSyncComponent::apply_remote_state_to_light_(
   if (use_remote_effect_off_transition) {
     light->set_default_transition_length(saved_default_transition);
   }
+  return true;
 #endif
 }
 

@@ -428,8 +428,9 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("#include \"esphome/components/light/light_state.h\"", header)
         self.assertIn("void add_light(light::LightState *light)", header)
         self.assertIn("std::vector<light::LightState *> lights_;", header)
-        self.assertIn("void apply_remote_state_(const CFXSyncPacket &packet);", header)
+        self.assertIn("bool apply_remote_state_(const CFXSyncPacket &packet);", header)
         self.assertIn("#if defined(USE_ESP8266)", source)
+        self.assertIn("light->remote_values.is_on() != packet.power", source)
         self.assertIn("call.set_state(packet.power);", source)
         self.assertIn("const auto traits = light->get_traits();", source)
         self.assertIn("const bool supports_brightness =", source)
@@ -441,9 +442,22 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             "if (packet.has_brightness && supports_brightness)",
             source,
         )
-        self.assertIn("call.set_brightness(packet.brightness / 255.0f);", source)
+        self.assertIn("light->remote_values.get_brightness()", source)
+        self.assertIn("call.set_brightness(desired_brightness);", source)
+        self.assertIn("return has_action;", source)
         self.assertIn(
             'ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields")',
+            source,
+        )
+
+    def test_satellite_logs_apply_only_when_state_performs(self):
+        source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("const bool applied = this->apply_remote_state_(packet);", source)
+        self.assertIn(
+            "if (this->role_ == CFXSyncRole::SATELLITE && applied)",
             source,
         )
 
