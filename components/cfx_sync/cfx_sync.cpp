@@ -583,15 +583,18 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->register_peer_(*peer);
     this->received_packets_++;
     this->last_valid_packet_ms_ = millis();
+#if defined(USE_ESP32)
     if (this->role_ == CFXSyncRole::LEADER &&
         this->should_send_state_for_hello_(*peer, new_peer,
                                            peer_rebooted)) {
       this->send_state_();
     }
+#endif
     return true;
   }
 
   if (packet.type == CFXSyncPacketType::SYNC_REQUEST) {
+#if defined(USE_ESP32)
     if (this->role_ != CFXSyncRole::LEADER) {
       this->log_rejection_("Ignoring SYNC_REQUEST for incompatible role");
       return true;
@@ -615,6 +618,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
         this->peer_accepts_leader_state_(*peer)) {
       this->send_state_();
     }
+#endif
     return true;
   }
 
@@ -644,6 +648,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
   }
 
   if (packet.type == CFXSyncPacketType::INPUT_STATE) {
+#if defined(USE_ESP32)
     if (this->role_ != CFXSyncRole::LEADER) {
       return true;
     }
@@ -680,6 +685,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->udp_input_applied_++;
       ESP_LOGD(TAG, "UDP input applied");
     }
+#endif
     return true;
   }
 
@@ -772,13 +778,11 @@ void CFXSyncComponent::on_sync_enabled_switch(bool enabled) {
 #endif
 }
 
-void CFXSyncComponent::on_local_control_update() {
 #if defined(USE_ESP32)
+void CFXSyncComponent::on_local_control_update() {
   this->on_local_light_update();
-#endif
 }
 
-#if defined(USE_ESP32)
 bool CFXSyncComponent::send_state_(bool include_default_transition) {
   auto *leader = this->leader_light_();
   if (leader == nullptr || this->effect_catalogs_.empty()) {
@@ -1159,6 +1163,7 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
 
 bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
                                            bool toggle) {
+#if defined(USE_ESP32)
   if (this->role_ != CFXSyncRole::LEADER) {
     return false;
   }
@@ -1190,8 +1195,15 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     this->schedule_remote_input_timeout_();
   }
   return true;
+#else
+  (void) pressed;
+  (void) maintained;
+  (void) toggle;
+  return false;
+#endif
 }
 
+#if defined(USE_ESP32)
 bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
                                            bool maintained, bool toggle) {
   if (toggle || maintained) {
@@ -1258,6 +1270,7 @@ void CFXSyncComponent::schedule_remote_input_timeout_() {
                       this->clear_remote_input_owner_();
                     });
 }
+#endif
 
 bool CFXSyncComponent::send_packet_(std::vector<uint8_t> &packet) {
   if (!this->has_static_peer_) {
@@ -1634,6 +1647,7 @@ uint8_t CFXSyncComponent::remote_peer_count_() const {
 }
 
 uint8_t CFXSyncComponent::pending_ack_count_() const {
+#if defined(USE_ESP32)
   uint8_t count = 0;
   for (const auto &peer : this->peers_) {
     if (this->peer_accepts_leader_state_(peer) &&
@@ -1642,6 +1656,9 @@ uint8_t CFXSyncComponent::pending_ack_count_() const {
     }
   }
   return count;
+#else
+  return 0;
+#endif
 }
 
 uint32_t CFXSyncComponent::missed_ack_count_() const {

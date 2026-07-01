@@ -399,6 +399,46 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             ),
         )
 
+    def test_esp8266_shared_parser_does_not_call_esp32_leader_helpers(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        decoded_body = re.search(
+            r"bool CFXSyncComponent::handle_decoded_packet_\(.*?"
+            r"\n\}\n\nvoid CFXSyncComponent::on_local_light_update",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(decoded_body)
+        decoded_source = decoded_body.group(0)
+        self.assertRegex(
+            decoded_source,
+            re.compile(
+                r"#if defined\(USE_ESP32\).*?"
+                r"this->send_state_\(\);.*?"
+                r"#endif.*?"
+                r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            decoded_source,
+            re.compile(
+                r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\) \{"
+                r"\s*#if defined\(USE_ESP32\).*?"
+                r"this->handle_remote_input_\(.*?"
+                r"#endif\s*return true;\s*\}",
+                re.DOTALL,
+            ),
+        )
+        pending_ack = re.search(
+            r"uint8_t CFXSyncComponent::pending_ack_count_\(\) const.*?"
+            r"\n\}\n\nuint32_t CFXSyncComponent::missed_ack_count_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(pending_ack)
+        self.assertIn("#if defined(USE_ESP32)", pending_ack.group(0))
+        self.assertIn("return 0;", pending_ack.group(0))
+
     def test_dump_config_reports_active_transport_selection(self):
         source = SOURCE.read_text(encoding="utf-8")
 
@@ -2638,6 +2678,7 @@ class ESPNowAPITests(unittest.TestCase):
             decoded_body.group(0),
             re.compile(
                 r"if \(packet\.type == CFXSyncPacketType::SYNC_REQUEST\) \{"
+                r"\s*#if defined\(USE_ESP32\)"
                 r"\s*if \(this->role_ != CFXSyncRole::LEADER\) \{"
                 r"\s*this->log_rejection_\("
                 r"\"Ignoring SYNC_REQUEST for incompatible role\"\);"
