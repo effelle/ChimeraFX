@@ -3256,7 +3256,7 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
-    def test_cfx_dimmer_freezes_native_ramps_from_current_light_output(self):
+    def test_cfx_dimmer_freezes_native_ramps_from_elapsed_ramp_position(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
         ).read_text(encoding="utf-8")
@@ -3279,11 +3279,23 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"float CFXDimmer::freeze_brightness_"
-                r"\(.*?state->current_values\.get_brightness\(\).*?"
-                r"state->current_values\.get_state\(\).*?"
-                r"this->ramp_current_brightness_\(index, now\)",
+                r"\(.*?return this->ramp_current_brightness_\(index, now\);",
                 re.DOTALL,
             ),
+            "dimmer release must freeze the elapsed ramp position, "
+            "not ESPHome's native transition target",
+        )
+        freeze_body = re.search(
+            r"float CFXDimmer::freeze_brightness_\(.*?\n\}\n\nbool CFXDimmer::target_has_effect_",
+            dimmer_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(freeze_body)
+        self.assertNotIn(
+            "current_values",
+            freeze_body.group(0),
+            "native transition current_values can already contain the edge "
+            "target when the button is released",
         )
 
     def test_follower_fans_out_with_independent_light_calls(self):

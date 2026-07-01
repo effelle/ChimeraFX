@@ -404,11 +404,7 @@ float CFXDimmer::ramp_current_brightness_(size_t index, uint32_t now) const {
 
 float CFXDimmer::freeze_brightness_(light::LightState *state, size_t index,
                                     uint32_t now) const {
-  if (index < this->ramp_manual_.size() && !this->ramp_manual_[index] &&
-      state != nullptr && state->current_values.is_on()) {
-    return this->clamp_brightness_(state->current_values.get_brightness() *
-                                   state->current_values.get_state());
-  }
+  (void) state;
   return this->ramp_current_brightness_(index, now);
 }
 
