@@ -3298,6 +3298,30 @@ class ESPNowAPITests(unittest.TestCase):
             "target when the button is released",
         )
 
+    def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+        apply_body = re.search(
+            r"void CFXDimmer::apply_brightness_\(.*?\n\}\n\nvoid CFXDimmer::turn_on_targets_",
+            dimmer_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_body)
+        source = apply_body.group(0)
+
+        from_values = source.find("call.from_light_color_values(state->remote_values);")
+        set_brightness = source.find("call.set_brightness(")
+        self.assertNotEqual(
+            from_values,
+            -1,
+            "dimming must preserve the current RGB/RGBW/white payload",
+        )
+        self.assertNotEqual(set_brightness, -1)
+        self.assertLess(
+            from_values,
+            set_brightness,
+            "dimming must copy the current light values before overriding brightness",
+        )
+
     def test_follower_fans_out_with_independent_light_calls(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")

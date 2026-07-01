@@ -287,6 +287,7 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   }
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
+  call.from_light_color_values(state->remote_values);
   call.set_state(true);
   call.set_brightness(this->clamp_brightness_(brightness));
   call.perform();
