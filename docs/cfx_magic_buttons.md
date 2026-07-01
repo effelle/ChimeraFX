@@ -1,14 +1,22 @@
 # ChimeraFX Magic Buttons
 
-ChimeraFX magic buttons are small on-device helpers for physical buttons. They
-do not create Home Assistant entities. The `cfx_button` platform
-binds an existing ESPHome `binary_sensor` to one ChimeraFX controller:
+ChimeraFX Magic Buttons let you control your lights directly using physical buttons wired to your ESP32 device. 
+
+Because magic buttons process all button presses locally on the device, they feature **instant control with zero network delay**. They will continue to work perfectly even if Home Assistant or your Wi-Fi network goes down.
+
+> [!NOTE]
+> Magic buttons operate entirely on the hardware level and do not create separate Home Assistant entities.
+
+The `cfx_button` platform binds an existing ESPHome `binary_sensor` to one ChimeraFX controller:
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: my_button
-    pin: GPIO05     # GPIO pin where the button is connected
+    pin:
+      number: GPIO05
+      mode: INPUT_PULLUP # Recommended: Keeps pin HIGH when button is open
+      inverted: true     # Recommended: Reports ON (true) when button is pressed to GND
 
 cfx_button:
   - id: my_button_binding
@@ -18,43 +26,31 @@ cfx_button:
         - my_light
 ```
 
-Exactly one controller is allowed per wrapper: `dimmer`, `cct_sweeper`,
-`hue_cycler`, or `effect_selector`. The referenced binary sensor remains
-responsible for GPIO configuration, inversion, filtering, debounce, touch
-inputs, expanders, and template state. Its logical convention must be
-`ON = pressed`.
+### How It Works
 
-Each controller may target a segmented master or its child segments, but the
-same `lights` list cannot contain both the master and any of its children.
-Configuration validation rejects that overlap.
+*   **One Controller per Binding:** Each `cfx_button` configuration can have exactly one controller type: `dimmer`, `cct_sweeper`, `hue_cycler`, or `effect_selector`.
+*   **Button State Convention:** The physical button must report `ON` when pressed and `OFF` when released. If your physical button is wired to GND (which is standard for most DIY ESPHome setups), ensure you set `inverted: true` and `mode: INPUT_PULLUP` on your `binary_sensor` pin configuration.
+*   **Segment Validation:** Each controller can target a master light or individual child light segments, but a single controller's `lights` list cannot contain both a master light and its child segments.
+*   **Startup Protection:** The button controller waits for the first valid `OFF` state (button released) after a reboot before accepting any input. If a button is held down or stuck during startup, it is ignored until released, preventing accidental triggers.
+*   **Transition Speeds:**
+    *   A quick tap (short-press) turns the light on/off using the light's normal transition speed (`default_transition_length`).
+    *   Holding the button (long-press) dims the light or cycles colors/effects using custom configured timings.
+    *   If your light has a dedicated white channel (like RGBW), CCT mode switches to it instantly, preventing the light from flashing stale RGB colors.
 
-Each controller is configured directly inside its wrapper; no separate helper
-declaration or helper ID is required. The wrapper waits for the first valid
-`OFF` state before accepting input. A
-button that is already `ON` during startup is ignored until released, preventing
-an accidental gesture after reboot. Controller timing and short/long behavior
-remain configured inside the selected controller block.
-
-Every short-press light command respects the target light's
-`default_transition_length`. Long-press dimming, CCT sweeping, hue cycling, and
-effect browsing keep their own configured timing. Effects with authored power
-choreography, including architectural and signature effects with embedded
-intros, continue to ignore the default transition through ChimeraFX's existing
-effect eligibility rules. A CCT `native_white` endpoint that uses only the
-physical white channel switches immediately, preventing ESPHome's addressable
-transition engine from carrying stale RGB channels into native-white mode.
+---
 
 ## Button Dimmer
 
-`cfx_dimmer` controls brightness. A short press toggles one or more lights. A
-long press ramps brightness, and each new long press alternates between ramping
-up and ramping down.
+`cfx_dimmer` controls light brightness. A short press toggles the target lights on or off. A long press ramps the brightness up or down, automatically alternating directions with each subsequent hold.
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: desk_lamp_button
-    pin: GPIO05     # GPIO pin where the button is connected
+    pin:
+      number: GPIO05
+      mode: INPUT_PULLUP
+      inverted: true
 
 cfx_button:
   - id: desk_lamp_button_binding
@@ -67,23 +63,28 @@ cfx_button:
         - desk_lamp_segment_4
 ```
 
-For rocker dimmers or wall controls with separate brighten/dim contacts, the
-dimmer can also bind directional inputs. The main `button` remains optional and
-keeps the normal short-press toggle plus alternating long-press dimming when it
-is present. `inputs.up` and `inputs.down` start ramping immediately while held
-and never perform a short-press toggle.
+For rocker dimmers or wall controls with separate brighten/dim contacts, the dimmer can also bind directional inputs. The main `button` remains optional (it keeps the normal short-press toggle plus alternating long-press dimming when present). `inputs.up` and `inputs.down` start ramping immediately while held and never perform a short-press toggle.
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: desk_lamp_toggle
-    pin: GPIO05
+    pin:
+      number: GPIO05
+      mode: INPUT_PULLUP
+      inverted: true
   - platform: gpio
     id: desk_lamp_up
-    pin: GPIO06
+    pin:
+      number: GPIO06
+      mode: INPUT_PULLUP
+      inverted: true
   - platform: gpio
     id: desk_lamp_down
-    pin: GPIO07
+    pin:
+      number: GPIO07
+      mode: INPUT_PULLUP
+      inverted: true
 
 cfx_button:
   - id: desk_lamp_dimmer_binding
@@ -96,6 +97,8 @@ cfx_button:
         down: desk_lamp_down
 ```
 
+### Configuration Options
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `id` | optional | Internal dimmer helper ID. Generated automatically when omitted. |
@@ -107,55 +110,42 @@ cfx_button:
 | `inputs.up` | unset | Optional binary sensor that ramps brightness upward immediately while held. |
 | `inputs.down` | unset | Optional binary sensor that ramps brightness downward immediately while held. |
 
-Brightness changes use ESPHome light transitions, preserve the currently
-selected ChimeraFX effect, and stop sending updates when the ramp reaches the
-upper or lower bound.
+### Key Features & Behaviors
 
-Each accepted press records whether any configured light is on. A short release
-uses that snapshot to turn the targets off or on, so transitions started during
-the gesture cannot reverse the requested action. Immediately before turning
-targets off, the dimmer captures each active target independently. The next
-dimmer turn-on restores a solid snapshot's brightness, color mode, and RGBW
-values. An effect snapshot instead restores its brightness and effect name
-without forcing possibly stale solid-color channels. Child segments therefore
-retain independent state. A segmented master has no effect state to capture, so
-its brightness and color values are restored as a solid snapshot.
+*   **Smart Dimming Direction:**
+    *   The first long press after boot defaults to ramping down.
+    *   **High Brightness (70%+):** Ramping down is always used.
+    *   **Low Brightness (30% or lower):** Ramping up is always used.
+    *   **In-between:** Consecutive long presses alternate directions (up then down, down then up).
+*   **State Snapshots:** Before turning a light off, the dimmer captures its current state. The next turn-on restores these values:
+    *   If it was showing a solid color: Restores brightness, color mode, and RGBW channels.
+    *   If it was running an effect: Restores brightness and the effect name (avoiding conflicting solid color channels).
+    *   *Note: Snapshots are kept in temporary memory and do not survive a reboot.*
+*   **Smart Ramping Restrictions:**
+    *   A single-button long press will only start dimming if the light is **already on**. Long presses starting while all targets are off are ignored (preventing accidental dimming in the dark).
+    *   A down-ramp stops at `min_brightness` (15% by default) and leaves the light on; only a short tap turns the light completely off.
+*   **Directional Inputs (Rocker Switches):**
+    *   `inputs.up` can turn an off light ON and brighten it starting from `min_brightness`.
+    *   `inputs.down` is ignored when all target lights are off.
+    *   Holding directional inputs starts ramping immediately and will not toggle the light state on release.
+*   **Anti-Flicker & Debounce Protection:** 
+    *   The dimmer uses direct brightness steps for active effects instead of smooth transitions. This avoids stop/start stuttering while holding the button.
+    *   After releasing the button, duplicate keypress signals are ignored for 350ms to ensure a double-trigger doesn't toggle your light by accident.
 
-These snapshots exist only at runtime and do not survive reboot. A target that
-has not yet been captured, including one that was already off when another
-target was captured, uses normal light turn-on behavior, so its configured
-restore mode or defaults may apply.
-Running effects are dimmed with direct brightness steps instead of ESPHome light
-transitions to avoid effect stop/start churn while the button is held.
-A long press only ramps when the gesture began with at least one configured
-light on. Long presses that begin while all targets are off are ignored. On
-release, the dimmer freezes at the brightness selected at that exact time. A
-completed down-ramp stops at `min_brightness` and leaves the light on; only a
-short press turns it off. The minimum applies to dimmer ramps and does not
-rewrite a lower brightness deliberately selected through Home Assistant.
-Directional `inputs.up` can turn an off target on and brighten it from
-`min_brightness`. Directional `inputs.down` is ignored when all targets are
-off. Directional inputs do not change the alternating direction remembered by
-the main one-button long-press gesture.
-The first long press after boot defaults to ramping down. At 70% brightness or
-higher, the dimmer always ramps down; at 30% or lower, it always ramps up.
-Between those barriers, consecutive long presses alternate direction.
-Classification also checks the total held time at release, so a busy device
-loop cannot misclassify a completed hold as a short-press toggle. The first
-release is applied immediately; repeated input edges are then suppressed until
-the button has remained quiet for 350 ms.
+---
 
 ## CCT Sweeper
 
-`cfx_cct_sweeper` controls white tone with RGB/RGBW approximations. It keeps an
-immutable native-white endpoint for the physical white channel and a preferred
-white that can be selected with a long press.
+`cfx_cct_sweeper` controls white color temperature using RGB or RGBW approximations. It lets you alternate between a clean physical white light (`native_white`) and a custom tuned color temperature (`preferred_white`).
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: living_room_cct_button
-    pin: GPIO06     # GPIO pin where the button is connected
+    pin:
+      number: GPIO06
+      mode: INPUT_PULLUP
+      inverted: true
 
 cfx_button:
   - id: living_room_cct_binding
@@ -169,6 +159,8 @@ cfx_button:
       restore: true
 ```
 
+### Configuration Options
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `id` | optional | Internal CCT sweeper helper ID. Generated automatically when omitted. |
@@ -179,54 +171,42 @@ cfx_button:
 | `preferred_white` | `[100%, 100%, 100%, 100%]` | Boot/default preferred white as `[red, green, blue, white]`. A long press updates it at runtime. |
 | `restore` | `false` | Restore the last preferred white selected by long press after reboot. |
 
-The legacy `favorite_white` option remains accepted as an alias for
-`preferred_white`, but the two names cannot be configured together.
-White-only endpoints such as the default `native_white` use ESPHome's native
-white color mode, keeping the RGB emitters off instead of normalizing them to
-full output.
+### Key Features & Behaviors
 
-A short press from the initial off state turns the targets on at
-`preferred_white`. After another controller or Home Assistant has turned the
-targets off, the first CCT short press restores their retained ESPHome state
-without replacing its effect, color, or brightness. The next short press enters
-CCT control. While the targets are on, a non-CCT output changes to the last
-white endpoint selected by this helper; later short presses alternate between
-`native_white` and `preferred_white`.
+*   **Understanding Color Formats:** 
+    *   The arrays `[red, green, blue, white]` represent the power levels (0% to 100%) sent to the light channels.
+    *   For example, `[100%, 90%, 75%, 60%]` uses all three RGB colors plus the physical white channel to approximate a specific white temperature.
+*   **Short Press Actions:**
+    *   If the light is off, a short press turns it on using your `preferred_white`.
+    *   If the light was turned off by Home Assistant or another control, the first short press restores its last state without changing the active effect or color.
+    *   If the light is on and showing a color/running an effect, a short press switches it to the last active white endpoint.
+    *   If it is already showing white, subsequent short presses toggle back and forth between `native_white` (dedicated white LED) and `preferred_white`.
+*   **Long Press Sweeping:**
+    *   Long presses starting while all target lights are off are ignored.
+    *   The first sweep moves toward a **warm white** limit. Subsequent sweeps alternate between **warm** and **cool** limits.
+    *   Releasing the button freezes the current white tone and updates your `preferred_white` color dynamically.
+    *   If you set `restore: true`, this dynamically selected preferred white will be saved and survive device reboots.
+*   **Transition Lock:** During a sweep, the color state is locked to the sweep position, preventing ESPHome's transition engine from causing the color to jump or shift.
 
-A long press that begins while all targets are off is ignored. The first valid
-sweep after boot moves toward the built-in warm limit; later long presses
-alternate between the internal warm and cool limits. Releasing the button freezes one shared white value
-across all targets and makes it the new `preferred_white`. With `restore:
-false`, reboot returns to the YAML value. With `restore: true`, the learned
-value survives reboot. When a sweep begins from `native_white`, the helper first
-enters the stored `preferred_white` RGBW domain so the warm/cool movement is
-visible immediately; `native_white` itself remains immutable.
-
-While sweeping, the helper locks the release color from its own commanded sweep
-timeline so ESPHome transition sampling cannot jump the output to a stale color.
+---
 
 ## Hue Cycler
 
-`cfx_hue_cycler` controls RGBW color. A short press toggles one or more lights
-between the selected hue and an immutable `fixed_color`. The fixed endpoint can
-be white or any other RGBW color. Release keeps the color currently shown.
+`cfx_hue_cycler` controls RGBW color. A short press toggles the target lights between your last selected color (hue) and a fixed color (usually white). A long press lets you cycle through colors to choose a new hue.
 
 Choose one long-press mode:
 
-- **Hue mode:** omit `colors`. The helper continuously cycles around the hue
-  wheel using `cycle_time` and `saturation`.
-- **Palette mode:** configure `colors`. The helper steps only through those
-  RGBW entries using `color_interval`. Do not configure `cycle_time` or
-  `saturation` with `colors`.
-
-The default boot/start hue is cyan-blue (`0%, 62%, 100%`) so it does not
-conflict with red error signaling.
+*   **Hue mode:** Omit the `colors` list. The helper continuously cycles around the hue wheel using `cycle_time` and `saturation`.
+*   **Palette mode:** Configure the `colors` list. The helper steps only through those exact colors using `color_interval`. (Do not configure `cycle_time` or `saturation` with `colors`).
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: game_room_rgb_button
-    pin: GPIO07     # GPIO pin where the button is connected
+    pin:
+      number: GPIO07
+      mode: INPUT_PULLUP
+      inverted: true
 
 cfx_button:
   - id: game_room_rgb_binding
@@ -238,6 +218,8 @@ cfx_button:
       fixed_color: [100%, 100%, 100%, 100%]
 ```
 
+### Configuration Options
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `id` | optional | Internal hue cycler helper ID. Generated automatically when omitted. |
@@ -246,13 +228,9 @@ cfx_button:
 | `cycle_time` | `6s` | Hue mode only. Time for one full hue loop. Cannot be used with `colors`. |
 | `colors` | unset | Optional list of RGBW colors. Enables palette mode and cannot be combined with `cycle_time` or `saturation`. |
 | `color_interval` | `900ms` | Time between palette entries while held. Valid only with `colors`. |
-| `fixed_color` | `[100%, 100%, 100%, 100%]` | Immutable short-press endpoint as `[red, green, blue, white]`. It does not need to be white. |
+| `fixed_color` | `[100%, 100%, 100%, 100%]` | Immutable short-press endpoint as `[red, green, blue, white]`. |
 | `saturation` | `100%` | Hue mode only. Lower values cycle pastel colors. Cannot be used with `colors`. |
 | `restore` | `false` | Restore the last locked hue or palette entry after reboot. |
-
-Palette mode uses the same RGBW format on every strip. RGB-only lights ignore
-the white entry. The first palette entry is selected when long press activates;
-later entries follow at `color_interval` and wrap to the beginning.
 
 ```yaml
 cfx_button:
@@ -269,31 +247,27 @@ cfx_button:
       restore: true
 ```
 
-Hue actions switch targets to solid color mode. If an effect is running, the
-helper replaces it with the selected solid output.
+### Key Features & Behaviors
 
-The helper recognizes only its configured `fixed_color` and its own selected
-hue. A short press while the selected hue is active applies `fixed_color`.
-A short press from `fixed_color`, a CCT selection, a Home Assistant change, or
-any other external state restores the selected hue. This avoids guessing
-whether an arbitrary RGBW value represents white. Repeated input edges are
-suppressed until the button has remained quiet for 350 ms.
+*   **Short Press Toggling:** A short press toggles the target lights between your last selected hue and your immutable `fixed_color` (which defaults to a warm, solid white).
+*   **Smart Restore Logic:** A short press from any external state (like a CCT change, an effect, or a Home Assistant control change) immediately restores your last selected hue. This makes it easy to get back to your custom color.
+*   **Effects Interaction:** Toggling or cycling hues will stop any running light effect and switch the light to a solid color mode.
+*   **Cycle Lock:** While cycling, the helper locks the release color immediately to prevent ESPHome from shifting or jumping the output when the button is released.
 
-While cycling, the helper locks the release color from its own commanded hue
-timeline so ESPHome transition sampling cannot jump the output to a stale color.
+---
 
 ## Effect Selector
 
-`cfx_effect_selector` controls a configured list of light effects. A short press
-turns the target lights on or off. A long press walks through the configured
-effect names, one effect at a time, and release keeps the currently selected
-effect running.
+`cfx_effect_selector` cycles through a list of configured light effects. A short press toggles the lights on or off. A long press cycles through the effects one by one, and releasing the button keeps the selected effect running.
 
 ```yaml
 binary_sensor:
   - platform: gpio
     id: desk_lamp_fx_button
-    pin: GPIO08     # GPIO pin where the button is connected
+    pin:
+      number: GPIO08
+      mode: INPUT_PULLUP
+      inverted: true
 
 cfx_button:
   - id: desk_lamp_fx_binding
@@ -310,6 +284,8 @@ cfx_button:
         - Ocean
 ```
 
+### Configuration Options
+
 | Option | Default | Description |
 | --- | --- | --- |
 | `id` | optional | Internal effect selector helper ID. Generated automatically when omitted. |
@@ -319,11 +295,11 @@ cfx_button:
 | `effect_interval` | `900ms` | Time between effect changes while the button remains held. |
 | `restore` | `false` | Restore the last selected effect after reboot. |
 
-Short press on uses the last selected effect, starting with the first configured
-effect after boot. Long press starts from the currently active configured effect
-when possible, then advances to the next effect immediately. If the lights are
-off, it first restores the last selected effect and then continues cycling
-while held. With `restore: true`, that selection survives reboot.
+### Key Features & Behaviors
 
-`cfx_button` is the only supported configuration interface. Standalone helper
-declarations and direct `press`/`release` actions are not available.
+*   **Short Press Actions:** Toggles the target lights on and off. Turning the light on restores the last active effect (or defaults to the first effect in the list after a boot).
+*   **Long Press Cycling:** 
+    *   Holding the button cycles through your configured `effects` list one by one.
+    *   If the lights are currently off, holding the button first turns the light ON with the last active effect, and then continues cycling after the configured delay.
+    *   Releasing the button locks the currently active effect.
+*   **Save/Restore:** Setting `restore: true` saves the last active effect to flash memory so it is restored automatically after a reboot.
