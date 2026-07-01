@@ -243,6 +243,9 @@ class CFXSyncPacketCodec {
                                  bool maintained, bool toggle,
                                  const std::array<uint8_t, 32> &key,
                                  std::vector<uint8_t> &output);
+  static CFXSyncDecodeResult peek_group_hash(const uint8_t *data,
+                                             size_t size,
+                                             uint32_t &group_hash);
   static CFXSyncDecodeResult decode(const uint8_t *data, size_t size,
                                     uint32_t expected_group_hash,
                                     const std::array<uint8_t, 32> &key,

@@ -24,6 +24,7 @@ from esphome.core import CORE, HexInt, TimePeriod, ID as CoreID
 from esphome.final_validate import full_config
 
 CODEOWNERS = ["@effelle"]
+MULTI_CONF = True
 DEPENDENCIES = []
 BASE_AUTO_LOAD = [
     "binary_sensor",
@@ -162,15 +163,21 @@ def _is_esp8266_target():
 
 
 def AUTO_LOAD(config):
-    transport = TRANSPORT_AUTO
-    if config:
-        transport = config.get(CONF_TRANSPORT, TRANSPORT_AUTO)
+    configs = []
+    if isinstance(config, list):
+        configs = [item for item in config if isinstance(item, dict)]
+    elif isinstance(config, dict):
+        configs = [config]
+
+    transports = [
+        item.get(CONF_TRANSPORT, TRANSPORT_AUTO) for item in configs
+    ] or [TRANSPORT_AUTO]
 
     if _is_esp8266_target():
-        if config and config.get(CONF_ROLE) == ROLE_SATELLITE:
+        if any(item.get(CONF_ROLE) == ROLE_SATELLITE for item in configs):
             return ESP8266_SATELLITE_AUTO_LOAD
         return ESP8266_CONTROLLER_AUTO_LOAD
-    if transport == TRANSPORT_UDP:
+    if all(transport == TRANSPORT_UDP for transport in transports):
         return BASE_AUTO_LOAD
     return BASE_AUTO_LOAD + ["espnow"]
 
@@ -359,6 +366,27 @@ def _validate_role_lights(config):
     return config
 
 
+def _validate_multi_group_light_ownership(configs):
+    if isinstance(configs, dict):
+        configs = [configs]
+
+    owners = {}
+    for config in configs:
+        if not isinstance(config, dict):
+            continue
+        role = config.get(CONF_ROLE)
+        if role not in (ROLE_LEADER, ROLE_FOLLOWER, ROLE_SATELLITE):
+            continue
+        for light_id in config.get(CONF_LIGHTS, []):
+            light_name = _id_name(light_id)
+            if light_name in owners:
+                raise cv.Invalid(
+                    f"light '{light_name}' is already used by cfx_sync"
+                )
+            owners[light_name] = role
+    return configs
+
+
 def _validate_group(value):
     value = cv.string_strict(value)
     if not value:
@@ -393,12 +421,19 @@ def _fnv1a_32(value):
 
 
 def _final_validate(config):
+    final_config = full_config.get()
+    try:
+        sync_configs = final_config.get_config_for_path(["cfx_sync"])
+    except (KeyError, AttributeError, AssertionError):
+        sync_configs = None
+    if sync_configs is not None:
+        _validate_multi_group_light_ownership(sync_configs)
+
     if not config.get(CONF_LIGHTS, []):
         config[CONF_EFFECT_CATALOGS] = []
         config[CONF_CONTROL_IDS] = []
         return config
 
-    final_config = full_config.get()
     all_lights = final_config.get_config_for_path(["light"])
     effect_catalogs = []
     control_ids = []

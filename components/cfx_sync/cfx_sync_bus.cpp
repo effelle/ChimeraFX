@@ -31,7 +31,7 @@ void CFXSyncBus::register_group(CFXSyncComponent *group) {
     }
   }
   if (this->group_count_ >= MAX_GROUPS) {
-    ESP_LOGW(TAG, "Only one CFX Sync group is supported in this phase");
+    ESP_LOGW(TAG, "Maximum CFX Sync group count reached");
     return;
   }
   this->groups_[this->group_count_++] = group;
@@ -56,9 +56,20 @@ bool CFXSyncBus::send_udp(const std::vector<uint8_t> &packet) {
 
 bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
                                  const uint8_t *data, size_t size) {
+  uint32_t packet_group_hash = 0;
+  const auto result =
+      CFXSyncPacketCodec::peek_group_hash(data, size, packet_group_hash);
+  if (result == CFXSyncDecodeResult::NOT_CFX) {
+    return false;
+  }
+
   bool handled = false;
   for (auto *group : this->groups_) {
     if (group == nullptr) {
+      continue;
+    }
+    if (result == CFXSyncDecodeResult::OK &&
+        group->group_hash() != packet_group_hash) {
       continue;
     }
     handled = group->handle_packet_(source, data, size) || handled;
@@ -68,9 +79,20 @@ bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
 
 bool CFXSyncBus::dispatch_unknown_packet(const CFXSyncSource &source,
                                          const uint8_t *data, size_t size) {
+  uint32_t packet_group_hash = 0;
+  const auto result =
+      CFXSyncPacketCodec::peek_group_hash(data, size, packet_group_hash);
+  if (result == CFXSyncDecodeResult::NOT_CFX) {
+    return false;
+  }
+
   bool handled = false;
   for (auto *group : this->groups_) {
     if (group == nullptr) {
+      continue;
+    }
+    if (result == CFXSyncDecodeResult::OK &&
+        group->group_hash() != packet_group_hash) {
       continue;
     }
     handled = group->handle_unknown_packet_(source, data, size) || handled;

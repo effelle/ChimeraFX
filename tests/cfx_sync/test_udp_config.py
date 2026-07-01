@@ -55,6 +55,26 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "auto"}))
             self.assertIn("espnow", cfx_sync.AUTO_LOAD({"transport": "espnow"}))
 
+    def test_multi_conf_autoload_handles_config_lists(self):
+        with patch.object(
+            type(cfx_sync.CORE),
+            "is_esp8266",
+            new_callable=PropertyMock,
+            return_value=False,
+        ):
+            self.assertNotIn(
+                "espnow",
+                cfx_sync.AUTO_LOAD(
+                    [{"transport": "udp"}, {"transport": "udp"}]
+                ),
+            )
+            self.assertIn(
+                "espnow",
+                cfx_sync.AUTO_LOAD(
+                    [{"transport": "udp"}, {"transport": "auto"}]
+                ),
+            )
+
     def test_autoload_omits_espnow_for_esp8266_auto_or_udp_controller(self):
         with patch.object(
             type(cfx_sync.CORE),

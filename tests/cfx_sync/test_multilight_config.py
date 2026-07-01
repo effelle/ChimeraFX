@@ -15,6 +15,7 @@ from components.cfx_sync import (
     ROLE_SATELLITE,
     _extract_control_ids,
     _normalize_lights,
+    _validate_multi_group_light_ownership,
     _validate_role_lights,
 )
 
@@ -84,6 +85,40 @@ class MultiLightConfigTests(unittest.TestCase):
             CONF_LIGHTS: [light_id("one"), light_id("two")],
         }
         self.assertIs(_validate_role_lights(config), config)
+
+    def test_component_declares_multi_conf(self):
+        source = COMPONENT.read_text(encoding="utf-8")
+        self.assertIn("MULTI_CONF = True", source)
+
+    def test_multi_group_rejects_reused_output_light(self):
+        with self.assertRaisesRegex(
+            cv.Invalid, "light 'shared_light' is already used by cfx_sync"
+        ):
+            _validate_multi_group_light_ownership(
+                [
+                    {
+                        CONF_ROLE: ROLE_LEADER,
+                        CONF_LIGHTS: [light_id("shared_light")],
+                    },
+                    {
+                        CONF_ROLE: ROLE_FOLLOWER,
+                        CONF_LIGHTS: [light_id("shared_light")],
+                    },
+                ]
+            )
+
+    def test_multi_group_accepts_distinct_light_groups(self):
+        configs = [
+            {
+                CONF_ROLE: ROLE_LEADER,
+                CONF_LIGHTS: [light_id("kitchen_light")],
+            },
+            {
+                CONF_ROLE: ROLE_LEADER,
+                CONF_LIGHTS: [light_id("hall_light")],
+            },
+        ]
+        self.assertIs(_validate_multi_group_light_ownership(configs), configs)
 
     def test_controller_requires_one_local_input_and_no_lights(self):
         with self.assertRaisesRegex(

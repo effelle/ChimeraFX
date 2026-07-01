@@ -88,7 +88,7 @@ class CFXSyncBus
                                const uint8_t *data, size_t size);
 
  protected:
-  static constexpr size_t MAX_GROUPS = 1;
+  static constexpr size_t MAX_GROUPS = 8;
 
   CFXSyncComponent *groups_[MAX_GROUPS]{};
   size_t group_count_{0};

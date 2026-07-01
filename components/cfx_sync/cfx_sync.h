@@ -134,6 +134,7 @@ class CFXSyncComponent : public Component {
   void set_group_hash(uint32_t group_hash) {
     this->group_hash_ = group_hash;
   }
+  uint32_t group_hash() const { return this->group_hash_; }
   void set_key(const std::array<uint8_t, 32> &key) { this->key_ = key; }
   void set_heartbeat_ms(uint32_t heartbeat_ms) {
     this->heartbeat_ms_ = heartbeat_ms;

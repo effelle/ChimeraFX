@@ -364,6 +364,34 @@ bool CFXSyncPacketCodec::encode_input_state(
                  sequence, &payload, INPUT_STATE_PAYLOAD_SIZE, key, output);
 }
 
+CFXSyncDecodeResult CFXSyncPacketCodec::peek_group_hash(
+    const uint8_t *data, size_t size, uint32_t &group_hash) {
+  group_hash = 0;
+  if (data == nullptr || size < sizeof(CFX_SYNC_MAGIC)) {
+    return CFXSyncDecodeResult::MALFORMED;
+  }
+  if (memcmp(data, CFX_SYNC_MAGIC, sizeof(CFX_SYNC_MAGIC)) != 0) {
+    return CFXSyncDecodeResult::NOT_CFX;
+  }
+  if (size < HEADER_SIZE + AUTH_TAG_SIZE) {
+    return CFXSyncDecodeResult::MALFORMED;
+  }
+  if (data[4] != VERSION) {
+    return CFXSyncDecodeResult::UNSUPPORTED_VERSION;
+  }
+  if (data[7] != HEADER_SIZE) {
+    return CFXSyncDecodeResult::MALFORMED;
+  }
+
+  const uint16_t payload_size = read_u16_(data + 8);
+  if (HEADER_SIZE + payload_size + AUTH_TAG_SIZE != size) {
+    return CFXSyncDecodeResult::MALFORMED;
+  }
+
+  group_hash = read_u32_(data + 10);
+  return CFXSyncDecodeResult::OK;
+}
+
 CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     const uint8_t *data, size_t size, uint32_t expected_group_hash,
     const std::array<uint8_t, 32> &key, CFXSyncPacket &packet) {

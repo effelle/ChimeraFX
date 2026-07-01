@@ -99,6 +99,38 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             ),
         )
 
+    def test_bus_supports_multiple_registered_groups(self):
+        header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            header,
+            re.compile(r"static constexpr size_t MAX_GROUPS = [2-9][0-9]*;"),
+        )
+        self.assertNotIn("Only one CFX Sync group is supported", source)
+
+    def test_bus_routes_by_packet_group_hash_before_decode(self):
+        header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+        packet_header = PACKET_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "static CFXSyncDecodeResult peek_group_hash(",
+            packet_header,
+        )
+        self.assertIn("uint32_t group_hash() const", HEADER.read_text(encoding="utf-8"))
+        self.assertRegex(
+            source,
+            re.compile(
+                r"CFXSyncPacketCodec::peek_group_hash\(data, size, "
+                r"packet_group_hash\).*?"
+                r"group->group_hash\(\) != packet_group_hash.*?"
+                r"continue;.*?"
+                r"group->handle_packet_\(source, data, size\)",
+                re.DOTALL,
+            ),
+        )
+
     def test_udp_transport_helper_files_exist(self):
         self.assertTrue(
             UDP_HEADER.exists(),
