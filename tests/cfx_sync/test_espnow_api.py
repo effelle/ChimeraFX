@@ -3256,7 +3256,7 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
-    def test_cfx_dimmer_freezes_native_ramps_from_elapsed_ramp_position(self):
+    def test_cfx_dimmer_freezes_native_ramps_from_plausible_measured_position(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
         ).read_text(encoding="utf-8")
@@ -3264,6 +3264,10 @@ class ESPNowAPITests(unittest.TestCase):
 
         self.assertIn(
             "float freeze_brightness_(light::LightState *state,",
+            dimmer_header,
+        )
+        self.assertIn(
+            "bool measured_ramp_brightness_(light::LightState *state,",
             dimmer_header,
         )
         self.assertRegex(
@@ -3279,23 +3283,31 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"float CFXDimmer::freeze_brightness_"
-                r"\(.*?return this->ramp_current_brightness_\(index, now\);",
+                r"\(.*?float measured = 0.0f;.*?"
+                r"this->measured_ramp_brightness_"
+                r"\(state, index, now, measured\).*?"
+                r"return measured;.*?"
+                r"return this->ramp_current_brightness_\(index, now\);",
                 re.DOTALL,
             ),
-            "dimmer release must freeze the elapsed ramp position, "
-            "not ESPHome's native transition target",
+            "dimmer release must prefer a plausible measured output, "
+            "then fall back to elapsed ramp position",
         )
-        freeze_body = re.search(
-            r"float CFXDimmer::freeze_brightness_\(.*?\n\}\n\nbool CFXDimmer::target_has_effect_",
+        measured_body = re.search(
+            r"bool CFXDimmer::measured_ramp_brightness_\(.*?\n\}\n\nfloat CFXDimmer::freeze_brightness_",
             dimmer_source,
             re.DOTALL,
         )
-        self.assertIsNotNone(freeze_body)
-        self.assertNotIn(
-            "current_values",
-            freeze_body.group(0),
-            "native transition current_values can already contain the edge "
-            "target when the button is released",
+        self.assertIsNotNone(measured_body)
+        body = measured_body.group(0)
+        self.assertIn("state->current_values.get_brightness()", body)
+        self.assertIn("state->current_values.get_state()", body)
+        self.assertIn("std::abs(measured - target)", body)
+        self.assertIn("RAMP_MEASURED_EDGE_EPSILON", body)
+        self.assertIn(
+            "progress < RAMP_MEASURED_EDGE_PROGRESS",
+            body,
+            "premature measured edge targets must be rejected",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
