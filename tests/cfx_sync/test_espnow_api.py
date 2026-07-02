@@ -1060,6 +1060,17 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
+    def test_cfx_sync_base_snapshot_is_esphome_light_state_not_chimerafx_only(self):
+        color_header = COLOR_HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("light::LightState &state", color_header)
+        self.assertIn("state.remote_values", color_header)
+        self.assertIn("state.get_traits()", color_header)
+        self.assertIn("apply_remote_state_to_light_", source)
+        self.assertIn("auto *light = this->lights_[light_index];", source)
+        self.assertNotIn("cfx_light", color_header.lower())
+
     def test_controller_role_is_declared_in_runtime_contract(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
