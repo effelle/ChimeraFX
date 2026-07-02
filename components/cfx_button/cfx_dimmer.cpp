@@ -253,7 +253,8 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
       continue;
     }
     const float current = this->freeze_brightness_(state, i, now);
-    this->apply_brightness_(state, current, 0);
+    publish_light_ramp_duration_hint(state, RAMP_FREEZE_TRANSITION_MS);
+    this->apply_brightness_(state, current, RAMP_FREEZE_TRANSITION_MS);
   }
   this->ramping_ = false;
   this->ramp_finished_ = true;

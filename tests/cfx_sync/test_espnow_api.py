@@ -3328,6 +3328,27 @@ class ESPNowAPITests(unittest.TestCase):
             "not stale ESPHome transition state",
         )
 
+    def test_cfx_dimmer_release_freeze_uses_short_settle_transition(self):
+        dimmer_header = (
+            ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
+        ).read_text(encoding="utf-8")
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("RAMP_FREEZE_TRANSITION_MS", dimmer_header)
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
+                r"publish_light_ramp_duration_hint"
+                r"\(state, RAMP_FREEZE_TRANSITION_MS\);.*?"
+                r"this->apply_brightness_"
+                r"\(state, current, RAMP_FREEZE_TRANSITION_MS\);",
+                re.DOTALL,
+            ),
+            "release freeze should gently settle the tiny native-ramp mismatch "
+            "and send the same short timing hint to synced followers",
+        )
+
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
         dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
         apply_body = re.search(
