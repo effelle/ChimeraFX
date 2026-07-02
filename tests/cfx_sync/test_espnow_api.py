@@ -3405,13 +3405,14 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
                 r"publish_light_ramp_duration_hint"
-                r"\(state, RAMP_FREEZE_TRANSITION_MS\);.*?"
+                r"\(state, 0\);.*?"
                 r"this->apply_brightness_"
                 r"\(state, current, RAMP_FREEZE_TRANSITION_MS\);",
                 re.DOTALL,
             ),
-            "release freeze should gently settle the tiny native-ramp mismatch "
-            "and send the same short timing hint to synced followers",
+            "release freeze should gently settle the local native-ramp "
+            "mismatch while asking synced followers to stop immediately at "
+            "the chosen brightness",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):

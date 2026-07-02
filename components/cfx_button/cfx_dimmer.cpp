@@ -279,7 +279,7 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
              static_cast<unsigned>(elapsed), static_cast<unsigned>(duration),
              start, this->ramp_target_brightness_(), estimated, measured,
              sampled, current);
-    publish_light_ramp_duration_hint(state, RAMP_FREEZE_TRANSITION_MS);
+    publish_light_ramp_duration_hint(state, 0);
     this->apply_brightness_(state, current, RAMP_FREEZE_TRANSITION_MS);
   }
   this->ramping_ = false;
