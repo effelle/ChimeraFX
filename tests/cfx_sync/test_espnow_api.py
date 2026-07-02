@@ -3212,16 +3212,22 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("capture_light_timing_hint", timing_header)
         self.assertIn("clear_light_timing_hint", timing_header)
         self.assertIn('#include "cfx_dimmer_timing.h"', dimmer_source)
-        self.assertNotIn(
+        self.assertIn(
             "publish_light_ramp_hint(state, now + duration);",
             dimmer_source,
-            "dimmer holds must use commanded steps, not native long transitions",
+            "plain dimmer holds must publish one native ramp timeline",
         )
         self.assertIn("clear_light_timing_hint(state);", dimmer_source)
-        self.assertIn(
-            "publish_light_ramp_duration_hint(state, transition_ms);",
+        self.assertRegex(
             dimmer_source,
-            "dimmer steps must tell followers to apply values immediately",
+            re.compile(
+                r"if \(transition_ms == 0\) \{\s*"
+                r"clear_light_timing_hint\(state\);\s*"
+                r"publish_light_ramp_duration_hint\(state, transition_ms\);"
+                r"\s*\}",
+                re.DOTALL,
+            ),
+            "only immediate dimmer freezes should cancel follower ramps",
         )
         self.assertIn('#include "cfx_dimmer_timing.h"', cct_source)
         self.assertRegex(
@@ -3267,7 +3273,7 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
-    def test_cfx_dimmer_ramps_with_commanded_steps(self):
+    def test_cfx_dimmer_uses_native_ramps_for_plain_lights(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
         ).read_text(encoding="utf-8")
@@ -3278,13 +3284,22 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_header,
         )
         self.assertNotIn("measured_ramp_brightness_", dimmer_header)
-        self.assertIn("RAMP_STEP_TRANSITION_MS", dimmer_header)
-        self.assertIn("const bool manual = true;", dimmer_source)
+        self.assertNotIn("RAMP_STEP_TRANSITION_MS", dimmer_header)
+        self.assertIn(
+            "bool target_has_effect_(light::LightState *state) const;",
+            dimmer_header,
+        )
+        self.assertIn(
+            "const bool manual = this->target_has_effect_(state);",
+            dimmer_source,
+        )
         self.assertIn("this->ramp_manual_.push_back(manual);", dimmer_source)
+        self.assertIn("publish_light_ramp_hint(state, now + duration);", dimmer_source)
         self.assertRegex(
             dimmer_source,
             re.compile(
-                r"this->apply_brightness_\(state, start, 0\);.*?"
+                r"this->apply_brightness_\(state, manual \? start : target,"
+                r"\s*manual \? 0 : duration\);.*?"
                 r"this->service_manual_ramp_\(now\);",
                 re.DOTALL,
             ),
@@ -3293,11 +3308,14 @@ class ESPNowAPITests(unittest.TestCase):
             "this->apply_brightness_(this->lights_[i],",
             dimmer_source,
         )
-        self.assertIn("RAMP_STEP_TRANSITION_MS", dimmer_source)
-        self.assertIn(
-            "publish_light_ramp_duration_hint(state, transition_ms);",
+        self.assertRegex(
             dimmer_source,
-            "manual dimmer steps must sync their short smoothing transition",
+            re.compile(
+                r"this->apply_brightness_\(this->lights_\[i\],"
+                r"\s*this->ramp_current_brightness_\(i, now\), 0\);",
+                re.DOTALL,
+            ),
+            "only effect-backed manual ramps should send repeated zero-transition steps",
         )
         self.assertRegex(
             dimmer_source,

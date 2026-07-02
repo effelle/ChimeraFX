@@ -176,12 +176,16 @@ void CFXDimmer::start_ramp_(uint32_t now, bool forced_direction_up,
   for (auto *state : this->lights_) {
     const float start = this->target_start_brightness_(state);
     const uint32_t duration = this->ramp_duration_ms_(start, target);
-    const bool manual = true;
+    const bool manual = this->target_has_effect_(state);
     this->ramp_start_brightness_.push_back(start);
     this->ramp_durations_ms_.push_back(duration);
     this->ramp_manual_.push_back(manual);
     this->ramp_end_ms_ = std::max(this->ramp_end_ms_, now + duration);
-    this->apply_brightness_(state, start, 0);
+    if (!manual && duration != 0) {
+      publish_light_ramp_hint(state, now + duration);
+    }
+    this->apply_brightness_(state, manual ? start : target,
+                            manual ? 0 : duration);
   }
   this->service_manual_ramp_(now);
 }
@@ -269,8 +273,7 @@ void CFXDimmer::service_manual_ramp_(uint32_t now) {
       continue;
     }
     this->apply_brightness_(this->lights_[i],
-                            this->ramp_current_brightness_(i, now),
-                            RAMP_STEP_TRANSITION_MS);
+                            this->ramp_current_brightness_(i, now), 0);
   }
 }
 
@@ -281,8 +284,8 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   }
   if (transition_ms == 0) {
     clear_light_timing_hint(state);
+    publish_light_ramp_duration_hint(state, transition_ms);
   }
-  publish_light_ramp_duration_hint(state, transition_ms);
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
   this->apply_color_values_(call, state, state->remote_values);
@@ -444,6 +447,13 @@ float CFXDimmer::freeze_brightness_(light::LightState *state, size_t index,
                                     uint32_t now) const {
   (void) state;
   return this->ramp_current_brightness_(index, now);
+}
+
+bool CFXDimmer::target_has_effect_(light::LightState *state) const {
+  if (state == nullptr || !state->remote_values.is_on()) {
+    return false;
+  }
+  return state->get_effect_name() != "None";
 }
 
 float CFXDimmer::clamp_brightness_(float value) const {

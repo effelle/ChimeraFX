@@ -129,7 +129,7 @@ cfx_button:
     *   `inputs.down` is ignored when all target lights are off.
     *   Holding directional inputs starts ramping immediately and will not toggle the light state on release.
 *   **Anti-Flicker & Debounce Protection:** 
-    *   The dimmer uses short blended brightness steps while the button is held. This keeps local and synced lights on the same commanded ramp position and avoids sampling ESPHome's internal transition state on release.
+    *   The dimmer uses ESPHome's native smooth brightness ramp for ordinary lights. When an active effect needs direct brightness updates, ChimeraFX still computes the release point from the commanded ramp timeline instead of sampling ESPHome's internal transition state.
     *   After releasing the button, duplicate keypress signals are ignored for 350ms to ensure a double-trigger doesn't toggle your light by accident.
 
 ---

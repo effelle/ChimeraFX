@@ -44,7 +44,6 @@ class CFXDimmer : public Component {
 
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
-  static constexpr uint32_t RAMP_STEP_TRANSITION_MS = 100;
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
 
   void finalize_release_(DimmerReleaseAction action, uint32_t released_at_ms);
@@ -71,6 +70,7 @@ class CFXDimmer : public Component {
   float ramp_current_brightness_(size_t index, uint32_t now) const;
   float freeze_brightness_(light::LightState *state, size_t index,
                            uint32_t now) const;
+  bool target_has_effect_(light::LightState *state) const;
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
