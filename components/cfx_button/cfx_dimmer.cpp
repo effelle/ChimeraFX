@@ -2,11 +2,14 @@
 #include "cfx_dimmer_timing.h"
 
 #include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 #include <algorithm>
 #include <cmath>
 
 namespace esphome {
 namespace cfx_dimmer {
+
+static const char *const TAG = "cfx_dimmer";
 
 void CFXDimmer::press() {
   if (this->pressed_ ||
@@ -252,7 +255,26 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
     if (state == nullptr) {
       continue;
     }
-    const float current = this->freeze_brightness_(state, i, now);
+    const float estimated = this->ramp_current_brightness_(i, now);
+    float measured = 0.0f;
+    const bool measured_ok =
+        this->measured_ramp_brightness_(state, i, now, measured);
+    const float current = measured_ok ? measured : estimated;
+    const float start = i < this->ramp_start_brightness_.size()
+                            ? this->ramp_start_brightness_[i]
+                            : current;
+    const uint32_t duration =
+        i < this->ramp_durations_ms_.size() ? this->ramp_durations_ms_[i] : 0;
+    const uint32_t elapsed = now - this->ramp_started_ms_;
+    ESP_LOGD(TAG,
+             "'%s' dimmer freeze idx=%u source=%s dir=%s elapsed=%ums/%ums "
+             "start=%.3f target=%.3f estimated=%.3f measured=%.3f chosen=%.3f",
+             state->get_name().c_str(), static_cast<unsigned>(i),
+             measured_ok ? "measured" : "estimated",
+             this->ramp_direction_up_ ? "up" : "down",
+             static_cast<unsigned>(elapsed), static_cast<unsigned>(duration),
+             start, this->ramp_target_brightness_(), estimated, measured,
+             current);
     publish_light_ramp_duration_hint(state, RAMP_FREEZE_TRANSITION_MS);
     this->apply_brightness_(state, current, RAMP_FREEZE_TRANSITION_MS);
   }
