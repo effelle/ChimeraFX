@@ -3345,6 +3345,13 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("state->current_values.get_state()", body)
         self.assertIn("std::abs(measured - estimated)", body)
         self.assertIn("RAMP_MEASURED_MAX_DRIFT", body)
+        self.assertIn(
+            "RAMP_MEASURED_MAX_DRIFT = 0.15f",
+            dimmer_header,
+            "native ESPHome transitions can legitimately lead or lag the "
+            "linear estimate by about 10% on release; prefer a sane measured "
+            "output over a visible snap back to the estimate",
+        )
         self.assertIn("RAMP_MEASURED_EDGE_EPSILON", body)
         self.assertIn(
             "progress < RAMP_MEASURED_EDGE_PROGRESS",
