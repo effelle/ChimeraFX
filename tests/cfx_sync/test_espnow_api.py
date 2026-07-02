@@ -3278,6 +3278,7 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_header,
         )
         self.assertNotIn("measured_ramp_brightness_", dimmer_header)
+        self.assertIn("RAMP_STEP_TRANSITION_MS", dimmer_header)
         self.assertIn("const bool manual = true;", dimmer_source)
         self.assertIn("this->ramp_manual_.push_back(manual);", dimmer_source)
         self.assertRegex(
@@ -3287,6 +3288,16 @@ class ESPNowAPITests(unittest.TestCase):
                 r"this->service_manual_ramp_\(now\);",
                 re.DOTALL,
             ),
+        )
+        self.assertIn(
+            "this->apply_brightness_(this->lights_[i],",
+            dimmer_source,
+        )
+        self.assertIn("RAMP_STEP_TRANSITION_MS", dimmer_source)
+        self.assertIn(
+            "publish_light_ramp_duration_hint(state, transition_ms);",
+            dimmer_source,
+            "manual dimmer steps must sync their short smoothing transition",
         )
         self.assertRegex(
             dimmer_source,

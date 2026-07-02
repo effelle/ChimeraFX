@@ -44,6 +44,7 @@ class CFXDimmer : public Component {
 
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
+  static constexpr uint32_t RAMP_STEP_TRANSITION_MS = 100;
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
 
   void finalize_release_(DimmerReleaseAction action, uint32_t released_at_ms);

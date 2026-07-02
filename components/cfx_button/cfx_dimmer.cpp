@@ -269,7 +269,8 @@ void CFXDimmer::service_manual_ramp_(uint32_t now) {
       continue;
     }
     this->apply_brightness_(this->lights_[i],
-                            this->ramp_current_brightness_(i, now), 0);
+                            this->ramp_current_brightness_(i, now),
+                            RAMP_STEP_TRANSITION_MS);
   }
 }
 
@@ -280,8 +281,8 @@ void CFXDimmer::apply_brightness_(light::LightState *state, float brightness,
   }
   if (transition_ms == 0) {
     clear_light_timing_hint(state);
-    publish_light_ramp_duration_hint(state, transition_ms);
   }
+  publish_light_ramp_duration_hint(state, transition_ms);
   auto call = state->make_call();
   call.set_transition_length(transition_ms);
   this->apply_color_values_(call, state, state->remote_values);
