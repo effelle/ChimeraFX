@@ -262,7 +262,8 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
     const float sampled = measured_ok ? measured : estimated;
     const float current =
         this->freeze_settle_brightness_(i, sampled,
-                                        RAMP_FREEZE_TRANSITION_MS);
+                                        RAMP_FREEZE_TRANSITION_MS,
+                                        measured_ok);
     const float start = i < this->ramp_start_brightness_.size()
                             ? this->ramp_start_brightness_[i]
                             : current;
@@ -512,8 +513,10 @@ bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
 }
 
 float CFXDimmer::freeze_settle_brightness_(size_t index, float sampled,
-                                           uint32_t transition_ms) const {
-  if (transition_ms == 0 || index >= this->ramp_start_brightness_.size() ||
+                                           uint32_t transition_ms,
+                                           bool project) const {
+  if (!project || transition_ms == 0 ||
+      index >= this->ramp_start_brightness_.size() ||
       index >= this->ramp_durations_ms_.size()) {
     return this->clamp_brightness_(sampled);
   }

@@ -75,7 +75,8 @@ class CFXDimmer : public Component {
   bool measured_ramp_brightness_(light::LightState *state, size_t index,
                                  uint32_t now, float &measured) const;
   float freeze_settle_brightness_(size_t index, float sampled,
-                                  uint32_t transition_ms) const;
+                                  uint32_t transition_ms,
+                                  bool project) const;
   float freeze_brightness_(light::LightState *state, size_t index,
                            uint32_t now) const;
   bool target_has_effect_(light::LightState *state) const;

@@ -3359,7 +3359,9 @@ class ESPNowAPITests(unittest.TestCase):
             "premature measured edge targets must still be rejected",
         )
         self.assertIn(
-            "float freeze_settle_brightness_(size_t index, float sampled,",
+            "float freeze_settle_brightness_(size_t index, float sampled,"
+            "\n                                  uint32_t transition_ms,"
+            "\n                                  bool project) const;",
             dimmer_header,
         )
         self.assertRegex(
@@ -3368,21 +3370,24 @@ class ESPNowAPITests(unittest.TestCase):
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
                 r"const float sampled = measured_ok \? measured : estimated;.*?"
                 r"const float current =\s*this->freeze_settle_brightness_"
-                r"\(i, sampled,\s*RAMP_FREEZE_TRANSITION_MS\);",
+                r"\(i, sampled,\s*RAMP_FREEZE_TRANSITION_MS,\s*"
+                r"measured_ok\);",
                 re.DOTALL,
             ),
             "release freeze should project the sampled brightness through the "
-            "short settle window so it does not command a reverse bump",
+            "short settle window only when it is based on real measured output",
         )
         settle_body = re.search(
             r"float CFXDimmer::freeze_settle_brightness_"
-            r"\(size_t index, float sampled,\s*uint32_t transition_ms\).*?"
+            r"\(size_t index, float sampled,\s*uint32_t transition_ms,"
+            r"\s*bool project\).*?"
             r"\n\}\n\nfloat CFXDimmer::freeze_brightness_",
             dimmer_source,
             re.DOTALL,
         )
         self.assertIsNotNone(settle_body)
         settle = settle_body.group(0)
+        self.assertIn("!project", settle)
         self.assertIn(
             "const float slope = (target - start) / static_cast<float>(duration);",
             settle,
