@@ -3369,13 +3369,16 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
                 r"const float sampled = measured_ok \? measured : estimated;.*?"
+                r"const uint32_t freeze_transition_ms =\s*measured_ok \? "
+                r"RAMP_FREEZE_TRANSITION_MS : 0;.*?"
                 r"const float current =\s*this->freeze_settle_brightness_"
-                r"\(i, sampled,\s*RAMP_FREEZE_TRANSITION_MS,\s*"
+                r"\(i, sampled,\s*freeze_transition_ms,\s*"
                 r"measured_ok\);",
                 re.DOTALL,
             ),
-            "release freeze should project the sampled brightness through the "
-            "short settle window only when it is based on real measured output",
+            "estimated-only segment releases must not run the short local "
+            "freeze transition from stale current_values; measured releases "
+            "can still use the gentle settle window",
         )
         settle_body = re.search(
             r"float CFXDimmer::freeze_settle_brightness_"
@@ -3409,15 +3412,17 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
+                r"const uint32_t freeze_transition_ms =\s*"
+                r"measured_ok \? RAMP_FREEZE_TRANSITION_MS : 0;.*?"
                 r"publish_light_ramp_duration_hint"
                 r"\(state, 0\);.*?"
                 r"this->apply_brightness_"
-                r"\(state, current, RAMP_FREEZE_TRANSITION_MS\);",
+                r"\(state, current, freeze_transition_ms\);",
                 re.DOTALL,
             ),
-            "release freeze should gently settle the local native-ramp "
-            "mismatch while asking synced followers to stop immediately at "
-            "the chosen brightness",
+            "release freeze should gently settle measured native-ramp "
+            "mismatch, but estimated-only releases must stop immediately so "
+            "stale current_values cannot animate a visible bump",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
