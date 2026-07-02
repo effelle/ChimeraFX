@@ -3283,7 +3283,6 @@ class ESPNowAPITests(unittest.TestCase):
             "float freeze_brightness_(light::LightState *state,",
             dimmer_header,
         )
-        self.assertNotIn("measured_ramp_brightness_", dimmer_header)
         self.assertNotIn("RAMP_STEP_TRANSITION_MS", dimmer_header)
         self.assertIn(
             "bool target_has_effect_(light::LightState *state) const;",
@@ -3317,15 +3316,40 @@ class ESPNowAPITests(unittest.TestCase):
             ),
             "only effect-backed manual ramps should send repeated zero-transition steps",
         )
+        self.assertIn(
+            "bool measured_ramp_brightness_(light::LightState *state,",
+            dimmer_header,
+        )
         self.assertRegex(
             dimmer_source,
             re.compile(
                 r"float CFXDimmer::freeze_brightness_"
-                r"\(.*?return this->ramp_current_brightness_\(index, now\);",
+                r"\(.*?float measured = 0.0f;.*?"
+                r"this->measured_ramp_brightness_"
+                r"\(state, index, now, measured\).*?"
+                r"return measured;.*?"
+                r"return this->ramp_current_brightness_\(index, now\);",
                 re.DOTALL,
             ),
-            "dimmer release must use the commanded ramp timeline, "
-            "not stale ESPHome transition state",
+            "native dimmer release should prefer plausible measured output, "
+            "then fall back to the commanded ramp timeline",
+        )
+        measured_body = re.search(
+            r"bool CFXDimmer::measured_ramp_brightness_\(.*?\n\}\n\nfloat CFXDimmer::freeze_brightness_",
+            dimmer_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(measured_body)
+        body = measured_body.group(0)
+        self.assertIn("state->current_values.get_brightness()", body)
+        self.assertIn("state->current_values.get_state()", body)
+        self.assertIn("std::abs(measured - estimated)", body)
+        self.assertIn("RAMP_MEASURED_MAX_DRIFT", body)
+        self.assertIn("RAMP_MEASURED_EDGE_EPSILON", body)
+        self.assertIn(
+            "progress < RAMP_MEASURED_EDGE_PROGRESS",
+            body,
+            "premature measured edge targets must still be rejected",
         )
 
     def test_cfx_dimmer_release_freeze_uses_short_settle_transition(self):

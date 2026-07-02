@@ -444,9 +444,53 @@ float CFXDimmer::ramp_current_brightness_(size_t index, uint32_t now) const {
   return this->clamp_brightness_(start + ((target - start) * progress));
 }
 
+bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
+                                          size_t index, uint32_t now,
+                                          float &measured) const {
+  if (state == nullptr || index >= this->ramp_start_brightness_.size() ||
+      index >= this->ramp_durations_ms_.size() ||
+      index >= this->ramp_manual_.size() || this->ramp_manual_[index]) {
+    return false;
+  }
+  const uint32_t duration = this->ramp_durations_ms_[index];
+  if (duration == 0 || !state->current_values.is_on()) {
+    return false;
+  }
+
+  const float start = this->ramp_start_brightness_[index];
+  const float target = this->ramp_target_brightness_();
+  const uint32_t elapsed = now - this->ramp_started_ms_;
+  const float progress =
+      std::min(1.0f, static_cast<float>(elapsed) / duration);
+  const float estimated =
+      this->clamp_brightness_(start + ((target - start) * progress));
+  measured = this->clamp_brightness_(
+      state->current_values.get_brightness() *
+      state->current_values.get_state());
+
+  const float low =
+      std::min(start, target) - RAMP_MEASURED_EDGE_EPSILON;
+  const float high =
+      std::max(start, target) + RAMP_MEASURED_EDGE_EPSILON;
+  if (measured < low || measured > high) {
+    return false;
+  }
+  if (std::abs(measured - estimated) > RAMP_MEASURED_MAX_DRIFT) {
+    return false;
+  }
+  if (progress < RAMP_MEASURED_EDGE_PROGRESS &&
+      std::abs(measured - target) <= RAMP_MEASURED_EDGE_EPSILON) {
+    return false;
+  }
+  return true;
+}
+
 float CFXDimmer::freeze_brightness_(light::LightState *state, size_t index,
                                     uint32_t now) const {
-  (void) state;
+  float measured = 0.0f;
+  if (this->measured_ramp_brightness_(state, index, now, measured)) {
+    return measured;
+  }
   return this->ramp_current_brightness_(index, now);
 }
 
