@@ -16,7 +16,7 @@ class CFXDimmer : public Component {
   explicit CFXDimmer(const std::string &id) : id_(id) {}
   void loop() override;
 
-  void add_light(light::LightState *state);
+  void add_light(light::LightState *state, bool segment_target = false);
   void set_long_press_ms(uint32_t value) { this->long_press_ms_ = value; }
   void set_ramp_time_ms(uint32_t value) { this->ramp_time_ms_ = value; }
   void set_min_brightness(float value) { this->min_brightness_ = value; }
@@ -71,6 +71,7 @@ class CFXDimmer : public Component {
   float ramp_target_brightness_() const;
   float target_start_brightness_(light::LightState *state) const;
   float ramp_current_brightness_(size_t index, uint32_t now) const;
+  float smoothed_ramp_progress_(float x) const;
   bool measured_ramp_brightness_(light::LightState *state, size_t index,
                                  uint32_t now, float &measured) const;
   float freeze_brightness_(light::LightState *state, size_t index,
@@ -79,6 +80,7 @@ class CFXDimmer : public Component {
   float clamp_brightness_(float value) const;
 
   std::vector<light::LightState *> lights_;
+  std::vector<bool> segment_targets_;
   std::vector<SavedState> saved_states_;
   std::string id_;
   uint32_t long_press_ms_{500};

@@ -254,6 +254,16 @@ def _id_name(value):
     return getattr(value, "id", value)
 
 
+def _segment_light_ids():
+    all_lights = full_config.get().get_config_for_path(["light"])
+    return {
+        _id_name(segment[CONF_ID])
+        for light_config in all_lights
+        if light_config.get("platform") == "cfx_light"
+        for segment in light_config.get(CONF_SEGMENTS, [])
+    }
+
+
 def _validate_button_inputs(config):
     if CONF_DIMMER not in config or CONF_INPUTS not in config[CONF_DIMMER]:
         return config
@@ -311,10 +321,14 @@ def _final_validate(config):
 FINAL_VALIDATE_SCHEMA = _final_validate
 
 
-async def _add_lights(controller, config):
+async def _add_lights(controller, config, segment_ids=None):
     for light_id in config[CONF_LIGHTS]:
         light_state = await cg.get_variable(light_id)
-        cg.add(controller.add_light(light_state))
+        if segment_ids is None:
+            cg.add(controller.add_light(light_state))
+            continue
+        segment_target = _id_name(light_id) in segment_ids
+        cg.add(controller.add_light(light_state, segment_target))
 
 
 async def _build_dimmer(config):
@@ -324,7 +338,7 @@ async def _build_dimmer(config):
     cg.add(var.set_ramp_time_ms(config[CONF_RAMP_TIME].total_milliseconds))
     cg.add(var.set_min_brightness(config[CONF_MIN_BRIGHTNESS]))
     cg.add(var.set_max_brightness(config[CONF_MAX_BRIGHTNESS]))
-    await _add_lights(var, config)
+    await _add_lights(var, config, _segment_light_ids())
     return var
 
 

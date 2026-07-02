@@ -34,8 +34,9 @@ void CFXDimmer::press() {
   this->gesture_.begin(this->any_target_on_());
 }
 
-void CFXDimmer::add_light(light::LightState *state) {
+void CFXDimmer::add_light(light::LightState *state, bool segment_target) {
   this->lights_.push_back(state);
+  this->segment_targets_.push_back(segment_target);
   this->saved_states_.emplace_back();
 }
 
@@ -259,7 +260,7 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
     float measured = 0.0f;
     const bool measured_ok =
         this->measured_ramp_brightness_(state, i, now, measured);
-    const float sampled = measured_ok ? measured : estimated;
+    const float sampled = this->freeze_brightness_(state, i, now);
     const float current = this->clamp_brightness_(sampled);
     const float start = i < this->ramp_start_brightness_.size()
                             ? this->ramp_start_brightness_[i]
@@ -465,7 +466,16 @@ float CFXDimmer::ramp_current_brightness_(size_t index, uint32_t now) const {
   const uint32_t elapsed = now - this->ramp_started_ms_;
   const float progress =
       std::min(1.0f, static_cast<float>(elapsed) / duration);
-  return this->clamp_brightness_(start + ((target - start) * progress));
+  const bool smooth =
+      index < this->segment_targets_.size() && this->segment_targets_[index];
+  const float shaped_progress =
+      smooth ? this->smoothed_ramp_progress_(progress) : progress;
+  return this->clamp_brightness_(start + ((target - start) * shaped_progress));
+}
+
+float CFXDimmer::smoothed_ramp_progress_(float x) const {
+  x = std::max(0.0f, std::min(1.0f, x));
+  return x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f);
 }
 
 bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
@@ -474,6 +484,9 @@ bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
   if (state == nullptr || index >= this->ramp_start_brightness_.size() ||
       index >= this->ramp_durations_ms_.size() ||
       index >= this->ramp_manual_.size() || this->ramp_manual_[index]) {
+    return false;
+  }
+  if (index < this->segment_targets_.size() && this->segment_targets_[index]) {
     return false;
   }
   const uint32_t duration = this->ramp_durations_ms_[index];

@@ -3362,7 +3362,7 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
-                r"const float sampled = measured_ok \? measured : estimated;.*?"
+                r"const float sampled = this->freeze_brightness_\(state, i, now\);.*?"
                 r"const float current = this->clamp_brightness_\(sampled\);",
                 re.DOTALL,
             ),
@@ -3396,6 +3396,70 @@ class ESPNowAPITests(unittest.TestCase):
             ),
             "release freeze should stop immediately at the sampled brightness "
             "so ESPHome does not run a final visible correction transition",
+        )
+
+    def test_cfx_dimmer_segments_use_smoothed_fallback_estimate(self):
+        button_py = CFX_BUTTON_PY.read_text(encoding="utf-8")
+        dimmer_header = (
+            ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
+        ).read_text(encoding="utf-8")
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "void add_light(light::LightState *state, bool segment_target = false)",
+            dimmer_header,
+        )
+        self.assertIn("std::vector<bool> segment_targets_", dimmer_header)
+        self.assertIn("smoothed_ramp_progress_", dimmer_header)
+        self.assertIn("this->segment_targets_.push_back(segment_target);", dimmer_source)
+        self.assertIn(
+            "index < this->segment_targets_.size() && this->segment_targets_[index]",
+            dimmer_source,
+        )
+        self.assertIn("const bool smooth =", dimmer_source)
+        self.assertIn(
+            "smooth ? this->smoothed_ramp_progress_(progress) : progress",
+            dimmer_source,
+        )
+        self.assertIn(
+            "start + ((target - start) * shaped_progress)",
+            dimmer_source,
+        )
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"bool CFXDimmer::measured_ramp_brightness_"
+                r"\(.*?index < this->segment_targets_\.size\(\) && "
+                r"this->segment_targets_\[index\].*?return false;",
+                re.DOTALL,
+            ),
+            "virtual segment current_values stay stale during transitions, "
+            "so segment releases must not accept measured brightness",
+        )
+        self.assertIn(
+            "x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f)",
+            dimmer_source,
+        )
+        self.assertIn("def _segment_light_ids():", button_py)
+        self.assertRegex(
+            button_py,
+            re.compile(
+                r"async def _add_lights\(controller, config, segment_ids=None\):.*?"
+                r"segment_target = _id_name\(light_id\) in segment_ids.*?"
+                r"controller.add_light\(light_state, segment_target\)",
+                re.DOTALL,
+            ),
+            "codegen must mark generated cfx_light segment targets without "
+            "requiring extra YAML",
+        )
+        self.assertRegex(
+            button_py,
+            re.compile(
+                r"async def _build_dimmer\(config\):.*?"
+                r"await _add_lights\(var, config, _segment_light_ids\(\)\)",
+                re.DOTALL,
+            ),
+            "only the dimmer needs segment-aware ramp release estimation",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
