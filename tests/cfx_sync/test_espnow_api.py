@@ -3212,12 +3212,16 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("capture_light_timing_hint", timing_header)
         self.assertIn("clear_light_timing_hint", timing_header)
         self.assertIn('#include "cfx_dimmer_timing.h"', dimmer_source)
-        self.assertIn("publish_light_ramp_hint(state, now + duration);", dimmer_source)
+        self.assertNotIn(
+            "publish_light_ramp_hint(state, now + duration);",
+            dimmer_source,
+            "dimmer holds must use commanded steps, not native long transitions",
+        )
         self.assertIn("clear_light_timing_hint(state);", dimmer_source)
         self.assertIn(
             "publish_light_ramp_duration_hint(state, transition_ms);",
             dimmer_source,
-            "immediate dimmer freeze must tell followers to cancel the active ramp",
+            "dimmer steps must tell followers to apply values immediately",
         )
         self.assertIn('#include "cfx_dimmer_timing.h"', cct_source)
         self.assertRegex(
@@ -3263,7 +3267,7 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
-    def test_cfx_dimmer_freezes_native_ramps_from_plausible_measured_position(self):
+    def test_cfx_dimmer_ramps_with_commanded_steps(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
         ).read_text(encoding="utf-8")
@@ -3273,16 +3277,14 @@ class ESPNowAPITests(unittest.TestCase):
             "float freeze_brightness_(light::LightState *state,",
             dimmer_header,
         )
-        self.assertIn(
-            "bool measured_ramp_brightness_(light::LightState *state,",
-            dimmer_header,
-        )
+        self.assertNotIn("measured_ramp_brightness_", dimmer_header)
+        self.assertIn("const bool manual = true;", dimmer_source)
+        self.assertIn("this->ramp_manual_.push_back(manual);", dimmer_source)
         self.assertRegex(
             dimmer_source,
             re.compile(
-                r"const float current = this->freeze_brightness_"
-                r"\(state, i, now\);.*?"
-                r"this->apply_brightness_\(state, current, 0\);",
+                r"this->apply_brightness_\(state, start, 0\);.*?"
+                r"this->service_manual_ramp_\(now\);",
                 re.DOTALL,
             ),
         )
@@ -3290,33 +3292,11 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"float CFXDimmer::freeze_brightness_"
-                r"\(.*?float measured = 0.0f;.*?"
-                r"this->measured_ramp_brightness_"
-                r"\(state, index, now, measured\).*?"
-                r"return measured;.*?"
-                r"return this->ramp_current_brightness_\(index, now\);",
+                r"\(.*?return this->ramp_current_brightness_\(index, now\);",
                 re.DOTALL,
             ),
-            "dimmer release must prefer a plausible measured output, "
-            "then fall back to elapsed ramp position",
-        )
-        measured_body = re.search(
-            r"bool CFXDimmer::measured_ramp_brightness_\(.*?\n\}\n\nfloat CFXDimmer::freeze_brightness_",
-            dimmer_source,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(measured_body)
-        body = measured_body.group(0)
-        self.assertIn("state->current_values.get_brightness()", body)
-        self.assertIn("state->current_values.get_state()", body)
-        self.assertIn("std::abs(measured - target)", body)
-        self.assertIn("RAMP_MEASURED_MAX_DRIFT", body)
-        self.assertIn("std::abs(measured - estimated)", body)
-        self.assertIn("RAMP_MEASURED_EDGE_EPSILON", body)
-        self.assertIn(
-            "progress < RAMP_MEASURED_EDGE_PROGRESS",
-            body,
-            "premature measured edge targets must be rejected",
+            "dimmer release must use the commanded ramp timeline, "
+            "not stale ESPHome transition state",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):
