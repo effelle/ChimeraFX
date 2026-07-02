@@ -3358,12 +3358,6 @@ class ESPNowAPITests(unittest.TestCase):
             body,
             "premature measured edge targets must still be rejected",
         )
-        self.assertIn(
-            "float freeze_settle_brightness_(size_t index, float sampled,"
-            "\n                                  uint32_t transition_ms,"
-            "\n                                  bool project) const;",
-            dimmer_header,
-        )
         self.assertRegex(
             dimmer_source,
             re.compile(
@@ -3371,35 +3365,19 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const float sampled = measured_ok \? measured : estimated;.*?"
                 r"const uint32_t freeze_transition_ms =\s*measured_ok \? "
                 r"RAMP_FREEZE_TRANSITION_MS : 0;.*?"
-                r"const float current =\s*this->freeze_settle_brightness_"
-                r"\(i, sampled,\s*freeze_transition_ms,\s*"
-                r"measured_ok\);",
+                r"const float current = this->clamp_brightness_\(sampled\);",
                 re.DOTALL,
             ),
-            "estimated-only segment releases must not run the short local "
-            "freeze transition from stale current_values; measured releases "
-            "can still use the gentle settle window",
+            "release freezes should use the sampled brightness itself; "
+            "measured native ramps already expose the real in-flight value, "
+            "and estimated segment ramps must not animate from stale values",
         )
-        settle_body = re.search(
-            r"float CFXDimmer::freeze_settle_brightness_"
-            r"\(size_t index, float sampled,\s*uint32_t transition_ms,"
-            r"\s*bool project\).*?"
-            r"\n\}\n\nfloat CFXDimmer::freeze_brightness_",
-            dimmer_source,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(settle_body)
-        settle = settle_body.group(0)
-        self.assertIn("!project", settle)
-        self.assertIn(
-            "const float slope = (target - start) / static_cast<float>(duration);",
-            settle,
-        )
-        self.assertIn(
+        self.assertNotIn("freeze_settle_brightness_", dimmer_header)
+        self.assertNotIn("freeze_settle_brightness_", dimmer_source)
+        self.assertNotIn(
             "sampled + (slope * static_cast<float>(transition_ms))",
-            settle,
+            dimmer_source,
         )
-        self.assertIn("return this->clamp_brightness_", settle)
 
     def test_cfx_dimmer_release_freeze_uses_short_settle_transition(self):
         dimmer_header = (
