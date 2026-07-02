@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, PropertyMock, patch
@@ -468,6 +469,16 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             'ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields")',
             source,
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(packet\.has_color \|\| packet\.has_color_brightness \|\|"
+                r"\s*packet\.has_color_temperature \|\|"
+                r"\s*packet\.has_cold_warm_white \|\|"
+                r"\s*packet\.has_effect",
+                re.DOTALL,
+            ),
         )
 
     def test_satellite_logs_apply_only_when_state_performs(self):

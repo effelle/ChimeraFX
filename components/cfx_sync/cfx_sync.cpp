@@ -2248,6 +2248,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     }
   }
   if (packet.has_color || packet.has_color_brightness ||
+      packet.has_color_temperature || packet.has_cold_warm_white ||
       packet.has_effect || packet.has_controls || packet.has_transition ||
       packet.has_ramp) {
     const uint32_t now = millis();
