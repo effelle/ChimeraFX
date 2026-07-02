@@ -3440,7 +3440,22 @@ class ESPNowAPITests(unittest.TestCase):
             "x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f)",
             dimmer_source,
         )
+        self.assertIn("_SEGMENT_LIGHT_IDS = set()", button_py)
         self.assertIn("def _segment_light_ids():", button_py)
+        segment_helper = re.search(
+            r"def _segment_light_ids\(\):(?P<body>.*?)\n\n\ndef _validate_button_inputs",
+            button_py,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(segment_helper)
+        self.assertNotIn(
+            "full_config.get()",
+            segment_helper.group("body"),
+            "to_code cannot read final_validate.full_config; segment ids must "
+            "be cached during final validation",
+        )
+        self.assertIn("_SEGMENT_LIGHT_IDS.clear()", button_py)
+        self.assertIn("_SEGMENT_LIGHT_IDS.update(", button_py)
         self.assertRegex(
             button_py,
             re.compile(

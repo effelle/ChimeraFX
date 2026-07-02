@@ -56,6 +56,7 @@ CONTROLLER_KEYS = (
     CONF_HUE_CYCLER,
     CONF_EFFECT_SELECTOR,
 )
+_SEGMENT_LIGHT_IDS = set()
 
 
 def _color4(value):
@@ -255,13 +256,7 @@ def _id_name(value):
 
 
 def _segment_light_ids():
-    all_lights = full_config.get().get_config_for_path(["light"])
-    return {
-        _id_name(segment[CONF_ID])
-        for light_config in all_lights
-        if light_config.get("platform") == "cfx_light"
-        for segment in light_config.get(CONF_SEGMENTS, [])
-    }
+    return set(_SEGMENT_LIGHT_IDS)
 
 
 def _validate_button_inputs(config):
@@ -295,6 +290,12 @@ def _final_validate(config):
         if light_config.get("platform") == "cfx_light"
         and light_config.get(CONF_SEGMENTS)
     }
+    _SEGMENT_LIGHT_IDS.clear()
+    _SEGMENT_LIGHT_IDS.update(
+        segment_id
+        for segment_ids in segmented_lights.values()
+        for segment_id in segment_ids
+    )
 
     for button_config in config:
         controller_key = next(
