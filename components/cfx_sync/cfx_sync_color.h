@@ -27,6 +27,11 @@ struct CFXSyncLightSnapshot {
   uint8_t blue{0};
   uint8_t white{0};
   bool has_white{false};
+  bool has_color_temperature{false};
+  uint16_t color_temperature_mireds{0};
+  bool has_cold_warm_white{false};
+  uint8_t cold_white{0};
+  uint8_t warm_white{0};
 
   bool operator==(const CFXSyncLightSnapshot &other) const {
     return this->power == other.power &&
@@ -34,7 +39,14 @@ struct CFXSyncLightSnapshot {
            this->color_brightness == other.color_brightness &&
            this->red == other.red &&
            this->green == other.green && this->blue == other.blue &&
-           this->white == other.white && this->has_white == other.has_white;
+           this->white == other.white &&
+           this->has_white == other.has_white &&
+           this->has_color_temperature == other.has_color_temperature &&
+           this->color_temperature_mireds ==
+               other.color_temperature_mireds &&
+           this->has_cold_warm_white == other.has_cold_warm_white &&
+           this->cold_white == other.cold_white &&
+           this->warm_white == other.warm_white;
   }
 
   bool operator!=(const CFXSyncLightSnapshot &other) const {
@@ -64,6 +76,16 @@ inline bool light_supports_rgb(light::LightState &state) {
          traits.supports_color_mode(light::ColorMode::RGB_WHITE);
 }
 
+inline bool light_supports_color_temperature(light::LightState &state) {
+  return state.get_traits().supports_color_capability(
+      light::ColorCapability::COLOR_TEMPERATURE);
+}
+
+inline bool light_supports_cold_warm_white(light::LightState &state) {
+  return state.get_traits().supports_color_capability(
+      light::ColorCapability::COLD_WARM_WHITE);
+}
+
 inline CFXSyncLightSnapshot capture_light_snapshot(
     light::LightState &state) {
   const auto &values = state.remote_values;
@@ -78,6 +100,20 @@ inline CFXSyncLightSnapshot capture_light_snapshot(
   snapshot.has_white = light_supports_white(state);
   snapshot.white =
       snapshot.has_white ? quantize_light_value(values.get_white()) : 0;
+  snapshot.has_color_temperature = light_supports_color_temperature(state);
+  snapshot.color_temperature_mireds =
+      snapshot.has_color_temperature
+          ? static_cast<uint16_t>(values.get_color_temperature())
+          : 0;
+  snapshot.has_cold_warm_white = light_supports_cold_warm_white(state);
+  snapshot.cold_white =
+      snapshot.has_cold_warm_white
+          ? quantize_light_value(values.get_cold_white())
+          : 0;
+  snapshot.warm_white =
+      snapshot.has_cold_warm_white
+          ? quantize_light_value(values.get_warm_white())
+          : 0;
   return snapshot;
 }
 

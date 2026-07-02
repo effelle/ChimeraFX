@@ -1071,6 +1071,22 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("auto *light = this->lights_[light_index];", source)
         self.assertNotIn("cfx_light", color_header.lower())
 
+    def test_cfx_sync_light_snapshot_tracks_color_temperature_channels(self):
+        color_header = COLOR_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("bool has_color_temperature{false};", color_header)
+        self.assertIn("uint16_t color_temperature_mireds{0};", color_header)
+        self.assertIn("bool has_cold_warm_white{false};", color_header)
+        self.assertIn("uint8_t cold_white{0};", color_header)
+        self.assertIn("uint8_t warm_white{0};", color_header)
+        self.assertIn("light_supports_color_temperature", color_header)
+        self.assertIn("light_supports_cold_warm_white", color_header)
+        self.assertIn("ColorCapability::COLOR_TEMPERATURE", color_header)
+        self.assertIn("ColorCapability::COLD_WARM_WHITE", color_header)
+        self.assertIn("values.get_color_temperature()", color_header)
+        self.assertIn("values.get_cold_white()", color_header)
+        self.assertIn("values.get_warm_white()", color_header)
+
     def test_controller_role_is_declared_in_runtime_contract(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
