@@ -1087,6 +1087,35 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("values.get_cold_white()", color_header)
         self.assertIn("values.get_warm_white()", color_header)
 
+    def test_cfx_sync_packet_has_canonical_cct_field_masks(self):
+        packet_header = PACKET_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn('#include "cfx_sync_color.h"', packet_header)
+        self.assertIn("FIELD_COLOR_TEMPERATURE = 0x00000100UL", packet_header)
+        self.assertIn("FIELD_COLD_WARM_WHITE = 0x00000200UL", packet_header)
+        self.assertIn("bool has_color_temperature{false};", packet_header)
+        self.assertIn("uint16_t color_temperature_mireds{0};", packet_header)
+        self.assertIn("bool has_cold_warm_white{false};", packet_header)
+        self.assertIn("uint8_t cold_white{0};", packet_header)
+        self.assertIn("uint8_t warm_white{0};", packet_header)
+        self.assertIn("MAX_COLOR_TEMPERATURE_VALUE_SIZE = 2", packet_header)
+        self.assertIn("MAX_COLD_WARM_WHITE_VALUE_SIZE = 2", packet_header)
+        self.assertIn("MAX_STATE_PACKET_SIZE == 136", packet_header)
+        self.assertIn("encode_state_snapshot", packet_header)
+
+    def test_cfx_sync_packet_encodes_cct_fields_in_network_order(self):
+        packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("FIELD_COLOR_TEMPERATURE", packet_source)
+        self.assertIn("packet.color_temperature_mireds", packet_source)
+        self.assertIn("append_u16_(payload, color_temperature_mireds)", packet_source)
+        self.assertIn("read_u16_(payload + offset)", packet_source)
+        self.assertIn("FIELD_COLD_WARM_WHITE", packet_source)
+        self.assertIn("packet.cold_white", packet_source)
+        self.assertIn("packet.warm_white", packet_source)
+        self.assertIn("packet.has_color_temperature = true;", packet_source)
+        self.assertIn("packet.has_cold_warm_white = true;", packet_source)
+
     def test_controller_role_is_declared_in_runtime_contract(self):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
@@ -2012,7 +2041,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("FIELD_TRANSITION = 0x00000040UL", header)
         self.assertIn("FIELD_RAMP = 0x00000080UL", header)
         self.assertIn("MAX_TIMING_VALUE_SIZE = 4", header)
-        self.assertIn("MAX_STATE_PACKET_SIZE == 132", header)
+        self.assertIn("MAX_STATE_PACKET_SIZE == 136", header)
         self.assertIn("bool has_transition{false};", header)
         self.assertIn("uint16_t transition_ms{0};", header)
         self.assertIn("bool has_ramp{false};", header)

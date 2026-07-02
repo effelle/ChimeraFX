@@ -8,6 +8,7 @@
 
 #if defined(USE_ESP32) || defined(USE_ESP8266)
 
+#include "cfx_sync_color.h"
 #include "cfx_sync_effect.h"
 #include "esphome/components/hmac_sha256/hmac_sha256.h"
 
@@ -123,6 +124,11 @@ struct CFXSyncPacket {
   uint8_t green{0};
   uint8_t blue{0};
   uint8_t white{0};
+  bool has_color_temperature{false};
+  uint16_t color_temperature_mireds{0};
+  bool has_cold_warm_white{false};
+  uint8_t cold_white{0};
+  uint8_t warm_white{0};
   bool has_effect{false};
   CFXSyncEffectState effect;
   bool has_controls{false};
@@ -154,6 +160,8 @@ class CFXSyncPacketCodec {
   static constexpr uint32_t FIELD_CONTROLS = 0x00000020UL;
   static constexpr uint32_t FIELD_TRANSITION = 0x00000040UL;
   static constexpr uint32_t FIELD_RAMP = 0x00000080UL;
+  static constexpr uint32_t FIELD_COLOR_TEMPERATURE = 0x00000100UL;
+  static constexpr uint32_t FIELD_COLD_WARM_WHITE = 0x00000200UL;
   static constexpr uint16_t CONTROL_FORCE_WHITE = 0x0001U;
   static constexpr uint16_t CONTROL_INTRO = 0x0002U;
   static constexpr uint16_t CONTROL_OUTRO = 0x0004U;
@@ -176,19 +184,22 @@ class CFXSyncPacketCodec {
   static constexpr size_t MAX_EFFECT_VALUE_SIZE = 67;
   static constexpr size_t MAX_CONTROLS_VALUE_SIZE = 11;
   static constexpr size_t MAX_TIMING_VALUE_SIZE = 4;
+  static constexpr size_t MAX_COLOR_TEMPERATURE_VALUE_SIZE = 2;
+  static constexpr size_t MAX_COLD_WARM_WHITE_VALUE_SIZE = 2;
   static constexpr size_t MAX_EFFECT_STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE +
       AUTH_TAG_SIZE;
   static constexpr size_t MAX_STATE_PAYLOAD_SIZE =
       FULL_STATE_PAYLOAD_SIZE + MAX_EFFECT_VALUE_SIZE +
-      MAX_CONTROLS_VALUE_SIZE + MAX_TIMING_VALUE_SIZE;
+      MAX_CONTROLS_VALUE_SIZE + MAX_TIMING_VALUE_SIZE +
+      MAX_COLOR_TEMPERATURE_VALUE_SIZE + MAX_COLD_WARM_WHITE_VALUE_SIZE;
   static constexpr size_t STATE_PACKET_SIZE =
       HEADER_SIZE + FULL_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t HELLO_PAYLOAD_SIZE = 3;
   static constexpr size_t STATE_ACK_PAYLOAD_SIZE = 9;
   static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;
   static constexpr size_t MAX_STATE_PACKET_SIZE =
-      HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 132 bytes.
+      HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 136 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t HELLO_PACKET_SIZE =
       HEADER_SIZE + HELLO_PAYLOAD_SIZE + AUTH_TAG_SIZE;
@@ -223,6 +234,27 @@ class CFXSyncPacketCodec {
                            const CFXSyncTimingState &timing,
                            const std::array<uint8_t, 32> &key,
                            std::vector<uint8_t> &output);
+  static bool encode_state(uint32_t group_hash, uint32_t boot_id,
+                           uint32_t sequence, bool power, uint8_t brightness,
+                           uint8_t color_brightness,
+                           uint8_t red, uint8_t green, uint8_t blue,
+                           uint8_t white, bool has_white,
+                           bool has_color_temperature,
+                           uint16_t color_temperature_mireds,
+                           bool has_cold_warm_white, uint8_t cold_white,
+                           uint8_t warm_white, bool has_effect,
+                           const CFXSyncEffectState &effect,
+                           bool has_controls,
+                           const CFXSyncControlState &controls,
+                           const CFXSyncTimingState &timing,
+                           const std::array<uint8_t, 32> &key,
+                           std::vector<uint8_t> &output);
+  static bool encode_state_snapshot(
+      uint32_t group_hash, uint32_t boot_id, uint32_t sequence,
+      const CFXSyncLightSnapshot &snapshot, bool has_effect,
+      const CFXSyncEffectState &effect, bool has_controls,
+      const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
+      const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output);
   static bool encode_sync_request(uint32_t group_hash, uint32_t boot_id,
                                   uint32_t sequence,
                                   const std::array<uint8_t, 32> &key,
@@ -278,9 +310,13 @@ static_assert(CFXSyncPacketCodec::MAX_CONTROLS_VALUE_SIZE == 11,
               "CFX sync maximum controls value size changed");
 static_assert(CFXSyncPacketCodec::MAX_TIMING_VALUE_SIZE == 4,
               "CFX sync maximum timing value size changed");
+static_assert(CFXSyncPacketCodec::MAX_COLOR_TEMPERATURE_VALUE_SIZE == 2,
+              "CFX sync maximum color temperature value size changed");
+static_assert(CFXSyncPacketCodec::MAX_COLD_WARM_WHITE_VALUE_SIZE == 2,
+              "CFX sync maximum cold/warm white value size changed");
 static_assert(CFXSyncPacketCodec::MAX_EFFECT_STATE_PACKET_SIZE == 117,
               "CFX sync maximum effect state packet size changed");
-static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 132,
+static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE == 136,
               "CFX sync maximum state packet size changed");
 static_assert(CFXSyncPacketCodec::MAX_STATE_PACKET_SIZE < 250,
               "CFX sync state packet exceeds ESP-NOW V1 payload limit");

@@ -150,7 +150,8 @@ bool CFXSyncPacketCodec::encode_state(
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
   return encode_state(group_hash, boot_id, sequence, power, brightness,
                       color_brightness, red, green, blue, white, has_white,
-                      false, {}, false, {}, {}, key, output);
+                      false, 0, false, 0, 0, false, {}, false, {}, {}, key,
+                      output);
 }
 
 bool CFXSyncPacketCodec::encode_state(
@@ -161,13 +162,29 @@ bool CFXSyncPacketCodec::encode_state(
     std::vector<uint8_t> &output) {
   return encode_state(group_hash, boot_id, sequence, power, brightness,
                       color_brightness, red, green, blue, white, has_white,
-                      has_effect, effect, false, {}, {}, key, output);
+                      false, 0, false, 0, 0, has_effect, effect, false, {}, {},
+                      key, output);
 }
 
 bool CFXSyncPacketCodec::encode_state(
     uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
     uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
     uint8_t blue, uint8_t white, bool has_white, bool has_effect,
+    const CFXSyncEffectState &effect, bool has_controls,
+    const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
+    const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  return encode_state(group_hash, boot_id, sequence, power, brightness,
+                      color_brightness, red, green, blue, white, has_white,
+                      false, 0, false, 0, 0, has_effect, effect, has_controls,
+                      controls, timing, key, output);
+}
+
+bool CFXSyncPacketCodec::encode_state(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
+    uint8_t brightness, uint8_t color_brightness, uint8_t red, uint8_t green,
+    uint8_t blue, uint8_t white, bool has_white, bool has_color_temperature,
+    uint16_t color_temperature_mireds, bool has_cold_warm_white,
+    uint8_t cold_white, uint8_t warm_white, bool has_effect,
     const CFXSyncEffectState &effect, bool has_controls,
     const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
@@ -199,6 +216,12 @@ bool CFXSyncPacketCodec::encode_state(
   if (has_controls) {
     field_mask |= FIELD_CONTROLS;
   }
+  if (has_color_temperature) {
+    field_mask |= FIELD_COLOR_TEMPERATURE;
+  }
+  if (has_cold_warm_white) {
+    field_mask |= FIELD_COLD_WARM_WHITE;
+  }
   if (timing.has_transition) {
     field_mask |= FIELD_TRANSITION;
   }
@@ -214,6 +237,14 @@ bool CFXSyncPacketCodec::encode_state(
   payload.push_back(blue);
   payload.push_back(white);
   payload.push_back(color_brightness);
+
+  if (has_color_temperature) {
+    append_u16_(payload, color_temperature_mireds);
+  }
+  if (has_cold_warm_white) {
+    payload.push_back(cold_white);
+    payload.push_back(warm_white);
+  }
 
   if (has_effect) {
     payload.push_back(static_cast<uint8_t>(effect.kind));
@@ -295,6 +326,21 @@ bool CFXSyncPacketCodec::encode_state(
 
   return encode_(CFXSyncPacketType::STATE, group_hash, boot_id, sequence,
                  payload.data(), payload.size(), key, output);
+}
+
+bool CFXSyncPacketCodec::encode_state_snapshot(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence,
+    const CFXSyncLightSnapshot &snapshot, bool has_effect,
+    const CFXSyncEffectState &effect, bool has_controls,
+    const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
+    const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  return encode_state(
+      group_hash, boot_id, sequence, snapshot.power, snapshot.brightness,
+      snapshot.color_brightness, snapshot.red, snapshot.green, snapshot.blue,
+      snapshot.white, snapshot.has_white, snapshot.has_color_temperature,
+      snapshot.color_temperature_mireds, snapshot.has_cold_warm_white,
+      snapshot.cold_white, snapshot.warm_white, has_effect, effect,
+      has_controls, controls, timing, key, output);
 }
 
 bool CFXSyncPacketCodec::encode_sync_request(
@@ -553,6 +599,24 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
     packet.color_brightness = payload[offset++];
   }
 
+  if ((packet.field_mask & FIELD_COLOR_TEMPERATURE) != 0) {
+    if (offset + 2 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_color_temperature = true;
+    packet.color_temperature_mireds = read_u16_(payload + offset);
+    offset += 2;
+  }
+
+  if ((packet.field_mask & FIELD_COLD_WARM_WHITE) != 0) {
+    if (offset + 2 > payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    packet.has_cold_warm_white = true;
+    packet.cold_white = payload[offset++];
+    packet.warm_white = payload[offset++];
+  }
+
   if ((packet.field_mask & FIELD_EFFECT) != 0) {
     if (offset + 1 > payload_size) {
       return CFXSyncDecodeResult::MALFORMED;
@@ -691,7 +755,8 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
 
   constexpr uint32_t KNOWN_FIELDS =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS |
-      FIELD_EFFECT | FIELD_CONTROLS | FIELD_TRANSITION | FIELD_RAMP;
+      FIELD_EFFECT | FIELD_CONTROLS | FIELD_TRANSITION | FIELD_RAMP |
+      FIELD_COLOR_TEMPERATURE | FIELD_COLD_WARM_WHITE;
   if ((packet.field_mask & ~KNOWN_FIELDS) == 0 && offset != payload_size) {
     return CFXSyncDecodeResult::MALFORMED;
   }
