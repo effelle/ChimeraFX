@@ -3358,6 +3358,40 @@ class ESPNowAPITests(unittest.TestCase):
             body,
             "premature measured edge targets must still be rejected",
         )
+        self.assertIn(
+            "float freeze_settle_brightness_(size_t index, float sampled,",
+            dimmer_header,
+        )
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
+                r"const float sampled = measured_ok \? measured : estimated;.*?"
+                r"const float current =\s*this->freeze_settle_brightness_"
+                r"\(i, sampled,\s*RAMP_FREEZE_TRANSITION_MS\);",
+                re.DOTALL,
+            ),
+            "release freeze should project the sampled brightness through the "
+            "short settle window so it does not command a reverse bump",
+        )
+        settle_body = re.search(
+            r"float CFXDimmer::freeze_settle_brightness_"
+            r"\(size_t index, float sampled,\s*uint32_t transition_ms\).*?"
+            r"\n\}\n\nfloat CFXDimmer::freeze_brightness_",
+            dimmer_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(settle_body)
+        settle = settle_body.group(0)
+        self.assertIn(
+            "const float slope = (target - start) / static_cast<float>(duration);",
+            settle,
+        )
+        self.assertIn(
+            "sampled + (slope * static_cast<float>(transition_ms))",
+            settle,
+        )
+        self.assertIn("return this->clamp_brightness_", settle)
 
     def test_cfx_dimmer_release_freeze_uses_short_settle_transition(self):
         dimmer_header = (
