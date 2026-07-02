@@ -3157,6 +3157,28 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertEqual(esp32_apply_branch.count("light->make_call()"), 1)
         self.assertEqual(esp32_apply_branch.count("call.perform();"), 1)
 
+    def test_follower_applies_cct_fields_when_supported(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
+
+        self.assertIn("light_supports_color_temperature(*light)", apply_light_source)
+        self.assertIn("light_supports_cold_warm_white(*light)", apply_light_source)
+        self.assertIn("packet.has_color_temperature", apply_light_source)
+        self.assertIn("packet.color_temperature_mireds", apply_light_source)
+        self.assertIn("call.set_color_temperature(", apply_light_source)
+        self.assertIn("packet.has_cold_warm_white", apply_light_source)
+        self.assertIn("packet.cold_white", apply_light_source)
+        self.assertIn("packet.warm_white", apply_light_source)
+        self.assertIn("call.set_cold_white(", apply_light_source)
+        self.assertIn("call.set_warm_white(", apply_light_source)
+
     def test_follower_applies_ramp_or_transition_before_perform(self):
         source = SOURCE.read_text(encoding="utf-8")
 
