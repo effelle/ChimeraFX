@@ -3363,8 +3363,6 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
                 r"const float sampled = measured_ok \? measured : estimated;.*?"
-                r"const uint32_t freeze_transition_ms =\s*measured_ok \? "
-                r"RAMP_FREEZE_TRANSITION_MS : 0;.*?"
                 r"const float current = this->clamp_brightness_\(sampled\);",
                 re.DOTALL,
             ),
@@ -3379,28 +3377,25 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
         )
 
-    def test_cfx_dimmer_release_freeze_uses_short_settle_transition(self):
+    def test_cfx_dimmer_release_freeze_is_immediate(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
         ).read_text(encoding="utf-8")
         dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn("RAMP_FREEZE_TRANSITION_MS", dimmer_header)
+        self.assertNotIn("RAMP_FREEZE_TRANSITION_MS", dimmer_header)
         self.assertRegex(
             dimmer_source,
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
-                r"const uint32_t freeze_transition_ms =\s*"
-                r"measured_ok \? RAMP_FREEZE_TRANSITION_MS : 0;.*?"
                 r"publish_light_ramp_duration_hint"
                 r"\(state, 0\);.*?"
                 r"this->apply_brightness_"
-                r"\(state, current, freeze_transition_ms\);",
+                r"\(state, current, 0\);",
                 re.DOTALL,
             ),
-            "release freeze should gently settle measured native-ramp "
-            "mismatch, but estimated-only releases must stop immediately so "
-            "stale current_values cannot animate a visible bump",
+            "release freeze should stop immediately at the sampled brightness "
+            "so ESPHome does not run a final visible correction transition",
         )
 
     def test_cfx_dimmer_brightness_updates_preserve_current_color_mode(self):

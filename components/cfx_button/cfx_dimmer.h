@@ -44,7 +44,6 @@ class CFXDimmer : public Component {
 
   static constexpr uint32_t MIN_RAMP_TRANSITION_MS = 50;
   static constexpr uint32_t RAMP_UPDATE_INTERVAL_MS = 50;
-  static constexpr uint32_t RAMP_FREEZE_TRANSITION_MS = 80;
   static constexpr uint32_t POST_ACTION_QUIET_MS = 350;
   static constexpr float RAMP_MEASURED_EDGE_EPSILON = 0.005f;
   static constexpr float RAMP_MEASURED_EDGE_PROGRESS = 0.98f;
