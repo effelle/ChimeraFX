@@ -837,12 +837,9 @@ bool CFXSyncComponent::send_state_to_followers_(
   const auto timing = capture_sync_timing_state(
       leader, snapshot, effect, include_default_transition);
   const uint32_t sequence = this->next_sequence_();
-  if (!CFXSyncPacketCodec::encode_state(
-          this->group_hash_, this->boot_id_, sequence, snapshot.power,
-          snapshot.brightness, snapshot.color_brightness, snapshot.red,
-          snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
-          true, effect, controls.has_any(), controls, timing, this->key_,
-          packet)) {
+  if (!CFXSyncPacketCodec::encode_state_snapshot(
+          this->group_hash_, this->boot_id_, sequence, snapshot, true, effect,
+          controls.has_any(), controls, timing, this->key_, packet)) {
     return false;
   }
   if (!this->send_state_packet_to_followers_(packet)) {
@@ -904,12 +901,9 @@ bool CFXSyncComponent::send_state_to_peer_(
   auto *leader = this->leader_light_();
   const auto timing = capture_sync_timing_state(leader, snapshot, effect, false);
   const uint32_t sequence = this->next_sequence_();
-  if (!CFXSyncPacketCodec::encode_state(
-          this->group_hash_, this->boot_id_, sequence, snapshot.power,
-          snapshot.brightness, snapshot.color_brightness, snapshot.red,
-          snapshot.green, snapshot.blue, snapshot.white, snapshot.has_white,
-          true, effect, controls.has_any(), controls, timing, this->key_,
-          packet)) {
+  if (!CFXSyncPacketCodec::encode_state_snapshot(
+          this->group_hash_, this->boot_id_, sequence, snapshot, true, effect,
+          controls.has_any(), controls, timing, this->key_, packet)) {
     return false;
   }
   if (!this->send_packet_to_peer_(peer, packet)) {

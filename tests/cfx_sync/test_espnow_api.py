@@ -2336,7 +2336,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(snapshot, effect, controls,\s*"
                 r"include_default_transition\);.*?"
                 r"bool CFXSyncComponent::send_state_to_followers_\(.*?"
-                r"snapshot\.has_white,\s*true,\s*effect,\s*"
+                r"CFXSyncPacketCodec::encode_state_snapshot\(.*?"
+                r"snapshot,\s*true,\s*effect,\s*"
                 r"controls\.has_any\(\),\s*controls,\s*timing,\s*"
                 r"this->key_,\s*packet",
                 re.DOTALL,
@@ -2397,13 +2398,23 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const CFXSyncControlState &controls,\s*"
                 r"bool include_default_transition\).*?"
                 r"const uint32_t sequence = this->next_sequence_\(\);.*?"
-                r"CFXSyncPacketCodec::encode_state\(.*?"
+                r"CFXSyncPacketCodec::encode_state_snapshot\(.*?"
                 r"this->send_state_packet_to_followers_\(packet\).*?"
                 r"this->mark_state_sent_to_followers_\(sequence\);",
                 re.DOTALL,
             ),
         )
         self.assertNotIn("this->send_state_to_peer_(*peer);", source)
+
+    def test_leader_state_send_paths_encode_canonical_snapshots(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        snapshot_encode = (
+            "CFXSyncPacketCodec::encode_state_snapshot(\n"
+            "          this->group_hash_, this->boot_id_, sequence, snapshot, true, effect,\n"
+            "          controls.has_any(), controls, timing, this->key_, packet)"
+        )
+        self.assertEqual(source.count(snapshot_encode), 2)
 
     def test_hello_and_sync_request_use_broadcast_state_response(self):
         source = SOURCE.read_text(encoding="utf-8")
