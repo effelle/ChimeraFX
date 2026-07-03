@@ -507,6 +507,22 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("traits.supports_color_mode(light::ColorMode::RGB)", source)
         self.assertIn("traits.supports_color_mode(light::ColorMode::RGB_WHITE)", source)
         self.assertIn(
+            "traits.supports_color_mode(light::ColorMode::COLOR_TEMPERATURE)",
+            source,
+        )
+        self.assertIn(
+            "traits.supports_color_mode(light::ColorMode::COLD_WARM_WHITE)",
+            source,
+        )
+        self.assertIn(
+            "traits.supports_color_mode(light::ColorMode::RGB_COLOR_TEMPERATURE)",
+            source,
+        )
+        self.assertIn(
+            "traits.supports_color_mode(light::ColorMode::RGB_COLD_WARM_WHITE)",
+            source,
+        )
+        self.assertIn(
             "if (packet.has_brightness && supports_brightness && apply_visual_state)",
             source,
         )

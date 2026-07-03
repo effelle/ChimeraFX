@@ -2242,7 +2242,11 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
       traits.supports_color_mode(light::ColorMode::BRIGHTNESS) ||
       traits.supports_color_mode(light::ColorMode::WHITE) ||
       traits.supports_color_mode(light::ColorMode::RGB) ||
-      traits.supports_color_mode(light::ColorMode::RGB_WHITE);
+      traits.supports_color_mode(light::ColorMode::RGB_WHITE) ||
+      traits.supports_color_mode(light::ColorMode::COLOR_TEMPERATURE) ||
+      traits.supports_color_mode(light::ColorMode::COLD_WARM_WHITE) ||
+      traits.supports_color_mode(light::ColorMode::RGB_COLOR_TEMPERATURE) ||
+      traits.supports_color_mode(light::ColorMode::RGB_COLD_WARM_WHITE);
   if (packet.has_brightness && supports_brightness && apply_visual_state) {
     const float desired_brightness = packet.brightness / 255.0f;
     if (std::fabs(light->remote_values.get_brightness() -
