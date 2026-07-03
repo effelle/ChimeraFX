@@ -2281,15 +2281,20 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     call.set_color_brightness(packet.color_brightness / 255.0f);
     has_action = true;
   }
-  if (packet.has_color_temperature && apply_visual_state &&
-      light_supports_color_temperature(*light)) {
-    call.set_color_temperature(packet.color_temperature_mireds);
-    has_action = true;
-  }
   if (packet.has_cold_warm_white && apply_visual_state &&
       light_supports_cold_warm_white(*light)) {
+    call.set_color_mode(light::ColorMode::COLD_WARM_WHITE);
+    if (packet.has_color_temperature &&
+        light_supports_color_temperature(*light)) {
+      call.set_color_temperature(packet.color_temperature_mireds);
+    }
     call.set_cold_white(packet.cold_white / 255.0f);
     call.set_warm_white(packet.warm_white / 255.0f);
+    has_action = true;
+  } else if (packet.has_color_temperature && apply_visual_state &&
+             light_supports_color_temperature(*light)) {
+    call.set_color_mode(light::ColorMode::COLOR_TEMPERATURE);
+    call.set_color_temperature(packet.color_temperature_mireds);
     has_action = true;
   }
   if (packet.has_effect || packet.has_controls || packet.has_transition ||
@@ -2367,14 +2372,19 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
   } else if (packet.has_color_brightness && apply_visual_state) {
     call.set_color_brightness(packet.color_brightness / 255.0f);
   }
-  if (packet.has_color_temperature && apply_visual_state &&
-      light_supports_color_temperature(*light)) {
-    call.set_color_temperature(packet.color_temperature_mireds);
-  }
   if (packet.has_cold_warm_white && apply_visual_state &&
       light_supports_cold_warm_white(*light)) {
+    call.set_color_mode(light::ColorMode::COLD_WARM_WHITE);
+    if (packet.has_color_temperature &&
+        light_supports_color_temperature(*light)) {
+      call.set_color_temperature(packet.color_temperature_mireds);
+    }
     call.set_cold_white(packet.cold_white / 255.0f);
     call.set_warm_white(packet.warm_white / 255.0f);
+  } else if (packet.has_color_temperature && apply_visual_state &&
+             light_supports_color_temperature(*light)) {
+    call.set_color_mode(light::ColorMode::COLOR_TEMPERATURE);
+    call.set_color_temperature(packet.color_temperature_mireds);
   }
 
   const bool may_select_effect =

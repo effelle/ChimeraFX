@@ -255,6 +255,17 @@ class CFXSyncPacketCodec {
       const CFXSyncEffectState &effect, bool has_controls,
       const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
       const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output);
+
+  static bool encode_state_with_fields_(
+      uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool power,
+      uint8_t brightness, bool has_color, bool has_color_brightness,
+      uint8_t color_brightness, uint8_t red, uint8_t green, uint8_t blue,
+      uint8_t white, bool has_white, bool has_color_temperature,
+      uint16_t color_temperature_mireds, bool has_cold_warm_white,
+      uint8_t cold_white, uint8_t warm_white, bool has_effect,
+      const CFXSyncEffectState &effect, bool has_controls,
+      const CFXSyncControlState &controls, const CFXSyncTimingState &timing,
+      const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output);
   static bool encode_sync_request(uint32_t group_hash, uint32_t boot_id,
                                   uint32_t sequence,
                                   const std::array<uint8_t, 32> &key,

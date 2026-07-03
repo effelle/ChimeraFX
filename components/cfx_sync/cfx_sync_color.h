@@ -19,6 +19,8 @@ namespace cfx_sync {
 struct CFXSyncLightSnapshot {
   bool power{false};
   uint8_t brightness{0};
+  bool has_color{true};
+  bool has_color_brightness{true};
   uint8_t color_brightness{255};
   uint8_t red{0};
   uint8_t green{0};
@@ -34,6 +36,8 @@ struct CFXSyncLightSnapshot {
   bool operator==(const CFXSyncLightSnapshot &other) const {
     return this->power == other.power &&
            this->brightness == other.brightness &&
+           this->has_color == other.has_color &&
+           this->has_color_brightness == other.has_color_brightness &&
            this->color_brightness == other.color_brightness &&
            this->red == other.red &&
            this->green == other.green && this->blue == other.blue &&
@@ -87,9 +91,26 @@ inline bool light_supports_cold_warm_white(light::LightState &state) {
 inline CFXSyncLightSnapshot capture_light_snapshot(
     light::LightState &state) {
   const auto &values = state.remote_values;
+  const auto color_mode = values.get_color_mode();
+  const bool wants_rgb_or_white =
+      color_mode == light::ColorMode::RGB ||
+      color_mode == light::ColorMode::RGB_WHITE ||
+      color_mode == light::ColorMode::RGB_COLOR_TEMPERATURE ||
+      color_mode == light::ColorMode::RGB_COLD_WARM_WHITE ||
+      color_mode == light::ColorMode::WHITE;
+  const bool wants_color_temperature =
+      color_mode == light::ColorMode::COLOR_TEMPERATURE ||
+      color_mode == light::ColorMode::COLD_WARM_WHITE ||
+      color_mode == light::ColorMode::RGB_COLOR_TEMPERATURE ||
+      color_mode == light::ColorMode::RGB_COLD_WARM_WHITE;
+  const bool wants_cold_warm_white =
+      color_mode == light::ColorMode::COLD_WARM_WHITE ||
+      color_mode == light::ColorMode::RGB_COLD_WARM_WHITE;
   CFXSyncLightSnapshot snapshot;
   snapshot.power = values.is_on();
   snapshot.brightness = quantize_light_value(values.get_brightness());
+  snapshot.has_color = wants_rgb_or_white;
+  snapshot.has_color_brightness = wants_rgb_or_white;
   snapshot.color_brightness =
       quantize_light_value(values.get_color_brightness());
   snapshot.red = quantize_light_value(values.get_red());
@@ -98,12 +119,14 @@ inline CFXSyncLightSnapshot capture_light_snapshot(
   snapshot.has_white = light_supports_white(state);
   snapshot.white =
       snapshot.has_white ? quantize_light_value(values.get_white()) : 0;
-  snapshot.has_color_temperature = light_supports_color_temperature(state);
+  snapshot.has_color_temperature =
+      wants_color_temperature && light_supports_color_temperature(state);
   snapshot.color_temperature_mireds =
       snapshot.has_color_temperature
           ? static_cast<uint16_t>(values.get_color_temperature())
           : 0;
-  snapshot.has_cold_warm_white = light_supports_cold_warm_white(state);
+  snapshot.has_cold_warm_white =
+      wants_cold_warm_white && light_supports_cold_warm_white(state);
   snapshot.cold_white =
       snapshot.has_cold_warm_white
           ? quantize_light_value(values.get_cold_white())

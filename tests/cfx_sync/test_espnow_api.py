@@ -1074,6 +1074,8 @@ class ESPNowAPITests(unittest.TestCase):
     def test_cfx_sync_light_snapshot_tracks_color_temperature_channels(self):
         color_header = COLOR_HEADER.read_text(encoding="utf-8")
 
+        self.assertIn("bool has_color{true};", color_header)
+        self.assertIn("bool has_color_brightness{true};", color_header)
         self.assertIn("bool has_color_temperature{false};", color_header)
         self.assertIn("uint16_t color_temperature_mireds{0};", color_header)
         self.assertIn("bool has_cold_warm_white{false};", color_header)
@@ -1086,6 +1088,34 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("values.get_color_temperature()", color_header)
         self.assertIn("values.get_cold_white()", color_header)
         self.assertIn("values.get_warm_white()", color_header)
+        self.assertIn("values.get_color_mode()", color_header)
+        self.assertIn("snapshot.has_color = wants_rgb_or_white;", color_header)
+        self.assertIn(
+            "snapshot.has_color_brightness = wants_rgb_or_white;",
+            color_header,
+        )
+
+    def test_normal_light_snapshot_does_not_send_stale_rgb_for_cwww_mode(self):
+        packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("snapshot.has_color", packet_source)
+        self.assertIn("snapshot.has_color_brightness", packet_source)
+        self.assertRegex(
+            packet_source,
+            re.compile(
+                r"uint32_t field_mask = FIELD_POWER \| FIELD_BRIGHTNESS;"
+                r".*?if \(has_color\) \{"
+                r"\s*field_mask \|= FIELD_COLOR;"
+                r".*?if \(has_color_brightness\) \{"
+                r"\s*field_mask \|= FIELD_COLOR_BRIGHTNESS;",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotIn(
+            "uint32_t field_mask = FULL_STATE_MASK;\n"
+            "  if (has_effect)",
+            packet_source,
+        )
 
     def test_cfx_sync_packet_has_canonical_cct_field_masks(self):
         packet_header = PACKET_HEADER.read_text(encoding="utf-8")
