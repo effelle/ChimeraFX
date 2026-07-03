@@ -1,6 +1,8 @@
 # ChimeraFX Sync
 
-`cfx_sync` lets one ChimeraFX light control other ChimeraFX lights on nearby devices.
+`cfx_sync` lets one leader light control other lights on nearby devices.
+
+It is designed for ChimeraFX lights, but the basic light-state sync uses ESPHome's normal light state. That means standard ESPHome lights can follow power, brightness, and supported color channels too. ChimeraFX-only features, like effects and live controls, are copied only when the follower also has those ChimeraFX features.
 
 Use it when you want, for example:
 
@@ -166,7 +168,7 @@ cfx_sync:
 
 This behaves like a follower for the light, but any local button you configure outside `cfx_sync` stays private to that device.
 
-ESP8266 devices can also be satellites when they use UDP transport. This is intentionally limited: an ESP8266 satellite follows the leader's ON/OFF state and brightness, and can send `local_input` button events. It does not run ChimeraFX effects and does not apply synced RGB/RGBW color, palettes, speed, intensity, Force White, intro, or outro controls.
+ESP8266 devices can also be satellites when they use UDP transport. This is intentionally limited: an ESP8266 satellite follows the leader's ON/OFF state and brightness, and can send `local_input` button events. It does not run ChimeraFX effects and does not apply synced RGB/RGBW color, color temperature, cold/warm white, palettes, speed, intensity, Force White, intro, or outro controls.
 
 Satellite with `local_input`:
 
@@ -376,6 +378,8 @@ For a local dimmer, CCT button, hue cycler, or effect selector, use [`cfx_button
 - Brightness.
 - RGB and RGBW color.
 - White channel when available.
+- Color temperature when both lights support it.
+- Cold white and warm white channels when both lights support them.
 - ChimeraFX effect selection.
 - ChimeraFX controls such as Force White, Speed, Intensity, Palette, Mirror, Intro, Outro, and In/Out Duration when those controls exist.
 
@@ -383,8 +387,22 @@ It does not yet copy:
 
 - Exact animation phase.
 - Random effect seed.
-- Multiple sync groups on the same device.
 - Full ChimeraFX light behavior on ESP8266. ESP8266 satellites are basic UDP light followers for ON/OFF and brightness only.
+
+---
+
+## Normal ESPHome Lights
+
+You can use `cfx_sync` with normal ESPHome lights when you only need the usual light state:
+
+- ON/OFF.
+- Brightness, if the light supports brightness.
+- RGB/RGBW color, if the light supports it.
+- Color temperature or cold/warm white, if the light supports it.
+
+Effects and ChimeraFX controls are still ChimeraFX features. A normal ESPHome light can follow the visual state, but it will ignore ChimeraFX effects, palettes, speed, intensity, intro, outro, and Force White.
+
+This is useful for mixed rooms. For example, a ChimeraFX leader can sync the basic state to a PWM, Tuya, or monochrome ESPHome light. The result depends on what that follower light can actually do.
 
 ---
 
@@ -413,6 +431,31 @@ Mixed RGB and RGBW devices are supported, but they may not look perfectly identi
 - RGB to RGBW moves neutral RGB into the white channel.
 
 Different strips, white LEDs, power supplies, and calibration can still make two lights look slightly different.
+
+---
+
+## Multiple Groups
+
+A device can belong to more than one sync group by declaring more than one `cfx_sync` block. Each block owns its own `group`, `key`, role, and light list.
+
+Use this when one device has two independent lights that should follow two different rooms:
+
+```yaml
+cfx_sync:
+  - id: kitchen_sync
+    role: follower
+    lights: kitchen_strip
+    group: kitchen
+    key: !secret cfx_sync_key
+
+  - id: dining_sync
+    role: follower
+    lights: dining_strip
+    group: dining_room
+    key: !secret cfx_sync_key
+```
+
+Keep each light in only one sync group. If the same light is configured in two groups, the groups will fight over it.
 
 ---
 
