@@ -335,11 +335,11 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn('#include "cfx_sync_color.h"', header)
         self.assertRegex(
             header,
             re.compile(
                 r"#if defined\(USE_ESP32\).*?"
-                r'#include "cfx_sync_color.h".*?'
                 r'#include "cfx_sync_effect.h".*?'
                 r'#include "../cfx_button/cfx_button.h".*?'
                 r"#endif",

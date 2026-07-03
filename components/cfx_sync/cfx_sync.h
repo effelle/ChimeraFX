@@ -8,8 +8,8 @@
 
 #if defined(USE_ESP32) || defined(USE_ESP8266)
 
-#if defined(USE_ESP32)
 #include "cfx_sync_color.h"
+#if defined(USE_ESP32)
 #include "cfx_sync_effect.h"
 #include "../cfx_button/cfx_button.h"
 #endif

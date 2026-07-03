@@ -473,7 +473,26 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
             encoding="utf-8"
         )
+        color_header = (
+            ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
+        ).read_text(encoding="utf-8")
 
+        self.assertIn('#include "cfx_sync_color.h"', header)
+        self.assertNotRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
+                r'#include "cfx_sync_color.h"',
+                re.DOTALL,
+            ),
+        )
+        self.assertNotRegex(
+            color_header,
+            re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
+                r"inline bool light_supports_rgb_white",
+            ),
+        )
         self.assertIn("#include \"esphome/components/light/light_state.h\"", header)
         self.assertIn("void add_light(light::LightState *light)", header)
         self.assertIn("std::vector<light::LightState *> lights_;", header)
