@@ -241,19 +241,22 @@ void CFXSyncComponent::setup() {
     return;
   }
 #elif defined(USE_ESP8266)
-  } else if (this->role_ == CFXSyncRole::SATELLITE) {
+  } else if (this->is_state_receiver_role_()) {
     if (this->lights_.empty()) {
-      ESP_LOGE(TAG, "Satellite requires at least one light reference");
+      ESP_LOGE(TAG, "%s requires at least one light reference",
+               this->role_name_());
       this->mark_failed();
       return;
     }
     if (!this->use_udp_transport_()) {
-      ESP_LOGE(TAG, "ESP8266 satellite requires UDP transport");
+      ESP_LOGE(TAG, "ESP8266 %s requires UDP transport",
+               this->role_name_());
       this->mark_failed();
       return;
     }
   } else {
-    ESP_LOGE(TAG, "ESP8266 cfx_sync support is controller-or-satellite over UDP");
+    ESP_LOGE(TAG,
+             "ESP8266 cfx_sync support is controller or light follower over UDP");
     this->mark_failed();
     return;
   }
@@ -2227,6 +2230,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
 
   auto call = light->make_call();
   bool has_action = false;
+  const bool apply_visual_state = !(packet.has_power && !packet.power);
   if (packet.has_power) {
     if (light->remote_values.is_on() != packet.power) {
       call.set_state(packet.power);
@@ -2239,7 +2243,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
       traits.supports_color_mode(light::ColorMode::WHITE) ||
       traits.supports_color_mode(light::ColorMode::RGB) ||
       traits.supports_color_mode(light::ColorMode::RGB_WHITE);
-  if (packet.has_brightness && supports_brightness) {
+  if (packet.has_brightness && supports_brightness && apply_visual_state) {
     const float desired_brightness = packet.brightness / 255.0f;
     if (std::fabs(light->remote_values.get_brightness() -
                   desired_brightness) > (0.5f / 255.0f)) {
@@ -2247,15 +2251,54 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
       has_action = true;
     }
   }
-  if (packet.has_color || packet.has_color_brightness ||
-      packet.has_color_temperature || packet.has_cold_warm_white ||
-      packet.has_effect || packet.has_controls || packet.has_transition ||
+  if (packet.has_color && apply_visual_state) {
+    CFXSyncLightSnapshot snapshot;
+    snapshot.red = packet.red;
+    snapshot.green = packet.green;
+    snapshot.blue = packet.blue;
+    snapshot.white = packet.source_has_white ? packet.white : 0;
+    snapshot.color_brightness =
+        packet.has_color_brightness ? packet.color_brightness : 255;
+    snapshot.has_white = packet.source_has_white;
+
+    if (light_supports_rgb_white(*light)) {
+      const auto converted = convert_color_for_follower(snapshot, true);
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_color_brightness(converted.color_brightness / 255.0f);
+      call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
+                   converted.blue / 255.0f);
+      call.set_white(converted.white / 255.0f);
+      has_action = true;
+    } else if (light_supports_rgb(*light)) {
+      const auto converted = convert_color_for_follower(snapshot, false);
+      call.set_color_mode(light::ColorMode::RGB);
+      call.set_color_brightness(converted.color_brightness / 255.0f);
+      call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
+                   converted.blue / 255.0f);
+      has_action = true;
+    }
+  } else if (packet.has_color_brightness && apply_visual_state) {
+    call.set_color_brightness(packet.color_brightness / 255.0f);
+    has_action = true;
+  }
+  if (packet.has_color_temperature && apply_visual_state &&
+      light_supports_color_temperature(*light)) {
+    call.set_color_temperature(packet.color_temperature_mireds);
+    has_action = true;
+  }
+  if (packet.has_cold_warm_white && apply_visual_state &&
+      light_supports_cold_warm_white(*light)) {
+    call.set_cold_white(packet.cold_white / 255.0f);
+    call.set_warm_white(packet.warm_white / 255.0f);
+    has_action = true;
+  }
+  if (packet.has_effect || packet.has_controls || packet.has_transition ||
       packet.has_ramp) {
     const uint32_t now = millis();
     if (this->last_unsupported_visual_log_ms_ == 0 ||
         now - this->last_unsupported_visual_log_ms_ >=
             CONTROL_SKIP_LOG_INTERVAL_MS) {
-      ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields");
+      ESP_LOGD(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields");
       this->last_unsupported_visual_log_ms_ = now;
     }
   }

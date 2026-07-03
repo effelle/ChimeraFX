@@ -311,6 +311,16 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             "lights": [light_id("tuya_light")],
             "local_input": light_id("wall_button"),
         }
+        valid_follower = {
+            "role": "follower",
+            "transport": "auto",
+            "lights": [light_id("tuya_light")],
+        }
+        valid_follower_udp = {
+            "role": "follower",
+            "transport": "udp",
+            "lights": [light_id("tuya_light")],
+        }
         invalid_configs = [
             {
                 "role": "leader",
@@ -335,6 +345,16 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 "lights": [],
                 "local_input": light_id("wall_button"),
                 "remote_input": light_id("remote_button_host"),
+            },
+            {
+                "role": "follower",
+                "transport": "espnow",
+                "lights": [light_id("tuya_light")],
+            },
+            {
+                "role": "follower",
+                "transport": "udp",
+                "lights": [],
             },
             {
                 "role": "satellite",
@@ -372,11 +392,19 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 cfx_sync._validate_platform_support(valid_satellite_udp),
                 valid_satellite_udp,
             )
+            self.assertIs(
+                cfx_sync._validate_platform_support(valid_follower),
+                valid_follower,
+            )
+            self.assertIs(
+                cfx_sync._validate_platform_support(valid_follower_udp),
+                valid_follower_udp,
+            )
 
             for config in invalid_configs:
                 with self.subTest(config=config), self.assertRaisesRegex(
                     cv.Invalid,
-                    "ESP8266 cfx_sync support is controller-or-satellite over UDP",
+                    "ESP8266 cfx_sync support is controller or light follower over UDP",
                 ):
                     cfx_sync._validate_platform_support(config)
 
@@ -438,7 +466,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             emitted,
         )
 
-    def test_esp8266_satellite_runtime_applies_basic_power_and_supported_brightness(self):
+    def test_esp8266_satellite_runtime_applies_supported_light_state_fields(self):
         header = (ROOT / "components" / "cfx_sync" / "cfx_sync.h").read_text(
             encoding="utf-8"
         )
@@ -460,23 +488,35 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("traits.supports_color_mode(light::ColorMode::RGB)", source)
         self.assertIn("traits.supports_color_mode(light::ColorMode::RGB_WHITE)", source)
         self.assertIn(
-            "if (packet.has_brightness && supports_brightness)",
+            "if (packet.has_brightness && supports_brightness && apply_visual_state)",
             source,
         )
         self.assertIn("light->remote_values.get_brightness()", source)
         self.assertIn("call.set_brightness(desired_brightness);", source)
+        self.assertIn("light_supports_rgb_white(*light)", source)
+        self.assertIn("light_supports_rgb(*light)", source)
+        self.assertIn("convert_color_for_follower(snapshot, true)", source)
+        self.assertIn("convert_color_for_follower(snapshot, false)", source)
+        self.assertIn("call.set_rgb(", source)
+        self.assertIn("call.set_white(", source)
+        self.assertIn("light_supports_color_temperature(*light)", source)
+        self.assertIn(
+            "call.set_color_temperature(packet.color_temperature_mireds)",
+            source,
+        )
+        self.assertIn("light_supports_cold_warm_white(*light)", source)
+        self.assertIn("call.set_cold_white(packet.cold_white / 255.0f)", source)
+        self.assertIn("call.set_warm_white(packet.warm_white / 255.0f)", source)
         self.assertIn("return has_action;", source)
         self.assertIn(
-            'ESP_LOGD(TAG, "ESP8266 satellite ignoring unsupported visual fields")',
+            'ESP_LOGD(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields")',
             source,
         )
         self.assertRegex(
             source,
             re.compile(
-                r"if \(packet\.has_color \|\| packet\.has_color_brightness \|\|"
-                r"\s*packet\.has_color_temperature \|\|"
-                r"\s*packet\.has_cold_warm_white \|\|"
-                r"\s*packet\.has_effect",
+                r"if \(packet\.has_effect \|\| packet\.has_controls \|\|"
+                r"\s*packet\.has_transition \|\|\s*packet\.has_ramp\)",
                 re.DOTALL,
             ),
         )

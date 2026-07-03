@@ -462,14 +462,14 @@ def _validate_platform_support(config):
     )
     if role == ROLE_CONTROLLER:
         invalid = invalid or bool(lights)
-    elif role == ROLE_SATELLITE:
+    elif role in (ROLE_FOLLOWER, ROLE_SATELLITE):
         invalid = invalid or not lights
     else:
         invalid = True
 
     if invalid:
         raise cv.Invalid(
-            "ESP8266 cfx_sync support is controller-or-satellite over UDP"
+            "ESP8266 cfx_sync support is controller or light follower over UDP"
         )
     return config
 

@@ -93,7 +93,7 @@ This is useful when the follower device has multiple segments and they should al
 
 ## Temporarily Stop One Follower Or Satellite
 
-Every follower and satellite automatically gets an **Enable Sync** switch in ESPHome and Home Assistant.
+Every ESP32 follower and satellite automatically gets an **Enable Sync** switch in ESPHome and Home Assistant.
 
 *   Turn **Enable Sync** off when you want that device to stop copying the leader for a while.
 *   Turn **Enable Sync** on again when you want it back in the group.
@@ -168,7 +168,7 @@ cfx_sync:
 
 This behaves like a follower for the light, but any local button you configure outside `cfx_sync` stays private to that device.
 
-ESP8266 devices can also be satellites when they use UDP transport. This is intentionally limited: an ESP8266 satellite follows the leader's ON/OFF state and brightness, and can send `local_input` button events. It does not run ChimeraFX effects and does not apply synced RGB/RGBW color, color temperature, cold/warm white, palettes, speed, intensity, Force White, intro, or outro controls.
+ESP8266 devices can also be followers or satellites when they use UDP transport. ESP8266 followers and satellites use UDP and can follow normal ESPHome light state. They do not run ChimeraFX effects or apply ChimeraFX controls.
 
 Satellite with `local_input`:
 
@@ -387,7 +387,7 @@ It does not yet copy:
 
 - Exact animation phase.
 - Random effect seed.
-- Full ChimeraFX light behavior on ESP8266. ESP8266 satellites are basic UDP light followers for ON/OFF and brightness only.
+- Full ChimeraFX light behavior on ESP8266. ESP8266 followers and satellites can follow normal ESPHome light state over UDP, but they do not run ChimeraFX effects or controls.
 
 ---
 
@@ -403,6 +403,8 @@ You can use `cfx_sync` with normal ESPHome lights when you only need the usual l
 Effects and ChimeraFX controls are still ChimeraFX features. A normal ESPHome light can follow the visual state, but it will ignore ChimeraFX effects, palettes, speed, intensity, intro, outro, and Force White.
 
 This is useful for mixed rooms. For example, a ChimeraFX leader can sync the basic state to a PWM, Tuya, or monochrome ESPHome light. The result depends on what that follower light can actually do.
+
+On ESP8266 this requires `transport: udp` or the default `transport: auto`. ESP8266 devices cannot be leaders in this version.
 
 ---
 
@@ -491,7 +493,7 @@ Default `auto` behavior:
 
 - ESP32 leaders can bridge ESP-NOW and UDP.
 - ESP32 followers, satellites, and controllers can use ESP-NOW.
-- ESP8266 controllers and basic satellites use UDP.
+- ESP8266 controllers, followers, and satellites use UDP.
 
 You can force a transport when you know what you need:
 
@@ -510,7 +512,7 @@ cfx_sync:
 Use UDP when:
 
 - The device has Ethernet or cannot use ESP-NOW.
-- You are using an ESP8266 controller or basic satellite.
+- You are using an ESP8266 controller, follower, or satellite.
 - Your Wi-Fi mesh makes ESP-NOW channel alignment difficult.
 
 Use ESP-NOW when:
@@ -565,7 +567,7 @@ Important rules:
 - `remote_input` is only for leaders.
 - Do not use `espnow_id` or `peer`; discovery is automatic.
 - ESP32 followers and satellites get an automatic **Enable Sync** switch. It is not a YAML option.
-- ESP8266 satellites use UDP and do not get the automatic **Enable Sync** switch in this first version.
+- ESP8266 followers and satellites use UDP and do not get the automatic **Enable Sync** switch in this first version.
 
 ---
 
@@ -574,7 +576,7 @@ Important rules:
 ### Follower does nothing:
 *   [ ] Verify `group` and `key` are spelled exactly the same on all devices.
 *   [ ] On ESP32 followers or satellites, make sure the **Enable Sync** switch is turned on in Home Assistant or ESPHome.
-*   [ ] Confirm full ChimeraFX light followers are ESP32s. ESP8266 satellites only support basic ON/OFF and brightness over UDP.
+*   [ ] Confirm full ChimeraFX light followers are ESP32s. ESP8266 followers can follow normal ESPHome light state over UDP, but they do not run ChimeraFX effects or controls.
 *   [ ] If using ESP-NOW, check that the devices are on the same 2.4 GHz Wi-Fi channel.
 *   [ ] If using mesh Wi-Fi with ESP-NOW, check that the BSSID/channel did not split between mesh nodes.
 *   [ ] If using UDP, check that the devices are on the same network and can reach each other.

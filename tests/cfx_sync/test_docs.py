@@ -30,11 +30,11 @@ class CFXSyncDocsTests(unittest.TestCase):
         text = CFX_SYNC_DOC.read_text(encoding="utf-8")
 
         self.assertIn(
-            "ESP8266 satellites are basic UDP light followers for ON/OFF and brightness only.",
+            "ESP8266 followers and satellites use UDP and can follow normal ESPHome light state.",
             text,
         )
         self.assertIn(
-            "does not apply synced RGB/RGBW color, color temperature, cold/warm white",
+            "They do not run ChimeraFX effects or apply ChimeraFX controls.",
             text,
         )
 
