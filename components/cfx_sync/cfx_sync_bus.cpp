@@ -121,7 +121,7 @@ bool CFXSyncBus::begin_espnow() {
                                 0xFF, 0xFF, 0xFF};
   const esp_err_t result = this->espnow_->add_peer(broadcast);
   if (result != ESP_OK) {
-    ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
+    ESP_LOGV(TAG, "ESP-NOW broadcast peer add skipped: %s",
              esp_err_to_name(result));
   }
   return true;

@@ -1201,7 +1201,7 @@ class ESPNowAPITests(unittest.TestCase):
             'this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller"',
             source,
         )
-        self.assertIn('ESP_LOGD(TAG, "Satellite applying leader state")', source)
+        self.assertIn('ESP_LOGV(TAG, "Satellite applying leader state")', source)
         self.assertRegex(
             source,
             re.compile(
@@ -1566,7 +1566,7 @@ class ESPNowAPITests(unittest.TestCase):
             inject_remote_input,
             re.compile(
                 r"if \(!pressed && !this->remote_input_pressed_\) \{\s*"
-                r"ESP_LOGD\(TAG, \"Ignoring duplicate CFX Sync remote release\"\);\s*"
+                r"ESP_LOGV\(TAG, \"Ignoring duplicate CFX Sync remote release\"\);\s*"
                 r"return false;\s*"
                 r"\}.*?"
                 r"this->remote_input_pressed_ = pressed;.*?"

@@ -544,7 +544,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("call.set_warm_white(packet.warm_white / 255.0f)", source)
         self.assertIn("return has_action;", source)
         self.assertIn(
-            'ESP_LOGD(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields")',
+            'ESP_LOGV(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields")',
             source,
         )
         self.assertRegex(

@@ -359,7 +359,7 @@ void CFXSyncComponent::setup() {
       this->local_input_has_state_ = true;
       this->local_input_pressed_ = this->local_input_->state;
     }
-    ESP_LOGD(TAG, "%s input bound to %s",
+    ESP_LOGV(TAG, "%s input bound to %s",
              this->role_ == CFXSyncRole::SATELLITE ? "Satellite"
                                                     : "Controller",
              this->local_input_->get_name().c_str());
@@ -686,7 +686,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     if (source.transport == CFXSyncTransportKind::UDP && applied) {
       this->udp_input_applied_++;
-      ESP_LOGD(TAG, "UDP input applied");
+      ESP_LOGV(TAG, "UDP input applied");
     }
 #endif
     return true;
@@ -742,7 +742,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->clear_warning_if_set_();
     const bool applied = this->apply_remote_state_(packet);
     if (this->role_ == CFXSyncRole::SATELLITE && applied) {
-      ESP_LOGD(TAG, "Satellite applying leader state");
+      ESP_LOGV(TAG, "Satellite applying leader state");
     }
     this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
                               CFXSyncAckResult::APPLIED);
@@ -1015,7 +1015,7 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
           pressed, maintained, toggle, this->key_, packet)) {
     return false;
   }
-  ESP_LOGD(TAG, "Sending CFX Sync input %s%s%s",
+  ESP_LOGV(TAG, "Sending CFX Sync input %s%s%s",
            pressed ? "pressed" : "released",
            maintained ? " maintained" : "",
            toggle ? " toggle" : "");
@@ -1039,7 +1039,7 @@ void CFXSyncComponent::schedule_udp_input_retry_(std::vector<uint8_t> packet,
                       }
                       if (this->send_packet_to_(BROADCAST_MAC, packet)) {
                         this->udp_input_retried_++;
-                        ESP_LOGD(TAG, "UDP input burst resend");
+                        ESP_LOGV(TAG, "UDP input burst resend");
                       }
                       if (remaining > 1) {
                         this->schedule_udp_input_retry_(packet, remaining - 1);
@@ -1061,7 +1061,7 @@ void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
   this->pending_input_events_[index] =
       PendingInputEvent{pressed, maintained, toggle};
   this->pending_input_count_++;
-  ESP_LOGD(TAG, "Queued CFX Sync input %s%s%s",
+  ESP_LOGV(TAG, "Queued CFX Sync input %s%s%s",
            pressed ? "pressed" : "released",
            maintained ? " maintained" : "",
            toggle ? " toggle" : "");
@@ -1089,7 +1089,7 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_has_state_ = true;
   this->local_input_pressed_ = pressed;
-  ESP_LOGD(TAG, "%s local input %s",
+  ESP_LOGV(TAG, "%s local input %s",
            this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller",
            pressed ? "pressed" : "released");
   const bool maintained =
@@ -1192,12 +1192,12 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     return false;
   }
   if (!pressed && !this->remote_input_pressed_) {
-    ESP_LOGD(TAG, "Ignoring duplicate CFX Sync remote release");
+    ESP_LOGV(TAG, "Ignoring duplicate CFX Sync remote release");
     return false;
   }
   this->remote_input_pressed_ = pressed;
   this->last_remote_input_ms_ = millis();
-  ESP_LOGD(TAG, "Applying CFX Sync remote input %s",
+  ESP_LOGV(TAG, "Applying CFX Sync remote input %s",
            pressed ? "pressed" : "released");
   this->remote_input_->inject_remote_state(pressed);
   if (pressed && !maintained) {
@@ -1904,7 +1904,7 @@ void CFXSyncComponent::log_rejection_(const char *message) {
   const uint32_t now = millis();
   if (this->last_rejection_log_ms_ == 0 ||
       now - this->last_rejection_log_ms_ >= 5000) {
-    ESP_LOGD(TAG, "%s", message);
+    ESP_LOGV(TAG, "%s", message);
     this->last_rejection_log_ms_ = now;
   }
 }
@@ -1991,7 +1991,7 @@ void CFXSyncComponent::exit_offline_fallback_(uint8_t channel) {
     return;
   }
   this->offline_fallback_active_ = false;
-  ESP_LOGI(TAG,
+  ESP_LOGV(TAG,
            "CFX Sync exiting offline fallback; infrastructure channel %u restored",
            static_cast<unsigned>(channel));
   this->schedule_espnow_rearm_("wifi-restored");
@@ -2080,7 +2080,7 @@ void CFXSyncComponent::schedule_espnow_rearm_(const char *reason) {
       return;
     }
     const uint8_t channel = this->active_sync_channel_();
-    ESP_LOGI(TAG, "Re-arming ESP-NOW after %s on %s channel %u", reason,
+    ESP_LOGV(TAG, "Re-arming ESP-NOW after %s on %s channel %u", reason,
              this->sync_mode_name_(), static_cast<unsigned>(channel));
     this->bus_->disable_espnow();
     this->apply_fallback_channel_();
@@ -2324,7 +2324,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     if (this->last_unsupported_visual_log_ms_ == 0 ||
         now - this->last_unsupported_visual_log_ms_ >=
             CONTROL_SKIP_LOG_INTERVAL_MS) {
-      ESP_LOGD(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields");
+      ESP_LOGV(TAG, "ESP8266 light follower ignoring ChimeraFX-only fields");
       this->last_unsupported_visual_log_ms_ = now;
     }
   }

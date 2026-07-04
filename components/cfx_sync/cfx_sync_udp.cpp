@@ -118,7 +118,7 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
                    reinterpret_cast<sockaddr *>(&addr), &addr_len);
     if (received < 0) {
       if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        ESP_LOGD(TAG, "UDP receive failed: errno=%d", errno);
+        ESP_LOGV(TAG, "UDP receive failed: errno=%d", errno);
       }
       return;
     }
