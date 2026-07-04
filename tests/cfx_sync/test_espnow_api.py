@@ -3209,6 +3209,40 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("call.set_cold_white(", apply_light_source)
         self.assertIn("call.set_warm_white(", apply_light_source)
 
+    def test_follower_folds_cwww_to_rgb_when_dual_white_is_missing(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        color_header = COLOR_HEADER.read_text(encoding="utf-8")
+        apply_light_body = re.search(
+            r"bool CFXSyncComponent::apply_remote_state_to_light_"
+            r"\(.*?\n\}\n\n#if defined\(USE_ESP32\)\nvoid CFXSyncComponent::apply_remote_controls_to_light_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(apply_light_body)
+        apply_light_source = apply_light_body.group(0)
+
+        self.assertIn("convert_cold_warm_white_for_rgb", color_header)
+        self.assertIn(
+            "std::max(cold_white, warm_white)",
+            color_header,
+        )
+        self.assertIn(
+            "convert_cold_warm_white_for_rgb(",
+            apply_light_source,
+        )
+        self.assertRegex(
+            apply_light_source,
+            re.compile(
+                r"else if \(packet\.has_cold_warm_white && apply_visual_state &&\s*"
+                r"light_supports_rgb\(\*light\)\) \{.*?"
+                r"call\.set_color_mode\(light::ColorMode::RGB\);.*?"
+                r"call\.set_color_brightness\(converted\.color_brightness / 255\.0f\);.*?"
+                r"call\.set_rgb\(converted\.red / 255\.0f, converted\.green / 255\.0f,"
+                r"\s*converted\.blue / 255\.0f\);",
+                re.DOTALL,
+            ),
+        )
+
     def test_follower_applies_ramp_or_transition_before_perform(self):
         source = SOURCE.read_text(encoding="utf-8")
 
