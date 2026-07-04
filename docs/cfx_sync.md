@@ -404,6 +404,8 @@ Effects and ChimeraFX controls are still ChimeraFX features. A normal ESPHome li
 
 This is useful for mixed rooms. For example, a ChimeraFX leader can sync the basic state to a PWM, Tuya, or monochrome ESPHome light. The result depends on what that follower light can actually do.
 
+If a follower does not have a white, color-temperature, cold-white, or warm-white channel, those white-only changes are ignored by that follower. The follower keeps its current color, but it still follows ON/OFF and brightness changes from the leader.
+
 On ESP8266 this requires `transport: udp` or the default `transport: auto`. ESP8266 devices cannot be leaders in this version.
 
 ---
@@ -431,6 +433,7 @@ Mixed RGB and RGBW devices are supported, but they may not look perfectly identi
 
 - RGBW to RGB folds white into RGB.
 - RGB to RGBW moves neutral RGB into the white channel.
+- RGBWW, CWWW, or color-temperature white changes are applied only by followers that support those channels. RGB-only and monochrome followers keep their current color and continue following power and brightness.
 
 Different strips, white LEDs, power supplies, and calibration can still make two lights look slightly different.
 

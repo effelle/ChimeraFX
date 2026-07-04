@@ -2312,15 +2312,6 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     call.set_cold_white(packet.cold_white / 255.0f);
     call.set_warm_white(packet.warm_white / 255.0f);
     has_action = true;
-  } else if (packet.has_cold_warm_white && apply_visual_state &&
-             light_supports_rgb(*light)) {
-    const auto converted = convert_cold_warm_white_for_rgb(
-        packet.cold_white, packet.warm_white);
-    call.set_color_mode(light::ColorMode::RGB);
-    call.set_color_brightness(converted.color_brightness / 255.0f);
-    call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
-                 converted.blue / 255.0f);
-    has_action = true;
   } else if (packet.has_color_temperature && apply_visual_state &&
              light_supports_color_temperature(*light)) {
     call.set_color_mode(light::ColorMode::COLOR_TEMPERATURE);
@@ -2411,14 +2402,6 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     }
     call.set_cold_white(packet.cold_white / 255.0f);
     call.set_warm_white(packet.warm_white / 255.0f);
-  } else if (packet.has_cold_warm_white && apply_visual_state &&
-             light_supports_rgb(*light)) {
-    const auto converted = convert_cold_warm_white_for_rgb(
-        packet.cold_white, packet.warm_white);
-    call.set_color_mode(light::ColorMode::RGB);
-    call.set_color_brightness(converted.color_brightness / 255.0f);
-    call.set_rgb(converted.red / 255.0f, converted.green / 255.0f,
-                 converted.blue / 255.0f);
   } else if (packet.has_color_temperature && apply_visual_state &&
              light_supports_color_temperature(*light)) {
     call.set_color_mode(light::ColorMode::COLOR_TEMPERATURE);

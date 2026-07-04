@@ -190,19 +190,6 @@ inline CFXSyncLightSnapshot convert_color_for_follower(
   return snapshot;
 }
 
-inline CFXSyncLightSnapshot convert_cold_warm_white_for_rgb(
-    uint8_t cold_white, uint8_t warm_white) {
-  CFXSyncLightSnapshot snapshot;
-  snapshot.has_color = true;
-  snapshot.has_color_brightness = true;
-  snapshot.has_white = false;
-  snapshot.red = 255;
-  snapshot.green = 255;
-  snapshot.blue = 255;
-  snapshot.color_brightness = std::max(cold_white, warm_white);
-  return snapshot;
-}
-
 }  // namespace cfx_sync
 }  // namespace esphome
 

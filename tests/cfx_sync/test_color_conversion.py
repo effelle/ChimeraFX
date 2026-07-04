@@ -54,13 +54,6 @@ def to_follower_channels(
     return converted[0], converted[1], converted[2], 0, converted[3]
 
 
-def cwww_to_rgb(cold_white, warm_white):
-    color_brightness = max(cold_white, warm_white)
-    if color_brightness == 0:
-        return 255, 255, 255, 0
-    return 255, 255, 255, color_brightness
-
-
 class ColorConversionTests(unittest.TestCase):
     def test_rgb_to_rgb_is_unchanged(self):
         self.assertEqual(
@@ -97,11 +90,6 @@ class ColorConversionTests(unittest.TestCase):
             to_follower_channels(38, 49, 255, 125, 158, True, True),
             (38, 49, 255, 125, 158),
         )
-
-    def test_cold_warm_white_folds_to_neutral_rgb(self):
-        self.assertEqual(cwww_to_rgb(255, 128), (255, 255, 255, 255))
-        self.assertEqual(cwww_to_rgb(64, 192), (255, 255, 255, 192))
-        self.assertEqual(cwww_to_rgb(0, 0), (255, 255, 255, 0))
 
     def test_quantization_rounds_and_clamps(self):
         self.assertEqual(quantize(0.0), 0)

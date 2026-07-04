@@ -19,6 +19,10 @@ class CFXSyncDocsTests(unittest.TestCase):
         )
         self.assertIn("## Normal ESPHome Lights", text)
         self.assertIn("PWM, Tuya, or monochrome ESPHome light", text)
+        self.assertIn(
+            "The follower keeps its current color, but it still follows ON/OFF and brightness changes from the leader.",
+            text,
+        )
         self.assertIn("## Multiple Groups", text)
         self.assertIn("more than one `cfx_sync` block", text)
         self.assertNotIn("Multiple sync groups on the same device.", text)
