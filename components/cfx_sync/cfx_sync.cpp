@@ -699,6 +699,15 @@ bool CFXSyncComponent::handle_decoded_packet_(
 
   peer->last_seen_ms = millis();
   if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
+    if (packet.type == CFXSyncPacketType::STATE &&
+        this->is_state_receiver_role_() &&
+        peer->has_rx_sequence &&
+        packet.boot_id == peer->rx_boot_id &&
+        packet.sequence == peer->rx_sequence) {
+      this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
+                                CFXSyncAckResult::APPLIED);
+      return true;
+    }
     this->stale_packets_++;
     this->log_rejection_("Ignoring duplicate or stale packet");
     return true;
@@ -727,7 +736,8 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->is_state_receiver_role_() &&
       (packet.has_power || packet.has_brightness || packet.has_color ||
        packet.has_color_brightness || packet.has_effect ||
-       packet.has_controls)) {
+       packet.has_controls || packet.has_color_temperature ||
+       packet.has_cold_warm_white)) {
     this->has_valid_state_ = true;
     this->clear_warning_if_set_();
     const bool applied = this->apply_remote_state_(packet);
@@ -848,6 +858,8 @@ bool CFXSyncComponent::send_state_to_followers_(
   if (!this->send_state_packet_to_followers_(packet)) {
     return false;
   }
+  this->last_state_retry_packet_ = packet;
+  this->last_state_retry_packet_valid_ = true;
   if (!this->state_retry_active_) {
     this->state_retry_attempts_ = 0;
   }
@@ -1691,6 +1703,7 @@ void CFXSyncComponent::handle_state_ack_(PeerState &peer,
   if (!this->has_peer_send_warning_() && !has_pending &&
       this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES) {
     this->state_retry_attempts_ = 0;
+    this->last_state_retry_packet_valid_ = false;
     this->clear_warning_if_set_();
   } else {
     this->check_ack_health_();
@@ -1840,6 +1853,7 @@ void CFXSyncComponent::schedule_state_retry_() {
     }
     if (this->pending_ack_count_() == 0) {
       this->state_retry_attempts_ = 0;
+      this->last_state_retry_packet_valid_ = false;
       return;
     }
     if (this->state_retry_attempts_ >= STATE_RETRY_MAX_ATTEMPTS) {
@@ -1852,8 +1866,11 @@ void CFXSyncComponent::schedule_state_retry_() {
     }
     this->state_retry_attempts_++;
     this->state_retry_active_ = true;
-    this->send_state_();
+    if (this->last_state_retry_packet_valid_) {
+      this->send_state_packet_to_followers_(this->last_state_retry_packet_);
+    }
     this->state_retry_active_ = false;
+    this->schedule_state_retry_();
   });
 }
 #endif

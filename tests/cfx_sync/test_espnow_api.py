@@ -2745,7 +2745,12 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("this->send_pending_", retry_text)
         self.assertIn("this->state_retry_attempts_++;", retry_text)
         self.assertIn("this->state_retry_active_ = true;", retry_text)
-        self.assertIn("this->send_state_();", retry_text)
+        self.assertIn("this->last_state_retry_packet_valid_", retry_text)
+        self.assertIn(
+            "this->send_state_packet_to_followers_(this->last_state_retry_packet_)",
+            retry_text,
+        )
+        self.assertNotIn("this->send_state_();", retry_text)
         self.assertIn("this->state_retry_active_ = false;", retry_text)
         self.assertRegex(
             retry_text,
@@ -3154,6 +3159,51 @@ class ESPNowAPITests(unittest.TestCase):
                 r"packet\.has_color \|\|\s*"
                 r"packet\.has_color_brightness \|\| packet\.has_effect \|\|\s*"
                 r"packet\.has_controls"
+            ),
+        )
+
+    def test_cct_only_follower_state_is_actionable(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"packet\.has_color_brightness \|\| packet\.has_effect \|\|\s*"
+                r"packet\.has_controls \|\| packet\.has_color_temperature \|\|\s*"
+                r"packet\.has_cold_warm_white"
+            ),
+        )
+
+    def test_state_retry_resends_same_packet_without_repainting_followers(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("std::vector<uint8_t> last_state_retry_packet_;", header)
+        self.assertIn("bool last_state_retry_packet_valid_{false};", header)
+        self.assertIn("this->last_state_retry_packet_ = packet;", source)
+        retry_body = re.search(
+            r"void CFXSyncComponent::schedule_state_retry_"
+            r"\(.*?\n\}\n#endif",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(retry_body)
+        retry_source = retry_body.group(0)
+        self.assertIn("this->last_state_retry_packet_valid_", retry_source)
+        self.assertIn(
+            "this->send_state_packet_to_followers_(this->last_state_retry_packet_)",
+            retry_source,
+        )
+        self.assertNotIn("this->send_state_();", retry_source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(!this->accept_sequence_\(\*peer, packet\.boot_id, packet\.sequence\)\) \{"
+                r".*?packet\.type == CFXSyncPacketType::STATE.*?"
+                r"packet\.sequence == peer->rx_sequence.*?"
+                r"this->schedule_state_ack_\(source\.espnow_mac_or_null\(\), packet,"
+                r"\s*CFXSyncAckResult::APPLIED\);",
+                re.DOTALL,
             ),
         )
 

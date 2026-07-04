@@ -459,6 +459,8 @@ class CFXSyncComponent : public Component {
   uint8_t state_retry_attempts_{0};
   bool state_retry_active_{false};
   bool state_retry_scheduled_{false};
+  std::vector<uint8_t> last_state_retry_packet_;
+  bool last_state_retry_packet_valid_{false};
   uint32_t last_broadcast_state_boot_id_{0};
   uint32_t last_broadcast_state_sequence_{0};
   uint32_t last_broadcast_state_ms_{0};
