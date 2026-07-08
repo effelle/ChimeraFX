@@ -3473,6 +3473,13 @@ class ESPNowAPITests(unittest.TestCase):
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
 
+    def test_cfx_button_timing_helpers_are_not_esp32_only(self):
+        timing_header = CFX_DIMMER_TIMING_HEADER.read_text(encoding="utf-8")
+
+        self.assertNotIn("#ifdef USE_ESP32", timing_header)
+        self.assertNotIn("#endif  // USE_ESP32", timing_header)
+        self.assertIn("namespace cfx_dimmer", timing_header)
+
     def test_cfx_dimmer_uses_native_ramps_for_plain_lights(self):
         dimmer_header = (
             ROOT / "components" / "cfx_button" / "cfx_dimmer.h"

@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef USE_ESP32
-
 #include "esphome/components/light/light_state.h"
 
 #include <array>
@@ -113,5 +111,3 @@ inline CFXDimmerTimingHint capture_light_timing_hint(light::LightState *light,
 
 }  // namespace cfx_dimmer
 }  // namespace esphome
-
-#endif  // USE_ESP32
