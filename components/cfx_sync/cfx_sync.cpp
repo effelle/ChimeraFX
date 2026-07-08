@@ -210,7 +210,11 @@ void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
 
 void CFXSyncComponent::setup() {
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
-    if (this->local_input_ == nullptr) {
+    bool has_local_input = this->local_input_ != nullptr;
+#ifdef USE_CFX_BUTTON
+    has_local_input = has_local_input || this->local_button_ != nullptr;
+#endif
+    if (!has_local_input) {
       ESP_LOGE(TAG, "Controller requires one local input");
       this->mark_failed();
       return;
@@ -366,6 +370,17 @@ void CFXSyncComponent::setup() {
     this->local_input_->add_on_state_callback(
         [this](bool pressed) { this->on_local_input_update_(pressed); });
   }
+#ifdef USE_CFX_BUTTON
+  if (this->is_input_sender_role_() && this->local_button_ != nullptr) {
+    ESP_LOGV(TAG, "%s CFX button input bound",
+             this->role_ == CFXSyncRole::SATELLITE ? "Satellite"
+                                                    : "Controller");
+    this->local_button_->add_sync_input_callback(
+        [this](cfx_button::CFXButtonInputAction action, bool pressed) {
+          this->on_local_button_update_(action, pressed);
+        });
+  }
+#endif
 }
 
 void CFXSyncComponent::loop() {
@@ -680,7 +695,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->last_valid_packet_ms_ = millis();
     const bool applied = this->handle_remote_input_(
         *peer, packet.input_pressed, packet.input_maintained,
-        packet.input_toggle);
+        packet.input_toggle, packet.input_action);
     if (source.transport == CFXSyncTransportKind::UDP) {
       this->udp_input_received_++;
     }
@@ -1014,22 +1029,30 @@ bool CFXSyncComponent::send_input_packet_(std::vector<uint8_t> &packet) {
 }
 
 bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
-                                         bool toggle) {
+                                         bool toggle,
+                                         CFXSyncInputAction action) {
   if (!this->is_input_sender_role_()) {
     return false;
   }
   if (this->send_pending_) {
-    this->queue_input_state_(pressed, maintained, toggle);
+    this->queue_input_state_(pressed, maintained, toggle, action);
     return false;
   }
   std::vector<uint8_t> packet;
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_input_state(
           this->group_hash_, this->boot_id_, sequence,
-          pressed, maintained, toggle, this->key_, packet)) {
+          pressed, maintained, toggle, action, this->key_, packet)) {
     return false;
   }
-  ESP_LOGV(TAG, "Sending CFX Sync input %s%s%s",
+  const char *action_name = "primary";
+  if (action == CFXSyncInputAction::DIMMER_UP) {
+    action_name = "dimmer-up";
+  } else if (action == CFXSyncInputAction::DIMMER_DOWN) {
+    action_name = "dimmer-down";
+  }
+  ESP_LOGV(TAG, "Sending CFX Sync input %s %s%s%s",
+           action_name,
            pressed ? "pressed" : "released",
            maintained ? " maintained" : "",
            toggle ? " toggle" : "");
@@ -1062,7 +1085,8 @@ void CFXSyncComponent::schedule_udp_input_retry_(std::vector<uint8_t> packet,
 }
 
 void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
-                                          bool toggle) {
+                                          bool toggle,
+                                          CFXSyncInputAction action) {
   if (this->pending_input_count_ >= PENDING_INPUT_QUEUE_SIZE) {
     this->pending_input_head_ =
         (this->pending_input_head_ + 1) % PENDING_INPUT_QUEUE_SIZE;
@@ -1073,7 +1097,7 @@ void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
       (this->pending_input_head_ + this->pending_input_count_) %
       PENDING_INPUT_QUEUE_SIZE;
   this->pending_input_events_[index] =
-      PendingInputEvent{pressed, maintained, toggle};
+      PendingInputEvent{pressed, maintained, toggle, action};
   this->pending_input_count_++;
   ESP_LOGV(TAG, "Queued CFX Sync input %s%s%s",
            pressed ? "pressed" : "released",
@@ -1090,7 +1114,8 @@ void CFXSyncComponent::flush_deferred_input_() {
   this->pending_input_head_ =
       (this->pending_input_head_ + 1) % PENDING_INPUT_QUEUE_SIZE;
   this->pending_input_count_--;
-  this->send_input_state_(event.pressed, event.maintained, event.toggle);
+  this->send_input_state_(event.pressed, event.maintained, event.toggle,
+                          event.action);
 }
 
 void CFXSyncComponent::on_local_input_update_(bool pressed) {
@@ -1135,7 +1160,9 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
                         }
                         this->local_input_sent_has_state_ = true;
                         this->local_input_sent_pressed_ = pressed;
-                        this->send_input_state_(pressed, maintained, toggle);
+                        this->send_input_state_(
+                            pressed, maintained, toggle,
+                            CFXSyncInputAction::PRIMARY);
                       });
     return;
   }
@@ -1143,7 +1170,8 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   this->local_input_sent_pressed_ = pressed;
   const uint32_t repeat_generation =
       ++this->local_input_repeat_generation_;
-  this->send_input_state_(pressed, maintained, false);
+  this->send_input_state_(pressed, maintained, false,
+                          CFXSyncInputAction::PRIMARY);
   if (pressed) {
     this->schedule_local_input_hold_repeat_(repeat_generation);
   } else {
@@ -1151,6 +1179,30 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
                                                repeat_generation);
   }
 }
+
+#ifdef USE_CFX_BUTTON
+void CFXSyncComponent::on_local_button_update_(
+    cfx_button::CFXButtonInputAction action, bool pressed) {
+  if (!this->is_input_sender_role_()) {
+    return;
+  }
+  CFXSyncInputAction sync_action = CFXSyncInputAction::PRIMARY;
+  switch (action) {
+    case cfx_button::CFXButtonInputAction::PRIMARY:
+      sync_action = CFXSyncInputAction::PRIMARY;
+      break;
+    case cfx_button::CFXButtonInputAction::DIMMER_UP:
+      sync_action = CFXSyncInputAction::DIMMER_UP;
+      break;
+    case cfx_button::CFXButtonInputAction::DIMMER_DOWN:
+      sync_action = CFXSyncInputAction::DIMMER_DOWN;
+      break;
+    default:
+      return;
+  }
+  this->send_input_state_(pressed, false, false, sync_action);
+}
+#endif
 
 void CFXSyncComponent::schedule_local_input_hold_repeat_(
     uint32_t generation) {
@@ -1161,7 +1213,8 @@ void CFXSyncComponent::schedule_local_input_hold_repeat_(
         !this->local_input_pressed_) {
       return;
     }
-    this->send_input_state_(true, false, false);
+    this->send_input_state_(true, false, false,
+                            CFXSyncInputAction::PRIMARY);
     this->schedule_local_input_hold_repeat_(generation);
   });
 }
@@ -1178,16 +1231,21 @@ void CFXSyncComponent::schedule_local_input_release_repeat_(
                           this->local_input_pressed_) {
                         return;
                       }
-                      this->send_input_state_(false, false, false);
+                      this->send_input_state_(
+                          false, false, false, CFXSyncInputAction::PRIMARY);
                       this->schedule_local_input_release_repeat_(
                           remaining - 1, generation);
                     });
 }
 
 bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
-                                           bool toggle) {
+                                           bool toggle,
+                                           CFXSyncInputAction action) {
 #if defined(USE_ESP32)
   if (this->role_ != CFXSyncRole::LEADER) {
+    return false;
+  }
+  if (action != CFXSyncInputAction::PRIMARY && (maintained || toggle)) {
     return false;
   }
   if (toggle) {
@@ -1198,6 +1256,7 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     this->apply_remote_power_input_(pressed);
     return true;
   }
+#ifdef USE_CFX_BUTTON
   if (this->remote_input_ == nullptr) {
     if (pressed) {
       this->apply_remote_toggle_input_();
@@ -1210,7 +1269,22 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     return false;
   }
   this->remote_input_pressed_ = pressed;
+  this->remote_input_action_ = pressed ? action : CFXSyncInputAction::PRIMARY;
   this->last_remote_input_ms_ = millis();
+  if (action == CFXSyncInputAction::DIMMER_UP) {
+    this->remote_input_->inject_remote_dimmer_up(pressed);
+    if (pressed) {
+      this->schedule_remote_input_timeout_();
+    }
+    return true;
+  }
+  if (action == CFXSyncInputAction::DIMMER_DOWN) {
+    this->remote_input_->inject_remote_dimmer_down(pressed);
+    if (pressed) {
+      this->schedule_remote_input_timeout_();
+    }
+    return true;
+  }
   ESP_LOGV(TAG, "Applying CFX Sync remote input %s",
            pressed ? "pressed" : "released");
   this->remote_input_->inject_remote_state(pressed);
@@ -1218,6 +1292,16 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     this->schedule_remote_input_timeout_();
   }
   return true;
+#else
+  if (action != CFXSyncInputAction::PRIMARY) {
+    return false;
+  }
+  if (pressed) {
+    this->apply_remote_toggle_input_();
+    return true;
+  }
+  return false;
+#endif
 #else
   (void) pressed;
   (void) maintained;
@@ -1228,9 +1312,10 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
 
 #if defined(USE_ESP32)
 bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
-                                           bool maintained, bool toggle) {
+                                           bool maintained, bool toggle,
+                                           CFXSyncInputAction action) {
   if (toggle || maintained) {
-    return this->inject_remote_input_(pressed, maintained, toggle);
+    return this->inject_remote_input_(pressed, maintained, toggle, action);
   }
   if (pressed) {
     if (this->remote_input_owner_ == nullptr) {
@@ -1240,7 +1325,7 @@ bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
           "Ignoring remote input while another controller is active");
       return false;
     }
-    return this->inject_remote_input_(pressed, maintained, toggle);
+    return this->inject_remote_input_(pressed, maintained, toggle, action);
   }
   if (this->remote_input_owner_ != nullptr &&
       this->remote_input_owner_ != &peer) {
@@ -1248,7 +1333,8 @@ bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
         "Ignoring remote input while another controller is active");
     return false;
   }
-  const bool applied = this->inject_remote_input_(pressed, maintained, toggle);
+  const bool applied =
+      this->inject_remote_input_(pressed, maintained, toggle, action);
   this->clear_remote_input_owner_();
   return applied;
 }
@@ -1289,7 +1375,8 @@ void CFXSyncComponent::schedule_remote_input_timeout_() {
                         this->schedule_remote_input_timeout_();
                         return;
                       }
-                      this->inject_remote_input_(false, false, false);
+                      this->inject_remote_input_(false, false, false,
+                                                this->remote_input_action_);
                       this->clear_remote_input_owner_();
                     });
 }

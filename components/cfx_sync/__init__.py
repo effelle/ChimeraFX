@@ -420,6 +420,52 @@ def _fnv1a_32(value):
     return result
 
 
+def _id_name(value):
+    return value.id if hasattr(value, "id") else str(value)
+
+
+def _local_input_schema(value):
+    if hasattr(value, "id"):
+        return value
+    return cv.string_strict(value)
+
+
+def _domain_has_id(final_config, domain, target_id):
+    try:
+        entries = final_config.get_config_for_path([domain])
+    except (KeyError, AttributeError, AssertionError, LookupError):
+        return False
+    if not isinstance(entries, list):
+        return False
+    for entry in entries:
+        if not isinstance(entry, dict) or CONF_ID not in entry:
+            continue
+        if _id_name(entry[CONF_ID]) == target_id:
+            return True
+    return False
+
+
+def _local_input_is_cfx_button(input_id):
+    try:
+        final_config = full_config.get()
+    except (LookupError, AttributeError):
+        return False
+    return _domain_has_id(final_config, "cfx_button", _id_name(input_id))
+
+
+def _validate_local_input_id(config, final_config):
+    if CONF_LOCAL_INPUT not in config:
+        return
+    input_id = _id_name(config[CONF_LOCAL_INPUT])
+    if _domain_has_id(final_config, "binary_sensor", input_id):
+        return
+    if _domain_has_id(final_config, "cfx_button", input_id):
+        return
+    raise cv.Invalid(
+        "local_input must reference a binary_sensor or cfx_button id"
+    )
+
+
 def _final_validate(config):
     final_config = full_config.get()
     try:
@@ -428,6 +474,8 @@ def _final_validate(config):
         sync_configs = None
     if sync_configs is not None:
         _validate_multi_group_light_ownership(sync_configs)
+
+    _validate_local_input_id(config, final_config)
 
     if not config.get(CONF_LIGHTS, []):
         config[CONF_EFFECT_CATALOGS] = []
@@ -500,7 +548,7 @@ CONFIG_SCHEMA = cv.All(
                 lower=True,
             ),
             cv.Optional(CONF_LIGHTS, default=[]): _normalize_lights,
-            cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor),
+            cv.Optional(CONF_LOCAL_INPUT): _local_input_schema,
             cv.Optional(CONF_REMOTE_INPUT): cv.use_id(cfx_button.CFXButton),
             cv.Optional(CONF_ESPNOW_ID): cv.invalid(
                 "espnow_id is no longer used; cfx_sync uses ESP-NOW "
@@ -620,8 +668,16 @@ async def to_code(config):
             )
             cg.add(var.set_palette_control(light_index, control))
     if CONF_LOCAL_INPUT in config:
-        local_input = await cg.get_variable(config[CONF_LOCAL_INPUT])
-        cg.add(var.set_local_input(local_input))
+        if _local_input_is_cfx_button(config[CONF_LOCAL_INPUT]):
+            local_input = await cg.get_variable(
+                CoreID(_id_name(config[CONF_LOCAL_INPUT]), type=cfx_button.CFXButton)
+            )
+            cg.add(var.set_local_button(local_input))
+        else:
+            local_input = await cg.get_variable(
+                CoreID(_id_name(config[CONF_LOCAL_INPUT]), type=binary_sensor.BinarySensor)
+            )
+            cg.add(var.set_local_input(local_input))
     if CONF_REMOTE_INPUT in config:
         remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
         cg.add(var.set_remote_input(remote_input))

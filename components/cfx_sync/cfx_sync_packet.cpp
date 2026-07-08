@@ -431,11 +431,20 @@ bool CFXSyncPacketCodec::encode_state_ack(
 
 bool CFXSyncPacketCodec::encode_input_state(
     uint32_t group_hash, uint32_t boot_id, uint32_t sequence, bool pressed,
-    bool maintained, bool toggle,
+    bool maintained, bool toggle, CFXSyncInputAction action,
     const std::array<uint8_t, 32> &key, std::vector<uint8_t> &output) {
+  switch (action) {
+    case CFXSyncInputAction::PRIMARY:
+    case CFXSyncInputAction::DIMMER_UP:
+    case CFXSyncInputAction::DIMMER_DOWN:
+      break;
+    default:
+      return false;
+  }
   const uint8_t payload = (pressed ? INPUT_FLAG_PRESSED : 0) |
                           (maintained ? INPUT_FLAG_MAINTAINED : 0) |
-                          (toggle ? INPUT_FLAG_TOGGLE : 0);
+                          (toggle ? INPUT_FLAG_TOGGLE : 0) |
+                          (static_cast<uint8_t>(action) << INPUT_ACTION_SHIFT);
   return encode_(CFXSyncPacketType::INPUT_STATE, group_hash, boot_id,
                  sequence, &payload, INPUT_STATE_PAYLOAD_SIZE, key, output);
 }
@@ -573,13 +582,24 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
   if (packet.type == CFXSyncPacketType::INPUT_STATE) {
     if (payload_size != INPUT_STATE_PAYLOAD_SIZE ||
         (payload[0] & ~(INPUT_FLAG_PRESSED | INPUT_FLAG_MAINTAINED |
-                        INPUT_FLAG_TOGGLE)) != 0) {
+                        INPUT_FLAG_TOGGLE | INPUT_ACTION_MASK)) != 0) {
       return CFXSyncDecodeResult::MALFORMED;
+    }
+    const auto action = static_cast<CFXSyncInputAction>(
+        (payload[0] & INPUT_ACTION_MASK) >> INPUT_ACTION_SHIFT);
+    switch (action) {
+      case CFXSyncInputAction::PRIMARY:
+      case CFXSyncInputAction::DIMMER_UP:
+      case CFXSyncInputAction::DIMMER_DOWN:
+        break;
+      default:
+        return CFXSyncDecodeResult::MALFORMED;
     }
     packet.input_pressed = (payload[0] & INPUT_FLAG_PRESSED) != 0;
     packet.input_maintained =
         (payload[0] & INPUT_FLAG_MAINTAINED) != 0;
     packet.input_toggle = (payload[0] & INPUT_FLAG_TOGGLE) != 0;
+    packet.input_action = action;
     return CFXSyncDecodeResult::OK;
   }
 

@@ -574,7 +574,9 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn("if (toggle && !pressed)", source)
         self.assertIn(
-            "this->send_input_state_(pressed, maintained, toggle);",
+            "this->send_input_state_(\n"
+            "                            pressed, maintained, toggle,\n"
+            "                            CFXSyncInputAction::PRIMARY);",
             source,
         )
 

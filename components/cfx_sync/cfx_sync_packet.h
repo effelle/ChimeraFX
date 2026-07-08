@@ -41,6 +41,12 @@ enum class CFXSyncAckResult : uint8_t {
   APPLY_FAILED = 2,
 };
 
+enum class CFXSyncInputAction : uint8_t {
+  PRIMARY = 0,
+  DIMMER_UP = 1,
+  DIMMER_DOWN = 2,
+};
+
 enum class CFXSyncDecodeResult : uint8_t {
   OK = 0,
   NOT_CFX,
@@ -145,6 +151,7 @@ struct CFXSyncPacket {
   bool input_pressed{false};
   bool input_maintained{false};
   bool input_toggle{false};
+  CFXSyncInputAction input_action{CFXSyncInputAction::PRIMARY};
 };
 
 class CFXSyncPacketCodec {
@@ -177,6 +184,8 @@ class CFXSyncPacketCodec {
   static constexpr uint8_t INPUT_FLAG_PRESSED = 0x01;
   static constexpr uint8_t INPUT_FLAG_MAINTAINED = 0x02;
   static constexpr uint8_t INPUT_FLAG_TOGGLE = 0x04;
+  static constexpr uint8_t INPUT_ACTION_SHIFT = 3;
+  static constexpr uint8_t INPUT_ACTION_MASK = 0x18;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
@@ -284,6 +293,7 @@ class CFXSyncPacketCodec {
   static bool encode_input_state(uint32_t group_hash, uint32_t boot_id,
                                  uint32_t sequence, bool pressed,
                                  bool maintained, bool toggle,
+                                 CFXSyncInputAction action,
                                  const std::array<uint8_t, 32> &key,
                                  std::vector<uint8_t> &output);
   static CFXSyncDecodeResult peek_group_hash(const uint8_t *data,

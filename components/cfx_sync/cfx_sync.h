@@ -9,9 +9,11 @@
 #if defined(USE_ESP32) || defined(USE_ESP8266)
 
 #include "cfx_sync_color.h"
+#ifdef USE_CFX_BUTTON
+#include "../cfx_button/cfx_button.h"
+#endif
 #if defined(USE_ESP32)
 #include "cfx_sync_effect.h"
-#include "../cfx_button/cfx_button.h"
 #endif
 #include "cfx_sync_bus.h"
 #include "cfx_sync_packet.h"
@@ -113,10 +115,17 @@ class CFXSyncComponent : public Component {
   void set_local_input(binary_sensor::BinarySensor *input) {
     this->local_input_ = input;
   }
+#ifdef USE_CFX_BUTTON
+  void set_local_button(cfx_button::CFXButton *input) {
+    this->local_button_ = input;
+  }
+#endif
 #if defined(USE_ESP32)
+#ifdef USE_CFX_BUTTON
   void set_remote_input(cfx_button::CFXButton *input) {
     this->remote_input_ = input;
   }
+#endif
   void set_sync_switch(CFXSyncEnableSwitch *sync_switch) {
     this->sync_switch_ = sync_switch;
   }
@@ -284,6 +293,7 @@ class CFXSyncComponent : public Component {
     bool pressed{false};
     bool maintained{false};
     bool toggle{false};
+    CFXSyncInputAction action{CFXSyncInputAction::PRIMARY};
   };
 
 #if defined(USE_ESP32)
@@ -316,17 +326,25 @@ class CFXSyncComponent : public Component {
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
   bool send_input_packet_(std::vector<uint8_t> &packet);
-  bool send_input_state_(bool pressed, bool maintained, bool toggle);
+  bool send_input_state_(bool pressed, bool maintained, bool toggle,
+                         CFXSyncInputAction action =
+                             CFXSyncInputAction::PRIMARY);
   void schedule_udp_input_retry_(std::vector<uint8_t> packet, uint8_t remaining);
-  void queue_input_state_(bool pressed, bool maintained, bool toggle);
+  void queue_input_state_(bool pressed, bool maintained, bool toggle, CFXSyncInputAction action);
   void flush_deferred_input_();
   void on_local_input_update_(bool pressed);
+#ifdef USE_CFX_BUTTON
+  void on_local_button_update_(cfx_button::CFXButtonInputAction action,
+                               bool pressed);
+#endif
   void schedule_local_input_hold_repeat_(uint32_t generation);
   void schedule_local_input_release_repeat_(uint8_t remaining,
                                             uint32_t generation);
   bool handle_remote_input_(PeerState &peer, bool pressed, bool maintained,
-                            bool toggle);
-  bool inject_remote_input_(bool pressed, bool maintained, bool toggle);
+                            bool toggle, CFXSyncInputAction action);
+  bool inject_remote_input_(bool pressed, bool maintained, bool toggle,
+                            CFXSyncInputAction action =
+                                CFXSyncInputAction::PRIMARY);
   void clear_remote_input_owner_();
   void apply_remote_power_input_(bool pressed);
   void apply_remote_toggle_input_();
@@ -442,8 +460,13 @@ class CFXSyncComponent : public Component {
 #endif
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   binary_sensor::BinarySensor *local_input_{nullptr};
+#ifdef USE_CFX_BUTTON
+  cfx_button::CFXButton *local_button_{nullptr};
+#endif
 #if defined(USE_ESP32)
+#ifdef USE_CFX_BUTTON
   cfx_button::CFXButton *remote_input_{nullptr};
+#endif
   CFXSyncEnableSwitch *sync_switch_{nullptr};
 #endif
   std::array<uint8_t, 6> peer_{};
@@ -491,6 +514,7 @@ class CFXSyncComponent : public Component {
   uint8_t pending_input_count_{0};
   PeerState *remote_input_owner_{nullptr};
   bool remote_input_pressed_{false};
+  CFXSyncInputAction remote_input_action_{CFXSyncInputAction::PRIMARY};
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};
   bool applying_remote_state_{false};

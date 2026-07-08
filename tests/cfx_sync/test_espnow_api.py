@@ -366,17 +366,35 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertRegex(
             header,
             re.compile(
+                r"#ifdef USE_CFX_BUTTON.*?"
+                r'#include "../cfx_button/cfx_button.h".*?'
+                r"#endif.*?"
                 r"#if defined\(USE_ESP32\).*?"
                 r'#include "cfx_sync_effect.h".*?'
-                r'#include "../cfx_button/cfx_button.h".*?'
                 r"#endif",
                 re.DOTALL,
             ),
         )
         self.assertIn("void add_light(light::LightState *light)", header)
-        self.assertIn("#if defined(USE_ESP32)\n  void set_remote_input", header)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
+                r"#ifdef USE_CFX_BUTTON\s*"
+                r"void set_remote_input\(cfx_button::CFXButton \*input\)",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("std::vector<light::LightState *> lights_;", header)
-        self.assertIn("#if defined(USE_ESP32)\n  cfx_button::CFXButton *remote_input_", header)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"#if defined\(USE_ESP32\).*?"
+                r"#ifdef USE_CFX_BUTTON\s*"
+                r"cfx_button::CFXButton \*remote_input_",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("#if defined(USE_ESP32)\nstatic CFXSyncTimingState", source)
         self.assertIn("#if defined(USE_ESP32)\n  void add_effect", header)
         self.assertIn("#if defined(USE_ESP32)\n  std::vector<std::vector<CFXSyncEffectEntry>> effect_catalogs_;", header)
@@ -862,10 +880,7 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('CONF_REMOTE_INPUT = "remote_input"', py_source)
         self.assertIn('ROLE_CONTROLLER = "controller"', py_source)
         self.assertIn('ROLE_SATELLITE = "satellite"', py_source)
-        self.assertIn(
-            "cv.Optional(CONF_LOCAL_INPUT): cv.use_id(binary_sensor.BinarySensor)",
-            py_source,
-        )
+        self.assertIn("cv.Optional(CONF_LOCAL_INPUT): _local_input_schema", py_source)
         self.assertIn(
             "cv.Optional(CONF_REMOTE_INPUT): cv.use_id(cfx_button.CFXButton)",
             py_source,
@@ -895,10 +910,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("require_wake_loop_threadsafe", py_source)
         self.assertNotIn("cg.add(var.set_peer", py_source)
         self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
-        self.assertIn(
-            "local_input = await cg.get_variable(config[CONF_LOCAL_INPUT])",
-            py_source,
-        )
+        self.assertIn("_local_input_is_cfx_button(config[CONF_LOCAL_INPUT])", py_source)
+        self.assertIn("cg.add(var.set_local_button(local_input))", py_source)
         self.assertIn("cg.add(var.set_local_input(local_input))", py_source)
         self.assertIn(
             "remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])",
@@ -1184,6 +1197,51 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("esphome/components/cfx_button/cfx_button.h", header)
         self.assertIn("set_local_input(binary_sensor::BinarySensor *input)", header)
         self.assertIn("set_remote_input(cfx_button::CFXButton *input)", header)
+
+    def test_cfx_button_local_input_exports_primary_and_dimmer_actions(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+        py_source = PY_COMPONENT.read_text(encoding="utf-8")
+        button_header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
+        button_source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("enum class CFXButtonInputAction : uint8_t", button_header)
+        self.assertIn("PRIMARY = 0", button_header)
+        self.assertIn("DIMMER_UP = 1", button_header)
+        self.assertIn("DIMMER_DOWN = 2", button_header)
+        self.assertIn("using SyncInputCallback", button_header)
+        self.assertIn("void add_sync_input_callback(SyncInputCallback callback)", button_header)
+        self.assertIn("void inject_remote_dimmer_up(bool pressed);", button_header)
+        self.assertIn("void inject_remote_dimmer_down(bool pressed);", button_header)
+        self.assertIn("CFXButtonState remote_dimmer_up_state_;", button_header)
+        self.assertIn("CFXButtonState remote_dimmer_down_state_;", button_header)
+        self.assertIn("emit_sync_input_(CFXButtonInputAction::PRIMARY, event);", button_source)
+        self.assertIn("emit_sync_input_(CFXButtonInputAction::DIMMER_UP, event);", button_source)
+        self.assertIn("emit_sync_input_(CFXButtonInputAction::DIMMER_DOWN, event);", button_source)
+        self.assertIn("void CFXButton::inject_remote_dimmer_up(bool pressed)", button_source)
+        self.assertIn("void CFXButton::inject_remote_dimmer_down(bool pressed)", button_source)
+
+        self.assertIn("void set_local_button(cfx_button::CFXButton *input)", header)
+        self.assertIn("cfx_button::CFXButton *local_button_{nullptr};", header)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"void on_local_button_update_"
+                r"\(cfx_button::CFXButtonInputAction action,\s*bool pressed\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("this->local_button_->add_sync_input_callback", source)
+        self.assertIn("this->on_local_button_update_(action, pressed);", source)
+        self.assertIn("has_local_input = has_local_input || this->local_button_ != nullptr;", source)
+        self.assertIn("CFXSyncInputAction::DIMMER_UP", source)
+        self.assertIn("CFXSyncInputAction::DIMMER_DOWN", source)
+        self.assertIn("this->remote_input_->inject_remote_dimmer_up(pressed);", source)
+        self.assertIn("this->remote_input_->inject_remote_dimmer_down(pressed);", source)
+
+        self.assertIn("_local_input_schema", py_source)
+        self.assertIn("cv.use_id(cfx_button.CFXButton)", py_source)
+        self.assertIn("set_local_button", py_source)
         self.assertIn("void set_input_mode(CFXSyncInputMode mode)", header)
         self.assertIn("CFXSyncNodeRole::REMOTE", source)
         self.assertIn("CAP_BINARY_REMOTE", source)
@@ -1262,11 +1320,18 @@ class ESPNowAPITests(unittest.TestCase):
         packet_source = PACKET_SOURCE.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
 
+        self.assertIn("enum class CFXSyncInputAction : uint8_t", packet_header)
+        self.assertIn("PRIMARY = 0", packet_header)
+        self.assertIn("DIMMER_UP = 1", packet_header)
+        self.assertIn("DIMMER_DOWN = 2", packet_header)
+        self.assertIn("CFXSyncInputAction input_action{CFXSyncInputAction::PRIMARY};", packet_header)
         self.assertIn("bool input_maintained{false};", packet_header)
         self.assertIn("bool input_toggle{false};", packet_header)
         self.assertIn("static constexpr uint8_t INPUT_FLAG_PRESSED = 0x01;", packet_header)
         self.assertIn("static constexpr uint8_t INPUT_FLAG_MAINTAINED = 0x02;", packet_header)
         self.assertIn("static constexpr uint8_t INPUT_FLAG_TOGGLE = 0x04;", packet_header)
+        self.assertIn("static constexpr uint8_t INPUT_ACTION_SHIFT = 3;", packet_header)
+        self.assertIn("static constexpr uint8_t INPUT_ACTION_MASK = 0x18;", packet_header)
         self.assertIn("static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;", packet_header)
         self.assertIn("static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE == 39", packet_header)
         self.assertRegex(
@@ -1275,6 +1340,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"static bool encode_input_state\(uint32_t group_hash, uint32_t boot_id,"
                 r"\s*uint32_t sequence, bool pressed,\s*bool maintained,"
                 r"\s*bool toggle,"
+                r"\s*CFXSyncInputAction action,"
                 r"\s*const std::array<uint8_t, 32> &key,"
                 r"\s*std::vector<uint8_t> &output\);",
                 re.DOTALL,
@@ -1285,23 +1351,28 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"const uint8_t payload = \(pressed \? INPUT_FLAG_PRESSED : 0\) \|"
                 r"\s*\(maintained \? INPUT_FLAG_MAINTAINED : 0\) \|"
-                r"\s*\(toggle \? INPUT_FLAG_TOGGLE : 0\);.*?"
+                r"\s*\(toggle \? INPUT_FLAG_TOGGLE : 0\) \|"
+                r"\s*\(static_cast<uint8_t>\(action\) << INPUT_ACTION_SHIFT\);.*?"
                 r"payload\[0\] & ~\(INPUT_FLAG_PRESSED \| INPUT_FLAG_MAINTAINED \|"
-                r"\s*INPUT_FLAG_TOGGLE\).*?"
-                r"packet\.input_pressed = \(payload\[0\] & INPUT_FLAG_PRESSED\) != 0;.*?"
-                r"packet\.input_maintained ="
-                r"\s*\(payload\[0\] & INPUT_FLAG_MAINTAINED\) != 0;.*?"
-                r"packet\.input_toggle ="
-                r"\s*\(payload\[0\] & INPUT_FLAG_TOGGLE\) != 0;",
+                r"\s*INPUT_FLAG_TOGGLE \| INPUT_ACTION_MASK\)",
                 re.DOTALL,
             ),
         )
+        self.assertIn("const auto action = static_cast<CFXSyncInputAction>", packet_source)
+        self.assertIn("(payload[0] & INPUT_ACTION_MASK) >> INPUT_ACTION_SHIFT", packet_source)
+        self.assertIn("case CFXSyncInputAction::DIMMER_UP:", packet_source)
+        self.assertIn("case CFXSyncInputAction::DIMMER_DOWN:", packet_source)
+        self.assertIn("packet.input_pressed = (payload[0] & INPUT_FLAG_PRESSED) != 0;", packet_source)
+        self.assertIn("packet.input_toggle = (payload[0] & INPUT_FLAG_TOGGLE) != 0;", packet_source)
+        self.assertIn("packet.input_action = action;", packet_source)
         self.assertIn("CFXSyncInputMode input_mode_{CFXSyncInputMode::CFX_SYNC_INPUT_MOMENTARY};", header)
         self.assertIn("this->input_mode_ == CFXSyncInputMode::CFX_SYNC_INPUT_MAINTAINED", source)
         self.assertRegex(
             source,
             re.compile(
-                r"this->send_input_state_\(pressed, maintained,\s*toggle\);",
+                r"this->send_input_state_\(\s*"
+                r"pressed, maintained, toggle,\s*"
+                r"CFXSyncInputAction::PRIMARY\);",
                 re.DOTALL,
             ),
         )
@@ -1310,7 +1381,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"const bool applied = this->handle_remote_input_\(\s*"
                 r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
-                r"packet\.input_toggle\);",
+                r"packet\.input_toggle,\s*packet\.input_action\);",
                 re.DOTALL,
             ),
         )
@@ -1319,7 +1390,10 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('this->set_timeout("input-maintained-settle"', source)
         self.assertIn("const uint32_t generation = ++this->local_input_maintained_generation_;", source)
         self.assertIn("[this, pressed, maintained, toggle, generation]", source)
-        self.assertIn("void queue_input_state_(bool pressed, bool maintained, bool toggle);", header)
+        self.assertIn(
+            "void queue_input_state_(bool pressed, bool maintained, bool toggle, CFXSyncInputAction action);",
+            header,
+        )
         self.assertIn("void flush_deferred_input_();", header)
         self.assertIn("PendingInputEvent pending_input_events_[PENDING_INPUT_QUEUE_SIZE];", header)
         self.assertIn("static constexpr uint8_t PENDING_INPUT_QUEUE_SIZE = 8;", header)
@@ -1340,9 +1414,10 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_input_state_"
-                r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+                r"\(bool pressed, bool maintained,\s*bool toggle,\s*"
+                r"CFXSyncInputAction action\).*?"
                 r"if \(this->send_pending_\) \{\s*"
-                r"this->queue_input_state_\(pressed, maintained, toggle\);"
+                r"this->queue_input_state_\(pressed, maintained, toggle, action\);"
                 r"\s*return false;\s*\}",
                 re.DOTALL,
             ),
@@ -1352,7 +1427,9 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"const uint32_t repeat_generation ="
                 r"\s*\+\+this->local_input_repeat_generation_;.*?"
-                r"this->send_input_state_\(pressed, maintained, false\);.*?"
+                r"this->send_input_state_"
+                r"\(pressed, maintained, false,\s*"
+                r"CFXSyncInputAction::PRIMARY\);.*?"
                 r"if \(pressed\) \{\s*"
                 r"this->schedule_local_input_hold_repeat_\(repeat_generation\);"
                 r"\s*\} else \{\s*"
@@ -1378,6 +1455,9 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\(\s*uint8_t remaining,\s*uint32_t generation\).*?"
                 r"generation != this->local_input_repeat_generation_.*?"
                 r"this->local_input_pressed_.*?"
+                r"this->send_input_state_"
+                r"\(\s*false, false, false,\s*"
+                r"CFXSyncInputAction::PRIMARY\);.*?"
                 r"this->schedule_local_input_release_repeat_"
                 r"\(\s*remaining - 1,\s*generation\);",
                 re.DOTALL,
@@ -1394,7 +1474,8 @@ class ESPNowAPITests(unittest.TestCase):
         )
         inject_remote_input = re.search(
             r"bool CFXSyncComponent::inject_remote_input_"
-            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\(bool pressed, bool maintained,\s*bool toggle,\s*"
+            r"CFXSyncInputAction action\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
             re.DOTALL,
@@ -1427,7 +1508,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("bool send_input_packet_(std::vector<uint8_t> &packet);", header)
         send_input_state = re.search(
             r"bool CFXSyncComponent::send_input_state_"
-            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\(bool pressed, bool maintained,\s*bool toggle,\s*"
+            r"CFXSyncInputAction action\).*?"
             r"\nvoid CFXSyncComponent::queue_input_state_",
             source,
             re.DOTALL,
@@ -1545,7 +1627,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
                 r"const bool applied = this->handle_remote_input_\(\s*"
                 r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
-                r"packet\.input_toggle\);.*?"
+                r"packet\.input_toggle,\s*packet\.input_action\);.*?"
                 r"if \(source\.transport == CFXSyncTransportKind::UDP\) \{\s*"
                 r"this->udp_input_received_\+\+;\s*"
                 r"\}.*?"
@@ -1571,13 +1653,14 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(packet\.type == CFXSyncPacketType::INPUT_STATE\).*?"
                 r"const bool applied = this->handle_remote_input_\(\s*"
                 r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
-                r"packet\.input_toggle\);",
+                r"packet\.input_toggle,\s*packet\.input_action\);",
                 re.DOTALL,
             ),
         )
         inject_remote_input = re.search(
             r"bool CFXSyncComponent::inject_remote_input_"
-            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\(bool pressed, bool maintained,\s*bool toggle,\s*"
+            r"CFXSyncInputAction action\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
             re.DOTALL,
@@ -1634,7 +1717,8 @@ class ESPNowAPITests(unittest.TestCase):
 
         inject_remote_input = re.search(
             r"bool CFXSyncComponent::inject_remote_input_"
-            r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
+            r"\(bool pressed, bool maintained,\s*bool toggle,\s*"
+            r"CFXSyncInputAction action\).*?"
             r"\nvoid CFXSyncComponent::apply_remote_power_input_",
             source,
             re.DOTALL,
@@ -1649,6 +1733,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"return false;\s*"
                 r"\}.*?"
                 r"this->remote_input_pressed_ = pressed;.*?"
+                r"this->remote_input_action_ = pressed \? action : CFXSyncInputAction::PRIMARY;.*?"
                 r"this->remote_input_->inject_remote_state\(pressed\);.*?"
                 r"return true;",
                 re.DOTALL,
@@ -2930,7 +3015,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"bool handle_remote_input_"
                 r"\(PeerState &peer, bool pressed, bool maintained,\s*"
-                r"bool toggle\);",
+                r"bool toggle, CFXSyncInputAction action\);",
                 re.DOTALL,
             ),
         )
@@ -2941,14 +3026,14 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"this->handle_remote_input_\(\s*"
                 r"\*peer, packet\.input_pressed, packet\.input_maintained,\s*"
-                r"packet\.input_toggle\)",
+                r"packet\.input_toggle,\s*packet\.input_action\)",
                 re.DOTALL,
             ),
         )
         handler_body = re.search(
             r"bool CFXSyncComponent::handle_remote_input_"
             r"\(PeerState &peer, bool pressed,\s*"
-            r"bool maintained, bool toggle\).*?"
+            r"bool maintained, bool toggle,\s*CFXSyncInputAction action\).*?"
             r"\n\}\n\nvoid CFXSyncComponent::clear_remote_input_owner_",
             source,
             re.DOTALL,
@@ -2957,7 +3042,7 @@ class ESPNowAPITests(unittest.TestCase):
         handler_source = handler_body.group(0)
         self.assertIn("if (toggle || maintained)", handler_source)
         self.assertIn(
-            "return this->inject_remote_input_(pressed, maintained, toggle);",
+            "return this->inject_remote_input_(pressed, maintained, toggle, action);",
             handler_source,
         )
         self.assertIn("if (pressed)", handler_source)
@@ -2967,7 +3052,15 @@ class ESPNowAPITests(unittest.TestCase):
             "Ignoring remote input while another controller is active",
             handler_source,
         )
-        self.assertIn("const bool applied = this->inject_remote_input_", handler_source)
+        self.assertRegex(
+            handler_source,
+            re.compile(
+                r"const bool applied =\s*"
+                r"this->inject_remote_input_"
+                r"\(pressed, maintained, toggle, action\);",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("this->clear_remote_input_owner_();", handler_source)
         self.assertRegex(
             source,

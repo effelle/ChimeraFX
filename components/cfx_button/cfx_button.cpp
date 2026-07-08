@@ -88,8 +88,34 @@ void CFXButton::inject_remote_state(bool pressed) {
   this->handle_state_(pressed, &this->remote_state_);
 }
 
+void CFXButton::inject_remote_dimmer_up(bool pressed) {
+  if (!this->remote_dimmer_up_state_.is_armed()) {
+    this->remote_dimmer_up_state_.prime(!pressed);
+  }
+  ESP_LOGD(TAG, "Remote dimmer up input %s",
+           pressed ? "pressed" : "released");
+  this->handle_dimmer_up_state_(pressed, &this->remote_dimmer_up_state_);
+}
+
+void CFXButton::inject_remote_dimmer_down(bool pressed) {
+  if (!this->remote_dimmer_down_state_.is_armed()) {
+    this->remote_dimmer_down_state_.prime(!pressed);
+  }
+  ESP_LOGD(TAG, "Remote dimmer down input %s",
+           pressed ? "pressed" : "released");
+  this->handle_dimmer_down_state_(pressed, &this->remote_dimmer_down_state_);
+}
+
 void CFXButton::handle_state_(bool pressed) {
-  this->handle_state_(pressed, &this->state_);
+  const CFXButtonEvent event = this->state_.on_state(pressed);
+  if (event == CFXButtonEvent::PRESS) {
+    ESP_LOGD(TAG, "Button press");
+    this->press_();
+  } else if (event == CFXButtonEvent::RELEASE) {
+    ESP_LOGD(TAG, "Button release");
+    this->release_();
+  }
+  this->emit_sync_input_(CFXButtonInputAction::PRIMARY, event);
 }
 
 void CFXButton::handle_state_(bool pressed, CFXButtonState *state) {
@@ -110,6 +136,16 @@ void CFXButton::handle_dimmer_up_state_(bool pressed) {
   } else if (event == CFXButtonEvent::RELEASE) {
     this->dimmer_release_up_();
   }
+  this->emit_sync_input_(CFXButtonInputAction::DIMMER_UP, event);
+}
+
+void CFXButton::handle_dimmer_up_state_(bool pressed, CFXButtonState *state) {
+  const CFXButtonEvent event = state->on_state(pressed);
+  if (event == CFXButtonEvent::PRESS) {
+    this->dimmer_press_up_();
+  } else if (event == CFXButtonEvent::RELEASE) {
+    this->dimmer_release_up_();
+  }
 }
 
 void CFXButton::handle_dimmer_down_state_(bool pressed) {
@@ -118,6 +154,28 @@ void CFXButton::handle_dimmer_down_state_(bool pressed) {
     this->dimmer_press_down_();
   } else if (event == CFXButtonEvent::RELEASE) {
     this->dimmer_release_down_();
+  }
+  this->emit_sync_input_(CFXButtonInputAction::DIMMER_DOWN, event);
+}
+
+void CFXButton::handle_dimmer_down_state_(bool pressed,
+                                          CFXButtonState *state) {
+  const CFXButtonEvent event = state->on_state(pressed);
+  if (event == CFXButtonEvent::PRESS) {
+    this->dimmer_press_down_();
+  } else if (event == CFXButtonEvent::RELEASE) {
+    this->dimmer_release_down_();
+  }
+}
+
+void CFXButton::emit_sync_input_(CFXButtonInputAction action,
+                                 CFXButtonEvent event) {
+  if (event != CFXButtonEvent::PRESS && event != CFXButtonEvent::RELEASE) {
+    return;
+  }
+  const bool pressed = event == CFXButtonEvent::PRESS;
+  for (auto &callback : this->sync_input_callbacks_) {
+    callback(action, pressed);
   }
 }
 
