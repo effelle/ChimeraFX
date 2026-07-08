@@ -211,7 +211,7 @@ void CFXSyncComponent::set_peer(const std::array<uint8_t, 6> &peer) {
 void CFXSyncComponent::setup() {
   if (this->role_ == CFXSyncRole::CFX_SYNC_ROLE_CONTROLLER) {
     bool has_local_input = this->local_input_ != nullptr;
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
     has_local_input = has_local_input || this->local_button_ != nullptr;
 #endif
     if (!has_local_input) {
@@ -370,7 +370,7 @@ void CFXSyncComponent::setup() {
     this->local_input_->add_on_state_callback(
         [this](bool pressed) { this->on_local_input_update_(pressed); });
   }
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   if (this->is_input_sender_role_() && this->local_button_ != nullptr) {
     ESP_LOGV(TAG, "%s CFX button input bound",
              this->role_ == CFXSyncRole::SATELLITE ? "Satellite"
@@ -1180,7 +1180,7 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
 }
 
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
 void CFXSyncComponent::on_local_button_update_(
     cfx_button::CFXButtonInputAction action, bool pressed) {
   if (!this->is_input_sender_role_()) {
@@ -1256,7 +1256,7 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     this->apply_remote_power_input_(pressed);
     return true;
   }
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   if (this->remote_input_ == nullptr) {
     if (pressed) {
       this->apply_remote_toggle_input_();

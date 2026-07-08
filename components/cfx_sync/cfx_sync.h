@@ -9,8 +9,11 @@
 #if defined(USE_ESP32) || defined(USE_ESP8266)
 
 #include "cfx_sync_color.h"
-#ifdef USE_CFX_BUTTON
+#if defined(USE_ESP32) || __has_include("../cfx_button/cfx_button.h")
 #include "../cfx_button/cfx_button.h"
+#define CFX_SYNC_HAS_CFX_BUTTON 1
+#else
+#define CFX_SYNC_HAS_CFX_BUTTON 0
 #endif
 #if defined(USE_ESP32)
 #include "cfx_sync_effect.h"
@@ -115,13 +118,13 @@ class CFXSyncComponent : public Component {
   void set_local_input(binary_sensor::BinarySensor *input) {
     this->local_input_ = input;
   }
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   void set_local_button(cfx_button::CFXButton *input) {
     this->local_button_ = input;
   }
 #endif
 #if defined(USE_ESP32)
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   void set_remote_input(cfx_button::CFXButton *input) {
     this->remote_input_ = input;
   }
@@ -333,7 +336,7 @@ class CFXSyncComponent : public Component {
   void queue_input_state_(bool pressed, bool maintained, bool toggle, CFXSyncInputAction action);
   void flush_deferred_input_();
   void on_local_input_update_(bool pressed);
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   void on_local_button_update_(cfx_button::CFXButtonInputAction action,
                                bool pressed);
 #endif
@@ -460,11 +463,11 @@ class CFXSyncComponent : public Component {
 #endif
   CFXSyncRole role_{CFXSyncRole::FOLLOWER};
   binary_sensor::BinarySensor *local_input_{nullptr};
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   cfx_button::CFXButton *local_button_{nullptr};
 #endif
 #if defined(USE_ESP32)
-#ifdef USE_CFX_BUTTON
+#if CFX_SYNC_HAS_CFX_BUTTON
   cfx_button::CFXButton *remote_input_{nullptr};
 #endif
   CFXSyncEnableSwitch *sync_switch_{nullptr};

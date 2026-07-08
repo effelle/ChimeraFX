@@ -100,7 +100,6 @@ cfx_sync:
   id: room_sync
   role: controller
   local_input: wall_button
-  input_mode: momentary
   group: living_room
   key: !secret cfx_sync_key
 ```
@@ -116,7 +115,7 @@ cfx_sync:
   key: !secret cfx_sync_key
 ```
 
-With `input_mode: momentary`, a short press toggles the leader light.
+Because `input_mode` defaults to `momentary`, a short press toggles the leader light. You can leave `input_mode` out for normal push buttons.
 
 ## Rocker Switches
 
@@ -141,9 +140,21 @@ In maintained mode:
 
 Use `input_mode: toggle` only when both stable switch edges should toggle the leader. That is uncommon for normal wall wiring, but useful for some latching or relay-style inputs.
 
+## When To Use `input_mode`
+
+`input_mode` is only for a `local_input` that points directly to a plain ESPHome `binary_sensor`.
+
+| Local Input | Use `input_mode`? | Why |
+| --- | --- | --- |
+| Plain push button `binary_sensor` | Optional | Default is `momentary`, so a press toggles the leader. |
+| Plain rocker switch `binary_sensor` | Yes | Use `maintained` when ON should mean ON and OFF should mean OFF. |
+| `cfx_button` id | No | The `cfx_button` already sends its own actions, such as primary, dimmer up, and dimmer down. |
+
+If `local_input` points to a `cfx_button`, do not add `input_mode`. It is not needed.
+
 ## Remote Dimmer And Magic Buttons
 
-`cfx_button` can be used from a controller. The controller sends the raw button state to the leader, and the leader runs the real ChimeraFX button logic.
+`cfx_button` can be used from a controller. The controller sends the raw `cfx_button` action to the leader, and the leader runs the real ChimeraFX button logic.
 
 Controller:
 
@@ -167,8 +178,7 @@ cfx_button:
 cfx_sync:
   id: room_sync
   role: controller
-  local_input: wall_button
-  input_mode: momentary
+  local_input: wall_dimmer
   group: living_room
   key: !secret cfx_sync_key
 ```
@@ -193,6 +203,41 @@ cfx_sync:
 
 The empty `lights: []` on the controller is intentional. It lets the controller define the same button type without controlling a local light.
 
+When `local_input` points to `wall_dimmer`, `cfx_sync` receives the `cfx_button` actions directly. Do not add `input_mode` in this layout.
+
+For a controller with separate dimmer buttons:
+
+```yaml
+binary_sensor:
+  - platform: gpio
+    id: main_button
+    # pin: ...
+
+  - platform: gpio
+    id: up_button
+    # pin: ...
+
+  - platform: gpio
+    id: down_button
+    # pin: ...
+
+cfx_button:
+  - id: wall_dimmer
+    button: main_button
+    dimmer:
+      lights: []
+      inputs:
+        up: up_button
+        down: down_button
+
+cfx_sync:
+  id: room_sync
+  role: controller
+  local_input: wall_dimmer
+  group: living_room
+  key: !secret cfx_sync_key
+```
+
 If the button is physically connected to the leader, keep it local and use the normal `cfx_button` configuration. You do not need `cfx_sync` for that local button.
 
 ## Satellite Devices
@@ -215,12 +260,33 @@ cfx_sync:
   role: satellite
   lights: bedside_light
   local_input: bedside_button
-  input_mode: momentary
   group: living_room
   key: !secret cfx_sync_key
 ```
 
 The satellite light still follows the leader. The local input is sent to the leader, and the leader remains authoritative.
+
+If the satellite uses a `cfx_button`, point `local_input` to the `cfx_button` id and omit `input_mode`:
+
+```yaml
+cfx_sync:
+  id: room_sync
+  role: satellite
+  lights: bedside_light
+  local_input: bedside_dimmer
+  group: living_room
+  key: !secret cfx_sync_key
+
+cfx_button:
+  - id: bedside_dimmer
+    button: bedside_button
+    dimmer:
+      lights:
+        - bedside_light
+      inputs:
+        up: up_button
+        down: down_button
+```
 
 ESP8266 followers and satellites use UDP and can follow normal ESPHome light state. They do not run ChimeraFX effects or apply ChimeraFX controls.
 
@@ -380,9 +446,9 @@ This is best effort. ESPHome may still reboot a device if Wi-Fi stays down long 
 | `lights` | For leader, follower, satellite | - | One light for a leader. One or more lights for followers and satellites. |
 | `group` | Yes | - | Same group means same sync room. |
 | `key` | Yes | - | Same key on every device in the group. Minimum 8 characters. |
-| `local_input` | Controller or satellite | - | A `binary_sensor` used as the local button or switch. |
+| `local_input` | Controller or satellite | - | A `binary_sensor` id or a `cfx_button` id used as the local input. |
 | `remote_input` | Optional leader | - | A `cfx_button` on the leader used for remote magic-button input. |
-| `input_mode` | No | `momentary` | `momentary`, `maintained`, or `toggle`. |
+| `input_mode` | No | `momentary` | Used only when `local_input` is a plain `binary_sensor`. Options: `momentary`, `maintained`, or `toggle`. |
 | `heartbeat` | No | `30s` | Regular state refresh from leader. |
 | `transport` | No | `auto` | `auto`, `espnow`, or `udp`. |
 | `udp_port` | No | `45678` | Change only if another service uses the same port. |
@@ -403,8 +469,9 @@ Button does nothing:
 
 - `controller` and `satellite` need `local_input`.
 - A leader needs `remote_input` only for remote `cfx_button` logic.
-- Plain momentary buttons usually use `input_mode: momentary`.
+- Plain momentary buttons can omit `input_mode`; the default is `momentary`.
 - Real on/off rocker switches usually use `input_mode: maintained`.
+- If `local_input` points to a `cfx_button`, remove `input_mode` and make sure the leader has the matching `remote_input`.
 
 Follower color looks different:
 

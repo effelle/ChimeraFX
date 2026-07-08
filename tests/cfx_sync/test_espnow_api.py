@@ -366,8 +366,12 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
         self.assertRegex(
             header,
             re.compile(
-                r"#ifdef USE_CFX_BUTTON.*?"
+                r"#if defined\(USE_ESP32\) \|\| __has_include"
+                r"\(\"../cfx_button/cfx_button.h\"\).*?"
                 r'#include "../cfx_button/cfx_button.h".*?'
+                r"#define CFX_SYNC_HAS_CFX_BUTTON 1.*?"
+                r"#else.*?"
+                r"#define CFX_SYNC_HAS_CFX_BUTTON 0.*?"
                 r"#endif.*?"
                 r"#if defined\(USE_ESP32\).*?"
                 r'#include "cfx_sync_effect.h".*?'
@@ -380,7 +384,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             header,
             re.compile(
                 r"#if defined\(USE_ESP32\)\s*"
-                r"#ifdef USE_CFX_BUTTON\s*"
+                r"#if CFX_SYNC_HAS_CFX_BUTTON\s*"
                 r"void set_remote_input\(cfx_button::CFXButton \*input\)",
                 re.DOTALL,
             ),
@@ -390,7 +394,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             header,
             re.compile(
                 r"#if defined\(USE_ESP32\).*?"
-                r"#ifdef USE_CFX_BUTTON\s*"
+                r"#if CFX_SYNC_HAS_CFX_BUTTON\s*"
                 r"cfx_button::CFXButton \*remote_input_",
                 re.DOTALL,
             ),
