@@ -81,6 +81,8 @@ class CFXSyncBus
   bool begin_udp(uint16_t port);
   void poll();
   bool send_udp(const std::vector<uint8_t> &packet);
+  bool send_udp_to(uint32_t address, uint16_t port,
+                   const std::vector<uint8_t> &packet);
 
   bool dispatch_packet(const CFXSyncSource &source, const uint8_t *data,
                        size_t size);

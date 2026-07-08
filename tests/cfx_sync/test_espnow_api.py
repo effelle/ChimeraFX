@@ -152,9 +152,25 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             "bool send_broadcast(const std::vector<uint8_t> &packet);",
             header,
         )
+        self.assertRegex(
+            header,
+            re.compile(
+                r"bool send_unicast\(uint32_t address, uint16_t port,\s*"
+                r"const std::vector<uint8_t> &packet\);",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("bool is_ready() const", header)
         self.assertIn("~CFXSyncUDPTransport();", header)
         self.assertIn("void close_();", header)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"bool send_to_\(uint32_t address, uint16_t port,\s*"
+                r"const std::vector<uint8_t> &packet\);",
+                re.DOTALL,
+            ),
+        )
         self.assertIn("int socket_fd_{-1};", header)
         self.assertIn("bool ready_{false};", header)
         self.assertIn("uint16_t port_{0};", header)
@@ -202,11 +218,22 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
                 r".*?for \(netif \*interface = netif_list;.*?"
                 r"const uint32_t subnet_broadcast = "
                 r"ip->addr \| ~netmask->addr;.*?"
-                r"this->send_to_\(subnet_broadcast, packet\).*?"
-                r"return this->send_to_\(INADDR_BROADCAST, packet\)",
+                r"this->send_to_\(subnet_broadcast, this->port_, packet\).*?"
+                r"return this->send_to_\(INADDR_BROADCAST, this->port_, packet\)",
                 re.DOTALL,
             ),
         )
+
+    def test_udp_transport_sends_direct_datagrams_to_learned_peer(self):
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bool CFXSyncUDPTransport::send_unicast(uint32_t address, uint16_t port,",
+            source,
+        )
+        self.assertIn("return this->send_to_(address, port, packet);", source)
+        self.assertIn("destination.sin_port = htons(port);", source)
+        self.assertIn("this->udp_.beginPacket(destination, port)", source)
 
     def test_component_exposes_transport_enum_setter_and_udp_members(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -1397,6 +1424,7 @@ class ESPNowAPITests(unittest.TestCase):
             "void schedule_udp_input_retry_(std::vector<uint8_t> packet, uint8_t remaining);",
             header,
         )
+        self.assertIn("bool send_input_packet_(std::vector<uint8_t> &packet);", header)
         send_input_state = re.search(
             r"bool CFXSyncComponent::send_input_state_"
             r"\(bool pressed, bool maintained,\s*bool toggle\).*?"
@@ -1418,14 +1446,28 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             send_input_state,
             re.compile(
-                r"const bool sent = this->send_packet_to_"
-                r"\(BROADCAST_MAC, packet\);.*?"
+                r"const bool sent = this->send_input_packet_"
+                r"\(packet\);.*?"
                 r"if \(sent && this->use_udp_transport_\(\)\) \{.*?"
                 r"this->schedule_udp_input_retry_\(packet, UDP_INPUT_RETRY_COUNT\);.*?"
                 r"\}.*?return sent;",
                 re.DOTALL,
             ),
         )
+
+        input_packet = re.search(
+            r"bool CFXSyncComponent::send_input_packet_"
+            r"\(std::vector<uint8_t> &packet\).*?"
+            r"\nbool CFXSyncComponent::send_input_state_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(input_packet)
+        input_packet = input_packet.group(0)
+        self.assertIn("peer.node_role != CFXSyncNodeRole::LEADER", input_packet)
+        self.assertIn("peer.transport != CFXSyncTransportKind::UDP", input_packet)
+        self.assertIn("this->send_packet_to_peer_(peer, packet)", input_packet)
+        self.assertIn("this->send_packet_to_(BROADCAST_MAC, packet)", input_packet)
 
         retry = re.search(
             r"void CFXSyncComponent::schedule_udp_input_retry_"
@@ -1439,9 +1481,46 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn('this->set_timeout("udp-input-retry"', retry)
         self.assertIn("UDP_INPUT_RETRY_DELAY_MS", retry)
         self.assertIn("[this, packet, remaining]() mutable", retry)
-        self.assertIn("this->send_packet_to_(BROADCAST_MAC, packet)", retry)
+        self.assertIn("this->send_input_packet_(packet)", retry)
         self.assertNotIn("this->next_sequence_()", retry)
         self.assertNotIn("encode_input_state", retry)
+
+    def test_udp_peer_send_uses_learned_address_and_port(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+        bus_header = BUS_HEADER.read_text(encoding="utf-8")
+        bus_source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            bus_header,
+            re.compile(
+                r"bool send_udp_to\(uint32_t address, uint16_t port,\s*"
+                r"const std::vector<uint8_t> &packet\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("return this->udp_.send_unicast(address, port, packet);", bus_source)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"bool send_udp_packet_to_\(uint32_t ipv4, uint16_t port,\s*"
+                r"std::vector<uint8_t> &packet\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("this->bus_->send_udp_to(ipv4, port, packet)", source)
+        send_peer = re.search(
+            r"bool CFXSyncComponent::send_packet_to_peer_"
+            r"\(PeerState &peer,\s*std::vector<uint8_t> &packet\).*?"
+            r"\n#ifdef USE_ESPNOW",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(send_peer)
+        self.assertIn(
+            "return this->send_udp_packet_to_(peer.ipv4, peer.udp_port, packet);",
+            send_peer.group(0),
+        )
 
     def test_udp_input_latency_counters_are_reported(self):
         header = HEADER.read_text(encoding="utf-8")

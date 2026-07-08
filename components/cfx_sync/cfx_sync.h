@@ -315,6 +315,7 @@ class CFXSyncComponent : public Component {
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
+  bool send_input_packet_(std::vector<uint8_t> &packet);
   bool send_input_state_(bool pressed, bool maintained, bool toggle);
   void schedule_udp_input_retry_(std::vector<uint8_t> packet, uint8_t remaining);
   void queue_input_state_(bool pressed, bool maintained, bool toggle);
@@ -332,6 +333,8 @@ class CFXSyncComponent : public Component {
   void schedule_remote_input_timeout_();
   bool send_packet_(std::vector<uint8_t> &packet);
   bool send_udp_packet_(std::vector<uint8_t> &packet);
+  bool send_udp_packet_to_(uint32_t ipv4, uint16_t port,
+                           std::vector<uint8_t> &packet);
   bool send_espnow_packet_to_(const std::array<uint8_t, 6> &mac,
                               std::vector<uint8_t> &packet);
   bool send_packet_to_(const std::array<uint8_t, 6> &mac,

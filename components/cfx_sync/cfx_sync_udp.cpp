@@ -133,7 +133,7 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
 #endif
 }
 
-bool CFXSyncUDPTransport::send_to_(uint32_t address,
+bool CFXSyncUDPTransport::send_to_(uint32_t address, uint16_t port,
                                    const std::vector<uint8_t> &packet) {
 #if defined(USE_ESP8266)
   if (!this->ready_ || packet.empty()) {
@@ -141,7 +141,7 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address,
   }
 
   IPAddress destination(address);
-  if (!this->udp_.beginPacket(destination, this->port_)) {
+  if (!this->udp_.beginPacket(destination, port)) {
     return false;
   }
   const size_t written = this->udp_.write(packet.data(), packet.size());
@@ -153,7 +153,7 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address,
 
   sockaddr_in destination{};
   destination.sin_family = AF_INET;
-  destination.sin_port = htons(this->port_);
+  destination.sin_port = htons(port);
   destination.sin_addr.s_addr = address;
 
   const ssize_t sent =
@@ -162,6 +162,14 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address,
                sizeof(destination));
   return sent == static_cast<ssize_t>(packet.size());
 #endif
+}
+
+bool CFXSyncUDPTransport::send_unicast(uint32_t address, uint16_t port,
+                                       const std::vector<uint8_t> &packet) {
+  if (address == 0 || port == 0) {
+    return false;
+  }
+  return this->send_to_(address, port, packet);
 }
 
 bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
@@ -173,7 +181,7 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
     const uint32_t broadcast =
         static_cast<uint32_t>(local_ip) | ~static_cast<uint32_t>(subnet);
     if (broadcast != 0 && broadcast != 0xFFFFFFFFUL) {
-      sent = this->send_to_(broadcast, packet);
+      sent = this->send_to_(broadcast, this->port_, packet);
     }
   }
   const IPAddress broadcast(255, 255, 255, 255);
@@ -202,10 +210,10 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
     if (subnet_broadcast == 0 || subnet_broadcast == INADDR_BROADCAST) {
       continue;
     }
-    sent = this->send_to_(subnet_broadcast, packet) || sent;
+    sent = this->send_to_(subnet_broadcast, this->port_, packet) || sent;
   }
 
-  return this->send_to_(INADDR_BROADCAST, packet) || sent;
+  return this->send_to_(INADDR_BROADCAST, this->port_, packet) || sent;
 #endif
 }
 

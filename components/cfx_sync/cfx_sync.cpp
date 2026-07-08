@@ -999,6 +999,20 @@ bool CFXSyncComponent::send_hello_() {
   return this->send_packet_to_(BROADCAST_MAC, packet);
 }
 
+bool CFXSyncComponent::send_input_packet_(std::vector<uint8_t> &packet) {
+  bool sent = false;
+  if (this->use_udp_transport_()) {
+    for (auto &peer : this->peers_) {
+      if (!peer.active || peer.node_role != CFXSyncNodeRole::LEADER ||
+          peer.transport != CFXSyncTransportKind::UDP) {
+        continue;
+      }
+      sent = this->send_packet_to_peer_(peer, packet) || sent;
+    }
+  }
+  return this->send_packet_to_(BROADCAST_MAC, packet) || sent;
+}
+
 bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
                                          bool toggle) {
   if (!this->is_input_sender_role_()) {
@@ -1019,7 +1033,7 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
            pressed ? "pressed" : "released",
            maintained ? " maintained" : "",
            toggle ? " toggle" : "");
-  const bool sent = this->send_packet_to_(BROADCAST_MAC, packet);
+  const bool sent = this->send_input_packet_(packet);
   if (sent && this->use_udp_transport_()) {
     this->udp_input_sent_++;
     this->schedule_udp_input_retry_(packet, UDP_INPUT_RETRY_COUNT);
@@ -1037,7 +1051,7 @@ void CFXSyncComponent::schedule_udp_input_retry_(std::vector<uint8_t> packet,
                       if (!this->use_udp_transport_()) {
                         return;
                       }
-                      if (this->send_packet_to_(BROADCAST_MAC, packet)) {
+                      if (this->send_input_packet_(packet)) {
                         this->udp_input_retried_++;
                         ESP_LOGV(TAG, "UDP input burst resend");
                       }
@@ -1307,6 +1321,26 @@ bool CFXSyncComponent::send_udp_packet_(std::vector<uint8_t> &packet) {
   return true;
 }
 
+bool CFXSyncComponent::send_udp_packet_to_(uint32_t ipv4, uint16_t port,
+                                           std::vector<uint8_t> &packet) {
+  if (!this->bus_->send_udp_to(ipv4, port, packet)) {
+#if defined(USE_ESP32)
+    this->handle_send_result_(ESP_FAIL);
+#else
+    this->send_failures_++;
+#endif
+    return false;
+  }
+#if defined(USE_ESP32)
+  this->handle_send_result_(ESP_OK);
+#endif
+  this->sent_packets_++;
+#if defined(USE_ESP32)
+  this->flush_deferred_state_();
+#endif
+  return true;
+}
+
 bool CFXSyncComponent::send_espnow_packet_to_(
     const std::array<uint8_t, 6> &mac, std::vector<uint8_t> &packet) {
 #ifdef USE_ESPNOW
@@ -1372,7 +1406,7 @@ bool CFXSyncComponent::send_state_packet_to_followers_(
 bool CFXSyncComponent::send_packet_to_peer_(PeerState &peer,
                                             std::vector<uint8_t> &packet) {
   if (peer.transport == CFXSyncTransportKind::UDP) {
-    return this->send_udp_packet_(packet);
+    return this->send_udp_packet_to_(peer.ipv4, peer.udp_port, packet);
   }
   if (this->use_udp_transport_() && !this->use_espnow_transport_()) {
     return this->send_udp_packet_(packet);

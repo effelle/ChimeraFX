@@ -54,6 +54,11 @@ bool CFXSyncBus::send_udp(const std::vector<uint8_t> &packet) {
   return this->udp_.send_broadcast(packet);
 }
 
+bool CFXSyncBus::send_udp_to(uint32_t address, uint16_t port,
+                             const std::vector<uint8_t> &packet) {
+  return this->udp_.send_unicast(address, port, packet);
+}
+
 bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
                                  const uint8_t *data, size_t size) {
   uint32_t packet_group_hash = 0;
