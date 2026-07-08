@@ -73,6 +73,7 @@ CONF_AUTO_ADD_PEER = "auto_add_peer"
 CONF_SYNC_SWITCH_ID = "_sync_switch_id"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
 CONF_CONTROL_IDS = "_control_ids"
+CONF_LOCAL_INPUT_KIND = "_local_input_kind"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_ID = "effect_id"
 CONF_NAME = "name"
@@ -458,8 +459,10 @@ def _validate_local_input_id(config, final_config):
         return
     input_id = _id_name(config[CONF_LOCAL_INPUT])
     if _domain_has_id(final_config, "binary_sensor", input_id):
+        config[CONF_LOCAL_INPUT_KIND] = "binary_sensor"
         return
     if _domain_has_id(final_config, "cfx_button", input_id):
+        config[CONF_LOCAL_INPUT_KIND] = "cfx_button"
         return
     raise cv.Invalid(
         "local_input must reference a binary_sensor or cfx_button id"
@@ -668,7 +671,7 @@ async def to_code(config):
             )
             cg.add(var.set_palette_control(light_index, control))
     if CONF_LOCAL_INPUT in config:
-        if _local_input_is_cfx_button(config[CONF_LOCAL_INPUT]):
+        if config.get(CONF_LOCAL_INPUT_KIND) == "cfx_button":
             local_input = await cg.get_variable(
                 CoreID(_id_name(config[CONF_LOCAL_INPUT]), type=cfx_button.CFXButton)
             )

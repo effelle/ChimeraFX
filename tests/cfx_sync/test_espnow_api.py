@@ -914,7 +914,10 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertNotIn("require_wake_loop_threadsafe", py_source)
         self.assertNotIn("cg.add(var.set_peer", py_source)
         self.assertNotIn("espnow_var.add_peer(peer.parts)", py_source)
-        self.assertIn("_local_input_is_cfx_button(config[CONF_LOCAL_INPUT])", py_source)
+        self.assertIn('CONF_LOCAL_INPUT_KIND = "_local_input_kind"', py_source)
+        self.assertIn('config[CONF_LOCAL_INPUT_KIND] = "cfx_button"', py_source)
+        self.assertIn('config[CONF_LOCAL_INPUT_KIND] = "binary_sensor"', py_source)
+        self.assertIn('config.get(CONF_LOCAL_INPUT_KIND) == "cfx_button"', py_source)
         self.assertIn("cg.add(var.set_local_button(local_input))", py_source)
         self.assertIn("cg.add(var.set_local_input(local_input))", py_source)
         self.assertIn(
