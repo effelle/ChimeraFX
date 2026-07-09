@@ -64,12 +64,16 @@ class CFXCCTSweeper : public Component {
   static constexpr uint32_t POST_SWEEP_GUARD_MS = 350;
   static constexpr uint32_t USE_DEFAULT_TRANSITION = UINT32_MAX;
   static constexpr float WHITE_MATCH_TOLERANCE = 0.04f;
+  static constexpr float SWEEP_MEASURED_MAX_DRIFT = 0.20f;
   static constexpr uint32_t PREFERRED_WHITE_VERSION = 1;
 
   void start_sweep_(uint32_t now);
   void finish_sweep_();
   void freeze_sweep_();
   CFXColor sweep_color_at_(const SweepTarget &target, uint32_t now) const;
+  bool measured_sweep_color_(light::LightState *state,
+                             const CFXColor &estimated,
+                             CFXColor &measured) const;
   void handle_short_press_();
   void restore_retained_state_();
   bool emit_sync_retained_state_();

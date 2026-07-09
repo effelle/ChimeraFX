@@ -3738,6 +3738,11 @@ class ESPNowAPITests(unittest.TestCase):
             "USE_DEFAULT_TRANSITION);",
             cct_source,
         )
+        self.assertIn("bool measured_sweep_color_", cct_header)
+        self.assertIn("state->current_values", cct_source)
+        self.assertIn("SWEEP_MEASURED_MAX_DRIFT", cct_source)
+        self.assertIn("native_white_only", cct_source)
+        self.assertIn("supports_rgb_white ? light::ColorMode::RGB_WHITE", cct_source)
 
     def test_light_command_packets_are_leader_only(self):
         source = SOURCE.read_text(encoding="utf-8")

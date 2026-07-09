@@ -219,6 +219,11 @@ void CFXCCTSweeper::freeze_sweep_() {
   CFXColor selected = this->active_sweep_target_;
   if (!this->sweep_targets_.empty() && this->sweep_targets_[0].valid) {
     selected = this->sweep_color_at_(this->sweep_targets_[0], now);
+    CFXColor measured;
+    if (!this->lights_.empty() &&
+        this->measured_sweep_color_(this->lights_[0], selected, measured)) {
+      selected = measured;
+    }
   }
   this->preferred_white_ = this->clamp_color_(selected);
   this->last_endpoint_ = CCTEndpoint::PREFERRED;
@@ -245,6 +250,25 @@ CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
           blend(target.start.green, this->active_sweep_target_.green),
           blend(target.start.blue, this->active_sweep_target_.blue),
           blend(target.start.white, this->active_sweep_target_.white)};
+}
+
+bool CFXCCTSweeper::measured_sweep_color_(light::LightState *state,
+                                          const CFXColor &estimated,
+                                          CFXColor &measured) const {
+  if (state == nullptr || !state->current_values.is_on()) {
+    return false;
+  }
+  const auto &values = state->current_values;
+  if (values.get_color_mode() == light::ColorMode::WHITE) {
+    measured = {0.0f, 0.0f, 0.0f, values.get_white()};
+  } else {
+    const float color_brightness = values.get_color_brightness();
+    measured = {color_brightness * values.get_red(),
+                color_brightness * values.get_green(),
+                color_brightness * values.get_blue(), values.get_white()};
+  }
+  measured = this->clamp_color_(measured);
+  return this->color_distance_(measured, estimated) <= SWEEP_MEASURED_MAX_DRIFT;
 }
 
 void CFXCCTSweeper::handle_short_press_() {
@@ -337,22 +361,27 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   }
   const CFXColor c = this->clamp_color_(color);
   const CCTRGBCommand rgb = split_cct_rgb(c.red, c.green, c.blue);
-  const bool white_only =
-      use_white_only_mode(c.red, c.green, c.blue, c.white) &&
+  const bool supports_rgb_white =
+      state->get_traits().supports_color_mode(light::ColorMode::RGB_WHITE);
+  const bool supports_rgb =
+      state->get_traits().supports_color_mode(light::ColorMode::RGB);
+  const bool supports_white =
       state->get_traits().supports_color_mode(light::ColorMode::WHITE);
+  const bool white_only =
+      use_white_only_mode(c.red, c.green, c.blue, c.white);
+  const bool native_white_only = white_only && !supports_rgb_white &&
+                                 supports_white;
   const bool use_default_transition =
       transition_ms == USE_DEFAULT_TRANSITION;
   const uint32_t effective_transition_ms =
-      use_default_transition ? 0 : cct_transition_ms(white_only, transition_ms);
+      use_default_transition ? 0
+                             : cct_transition_ms(white_only, transition_ms);
   const light::ColorMode command_mode =
-      white_only ? light::ColorMode::WHITE
-                 : (state->get_traits().supports_color_mode(
-                        light::ColorMode::RGB_WHITE)
-                        ? light::ColorMode::RGB_WHITE
-                        : (state->get_traits().supports_color_mode(
-                               light::ColorMode::RGB)
-                               ? light::ColorMode::RGB
-                               : light::ColorMode::WHITE));
+      native_white_only
+          ? light::ColorMode::WHITE
+          : (supports_rgb_white ? light::ColorMode::RGB_WHITE
+                                : (supports_rgb ? light::ColorMode::RGB
+                                                : light::ColorMode::WHITE));
   ESP_LOGV(TAG,
            "[%s] command light='%s' mode=%s(%u) transition=%ums "
            "RGBW=%.3f/%.3f/%.3f/%.3f color_brightness=%.3f",
@@ -361,7 +390,7 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
            static_cast<unsigned>(command_mode), effective_transition_ms, c.red,
            c.green, c.blue, c.white, rgb.color_brightness);
   auto call = state->make_call();
-  if (use_default_transition && white_only) {
+  if (use_default_transition && native_white_only) {
     // ESPHome's addressable default transformer snapshots the previous RGB
     // channels. Native white must switch immediately to keep RGB fully off.
     call.set_transition_length(0);
@@ -379,20 +408,19 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
   }
   call.set_state(true);
   call.set_effect("None");
-  if (white_only) {
+  if (native_white_only) {
     call.set_color_mode(light::ColorMode::WHITE);
     call.set_white(c.white);
-  } else if (state->get_traits().supports_color_mode(
-                 light::ColorMode::RGB_WHITE)) {
+  } else if (supports_rgb_white) {
     call.set_color_mode(light::ColorMode::RGB_WHITE);
     call.set_color_brightness(rgb.color_brightness);
     call.set_rgb(rgb.red, rgb.green, rgb.blue);
     call.set_white(c.white);
-  } else if (state->get_traits().supports_color_mode(light::ColorMode::RGB)) {
+  } else if (supports_rgb) {
     call.set_color_mode(light::ColorMode::RGB);
     call.set_color_brightness(rgb.color_brightness);
     call.set_rgb(rgb.red, rgb.green, rgb.blue);
-  } else if (state->get_traits().supports_color_mode(light::ColorMode::WHITE)) {
+  } else if (supports_white) {
     call.set_color_mode(light::ColorMode::WHITE);
     call.set_white(std::max({c.red, c.green, c.blue, c.white}));
   }
