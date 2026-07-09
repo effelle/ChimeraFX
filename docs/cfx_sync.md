@@ -14,10 +14,29 @@ Think about a sync group as a small room:
 | --- | --- |
 | `leader` | Owns the light state for the group. |
 | `follower` | Copies the leader. |
-| `controller` | Has a button or switch, but no local synced light. It tells the leader what the user pressed. |
-| `satellite` | Has a local light that follows the leader, and can also send a local button or switch to the leader. |
+| `controller` | Has an exposed button or switch, but no local synced light. It tells the leader what the user pressed. |
+| `satellite` | Has a local light that follows the leader. It can also report local light changes or exposed local inputs back to the leader. |
 
 Most users need only `leader` and `follower`.
+
+## Which Role Should I Use?
+
+Use this as the quick rule:
+
+| Device Type | Use This Role | Why |
+| --- | --- | --- |
+| Main light for the group | `leader` | This light is the source of truth. |
+| Extra light that should copy the main light | `follower` | It only receives the leader state. |
+| Wall button with no local light | `controller` | It only sends button or switch input to the leader. |
+| Light that should follow the group and can also be changed locally | `satellite` | It has a light, so it is part of the group. |
+| Tuya MCU dimmer with hidden buttons | `satellite` | The buttons are not exposed, so `cfx_sync` watches the Tuya light state instead. |
+
+The important distinction is simple:
+
+- Use `controller` only for an input-only device.
+- Use `satellite` whenever the device has its own synced light.
+
+A controller cannot declare `lights`. A satellite must declare `lights`.
 
 ## First Test
 
@@ -82,6 +101,8 @@ ESP8266 followers and satellites use UDP and do not get the automatic **Enable S
 ## Remote Push Button
 
 Use `role: controller` when a device has only a button or switch and no synced light.
+
+Do not use `controller` for a dimmer or light device that also belongs to the group. Use `satellite` for that case.
 
 Controller:
 
@@ -244,6 +265,8 @@ If the button is physically connected to the leader, keep it local and use the n
 
 Use `role: satellite` when a device has a local light that follows the group and also has a local input for the leader.
 
+A satellite is still a light device first. The leader remains authoritative, but the satellite can contribute local changes back to the group.
+
 ```yaml
 binary_sensor:
   - platform: gpio
@@ -295,6 +318,8 @@ ESP8266 followers and satellites use UDP and can follow normal ESPHome light sta
 Some Tuya MCU dimmers do not expose their physical buttons as ESPHome `binary_sensor` entities. The secondary MCU handles the buttons and only reports the final light state.
 
 For that layout, make the device a `satellite` and enable `local_light_input`.
+
+Do not configure this kind of Tuya dimmer as a `controller`. There is no exposed GPIO button for `controller` mode to listen to.
 
 ```yaml
 cfx_sync:
@@ -484,11 +509,11 @@ This is best effort. ESPHome may still reboot a device if Wi-Fi stays down long 
 | --- | --- | --- | --- |
 | `id` | Recommended | Generated | Use an explicit id for clarity. |
 | `role` | Yes | - | `leader`, `follower`, `controller`, or `satellite`. |
-| `lights` | For leader, follower, satellite | - | One light for a leader. One or more lights for followers and satellites. |
+| `lights` | For leader, follower, satellite | - | One light for a leader. One or more lights for followers and satellites. Not allowed on controllers. |
 | `group` | Yes | - | Same group means same sync room. |
 | `key` | Yes | - | Same key on every device in the group. Minimum 8 characters. |
-| `local_input` | Controller or satellite | - | A `binary_sensor` id or a `cfx_button` id used as the local input. |
-| `local_light_input` | Optional satellite | `false` | Watches the satellite light itself and sends local light changes to the leader. Use for Tuya MCU dimmers with hidden buttons. |
+| `local_input` | Controller or satellite | - | A `binary_sensor` id or a `cfx_button` id used as the local input. Use when the input is exposed to ESPHome. |
+| `local_light_input` | Optional satellite | `false` | Watches the satellite light itself and sends local light changes to the leader. Use when the physical buttons are hidden behind a Tuya MCU or similar device. |
 | `remote_input` | Optional leader | - | A `cfx_button` on the leader used for remote magic-button input. |
 | `input_mode` | No | `momentary` | Used only when `local_input` is a plain `binary_sensor`. Options: `momentary`, `maintained`, or `toggle`. |
 | `heartbeat` | No | `30s` | Regular state refresh from leader. |
