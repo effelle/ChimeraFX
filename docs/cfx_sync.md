@@ -330,7 +330,6 @@ cfx_sync:
   local_light_input: true
   group: living_room
   key: !secret cfx_sync_key
-  transport: udp
 
 tuya:
 
@@ -390,7 +389,7 @@ Examples:
 
 For these lights, `cfx_sync` applies only the fields supported by the follower. A Tuya dimmer, for example, can follow ON/OFF and brightness while ignoring color.
 
-On ESP8266, use the default `transport: auto` or set `transport: udp`. ESP8266 devices cannot be leaders in this version.
+On ESP8266, the default `transport: auto` uses UDP automatically. You normally do not need to write `transport: udp` yourself. ESP8266 devices cannot be leaders in this version.
 
 ## Mixed Light Types
 

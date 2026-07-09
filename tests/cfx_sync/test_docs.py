@@ -50,6 +50,13 @@ class CFXSyncDocsTests(unittest.TestCase):
         self.assertIn("Tuya MCU", text)
         self.assertIn("not exposed as ESPHome binary sensors", text)
         self.assertIn("The satellite must have exactly one light", text)
+        self.assertIn(
+            "On ESP8266, the default `transport: auto` uses UDP automatically.",
+            text,
+        )
+        tuya_section = text.split("## Tuya MCU Dimmers With Hidden Buttons", 1)[1]
+        tuya_section = tuya_section.split("## What Gets Copied", 1)[0]
+        self.assertNotIn("transport: udp", tuya_section)
 
 
 if __name__ == "__main__":
