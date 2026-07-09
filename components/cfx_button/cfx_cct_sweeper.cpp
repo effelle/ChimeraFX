@@ -282,6 +282,7 @@ void CFXCCTSweeper::handle_short_press_() {
 }
 
 void CFXCCTSweeper::restore_retained_state_() {
+  this->emit_sync_retained_state_();
   for (auto *state : this->lights_) {
     if (state == nullptr) {
       continue;
@@ -290,6 +291,17 @@ void CFXCCTSweeper::restore_retained_state_() {
     call.set_state(true);
     call.perform();
   }
+}
+
+bool CFXCCTSweeper::emit_sync_retained_state_() {
+  for (auto *state : this->lights_) {
+    if (state == nullptr) {
+      continue;
+    }
+    this->emit_sync_color_(this->remote_color_(state), USE_DEFAULT_TRANSITION);
+    return true;
+  }
+  return false;
 }
 
 void CFXCCTSweeper::emit_sync_color_(const CFXColor &color,

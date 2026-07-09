@@ -72,6 +72,7 @@ class CFXCCTSweeper : public Component {
   CFXColor sweep_color_at_(const SweepTarget &target, uint32_t now) const;
   void handle_short_press_();
   void restore_retained_state_();
+  bool emit_sync_retained_state_();
   void emit_sync_color_(const CFXColor &color, uint32_t transition_ms);
   void apply_color_(light::LightState *state, const CFXColor &color,
                     uint32_t transition_ms);

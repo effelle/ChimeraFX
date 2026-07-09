@@ -3724,6 +3724,20 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("CFXButtonSyncKind::CCT", cct_source)
         self.assertIn("command.has_rgb = true", cct_source)
         self.assertIn("command.has_white = true", cct_source)
+        self.assertIn("bool emit_sync_retained_state_();", cct_header)
+        self.assertRegex(
+            cct_source,
+            re.compile(
+                r"void CFXCCTSweeper::restore_retained_state_\(\) \{\s*"
+                r"this->emit_sync_retained_state_\(\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "this->emit_sync_color_(this->remote_color_(state), "
+            "USE_DEFAULT_TRANSITION);",
+            cct_source,
+        )
 
     def test_light_command_packets_are_leader_only(self):
         source = SOURCE.read_text(encoding="utf-8")
