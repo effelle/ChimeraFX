@@ -314,6 +314,10 @@ class CFXSyncComponent : public Component {
                                 const CFXSyncEffectState &effect,
                                 const CFXSyncControlState &controls,
                                 bool include_default_transition);
+  bool send_state_to_followers_(const CFXSyncLightSnapshot &snapshot,
+                                const CFXSyncEffectState &effect,
+                                const CFXSyncControlState &controls,
+                                const CFXSyncTimingState &timing);
   void mark_state_sent_to_followers_(uint32_t sequence);
   bool peer_accepts_leader_state_(const PeerState &peer) const;
   bool send_state_to_peer_(PeerState &peer);
@@ -356,6 +360,9 @@ class CFXSyncComponent : public Component {
 #if defined(USE_ESP32)
   bool handle_remote_light_command_(PeerState &peer,
                                     const CFXSyncPacket &packet);
+  bool predict_leader_state_from_command_(
+      const CFXSyncPacket &packet, CFXSyncLightSnapshot &snapshot,
+      CFXSyncTimingState &timing) const;
   bool apply_light_command_to_leader_(const CFXSyncPacket &packet);
 #endif
   bool inject_remote_input_(bool pressed, bool maintained, bool toggle,

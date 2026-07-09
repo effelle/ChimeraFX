@@ -940,18 +940,26 @@ bool CFXSyncComponent::send_state_to_followers_(
     const CFXSyncEffectState &effect,
     const CFXSyncControlState &controls,
     bool include_default_transition) {
+  auto *leader = this->leader_light_();
+  const auto timing = capture_sync_timing_state(
+      leader, snapshot, effect, include_default_transition);
+  return this->send_state_to_followers_(snapshot, effect, controls, timing);
+}
+
+bool CFXSyncComponent::send_state_to_followers_(
+    const CFXSyncLightSnapshot &snapshot,
+    const CFXSyncEffectState &effect,
+    const CFXSyncControlState &controls,
+    const CFXSyncTimingState &timing) {
   if (this->send_pending_) {
     this->state_send_deferred_ = true;
     this->state_send_deferred_with_transition_ =
         this->state_send_deferred_with_transition_ ||
-        include_default_transition;
+        timing.has_transition || timing.has_ramp;
     return false;
   }
 
   std::vector<uint8_t> packet;
-  auto *leader = this->leader_light_();
-  const auto timing = capture_sync_timing_state(
-      leader, snapshot, effect, include_default_transition);
   const uint32_t sequence = this->next_sequence_();
   if (!CFXSyncPacketCodec::encode_state_snapshot(
           this->group_hash_, this->boot_id_, sequence, snapshot, true, effect,
@@ -1646,11 +1654,136 @@ bool CFXSyncComponent::handle_remote_light_command_(
     }
   }
 
+  auto *leader = this->leader_light_();
+  bool predicted_sent = false;
+  CFXSyncLightSnapshot predicted_snapshot;
+  CFXSyncEffectState predicted_effect;
+  CFXSyncControlState predicted_controls;
+  if (leader != nullptr && !this->effect_catalogs_.empty()) {
+    predicted_snapshot = capture_light_snapshot(*leader);
+    CFXSyncTimingState predicted_timing;
+    if (this->predict_leader_state_from_command_(
+            packet, predicted_snapshot, predicted_timing)) {
+      predicted_effect =
+          capture_effect_state(leader, this->effect_catalogs_[0]);
+      predicted_controls = this->capture_control_state_(0);
+      predicted_sent = this->send_state_to_followers_(
+          predicted_snapshot, predicted_effect, predicted_controls,
+          predicted_timing);
+    }
+  }
+
   const bool applied = this->apply_light_command_to_leader_(packet);
+  if (predicted_sent && applied) {
+    this->has_observed_state_ = true;
+    this->observed_state_ = predicted_snapshot;
+    this->observed_effect_ = predicted_effect;
+    this->observed_controls_ = predicted_controls;
+  }
   if (hold_like && released) {
     this->clear_remote_input_owner_();
   }
   return applied;
+}
+
+bool CFXSyncComponent::predict_leader_state_from_command_(
+    const CFXSyncPacket &packet, CFXSyncLightSnapshot &snapshot,
+    CFXSyncTimingState &timing) const {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr) {
+    return false;
+  }
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_EFFECT) != 0 ||
+      packet.command_kind == CFXSyncCommandKind::EFFECT) {
+    return false;
+  }
+
+  bool has_action = false;
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_TOGGLE) != 0) {
+    snapshot.power = !leader->remote_values.is_on();
+    has_action = true;
+  }
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_POWER) != 0) {
+    snapshot.power = packet.command_power;
+    has_action = true;
+  }
+
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_RAMP) != 0) {
+    timing.has_ramp = true;
+    timing.ramp_ms = packet.command_ramp_ms;
+  }
+
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0 &&
+      light_supports_brightness(*leader)) {
+    snapshot.power = true;
+    snapshot.brightness = packet.command_brightness;
+    has_action = true;
+  }
+
+  const bool has_rgb =
+      (packet.command_mask & CFXSyncPacketCodec::COMMAND_RGB) != 0;
+  const bool has_white =
+      (packet.command_mask & CFXSyncPacketCodec::COMMAND_WHITE) != 0;
+  const bool has_color_brightness =
+      (packet.command_mask &
+       CFXSyncPacketCodec::COMMAND_COLOR_BRIGHTNESS) != 0;
+  if (has_rgb && light_supports_rgb(*leader)) {
+    snapshot.power = true;
+    snapshot.has_color = true;
+    snapshot.red = packet.command_red;
+    snapshot.green = packet.command_green;
+    snapshot.blue = packet.command_blue;
+    if (has_color_brightness) {
+      snapshot.has_color_brightness = true;
+      snapshot.color_brightness = packet.command_color_brightness;
+    }
+    if (has_white && light_supports_white(*leader)) {
+      snapshot.has_white = true;
+      snapshot.white = packet.command_white;
+    }
+    has_action = true;
+  } else if (has_white && light_supports_white(*leader)) {
+    snapshot.power = true;
+    snapshot.has_white = true;
+    snapshot.white = packet.command_white;
+    if (has_color_brightness && light_supports_rgb(*leader)) {
+      snapshot.has_color_brightness = true;
+      snapshot.color_brightness = packet.command_color_brightness;
+    }
+    has_action = true;
+  } else if (has_color_brightness && light_supports_rgb(*leader)) {
+    snapshot.power = true;
+    snapshot.has_color_brightness = true;
+    snapshot.color_brightness = packet.command_color_brightness;
+    has_action = true;
+  }
+
+  if ((packet.command_mask &
+       CFXSyncPacketCodec::COMMAND_COLD_WARM_WHITE) != 0 &&
+      light_supports_cold_warm_white(*leader)) {
+    snapshot.power = true;
+    snapshot.has_cold_warm_white = true;
+    snapshot.cold_white = packet.command_cold_white;
+    snapshot.warm_white = packet.command_warm_white;
+    if ((packet.command_mask &
+         CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE) != 0 &&
+        light_supports_color_temperature(*leader)) {
+      snapshot.has_color_temperature = true;
+      snapshot.color_temperature_mireds =
+          packet.command_color_temperature_mireds;
+    }
+    has_action = true;
+  } else if ((packet.command_mask &
+              CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE) != 0 &&
+             light_supports_color_temperature(*leader)) {
+    snapshot.power = true;
+    snapshot.has_color_temperature = true;
+    snapshot.color_temperature_mireds =
+        packet.command_color_temperature_mireds;
+    has_action = true;
+  }
+
+  return has_action;
 }
 
 bool CFXSyncComponent::apply_light_command_to_leader_(

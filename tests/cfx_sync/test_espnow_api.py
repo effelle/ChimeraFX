@@ -2799,11 +2799,15 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::send_state_to_followers_"
-                r"\(.*?if \(this->send_pending_\) \{"
+                r"\(\s*const CFXSyncLightSnapshot &snapshot,\s*"
+                r"const CFXSyncEffectState &effect,\s*"
+                r"const CFXSyncControlState &controls,\s*"
+                r"const CFXSyncTimingState &timing\) \{"
+                r"\s*if \(this->send_pending_\) \{"
                 r"\s*this->state_send_deferred_ = true;"
                 r"\s*this->state_send_deferred_with_transition_ ="
                 r"\s*this->state_send_deferred_with_transition_ \|\|"
-                r"\s*include_default_transition;"
+                r"\s*timing\.has_transition \|\| timing\.has_ramp;"
                 r"\s*return false;"
                 r"\s*\}",
                 re.DOTALL,
@@ -3752,8 +3756,20 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("Ignoring remote light command on non-leader", source)
         self.assertIn("handle_remote_light_command_", header)
         self.assertIn("handle_remote_light_command_", source)
+        self.assertIn("predict_leader_state_from_command_", header)
+        self.assertIn("predict_leader_state_from_command_", source)
         self.assertIn("apply_light_command_to_leader_", header)
         self.assertIn("apply_light_command_to_leader_", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"predict_leader_state_from_command_\(.*?"
+                r"send_state_to_followers_\(.*?"
+                r"apply_light_command_to_leader_",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("timing.has_transition || timing.has_ramp", source)
 
     def test_light_command_application_uses_light_capability_checks(self):
         source = SOURCE.read_text(encoding="utf-8")
