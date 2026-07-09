@@ -22,6 +22,17 @@ def light_id(name):
     return ID(name)
 
 
+class _FinalConfig:
+    def __init__(self, entries):
+        self.entries = entries
+
+    def get_config_for_path(self, path):
+        key = path[0]
+        if key not in self.entries:
+            raise KeyError(key)
+        return self.entries[key]
+
+
 class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
     def test_transport_constants_are_exported(self):
         self.assertEqual(cfx_sync.CONF_TRANSPORT, "transport")
@@ -128,6 +139,69 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("cfx_effect_registry", autoload)
         self.assertNotIn("number", autoload)
         self.assertNotIn("select", autoload)
+
+    def test_local_input_binary_sensor_prefers_owning_cfx_button(self):
+        config = {
+            "role": "satellite",
+            "lights": [],
+            "local_input": light_id("wall_button"),
+        }
+        final_config = _FinalConfig(
+            {
+                "binary_sensor": [{"id": light_id("wall_button")}],
+                "cfx_button": [
+                    {
+                        "id": light_id("wall_dimmer"),
+                        "button": light_id("wall_button"),
+                        "dimmer": {"lights": []},
+                    }
+                ],
+            }
+        )
+
+        cfx_sync._validate_local_input_id(config, final_config)
+
+        self.assertEqual(config["_local_input_kind"], "cfx_button")
+        self.assertEqual(config["_local_button_id"], light_id("wall_dimmer"))
+
+    async def test_codegen_uses_resolved_local_cfx_button_id(self):
+        emitted = []
+
+        class _Var:
+            def __getattr__(self, name):
+                return lambda *args: (name, *args)
+
+        var = _Var()
+        local_button = object()
+        heartbeat = SimpleNamespace(total_milliseconds=30_000)
+        config = {
+            "id": light_id("sync"),
+            "role": "satellite",
+            "lights": [],
+            "local_input": light_id("wall_button"),
+            "_local_input_kind": "cfx_button",
+            "_local_button_id": light_id("wall_dimmer"),
+            "local_light_input": False,
+            "group": "room",
+            "key": "password",
+            "heartbeat": heartbeat,
+            "transport": "udp",
+        }
+
+        with (
+            patch.object(cfx_sync.cg, "new_Pvariable", return_value=var),
+            patch.object(cfx_sync.cg, "register_component", new=AsyncMock()),
+            patch.object(
+                cfx_sync.cg,
+                "get_variable",
+                new=AsyncMock(side_effect=[local_button]),
+            ),
+            patch.object(cfx_sync.cg, "add", side_effect=emitted.append),
+        ):
+            await cfx_sync.to_code(config)
+
+        self.assertIn(("set_local_button", local_button), emitted)
+        self.assertNotIn(("set_local_input", local_button), emitted)
 
     async def test_codegen_emits_espnow_transport_enum(self):
         emitted = []

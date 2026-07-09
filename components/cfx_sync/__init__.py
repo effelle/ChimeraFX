@@ -75,6 +75,7 @@ CONF_SYNC_SWITCH_ID = "_sync_switch_id"
 CONF_EFFECT_CATALOGS = "_effect_catalogs"
 CONF_CONTROL_IDS = "_control_ids"
 CONF_LOCAL_INPUT_KIND = "_local_input_kind"
+CONF_LOCAL_BUTTON_ID = "_local_button_id"
 CONF_EFFECTS = "effects"
 CONF_EFFECT_ID = "effect_id"
 CONF_NAME = "name"
@@ -461,15 +462,61 @@ def _local_input_is_cfx_button(input_id):
     return _domain_has_id(final_config, "cfx_button", _id_name(input_id))
 
 
+def _cfx_button_uses_binary_input(button_config, input_id):
+    if not isinstance(button_config, dict):
+        return False
+    target = _id_name(input_id)
+    if (
+        cfx_button.CONF_BUTTON in button_config
+        and _id_name(button_config[cfx_button.CONF_BUTTON]) == target
+    ):
+        return True
+    dimmer = button_config.get(cfx_button.CONF_DIMMER)
+    if not isinstance(dimmer, dict):
+        return False
+    inputs = dimmer.get(cfx_button.CONF_INPUTS, {})
+    if not isinstance(inputs, dict):
+        return False
+    return any(_id_name(value) == target for value in inputs.values())
+
+
+def _find_cfx_button_for_binary_input(final_config, input_id):
+    try:
+        entries = final_config.get_config_for_path(["cfx_button"])
+    except (KeyError, AttributeError, AssertionError, LookupError):
+        return None
+    if not isinstance(entries, list):
+        return None
+    matches = [
+        entry[CONF_ID]
+        for entry in entries
+        if isinstance(entry, dict)
+        and CONF_ID in entry
+        and _cfx_button_uses_binary_input(entry, input_id)
+    ]
+    if len(matches) > 1:
+        raise cv.Invalid(
+            "local_input is used by more than one cfx_button; use the "
+            "wanted cfx_button id as local_input"
+        )
+    return matches[0] if matches else None
+
+
 def _validate_local_input_id(config, final_config):
     if CONF_LOCAL_INPUT not in config:
         return
     input_id = _id_name(config[CONF_LOCAL_INPUT])
-    if _domain_has_id(final_config, "binary_sensor", input_id):
-        config[CONF_LOCAL_INPUT_KIND] = "binary_sensor"
-        return
     if _domain_has_id(final_config, "cfx_button", input_id):
         config[CONF_LOCAL_INPUT_KIND] = "cfx_button"
+        config[CONF_LOCAL_BUTTON_ID] = config[CONF_LOCAL_INPUT]
+        return
+    if _domain_has_id(final_config, "binary_sensor", input_id):
+        local_button = _find_cfx_button_for_binary_input(final_config, input_id)
+        if local_button is not None:
+            config[CONF_LOCAL_INPUT_KIND] = "cfx_button"
+            config[CONF_LOCAL_BUTTON_ID] = local_button
+            return
+        config[CONF_LOCAL_INPUT_KIND] = "binary_sensor"
         return
     raise cv.Invalid(
         "local_input must reference a binary_sensor or cfx_button id"
@@ -682,7 +729,12 @@ async def to_code(config):
     if CONF_LOCAL_INPUT in config:
         if config.get(CONF_LOCAL_INPUT_KIND) == "cfx_button":
             local_input = await cg.get_variable(
-                CoreID(_id_name(config[CONF_LOCAL_INPUT]), type=cfx_button.CFXButton)
+                CoreID(
+                    _id_name(
+                        config.get(CONF_LOCAL_BUTTON_ID, config[CONF_LOCAL_INPUT])
+                    ),
+                    type=cfx_button.CFXButton,
+                )
             )
             cg.add(var.set_local_button(local_input))
         else:

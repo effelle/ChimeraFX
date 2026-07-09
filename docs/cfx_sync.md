@@ -219,7 +219,7 @@ cfx_sync:
 
 The empty `lights: []` on the controller is intentional. It lets the controller define the button behavior without controlling a local light.
 
-When `local_input` points to `wall_dimmer`, `cfx_sync` receives the `cfx_button` actions directly. Do not add `input_mode` in this layout.
+When `local_input` points to `wall_dimmer`, `cfx_sync` receives the `cfx_button` actions directly. You may also point `local_input` to `main_button`; if exactly one `cfx_button` uses that physical button, `cfx_sync` will automatically use the richer `cfx_button` command. Do not add `input_mode` in this layout.
 
 The leader applies only the command fields its own light supports. After that,
 followers and satellites adapt the leader state to their own light type.
@@ -287,7 +287,7 @@ cfx_sync:
 
 The satellite light still follows the leader. The local input is sent to the leader, and the leader remains authoritative.
 
-If the satellite uses a `cfx_button`, point `local_input` to the `cfx_button` id and omit `input_mode`:
+If the satellite uses a `cfx_button`, point `local_input` to the `cfx_button` id and omit `input_mode`. You can also point `local_input` to the physical binary sensor used by that `cfx_button`; `cfx_sync` will detect the magic-button binding automatically.
 
 ```yaml
 cfx_sync:
@@ -536,6 +536,7 @@ Button does nothing:
 - Plain momentary buttons can omit `input_mode`; the default is `momentary`.
 - Real on/off rocker switches usually use `input_mode: maintained`.
 - If `local_input` points to a `cfx_button`, remove `input_mode`.
+- If `local_input` points to a binary sensor already used by exactly one `cfx_button`, `cfx_sync` treats it as that `cfx_button` automatically.
 
 Follower color looks different:
 
