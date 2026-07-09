@@ -388,9 +388,9 @@ void CFXSyncComponent::setup() {
     ESP_LOGV(TAG, "%s CFX button input bound",
              this->role_ == CFXSyncRole::SATELLITE ? "Satellite"
                                                     : "Controller");
-    this->local_button_->add_sync_input_callback(
-        [this](cfx_button::CFXButtonInputAction action, bool pressed) {
-          this->on_local_button_update_(action, pressed);
+    this->local_button_->add_sync_command_callback(
+        [this](const cfx_button::CFXButtonSyncCommand &command) {
+          this->on_local_button_command_(command);
         });
   }
 #endif
@@ -550,7 +550,8 @@ bool CFXSyncComponent::handle_unknown_packet_(const CFXSyncSource &source,
       packet.type != CFXSyncPacketType::SYNC_REQUEST &&
       packet.type != CFXSyncPacketType::STATE &&
       packet.type != CFXSyncPacketType::STATE_ACK &&
-      packet.type != CFXSyncPacketType::INPUT_STATE) {
+      packet.type != CFXSyncPacketType::INPUT_STATE &&
+      packet.type != CFXSyncPacketType::LIGHT_COMMAND) {
     this->log_rejection_(
         "Ignoring authenticated non-discovery packet from unknown peer");
     return true;
@@ -728,6 +729,49 @@ bool CFXSyncComponent::handle_decoded_packet_(
       this->udp_input_applied_++;
       ESP_LOGV(TAG, "UDP input applied");
     }
+#endif
+    return true;
+  }
+
+  if (packet.type == CFXSyncPacketType::LIGHT_COMMAND) {
+#if defined(USE_ESP32)
+    if (this->role_ != CFXSyncRole::LEADER) {
+      this->log_rejection_("Ignoring remote light command on non-leader");
+      return true;
+    }
+    if (peer == nullptr) {
+      peer = this->find_or_add_peer_(source, CFXSyncNodeRole::REMOTE,
+                                     CFXSyncPacketCodec::CAP_BINARY_REMOTE);
+      if (peer != nullptr) {
+        this->register_peer_(*peer);
+      }
+    }
+    if (peer == nullptr) {
+      return true;
+    }
+    if (peer->node_role != CFXSyncNodeRole::REMOTE &&
+        peer->node_role != CFXSyncNodeRole::SATELLITE &&
+        (peer->capabilities & CFXSyncPacketCodec::CAP_BINARY_REMOTE) == 0) {
+      return true;
+    }
+    peer->last_seen_ms = millis();
+    if (!this->accept_sequence_(*peer, packet.boot_id, packet.sequence)) {
+      this->stale_packets_++;
+      this->log_rejection_("Ignoring duplicate or stale packet");
+      return true;
+    }
+    this->received_packets_++;
+    this->last_valid_packet_ms_ = millis();
+    const bool applied = this->handle_remote_light_command_(*peer, packet);
+    if (source.transport == CFXSyncTransportKind::UDP) {
+      this->udp_input_received_++;
+    }
+    if (source.transport == CFXSyncTransportKind::UDP && applied) {
+      this->udp_input_applied_++;
+      ESP_LOGV(TAG, "UDP input applied");
+    }
+#else
+    (void) source;
 #endif
     return true;
   }
@@ -1312,6 +1356,128 @@ void CFXSyncComponent::on_local_button_update_(
   }
   this->send_input_state_(pressed, false, false, sync_action);
 }
+
+void CFXSyncComponent::on_local_button_command_(
+    const cfx_button::CFXButtonSyncCommand &command) {
+  if (!this->is_input_sender_role_()) {
+    return;
+  }
+  this->send_light_command_(command);
+}
+
+bool CFXSyncComponent::send_light_command_(
+    const cfx_button::CFXButtonSyncCommand &command) {
+  if (!this->is_input_sender_role_() || this->send_pending_) {
+    return false;
+  }
+
+  CFXSyncPacket packet;
+  switch (command.kind) {
+    case cfx_button::CFXButtonSyncKind::BINARY:
+      packet.command_kind = CFXSyncCommandKind::BINARY;
+      break;
+    case cfx_button::CFXButtonSyncKind::DIMMER:
+      packet.command_kind = CFXSyncCommandKind::DIMMER;
+      break;
+    case cfx_button::CFXButtonSyncKind::HUE:
+      packet.command_kind = CFXSyncCommandKind::HUE;
+      break;
+    case cfx_button::CFXButtonSyncKind::CCT:
+      packet.command_kind = CFXSyncCommandKind::CCT;
+      break;
+    case cfx_button::CFXButtonSyncKind::EFFECT:
+    default:
+      packet.command_kind = CFXSyncCommandKind::EFFECT;
+      packet.command_mask = CFXSyncPacketCodec::COMMAND_EFFECT;
+      break;
+  }
+
+  if (command.pressed) {
+    packet.command_flags |= CFXSyncPacketCodec::COMMAND_FLAG_PRESSED;
+  } else {
+    packet.command_flags |= CFXSyncPacketCodec::COMMAND_FLAG_RELEASED;
+  }
+  if (command.direction_up) {
+    packet.command_flags |= CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_UP;
+  }
+  if (command.direction_down) {
+    packet.command_flags |= CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_DOWN;
+  }
+
+  if (command.has_power) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_POWER;
+    packet.command_power = command.power;
+  }
+  if (command.toggle) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_TOGGLE;
+  }
+  if (command.has_brightness) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_BRIGHTNESS;
+    packet.command_brightness = command.brightness;
+  }
+  if (command.has_ramp) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_RAMP;
+    packet.command_ramp_ms = command.ramp_ms;
+  }
+  if (command.has_rgb) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_RGB;
+    packet.command_red = command.red;
+    packet.command_green = command.green;
+    packet.command_blue = command.blue;
+  }
+  if (command.has_white) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_WHITE;
+    packet.command_white = command.white;
+  }
+  if (command.has_color_brightness) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_COLOR_BRIGHTNESS;
+    packet.command_color_brightness = command.color_brightness;
+  }
+  if (command.has_color_temperature) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE;
+    packet.command_color_temperature_mireds =
+        command.color_temperature_mireds;
+  }
+  if (command.has_cold_warm_white) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_COLD_WARM_WHITE;
+    packet.command_cold_white = command.cold_white;
+    packet.command_warm_white = command.warm_white;
+  }
+
+  if (packet.command_kind == CFXSyncCommandKind::DIMMER &&
+      (packet.command_flags &
+       CFXSyncPacketCodec::COMMAND_FLAG_RELEASED) != 0 &&
+      (packet.command_flags &
+       (CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_UP |
+        CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_DOWN)) != 0 &&
+      packet.command_mask == 0) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_RAMP;
+    packet.command_ramp_ms = 0;
+  }
+  if (packet.command_kind == CFXSyncCommandKind::DIMMER &&
+      command.action == cfx_button::CFXButtonInputAction::PRIMARY &&
+      command.pressed && packet.command_mask == 0) {
+    packet.command_mask |= CFXSyncPacketCodec::COMMAND_TOGGLE;
+  }
+
+  std::vector<uint8_t> wire_packet;
+  const uint32_t sequence = this->next_sequence_();
+  if (!CFXSyncPacketCodec::encode_light_command(
+          this->group_hash_, this->boot_id_, sequence, packet, this->key_,
+          wire_packet)) {
+    ESP_LOGW(TAG, "CFX Sync light command could not be encoded");
+    return false;
+  }
+  ESP_LOGV(TAG, "Sending CFX Sync resolved command kind=%u mask=%04X",
+           static_cast<unsigned>(packet.command_kind),
+           static_cast<unsigned>(packet.command_mask));
+  const bool sent = this->send_input_packet_(wire_packet);
+  if (sent && this->use_udp_transport_()) {
+    this->udp_input_sent_++;
+    this->schedule_udp_input_retry_(wire_packet, UDP_INPUT_RETRY_COUNT);
+  }
+  return sent;
+}
 #endif
 
 void CFXSyncComponent::schedule_local_input_hold_repeat_(
@@ -1447,6 +1613,193 @@ bool CFXSyncComponent::handle_remote_input_(PeerState &peer, bool pressed,
       this->inject_remote_input_(pressed, maintained, toggle, action);
   this->clear_remote_input_owner_();
   return applied;
+}
+
+bool CFXSyncComponent::handle_remote_light_command_(
+    PeerState &peer, const CFXSyncPacket &packet) {
+  const bool pressed =
+      (packet.command_flags & CFXSyncPacketCodec::COMMAND_FLAG_PRESSED) != 0;
+  const bool released =
+      (packet.command_flags & CFXSyncPacketCodec::COMMAND_FLAG_RELEASED) != 0;
+  const bool directional =
+      (packet.command_flags &
+       (CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_UP |
+        CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_DOWN)) != 0;
+  const bool hold_like =
+      packet.command_kind == CFXSyncCommandKind::DIMMER && directional &&
+      (pressed || released);
+
+  if (hold_like && pressed) {
+    if (this->remote_input_owner_ == nullptr) {
+      this->remote_input_owner_ = &peer;
+    } else if (this->remote_input_owner_ != &peer) {
+      this->log_rejection_(
+          "Ignoring remote input while another controller is active");
+      return false;
+    }
+  } else if (hold_like && released) {
+    if (this->remote_input_owner_ != nullptr &&
+        this->remote_input_owner_ != &peer) {
+      this->log_rejection_(
+          "Ignoring remote input while another controller is active");
+      return false;
+    }
+  }
+
+  const bool applied = this->apply_light_command_to_leader_(packet);
+  if (hold_like && released) {
+    this->clear_remote_input_owner_();
+  }
+  return applied;
+}
+
+bool CFXSyncComponent::apply_light_command_to_leader_(
+    const CFXSyncPacket &packet) {
+  auto *leader = this->leader_light_();
+  if (leader == nullptr) {
+    return false;
+  }
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_EFFECT) != 0 ||
+      packet.command_kind == CFXSyncCommandKind::EFFECT) {
+    ESP_LOGW(TAG,
+             "CFX Sync effect command ignored: unsupported in this release");
+    return false;
+  }
+
+  auto call = leader->make_call();
+  bool has_action = false;
+  const bool released =
+      (packet.command_flags & CFXSyncPacketCodec::COMMAND_FLAG_RELEASED) != 0;
+  const bool directional =
+      (packet.command_flags &
+       (CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_UP |
+        CFXSyncPacketCodec::COMMAND_FLAG_DIRECTION_DOWN)) != 0;
+  const bool dimmer_release =
+      packet.command_kind == CFXSyncCommandKind::DIMMER && released &&
+      directional;
+
+  if (dimmer_release) {
+    const float brightness =
+        leader->current_values.is_on()
+            ? std::max(0.0f,
+                       std::min(1.0f,
+                                leader->current_values.get_brightness() *
+                                    leader->current_values.get_state()))
+            : leader->remote_values.get_brightness();
+    call.set_transition_length(0);
+    call.set_state(leader->remote_values.is_on());
+    if (light_supports_brightness(*leader)) {
+      call.set_brightness(brightness);
+    }
+    cfx_dimmer::clear_light_timing_hint(leader);
+    call.perform();
+    return true;
+  }
+
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_RAMP) != 0) {
+    call.set_transition_length(packet.command_ramp_ms);
+  }
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_TOGGLE) != 0) {
+    call.set_state(!leader->remote_values.is_on());
+    has_action = true;
+  }
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_POWER) != 0) {
+    call.set_state(packet.command_power);
+    has_action = true;
+  }
+
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_RAMP) != 0 &&
+      packet.command_ramp_ms > 0 &&
+      ((packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0 ||
+       packet.command_kind == CFXSyncCommandKind::DIMMER)) {
+    cfx_dimmer::publish_light_ramp_duration_hint(leader,
+                                                 packet.command_ramp_ms);
+  }
+
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0 &&
+      light_supports_brightness(*leader)) {
+    call.set_state(true);
+    call.set_brightness(packet.command_brightness / 255.0f);
+    has_action = true;
+  }
+
+  const bool has_rgb =
+      (packet.command_mask & CFXSyncPacketCodec::COMMAND_RGB) != 0;
+  const bool has_white =
+      (packet.command_mask & CFXSyncPacketCodec::COMMAND_WHITE) != 0;
+  const bool has_color_brightness =
+      (packet.command_mask &
+       CFXSyncPacketCodec::COMMAND_COLOR_BRIGHTNESS) != 0;
+  if (has_rgb && light_supports_rgb_white(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::RGB_WHITE);
+    call.set_rgb(packet.command_red / 255.0f,
+                 packet.command_green / 255.0f,
+                 packet.command_blue / 255.0f);
+    if (has_white) {
+      call.set_white(packet.command_white / 255.0f);
+    }
+    if (has_color_brightness) {
+      call.set_color_brightness(packet.command_color_brightness / 255.0f);
+    }
+    has_action = true;
+  } else if (has_rgb && light_supports_rgb(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::RGB);
+    call.set_rgb(packet.command_red / 255.0f,
+                 packet.command_green / 255.0f,
+                 packet.command_blue / 255.0f);
+    if (has_color_brightness) {
+      call.set_color_brightness(packet.command_color_brightness / 255.0f);
+    }
+    has_action = true;
+  } else if (has_white && light_supports_rgb_white(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::RGB_WHITE);
+    call.set_white(packet.command_white / 255.0f);
+    if (has_color_brightness) {
+      call.set_color_brightness(packet.command_color_brightness / 255.0f);
+    }
+    has_action = true;
+  } else if (has_white && light_supports_white(*leader) &&
+             !light_supports_rgb(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::WHITE);
+    call.set_white(packet.command_white / 255.0f);
+    has_action = true;
+  } else if (has_color_brightness && light_supports_rgb(*leader)) {
+    call.set_state(true);
+    call.set_color_brightness(packet.command_color_brightness / 255.0f);
+    has_action = true;
+  }
+
+  if ((packet.command_mask &
+       CFXSyncPacketCodec::COMMAND_COLD_WARM_WHITE) != 0 &&
+      light_supports_cold_warm_white(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::COLD_WARM_WHITE);
+    if ((packet.command_mask &
+         CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE) != 0 &&
+        light_supports_color_temperature(*leader)) {
+      call.set_color_temperature(packet.command_color_temperature_mireds);
+    }
+    call.set_cold_white(packet.command_cold_white / 255.0f);
+    call.set_warm_white(packet.command_warm_white / 255.0f);
+    has_action = true;
+  } else if ((packet.command_mask &
+              CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE) != 0 &&
+             light_supports_color_temperature(*leader)) {
+    call.set_state(true);
+    call.set_color_mode(light::ColorMode::COLOR_TEMPERATURE);
+    call.set_color_temperature(packet.command_color_temperature_mireds);
+    has_action = true;
+  }
+
+  if (!has_action) {
+    return false;
+  }
+  call.perform();
+  return true;
 }
 
 void CFXSyncComponent::clear_remote_input_owner_() {

@@ -26,6 +26,7 @@ enum class CFXSyncPacketType : uint8_t {
   HELLO = 3,
   STATE_ACK = 4,
   INPUT_STATE = 5,
+  LIGHT_COMMAND = 6,
 };
 
 enum class CFXSyncNodeRole : uint8_t {
@@ -45,6 +46,14 @@ enum class CFXSyncInputAction : uint8_t {
   PRIMARY = 0,
   DIMMER_UP = 1,
   DIMMER_DOWN = 2,
+};
+
+enum class CFXSyncCommandKind : uint8_t {
+  BINARY = 0,
+  DIMMER = 1,
+  HUE = 2,
+  CCT = 3,
+  EFFECT = 4,
 };
 
 enum class CFXSyncDecodeResult : uint8_t {
@@ -152,6 +161,20 @@ struct CFXSyncPacket {
   bool input_maintained{false};
   bool input_toggle{false};
   CFXSyncInputAction input_action{CFXSyncInputAction::PRIMARY};
+  uint16_t command_mask{0};
+  CFXSyncCommandKind command_kind{CFXSyncCommandKind::BINARY};
+  uint8_t command_flags{0};
+  bool command_power{false};
+  uint8_t command_brightness{0};
+  uint16_t command_ramp_ms{0};
+  uint8_t command_red{0};
+  uint8_t command_green{0};
+  uint8_t command_blue{0};
+  uint8_t command_white{0};
+  uint8_t command_color_brightness{0};
+  uint16_t command_color_temperature_mireds{0};
+  uint8_t command_cold_white{0};
+  uint8_t command_warm_white{0};
 };
 
 class CFXSyncPacketCodec {
@@ -186,6 +209,20 @@ class CFXSyncPacketCodec {
   static constexpr uint8_t INPUT_FLAG_TOGGLE = 0x04;
   static constexpr uint8_t INPUT_ACTION_SHIFT = 3;
   static constexpr uint8_t INPUT_ACTION_MASK = 0x18;
+  static constexpr uint16_t COMMAND_POWER = 0x0001U;
+  static constexpr uint16_t COMMAND_TOGGLE = 0x0002U;
+  static constexpr uint16_t COMMAND_BRIGHTNESS = 0x0004U;
+  static constexpr uint16_t COMMAND_RAMP = 0x0008U;
+  static constexpr uint16_t COMMAND_RGB = 0x0010U;
+  static constexpr uint16_t COMMAND_COLOR_BRIGHTNESS = 0x0020U;
+  static constexpr uint16_t COMMAND_COLOR_TEMPERATURE = 0x0040U;
+  static constexpr uint16_t COMMAND_COLD_WARM_WHITE = 0x0080U;
+  static constexpr uint16_t COMMAND_EFFECT = 0x0100U;
+  static constexpr uint16_t COMMAND_WHITE = 0x0200U;
+  static constexpr uint8_t COMMAND_FLAG_PRESSED = 0x01U;
+  static constexpr uint8_t COMMAND_FLAG_RELEASED = 0x02U;
+  static constexpr uint8_t COMMAND_FLAG_DIRECTION_UP = 0x04U;
+  static constexpr uint8_t COMMAND_FLAG_DIRECTION_DOWN = 0x08U;
   static constexpr uint32_t FULL_STATE_MASK =
       FIELD_POWER | FIELD_BRIGHTNESS | FIELD_COLOR | FIELD_COLOR_BRIGHTNESS;
   static constexpr size_t FULL_STATE_PAYLOAD_SIZE = 12;
@@ -207,6 +244,8 @@ class CFXSyncPacketCodec {
   static constexpr size_t HELLO_PAYLOAD_SIZE = 3;
   static constexpr size_t STATE_ACK_PAYLOAD_SIZE = 9;
   static constexpr size_t INPUT_STATE_PAYLOAD_SIZE = 1;
+  static constexpr size_t MIN_LIGHT_COMMAND_PAYLOAD_SIZE = 4;
+  static constexpr size_t MAX_LIGHT_COMMAND_PAYLOAD_SIZE = 17;
   static constexpr size_t MAX_STATE_PACKET_SIZE =
       HEADER_SIZE + MAX_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;  // 136 bytes.
   static constexpr size_t REQUEST_PACKET_SIZE = HEADER_SIZE + AUTH_TAG_SIZE;
@@ -216,6 +255,8 @@ class CFXSyncPacketCodec {
       HEADER_SIZE + STATE_ACK_PAYLOAD_SIZE + AUTH_TAG_SIZE;
   static constexpr size_t INPUT_STATE_PACKET_SIZE =
       HEADER_SIZE + INPUT_STATE_PAYLOAD_SIZE + AUTH_TAG_SIZE;
+  static constexpr size_t MAX_LIGHT_COMMAND_PACKET_SIZE =
+      HEADER_SIZE + MAX_LIGHT_COMMAND_PAYLOAD_SIZE + AUTH_TAG_SIZE;
 
   static bool encode_state(uint32_t group_hash, uint32_t boot_id,
                            uint32_t sequence, bool power, uint8_t brightness,
@@ -296,6 +337,11 @@ class CFXSyncPacketCodec {
                                  CFXSyncInputAction action,
                                  const std::array<uint8_t, 32> &key,
                                  std::vector<uint8_t> &output);
+  static bool encode_light_command(uint32_t group_hash, uint32_t boot_id,
+                                   uint32_t sequence,
+                                   const CFXSyncPacket &command,
+                                   const std::array<uint8_t, 32> &key,
+                                   std::vector<uint8_t> &output);
   static CFXSyncDecodeResult peek_group_hash(const uint8_t *data,
                                              size_t size,
                                              uint32_t &group_hash);
@@ -349,12 +395,16 @@ static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE == 47,
               "CFX sync state ack packet size changed");
 static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE == 39,
               "CFX sync input state packet size changed");
+static_assert(CFXSyncPacketCodec::MAX_LIGHT_COMMAND_PACKET_SIZE == 55,
+              "CFX sync maximum light command packet size changed");
 static_assert(CFXSyncPacketCodec::HELLO_PACKET_SIZE < 250,
               "CFX sync hello packet exceeds ESP-NOW V1 payload limit");
 static_assert(CFXSyncPacketCodec::STATE_ACK_PACKET_SIZE < 250,
               "CFX sync state ack packet exceeds ESP-NOW V1 payload limit");
 static_assert(CFXSyncPacketCodec::INPUT_STATE_PACKET_SIZE < 250,
               "CFX sync input state packet exceeds ESP-NOW V1 payload limit");
+static_assert(CFXSyncPacketCodec::MAX_LIGHT_COMMAND_PACKET_SIZE < 250,
+              "CFX sync light command exceeds ESP-NOW V1 payload limit");
 
 }  // namespace cfx_sync
 }  // namespace esphome

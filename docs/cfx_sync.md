@@ -175,7 +175,9 @@ If `local_input` points to a `cfx_button`, do not add `input_mode`. It is not ne
 
 ## Remote Dimmer And Magic Buttons
 
-`cfx_button` can be used from a controller. The controller sends the raw `cfx_button` action to the leader, and the leader runs the real ChimeraFX button logic.
+`cfx_button` can be used from a controller or satellite. The sender sends a resolved command to the leader, such as toggle, dimmer up/down, RGB color, or white/CCT value. The leader applies that command to its own light, then sends the resulting authoritative light state to the group.
+
+The leader does not need `remote_input` for normal remote magic buttons.
 
 Controller:
 
@@ -207,29 +209,20 @@ cfx_sync:
 Leader:
 
 ```yaml
-cfx_button:
-  - id: leader_dimmer
-    dimmer:
-      lights:
-        - room_light
-
 cfx_sync:
   id: room_sync
   role: leader
   lights: room_light
-  remote_input: leader_dimmer
   group: living_room
   key: !secret cfx_sync_key
 ```
 
-The empty `lights: []` on the controller is intentional. It lets the controller define the same button type without controlling a local light.
+The empty `lights: []` on the controller is intentional. It lets the controller define the button behavior without controlling a local light.
 
 When `local_input` points to `wall_dimmer`, `cfx_sync` receives the `cfx_button` actions directly. Do not add `input_mode` in this layout.
 
-The remote button type must match the leader `remote_input`. If a controller
-or satellite sends dimmer up/down actions, the leader `remote_input` must be a
-dimmer `cfx_button`. If it is a hue selector, CCT sweeper, or another button
-type, the unsupported dimmer action is ignored and a warning is logged.
+The leader applies only the command fields its own light supports. After that,
+followers and satellites adapt the leader state to their own light type.
 
 For a controller with separate dimmer buttons:
 
@@ -518,7 +511,7 @@ This is best effort. ESPHome may still reboot a device if Wi-Fi stays down long 
 | `key` | Yes | - | Same key on every device in the group. Minimum 8 characters. |
 | `local_input` | Controller or satellite | - | A `binary_sensor` id or a `cfx_button` id used as the local input. Use when the input is exposed to ESPHome. |
 | `local_light_input` | Optional satellite | `false` | Watches the satellite light itself and sends local light changes to the leader. Use when the physical buttons are hidden behind a Tuya MCU or similar device. |
-| `remote_input` | Optional leader | - | A `cfx_button` on the leader used for remote magic-button input. |
+| `remote_input` | Optional leader | - | Legacy advanced hook for old remote magic-button layouts. Normal controller and satellite `cfx_button` inputs do not need it. |
 | `input_mode` | No | `momentary` | Used only when `local_input` is a plain `binary_sensor`. Options: `momentary`, `maintained`, or `toggle`. |
 | `heartbeat` | No | `30s` | Regular state refresh from leader. |
 | `transport` | No | `auto` | `auto`, `espnow`, or `udp`. |
@@ -539,10 +532,10 @@ No follower reaction:
 Button does nothing:
 
 - `controller` and `satellite` need `local_input`.
-- A leader needs `remote_input` only for remote `cfx_button` logic.
+- A leader does not need `remote_input` for normal controller or satellite `cfx_button` commands.
 - Plain momentary buttons can omit `input_mode`; the default is `momentary`.
 - Real on/off rocker switches usually use `input_mode: maintained`.
-- If `local_input` points to a `cfx_button`, remove `input_mode` and make sure the leader has the matching `remote_input`.
+- If `local_input` points to a `cfx_button`, remove `input_mode`.
 
 Follower color looks different:
 

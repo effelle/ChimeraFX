@@ -11,6 +11,7 @@ TYPE_SYNC_REQUEST = 2
 TYPE_HELLO = 3
 TYPE_STATE_ACK = 4
 TYPE_INPUT_STATE = 5
+TYPE_LIGHT_COMMAND = 6
 HEADER_SIZE = 22
 TAG_SIZE = 16
 FIELD_POWER = 0x00000001
@@ -40,6 +41,25 @@ ROLE_SATELLITE = 4
 ACK_APPLIED = 0
 ACK_IGNORED_UNSUPPORTED = 1
 ACK_APPLY_FAILED = 2
+COMMAND_POWER = 0x0001
+COMMAND_TOGGLE = 0x0002
+COMMAND_BRIGHTNESS = 0x0004
+COMMAND_RAMP = 0x0008
+COMMAND_RGB = 0x0010
+COMMAND_COLOR_BRIGHTNESS = 0x0020
+COMMAND_COLOR_TEMPERATURE = 0x0040
+COMMAND_COLD_WARM_WHITE = 0x0080
+COMMAND_EFFECT = 0x0100
+COMMAND_WHITE = 0x0200
+COMMAND_KIND_BINARY = 0
+COMMAND_KIND_DIMMER = 1
+COMMAND_KIND_HUE = 2
+COMMAND_KIND_CCT = 3
+COMMAND_KIND_EFFECT = 4
+COMMAND_FLAG_PRESSED = 0x01
+COMMAND_FLAG_RELEASED = 0x02
+COMMAND_FLAG_DIRECTION_UP = 0x04
+COMMAND_FLAG_DIRECTION_DOWN = 0x08
 CAP_LIGHT_LEADER = 0x0001
 CAP_LIGHT_FOLLOWER = 0x0002
 CAP_BINARY_REMOTE = 0x0004
@@ -498,6 +518,100 @@ def decode(packet, expected_group_hash=GROUP_HASH):
         if payload[0] > 1:
             raise ValueError("input-state")
         result["input_pressed"] = bool(payload[0])
+    elif packet[5] == TYPE_LIGHT_COMMAND:
+        payload = packet[HEADER_SIZE:authenticated_size]
+        if len(payload) < 4:
+            raise ValueError("command")
+        mask, kind, flags = struct.unpack(">HBB", payload[:4])
+        offset = 4
+        result.update(
+            {
+                "command_mask": mask,
+                "command_kind": kind,
+                "command_flags": flags,
+            }
+        )
+        known_mask = (
+            COMMAND_POWER
+            | COMMAND_TOGGLE
+            | COMMAND_BRIGHTNESS
+            | COMMAND_RAMP
+            | COMMAND_RGB
+            | COMMAND_COLOR_BRIGHTNESS
+            | COMMAND_COLOR_TEMPERATURE
+            | COMMAND_COLD_WARM_WHITE
+            | COMMAND_EFFECT
+            | COMMAND_WHITE
+        )
+        if mask == 0 or (mask & ~known_mask):
+            raise ValueError("command")
+        if kind not in (
+            COMMAND_KIND_BINARY,
+            COMMAND_KIND_DIMMER,
+            COMMAND_KIND_HUE,
+            COMMAND_KIND_CCT,
+            COMMAND_KIND_EFFECT,
+        ):
+            raise ValueError("command")
+        if flags & ~(
+            COMMAND_FLAG_PRESSED
+            | COMMAND_FLAG_RELEASED
+            | COMMAND_FLAG_DIRECTION_UP
+            | COMMAND_FLAG_DIRECTION_DOWN
+        ):
+            raise ValueError("command")
+        if flags & COMMAND_FLAG_PRESSED and flags & COMMAND_FLAG_RELEASED:
+            raise ValueError("command")
+        if flags & COMMAND_FLAG_DIRECTION_UP and flags & COMMAND_FLAG_DIRECTION_DOWN:
+            raise ValueError("command")
+        if mask & COMMAND_POWER:
+            if offset + 1 > len(payload):
+                raise ValueError("command")
+            result["command_power"] = payload[offset] != 0
+            offset += 1
+        if mask & COMMAND_BRIGHTNESS:
+            if offset + 1 > len(payload):
+                raise ValueError("command")
+            result["command_brightness"] = payload[offset]
+            offset += 1
+        if mask & COMMAND_RAMP:
+            if offset + 2 > len(payload):
+                raise ValueError("command")
+            result["command_ramp_ms"] = struct.unpack(
+                ">H", payload[offset:offset + 2]
+            )[0]
+            offset += 2
+        if mask & COMMAND_RGB:
+            if offset + 3 > len(payload):
+                raise ValueError("command")
+            result["command_rgb"] = tuple(payload[offset:offset + 3])
+            offset += 3
+        if mask & COMMAND_WHITE:
+            if offset + 1 > len(payload):
+                raise ValueError("command")
+            result["command_white"] = payload[offset]
+            offset += 1
+        if mask & COMMAND_COLOR_BRIGHTNESS:
+            if offset + 1 > len(payload):
+                raise ValueError("command")
+            result["command_color_brightness"] = payload[offset]
+            offset += 1
+        if mask & COMMAND_COLOR_TEMPERATURE:
+            if offset + 2 > len(payload):
+                raise ValueError("command")
+            result["command_color_temperature_mireds"] = struct.unpack(
+                ">H", payload[offset:offset + 2]
+            )[0]
+            offset += 2
+        if mask & COMMAND_COLD_WARM_WHITE:
+            if offset + 2 > len(payload):
+                raise ValueError("command")
+            result["command_cold_warm_white"] = tuple(
+                payload[offset:offset + 2]
+            )
+            offset += 2
+        if offset != len(payload):
+            raise ValueError("command")
     else:
         raise ValueError("type")
     return result
@@ -578,6 +692,66 @@ class ProtocolTests(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, "input"):
                     decode(encode(TYPE_INPUT_STATE, payload))
+
+    def test_light_command_binary_toggle_vector_is_stable(self):
+        payload = struct.pack(
+            ">HBB",
+            COMMAND_TOGGLE,
+            COMMAND_KIND_BINARY,
+            COMMAND_FLAG_PRESSED,
+        )
+        packet = encode(TYPE_LIGHT_COMMAND, payload)
+        self.assertEqual(len(packet), 42)
+        decoded = decode(packet)
+        self.assertEqual(decoded["type"], TYPE_LIGHT_COMMAND)
+        self.assertEqual(decoded["command_mask"], COMMAND_TOGGLE)
+        self.assertEqual(decoded["command_kind"], COMMAND_KIND_BINARY)
+        self.assertEqual(decoded["command_flags"], COMMAND_FLAG_PRESSED)
+
+    def test_light_command_hue_rgb_vector_is_stable(self):
+        payload = (
+            struct.pack(
+                ">HBB",
+                COMMAND_RGB | COMMAND_COLOR_BRIGHTNESS,
+                COMMAND_KIND_HUE,
+                COMMAND_FLAG_PRESSED,
+            )
+            + bytes((0x11, 0x80, 0xEE, 0xCC))
+        )
+        decoded = decode(encode(TYPE_LIGHT_COMMAND, payload))
+        self.assertEqual(decoded["command_rgb"], (0x11, 0x80, 0xEE))
+        self.assertEqual(decoded["command_color_brightness"], 0xCC)
+
+    def test_light_command_cct_vector_is_stable(self):
+        payload = struct.pack(
+            ">HBBBBBBH",
+            COMMAND_RGB | COMMAND_WHITE | COMMAND_COLOR_TEMPERATURE,
+            COMMAND_KIND_CCT,
+            COMMAND_FLAG_PRESSED,
+            255,
+            238,
+            210,
+            180,
+            370,
+        )
+        decoded = decode(encode(TYPE_LIGHT_COMMAND, payload))
+        self.assertEqual(decoded["command_rgb"], (255, 238, 210))
+        self.assertEqual(decoded["command_white"], 180)
+        self.assertEqual(decoded["command_color_temperature_mireds"], 370)
+
+    def test_malformed_light_command_is_rejected(self):
+        cases = (
+            b"",
+            b"\x00\x00\x00\x00",
+            struct.pack(">HBB", 0x8000, COMMAND_KIND_BINARY, 0),
+            struct.pack(">HBB", COMMAND_TOGGLE, 99, 0),
+            struct.pack(">HBB", COMMAND_TOGGLE, COMMAND_KIND_BINARY, 0x80),
+            struct.pack(">HBB", COMMAND_RGB, COMMAND_KIND_HUE, 0) + b"\x01",
+        )
+        for payload in cases:
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(ValueError, "command"):
+                    decode(encode(TYPE_LIGHT_COMMAND, payload))
 
     def test_hello_round_trips_role_and_capabilities(self):
         payload = bytes((ROLE_LEADER,)) + struct.pack(

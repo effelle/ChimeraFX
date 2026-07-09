@@ -77,6 +77,18 @@ inline bool light_supports_rgb(light::LightState &state) {
          traits.supports_color_mode(light::ColorMode::RGB_WHITE);
 }
 
+inline bool light_supports_brightness(light::LightState &state) {
+  const auto traits = state.get_traits();
+  return traits.supports_color_mode(light::ColorMode::BRIGHTNESS) ||
+         traits.supports_color_mode(light::ColorMode::WHITE) ||
+         traits.supports_color_mode(light::ColorMode::RGB) ||
+         traits.supports_color_mode(light::ColorMode::RGB_WHITE) ||
+         traits.supports_color_mode(light::ColorMode::COLOR_TEMPERATURE) ||
+         traits.supports_color_mode(light::ColorMode::COLD_WARM_WHITE) ||
+         traits.supports_color_mode(light::ColorMode::RGB_COLOR_TEMPERATURE) ||
+         traits.supports_color_mode(light::ColorMode::RGB_COLD_WARM_WHITE);
+}
+
 inline bool light_supports_color_temperature(light::LightState &state) {
   return state.get_traits().supports_color_capability(
       light::ColorCapability::COLOR_TEMPERATURE);

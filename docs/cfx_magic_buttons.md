@@ -37,6 +37,10 @@ cfx_button:
     *   Holding the button (long-press) dims the light or cycles colors/effects using custom configured timings.
     *   If your light has a dedicated white channel (like RGBW), CCT mode switches to it instantly, preventing the light from flashing stale RGB colors.
 
+### Sync Note
+
+When a `cfx_button` is used as `cfx_sync.local_input`, it sends resolved commands to the sync leader. The leader does not need a local copy of that magic-button helper configured as `remote_input`. For an input-only controller, use `lights: []` inside the `cfx_button`; this means the button controls the sync group, not a local light.
+
 ---
 
 ## Button Dimmer

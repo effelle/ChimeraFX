@@ -1,9 +1,11 @@
 #pragma once
 
+#include "cfx_button_sync_command.h"
 #include "cfx_cct_policy.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,9 @@ struct CFXColor {
 
 class CFXCCTSweeper : public Component {
  public:
+  using SyncCommandCallback =
+      std::function<void(const cfx_button::CFXButtonSyncCommand &command)>;
+
   explicit CFXCCTSweeper(const std::string &id) : id_(id) {}
   void setup() override;
   void loop() override;
@@ -33,6 +38,9 @@ class CFXCCTSweeper : public Component {
     this->preferred_white_ = {r, g, b, w};
   }
   void set_restore(bool value) { this->restore_ = value; }
+  void add_sync_command_callback(SyncCommandCallback callback) {
+    this->sync_command_callbacks_.push_back(callback);
+  }
 
   void press();
   void release();
@@ -64,6 +72,7 @@ class CFXCCTSweeper : public Component {
   CFXColor sweep_color_at_(const SweepTarget &target, uint32_t now) const;
   void handle_short_press_();
   void restore_retained_state_();
+  void emit_sync_color_(const CFXColor &color, uint32_t transition_ms);
   void apply_color_(light::LightState *state, const CFXColor &color,
                     uint32_t transition_ms);
   void apply_color_to_all_(const CFXColor &color, uint32_t transition_ms);
@@ -83,6 +92,7 @@ class CFXCCTSweeper : public Component {
 
   std::vector<light::LightState *> lights_;
   std::vector<SweepTarget> sweep_targets_;
+  std::vector<SyncCommandCallback> sync_command_callbacks_;
   std::string id_;
   ESPPreferenceObject preferred_white_pref_{};
   bool preferred_white_pref_ready_{false};

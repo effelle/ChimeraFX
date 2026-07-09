@@ -17,6 +17,9 @@ PACKET_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_packet.cpp"
 COLOR_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
 EFFECT_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_effect.h"
 CFX_BUTTON_PY = ROOT / "components" / "cfx_button" / "__init__.py"
+CFX_BUTTON_SYNC_HEADER = (
+    ROOT / "components" / "cfx_button" / "cfx_button_sync_command.h"
+)
 CFX_BUTTON_HEADER = ROOT / "components" / "cfx_button" / "cfx_button.h"
 CFX_BUTTON_SOURCE = ROOT / "components" / "cfx_button" / "cfx_button.cpp"
 CFX_BUTTON_STATE_HEADER = ROOT / "components" / "cfx_button" / "cfx_button_state.h"
@@ -1209,13 +1212,17 @@ class ESPNowAPITests(unittest.TestCase):
         header = HEADER.read_text(encoding="utf-8")
         source = SOURCE.read_text(encoding="utf-8")
         py_source = PY_COMPONENT.read_text(encoding="utf-8")
+        button_command_header = CFX_BUTTON_SYNC_HEADER.read_text(encoding="utf-8")
         button_header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
         button_source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn("enum class CFXButtonInputAction : uint8_t", button_header)
-        self.assertIn("PRIMARY = 0", button_header)
-        self.assertIn("DIMMER_UP = 1", button_header)
-        self.assertIn("DIMMER_DOWN = 2", button_header)
+        self.assertIn(
+            "enum class CFXButtonInputAction : uint8_t",
+            button_command_header,
+        )
+        self.assertIn("PRIMARY = 0", button_command_header)
+        self.assertIn("DIMMER_UP = 1", button_command_header)
+        self.assertIn("DIMMER_DOWN = 2", button_command_header)
         self.assertIn("using SyncInputCallback", button_header)
         self.assertIn("void add_sync_input_callback(SyncInputCallback callback)", button_header)
         self.assertIn("void inject_remote_dimmer_up(bool pressed);", button_header)
@@ -1238,8 +1245,8 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
-        self.assertIn("this->local_button_->add_sync_input_callback", source)
-        self.assertIn("this->on_local_button_update_(action, pressed);", source)
+        self.assertIn("this->local_button_->add_sync_command_callback", source)
+        self.assertIn("this->on_local_button_command_(command);", source)
         self.assertIn("has_local_input = has_local_input || this->local_button_ != nullptr;", source)
         self.assertIn("CFXSyncInputAction::DIMMER_UP", source)
         self.assertIn("CFXSyncInputAction::DIMMER_DOWN", source)
@@ -3684,6 +3691,67 @@ class ESPNowAPITests(unittest.TestCase):
             sync_source,
         )
         self.assertIn("capture_light_timing_hint(leader, millis())", sync_source)
+
+    def test_cfx_button_emits_typed_sync_commands(self):
+        self.assertTrue(CFX_BUTTON_SYNC_HEADER.exists())
+        command_header = CFX_BUTTON_SYNC_HEADER.read_text(encoding="utf-8")
+        button_header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
+        button_source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("struct CFXButtonSyncCommand", command_header)
+        self.assertIn("enum class CFXButtonSyncKind", command_header)
+        self.assertIn("add_sync_command_callback", button_header)
+        self.assertIn("emit_sync_command_", button_source)
+        self.assertIn("CFXButtonSyncKind::DIMMER", button_source)
+        self.assertIn("CFXButtonInputAction::DIMMER_UP", button_source)
+        self.assertIn("CFXButtonInputAction::DIMMER_DOWN", button_source)
+
+    def test_hue_and_cct_helpers_emit_resolved_sync_values(self):
+        hue_header = (
+            ROOT / "components" / "cfx_button" / "cfx_hue_cycler.h"
+        ).read_text(encoding="utf-8")
+        hue_source = CFX_HUE_CYCLER_SOURCE.read_text(encoding="utf-8")
+        cct_header = (
+            ROOT / "components" / "cfx_button" / "cfx_cct_sweeper.h"
+        ).read_text(encoding="utf-8")
+        cct_source = CFX_CCT_SWEEPER_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("add_sync_command_callback", hue_header)
+        self.assertIn("CFXButtonSyncKind::HUE", hue_source)
+        self.assertIn("command.has_rgb = true", hue_source)
+        self.assertIn("command.has_white = true", hue_source)
+        self.assertIn("add_sync_command_callback", cct_header)
+        self.assertIn("CFXButtonSyncKind::CCT", cct_source)
+        self.assertIn("command.has_rgb = true", cct_source)
+        self.assertIn("command.has_white = true", cct_source)
+
+    def test_light_command_packets_are_leader_only(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("CFXSyncPacketType::LIGHT_COMMAND", source)
+        self.assertIn("Ignoring remote light command on non-leader", source)
+        self.assertIn("handle_remote_light_command_", header)
+        self.assertIn("handle_remote_light_command_", source)
+        self.assertIn("apply_light_command_to_leader_", header)
+        self.assertIn("apply_light_command_to_leader_", source)
+
+    def test_light_command_application_uses_light_capability_checks(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        color_header = COLOR_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn("light_supports_brightness", color_header)
+        self.assertIn("light_supports_brightness", source)
+        self.assertIn("light_supports_rgb", source)
+        self.assertIn("light_supports_color_temperature", source)
+        self.assertIn("light_supports_cold_warm_white", source)
+
+    def test_cfx_sync_binds_cfx_button_to_resolved_commands(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("add_sync_command_callback", source)
+        self.assertIn("on_local_button_command_", source)
+        self.assertIn("send_light_command_", source)
 
     def test_cfx_button_timing_helpers_are_not_esp32_only(self):
         timing_header = CFX_DIMMER_TIMING_HEADER.read_text(encoding="utf-8")

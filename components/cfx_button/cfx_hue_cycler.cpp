@@ -8,6 +8,16 @@
 namespace esphome {
 namespace cfx_hue_cycler {
 
+static uint8_t to_u8_(float value) {
+  if (value <= 0.0f) {
+    return 0;
+  }
+  if (value >= 1.0f) {
+    return 255;
+  }
+  return static_cast<uint8_t>((value * 255.0f) + 0.5f);
+}
+
 void CFXHueCycler::setup() {
   if (!this->restore_ || global_preferences == nullptr) {
     return;
@@ -124,6 +134,7 @@ void CFXHueCycler::apply_cycle_(uint32_t now) {
   }
   this->last_cycle_update_ms_ = now;
   const CFXColor color = this->cycle_color_at_(now);
+  this->emit_sync_color_(color, HUE_TRANSITION_MS);
   for (auto *state : this->lights_) {
     this->apply_color_(state, color, HUE_TRANSITION_MS);
   }
@@ -139,6 +150,7 @@ void CFXHueCycler::select_next_palette_color_(uint32_t now) {
   this->active_color_known_ = true;
   this->last_cycle_update_ms_ = now;
   this->last_cycle_color_ = this->colors_[this->active_color_index_];
+  this->emit_sync_color_(this->last_cycle_color_, HUE_TRANSITION_MS);
   for (auto *state : this->lights_) {
     this->apply_color_(state, this->last_cycle_color_, HUE_TRANSITION_MS);
   }
@@ -169,6 +181,7 @@ void CFXHueCycler::freeze_cycle_() {
     this->saved_colors_.resize(this->lights_.size());
   }
   this->save_selection_();
+  this->emit_sync_color_(this->last_cycle_color_, 0);
   for (size_t i = 0; i < this->lights_.size(); i++) {
     this->saved_colors_[i].valid = true;
     this->saved_colors_[i].color = this->last_cycle_color_;
@@ -182,6 +195,10 @@ void CFXHueCycler::toggle_fixed_color_() {
   const ShortPressOutput output = next_short_press_output(
       this->all_targets_match_fixed_color_(),
       this->all_targets_match_selected_hue_());
+  const CFXColor command_color =
+      output == ShortPressOutput::SELECTED_HUE ? this->selected_color_(0)
+                                               : this->fixed_color_;
+  this->emit_sync_color_(command_color, USE_DEFAULT_TRANSITION);
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *state = this->lights_[i];
     if (output == ShortPressOutput::SELECTED_HUE) {
@@ -205,6 +222,32 @@ void CFXHueCycler::restore_saved_color_(size_t index, light::LightState *state) 
     this->saved_colors_[index].color = fallback;
   }
   this->apply_color_(state, fallback, USE_DEFAULT_TRANSITION);
+}
+
+void CFXHueCycler::emit_sync_color_(const CFXColor &color,
+                                    uint32_t transition_ms) {
+  const CFXColor c = this->clamp_color_(color);
+  const float color_brightness = std::max({c.red, c.green, c.blue});
+  const float divisor = color_brightness > 0.0f ? color_brightness : 1.0f;
+  cfx_button::CFXButtonSyncCommand command;
+  command.kind = cfx_button::CFXButtonSyncKind::HUE;
+  command.pressed = true;
+  command.has_rgb = true;
+  command.red = to_u8_(c.red / divisor);
+  command.green = to_u8_(c.green / divisor);
+  command.blue = to_u8_(c.blue / divisor);
+  command.has_white = true;
+  command.white = to_u8_(c.white);
+  command.has_color_brightness = true;
+  command.color_brightness = to_u8_(color_brightness);
+  if (transition_ms != USE_DEFAULT_TRANSITION) {
+    command.has_ramp = true;
+    command.ramp_ms = static_cast<uint16_t>(
+        std::min<uint32_t>(transition_ms, UINT16_MAX));
+  }
+  for (auto &callback : this->sync_command_callbacks_) {
+    callback(command);
+  }
 }
 
 void CFXHueCycler::apply_color_(light::LightState *state, const CFXColor &color,

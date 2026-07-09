@@ -21,6 +21,9 @@ class CFXDimmer : public Component {
   void set_ramp_time_ms(uint32_t value) { this->ramp_time_ms_ = value; }
   void set_min_brightness(float value) { this->min_brightness_ = value; }
   void set_max_brightness(float value) { this->max_brightness_ = value; }
+  uint32_t get_ramp_time_ms() const { return this->ramp_time_ms_; }
+  float get_min_brightness() const { return this->min_brightness_; }
+  float get_max_brightness() const { return this->max_brightness_; }
 
   void press();
   void release();

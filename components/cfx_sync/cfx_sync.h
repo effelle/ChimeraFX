@@ -344,12 +344,20 @@ class CFXSyncComponent : public Component {
 #if CFX_SYNC_HAS_CFX_BUTTON
   void on_local_button_update_(cfx_button::CFXButtonInputAction action,
                                bool pressed);
+  void on_local_button_command_(
+      const cfx_button::CFXButtonSyncCommand &command);
+  bool send_light_command_(const cfx_button::CFXButtonSyncCommand &command);
 #endif
   void schedule_local_input_hold_repeat_(uint32_t generation);
   void schedule_local_input_release_repeat_(uint8_t remaining,
                                             uint32_t generation);
   bool handle_remote_input_(PeerState &peer, bool pressed, bool maintained,
                             bool toggle, CFXSyncInputAction action);
+#if defined(USE_ESP32)
+  bool handle_remote_light_command_(PeerState &peer,
+                                    const CFXSyncPacket &packet);
+  bool apply_light_command_to_leader_(const CFXSyncPacket &packet);
+#endif
   bool inject_remote_input_(bool pressed, bool maintained, bool toggle,
                             CFXSyncInputAction action =
                                 CFXSyncInputAction::PRIMARY);

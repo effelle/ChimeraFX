@@ -7,6 +7,16 @@ namespace cfx_button {
 
 static const char *const TAG = "cfx_button";
 
+static uint8_t to_u8_(float value) {
+  if (value <= 0.0f) {
+    return 0;
+  }
+  if (value >= 1.0f) {
+    return 255;
+  }
+  return static_cast<uint8_t>((value * 255.0f) + 0.5f);
+}
+
 void CFXButton::setup() {
   if (!this->press_ || !this->release_) {
     this->mark_failed();
@@ -126,6 +136,7 @@ void CFXButton::handle_state_(bool pressed) {
     this->release_();
   }
   this->emit_sync_input_(CFXButtonInputAction::PRIMARY, event);
+  this->emit_sync_command_(CFXButtonInputAction::PRIMARY, event);
 }
 
 void CFXButton::handle_state_(bool pressed, CFXButtonState *state) {
@@ -147,6 +158,7 @@ void CFXButton::handle_dimmer_up_state_(bool pressed) {
     this->dimmer_release_up_();
   }
   this->emit_sync_input_(CFXButtonInputAction::DIMMER_UP, event);
+  this->emit_sync_command_(CFXButtonInputAction::DIMMER_UP, event);
 }
 
 void CFXButton::handle_dimmer_up_state_(bool pressed, CFXButtonState *state) {
@@ -166,6 +178,7 @@ void CFXButton::handle_dimmer_down_state_(bool pressed) {
     this->dimmer_release_down_();
   }
   this->emit_sync_input_(CFXButtonInputAction::DIMMER_DOWN, event);
+  this->emit_sync_command_(CFXButtonInputAction::DIMMER_DOWN, event);
 }
 
 void CFXButton::handle_dimmer_down_state_(bool pressed,
@@ -186,6 +199,51 @@ void CFXButton::emit_sync_input_(CFXButtonInputAction action,
   const bool pressed = event == CFXButtonEvent::PRESS;
   for (auto &callback : this->sync_input_callbacks_) {
     callback(action, pressed);
+  }
+}
+
+void CFXButton::emit_sync_command_(CFXButtonInputAction action,
+                                   CFXButtonEvent event) {
+  if (event != CFXButtonEvent::PRESS && event != CFXButtonEvent::RELEASE) {
+    return;
+  }
+  if ((this->sync_kind_ == CFXButtonSyncKind::HUE ||
+       this->sync_kind_ == CFXButtonSyncKind::CCT ||
+       this->sync_kind_ == CFXButtonSyncKind::EFFECT) &&
+      action == CFXButtonInputAction::PRIMARY) {
+    return;
+  }
+
+  const bool pressed = event == CFXButtonEvent::PRESS;
+  CFXButtonSyncCommand command;
+  command.kind = this->sync_kind_;
+  command.action = action;
+  command.pressed = pressed;
+
+  if (this->sync_kind_ == CFXButtonSyncKind::DIMMER &&
+      (action == CFXButtonInputAction::DIMMER_UP ||
+       action == CFXButtonInputAction::DIMMER_DOWN)) {
+    command.direction_up = action == CFXButtonInputAction::DIMMER_UP;
+    command.direction_down = action == CFXButtonInputAction::DIMMER_DOWN;
+    if (pressed) {
+      command.has_brightness = true;
+      command.brightness =
+          to_u8_(action == CFXButtonInputAction::DIMMER_UP
+                     ? this->dimmer_max_brightness_
+                     : this->dimmer_min_brightness_);
+      command.has_ramp = true;
+      command.ramp_ms = this->dimmer_ramp_time_ms_;
+    }
+  } else if (this->sync_kind_ == CFXButtonSyncKind::BINARY &&
+             action == CFXButtonInputAction::PRIMARY && pressed) {
+    command.toggle = true;
+  }
+  this->emit_sync_command_(command);
+}
+
+void CFXButton::emit_sync_command_(const CFXButtonSyncCommand &command) {
+  for (auto &callback : this->sync_command_callbacks_) {
+    callback(command);
   }
 }
 

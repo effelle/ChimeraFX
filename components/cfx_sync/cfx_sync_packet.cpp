@@ -449,6 +449,74 @@ bool CFXSyncPacketCodec::encode_input_state(
                  sequence, &payload, INPUT_STATE_PAYLOAD_SIZE, key, output);
 }
 
+bool CFXSyncPacketCodec::encode_light_command(
+    uint32_t group_hash, uint32_t boot_id, uint32_t sequence,
+    const CFXSyncPacket &command, const std::array<uint8_t, 32> &key,
+    std::vector<uint8_t> &output) {
+  constexpr uint16_t KNOWN_COMMANDS =
+      COMMAND_POWER | COMMAND_TOGGLE | COMMAND_BRIGHTNESS | COMMAND_RAMP |
+      COMMAND_RGB | COMMAND_COLOR_BRIGHTNESS | COMMAND_COLOR_TEMPERATURE |
+      COMMAND_COLD_WARM_WHITE | COMMAND_EFFECT | COMMAND_WHITE;
+  constexpr uint8_t KNOWN_FLAGS =
+      COMMAND_FLAG_PRESSED | COMMAND_FLAG_RELEASED |
+      COMMAND_FLAG_DIRECTION_UP | COMMAND_FLAG_DIRECTION_DOWN;
+
+  if (command.command_mask == 0 ||
+      (command.command_mask & ~KNOWN_COMMANDS) != 0 ||
+      (command.command_mask & COMMAND_EFFECT) != 0 ||
+      (command.command_flags & ~KNOWN_FLAGS) != 0) {
+    return false;
+  }
+  switch (command.command_kind) {
+    case CFXSyncCommandKind::BINARY:
+    case CFXSyncCommandKind::DIMMER:
+    case CFXSyncCommandKind::HUE:
+    case CFXSyncCommandKind::CCT:
+      break;
+    case CFXSyncCommandKind::EFFECT:
+    default:
+      return false;
+  }
+
+  std::vector<uint8_t> payload;
+  payload.reserve(MAX_LIGHT_COMMAND_PAYLOAD_SIZE);
+  append_u16_(payload, command.command_mask);
+  payload.push_back(static_cast<uint8_t>(command.command_kind));
+  payload.push_back(command.command_flags);
+  if ((command.command_mask & COMMAND_POWER) != 0) {
+    payload.push_back(command.command_power ? 1 : 0);
+  }
+  if ((command.command_mask & COMMAND_BRIGHTNESS) != 0) {
+    payload.push_back(command.command_brightness);
+  }
+  if ((command.command_mask & COMMAND_RAMP) != 0) {
+    append_u16_(payload, command.command_ramp_ms);
+  }
+  if ((command.command_mask & COMMAND_RGB) != 0) {
+    payload.push_back(command.command_red);
+    payload.push_back(command.command_green);
+    payload.push_back(command.command_blue);
+  }
+  if ((command.command_mask & COMMAND_WHITE) != 0) {
+    payload.push_back(command.command_white);
+  }
+  if ((command.command_mask & COMMAND_COLOR_BRIGHTNESS) != 0) {
+    payload.push_back(command.command_color_brightness);
+  }
+  if ((command.command_mask & COMMAND_COLOR_TEMPERATURE) != 0) {
+    append_u16_(payload, command.command_color_temperature_mireds);
+  }
+  if ((command.command_mask & COMMAND_COLD_WARM_WHITE) != 0) {
+    payload.push_back(command.command_cold_white);
+    payload.push_back(command.command_warm_white);
+  }
+  if (payload.size() > MAX_LIGHT_COMMAND_PAYLOAD_SIZE) {
+    return false;
+  }
+  return encode_(CFXSyncPacketType::LIGHT_COMMAND, group_hash, boot_id,
+                 sequence, payload.data(), payload.size(), key, output);
+}
+
 CFXSyncDecodeResult CFXSyncPacketCodec::peek_group_hash(
     const uint8_t *data, size_t size, uint32_t &group_hash) {
   group_hash = 0;
@@ -519,7 +587,8 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
           static_cast<uint8_t>(CFXSyncPacketType::SYNC_REQUEST) &&
       raw_type != static_cast<uint8_t>(CFXSyncPacketType::HELLO) &&
       raw_type != static_cast<uint8_t>(CFXSyncPacketType::STATE_ACK) &&
-      raw_type != static_cast<uint8_t>(CFXSyncPacketType::INPUT_STATE)) {
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::INPUT_STATE) &&
+      raw_type != static_cast<uint8_t>(CFXSyncPacketType::LIGHT_COMMAND)) {
     return CFXSyncDecodeResult::UNSUPPORTED_TYPE;
   }
 
@@ -600,6 +669,113 @@ CFXSyncDecodeResult CFXSyncPacketCodec::decode(
         (payload[0] & INPUT_FLAG_MAINTAINED) != 0;
     packet.input_toggle = (payload[0] & INPUT_FLAG_TOGGLE) != 0;
     packet.input_action = action;
+    return CFXSyncDecodeResult::OK;
+  }
+
+  if (packet.type == CFXSyncPacketType::LIGHT_COMMAND) {
+    if (payload_size < MIN_LIGHT_COMMAND_PAYLOAD_SIZE ||
+        payload_size > MAX_LIGHT_COMMAND_PAYLOAD_SIZE) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    constexpr uint16_t KNOWN_COMMANDS =
+        COMMAND_POWER | COMMAND_TOGGLE | COMMAND_BRIGHTNESS | COMMAND_RAMP |
+        COMMAND_RGB | COMMAND_COLOR_BRIGHTNESS | COMMAND_COLOR_TEMPERATURE |
+        COMMAND_COLD_WARM_WHITE | COMMAND_EFFECT | COMMAND_WHITE;
+    constexpr uint8_t KNOWN_FLAGS =
+        COMMAND_FLAG_PRESSED | COMMAND_FLAG_RELEASED |
+        COMMAND_FLAG_DIRECTION_UP | COMMAND_FLAG_DIRECTION_DOWN;
+
+    packet.command_mask = read_u16_(payload);
+    packet.command_kind = static_cast<CFXSyncCommandKind>(payload[2]);
+    packet.command_flags = payload[3];
+    if (packet.command_mask == 0 ||
+        (packet.command_mask & ~KNOWN_COMMANDS) != 0 ||
+        (packet.command_flags & ~KNOWN_FLAGS) != 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    if ((packet.command_flags & COMMAND_FLAG_DIRECTION_UP) != 0 &&
+        (packet.command_flags & COMMAND_FLAG_DIRECTION_DOWN) != 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    if ((packet.command_flags & COMMAND_FLAG_PRESSED) != 0 &&
+        (packet.command_flags & COMMAND_FLAG_RELEASED) != 0) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
+    switch (packet.command_kind) {
+      case CFXSyncCommandKind::BINARY:
+      case CFXSyncCommandKind::DIMMER:
+      case CFXSyncCommandKind::HUE:
+      case CFXSyncCommandKind::CCT:
+        if ((packet.command_mask & COMMAND_EFFECT) != 0) {
+          return CFXSyncDecodeResult::MALFORMED;
+        }
+        break;
+      case CFXSyncCommandKind::EFFECT:
+        if ((packet.command_mask & COMMAND_EFFECT) == 0) {
+          return CFXSyncDecodeResult::MALFORMED;
+        }
+        break;
+      default:
+        return CFXSyncDecodeResult::MALFORMED;
+    }
+
+    size_t offset = MIN_LIGHT_COMMAND_PAYLOAD_SIZE;
+    if ((packet.command_mask & COMMAND_POWER) != 0) {
+      if (offset + 1 > payload_size || payload[offset] > 1) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_power = payload[offset++] != 0;
+    }
+    if ((packet.command_mask & COMMAND_BRIGHTNESS) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_brightness = payload[offset++];
+    }
+    if ((packet.command_mask & COMMAND_RAMP) != 0) {
+      if (offset + 2 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_ramp_ms = read_u16_(payload + offset);
+      offset += 2;
+    }
+    if ((packet.command_mask & COMMAND_RGB) != 0) {
+      if (offset + 3 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_red = payload[offset++];
+      packet.command_green = payload[offset++];
+      packet.command_blue = payload[offset++];
+    }
+    if ((packet.command_mask & COMMAND_WHITE) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_white = payload[offset++];
+    }
+    if ((packet.command_mask & COMMAND_COLOR_BRIGHTNESS) != 0) {
+      if (offset + 1 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_color_brightness = payload[offset++];
+    }
+    if ((packet.command_mask & COMMAND_COLOR_TEMPERATURE) != 0) {
+      if (offset + 2 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_color_temperature_mireds = read_u16_(payload + offset);
+      offset += 2;
+    }
+    if ((packet.command_mask & COMMAND_COLD_WARM_WHITE) != 0) {
+      if (offset + 2 > payload_size) {
+        return CFXSyncDecodeResult::MALFORMED;
+      }
+      packet.command_cold_white = payload[offset++];
+      packet.command_warm_white = payload[offset++];
+    }
+    if (offset != payload_size) {
+      return CFXSyncDecodeResult::MALFORMED;
+    }
     return CFXSyncDecodeResult::OK;
   }
 

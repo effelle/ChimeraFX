@@ -50,7 +50,6 @@ class CFXSyncDocsTests(unittest.TestCase):
         self.assertIn("Tuya MCU", text)
         self.assertIn("not exposed as ESPHome binary sensors", text)
         self.assertIn("The satellite must have exactly one light", text)
-        self.assertIn("The remote button type must match the leader `remote_input`", text)
         self.assertIn(
             "On ESP8266, the default `transport: auto` uses UDP automatically.",
             text,
@@ -58,6 +57,19 @@ class CFXSyncDocsTests(unittest.TestCase):
         tuya_section = text.split("## Tuya MCU Dimmers With Hidden Buttons", 1)[1]
         tuya_section = tuya_section.split("## What Gets Copied", 1)[0]
         self.assertNotIn("transport: udp", tuya_section)
+
+    def test_docs_explain_resolved_magic_button_commands(self):
+        text = CFX_SYNC_DOC.read_text(encoding="utf-8")
+        lower = text.lower()
+
+        self.assertNotIn("remote button type must match", lower)
+        self.assertNotIn("matching `remote_input`", lower)
+        self.assertIn("input_mode` is only", text)
+        self.assertIn("resolved command", lower)
+        self.assertIn(
+            "The leader does not need `remote_input`",
+            text,
+        )
 
 
 if __name__ == "__main__":

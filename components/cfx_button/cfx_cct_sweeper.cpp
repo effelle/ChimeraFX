@@ -11,6 +11,16 @@ namespace cfx_cct_sweeper {
 
 static const char *const TAG = "cfx_cct_sweeper";
 
+static uint8_t to_u8_(float value) {
+  if (value <= 0.0f) {
+    return 0;
+  }
+  if (value >= 1.0f) {
+    return 255;
+  }
+  return static_cast<uint8_t>((value * 255.0f) + 0.5f);
+}
+
 static const char *color_mode_name(light::ColorMode mode) {
   switch (mode) {
     case light::ColorMode::WHITE:
@@ -174,6 +184,7 @@ void CFXCCTSweeper::start_sweep_(uint32_t now) {
   this->sweep_end_ms_ = now;
   this->sweep_started_ms_ = now;
   this->active_sweep_target_ = this->sweep_target_();
+  this->emit_sync_color_(this->active_sweep_target_, this->sweep_time_ms_);
   this->sweep_targets_.clear();
   this->sweep_targets_.reserve(this->lights_.size());
   for (auto *state : this->lights_) {
@@ -194,6 +205,7 @@ void CFXCCTSweeper::finish_sweep_() {
   this->sweep_finished_ = true;
   this->preferred_white_ = this->active_sweep_target_;
   this->last_endpoint_ = CCTEndpoint::PREFERRED;
+  this->emit_sync_color_(this->preferred_white_, 0);
   this->apply_color_to_all_(this->preferred_white_, 0);
   this->save_preferred_white_();
   this->sweep_targets_.clear();
@@ -210,6 +222,7 @@ void CFXCCTSweeper::freeze_sweep_() {
   }
   this->preferred_white_ = this->clamp_color_(selected);
   this->last_endpoint_ = CCTEndpoint::PREFERRED;
+  this->emit_sync_color_(this->preferred_white_, 0);
   this->apply_color_to_all_(this->preferred_white_, 0);
   this->save_preferred_white_();
   this->sweeping_ = false;
@@ -256,11 +269,13 @@ void CFXCCTSweeper::handle_short_press_() {
     return;
   }
   if (action == CCTShortPressAction::APPLY_NATIVE) {
+    this->emit_sync_color_(this->native_white_, USE_DEFAULT_TRANSITION);
     this->apply_color_to_all_(this->native_white_, USE_DEFAULT_TRANSITION);
     this->last_endpoint_ = CCTEndpoint::NATIVE;
     this->has_retained_state_ = true;
     return;
   }
+  this->emit_sync_color_(this->preferred_white_, USE_DEFAULT_TRANSITION);
   this->apply_color_to_all_(this->preferred_white_, USE_DEFAULT_TRANSITION);
   this->last_endpoint_ = CCTEndpoint::PREFERRED;
   this->has_retained_state_ = true;
@@ -274,6 +289,31 @@ void CFXCCTSweeper::restore_retained_state_() {
     auto call = state->make_call();
     call.set_state(true);
     call.perform();
+  }
+}
+
+void CFXCCTSweeper::emit_sync_color_(const CFXColor &color,
+                                     uint32_t transition_ms) {
+  const CFXColor c = this->clamp_color_(color);
+  const CCTRGBCommand rgb = split_cct_rgb(c.red, c.green, c.blue);
+  cfx_button::CFXButtonSyncCommand command;
+  command.kind = cfx_button::CFXButtonSyncKind::CCT;
+  command.pressed = true;
+  command.has_rgb = true;
+  command.red = to_u8_(rgb.red);
+  command.green = to_u8_(rgb.green);
+  command.blue = to_u8_(rgb.blue);
+  command.has_white = true;
+  command.white = to_u8_(c.white);
+  command.has_color_brightness = true;
+  command.color_brightness = to_u8_(rgb.color_brightness);
+  if (transition_ms != USE_DEFAULT_TRANSITION) {
+    command.has_ramp = true;
+    command.ramp_ms = static_cast<uint16_t>(
+        std::min<uint32_t>(transition_ms, UINT16_MAX));
+  }
+  for (auto &callback : this->sync_command_callbacks_) {
+    callback(command);
   }
 }
 

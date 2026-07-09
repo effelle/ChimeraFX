@@ -1,10 +1,12 @@
 #pragma once
 
+#include "cfx_button_sync_command.h"
 #include "cfx_hue_policy.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,9 @@ struct CFXColor {
 
 class CFXHueCycler : public Component {
  public:
+  using SyncCommandCallback =
+      std::function<void(const cfx_button::CFXButtonSyncCommand &command)>;
+
   explicit CFXHueCycler(const std::string &id) : id_(id) {}
   void setup() override;
   void loop() override;
@@ -38,6 +43,9 @@ class CFXHueCycler : public Component {
   }
   void set_saturation(float value) { this->saturation_ = value; }
   void set_restore(bool value) { this->restore_ = value; }
+  void add_sync_command_callback(SyncCommandCallback callback) {
+    this->sync_command_callbacks_.push_back(callback);
+  }
 
   void press();
   void release();
@@ -61,6 +69,7 @@ class CFXHueCycler : public Component {
   void freeze_cycle_();
   void toggle_fixed_color_();
   void restore_saved_color_(size_t index, light::LightState *state);
+  void emit_sync_color_(const CFXColor &color, uint32_t transition_ms);
   void apply_color_(light::LightState *state, const CFXColor &color,
                     uint32_t transition_ms);
   void save_selection_();
@@ -79,6 +88,7 @@ class CFXHueCycler : public Component {
   std::vector<light::LightState *> lights_;
   std::vector<SavedColor> saved_colors_;
   std::vector<CFXColor> colors_;
+  std::vector<SyncCommandCallback> sync_command_callbacks_;
   std::string id_;
   ESPPreferenceObject selection_pref_{};
   bool selection_pref_ready_{false};
