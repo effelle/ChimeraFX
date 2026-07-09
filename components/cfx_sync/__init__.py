@@ -61,6 +61,7 @@ CONF_INTERNAL_ESPNOW_ID = "_espnow_id"
 CONF_ROLE = "role"
 CONF_LIGHTS = "lights"
 CONF_LOCAL_INPUT = "local_input"
+CONF_LOCAL_LIGHT_INPUT = "local_light_input"
 CONF_REMOTE_INPUT = "remote_input"
 CONF_PEER = "peer"
 CONF_GROUP = "group"
@@ -333,6 +334,12 @@ def _extract_cfx_effect_catalog(light_config):
 def _validate_role_lights(config):
     role = config[CONF_ROLE]
     lights = config.get(CONF_LIGHTS, [])
+    if config.get(CONF_LOCAL_LIGHT_INPUT, False) and (
+        role != ROLE_SATELLITE or len(lights) != 1
+    ):
+        raise cv.Invalid(
+            "local_light_input can only be used by a satellite with exactly one light"
+        )
     if role == ROLE_CONTROLLER:
         if lights:
             raise cv.Invalid("cfx_sync controller cannot declare lights")
@@ -552,6 +559,7 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_LIGHTS, default=[]): _normalize_lights,
             cv.Optional(CONF_LOCAL_INPUT): _local_input_schema,
+            cv.Optional(CONF_LOCAL_LIGHT_INPUT, default=False): cv.boolean,
             cv.Optional(CONF_REMOTE_INPUT): cv.use_id(cfx_button.CFXButton),
             cv.Optional(CONF_ESPNOW_ID): cv.invalid(
                 "espnow_id is no longer used; cfx_sync uses ESP-NOW "
@@ -599,6 +607,7 @@ async def to_code(config):
     config.setdefault(CONF_INPUT_MODE, INPUT_MODE_MOMENTARY)
     config.setdefault(CONF_FALLBACK_CHANNEL, DEFAULT_FALLBACK_CHANNEL)
     config.setdefault(CONF_TRANSPORT, TRANSPORT_AUTO)
+    config.setdefault(CONF_LOCAL_LIGHT_INPUT, False)
     use_espnow = config[CONF_TRANSPORT] == TRANSPORT_ESPNOW or (
         config[CONF_TRANSPORT] == TRANSPORT_AUTO and not _is_esp8266_target()
     )
@@ -681,6 +690,7 @@ async def to_code(config):
                 CoreID(_id_name(config[CONF_LOCAL_INPUT]), type=binary_sensor.BinarySensor)
             )
             cg.add(var.set_local_input(local_input))
+    cg.add(var.set_local_light_input(config[CONF_LOCAL_LIGHT_INPUT]))
     if CONF_REMOTE_INPUT in config:
         remote_input = await cg.get_variable(config[CONF_REMOTE_INPUT])
         cg.add(var.set_remote_input(remote_input))

@@ -71,6 +71,7 @@ class CFXSyncEnableSwitch : public switch_::Switch {
  protected:
   CFXSyncComponent *parent_{nullptr};
 };
+#endif
 
 class CFXSyncLightListener : public light::LightRemoteValuesListener {
  public:
@@ -80,7 +81,6 @@ class CFXSyncLightListener : public light::LightRemoteValuesListener {
  protected:
   CFXSyncComponent *parent_;
 };
-#endif
 
 class CFXSyncComponent : public Component {
  public:
@@ -135,6 +135,9 @@ class CFXSyncComponent : public Component {
 #endif
   void set_input_mode(CFXSyncInputMode mode) {
     this->input_mode_ = mode;
+  }
+  void set_local_light_input(bool enabled) {
+    this->local_light_input_ = enabled;
   }
   void set_transport(CFXSyncTransport transport) {
     this->transport_ = transport;
@@ -328,6 +331,7 @@ class CFXSyncComponent : public Component {
   bool send_sync_request_();
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
+  bool send_satellite_local_state_();
   bool send_input_packet_(std::vector<uint8_t> &packet);
   bool send_input_state_(bool pressed, bool maintained, bool toggle,
                          CFXSyncInputAction action =
@@ -398,6 +402,8 @@ class CFXSyncComponent : public Component {
   bool is_current_broadcast_ack_(const CFXSyncPacket &packet) const;
   void seed_peer_sent_state_from_ack_(PeerState &peer,
                                       const CFXSyncPacket &packet);
+  bool handle_satellite_state_proposal_(PeerState &peer,
+                                        const CFXSyncPacket &packet);
 #endif
   bool is_peer_send_suspended_(const PeerState &peer) const;
   uint8_t active_peer_count_() const;
@@ -520,14 +526,15 @@ class CFXSyncComponent : public Component {
   CFXSyncInputAction remote_input_action_{CFXSyncInputAction::PRIMARY};
   uint32_t last_remote_input_ms_{0};
   bool sync_enabled_{true};
+  bool local_light_input_{false};
   bool applying_remote_state_{false};
   bool has_valid_state_{false};
   uint32_t last_unsupported_visual_log_ms_{0};
 
-#if defined(USE_ESP32)
   CFXSyncLightListener light_listener_{this};
   bool has_observed_state_{false};
   CFXSyncLightSnapshot observed_state_{};
+#if defined(USE_ESP32)
   CFXSyncEffectState observed_effect_{};
   CFXSyncControlState observed_controls_{};
 #endif

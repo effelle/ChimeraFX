@@ -290,6 +290,47 @@ cfx_button:
 
 ESP8266 followers and satellites use UDP and can follow normal ESPHome light state. They do not run ChimeraFX effects or apply ChimeraFX controls.
 
+## Tuya MCU Dimmers With Hidden Buttons
+
+Some Tuya MCU dimmers do not expose their physical buttons as ESPHome `binary_sensor` entities. The secondary MCU handles the buttons and only reports the final light state.
+
+For that layout, make the device a `satellite` and enable `local_light_input`.
+
+```yaml
+cfx_sync:
+  id: room_sync
+  role: satellite
+  lights:
+    - tuya_light
+  local_light_input: true
+  group: living_room
+  key: !secret cfx_sync_key
+  transport: udp
+
+tuya:
+
+uart:
+  rx_pin: GPIO3
+  tx_pin: GPIO1
+  baud_rate: 9600
+
+light:
+  - platform: tuya
+    id: tuya_light
+    name: Dimmer test
+    dimmer_datapoint: 2
+    switch_datapoint: 1
+    min_value_datapoint: 50
+    min_value: 25
+    max_value: 255
+```
+
+When the Tuya MCU changes `tuya_light`, the satellite sends that new light state to the leader. The leader remains authoritative and sends the final state back to the group.
+
+Use this only when the device buttons are not exposed as ESPHome binary sensors. If you have normal GPIO buttons, prefer `local_input` or a `cfx_button`.
+
+The satellite must have exactly one light when `local_light_input: true` is used.
+
 ## What Gets Copied
 
 `cfx_sync` watches the leader light. When the leader changes, followers are updated automatically.
@@ -447,6 +488,7 @@ This is best effort. ESPHome may still reboot a device if Wi-Fi stays down long 
 | `group` | Yes | - | Same group means same sync room. |
 | `key` | Yes | - | Same key on every device in the group. Minimum 8 characters. |
 | `local_input` | Controller or satellite | - | A `binary_sensor` id or a `cfx_button` id used as the local input. |
+| `local_light_input` | Optional satellite | `false` | Watches the satellite light itself and sends local light changes to the leader. Use for Tuya MCU dimmers with hidden buttons. |
 | `remote_input` | Optional leader | - | A `cfx_button` on the leader used for remote magic-button input. |
 | `input_mode` | No | `momentary` | Used only when `local_input` is a plain `binary_sensor`. Options: `momentary`, `maintained`, or `toggle`. |
 | `heartbeat` | No | `30s` | Regular state refresh from leader. |

@@ -28,6 +28,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cfx_sync.TRANSPORT_AUTO, "auto")
         self.assertEqual(cfx_sync.TRANSPORT_ESPNOW, "espnow")
         self.assertEqual(cfx_sync.TRANSPORT_UDP, "udp")
+        self.assertEqual(cfx_sync.CONF_LOCAL_LIGHT_INPUT, "local_light_input")
 
     def test_schema_defaults_to_auto_and_accepts_explicit_transports(self):
         source = component_source()
@@ -408,6 +409,51 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 ):
                     cfx_sync._validate_platform_support(config)
 
+    def test_local_light_input_is_satellite_only_and_single_light(self):
+        valid = {
+            "role": "satellite",
+            "transport": "udp",
+            "lights": [light_id("tuya_light")],
+            "local_light_input": True,
+        }
+
+        self.assertIs(cfx_sync._validate_role_lights(valid), valid)
+
+        invalid_configs = [
+            {
+                "role": "leader",
+                "transport": "udp",
+                "lights": [light_id("leader_light")],
+                "local_light_input": True,
+            },
+            {
+                "role": "follower",
+                "transport": "udp",
+                "lights": [light_id("follower_light")],
+                "local_light_input": True,
+            },
+            {
+                "role": "controller",
+                "transport": "udp",
+                "lights": [],
+                "local_input": light_id("wall_button"),
+                "local_light_input": True,
+            },
+            {
+                "role": "satellite",
+                "transport": "udp",
+                "lights": [light_id("one"), light_id("two")],
+                "local_light_input": True,
+            },
+        ]
+
+        for config in invalid_configs:
+            with self.subTest(config=config), self.assertRaisesRegex(
+                cv.Invalid,
+                "local_light_input can only be used by a satellite with exactly one light",
+            ):
+                cfx_sync._validate_role_lights(config)
+
     async def test_codegen_emits_esp8266_satellite_light_and_udp_transport(self):
         emitted = []
 
@@ -428,6 +474,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             "key": "password",
             "heartbeat": heartbeat,
             "transport": "auto",
+            "local_light_input": True,
             "_effect_catalogs": [[]],
             "_control_ids": [{}],
         }
@@ -458,6 +505,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn(("add_light", light), emitted)
         self.assertIn(("set_local_input", local_input), emitted)
+        self.assertIn(("set_local_light_input", True), emitted)
         self.assertIn(
             (
                 "set_transport",
@@ -555,6 +603,69 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 re.DOTALL,
             ),
         )
+
+    def test_esp8266_satellite_local_light_input_sends_state_to_leader(self):
+        header = (ROOT / "components" / "cfx_sync" / "cfx_sync.h").read_text(
+            encoding="utf-8"
+        )
+        source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
+            encoding="utf-8"
+        )
+        color_header = (
+            ROOT / "components" / "cfx_sync" / "cfx_sync_color.h"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("void set_local_light_input(bool enabled)", header)
+        self.assertIn("bool local_light_input_{false};", header)
+        self.assertIn("bool send_satellite_local_state_();", header)
+        self.assertIn("CFXSyncLightListener light_listener_{this};", header)
+        listener_index = header.index("class CFXSyncLightListener")
+        enable_switch_index = header.index("class CFXSyncEnableSwitch")
+        self.assertLess(enable_switch_index, listener_index)
+        self.assertIn("#endif\n\nclass CFXSyncLightListener", header)
+        self.assertNotRegex(
+            color_header,
+            re.compile(
+                r"#if defined\(USE_ESP32\)\s*"
+                r"inline CFXSyncLightSnapshot capture_light_snapshot",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->role_ == CFXSyncRole::SATELLITE &&"
+                r"\s*this->local_light_input_\).*?"
+                r"this->lights_\[0\]->add_remote_values_listener"
+                r"\(&this->light_listener_\);",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::send_satellite_local_state_\(\)"
+                r".*?capture_light_snapshot\(\*light\).*?"
+                r"CFXSyncPacketCodec::encode_state_snapshot"
+                r".*?this->send_packet_to_\(BROADCAST_MAC, packet\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "this->handle_satellite_state_proposal_(*peer, packet)", source
+        )
+        handler = re.search(
+            r"bool CFXSyncComponent::handle_satellite_state_proposal_"
+            r".*?\n\}\n#endif",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(handler)
+        handler = handler.group(0)
+        self.assertIn("peer.node_role != CFXSyncNodeRole::SATELLITE", handler)
+        self.assertIn("CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER", handler)
+        self.assertIn("this->apply_remote_state_(packet)", handler)
+        self.assertIn("this->send_state_()", handler)
 
     def test_satellite_logs_apply_only_when_state_performs(self):
         source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(

@@ -84,13 +84,13 @@ class RemoteApplyGuard {
   bool &flag_;
 };
 
-#if defined(USE_ESP32)
 void CFXSyncLightListener::on_light_remote_values_update() {
   if (this->parent_ != nullptr) {
     this->parent_->on_local_light_update();
   }
 }
 
+#if defined(USE_ESP32)
 void CFXSyncEnableSwitch::write_state(bool state) {
   if (this->parent_ != nullptr) {
     this->parent_->on_sync_enabled_switch(state);
@@ -358,6 +358,19 @@ void CFXSyncComponent::setup() {
     this->schedule_follower_recovery_();
   }
 #endif
+  if (this->role_ == CFXSyncRole::SATELLITE && this->local_light_input_) {
+    if (this->lights_.size() != 1 || this->lights_[0] == nullptr) {
+      ESP_LOGE(TAG,
+               "local_light_input requires a satellite with exactly one light");
+      this->mark_failed();
+      return;
+    }
+    this->observed_state_ = capture_light_snapshot(*this->lights_[0]);
+    this->has_observed_state_ = true;
+    this->lights_[0]->add_remote_values_listener(&this->light_listener_);
+    ESP_LOGV(TAG, "Satellite local light input bound to %s",
+             this->lights_[0]->get_name().c_str());
+  }
   if (this->is_input_sender_role_() && this->local_input_ != nullptr) {
     if (this->local_input_->has_state()) {
       this->local_input_has_state_ = true;
@@ -649,6 +662,18 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
   }
 #if defined(USE_ESP32)
+  if (peer == nullptr && packet.type == CFXSyncPacketType::STATE &&
+      this->role_ == CFXSyncRole::LEADER) {
+    peer = this->find_or_add_peer_(
+        source, CFXSyncNodeRole::SATELLITE,
+        CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER |
+            CFXSyncPacketCodec::CAP_BINARY_REMOTE);
+    if (peer != nullptr) {
+      this->register_peer_(*peer);
+    }
+  }
+#endif
+#if defined(USE_ESP32)
   if (peer == nullptr && packet.type == CFXSyncPacketType::STATE_ACK &&
       this->role_ == CFXSyncRole::LEADER &&
       this->is_current_broadcast_ack_(packet)) {
@@ -740,6 +765,14 @@ bool CFXSyncComponent::handle_decoded_packet_(
     return true;
   }
 
+#if defined(USE_ESP32)
+  if (this->role_ == CFXSyncRole::LEADER &&
+      packet.type == CFXSyncPacketType::STATE &&
+      this->handle_satellite_state_proposal_(*peer, packet)) {
+    return true;
+  }
+#endif
+
   if (packet.type == CFXSyncPacketType::STATE &&
       this->is_state_receiver_role_() &&
       !this->sync_enabled_) {
@@ -766,10 +799,16 @@ bool CFXSyncComponent::handle_decoded_packet_(
 }
 
 void CFXSyncComponent::on_local_light_update() {
+  if (this->applying_remote_state_) {
+    return;
+  }
+  if (this->role_ == CFXSyncRole::SATELLITE && this->local_light_input_) {
+    this->send_satellite_local_state_();
+    return;
+  }
 #if defined(USE_ESP32)
   auto *leader = this->leader_light_();
-  if (this->applying_remote_state_ || leader == nullptr ||
-      this->effect_catalogs_.empty()) {
+  if (leader == nullptr || this->effect_catalogs_.empty()) {
     return;
   }
 
@@ -944,7 +983,58 @@ bool CFXSyncComponent::send_state_to_peer_(
   peer.last_state_sent_ms = millis();
   return true;
 }
+
+bool CFXSyncComponent::handle_satellite_state_proposal_(
+    PeerState &peer, const CFXSyncPacket &packet) {
+  if (this->role_ != CFXSyncRole::LEADER ||
+      packet.type != CFXSyncPacketType::STATE ||
+      peer.node_role != CFXSyncNodeRole::SATELLITE ||
+      (peer.capabilities & CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER) == 0) {
+    return false;
+  }
+  if (!(packet.has_power || packet.has_brightness || packet.has_color ||
+        packet.has_color_brightness || packet.has_color_temperature ||
+        packet.has_cold_warm_white)) {
+    return true;
+  }
+
+  const bool applied = this->apply_remote_state_(packet);
+  if (applied) {
+    ESP_LOGV(TAG, "Leader applied satellite local light state");
+    this->send_state_();
+  }
+  return true;
+}
 #endif
+
+bool CFXSyncComponent::send_satellite_local_state_() {
+  if (this->role_ != CFXSyncRole::SATELLITE || !this->local_light_input_ ||
+      this->lights_.size() != 1 || this->lights_[0] == nullptr ||
+      this->applying_remote_state_) {
+    return false;
+  }
+
+  auto *light = this->lights_[0];
+  const auto snapshot = capture_light_snapshot(*light);
+  if (this->has_observed_state_ && snapshot == this->observed_state_) {
+    return false;
+  }
+  this->has_observed_state_ = true;
+  this->observed_state_ = snapshot;
+
+  CFXSyncEffectState effect;
+  CFXSyncControlState controls;
+  CFXSyncTimingState timing;
+  std::vector<uint8_t> packet;
+  if (!CFXSyncPacketCodec::encode_state_snapshot(
+          this->group_hash_, this->boot_id_, this->next_sequence_(),
+          snapshot, false, effect, false, controls, timing, this->key_,
+          packet)) {
+    return false;
+  }
+  ESP_LOGV(TAG, "Satellite sending local light state");
+  return this->send_packet_to_(BROADCAST_MAC, packet);
+}
 
 bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
                                        const CFXSyncPacket &packet,

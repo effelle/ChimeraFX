@@ -42,6 +42,15 @@ class CFXSyncDocsTests(unittest.TestCase):
             text,
         )
 
+    def test_docs_explain_tuya_mcu_satellite_light_input(self):
+        text = CFX_SYNC_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("## Tuya MCU Dimmers With Hidden Buttons", text)
+        self.assertIn("local_light_input: true", text)
+        self.assertIn("Tuya MCU", text)
+        self.assertIn("not exposed as ESPHome binary sensors", text)
+        self.assertIn("The satellite must have exactly one light", text)
+
 
 if __name__ == "__main__":
     unittest.main()

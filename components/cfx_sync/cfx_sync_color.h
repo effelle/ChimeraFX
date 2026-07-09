@@ -87,7 +87,6 @@ inline bool light_supports_cold_warm_white(light::LightState &state) {
       light::ColorCapability::COLD_WARM_WHITE);
 }
 
-#if defined(USE_ESP32)
 inline CFXSyncLightSnapshot capture_light_snapshot(
     light::LightState &state) {
   const auto &values = state.remote_values;
@@ -137,7 +136,6 @@ inline CFXSyncLightSnapshot capture_light_snapshot(
           : 0;
   return snapshot;
 }
-#endif
 
 inline CFXSyncLightSnapshot convert_color_for_follower(
     CFXSyncLightSnapshot snapshot, bool follower_has_white) {
