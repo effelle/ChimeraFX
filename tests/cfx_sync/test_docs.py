@@ -50,6 +50,7 @@ class CFXSyncDocsTests(unittest.TestCase):
         self.assertIn("Tuya MCU", text)
         self.assertIn("not exposed as ESPHome binary sensors", text)
         self.assertIn("The satellite must have exactly one light", text)
+        self.assertIn("The remote button type must match the leader `remote_input`", text)
         self.assertIn(
             "On ESP8266, the default `transport: auto` uses UDP automatically.",
             text,

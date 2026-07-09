@@ -89,6 +89,11 @@ void CFXButton::inject_remote_state(bool pressed) {
 }
 
 void CFXButton::inject_remote_dimmer_up(bool pressed) {
+  if (!this->dimmer_press_up_ || !this->dimmer_release_up_) {
+    ESP_LOGW(TAG, "Remote dimmer up input ignored: controller does not "
+                  "support dimmer up");
+    return;
+  }
   if (!this->remote_dimmer_up_state_.is_armed()) {
     this->remote_dimmer_up_state_.prime(!pressed);
   }
@@ -98,6 +103,11 @@ void CFXButton::inject_remote_dimmer_up(bool pressed) {
 }
 
 void CFXButton::inject_remote_dimmer_down(bool pressed) {
+  if (!this->dimmer_press_down_ || !this->dimmer_release_down_) {
+    ESP_LOGW(TAG, "Remote dimmer down input ignored: controller does not "
+                  "support dimmer down");
+    return;
+  }
   if (!this->remote_dimmer_down_state_.is_armed()) {
     this->remote_dimmer_down_state_.prime(!pressed);
   }

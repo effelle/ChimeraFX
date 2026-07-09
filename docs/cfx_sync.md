@@ -226,6 +226,11 @@ The empty `lights: []` on the controller is intentional. It lets the controller 
 
 When `local_input` points to `wall_dimmer`, `cfx_sync` receives the `cfx_button` actions directly. Do not add `input_mode` in this layout.
 
+The remote button type must match the leader `remote_input`. If a controller
+or satellite sends dimmer up/down actions, the leader `remote_input` must be a
+dimmer `cfx_button`. If it is a hue selector, CCT sweeper, or another button
+type, the unsupported dimmer action is ignored and a warning is logged.
+
 For a controller with separate dimmer buttons:
 
 ```yaml

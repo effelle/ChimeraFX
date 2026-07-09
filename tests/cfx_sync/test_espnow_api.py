@@ -1254,6 +1254,39 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("CAP_BINARY_REMOTE", source)
         self.assertIn('return "controller"', source)
 
+    def test_remote_dimmer_action_is_ignored_when_remote_button_is_not_dimmer(self):
+        button_source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        up = re.search(
+            r"void CFXButton::inject_remote_dimmer_up"
+            r".*?\n\}\n\nvoid CFXButton::inject_remote_dimmer_down",
+            button_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(up)
+        up = up.group(0)
+        self.assertIn("!this->dimmer_press_up_ || !this->dimmer_release_up_", up)
+        self.assertIn("Remote dimmer up input ignored", up)
+        self.assertLess(
+            up.index("!this->dimmer_press_up_ || !this->dimmer_release_up_"),
+            up.index("this->handle_dimmer_up_state_"),
+        )
+
+        down = re.search(
+            r"void CFXButton::inject_remote_dimmer_down"
+            r".*?\n\}\n\nvoid CFXButton::handle_state_",
+            button_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(down)
+        down = down.group(0)
+        self.assertIn("!this->dimmer_press_down_ || !this->dimmer_release_down_", down)
+        self.assertIn("Remote dimmer down input ignored", down)
+        self.assertLess(
+            down.index("!this->dimmer_press_down_ || !this->dimmer_release_down_"),
+            down.index("this->handle_dimmer_down_state_"),
+        )
+
     def test_satellite_role_is_follower_plus_input_contract(self):
         header = HEADER.read_text(encoding="utf-8")
         packet_header = PACKET_HEADER.read_text(encoding="utf-8")
