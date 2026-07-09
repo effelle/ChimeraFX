@@ -3797,6 +3797,28 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertIn("timing.has_transition || timing.has_ramp", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"const bool defer_to_leader_apply =\s*"
+                r"packet\.command_kind == CFXSyncCommandKind::CCT;.*?"
+                r"if \(!defer_to_leader_apply && leader != nullptr &&.*?"
+                r"predict_leader_state_from_command_",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"const bool carries_visual_change =.*?"
+                r"COMMAND_COLOR_TEMPERATURE.*?"
+                r"COMMAND_COLD_WARM_WHITE.*?"
+                r"packet\.command_kind == CFXSyncCommandKind::HUE \|\|"
+                r"\s*packet\.command_kind == CFXSyncCommandKind::CCT;"
+                r".*?publish_light_ramp_duration_hint",
+                re.DOTALL,
+            ),
+        )
 
     def test_light_command_application_uses_light_capability_checks(self):
         source = SOURCE.read_text(encoding="utf-8")

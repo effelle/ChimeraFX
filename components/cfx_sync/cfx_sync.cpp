@@ -1659,7 +1659,10 @@ bool CFXSyncComponent::handle_remote_light_command_(
   CFXSyncLightSnapshot predicted_snapshot;
   CFXSyncEffectState predicted_effect;
   CFXSyncControlState predicted_controls;
-  if (leader != nullptr && !this->effect_catalogs_.empty()) {
+  const bool defer_to_leader_apply =
+      packet.command_kind == CFXSyncCommandKind::CCT;
+  if (!defer_to_leader_apply && leader != nullptr &&
+      !this->effect_catalogs_.empty()) {
     predicted_snapshot = capture_light_snapshot(*leader);
     CFXSyncTimingState predicted_timing;
     if (this->predict_leader_state_from_command_(
@@ -1841,12 +1844,24 @@ bool CFXSyncComponent::apply_light_command_to_leader_(
     has_action = true;
   }
 
-  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_RAMP) != 0 &&
-      packet.command_ramp_ms > 0 &&
-      ((packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0 ||
-       packet.command_kind == CFXSyncCommandKind::DIMMER)) {
-    cfx_dimmer::publish_light_ramp_duration_hint(leader,
-                                                 packet.command_ramp_ms);
+  if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_RAMP) != 0) {
+    const bool carries_visual_change =
+        (packet.command_mask &
+         (CFXSyncPacketCodec::COMMAND_BRIGHTNESS |
+          CFXSyncPacketCodec::COMMAND_RGB |
+          CFXSyncPacketCodec::COMMAND_WHITE |
+          CFXSyncPacketCodec::COMMAND_COLOR_BRIGHTNESS |
+          CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE |
+          CFXSyncPacketCodec::COMMAND_COLD_WARM_WHITE)) != 0 ||
+        packet.command_kind == CFXSyncCommandKind::DIMMER ||
+        packet.command_kind == CFXSyncCommandKind::HUE ||
+        packet.command_kind == CFXSyncCommandKind::CCT;
+    if (packet.command_ramp_ms > 0 && carries_visual_change) {
+      cfx_dimmer::publish_light_ramp_duration_hint(
+          leader, packet.command_ramp_ms);
+    } else {
+      cfx_dimmer::clear_light_timing_hint(leader);
+    }
   }
 
   if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0 &&
