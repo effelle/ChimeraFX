@@ -790,6 +790,11 @@ bool CFXSyncComponent::handle_decoded_packet_(
     this->clear_warning_if_set_();
     const bool applied = this->apply_remote_state_(packet);
     if (this->role_ == CFXSyncRole::SATELLITE && applied) {
+      if (this->local_light_input_ && this->lights_.size() == 1 &&
+          this->lights_[0] != nullptr) {
+        this->observed_state_ = capture_light_snapshot(*this->lights_[0]);
+        this->has_observed_state_ = true;
+      }
       ESP_LOGV(TAG, "Satellite applying leader state");
     }
     this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
@@ -1033,7 +1038,22 @@ bool CFXSyncComponent::send_satellite_local_state_() {
     return false;
   }
   ESP_LOGV(TAG, "Satellite sending local light state");
-  return this->send_packet_to_(BROADCAST_MAC, packet);
+  return this->send_satellite_state_packet_(packet);
+}
+
+bool CFXSyncComponent::send_satellite_state_packet_(
+    std::vector<uint8_t> &packet) {
+  bool sent = false;
+  if (this->use_udp_transport_()) {
+    for (auto &peer : this->peers_) {
+      if (!peer.active || peer.node_role != CFXSyncNodeRole::LEADER ||
+          peer.transport != CFXSyncTransportKind::UDP) {
+        continue;
+      }
+      sent = this->send_packet_to_peer_(peer, packet) || sent;
+    }
+  }
+  return this->send_packet_to_(BROADCAST_MAC, packet) || sent;
 }
 
 bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,

@@ -618,6 +618,7 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("void set_local_light_input(bool enabled)", header)
         self.assertIn("bool local_light_input_{false};", header)
         self.assertIn("bool send_satellite_local_state_();", header)
+        self.assertIn("bool send_satellite_state_packet_(std::vector<uint8_t> &packet);", header)
         self.assertIn("CFXSyncLightListener light_listener_{this};", header)
         listener_index = header.index("class CFXSyncLightListener")
         enable_switch_index = header.index("class CFXSyncEnableSwitch")
@@ -647,10 +648,22 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
                 r"bool CFXSyncComponent::send_satellite_local_state_\(\)"
                 r".*?capture_light_snapshot\(\*light\).*?"
                 r"CFXSyncPacketCodec::encode_state_snapshot"
-                r".*?this->send_packet_to_\(BROADCAST_MAC, packet\)",
+                r".*?this->send_satellite_state_packet_\(packet\)",
                 re.DOTALL,
             ),
         )
+        sender = re.search(
+            r"bool CFXSyncComponent::send_satellite_state_packet_"
+            r".*?\n\}\n\nbool CFXSyncComponent::send_state_ack_",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(sender)
+        sender = sender.group(0)
+        self.assertIn("peer.node_role != CFXSyncNodeRole::LEADER", sender)
+        self.assertIn("peer.transport != CFXSyncTransportKind::UDP", sender)
+        self.assertIn("this->send_packet_to_peer_(peer, packet)", sender)
+        self.assertIn("this->send_packet_to_(BROADCAST_MAC, packet)", sender)
         self.assertIn(
             "this->handle_satellite_state_proposal_(*peer, packet)", source
         )
@@ -666,6 +679,22 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("CFXSyncPacketCodec::CAP_LIGHT_FOLLOWER", handler)
         self.assertIn("this->apply_remote_state_(packet)", handler)
         self.assertIn("this->send_state_()", handler)
+
+    def test_satellite_local_light_input_suppresses_remote_apply_echo(self):
+        source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->role_ == CFXSyncRole::SATELLITE && applied\)"
+                r".*?this->observed_state_ = capture_light_snapshot"
+                r"\(\*this->lights_\[0\]\);"
+                r".*?this->has_observed_state_ = true;",
+                re.DOTALL,
+            ),
+        )
 
     def test_satellite_logs_apply_only_when_state_performs(self):
         source = (ROOT / "components" / "cfx_sync" / "cfx_sync.cpp").read_text(

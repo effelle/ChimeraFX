@@ -332,6 +332,7 @@ class CFXSyncComponent : public Component {
   bool send_sync_request_to_(const std::array<uint8_t, 6> &mac);
   bool send_hello_();
   bool send_satellite_local_state_();
+  bool send_satellite_state_packet_(std::vector<uint8_t> &packet);
   bool send_input_packet_(std::vector<uint8_t> &packet);
   bool send_input_state_(bool pressed, bool maintained, bool toggle,
                          CFXSyncInputAction action =
