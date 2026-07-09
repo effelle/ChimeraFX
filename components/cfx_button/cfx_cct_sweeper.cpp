@@ -184,15 +184,23 @@ void CFXCCTSweeper::start_sweep_(uint32_t now) {
   this->sweep_end_ms_ = now;
   this->sweep_started_ms_ = now;
   this->active_sweep_target_ = this->sweep_target_();
-  this->emit_sync_color_(this->active_sweep_target_, this->sweep_time_ms_);
   this->sweep_targets_.clear();
   this->sweep_targets_.reserve(this->lights_.size());
+  uint32_t sync_duration = 0;
   for (auto *state : this->lights_) {
     const CFXColor start = this->sweep_start_color_(state);
     const uint32_t duration =
         this->sweep_duration_ms_(start, this->active_sweep_target_);
     this->sweep_targets_.push_back({true, start, duration});
+    sync_duration = std::max(sync_duration, duration);
     this->sweep_end_ms_ = std::max(this->sweep_end_ms_, now + duration);
+  }
+  this->emit_sync_color_(this->active_sweep_target_, sync_duration);
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    const uint32_t duration =
+        i < this->sweep_targets_.size() ? this->sweep_targets_[i].duration_ms
+                                        : sync_duration;
+    auto *state = this->lights_[i];
     this->apply_color_(state, this->active_sweep_target_, duration);
   }
 }
@@ -332,6 +340,7 @@ void CFXCCTSweeper::emit_sync_color_(const CFXColor &color,
                                      uint32_t transition_ms) {
   const CFXColor c = this->clamp_color_(color);
   const CCTRGBCommand rgb = split_cct_rgb(c.red, c.green, c.blue);
+  const bool white_only = use_white_only_mode(c.red, c.green, c.blue, c.white);
   cfx_button::CFXButtonSyncCommand command;
   command.kind = cfx_button::CFXButtonSyncKind::CCT;
   command.pressed = true;
@@ -346,7 +355,11 @@ void CFXCCTSweeper::emit_sync_color_(const CFXColor &color,
   if (transition_ms != USE_DEFAULT_TRANSITION) {
     command.has_ramp = true;
     command.ramp_ms = static_cast<uint16_t>(
-        std::min<uint32_t>(transition_ms, UINT16_MAX));
+        std::min<uint32_t>(cct_transition_ms(white_only, transition_ms),
+                           UINT16_MAX));
+  } else if (white_only) {
+    command.has_ramp = true;
+    command.ramp_ms = 0;
   }
   for (auto &callback : this->sync_command_callbacks_) {
     callback(command);

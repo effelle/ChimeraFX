@@ -3747,6 +3747,33 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("SWEEP_MEASURED_MAX_DRIFT", cct_source)
         self.assertIn("native_white_only", cct_source)
         self.assertIn("supports_rgb_white ? light::ColorMode::RGB_WHITE", cct_source)
+        self.assertNotIn(
+            "this->emit_sync_color_(this->active_sweep_target_, this->sweep_time_ms_);",
+            cct_source,
+        )
+        self.assertIn("uint32_t sync_duration = 0;", cct_source)
+        self.assertIn("sync_duration = std::max(sync_duration, duration);", cct_source)
+        self.assertIn(
+            "this->emit_sync_color_(this->active_sweep_target_, sync_duration);",
+            cct_source,
+        )
+        self.assertIn(
+            "const bool white_only = use_white_only_mode(c.red, c.green, c.blue, c.white);",
+            cct_source,
+        )
+        self.assertIn(
+            "std::min<uint32_t>(cct_transition_ms(white_only, transition_ms),",
+            cct_source,
+        )
+        self.assertRegex(
+            cct_source,
+            re.compile(
+                r"else if \(white_only\) \{\s*"
+                r"command\.has_ramp = true;\s*"
+                r"command\.ramp_ms = 0;",
+                re.DOTALL,
+            ),
+        )
 
     def test_light_command_packets_are_leader_only(self):
         source = SOURCE.read_text(encoding="utf-8")
