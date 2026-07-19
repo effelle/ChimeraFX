@@ -12,10 +12,17 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 23
+CFX_LIGHT_SCHEMA_REV = 24
 
 import esphome.codegen as cg
-from esphome.components import light, event, sensor, select, text_sensor
+from esphome.components import (
+    event,
+    light,
+    power_supply,
+    select,
+    sensor,
+    text_sensor,
+)
 import esphome.config_validation as cv
 import esphome.core as core
 import logging
@@ -40,6 +47,7 @@ from esphome.const import (
     CONF_NUMBER,
     CONF_OUTPUT_ID,
     CONF_PIN,
+    CONF_POWER_SUPPLY,
     CONF_RED,
     CONF_UPDATE_INTERVAL,
     CONF_WHITE,
@@ -1355,6 +1363,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SACRIFICIAL_PIXEL, default=False): cv.boolean,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
+            cv.Optional(CONF_POWER_SUPPLY): cv.use_id(power_supply.PowerSupply),
             # Auto-controls (cfx_control entities generated from cfx_light)
             cv.Optional("controls", default=True): cv.boolean,
             cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
@@ -1865,6 +1874,9 @@ async def to_code(config):
 
     # --- Hardware configuration (always) ---
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
+    if CONF_POWER_SUPPLY in config:
+        supply = await cg.get_variable(config[CONF_POWER_SUPPLY])
+        cg.add(var.set_power_supply(supply))
     cg.add(var.set_sacrificial_pixel(config[CONF_SACRIFICIAL_PIXEL]))
     chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))

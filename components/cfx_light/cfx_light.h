@@ -13,6 +13,9 @@
 #include "esphome/components/light/light_output.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/light/light_transformer.h"
+#ifdef USE_POWER_SUPPLY
+#include "esphome/components/power_supply/power_supply.h"
+#endif
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
@@ -269,6 +272,12 @@ public:
   // Config setters (called by light.py codegen)
   void set_pin(uint8_t pin) { this->pin_ = pin; }
   void set_num_leds(uint16_t num_leds) { this->num_leds_ = num_leds; }
+#ifdef USE_POWER_SUPPLY
+  void set_power_supply(power_supply::PowerSupply *supply) {
+    this->power_supply_requester_.set_parent(supply);
+    this->has_power_supply_ = supply != nullptr;
+  }
+#endif
   void set_chipset(ChimeraChipset chipset) { this->chipset_ = chipset; }
   void set_rgb_order(RGBOrder order) { this->rgb_order_ = order; }
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
@@ -505,6 +514,13 @@ protected:
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
   void release_outro_callback_storage_();
+#ifdef USE_POWER_SUPPLY
+  bool has_power_demand_() const;
+  bool power_transmit_in_flight_() const;
+  void request_power_supply_();
+  void schedule_power_supply_release_();
+  void service_power_supply_release_();
+#endif
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
   bool should_scrub_segment_(light::LightState *state) const;
@@ -666,6 +682,12 @@ protected:
   uint32_t spi_last_flush_ms_{0};
 
   CFXPowerManager *power_manager_{nullptr};
+#ifdef USE_POWER_SUPPLY
+  power_supply::PowerSupplyRequester power_supply_requester_{};
+  bool has_power_supply_{false};
+  bool power_supply_requested_{false};
+  bool power_supply_release_pending_{false};
+#endif
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};

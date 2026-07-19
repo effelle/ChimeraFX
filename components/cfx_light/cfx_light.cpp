@@ -2617,7 +2617,78 @@ void CFXLightOutput::on_shutdown() {
     this->force_parallel_shutdown_blackout_();
   }
   this->high_freq_loop_requester_.stop();
+#ifdef USE_POWER_SUPPLY
+  this->power_supply_release_pending_ = false;
+  if (this->power_supply_requested_) {
+    this->power_supply_requester_.unrequest();
+    this->power_supply_requested_ = false;
+  }
+#endif
 }
+
+#ifdef USE_POWER_SUPPLY
+bool CFXLightOutput::has_power_demand_() const {
+  if (this->has_outro()) {
+    return true;
+  }
+  auto state_needs_power = [](const light::LightState *state) {
+    return state != nullptr &&
+           (state->remote_values.is_on() ||
+            state->current_values.get_state() > 0.0f);
+  };
+  if (state_needs_power(this->master_light_state_)) {
+    return true;
+  }
+  for (const auto *state : this->segment_light_states_) {
+    if (state_needs_power(state)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CFXLightOutput::power_transmit_in_flight_() const {
+  if (this->rmt_tx_in_flight_ || this->spi_tx_in_flight_) {
+    return true;
+  }
+  if (this->transport_ == TRANSPORT_PARALLEL) {
+    const auto *group = parallel_group_for_output_(this);
+    return group != nullptr && group->tx_in_flight_count > 0;
+  }
+  return false;
+}
+
+void CFXLightOutput::request_power_supply_() {
+  if (!this->has_power_supply_ || this->power_supply_requested_) {
+    return;
+  }
+  this->power_supply_requester_.request();
+  this->power_supply_requested_ = true;
+  this->power_supply_release_pending_ = false;
+}
+
+void CFXLightOutput::schedule_power_supply_release_() {
+  if (this->power_supply_requested_ && !this->has_power_demand_()) {
+    this->power_supply_release_pending_ = true;
+  }
+}
+
+void CFXLightOutput::service_power_supply_release_() {
+  if (!this->power_supply_release_pending_) {
+    return;
+  }
+  if (this->has_power_demand_()) {
+    this->power_supply_release_pending_ = false;
+    return;
+  }
+  if (this->power_transmit_in_flight_()) {
+    return;
+  }
+  this->power_supply_requester_.unrequest();
+  this->power_supply_requested_ = false;
+  this->power_supply_release_pending_ = false;
+}
+#endif
 
 // --- Timing Configuration ---
 
@@ -6100,6 +6171,11 @@ void CFXLightOutput::on_master_update() {
   if (this->master_light_state_ == nullptr) {
     return;
   }
+#ifdef USE_POWER_SUPPLY
+  if (this->master_light_state_->remote_values.is_on()) {
+    this->request_power_supply_();
+  }
+#endif
   this->wake_mono_idle_light_state_(this->master_light_state_);
 
   this->maybe_apply_turn_on_defaults_(this->master_light_state_,
@@ -6164,6 +6240,14 @@ void CFXLightOutput::on_segment_update() {
   if (this->segment_light_states_.empty()) {
     return;
   }
+#ifdef USE_POWER_SUPPLY
+  for (const auto *state : this->segment_light_states_) {
+    if (state != nullptr && state->remote_values.is_on()) {
+      this->request_power_supply_();
+      break;
+    }
+  }
+#endif
   if (this->has_active_parent_owned_segments_()) {
     this->refresh_parent_owned_segment_slots_();
   }
@@ -6410,6 +6494,9 @@ void CFXLightOutput::loop() {
   }
 
 segment_flush_done:
+#ifdef USE_POWER_SUPPLY
+  this->service_power_supply_release_();
+#endif
   this->update_high_frequency_loop_request_();
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
@@ -6750,6 +6837,11 @@ void CFXLightOutput::request_segment_solid_repaint_flush(
 // Encapsulates the transport-specific DMA fire sequence so the barrier can
 // trigger it on any output without knowing its transport type.
 void CFXLightOutput::commit_transmit_() {
+#ifdef USE_POWER_SUPPLY
+  if (this->has_power_demand_()) {
+    this->request_power_supply_();
+  }
+#endif
   if (this->transport_ == TRANSPORT_SPI) {
     esphome::App.feed_wdt();
     this->flush_spi_();
@@ -6777,6 +6869,9 @@ void CFXLightOutput::commit_transmit_() {
     g_rmt_launch_seq++;
     this->flush_rmt_();
   }
+#ifdef USE_POWER_SUPPLY
+  this->schedule_power_supply_release_();
+#endif
 }
 
 void CFXLightOutput::write_state(light::LightState *state) {
@@ -7645,6 +7740,10 @@ void CFXLightOutput::dump_config() {
   }
 
   // Segment layout
+#ifdef USE_POWER_SUPPLY
+  ESP_LOGCONFIG(TAG, "  Power Supply: %s",
+                this->has_power_supply_ ? "configured" : "none");
+#endif
   if (!this->segment_defs_.empty()) {
     ESP_LOGCONFIG(TAG, "  Segments: %u", this->segment_defs_.size());
     for (size_t i = 0; i < this->segment_defs_.size(); i++) {
