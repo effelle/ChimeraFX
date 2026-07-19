@@ -3452,7 +3452,7 @@ class ESPNowAPITests(unittest.TestCase):
             "if (packet.has_color && apply_visual_state)",
             apply_light_source,
         )
-        self.assertIn("call.set_brightness(", apply_light_source)
+        self.assertIn("call.set_brightness_if_supported(", apply_light_source)
         self.assertIn("call.set_color_brightness(", apply_light_source)
         self.assertIn("call.set_rgb(", apply_light_source)
         self.assertIn("call.set_white(", apply_light_source)
@@ -3796,6 +3796,29 @@ class ESPNowAPITests(unittest.TestCase):
                 r"apply_light_command_to_leader_",
                 re.DOTALL,
             ),
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(predicted_sent\) \{\s*"
+                r".*?RemoteApplyGuard guard\(this->applying_remote_state_\);"
+                r"\s*applied = this->apply_light_command_to_leader_\(packet\);",
+                re.DOTALL,
+            ),
+            "a predicted STATE must suppress the synchronous leader listener "
+            "so it cannot replace the shared ramp with a default transition",
+        )
+        self.assertRegex(
+            source,
+            re.compile(
+                r"bool CFXSyncComponent::predict_leader_state_from_command_\(.*?"
+                r"COMMAND_COLD_WARM_WHITE.*?"
+                r"COMMAND_COLOR_TEMPERATURE.*?"
+                r"return has_action;",
+                re.DOTALL,
+            ),
+            "CCT prediction must use the same guarded authoritative fanout "
+            "as brightness commands",
         )
         self.assertIn("timing.has_transition || timing.has_ramp", source)
         self.assertNotIn("defer_to_leader_apply", source)

@@ -1678,7 +1678,18 @@ bool CFXSyncComponent::handle_remote_light_command_(
     }
   }
 
-  const bool applied = this->apply_light_command_to_leader_(packet);
+  bool applied = false;
+  if (predicted_sent) {
+    // LightCall::perform() notifies remote-value listeners synchronously. The
+    // predicted authoritative STATE is already on the wire, so suppress the
+    // listener while applying the same command locally; otherwise the leader
+    // immediately emits a second STATE with its default transition and
+    // replaces the shared ramp on every receiver.
+    RemoteApplyGuard guard(this->applying_remote_state_);
+    applied = this->apply_light_command_to_leader_(packet);
+  } else {
+    applied = this->apply_light_command_to_leader_(packet);
+  }
   if (predicted_sent && applied) {
     this->has_observed_state_ = true;
     this->observed_state_ = predicted_snapshot;
@@ -3007,7 +3018,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
     const float desired_brightness = packet.brightness / 255.0f;
     if (std::fabs(light->remote_values.get_brightness() -
                   desired_brightness) > (0.5f / 255.0f)) {
-      call.set_brightness(desired_brightness);
+      call.set_brightness_if_supported(desired_brightness);
       has_action = true;
     }
   }
@@ -3104,7 +3115,7 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
   }
   if (packet.has_brightness && apply_visual_state &&
       light_supports_brightness(*light)) {
-    call.set_brightness(packet.brightness / 255.0f);
+    call.set_brightness_if_supported(packet.brightness / 255.0f);
   }
   if (packet.has_color && apply_visual_state) {
     CFXSyncLightSnapshot snapshot;

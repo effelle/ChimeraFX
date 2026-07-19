@@ -649,7 +649,9 @@ class UDPTransportConfigTests(unittest.IsolatedAsyncioTestCase):
             source,
         )
         self.assertIn("light->remote_values.get_brightness()", source)
-        self.assertIn("call.set_brightness(desired_brightness);", source)
+        self.assertIn(
+            "call.set_brightness_if_supported(desired_brightness);", source
+        )
         self.assertIn("light_supports_rgb_white(*light)", source)
         self.assertIn("light_supports_rgb(*light)", source)
         self.assertIn("convert_color_for_follower(snapshot, true)", source)
