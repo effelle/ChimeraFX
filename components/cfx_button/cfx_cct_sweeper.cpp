@@ -250,7 +250,7 @@ CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
     progress = static_cast<float>(now - this->sweep_started_ms_) /
                static_cast<float>(target.duration_ms);
   }
-  progress = std::max(0.0f, std::min(1.0f, progress));
+  progress = this->smoothed_sweep_progress_(progress);
   const auto blend = [progress](float start, float end) {
     return start + ((end - start) * progress);
   };
@@ -258,6 +258,11 @@ CFXColor CFXCCTSweeper::sweep_color_at_(const SweepTarget &target,
           blend(target.start.green, this->active_sweep_target_.green),
           blend(target.start.blue, this->active_sweep_target_.blue),
           blend(target.start.white, this->active_sweep_target_.white)};
+}
+
+float CFXCCTSweeper::smoothed_sweep_progress_(float progress) const {
+  const float x = std::max(0.0f, std::min(1.0f, progress));
+  return x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f);
 }
 
 bool CFXCCTSweeper::measured_sweep_color_(light::LightState *state,

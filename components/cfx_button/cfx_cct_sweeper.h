@@ -71,6 +71,7 @@ class CFXCCTSweeper : public Component {
   void finish_sweep_();
   void freeze_sweep_();
   CFXColor sweep_color_at_(const SweepTarget &target, uint32_t now) const;
+  float smoothed_sweep_progress_(float progress) const;
   bool measured_sweep_color_(light::LightState *state,
                              const CFXColor &estimated,
                              CFXColor &measured) const;

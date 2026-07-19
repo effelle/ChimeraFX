@@ -3746,6 +3746,13 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("bool measured_sweep_color_", cct_header)
         self.assertIn("state->current_values", cct_source)
         self.assertIn("SWEEP_MEASURED_MAX_DRIFT", cct_source)
+        self.assertIn("smoothed_sweep_progress_", cct_header)
+        self.assertIn(
+            "progress = this->smoothed_sweep_progress_(progress);", cct_source
+        )
+        self.assertIn(
+            "x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f)", cct_source
+        )
         self.assertIn("native_white_only", cct_source)
         self.assertIn("supports_rgb_white ? light::ColorMode::RGB_WHITE", cct_source)
         self.assertNotIn(
