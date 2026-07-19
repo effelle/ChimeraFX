@@ -1476,9 +1476,14 @@ bool CFXSyncComponent::send_light_command_(
     ESP_LOGW(TAG, "CFX Sync light command could not be encoded");
     return false;
   }
-  ESP_LOGV(TAG, "Sending CFX Sync resolved command kind=%u mask=%04X",
+  ESP_LOGV(TAG,
+           "Sending CFX Sync resolved command kind=%u mask=%04X "
+           "brightness=%u ramp=%ums flags=%02X",
            static_cast<unsigned>(packet.command_kind),
-           static_cast<unsigned>(packet.command_mask));
+           static_cast<unsigned>(packet.command_mask),
+           static_cast<unsigned>(packet.command_brightness),
+           static_cast<unsigned>(packet.command_ramp_ms),
+           static_cast<unsigned>(packet.command_flags));
   const bool sent = this->send_input_packet_(wire_packet);
   if (sent && this->use_udp_transport_()) {
     this->udp_input_sent_++;
@@ -1659,10 +1664,7 @@ bool CFXSyncComponent::handle_remote_light_command_(
   CFXSyncLightSnapshot predicted_snapshot;
   CFXSyncEffectState predicted_effect;
   CFXSyncControlState predicted_controls;
-  const bool defer_to_leader_apply =
-      packet.command_kind == CFXSyncCommandKind::CCT;
-  if (!defer_to_leader_apply && leader != nullptr &&
-      !this->effect_catalogs_.empty()) {
+  if (leader != nullptr && !this->effect_catalogs_.empty()) {
     predicted_snapshot = capture_light_snapshot(*leader);
     CFXSyncTimingState predicted_timing;
     if (this->predict_leader_state_from_command_(
@@ -1815,13 +1817,18 @@ bool CFXSyncComponent::apply_light_command_to_leader_(
       directional;
 
   if (dimmer_release) {
+    const bool has_commanded_brightness =
+        (packet.command_mask & CFXSyncPacketCodec::COMMAND_BRIGHTNESS) != 0;
     const float brightness =
-        leader->current_values.is_on()
-            ? std::max(0.0f,
-                       std::min(1.0f,
-                                leader->current_values.get_brightness() *
-                                    leader->current_values.get_state()))
-            : leader->remote_values.get_brightness();
+        has_commanded_brightness
+            ? packet.command_brightness / 255.0f
+            : (leader->current_values.is_on()
+                   ? std::max(0.0f,
+                              std::min(
+                                  1.0f,
+                                  leader->current_values.get_brightness() *
+                                      leader->current_values.get_state()))
+                   : leader->remote_values.get_brightness());
     call.set_transition_length(0);
     call.set_state(leader->remote_values.is_on());
     if (light_supports_brightness(*leader)) {
@@ -3095,7 +3102,8 @@ bool CFXSyncComponent::apply_remote_state_to_light_(
   if (packet.has_power) {
     call.set_state(packet.power);
   }
-  if (packet.has_brightness && apply_visual_state) {
+  if (packet.has_brightness && apply_visual_state &&
+      light_supports_brightness(*light)) {
     call.set_brightness(packet.brightness / 255.0f);
   }
   if (packet.has_color && apply_visual_state) {

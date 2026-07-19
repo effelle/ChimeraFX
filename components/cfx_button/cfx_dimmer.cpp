@@ -11,6 +11,11 @@ namespace cfx_dimmer {
 
 static const char *const TAG = "cfx_dimmer";
 
+static uint8_t to_u8_(float value) {
+  value = std::max(0.0f, std::min(1.0f, value));
+  return static_cast<uint8_t>((value * 255.0f) + 0.5f);
+}
+
 void CFXDimmer::press() {
   if (this->pressed_ ||
       this->directional_press_ != DirectionalPress::NONE) {
@@ -188,7 +193,17 @@ void CFXDimmer::start_ramp_(uint32_t now, bool forced_direction_up,
     if (!manual && duration != 0) {
       publish_light_ramp_hint(state, now + duration);
     }
-    this->apply_brightness_(state, manual ? start : target,
+  }
+  this->emit_sync_ramp_(target, this->ramp_end_ms_ - now, true);
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    const bool manual = i < this->ramp_manual_.size() && this->ramp_manual_[i];
+    const float start = i < this->ramp_start_brightness_.size()
+                            ? this->ramp_start_brightness_[i]
+                            : target;
+    const uint32_t duration = i < this->ramp_durations_ms_.size()
+                                  ? this->ramp_durations_ms_[i]
+                                  : 0;
+    this->apply_brightness_(this->lights_[i], manual ? start : target,
                             manual ? 0 : duration);
   }
   this->service_manual_ramp_(now);
@@ -239,6 +254,7 @@ void CFXDimmer::finish_ramp_() {
   this->ramping_ = false;
   this->ramp_finished_ = true;
   const float target = this->ramp_target_brightness_();
+  this->emit_sync_ramp_(target, 0, false);
   for (auto *state : this->lights_) {
     this->apply_brightness_(state, target, 0);
   }
@@ -251,9 +267,14 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
   if (!this->ramping_) {
     return;
   }
+  std::vector<float> frozen_brightness;
+  frozen_brightness.reserve(this->lights_.size());
+  float frozen_total = 0.0f;
+  size_t frozen_count = 0;
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *state = this->lights_[i];
     if (state == nullptr) {
+      frozen_brightness.push_back(0.0f);
       continue;
     }
     const float estimated = this->ramp_current_brightness_(i, now);
@@ -262,6 +283,9 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
         this->measured_ramp_brightness_(state, i, now, measured);
     const float sampled = this->freeze_brightness_(state, i, now);
     const float current = this->clamp_brightness_(sampled);
+    frozen_brightness.push_back(current);
+    frozen_total += current;
+    frozen_count++;
     const float start = i < this->ramp_start_brightness_.size()
                             ? this->ramp_start_brightness_[i]
                             : current;
@@ -278,8 +302,17 @@ void CFXDimmer::freeze_ramp_(uint32_t now) {
              static_cast<unsigned>(elapsed), static_cast<unsigned>(duration),
              start, this->ramp_target_brightness_(), estimated, measured,
              sampled, current);
+  }
+  if (frozen_count != 0) {
+    this->emit_sync_ramp_(frozen_total / frozen_count, 0, false);
+  }
+  for (size_t i = 0; i < this->lights_.size(); i++) {
+    auto *state = this->lights_[i];
+    if (state == nullptr || i >= frozen_brightness.size()) {
+      continue;
+    }
     publish_light_ramp_duration_hint(state, 0);
-    this->apply_brightness_(state, current, 0);
+    this->apply_brightness_(state, frozen_brightness[i], 0);
   }
   this->ramping_ = false;
   this->ramp_finished_ = true;
@@ -359,6 +392,7 @@ void CFXDimmer::apply_color_values_(
 }
 
 void CFXDimmer::turn_on_targets_() {
+  this->emit_sync_power_(true);
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *state = this->lights_[i];
     if (state == nullptr) {
@@ -388,6 +422,7 @@ void CFXDimmer::turn_on_targets_() {
 }
 
 void CFXDimmer::turn_off_targets_() {
+  this->emit_sync_power_(false);
   for (size_t i = 0; i < this->lights_.size(); i++) {
     auto *state = this->lights_[i];
     if (state == nullptr) {
@@ -541,6 +576,40 @@ bool CFXDimmer::target_has_effect_(light::LightState *state) const {
 float CFXDimmer::clamp_brightness_(float value) const {
   return std::max(this->min_brightness_,
                   std::min(this->max_brightness_, value));
+}
+
+void CFXDimmer::emit_sync_ramp_(float brightness, uint32_t ramp_ms,
+                                bool pressed) {
+  if (this->sync_command_callbacks_.empty()) {
+    return;
+  }
+  cfx_button::CFXButtonSyncCommand command;
+  command.kind = cfx_button::CFXButtonSyncKind::DIMMER;
+  command.pressed = pressed;
+  command.has_brightness = true;
+  command.brightness = to_u8_(this->clamp_brightness_(brightness));
+  command.has_ramp = true;
+  command.ramp_ms = static_cast<uint16_t>(
+      std::min<uint32_t>(ramp_ms, UINT16_MAX));
+  command.direction_up = this->ramp_direction_up_;
+  command.direction_down = !this->ramp_direction_up_;
+  for (auto &callback : this->sync_command_callbacks_) {
+    callback(command);
+  }
+}
+
+void CFXDimmer::emit_sync_power_(bool power) {
+  if (this->sync_command_callbacks_.empty()) {
+    return;
+  }
+  cfx_button::CFXButtonSyncCommand command;
+  command.kind = cfx_button::CFXButtonSyncKind::DIMMER;
+  command.pressed = true;
+  command.has_power = true;
+  command.power = power;
+  for (auto &callback : this->sync_command_callbacks_) {
+    callback(command);
+  }
 }
 
 }  // namespace cfx_dimmer

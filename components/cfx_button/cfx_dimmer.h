@@ -1,10 +1,12 @@
 #pragma once
 
+#include "cfx_button_sync_command.h"
 #include "cfx_dimmer_gesture.h"
 #include "esphome/components/light/light_call.h"
 #include "esphome/components/light/light_color_values.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/core/component.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -13,6 +15,9 @@ namespace cfx_dimmer {
 
 class CFXDimmer : public Component {
  public:
+  using SyncCommandCallback =
+      std::function<void(const cfx_button::CFXButtonSyncCommand &command)>;
+
   explicit CFXDimmer(const std::string &id) : id_(id) {}
   void loop() override;
 
@@ -24,6 +29,10 @@ class CFXDimmer : public Component {
   uint32_t get_ramp_time_ms() const { return this->ramp_time_ms_; }
   float get_min_brightness() const { return this->min_brightness_; }
   float get_max_brightness() const { return this->max_brightness_; }
+  bool has_lights() const { return !this->lights_.empty(); }
+  void add_sync_command_callback(SyncCommandCallback callback) {
+    this->sync_command_callbacks_.push_back(callback);
+  }
 
   void press();
   void release();
@@ -81,6 +90,8 @@ class CFXDimmer : public Component {
                            uint32_t now) const;
   bool target_has_effect_(light::LightState *state) const;
   float clamp_brightness_(float value) const;
+  void emit_sync_ramp_(float brightness, uint32_t ramp_ms, bool pressed);
+  void emit_sync_power_(bool power);
 
   std::vector<light::LightState *> lights_;
   std::vector<bool> segment_targets_;
@@ -106,6 +117,7 @@ class CFXDimmer : public Component {
   std::vector<float> ramp_start_brightness_;
   std::vector<uint32_t> ramp_durations_ms_;
   std::vector<bool> ramp_manual_;
+  std::vector<SyncCommandCallback> sync_command_callbacks_;
 };
 
 }  // namespace cfx_dimmer

@@ -43,6 +43,7 @@ class CFXButton : public Component {
   }
   void set_controller(cfx_dimmer::CFXDimmer *controller) {
     this->sync_kind_ = CFXButtonSyncKind::DIMMER;
+    this->dimmer_controller_ = controller;
     this->press_ = [controller]() { controller->press(); };
     this->release_ = [controller]() { controller->release(); };
     this->dimmer_press_up_ = [controller]() { controller->press_up(); };
@@ -52,6 +53,10 @@ class CFXButton : public Component {
     this->dimmer_min_brightness_ = controller->get_min_brightness();
     this->dimmer_max_brightness_ = controller->get_max_brightness();
     this->dimmer_ramp_time_ms_ = controller->get_ramp_time_ms();
+    controller->add_sync_command_callback(
+        [this](const CFXButtonSyncCommand &command) {
+          this->emit_sync_command_(command);
+        });
   }
   void set_controller(cfx_hue_cycler::CFXHueCycler *controller) {
     this->sync_kind_ = CFXButtonSyncKind::HUE;
@@ -120,6 +125,7 @@ class CFXButton : public Component {
   CFXButtonState dimmer_down_state_;
   CFXButtonState remote_dimmer_up_state_;
   CFXButtonState remote_dimmer_down_state_;
+  cfx_dimmer::CFXDimmer *dimmer_controller_{nullptr};
 };
 
 }  // namespace cfx_button

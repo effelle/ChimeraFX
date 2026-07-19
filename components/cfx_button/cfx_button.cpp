@@ -213,6 +213,13 @@ void CFXButton::emit_sync_command_(CFXButtonInputAction action,
       action == CFXButtonInputAction::PRIMARY) {
     return;
   }
+  if (this->sync_kind_ == CFXButtonSyncKind::DIMMER &&
+      this->dimmer_controller_ != nullptr &&
+      this->dimmer_controller_->has_lights()) {
+    // A dimmer with local targets emits the exact command it executed. Keep
+    // this wrapper path for targetless remote controllers only.
+    return;
+  }
 
   const bool pressed = event == CFXButtonEvent::PRESS;
   CFXButtonSyncCommand command;

@@ -3444,9 +3444,10 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertIn("apply_remote_state_", source)
         self.assertIn("if (packet.has_power)", apply_light_source)
         self.assertIn(
-            "if (packet.has_brightness && apply_visual_state)",
+            "if (packet.has_brightness && apply_visual_state &&",
             apply_light_source,
         )
+        self.assertIn("light_supports_brightness(*light)", apply_light_source)
         self.assertIn(
             "if (packet.has_color && apply_visual_state)",
             apply_light_source,
@@ -3505,7 +3506,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertIn(
-            "if (packet.has_brightness && apply_visual_state)",
+            "if (packet.has_brightness && apply_visual_state &&",
             apply_light_source,
         )
         self.assertIn(
@@ -3552,7 +3553,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertIn(
-            "if (packet.has_brightness && apply_visual_state)",
+            "if (packet.has_brightness && apply_visual_state &&",
             apply_light_source,
         )
         self.assertIn(
@@ -3797,16 +3798,7 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
         self.assertIn("timing.has_transition || timing.has_ramp", source)
-        self.assertRegex(
-            source,
-            re.compile(
-                r"const bool defer_to_leader_apply =\s*"
-                r"packet\.command_kind == CFXSyncCommandKind::CCT;.*?"
-                r"if \(!defer_to_leader_apply && leader != nullptr &&.*?"
-                r"predict_leader_state_from_command_",
-                re.DOTALL,
-            ),
-        )
+        self.assertNotIn("defer_to_leader_apply", source)
         self.assertRegex(
             source,
             re.compile(
@@ -3868,7 +3860,8 @@ class ESPNowAPITests(unittest.TestCase):
         self.assertRegex(
             dimmer_source,
             re.compile(
-                r"this->apply_brightness_\(state, manual \? start : target,"
+                r"this->emit_sync_ramp_\(target, this->ramp_end_ms_ - now, true\);.*?"
+                r"this->apply_brightness_\(this->lights_\[i\], manual \? start : target,"
                 r"\s*manual \? 0 : duration\);.*?"
                 r"this->service_manual_ramp_\(now\);",
                 re.DOTALL,
@@ -3959,15 +3952,37 @@ class ESPNowAPITests(unittest.TestCase):
             dimmer_source,
             re.compile(
                 r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
+                r"this->emit_sync_ramp_\(frozen_total / frozen_count, 0, false\);.*?"
                 r"publish_light_ramp_duration_hint"
                 r"\(state, 0\);.*?"
                 r"this->apply_brightness_"
-                r"\(state, current, 0\);",
+                r"\(state, frozen_brightness\[i\], 0\);",
                 re.DOTALL,
             ),
             "release freeze should stop immediately at the sampled brightness "
             "so ESPHome does not run a final visible correction transition",
         )
+
+    def test_cfx_dimmer_emits_resolved_ramp_commands(self):
+        dimmer_header = (
+            ROOT / "components" / "cfx_button" / "cfx_dimmer.h"
+        ).read_text(encoding="utf-8")
+        dimmer_source = CFX_DIMMER_SOURCE.read_text(encoding="utf-8")
+        button_header = CFX_BUTTON_HEADER.read_text(encoding="utf-8")
+        button_source = CFX_BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("add_sync_command_callback", dimmer_header)
+        self.assertIn("emit_sync_ramp_", dimmer_header)
+        self.assertIn(
+            "this->emit_sync_ramp_(target, this->ramp_end_ms_ - now, true);",
+            dimmer_source,
+        )
+        self.assertIn(
+            "this->emit_sync_ramp_(frozen_total / frozen_count, 0, false);",
+            dimmer_source,
+        )
+        self.assertIn("controller->add_sync_command_callback", button_header)
+        self.assertIn("this->dimmer_controller_->has_lights()", button_source)
 
     def test_cfx_dimmer_segments_use_smoothed_fallback_estimate(self):
         button_py = CFX_BUTTON_PY.read_text(encoding="utf-8")
