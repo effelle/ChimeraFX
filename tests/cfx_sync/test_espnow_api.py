@@ -4025,9 +4025,8 @@ class ESPNowAPITests(unittest.TestCase):
             "index < this->segment_targets_.size() && this->segment_targets_[index]",
             dimmer_source,
         )
-        self.assertIn("const bool smooth =", dimmer_source)
         self.assertIn(
-            "smooth ? this->smoothed_ramp_progress_(progress) : progress",
+            "const float shaped_progress = this->smoothed_ramp_progress_(progress)",
             dimmer_source,
         )
         self.assertIn(
@@ -4044,6 +4043,10 @@ class ESPNowAPITests(unittest.TestCase):
             ),
             "virtual segment current_values stay stale during transitions, "
             "so segment releases must not accept measured brightness",
+        )
+        self.assertIn(
+            "const float estimated = this->ramp_current_brightness_(index, now);",
+            dimmer_source,
         )
         self.assertIn(
             "x * x * x * (x * (x * 6.0f - 15.0f) + 10.0f)",

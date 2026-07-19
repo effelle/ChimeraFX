@@ -501,10 +501,7 @@ float CFXDimmer::ramp_current_brightness_(size_t index, uint32_t now) const {
   const uint32_t elapsed = now - this->ramp_started_ms_;
   const float progress =
       std::min(1.0f, static_cast<float>(elapsed) / duration);
-  const bool smooth =
-      index < this->segment_targets_.size() && this->segment_targets_[index];
-  const float shaped_progress =
-      smooth ? this->smoothed_ramp_progress_(progress) : progress;
+  const float shaped_progress = this->smoothed_ramp_progress_(progress);
   return this->clamp_brightness_(start + ((target - start) * shaped_progress));
 }
 
@@ -529,17 +526,16 @@ bool CFXDimmer::measured_ramp_brightness_(light::LightState *state,
     return false;
   }
 
-  const float start = this->ramp_start_brightness_[index];
-  const float target = this->ramp_target_brightness_();
   const uint32_t elapsed = now - this->ramp_started_ms_;
   const float progress =
       std::min(1.0f, static_cast<float>(elapsed) / duration);
-  const float estimated =
-      this->clamp_brightness_(start + ((target - start) * progress));
+  const float estimated = this->ramp_current_brightness_(index, now);
   measured = this->clamp_brightness_(
       state->current_values.get_brightness() *
       state->current_values.get_state());
 
+  const float start = this->ramp_start_brightness_[index];
+  const float target = this->ramp_target_brightness_();
   const float low =
       std::min(start, target) - RAMP_MEASURED_EDGE_EPSILON;
   const float high =
