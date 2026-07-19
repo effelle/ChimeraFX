@@ -616,7 +616,7 @@ class CFXSyncTransportBoundaryTests(unittest.TestCase):
     def test_espnow_callbacks_wrap_source_before_packet_decode(self):
         source = BUS_SOURCE.read_text(encoding="utf-8")
 
-        for callback in ("on_received", "on_receive", "on_broadcasted", "on_broadcast"):
+        for callback in ("on_receive", "on_broadcast"):
             with self.subTest(callback=callback):
                 self.assertRegex(
                     source,
@@ -668,47 +668,33 @@ class ESPNowAPITests(unittest.TestCase):
         )
         return EFFECT_HEADER.read_text(encoding="utf-8")
 
-    def test_uses_version_conditional_receive_api(self):
+    def test_uses_released_2026_7_receive_api(self):
         header = BUS_HEADER.read_text(encoding="utf-8")
         source = BUS_SOURCE.read_text(encoding="utf-8")
 
         self.assertIn('#include "esphome/core/version.h"', header)
         self.assertIn(
-            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
+            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 7, 0)",
             header,
         )
         self.assertIn(
             "public espnow::ESPNowReceivedPacketHandler,\n"
             "      public espnow::ESPNowUnknownPeerHandler,\n"
-            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)\n"
-            "      public espnow::ESPNowBroadcastedHandler",
+            "      public espnow::ESPNowBroadcastHandler",
             header,
         )
-        self.assertIn("bool on_received(", header)
         self.assertIn("bool on_receive(", header)
         self.assertIn("bool on_unknown_peer(", header)
         self.assertIn("bool dispatch_packet(", header)
-        self.assertIn(
-            "#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)",
-            source,
-        )
-        self.assertIn("register_received_handler(this)", source)
+        self.assertIn("using CFXSyncESPNowPacketSize = uint16_t;", header)
+        self.assertIn("using CFXSyncESPNowPacketSize = uint8_t;", header)
+        self.assertNotIn("register_received_handler(this)", source)
         self.assertIn("register_receive_handler(this)", source)
         self.assertIn("register_unknown_peer_handler(this)", source)
-        self.assertIn("CFXSyncBus::on_received(", source)
+        self.assertNotIn("CFXSyncBus::on_received(", source)
         self.assertIn("CFXSyncBus::on_receive(", source)
         self.assertIn("CFXSyncBus::on_unknown_peer(", source)
         self.assertIn("CFXSyncBus::dispatch_packet(", source)
-        self.assertRegex(
-            source,
-            re.compile(
-                r"bool CFXSyncBus::on_received\(.*?\).*?"
-                r"CFXSyncSource source = "
-                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->dispatch_packet\(source, data, size\);",
-                re.DOTALL,
-            ),
-        )
         self.assertRegex(
             source,
             re.compile(
@@ -728,26 +714,16 @@ class ESPNowAPITests(unittest.TestCase):
             ),
         )
 
-    def test_registers_version_conditional_broadcast_handler_for_discovery(self):
+    def test_registers_released_broadcast_handler_for_discovery(self):
         header = BUS_HEADER.read_text(encoding="utf-8")
         source = BUS_SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn("public espnow::ESPNowBroadcastedHandler", header)
+        self.assertNotIn("public espnow::ESPNowBroadcastedHandler", header)
         self.assertIn("public espnow::ESPNowBroadcastHandler", header)
-        self.assertIn("bool on_broadcasted(", header)
+        self.assertNotIn("bool on_broadcasted(", header)
         self.assertIn("bool on_broadcast(", header)
-        self.assertIn("register_broadcasted_handler(this)", source)
+        self.assertNotIn("register_broadcasted_handler(this)", source)
         self.assertIn("register_broadcast_handler(this)", source)
-        self.assertRegex(
-            source,
-            re.compile(
-                r"bool CFXSyncBus::on_broadcasted\(.*?\).*?"
-                r"CFXSyncSource source = "
-                r"CFXSyncSource::from_espnow\(info\.src_addr\);.*?"
-                r"return this->dispatch_packet\(source, data, size\);",
-                re.DOTALL,
-            ),
-        )
         self.assertRegex(
             source,
             re.compile(

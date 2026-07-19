@@ -24,6 +24,10 @@
 namespace esphome {
 namespace chimera_fx {
 
+inline bool select_has_state(const select::Select *value) {
+  return value != nullptr && value->active_index().has_value();
+}
+
 class CFXNumber : public number::Number {
 public:
   void control(float value) override { this->publish_state(value); }
@@ -203,7 +207,7 @@ public:
       runner->setDebug(debug_->state);
     else
       runner->setDebug(global_debug_enabled_);
-    if (palette_ && palette_->has_state() && !runner->sequence_owns_palette_) {
+    if (select_has_state(palette_) && !runner->sequence_owns_palette_) {
       std::string opt_str(palette_->current_option());
       const char *opt_ptr = opt_str.c_str();
       std::string opt = opt_ptr ? opt_ptr : "";

@@ -27,15 +27,19 @@ namespace cfx_sync {
 
 class CFXSyncComponent;
 
+#ifdef USE_ESPNOW
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 7, 0)
+using CFXSyncESPNowPacketSize = uint16_t;
+#else
+using CFXSyncESPNowPacketSize = uint8_t;
+#endif
+#endif
+
 class CFXSyncBus
 #ifdef USE_ESPNOW
     : public espnow::ESPNowReceivedPacketHandler,
       public espnow::ESPNowUnknownPeerHandler,
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-      public espnow::ESPNowBroadcastedHandler
-#else
       public espnow::ESPNowBroadcastHandler
-#endif
 #endif
 {
  public:
@@ -61,21 +65,13 @@ class CFXSyncBus
                                std::forward<Callback>(callback));
   }
 
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-  bool on_received(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                   uint8_t size) override;
-  bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                       const uint8_t *data, uint8_t size) override;
-  bool on_broadcasted(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                      uint8_t size) override;
-#else
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                  uint8_t size) override;
+                  CFXSyncESPNowPacketSize size) override;
   bool on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                       const uint8_t *data, uint8_t size) override;
+                       const uint8_t *data,
+                       CFXSyncESPNowPacketSize size) override;
   bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
-                    uint8_t size) override;
-#endif
+                    CFXSyncESPNowPacketSize size) override;
 #endif
 
   bool begin_udp(uint16_t port);

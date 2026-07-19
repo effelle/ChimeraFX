@@ -1497,7 +1497,7 @@ void CFXAddressableLightEffect::start() {
       std::string pal_name = "";
       select::Select *palette_sel =
           (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
-      if (palette_sel && palette_sel->has_state()) {
+      if (select_has_state(palette_sel)) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = palette_sel->current_option().c_str();
         if (opt != nullptr)
@@ -1568,7 +1568,7 @@ void CFXAddressableLightEffect::start() {
       act_->active_intro_mode = preset.intro_mode;
     } else {
       // 2. YAML/runtime presets override the live UI selectors.
-      if (intro_sel != nullptr && intro_sel->has_state()) {
+      if (select_has_state(intro_sel)) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = intro_sel->current_option().c_str();
         std::string s = opt ? opt : "";
@@ -1863,7 +1863,7 @@ void CFXAddressableLightEffect::stop() {
         act_->active_outro_mode = preset.outro_mode;
       } else {
         // 2. YAML/runtime presets override the live UI selectors.
-      if (out_eff != nullptr && out_eff->has_state()) {
+        if (select_has_state(out_eff)) {
           std::string raw_opt_s(out_eff->current_option());
           const char *raw_opt = raw_opt_s.c_str();
           std::string s = raw_opt ? raw_opt : "";
@@ -4667,7 +4667,7 @@ void CFXAddressableLightEffect::run_controls_() {
         intensity_num->state != act_->autotune_expected_intensity)
       manual_override = true;
 
-    if (is_currently_target && palette_sel && palette_sel->has_state() &&
+    if (is_currently_target && select_has_state(palette_sel) &&
         palette_sel->current_option() != act_->autotune_expected_palette)
       manual_override = true;
 
@@ -4678,7 +4678,7 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   // --- Visualizer: Dynamic Palette Sync ---
-  if (!this->is_virtual_segment_ && palette_sel && palette_sel->has_state()) {
+  if (!this->is_virtual_segment_ && select_has_state(palette_sel)) {
     // audit 2.2: c_str() directly on the reference — no std::string copy
     const char *opt = palette_sel->current_option().c_str();
     std::string current_pal = opt ? opt : "";
@@ -4700,7 +4700,7 @@ void CFXAddressableLightEffect::run_controls_() {
           this->get_light_state()->get_output());
       if (out != nullptr) {
         std::string pal_name = "";
-        if (palette_sel && palette_sel->has_state()) {
+        if (select_has_state(palette_sel)) {
           // audit 2.2: c_str() directly on the reference — no std::string copy
           const char *opt = palette_sel->current_option().c_str();
           if (opt != nullptr)
@@ -4723,7 +4723,7 @@ void CFXAddressableLightEffect::run_controls_() {
     // Helper lambda for Palette Index Lookup
     // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
     auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
-      if (!sel || !sel->has_state())
+      if (!select_has_state(sel))
         return 0;
       // audit 2.2: avoid copying current_option() into a new std::string
       const char *opt = sel->current_option().c_str();
@@ -4982,7 +4982,7 @@ void CFXAddressableLightEffect::run_controls_() {
                 if (seg_c->get_mirror() && seg_c->get_mirror()->has_state())
                   r_mirror = seg_c->get_mirror()->state;
 
-                if (seg_c->get_palette() && seg_c->get_palette()->has_state()) {
+                if (select_has_state(seg_c->get_palette())) {
                   // audit 2.2: check non-empty via c_str() directly —
                   // no intermediate std::string copy needed.
                   const char *opt_ptr =

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-*   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
+*   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.7.0**
 *   **Supported Hardware**:
       *   **ESP32 (Classic)**: Fully supported and still a strong choice for ordinary RMT and SPI nodes, especially when you need several moderate 1-wire outputs.
       *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
@@ -10,6 +10,10 @@
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
       *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
+
+ESPHome 2026.7 uses the native ESP-IDF build toolchain by default on ESP32, including when the Arduino framework is selected. This is the recommended path for ChimeraFX, and the normal `framework: type: esp-idf` configuration below is all you need. Do not add a `toolchain:` option unless you intentionally want to override ESPHome's default.
+
+ESPHome 2026.7 also treats an explicit brightness of `0` as OFF. ChimeraFX already sends ON/OFF separately and preserves the last non-zero brightness. No ChimeraFX YAML change is needed. Only custom lambdas that deliberately set brightness to `0` should be reviewed: a later bare turn-on will use 100% unless that turn-on also provides a brightness.
 
 ---
 

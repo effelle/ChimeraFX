@@ -111,15 +111,9 @@ bool CFXSyncBus::begin_espnow() {
     return false;
   }
   if (!this->espnow_registered_) {
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-    this->espnow_->register_received_handler(this);
-    this->espnow_->register_unknown_peer_handler(this);
-    this->espnow_->register_broadcasted_handler(this);
-#else
     this->espnow_->register_receive_handler(this);
     this->espnow_->register_unknown_peer_handler(this);
     this->espnow_->register_broadcast_handler(this);
-#endif
     this->espnow_registered_ = true;
   }
   const uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF,
@@ -153,43 +147,26 @@ void CFXSyncBus::enable_espnow() {
   this->espnow_->enable();
 }
 
-#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 6, 0)
-bool CFXSyncBus::on_received(const espnow::ESPNowRecvInfo &info,
-                             const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->dispatch_packet(source, data, size);
-}
-
-bool CFXSyncBus::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                                 const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->dispatch_unknown_packet(source, data, size);
-}
-
-bool CFXSyncBus::on_broadcasted(const espnow::ESPNowRecvInfo &info,
-                                const uint8_t *data, uint8_t size) {
-  CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
-  return this->dispatch_packet(source, data, size);
-}
-#else
 bool CFXSyncBus::on_receive(const espnow::ESPNowRecvInfo &info,
-                            const uint8_t *data, uint8_t size) {
+                            const uint8_t *data,
+                            CFXSyncESPNowPacketSize size) {
   CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
   return this->dispatch_packet(source, data, size);
 }
 
 bool CFXSyncBus::on_unknown_peer(const espnow::ESPNowRecvInfo &info,
-                                 const uint8_t *data, uint8_t size) {
+                                 const uint8_t *data,
+                                 CFXSyncESPNowPacketSize size) {
   CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
   return this->dispatch_unknown_packet(source, data, size);
 }
 
 bool CFXSyncBus::on_broadcast(const espnow::ESPNowRecvInfo &info,
-                              const uint8_t *data, uint8_t size) {
+                              const uint8_t *data,
+                              CFXSyncESPNowPacketSize size) {
   CFXSyncSource source = CFXSyncSource::from_espnow(info.src_addr);
   return this->dispatch_packet(source, data, size);
 }
-#endif
 #endif
 
 }  // namespace cfx_sync
