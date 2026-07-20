@@ -13,7 +13,15 @@
 namespace esphome {
 namespace cfx_sync {
 
+static constexpr uint8_t CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 1;
+static constexpr size_t CFX_SYNC_SHARED_TRANSPORT_MTU = 250;
+
 enum class CFXSyncTransportKind : uint8_t { ESPNOW = 0, UDP = 1 };
+
+enum class CFXSyncReceivePath : uint8_t {
+  NORMAL = 0,
+  UNKNOWN_PEER = 1,
+};
 
 struct CFXSyncSource {
   CFXSyncTransportKind transport{CFXSyncTransportKind::ESPNOW};
@@ -50,6 +58,19 @@ struct CFXSyncSource {
     }
     return this->mac.data();
   }
+};
+
+// A consumer for another authenticated protocol sharing the same physical
+// ESP-NOW/UDP owner. Only packets that are not CFX packets are offered here;
+// malformed or unsupported CFX packets remain owned by CFX. The packet buffer
+// is borrowed and remains valid only for the duration of the callback.
+class CFXSyncSharedTransportConsumer {
+ public:
+  virtual ~CFXSyncSharedTransportConsumer() = default;
+  virtual bool on_shared_transport_packet(CFXSyncReceivePath path,
+                                          const CFXSyncSource &source,
+                                          const uint8_t *data,
+                                          size_t size) = 0;
 };
 
 }  // namespace cfx_sync

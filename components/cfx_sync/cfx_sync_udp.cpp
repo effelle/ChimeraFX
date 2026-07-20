@@ -19,7 +19,8 @@ namespace esphome {
 namespace cfx_sync {
 
 static const char *const TAG = "cfx_sync.udp";
-static constexpr size_t UDP_RX_BUFFER_SIZE = 250;
+static constexpr size_t UDP_RX_BUFFER_SIZE =
+    CFX_SYNC_SHARED_TRANSPORT_MTU + 1;
 
 CFXSyncUDPTransport::~CFXSyncUDPTransport() { this->close_(); }
 
@@ -99,6 +100,13 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
     if (packet_size <= 0) {
       return;
     }
+    if (packet_size > static_cast<int>(CFX_SYNC_SHARED_TRANSPORT_MTU)) {
+      ESP_LOGV(TAG, "Dropped oversized UDP datagram: bytes=%d maximum=%u",
+               packet_size,
+               static_cast<unsigned>(CFX_SYNC_SHARED_TRANSPORT_MTU));
+      this->udp_.flush();
+      continue;
+    }
     const int received = this->udp_.read(buffer, sizeof(buffer));
     if (received <= 0) {
       continue;
@@ -125,6 +133,13 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
     if (received == 0) {
       return;
     }
+    if (received >
+        static_cast<ssize_t>(CFX_SYNC_SHARED_TRANSPORT_MTU)) {
+      ESP_LOGV(TAG, "Dropped oversized UDP datagram: bytes>=%u maximum=%u",
+               static_cast<unsigned>(received),
+               static_cast<unsigned>(CFX_SYNC_SHARED_TRANSPORT_MTU));
+      continue;
+    }
 
     CFXSyncSource source =
         CFXSyncSource::from_udp(addr.sin_addr.s_addr, ntohs(addr.sin_port));
@@ -134,9 +149,9 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
 }
 
 bool CFXSyncUDPTransport::send_to_(uint32_t address, uint16_t port,
-                                   const std::vector<uint8_t> &packet) {
+                                   const uint8_t *data, size_t size) {
 #if defined(USE_ESP8266)
-  if (!this->ready_ || packet.empty()) {
+  if (!this->ready_ || data == nullptr || size == 0) {
     return false;
   }
 
@@ -144,10 +159,10 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address, uint16_t port,
   if (!this->udp_.beginPacket(destination, port)) {
     return false;
   }
-  const size_t written = this->udp_.write(packet.data(), packet.size());
-  return written == packet.size() && this->udp_.endPacket() == 1;
+  const size_t written = this->udp_.write(data, size);
+  return written == size && this->udp_.endPacket() == 1;
 #else
-  if (!this->ready_ || this->socket_fd_ < 0 || packet.empty()) {
+  if (!this->ready_ || this->socket_fd_ < 0 || data == nullptr || size == 0) {
     return false;
   }
 
@@ -157,22 +172,27 @@ bool CFXSyncUDPTransport::send_to_(uint32_t address, uint16_t port,
   destination.sin_addr.s_addr = address;
 
   const ssize_t sent =
-      ::sendto(this->socket_fd_, packet.data(), packet.size(), 0,
+      ::sendto(this->socket_fd_, data, size, 0,
                reinterpret_cast<const sockaddr *>(&destination),
                sizeof(destination));
-  return sent == static_cast<ssize_t>(packet.size());
+  return sent == static_cast<ssize_t>(size);
 #endif
 }
 
 bool CFXSyncUDPTransport::send_unicast(uint32_t address, uint16_t port,
-                                       const std::vector<uint8_t> &packet) {
+                                       const uint8_t *data, size_t size) {
   if (address == 0 || port == 0) {
     return false;
   }
-  return this->send_to_(address, port, packet);
+  return this->send_to_(address, port, data, size);
 }
 
-bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
+bool CFXSyncUDPTransport::send_unicast(
+    uint32_t address, uint16_t port, const std::vector<uint8_t> &packet) {
+  return this->send_unicast(address, port, packet.data(), packet.size());
+}
+
+bool CFXSyncUDPTransport::send_broadcast(const uint8_t *data, size_t size) {
 #if defined(USE_ESP8266)
   bool sent = false;
   if (WiFi.status() == WL_CONNECTED) {
@@ -181,18 +201,18 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
     const uint32_t broadcast =
         static_cast<uint32_t>(local_ip) | ~static_cast<uint32_t>(subnet);
     if (broadcast != 0 && broadcast != 0xFFFFFFFFUL) {
-      sent = this->send_to_(broadcast, this->port_, packet);
+      sent = this->send_to_(broadcast, this->port_, data, size);
     }
   }
   const IPAddress broadcast(255, 255, 255, 255);
-  if (!this->ready_ || packet.empty()) {
+  if (!this->ready_ || data == nullptr || size == 0) {
     return sent;
   }
   if (!this->udp_.beginPacket(broadcast, this->port_)) {
     return sent;
   }
-  const size_t written = this->udp_.write(packet.data(), packet.size());
-  return (written == packet.size() && this->udp_.endPacket() == 1) || sent;
+  const size_t written = this->udp_.write(data, size);
+  return (written == size && this->udp_.endPacket() == 1) || sent;
 #else
   bool sent = false;
 
@@ -210,11 +230,16 @@ bool CFXSyncUDPTransport::send_broadcast(const std::vector<uint8_t> &packet) {
     if (subnet_broadcast == 0 || subnet_broadcast == INADDR_BROADCAST) {
       continue;
     }
-    sent = this->send_to_(subnet_broadcast, this->port_, packet) || sent;
+    sent = this->send_to_(subnet_broadcast, this->port_, data, size) || sent;
   }
 
-  return this->send_to_(INADDR_BROADCAST, this->port_, packet) || sent;
+  return this->send_to_(INADDR_BROADCAST, this->port_, data, size) || sent;
 #endif
+}
+
+bool CFXSyncUDPTransport::send_broadcast(
+    const std::vector<uint8_t> &packet) {
+  return this->send_broadcast(packet.data(), packet.size());
 }
 
 }  // namespace cfx_sync

@@ -468,6 +468,59 @@ Use UDP when:
 
 ESP-NOW is usually faster for ESP32-to-ESP32 input sync, especially buttons and dimmers. UDP is more universal, but it may feel slightly slower for button ON/OFF actions.
 
+## Using ChimeraFX with Synchrocast
+
+You can use `cfx_sync` for ChimeraFX lights and Magic Buttons while using
+Synchrocast for another entity, such as a fan, on the same ESPHome device.
+Add both repositories and configure each component normally:
+
+```yaml
+external_components:
+  - source: github://effelle/ChimeraFX@stage
+    refresh: always
+  - source: github://effelle/Synchrocast@stage
+    refresh: always
+
+# ChimeraFX keeps the specialized light and Magic Button profile.
+cfx_sync:
+  id: room_light_sync
+  role: follower
+  lights:
+    - room_light
+  group: living_room_lights
+  key: !secret cfx_sync_key
+  transport: auto
+
+# Synchrocast can register a different domain on the same device.
+synchrocast:
+  id: room_fan_sync
+  role: follower
+  fans:
+    - room_fan
+  group: living_room_fan
+  key: !secret synchrocast_key
+  transport: auto
+```
+
+There is nothing extra to link by ID. When both YAML blocks are present,
+Synchrocast detects `cfx_sync` and attaches to the transport that ChimeraFX
+already owns. It does not create a second UDP socket or a second ESP-NOW owner.
+
+Keep these rules in mind:
+
+- `cfx_sync` remains responsible for starting and managing ESP-NOW or UDP.
+- Synchrocast must use a transport that is active in `cfx_sync`; `auto` is the
+  safest choice for normal configurations.
+- ChimeraFX UDP uses its internal shared port `39580`. It is not a YAML option.
+- The two components may use different groups and keys. ChimeraFX continues to
+  authenticate its own CFX packets. Synchrocast's `key` is currently reserved
+  until its authenticated wire codec is implemented.
+- Merely adding the Synchrocast repository does nothing. Sharing is enabled
+  only when a `synchrocast:` block is also configured on that device.
+
+Synchrocast is currently an early development skeleton. Check its repository
+status before relying on its domains in a finished installation.
+
 ## ESP-NOW And Mesh Wi-Fi
 
 ESP-NOW works only when devices are on the same Wi-Fi channel.
@@ -515,8 +568,11 @@ This is best effort. ESPHome may still reboot a device if Wi-Fi stays down long 
 | `input_mode` | No | `momentary` | Used only when `local_input` is a plain `binary_sensor`. Options: `momentary`, `maintained`, or `toggle`. |
 | `heartbeat` | No | `30s` | Regular state refresh from leader. |
 | `transport` | No | `auto` | `auto`, `espnow`, or `udp`. |
-| `udp_port` | No | `45678` | Change only if another service uses the same port. |
 | `fallback_channel` | No | `6` | Used by ESP-NOW offline fallback. |
+
+When UDP is selected, `cfx_sync` uses its internal shared port `39580`. The
+port is intentionally not configurable so every CFX peer uses the same
+transport contract.
 
 ## Troubleshooting
 

@@ -37,9 +37,63 @@ void CFXSyncBus::register_group(CFXSyncComponent *group) {
   this->groups_[this->group_count_++] = group;
 }
 
-bool CFXSyncBus::begin_udp(uint16_t port) {
-  if (this->udp_.is_ready() && this->udp_port_ == port) {
+bool CFXSyncBus::register_shared_transport_consumer(
+    CFXSyncSharedTransportConsumer *consumer) {
+  if (consumer == nullptr) {
+    return false;
+  }
+  for (size_t i = 0; i < this->shared_transport_consumer_count_; i++) {
+    if (this->shared_transport_consumers_[i] == consumer) {
+      return true;
+    }
+  }
+  if (this->shared_transport_consumer_count_ >=
+      MAX_SHARED_TRANSPORT_CONSUMERS) {
+    ESP_LOGE(TAG, "Maximum shared transport consumer count reached");
+    return false;
+  }
+  this->shared_transport_consumers_[this->shared_transport_consumer_count_++] =
+      consumer;
+  ESP_LOGV(TAG, "Registered shared transport consumer (%u/%u)",
+           static_cast<unsigned>(this->shared_transport_consumer_count_),
+           static_cast<unsigned>(MAX_SHARED_TRANSPORT_CONSUMERS));
+  return true;
+}
+
+bool CFXSyncBus::unregister_shared_transport_consumer(
+    CFXSyncSharedTransportConsumer *consumer) {
+  if (consumer == nullptr) {
+    return false;
+  }
+  for (size_t i = 0; i < this->shared_transport_consumer_count_; i++) {
+    if (this->shared_transport_consumers_[i] != consumer) {
+      continue;
+    }
+    for (size_t j = i + 1; j < this->shared_transport_consumer_count_; j++) {
+      this->shared_transport_consumers_[j - 1] =
+          this->shared_transport_consumers_[j];
+    }
+    this->shared_transport_consumer_count_--;
+    this->shared_transport_consumers_[this->shared_transport_consumer_count_] =
+        nullptr;
+    ESP_LOGV(TAG, "Unregistered shared transport consumer (%u/%u)",
+             static_cast<unsigned>(this->shared_transport_consumer_count_),
+             static_cast<unsigned>(MAX_SHARED_TRANSPORT_CONSUMERS));
     return true;
+  }
+  return false;
+}
+
+bool CFXSyncBus::begin_udp(uint16_t port) {
+  if (this->udp_.is_ready()) {
+    if (this->udp_port_ == port) {
+      return true;
+    }
+    ESP_LOGE(TAG,
+             "Shared UDP transport already owns port %u; refusing port %u",
+             static_cast<unsigned>(this->udp_port_),
+             static_cast<unsigned>(port));
+    return false;
   }
   if (!this->udp_.begin(port)) {
     return false;
@@ -50,13 +104,49 @@ bool CFXSyncBus::begin_udp(uint16_t port) {
 
 void CFXSyncBus::poll() { this->udp_.poll(this); }
 
+bool CFXSyncBus::send_udp(const uint8_t *data, size_t size) {
+  if (data == nullptr || size == 0 ||
+      size > CFX_SYNC_SHARED_TRANSPORT_MTU) {
+    return false;
+  }
+  return this->udp_.send_broadcast(data, size);
+}
+
 bool CFXSyncBus::send_udp(const std::vector<uint8_t> &packet) {
-  return this->udp_.send_broadcast(packet);
+  return this->send_udp(packet.data(), packet.size());
+}
+
+bool CFXSyncBus::send_udp_to(uint32_t address, uint16_t port,
+                             const uint8_t *data, size_t size) {
+  if (data == nullptr || size == 0 ||
+      size > CFX_SYNC_SHARED_TRANSPORT_MTU) {
+    return false;
+  }
+  return this->udp_.send_unicast(address, port, data, size);
 }
 
 bool CFXSyncBus::send_udp_to(uint32_t address, uint16_t port,
                              const std::vector<uint8_t> &packet) {
-  return this->udp_.send_unicast(address, port, packet);
+  return this->send_udp_to(address, port, packet.data(), packet.size());
+}
+
+bool CFXSyncBus::dispatch_shared_transport_packet_(
+    CFXSyncReceivePath path, const CFXSyncSource &source, const uint8_t *data,
+    size_t size) {
+  if (data == nullptr || size == 0 ||
+      size > CFX_SYNC_SHARED_TRANSPORT_MTU) {
+    ESP_LOGV(TAG, "Dropped invalid shared transport packet (%u bytes)",
+             static_cast<unsigned>(size));
+    return false;
+  }
+  for (size_t i = 0; i < this->shared_transport_consumer_count_; i++) {
+    auto *consumer = this->shared_transport_consumers_[i];
+    if (consumer != nullptr &&
+        consumer->on_shared_transport_packet(path, source, data, size)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
@@ -65,7 +155,8 @@ bool CFXSyncBus::dispatch_packet(const CFXSyncSource &source,
   const auto result =
       CFXSyncPacketCodec::peek_group_hash(data, size, packet_group_hash);
   if (result == CFXSyncDecodeResult::NOT_CFX) {
-    return false;
+    return this->dispatch_shared_transport_packet_(
+        CFXSyncReceivePath::NORMAL, source, data, size);
   }
 
   bool handled = false;
@@ -88,7 +179,8 @@ bool CFXSyncBus::dispatch_unknown_packet(const CFXSyncSource &source,
   const auto result =
       CFXSyncPacketCodec::peek_group_hash(data, size, packet_group_hash);
   if (result == CFXSyncDecodeResult::NOT_CFX) {
-    return false;
+    return this->dispatch_shared_transport_packet_(
+        CFXSyncReceivePath::UNKNOWN_PEER, source, data, size);
   }
 
   bool handled = false;
@@ -123,6 +215,7 @@ bool CFXSyncBus::begin_espnow() {
     ESP_LOGV(TAG, "ESP-NOW broadcast peer add skipped: %s",
              esp_err_to_name(result));
   }
+  this->espnow_enabled_ = true;
   return true;
 }
 
@@ -137,6 +230,7 @@ void CFXSyncBus::disable_espnow() {
   if (this->espnow_ == nullptr) {
     return;
   }
+  this->espnow_enabled_ = false;
   this->espnow_->disable();
 }
 
@@ -145,6 +239,7 @@ void CFXSyncBus::enable_espnow() {
     return;
   }
   this->espnow_->enable();
+  this->espnow_enabled_ = true;
 }
 
 bool CFXSyncBus::on_receive(const espnow::ESPNowRecvInfo &info,

@@ -617,7 +617,7 @@ CONFIG_SCHEMA = cv.All(
                 "group and key"
             ),
             cv.Required(CONF_GROUP): _validate_group,
-            cv.Required(CONF_KEY): _validate_key,
+            cv.Required(CONF_KEY): cv.sensitive(_validate_key),
             cv.Optional(
                 CONF_HEARTBEAT, default="30s"
             ): cv.All(

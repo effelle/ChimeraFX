@@ -270,8 +270,6 @@ void CFXSyncComponent::setup() {
   if (this->boot_id_ == 0) {
     this->boot_id_ = 1;
   }
-  this->bus_->register_group(this);
-
   bool transport_started = false;
   if (this->use_udp_transport_()) {
     if (this->transport_ == CFXSyncTransport::CFX_SYNC_TRANSPORT_AUTO) {
@@ -311,6 +309,7 @@ void CFXSyncComponent::setup() {
     this->mark_failed();
     return;
   }
+  this->bus_->register_group(this);
   this->boot_discovery_started_ms_ = millis();
   this->schedule_boot_discovery_();
   if (this->role_ != CFXSyncRole::LEADER) {

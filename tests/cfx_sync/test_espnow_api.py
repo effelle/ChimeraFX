@@ -170,7 +170,7 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             header,
             re.compile(
                 r"bool send_to_\(uint32_t address, uint16_t port,\s*"
-                r"const std::vector<uint8_t> &packet\);",
+                r"const uint8_t \*data,\s*size_t size\);",
                 re.DOTALL,
             ),
         )
@@ -217,14 +217,18 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncUDPTransport::send_broadcast"
-                r"\(const std::vector<uint8_t> &packet\)"
+                r"\(const uint8_t \*data, size_t size\)"
                 r".*?for \(netif \*interface = netif_list;.*?"
                 r"const uint32_t subnet_broadcast = "
                 r"ip->addr \| ~netmask->addr;.*?"
-                r"this->send_to_\(subnet_broadcast, this->port_, packet\).*?"
-                r"return this->send_to_\(INADDR_BROADCAST, this->port_, packet\)",
+                r"this->send_to_\(subnet_broadcast, this->port_, data, size\).*?"
+                r"return this->send_to_\(INADDR_BROADCAST, this->port_, data, size\)",
                 re.DOTALL,
             ),
+        )
+        self.assertIn(
+            "return this->send_broadcast(packet.data(), packet.size());",
+            source,
         )
 
     def test_udp_transport_sends_direct_datagrams_to_learned_peer(self):
@@ -234,7 +238,13 @@ class CFXSyncUDPTransportRuntimeTests(unittest.TestCase):
             "bool CFXSyncUDPTransport::send_unicast(uint32_t address, uint16_t port,",
             source,
         )
-        self.assertIn("return this->send_to_(address, port, packet);", source)
+        self.assertIn(
+            "return this->send_to_(address, port, data, size);", source
+        )
+        self.assertIn(
+            "return this->send_unicast(address, port, packet.data(), packet.size());",
+            source,
+        )
         self.assertIn("destination.sin_port = htons(port);", source)
         self.assertIn("this->udp_.beginPacket(destination, port)", source)
 
@@ -1604,7 +1614,14 @@ class ESPNowAPITests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
-        self.assertIn("return this->udp_.send_unicast(address, port, packet);", bus_source)
+        self.assertIn(
+            "return this->udp_.send_unicast(address, port, data, size);",
+            bus_source,
+        )
+        self.assertIn(
+            "return this->send_udp_to(address, port, packet.data(), packet.size());",
+            bus_source,
+        )
         self.assertRegex(
             header,
             re.compile(
@@ -4319,6 +4336,151 @@ class ESPNowAPITests(unittest.TestCase):
             "renderer",
         ):
             self.assertNotIn(forbidden, texts)
+
+    def test_shared_transport_hook_is_versioned_and_fixed_capacity(self):
+        transport = TRANSPORT_HEADER.read_text(encoding="utf-8")
+        header = BUS_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 1", transport
+        )
+        self.assertIn("enum class CFXSyncReceivePath", transport)
+        self.assertIn("class CFXSyncSharedTransportConsumer", transport)
+        self.assertIn("UNKNOWN_PEER", transport)
+        self.assertIn(
+            "bool register_shared_transport_consumer(", header
+        )
+        self.assertIn(
+            "bool unregister_shared_transport_consumer(", header
+        )
+        self.assertIn("CFX_SYNC_SHARED_TRANSPORT_MTU = 250", transport)
+        self.assertIn("valid only for the duration of the callback", transport)
+        self.assertRegex(
+            header,
+            re.compile(
+                r"MAX_SHARED_TRANSPORT_CONSUMERS = [1-9][0-9]*"
+            ),
+        )
+        self.assertNotIn("std::function", transport)
+
+    def test_only_non_cfx_packets_reach_shared_consumers(self):
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        normal = re.compile(
+            r"dispatch_packet\(.*?peek_group_hash\(data, size, "
+            r"packet_group_hash\);.*?"
+            r"if \(result == CFXSyncDecodeResult::NOT_CFX\) \{.*?"
+            r"CFXSyncReceivePath::NORMAL",
+            re.DOTALL,
+        )
+        unknown = re.compile(
+            r"dispatch_unknown_packet\(.*?peek_group_hash\(data, size, "
+            r"packet_group_hash\);.*?"
+            r"if \(result == CFXSyncDecodeResult::NOT_CFX\) \{.*?"
+            r"CFXSyncReceivePath::UNKNOWN_PEER",
+            re.DOTALL,
+        )
+        self.assertRegex(source, normal)
+        self.assertRegex(source, unknown)
+        self.assertNotRegex(
+            source,
+            re.compile(
+                r"UNSUPPORTED_VERSION.*?dispatch_shared_transport_packet_",
+                re.DOTALL,
+            ),
+        )
+
+    def test_shared_receive_path_enforces_transport_mtu(self):
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        dispatch = re.search(
+            r"bool CFXSyncBus::dispatch_shared_transport_packet_\(.*?\n\}",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(dispatch)
+        self.assertIn("data == nullptr || size == 0", dispatch.group(0))
+        self.assertIn(
+            "size > CFX_SYNC_SHARED_TRANSPORT_MTU", dispatch.group(0)
+        )
+        self.assertIn(
+            "Dropped invalid shared transport packet", dispatch.group(0)
+        )
+
+    def test_shared_bus_exposes_read_only_transport_status(self):
+        header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool has_active_group() const", header)
+        self.assertIn("bool is_espnow_ready() const", header)
+        self.assertIn("espnow_registered_ && this->espnow_enabled_", header)
+        self.assertIn("bool espnow_enabled_{false};", header)
+        self.assertIn("this->espnow_enabled_ = false;", source)
+        self.assertIn("this->espnow_enabled_ = true;", source)
+        self.assertIn("bool is_udp_ready() const", header)
+        self.assertIn("uint16_t udp_port() const", header)
+
+    def test_shared_send_path_accepts_fixed_raw_buffers(self):
+        bus_header = BUS_HEADER.read_text(encoding="utf-8")
+        udp_header = UDP_HEADER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "const uint8_t *mac, const uint8_t *data, size_t size",
+            bus_header,
+        )
+        self.assertIn(
+            "bool send_udp(const uint8_t *data, size_t size);",
+            bus_header,
+        )
+        self.assertIn(
+            "bool send_broadcast(const uint8_t *data, size_t size);",
+            udp_header,
+        )
+        self.assertIn(
+            "const uint8_t *data,\n                    size_t size",
+            udp_header,
+        )
+        self.assertIn("data == nullptr || size == 0", bus_header)
+        self.assertIn("size > CFX_SYNC_SHARED_TRANSPORT_MTU", bus_header)
+
+    def test_shared_consumer_can_be_safely_unregistered(self):
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "CFXSyncBus::unregister_shared_transport_consumer", source
+        )
+        self.assertIn(
+            "this->shared_transport_consumers_[j - 1] =", source
+        )
+        self.assertIn("this->shared_transport_consumer_count_--;", source)
+
+    def test_group_is_advertised_only_after_transport_setup(self):
+        source = SOURCE.read_text(encoding="utf-8")
+
+        register = source.find("this->bus_->register_group(this);")
+        no_transport = source.find("if (!transport_started)")
+        discovery = source.find("this->boot_discovery_started_ms_ = millis();")
+        self.assertGreater(register, no_transport)
+        self.assertLess(register, discovery)
+
+    def test_oversized_udp_datagrams_are_dropped(self):
+        source = UDP_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("CFX_SYNC_SHARED_TRANSPORT_MTU + 1", source)
+        self.assertIn("Dropped oversized UDP datagram", source)
+
+    def test_active_udp_owner_refuses_a_port_change(self):
+        source = BUS_SOURCE.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            re.compile(
+                r"if \(this->udp_\.is_ready\(\)\).*?"
+                r"this->udp_port_ == port.*?return true;.*?"
+                r"refusing port %u.*?return false;",
+                re.DOTALL,
+            ),
+        )
 
 
 if __name__ == "__main__":

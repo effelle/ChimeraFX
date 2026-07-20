@@ -12,6 +12,7 @@
 #include <WiFiUdp.h>
 #endif
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -26,15 +27,18 @@ class CFXSyncUDPTransport {
 
   bool begin(uint16_t port);
   void poll(CFXSyncBus *bus);
+  bool send_broadcast(const uint8_t *data, size_t size);
   bool send_broadcast(const std::vector<uint8_t> &packet);
+  bool send_unicast(uint32_t address, uint16_t port, const uint8_t *data,
+                    size_t size);
   bool send_unicast(uint32_t address, uint16_t port,
                     const std::vector<uint8_t> &packet);
   bool is_ready() const { return this->ready_; }
 
  protected:
   void close_();
-  bool send_to_(uint32_t address, uint16_t port,
-                const std::vector<uint8_t> &packet);
+  bool send_to_(uint32_t address, uint16_t port, const uint8_t *data,
+                size_t size);
 
 #if defined(USE_ESP8266)
   WiFiUDP udp_;

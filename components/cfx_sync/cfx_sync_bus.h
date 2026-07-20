@@ -44,25 +44,47 @@ class CFXSyncBus
 {
  public:
   void register_group(CFXSyncComponent *group);
+  bool register_shared_transport_consumer(
+      CFXSyncSharedTransportConsumer *consumer);
+  bool unregister_shared_transport_consumer(
+      CFXSyncSharedTransportConsumer *consumer);
+  bool has_active_group() const { return this->group_count_ != 0; }
+  bool is_udp_ready() const { return this->udp_.is_ready(); }
+  uint16_t udp_port() const { return this->udp_port_; }
 
 #ifdef USE_ESPNOW
   void set_espnow(espnow::ESPNowComponent *espnow) {
     this->espnow_ = espnow;
   }
   bool has_espnow() const { return this->espnow_ != nullptr; }
+  bool is_espnow_ready() const {
+    return this->espnow_registered_ && this->espnow_enabled_;
+  }
   bool begin_espnow();
   bool add_espnow_peer(const uint8_t *mac);
   void disable_espnow();
   void enable_espnow();
 
   template<typename Callback>
-  esp_err_t send_espnow(const uint8_t *mac, std::vector<uint8_t> &packet,
+  esp_err_t send_espnow(const uint8_t *mac, const uint8_t *data, size_t size,
                         Callback &&callback) {
-    if (this->espnow_ == nullptr) {
+    if (!this->is_espnow_ready()) {
       return ESP_FAIL;
     }
-    return this->espnow_->send(mac, packet,
+    if (mac == nullptr || data == nullptr || size == 0 ||
+        size > CFX_SYNC_SHARED_TRANSPORT_MTU) {
+      return ESP_ERR_INVALID_ARG;
+    }
+    return this->espnow_->send(mac, data, size,
                                std::forward<Callback>(callback));
+  }
+
+  template<typename Callback>
+  esp_err_t send_espnow(const uint8_t *mac,
+                        const std::vector<uint8_t> &packet,
+                        Callback &&callback) {
+    return this->send_espnow(mac, packet.data(), packet.size(),
+                             std::forward<Callback>(callback));
   }
 
   bool on_receive(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
@@ -72,11 +94,16 @@ class CFXSyncBus
                        CFXSyncESPNowPacketSize size) override;
   bool on_broadcast(const espnow::ESPNowRecvInfo &info, const uint8_t *data,
                     CFXSyncESPNowPacketSize size) override;
+#else
+  bool is_espnow_ready() const { return false; }
 #endif
 
   bool begin_udp(uint16_t port);
   void poll();
+  bool send_udp(const uint8_t *data, size_t size);
   bool send_udp(const std::vector<uint8_t> &packet);
+  bool send_udp_to(uint32_t address, uint16_t port, const uint8_t *data,
+                   size_t size);
   bool send_udp_to(uint32_t address, uint16_t port,
                    const std::vector<uint8_t> &packet);
 
@@ -87,9 +114,17 @@ class CFXSyncBus
 
  protected:
   static constexpr size_t MAX_GROUPS = 8;
+  static constexpr size_t MAX_SHARED_TRANSPORT_CONSUMERS = 8;
+
+  bool dispatch_shared_transport_packet_(CFXSyncReceivePath path,
+                                         const CFXSyncSource &source,
+                                         const uint8_t *data, size_t size);
 
   CFXSyncComponent *groups_[MAX_GROUPS]{};
   size_t group_count_{0};
+  CFXSyncSharedTransportConsumer
+      *shared_transport_consumers_[MAX_SHARED_TRANSPORT_CONSUMERS]{};
+  size_t shared_transport_consumer_count_{0};
 
   CFXSyncUDPTransport udp_;
   uint16_t udp_port_{0};
@@ -97,6 +132,7 @@ class CFXSyncBus
 #ifdef USE_ESPNOW
   espnow::ESPNowComponent *espnow_{nullptr};
   bool espnow_registered_{false};
+  bool espnow_enabled_{false};
 #endif
 };
 
