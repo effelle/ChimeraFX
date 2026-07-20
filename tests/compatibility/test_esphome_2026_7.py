@@ -8,6 +8,9 @@ CONTROL_HEADER = ROOT / "components" / "cfx_effect" / "cfx_control.h"
 EFFECT_SOURCE = (
     ROOT / "components" / "cfx_effect" / "cfx_addressable_light_effect.cpp"
 )
+CCT_SOURCE = ROOT / "components" / "cfx_button" / "cfx_cct_sweeper.cpp"
+SCHEDULER_SOURCE = ROOT / "components" / "cfx_effect" / "cfx_scheduler.cpp"
+RUNNER_SOURCE = ROOT / "components" / "cfx_effect" / "CFXRunner.cpp"
 SYNC_BUS_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.h"
 SYNC_BUS_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.cpp"
 SYNC_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
@@ -71,6 +74,34 @@ class ESPHome20267CompatibilityTests(unittest.TestCase):
         self.assertNotIn("heap=%ukB", light)
         self.assertIn('Heap: %" PRIu32 "kB', utils)
         self.assertIn('(%" PRId32', segment)
+
+    def test_native_toolchain_warning_regressions(self):
+        cct = CCT_SOURCE.read_text(encoding="utf-8")
+        scheduler = SCHEDULER_SOURCE.read_text(encoding="utf-8")
+        runner = RUNNER_SOURCE.read_text(encoding="utf-8")
+        light = LIGHT_SOURCE.read_text(encoding="utf-8")
+        effect = EFFECT_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn('transition=%" PRIu32 "ms', cct)
+        self.assertNotIn("transition=%ums", cct)
+        self.assertNotIn("dispatch_us=%u", scheduler)
+        self.assertIn('dispatch_us=%" PRIu32', scheduler)
+        self.assertIn('Entropy=%" PRIu32', runner)
+        self.assertNotIn("pixel_count >= 0", runner)
+        self.assertNotIn("filledPixels >= 0", runner)
+        self.assertGreaterEqual(runner.count("[[maybe_unused]]"), 6)
+        self.assertNotIn('(% " PRIu32', light)
+        self.assertNotIn("rmt_symbols=%u", light)
+        self.assertIn('idx=%" PRId32', light)
+        self.assertGreaterEqual(light.count("[[maybe_unused]]"), 9)
+        self.assertIn('Heap too low to start effect (%" PRIu32', effect)
+        self.assertIn('update_interval=%" PRIu32', effect)
+        self.assertIn('dt=%" PRIu32', effect)
+        self.assertNotIn("brightness > 255u", effect)
+        self.assertNotIn("(int)brightness > 255", effect)
+        self.assertNotIn("(int)brightness < 0", effect)
+        self.assertIn("std::min<uint32_t>(ramp_brightness, 255u)", effect)
+        self.assertIn("std::clamp(pulse_brightness, 0, 255)", effect)
 
     def test_documented_minimum_version_is_2026_7(self):
         installation = INSTALL_DOCS.read_text(encoding="utf-8")

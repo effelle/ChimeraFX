@@ -16,6 +16,7 @@
 #include "esphome/core/hal.h" // For millis_64()
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <cinttypes>
 #include <span>
 
 #include "cfx_event_manager.h"
@@ -955,10 +956,12 @@ void CFXAddressableLightEffect::start() {
         out->trigger_low_ram_warning(this->get_light_state());
       }
       ESP_LOGW("cfx_heap",
-               "[%s] Heap too low to start effect (%u B free, %u B floor) — "
+               "[%s] Heap too low to start effect (%" PRIu32
+               " B free, %" PRIu32 " B floor) — "
                "showing a red 5s warning and forcing the impacted light OFF. "
                "Free RAM before adding more lights/segments.",
-               this->get_name().c_str(), free_heap, CFX_HEAP_FLOOR);
+               this->get_name().c_str(), free_heap,
+               static_cast<uint32_t>(CFX_HEAP_FLOOR));
       return;
     }
   }
@@ -1272,7 +1275,8 @@ void CFXAddressableLightEffect::start() {
   SPIDiagCensus diag_census = collect_spi_diag_census();
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
     ESP_LOGI("chimera_fx",
-             "CFX spi_effect_start[%s] effect_id=%u update_interval=%ums",
+             "CFX spi_effect_start[%s] effect_id=%u update_interval=%" PRIu32
+             "ms",
              act_->cached_runner_name.c_str(), this->effect_id_,
              this->update_interval_);
     ESP_LOGV(
@@ -2799,7 +2803,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
          this->act_->spi_diag_apply_logs == 6)) {
       ESP_LOGV(
           "cfx_seq",
-          "SPI diag heartbeat[%u]: effect=%s act=%p dt=%ums totals(e=%u,se=%u) "
+          "SPI diag heartbeat[%u]: effect=%s act=%p dt=%" PRIu32
+          "ms totals(e=%u,se=%u) "
           "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
           static_cast<unsigned>(this->act_->spi_diag_heartbeat_logs),
           this->act_->cached_runner_name.c_str(), this->act_, delta_ms,
@@ -6623,9 +6628,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       uint32_t phase_dur = duration - p3_end;
       if (phase_dur == 0)
         phase_dur = 1;
-      brightness = (uint8_t)(210u + (phase_t * 45u / phase_dur));
-      if (brightness > 255u)
-        brightness = 255u;
+      const uint32_t ramp_brightness =
+          210u + (phase_t * 45u / phase_dur);
+      brightness = static_cast<uint8_t>(
+          std::min<uint32_t>(ramp_brightness, 255u));
     }
 
     // ── 3. Apply brightness to full strip ────────────────────────────────────
@@ -8151,12 +8157,11 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         period = 1;
       uint8_t t = (uint8_t)((phase_t % period) * 255u / period);
       uint8_t base_b = (uint8_t)(255u - (uint32_t)(norm * 50.0f));
-      brightness = (uint8_t)((int)base_b - (int)amp +
-                             (int)(((uint16_t)cfx::sin8(t) * amp * 2u) >> 8));
-      if ((int)brightness > 255)
-        brightness = 255;
-      if ((int)brightness < 0)
-        brightness = 0;
+      const int pulse_brightness =
+          static_cast<int>(base_b) - static_cast<int>(amp) +
+          static_cast<int>(((uint16_t)cfx::sin8(t) * amp * 2u) >> 8);
+      brightness =
+          static_cast<uint8_t>(std::clamp(pulse_brightness, 0, 255));
     } else if (elapsed < p3_end) {
       // ── Phase 3: Collapse — sparse final flares, mostly dark ──────────────
       const uint32_t SLOT_MS = 40;

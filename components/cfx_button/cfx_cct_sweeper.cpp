@@ -4,6 +4,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 
 namespace esphome {
@@ -401,7 +402,7 @@ void CFXCCTSweeper::apply_color_(light::LightState *state,
                                 : (supports_rgb ? light::ColorMode::RGB
                                                 : light::ColorMode::WHITE));
   ESP_LOGV(TAG,
-           "[%s] command light='%s' mode=%s(%u) transition=%ums "
+           "[%s] command light='%s' mode=%s(%u) transition=%" PRIu32 "ms "
            "RGBW=%.3f/%.3f/%.3f/%.3f color_brightness=%.3f",
            this->id_.c_str(), state->get_name().c_str(),
            color_mode_name(command_mode),

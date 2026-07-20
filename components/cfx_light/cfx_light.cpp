@@ -31,6 +31,7 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
@@ -232,7 +233,7 @@ static CFXParallelGroupRuntime *parallel_group_for_output_(
   return parallel_group_at_(output->get_parallel_group_index());
 }
 
-static uint8_t parallel_configured_group_count_() {
+[[maybe_unused]] static uint8_t parallel_configured_group_count_() {
   uint8_t count = 0;
   for (uint8_t i = 0; i < PARALLEL_MAX_GROUPS; i++) {
     if (g_parallel_groups[i].configured) {
@@ -434,7 +435,9 @@ static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group)
 }
 #endif
 
-static bool parallel_pin_used_(uint8_t pin, const uint8_t *pins, uint8_t count) {
+[[maybe_unused]] static bool parallel_pin_used_(uint8_t pin,
+                                               const uint8_t *pins,
+                                               uint8_t count) {
   for (uint8_t i = 0; i < count; i++) {
     if (pins[i] == pin) {
       return true;
@@ -509,7 +512,8 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
 }
 #endif
 
-static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
+[[maybe_unused]] static uint32_t
+rmt_non_dma_symbols(uint32_t configured_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return configured_symbols < 128u ? 128u : configured_symbols;
 #else
@@ -517,7 +521,8 @@ static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 #endif
 }
 
-static size_t rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
+[[maybe_unused]] static size_t
+rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
     defined(CONFIG_IDF_TARGET_ESP32P4)
   // C3/S3/P4 RMT blocks are small, and waking the simple encoder every byte
@@ -2744,11 +2749,10 @@ void CFXLightOutput::configure_timing_() {
 // --- RMT Encoder Callback (ESP-IDF >= 5.3) ---
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
-                                             size_t symbols_written,
-                                             size_t symbols_free,
-                                             rmt_symbol_word_t *symbols,
-                                             bool *done, void *arg) {
+[[maybe_unused]] static size_t IRAM_ATTR HOT
+encoder_callback(const void *data, size_t size, size_t symbols_written,
+                 size_t symbols_free, rmt_symbol_word_t *symbols, bool *done,
+                 void *arg) {
   auto *params = static_cast<LedParams *>(arg);
   const auto *bytes = static_cast<const uint8_t *>(data);
   size_t index = symbols_written / RMT_SYMBOLS_PER_BYTE;
@@ -3065,8 +3069,8 @@ void CFXLightOutput::setup() {
              static_cast<unsigned>(this->get_pixel_stride_()));
   } else {
     ESP_LOGI(TAG,
-             "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%u, "
-             "mem_block_symbols=%u, physical_leds=%" PRIu32 ")",
+             "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%" PRIu32
+             ", mem_block_symbols=%" PRIu32 ", physical_leds=%" PRIu32 ")",
              this->num_leds_, this->pin_,
              this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
              this->rmt_symbols_, this->rmt_mem_block_symbols_,
@@ -3169,7 +3173,8 @@ void CFXLightOutput::setup_rmt_() {
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32
                ": pin=%u GDMA skipped (%s) "
-               "mem_block_symbols=%u rmt_symbols=%u hw_tx_slots=%d",
+               "mem_block_symbols=%u rmt_symbols=%" PRIu32
+               " hw_tx_slots=%d",
                this->rmt_alloc_index_, this->pin_, skip_dma_reason,
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
@@ -3191,7 +3196,7 @@ void CFXLightOutput::setup_rmt_() {
       channel.mem_block_symbols = 48;
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32 ": pin=%u %s=true mem_block_symbols=%u "
-               "rmt_symbols=%u hw_tx_slots=%d",
+               "rmt_symbols=%" PRIu32 " hw_tx_slots=%d",
                this->rmt_alloc_index_, this->pin_, rmt_dma_backend_label(),
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
@@ -3203,7 +3208,7 @@ void CFXLightOutput::setup_rmt_() {
         ESP_LOGW(TAG,
                  "RMT %s unavailable for pin=%u (alloc #%" PRIu32
                  " of %d hw slots, err=%d) - falling back to non-DMA "
-                 "(mem_block_symbols=%u). "
+                 "(mem_block_symbols=%" PRIu32 "). "
                  "Check for other RMT consumers (remote_transmitter, "
                  "neopixelbus, status_led, ir_transmitter).",
                  rmt_dma_backend_label(), this->pin_, this->rmt_alloc_index_,
@@ -3223,7 +3228,7 @@ void CFXLightOutput::setup_rmt_() {
         this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
         ESP_LOGI(TAG,
                  "RMT alloc #%" PRIu32
-                 ": pin=%u non-DMA fallback OK mem_block_symbols=%u",
+                 ": pin=%u non-DMA fallback OK mem_block_symbols=%" PRIu32,
                  this->rmt_alloc_index_, this->pin_,
                  this->rmt_mem_block_symbols_);
       }
@@ -5651,7 +5656,7 @@ static bool parallel_group_has_active_rendering_(
   return false;
 }
 
-static uint8_t active_parallel_group_mask_() {
+[[maybe_unused]] static uint8_t active_parallel_group_mask_() {
   uint8_t active_mask = 0;
   for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
     auto &group = g_parallel_groups[gi];
@@ -5710,7 +5715,7 @@ void CFXLightOutput::update_high_frequency_loop_request_() {
   }
 }
 
-static bool parallel_shared_whole_group_mode_enabled_() {
+[[maybe_unused]] static bool parallel_shared_whole_group_mode_enabled_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
     return false;
@@ -5730,7 +5735,7 @@ static bool parallel_shared_whole_group_mode_enabled_() {
 #endif
 }
 
-static bool parallel_group_active_outputs_are_segmented_(
+[[maybe_unused]] static bool parallel_group_active_outputs_are_segmented_(
     CFXParallelGroupRuntime &group) {
   bool has_active = false;
   for (uint8_t lane = 0; lane < group.lane_count; lane++) {
@@ -5746,7 +5751,7 @@ static bool parallel_group_active_outputs_are_segmented_(
   return has_active;
 }
 
-static bool parallel_shared_segment_group_mode_enabled_() {
+[[maybe_unused]] static bool parallel_shared_segment_group_mode_enabled_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
     return false;
@@ -6009,7 +6014,8 @@ bool CFXLightOutput::wait_for_rmt_tx_(uint32_t timeout_ms, const char *context) 
       if (wait_us > this->perf_diag_max_wait_us_) {
         this->perf_diag_max_wait_us_ = wait_us;
       }
-      ESP_LOGW(TAG, "RMT TX wait timeout (%u ms) during %s (waits=%" PRIu32
+      ESP_LOGW(TAG, "RMT TX wait timeout (%" PRIu32
+               " ms) during %s (waits=%" PRIu32
                ", timeouts=%" PRIu32 ")",
                timeout_ms, context, this->rmt_wait_count_,
                this->rmt_wait_timeout_count_);
@@ -6065,8 +6071,8 @@ bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) 
   if (err == ESP_ERR_TIMEOUT) {
     this->spi_wait_timeout_count_++;
     ESP_LOGW(TAG,
-             "SPI TX wait timeout during %s (% " PRIu32 " ms, waits=% " PRIu32
-             ", timeouts=% " PRIu32 ", queue_err=% " PRIu32 ")",
+             "SPI TX wait timeout during %s (%" PRIu32 " ms, waits=%" PRIu32
+             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
              context, timeout_ms, this->spi_wait_count_,
              this->spi_wait_timeout_count_, this->spi_queue_error_count_);
   } else {
@@ -7558,7 +7564,8 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
     if (!this->unsafe_view_logged_) {
       ESP_LOGW(TAG,
                "Unsafe pixel view redirected to dummy pixel "
-               "(pin=%u, idx=%d, size=%d, buf=%p, effect=%p, failed=%d)",
+               "(pin=%u, idx=%" PRId32 ", size=%" PRId32
+               ", buf=%p, effect=%p, failed=%d)",
                this->pin_, index, this->size(), this->buf_,
                this->effect_data_, this->is_failed());
       this->unsafe_view_logged_ = true;

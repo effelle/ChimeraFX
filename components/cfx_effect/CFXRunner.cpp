@@ -15,6 +15,7 @@
 #include "esp_system.h"
 #include <algorithm> // For std::min, std::max
 #include <array>
+#include <cinttypes>
 #include <cmath>     // For powf
 #include <cstdint>
 #include <vector>
@@ -533,7 +534,7 @@ static CRGBW color_add(CRGBW c1, CRGBW c2) {
 }
 
 // Scale color by fadeAmount/256 (for fade effects)
-static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
+[[maybe_unused]] static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
   return CRGBW(
       ((uint16_t)c.r * fadeAmount) >> 8, ((uint16_t)c.g * fadeAmount) >> 8,
       ((uint16_t)c.b * fadeAmount) >> 8, ((uint16_t)c.w * fadeAmount) >> 8);
@@ -837,7 +838,7 @@ void CFXRunner::generateRandomPalette() {
   if (entropy == 0) {
     entropy = 0xA5A5A5A5u;
   }
-  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
+  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%" PRIu32, entropy);
 
   const uint8_t base_hue = static_cast<uint8_t>(entropy >> 24);
   const uint8_t style = static_cast<uint8_t>((entropy >> 5) % 5u);
@@ -1563,9 +1564,9 @@ static CRGB pacifica_cache_color(uint8_t cache_id, uint8_t index) {
 
 // Helper: WLED-EXACT wave layer function
 // This matches WLED's pacifica_one_layer() precisely
-static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
-                                    uint16_t cistart, uint16_t wavescale,
-                                    uint8_t bri, uint16_t ioff) {
+[[maybe_unused]] static void pacifica_one_layer_wled(
+    CRGB &c, uint16_t i, uint8_t cache_id, uint16_t cistart,
+    uint16_t wavescale, uint8_t bri, uint16_t ioff) {
   // WLED EXACT: unsigned ci = cistart;
   unsigned ci = cistart;
   // WLED EXACT: unsigned waveangle = ioff;
@@ -1604,8 +1605,8 @@ static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
 }
 
 // Helper: Add whitecaps to peaks (WLED exact)
-static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
-                                   uint8_t basethreshold) {
+[[maybe_unused]] static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
+                                                    uint8_t basethreshold) {
   uint8_t threshold = scale8(sin8(wave), 20) + basethreshold;
   uint8_t l = c.getAverageLight();
   if (l > threshold) {
@@ -1618,7 +1619,7 @@ static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
 }
 
 // Helper: Deepen colors (darken valleys) and ensure blue tint
-static void pacifica_deepen_colors(CRGB &c) {
+[[maybe_unused]] static void pacifica_deepen_colors(CRGB &c) {
   c.b = scale8(c.b, 145);
   c.g = scale8(c.g, 200);
   // ESPHome gamma 2.8 crushes low values. Boost floor to ensure visible
@@ -1632,7 +1633,7 @@ static void pacifica_deepen_colors(CRGB &c) {
 // Helper: Deepen colors with TEAL preservation (less aggressive darkening)
 // This version maintains the teal appearance instead of crushing to deep
 // blue
-static void pacifica_deepen_colors_teal(CRGB &c) {
+[[maybe_unused]] static void pacifica_deepen_colors_teal(CRGB &c) {
   // Relaxed scaling - don't crush colors as much
   c.b = scale8(c.b, 200); // Was 145, now less aggressive
   c.g = scale8(c.g, 220); // Was 200, now less aggressive
@@ -1645,9 +1646,9 @@ static void pacifica_deepen_colors_teal(CRGB &c) {
 // Helper: Add one wave layer with pre-computed waveangle (intensity-zoomed)
 // This version accepts a pre-calculated waveangle instead of computing from
 // intensity
-static void pacifica_one_layer_zoomed(CRGB &c, uint16_t i, uint8_t cache_id,
-                                      uint16_t cistart, uint16_t wavescale,
-                                      uint8_t bri, uint16_t waveangle) {
+[[maybe_unused]] static void pacifica_one_layer_zoomed(
+    CRGB &c, uint16_t i, uint8_t cache_id, uint16_t cistart,
+    uint16_t wavescale, uint8_t bri, uint16_t waveangle) {
   uint16_t ci = cistart;
   uint16_t wavescale_half = (wavescale >> 1) + 20;
 
@@ -2362,7 +2363,7 @@ uint16_t mode_dissolve(void) {
   // Progress tracking: report fill progress only during FILLING phase (state==0)
   // so milestones are not re-fired in reverse during DISSOLVING.
   if ((instance->_segment.aux0 & 0x03) == 0) {
-    if (pixel_count >= 0 && pixel_count < (uint16_t)len)
+    if (pixel_count < (uint16_t)len)
       instance->current_leading_pixel = (int32_t)pixel_count;
   }
 
@@ -5504,7 +5505,7 @@ uint16_t mode_dropping_time(void) {
         instance->_segment.setPixelColor(pos, color_blend(dropColor, 0, 150));
       }
       // Draw ripple at water level exactly
-      if (state->filledPixels < len && state->filledPixels >= 0) {
+      if (state->filledPixels < len) {
         uint32_t cur = instance->_segment.getPixelColor(state->filledPixels);
         instance->_segment.setPixelColor(state->filledPixels,
                                          color_blend(cur, dropColor, 200));
@@ -5568,7 +5569,7 @@ uint16_t mode_dropping_time(void) {
               }
             }
           } else if (state->dummyDrops[i].colIndex > 2) { // Splash Ripple
-            if (state->filledPixels < len && state->filledPixels >= 0) {
+            if (state->filledPixels < len) {
               uint32_t cur =
                   instance->_segment.getPixelColor(state->filledPixels);
               instance->_segment.setPixelColor(state->filledPixels,

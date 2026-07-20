@@ -8,6 +8,7 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include <algorithm>  // std::sort
+#include <cinttypes>
 
 static const char *const TAG = "CFXScheduler";
 
@@ -128,7 +129,8 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
         this->last_batch_diag_ms_ = now_ms;
         ESP_LOGV(TAG,
                  "CFX sched_batch total=%u mode=sequential force=%u global=%u "
-                 "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
+                 "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%" PRIu32
+                 " ok=1",
                  static_cast<unsigned>(total),
                  static_cast<unsigned>(force_sequential),
                  static_cast<unsigned>(force_sequential_),
@@ -217,7 +219,9 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
     const bool core0_ok =
         xSemaphoreTake(core0_done_, pdMS_TO_TICKS(CFX_CORE0_TIMEOUT_MS)) == pdTRUE;
     if (!core0_ok) {
-      ESP_LOGW(TAG, "Core 0 runner timeout (%u ms) — frame skipped for %u runners",
+      ESP_LOGW(TAG,
+               "Core 0 runner timeout (%" PRIu32
+               " ms) — frame skipped for %u runners",
                CFX_CORE0_TIMEOUT_MS, (unsigned)core0_slice_.size());
     }
 
@@ -228,8 +232,8 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
         this->last_batch_diag_ms_ = now_ms;
         ESP_LOGV(TAG,
                  "CFX sched_batch total=%u mode=dual force=0 global=%u "
-                 "core1=%u core0=%u cost1=%u cost0=%u dispatch_us=%u "
-                 "ok=%u timeout_ms=%u",
+                 "core1=%u core0=%u cost1=%u cost0=%u dispatch_us=%" PRIu32
+                 " ok=%u timeout_ms=%" PRIu32,
                  static_cast<unsigned>(total),
                  static_cast<unsigned>(force_sequential_),
                  static_cast<unsigned>(core1_slice_.size()),
@@ -237,7 +241,7 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
                  static_cast<unsigned>(cost_core1),
                  static_cast<unsigned>(cost_core0),
                  micros() - dispatch_start_us, static_cast<unsigned>(core0_ok),
-                 static_cast<unsigned>(CFX_CORE0_TIMEOUT_MS));
+                 CFX_CORE0_TIMEOUT_MS);
       }
     }
 
@@ -261,7 +265,8 @@ bool CFXScheduler::service_runners(std::vector<CFXRunner *> &runners,
       this->last_batch_diag_ms_ = now_ms;
       ESP_LOGV(TAG,
                "CFX sched_batch total=%u mode=fallthrough force=%u global=%u "
-               "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%u ok=1",
+               "core1=%u core0=0 cost1=0 cost0=0 dispatch_us=%" PRIu32
+               " ok=1",
                static_cast<unsigned>(total),
                static_cast<unsigned>(force_sequential),
                static_cast<unsigned>(force_sequential_),
