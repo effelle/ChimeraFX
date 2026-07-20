@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CFX_SYNC_DOC = ROOT / "docs" / "cfx_sync.md"
+INSTALLATION_DOC = ROOT / "docs" / "Installation.md"
 
 
 class CFXSyncDocsTests(unittest.TestCase):
@@ -70,6 +71,22 @@ class CFXSyncDocsTests(unittest.TestCase):
             "The leader does not need `remote_input`",
             text,
         )
+
+    def test_docs_keep_automatic_transport_and_esp8266_scope_clear(self):
+        text = CFX_SYNC_DOC.read_text(encoding="utf-8")
+        transport_section = text.split("## Transport", 1)[1].split(
+            "## Using ChimeraFX with Synchrocast", 1
+        )[0]
+        first_example = transport_section.split("```yaml", 1)[1].split("```", 1)[0]
+
+        self.assertIn("Leave `transport` out", transport_section)
+        self.assertNotIn("transport: auto", first_example)
+
+        installation = INSTALLATION_DOC.read_text(encoding="utf-8")
+        self.assertIn(
+            "Not supported for `cfx_light` or ChimeraFX effects", installation
+        )
+        self.assertIn("`cfx_sync` over UDP", installation)
 
 
 if __name__ == "__main__":

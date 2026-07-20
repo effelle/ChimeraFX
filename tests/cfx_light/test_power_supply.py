@@ -127,6 +127,10 @@ class CFXLightPowerSupplyTests(unittest.TestCase):
         self.assertIn("`keep_on_time` defaults to `5s`", docs)
         self.assertIn("You can override either value", docs)
         self.assertIn("Segments share the single power request", docs)
+        self.assertGreater(
+            docs.index("## Switching the LED Power Supply"),
+            docs.index("## Configuration Variables"),
+        )
 
 
 if __name__ == "__main__":

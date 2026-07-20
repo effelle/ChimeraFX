@@ -58,7 +58,7 @@ ChimeraFX reports render performance and LED output cadence separately. This dis
 - **RMT / 1-wire NRZ strips** are locked to roughly 800 kHz. A long strip can make the wire time slower than the renderer, so the driver may coalesce or skip intermediate rendered frames before the next physical transmission completes.
 - **SPI strips** are clocked much faster, so their bottleneck is usually CPU math, RAM, power delivery, or latch current rather than the raw wire protocol.
 
-For tested LED counts, platform notes, and deployment limits, see [`cfx_light`](cfx_light.md#hardware-architecture--performance-limits). Keep `Troubleshooting` focused on symptoms: if `RenderFPS` is high but `LedFPS` is low, the effect engine is keeping up but the LED transport is saturated. If both numbers are low, reduce effect complexity, LED count, or other ESPHome workload.
+For tested LED counts, platform notes, and deployment limits, see [`cfx_light`](cfx_light.md#hardware-architecture-performance-limits). Keep `Troubleshooting` focused on symptoms: if `RenderFPS` is high but `LedFPS` is low, the effect engine is keeping up but the LED transport is saturated. If both numbers are low, reduce effect complexity, LED count, or other ESPHome workload.
 
 ---
 
@@ -74,7 +74,7 @@ ESP32-C3 support remains experimental for segmented RMT and is not recommended f
 
 On ESP32 Classic, automatic allocation is intentionally conservative and caps each RMT light at `128` symbols. This avoids the higher completion latency seen with larger automatic blocks on long strips. If you have a tested layout that benefits from larger buffers, set `rmt_symbols` manually: for example `512` for one RMT light, `256` each for two RMT lights, or `128` each for four RMT lights.
 
-For platform-specific output limits, see [`cfx_light`](cfx_light.md#hardware-architecture--performance-limits).
+For platform-specific output limits, see [`cfx_light`](cfx_light.md#hardware-architecture-performance-limits).
 
 Example configuration:
 

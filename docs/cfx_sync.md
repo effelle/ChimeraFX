@@ -428,7 +428,7 @@ Use a different group when you want a different set of lights to act together.
 
 ## Transport
 
-The recommended setting is the default:
+Leave `transport` out for the recommended automatic choice:
 
 ```yaml
 cfx_sync:
@@ -437,10 +437,9 @@ cfx_sync:
   lights: room_light
   group: living_room
   key: !secret cfx_sync_key
-  transport: auto
 ```
 
-`transport: auto` means:
+The default `transport: auto` means:
 
 | Device | Auto Behavior |
 | --- | --- |

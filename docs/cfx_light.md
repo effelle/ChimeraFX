@@ -41,57 +41,6 @@ light:
     chipset: SK9822
 ```
 
----
-
-## Switching the LED Power Supply
-
-`cfx_light` can use ESPHome's standard [`power_supply`](https://esphome.io/components/power_supply/) component to turn the LED power supply on only when the strip needs it.
-
-```yaml
-power_supply:
-  - id: led_power
-    pin:
-      number: GPIO18
-      inverted: true
-
-light:
-  - platform: cfx_light
-    name: "LED Strip"
-    id: led_strip
-    pin: GPIO16
-    num_leds: 120
-    chipset: WS2812X
-    power_supply: led_power
-```
-
-That is all the ChimeraFX configuration you need. `cfx_light` turns the supply on before sending LED data and keeps it on through transitions, effects, intros, and outros. It releases the supply only after the final LED frame has finished.
-
-For a power supply referenced by `cfx_light`, ChimeraFX supplies two practical timing defaults when you omit them:
-
-* `enable_time` defaults to `100ms`, giving the relay or power supply time to become ready before LED data is sent.
-* `keep_on_time` defaults to `5s`, preventing rapid relay cycling when the light is switched again shortly after turning off.
-
-You can override either value in the normal ESPHome `power_supply` configuration when your hardware needs different timing:
-
-```yaml
-power_supply:
-  - id: led_power
-    enable_time: 250ms
-    keep_on_time: 10s
-    pin:
-      number: GPIO18
-      inverted: true
-```
-
-These helper defaults apply only to power supplies referenced by `cfx_light`. Other ESPHome power-supply configurations keep their native behavior.
-
-* Segments share the single power request of their physical strip automatically.
-* Multiple `cfx_light` outputs may reference the same `power_supply` ID. ESPHome keeps it enabled until every attached output has released it.
-
-Use a correctly rated relay, MOSFET, or power-supply enable input for the load. Set an inverted pin under `pin:` if your control hardware is active-low. Avoid `enable_on_boot: true` unless the supply should remain enabled continuously.
-
----
-
 ## Configuration Variables
 
 ### Required Parameters
@@ -122,6 +71,57 @@ Use a correctly rated relay, MOSFET, or power-supply enable input for the load. 
 * **set_color** (*list[int]*): Default color when turned on as `[r, g, b]` or `[r, g, b, w]` (0-100%).
 * **set_intro** / **set_outro** (*int*): Force a global intro/outro animation for eligible effects.
 * **set_inout_dur** (*Time*): Duration for intros and outros.
+
+---
+
+## Switching the LED Power Supply
+
+This optional section is only for installations that need to switch the LED power supply or relay on and off with the strip.
+
+`cfx_light` can use ESPHome's standard [`power_supply`](https://esphome.io/components/power_supply/) component to turn the LED power supply on only when the strip needs it.
+
+```yaml
+power_supply:
+  - id: led_power
+    pin:
+      number: GPIO18
+      inverted: true
+
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    power_supply: led_power
+```
+
+`cfx_light` turns the supply on before sending LED data and keeps it on through transitions, effects, intros, and outros. It releases the supply only after the final LED frame has finished.
+
+For a power supply referenced by `cfx_light`, ChimeraFX supplies two practical timing defaults when you omit them:
+
+* `enable_time` defaults to `100ms`, giving the relay or power supply time to become ready before LED data is sent.
+* `keep_on_time` defaults to `5s`, preventing rapid relay cycling when the light is switched again shortly after turning off.
+
+You can override either value in the normal ESPHome `power_supply` configuration when your hardware needs different timing:
+
+```yaml
+power_supply:
+  - id: led_power
+    enable_time: 250ms
+    keep_on_time: 10s
+    pin:
+      number: GPIO18
+      inverted: true
+```
+
+These helper defaults apply only to power supplies referenced by `cfx_light`. Other ESPHome power-supply configurations keep their native behavior.
+
+* Segments share the single power request of their physical strip automatically.
+* Multiple `cfx_light` outputs may reference the same `power_supply` ID. ESPHome keeps it enabled until every attached output has released it.
+
+Use a correctly rated relay, MOSFET, or power-supply enable input for the load. Set an inverted pin under `pin:` if your control hardware is active-low. Avoid `enable_on_boot: true` unless the supply should remain enabled continuously.
 
 ---
 

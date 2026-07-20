@@ -8,7 +8,7 @@
       *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
       *   **ESP32-C3**: Experimental for segmented RMT and not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
-      *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
+      *   **ESP8266 (and variants)**: Not supported for `cfx_light` or ChimeraFX effects because it lacks the FPU and RAM required by the rendering engine. It can still use `cfx_sync` over UDP as a follower, satellite, or controller for a normal ESPHome light. ESP8266 cannot be a ChimeraFX sync leader.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
 
 ESPHome 2026.7 uses the native ESP-IDF build toolchain by default on ESP32, including when the Arduino framework is selected. This is the recommended path for ChimeraFX, and the normal `framework: type: esp-idf` configuration below is all you need. Do not add a `toolchain:` option unless you intentionally want to override ESPHome's default.
@@ -65,8 +65,8 @@ Once you have a working setup, it is safer to remove `refresh: always` or pin to
 
 If you are developing, need to modify the code locally, or prefer not to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
 
-1.  Download the `components/` folder from the repository.
-2.  Place it in your ESPHome config directory (e.g., `config/components/cfx_effect`).
+1.  Download the repository's `components/` folder.
+2.  Copy its contents into your ESPHome config directory so the component folders live at paths such as `config/components/cfx_light` and `config/components/cfx_effect`.
 3.  Point your configuration to the local folder:
 
 ```yaml
