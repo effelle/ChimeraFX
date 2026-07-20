@@ -29,6 +29,7 @@ That’s it! You already have everything you need to run ChimeraFX!
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
+- [ChimeraFX Sync Guide](https://effelle.github.io/ChimeraFX/cfx_sync/)
 - [Magic Buttons](https://effelle.github.io/ChimeraFX/cfx_magic_buttons/)
 - [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
@@ -38,6 +39,8 @@ The documentation includes everything you need:
 ### Key Features
 
 * **Magic Buttons** - Bind physical ESPHome buttons to on-device dimming, CCT sweeping, hue or palette selection, and effect selection without lambdas or extra Home Assistant entities.
+
+* **ChimeraFX Sync** - Synchronize light groups, local controls, and supported satellite devices over ESP-NOW or UDP without manual MAC pairing.
 
 * **Zero YAML Overhead** — Pure C++ implementation for maximum ESP32 frame rates.
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
@@ -73,7 +76,7 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 - **Recommended target:** **ESP32-S3**. The native parallel driver unlocks the S3 as the strongest validated target for dense 1-wire LED installs.
 - **Chips:** **ESP32 Classic**, **ESP32-S2**, **ESP32-S3**, **ESP32-C3**, **ESP32-C6**.
   - **ESP32-S3:** Fully supported and preferred. Use normal RMT/SPI for smaller installs, or `parallel_group` for high-density WS2812X/SK6812 layouts with up to 4 lanes per group and up to 2 parallel groups.
-  - **⚠️ ESP8266 IS NOT SUPPORTED:** Due to architectural differences, lack of hardware FPU, and severe memory constraints, ESP8266 will not compile or run with ChimeraFX.
+  - **ESP8266:** Supported for `cfx_sync` over UDP as a follower, satellite, or controller using a normal ESPHome light, PWM light, or Tuya light. It cannot run `cfx_light`, ChimeraFX effects, or act as a sync leader.
 - **Protocol Support:** **1-wire NRZ** (WS2812X, SK6812, WS2811) and **2-wire SPI** (APA102, SK9822).
 
 > **⚠️ Reality Check:** Visual effects are computationally expensive. A dual-core ESP32 is highly recommended. Trying to run complex effects alongside heavy ESPHome components (like Bluetooth Proxies or Cameras) will likely cause instability. Manage your load accordingly.

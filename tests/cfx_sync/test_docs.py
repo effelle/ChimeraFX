@@ -5,6 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 CFX_SYNC_DOC = ROOT / "docs" / "cfx_sync.md"
 INSTALLATION_DOC = ROOT / "docs" / "Installation.md"
+README = ROOT / "README.md"
 
 
 class CFXSyncDocsTests(unittest.TestCase):
@@ -83,10 +84,14 @@ class CFXSyncDocsTests(unittest.TestCase):
         self.assertNotIn("transport: auto", first_example)
 
         installation = INSTALLATION_DOC.read_text(encoding="utf-8")
-        self.assertIn(
-            "Not supported for `cfx_light` or ChimeraFX effects", installation
-        )
+        self.assertIn("Supported for `cfx_sync` over UDP", installation)
+        self.assertIn("cannot run `cfx_light` or ChimeraFX effects", installation)
         self.assertIn("`cfx_sync` over UDP", installation)
+
+        readme = README.read_text(encoding="utf-8")
+        self.assertIn("ChimeraFX Sync Guide", readme)
+        self.assertIn("Supported for `cfx_sync` over UDP", readme)
+        self.assertIn("It cannot run `cfx_light`, ChimeraFX effects", readme)
 
 
 if __name__ == "__main__":

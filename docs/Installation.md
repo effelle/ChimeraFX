@@ -8,8 +8,8 @@
       *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
       *   **ESP32-C3**: Experimental for segmented RMT and not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
-      *   **ESP8266 (and variants)**: Not supported for `cfx_light` or ChimeraFX effects because it lacks the FPU and RAM required by the rendering engine. It can still use `cfx_sync` over UDP as a follower, satellite, or controller for a normal ESPHome light. ESP8266 cannot be a ChimeraFX sync leader.
-*   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
+      *   **ESP8266 (and variants)**: Supported for `cfx_sync` over UDP as a follower, satellite, or controller using a normal ESPHome light, PWM light, or Tuya light. It cannot run `cfx_light` or ChimeraFX effects because it lacks the FPU and RAM required by the rendering engine. ESP8266 cannot be a ChimeraFX sync leader.
+*   **Framework**: `cfx_light` supports both **ESP-IDF** and **Arduino** on ESP32. ESP8266 Sync-only nodes use ESPHome's normal ESP8266 platform.
 
 ESPHome 2026.7 uses the native ESP-IDF build toolchain by default on ESP32, including when the Arduino framework is selected. This is the recommended path for ChimeraFX, and the normal `framework: type: esp-idf` configuration below is all you need. Do not add a `toolchain:` option unless you intentionally want to override ESPHome's default.
 
@@ -17,9 +17,9 @@ ESPHome 2026.7 also treats an explicit brightness of `0` as OFF. ChimeraFX alrea
 
 ---
 
-## Before You Flash
+## Before You Flash a `cfx_light` Node
 
-ChimeraFX does not need special ESPHome knowledge, but addressable LEDs are picky about wiring and power. Before your first compile and flash:
+This section applies to ESP32 nodes running `cfx_light`. Addressable LEDs are picky about wiring and power. Before your first compile and flash:
 
 *   Connect the LED strip ground and ESP32 ground together.
 *   Use a power supply sized for your LED count and expected brightness.
@@ -29,7 +29,7 @@ ChimeraFX does not need special ESPHome knowledge, but addressable LEDs are pick
 
 For flicker, random colors, resets, SPI inrush, and memory pressure, see [Performance & Troubleshooting](Troubleshooting.md).
 
-Keep each ChimeraFX node on one LED transport family: **RMT-only**, **SPI-only**, or **parallel-only**. Mixed transport `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs multiple transport families.
+Keep each ESP32 node running `cfx_light` on one LED transport family: **RMT-only**, **SPI-only**, or **parallel-only**. Mixed transport `cfx_light` entries are blocked at compile time; use separate ESP32 controllers if your installation needs multiple transport families.
 
 ---
 
