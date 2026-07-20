@@ -1319,7 +1319,7 @@ class ESPNowAPITests(unittest.TestCase):
             'this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller"',
             source,
         )
-        self.assertIn('ESP_LOGV(TAG, "Satellite applying leader state")', source)
+        self.assertNotIn('ESP_LOGV(TAG, "Satellite applying leader state")', source)
         self.assertRegex(
             source,
             re.compile(
@@ -1769,7 +1769,6 @@ class ESPNowAPITests(unittest.TestCase):
             inject_remote_input,
             re.compile(
                 r"if \(!pressed && !this->remote_input_pressed_\) \{\s*"
-                r"ESP_LOGV\(TAG, \"Ignoring duplicate CFX Sync remote release\"\);\s*"
                 r"return false;\s*"
                 r"\}.*?"
                 r"this->remote_input_pressed_ = pressed;.*?"
@@ -4318,6 +4317,28 @@ class ESPNowAPITests(unittest.TestCase):
             'ESP_LOGW(TAG, "CFX Sync peer table full; ignoring %s", peer_buf);',
             source,
         )
+
+    def test_sync_logging_reports_health_transitions_not_packet_chatter(self):
+        header = HEADER.read_text(encoding="utf-8")
+        source = SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("bool ack_warning_active_{false};", header)
+        for message in (
+            '"UDP input applied"',
+            '"UDP input burst resend"',
+            '"Satellite applying leader state"',
+            '"Sending CFX Sync input',
+            '"Queued CFX Sync input',
+            '"Sending CFX Sync resolved command',
+            '"Ignoring duplicate CFX Sync remote release"',
+        ):
+            self.assertNotIn(message, source)
+        self.assertIn('ESP_LOGD(TAG, "%s local input %s",', source)
+        self.assertIn('ESP_LOGD(TAG, "Applying CFX Sync remote input %s",', source)
+        self.assertIn("now - this->last_rejection_log_ms_ >= 30000", source)
+        self.assertIn('ESP_LOGI(TAG, "CFX Sync follower ACK health recovered")', source)
+        self.assertIn('"CFX Sync ESP-NOW send health degraded after %u failures: %s"', source)
+        self.assertIn('ESP_LOGI(TAG, "CFX Sync ESP-NOW send health recovered")', source)
 
     def test_sync_component_has_no_renderer_or_effect_dependency(self):
         component_dir = ROOT / "components" / "cfx_sync"

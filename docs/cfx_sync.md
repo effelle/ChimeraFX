@@ -602,7 +602,20 @@ Follower color looks different:
 - RGB-only lights cannot reproduce a real white channel.
 - Monochrome and Tuya dimmers follow power and brightness, but ignore color.
 
-Follower logs are very quiet:
+## Logging And Diagnostics
 
-- That is expected. Healthy sync traffic is mostly verbose-level logging.
-- Warnings remain visible for missing effects, missing controls, send failures, and startup recovery problems.
+Healthy sync traffic stays quiet. `cfx_sync` does not log successful state
+packets, UDP retries, duplicate packets, or heartbeat traffic one by one.
+
+- **Info** reports meaningful changes: a peer is discovered, a degraded link
+  recovers, or the transport changes.
+- **Warnings** report a real problem once when it begins, such as missing ACKs,
+  repeated send failures, startup recovery failure, or an unavailable effect or
+  control.
+- **Debug** can show a local or remote input edge and occasional rejected
+  packet diagnostics. Use it when troubleshooting a button or connection.
+- Packet rejection, retry, and delivery counters remain available in
+  `dump_config()` without filling the runtime log.
+
+ESPHome can still show its own raw Wi-Fi or ESP-NOW messages at `VERBOSE`.
+Those are transport diagnostics from ESPHome, not normal `cfx_sync` traffic.

@@ -55,9 +55,6 @@ bool CFXSyncBus::register_shared_transport_consumer(
   }
   this->shared_transport_consumers_[this->shared_transport_consumer_count_++] =
       consumer;
-  ESP_LOGV(TAG, "Registered shared transport consumer (%u/%u)",
-           static_cast<unsigned>(this->shared_transport_consumer_count_),
-           static_cast<unsigned>(MAX_SHARED_TRANSPORT_CONSUMERS));
   return true;
 }
 
@@ -77,9 +74,6 @@ bool CFXSyncBus::unregister_shared_transport_consumer(
     this->shared_transport_consumer_count_--;
     this->shared_transport_consumers_[this->shared_transport_consumer_count_] =
         nullptr;
-    ESP_LOGV(TAG, "Unregistered shared transport consumer (%u/%u)",
-             static_cast<unsigned>(this->shared_transport_consumer_count_),
-             static_cast<unsigned>(MAX_SHARED_TRANSPORT_CONSUMERS));
     return true;
   }
   return false;
@@ -136,7 +130,7 @@ bool CFXSyncBus::dispatch_shared_transport_packet_(
     size_t size) {
   if (data == nullptr || size == 0 ||
       size > CFX_SYNC_SHARED_TRANSPORT_MTU) {
-    ESP_LOGV(TAG, "Dropped invalid shared transport packet (%u bytes)",
+    ESP_LOGD(TAG, "Dropped invalid shared transport packet (%u bytes)",
              static_cast<unsigned>(size));
     return false;
   }
@@ -213,7 +207,7 @@ bool CFXSyncBus::begin_espnow() {
                                 0xFF, 0xFF, 0xFF};
   const esp_err_t result = this->espnow_->add_peer(broadcast);
   if (result != ESP_OK) {
-    ESP_LOGV(TAG, "ESP-NOW broadcast peer add skipped: %s",
+    ESP_LOGD(TAG, "ESP-NOW broadcast peer add skipped: %s",
              esp_err_to_name(result));
   }
   this->espnow_enabled_ = true;
@@ -245,7 +239,7 @@ void CFXSyncBus::enable_espnow() {
   if (this->recovery_generation_ == 0) {
     this->recovery_generation_ = 1;
   }
-  ESP_LOGV(TAG, "Shared transport recovery generation=%" PRIu32,
+  ESP_LOGD(TAG, "Shared transport recovery generation=%" PRIu32,
            this->recovery_generation_);
 }
 

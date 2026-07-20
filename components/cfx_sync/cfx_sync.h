@@ -268,7 +268,6 @@ class CFXSyncComponent : public Component {
     uint32_t missed_acks{0};
     uint8_t consecutive_send_failures{0};
     uint32_t send_failures{0};
-    uint32_t last_send_failure_log_ms{0};
     uint32_t tx_suspended_until_ms{0};
   };
 
@@ -559,8 +558,7 @@ class CFXSyncComponent : public Component {
 
   uint8_t consecutive_send_failures_{0};
   uint32_t last_rejection_log_ms_{0};
-  uint32_t last_send_failure_log_ms_{0};
-  uint32_t last_ack_warning_log_ms_{0};
+  bool ack_warning_active_{false};
   uint32_t sent_packets_{0};
   uint32_t received_packets_{0};
   uint32_t malformed_packets_{0};

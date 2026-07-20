@@ -726,7 +726,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     if (source.transport == CFXSyncTransportKind::UDP && applied) {
       this->udp_input_applied_++;
-      ESP_LOGV(TAG, "UDP input applied");
     }
 #endif
     return true;
@@ -767,7 +766,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
     }
     if (source.transport == CFXSyncTransportKind::UDP && applied) {
       this->udp_input_applied_++;
-      ESP_LOGV(TAG, "UDP input applied");
     }
 #else
     (void) source;
@@ -838,7 +836,6 @@ bool CFXSyncComponent::handle_decoded_packet_(
         this->observed_state_ = capture_light_snapshot(*this->lights_[0]);
         this->has_observed_state_ = true;
       }
-      ESP_LOGV(TAG, "Satellite applying leader state");
     }
     this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
                               CFXSyncAckResult::APPLIED);
@@ -1056,7 +1053,7 @@ bool CFXSyncComponent::handle_satellite_state_proposal_(
 
   const bool applied = this->apply_remote_state_(packet);
   if (applied) {
-    ESP_LOGV(TAG, "Leader applied satellite local light state");
+    ESP_LOGD(TAG, "Leader applied satellite local light state");
     this->send_state_();
   }
   return true;
@@ -1088,7 +1085,7 @@ bool CFXSyncComponent::send_satellite_local_state_() {
           packet)) {
     return false;
   }
-  ESP_LOGV(TAG, "Satellite sending local light state");
+  ESP_LOGD(TAG, "Satellite sending local light state");
   return this->send_satellite_state_packet_(packet);
 }
 
@@ -1206,17 +1203,6 @@ bool CFXSyncComponent::send_input_state_(bool pressed, bool maintained,
           pressed, maintained, toggle, action, this->key_, packet)) {
     return false;
   }
-  const char *action_name = "primary";
-  if (action == CFXSyncInputAction::DIMMER_UP) {
-    action_name = "dimmer-up";
-  } else if (action == CFXSyncInputAction::DIMMER_DOWN) {
-    action_name = "dimmer-down";
-  }
-  ESP_LOGV(TAG, "Sending CFX Sync input %s %s%s%s",
-           action_name,
-           pressed ? "pressed" : "released",
-           maintained ? " maintained" : "",
-           toggle ? " toggle" : "");
   const bool sent = this->send_input_packet_(packet);
   if (sent && this->use_udp_transport_()) {
     this->udp_input_sent_++;
@@ -1237,7 +1223,6 @@ void CFXSyncComponent::schedule_udp_input_retry_(std::vector<uint8_t> packet,
                       }
                       if (this->send_input_packet_(packet)) {
                         this->udp_input_retried_++;
-                        ESP_LOGV(TAG, "UDP input burst resend");
                       }
                       if (remaining > 1) {
                         this->schedule_udp_input_retry_(packet, remaining - 1);
@@ -1260,10 +1245,6 @@ void CFXSyncComponent::queue_input_state_(bool pressed, bool maintained,
   this->pending_input_events_[index] =
       PendingInputEvent{pressed, maintained, toggle, action};
   this->pending_input_count_++;
-  ESP_LOGV(TAG, "Queued CFX Sync input %s%s%s",
-           pressed ? "pressed" : "released",
-           maintained ? " maintained" : "",
-           toggle ? " toggle" : "");
 }
 
 void CFXSyncComponent::flush_deferred_input_() {
@@ -1289,7 +1270,7 @@ void CFXSyncComponent::on_local_input_update_(bool pressed) {
   }
   this->local_input_has_state_ = true;
   this->local_input_pressed_ = pressed;
-  ESP_LOGV(TAG, "%s local input %s",
+  ESP_LOGD(TAG, "%s local input %s",
            this->role_ == CFXSyncRole::SATELLITE ? "Satellite" : "Controller",
            pressed ? "pressed" : "released");
   const bool maintained =
@@ -1475,14 +1456,6 @@ bool CFXSyncComponent::send_light_command_(
     ESP_LOGW(TAG, "CFX Sync light command could not be encoded");
     return false;
   }
-  ESP_LOGV(TAG,
-           "Sending CFX Sync resolved command kind=%u mask=%04X "
-           "brightness=%u ramp=%ums flags=%02X",
-           static_cast<unsigned>(packet.command_kind),
-           static_cast<unsigned>(packet.command_mask),
-           static_cast<unsigned>(packet.command_brightness),
-           static_cast<unsigned>(packet.command_ramp_ms),
-           static_cast<unsigned>(packet.command_flags));
   const bool sent = this->send_input_packet_(wire_packet);
   if (sent && this->use_udp_transport_()) {
     this->udp_input_sent_++;
@@ -1553,7 +1526,6 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     return false;
   }
   if (!pressed && !this->remote_input_pressed_) {
-    ESP_LOGV(TAG, "Ignoring duplicate CFX Sync remote release");
     return false;
   }
   this->remote_input_pressed_ = pressed;
@@ -1573,7 +1545,7 @@ bool CFXSyncComponent::inject_remote_input_(bool pressed, bool maintained,
     }
     return true;
   }
-  ESP_LOGV(TAG, "Applying CFX Sync remote input %s",
+  ESP_LOGD(TAG, "Applying CFX Sync remote input %s",
            pressed ? "pressed" : "released");
   this->remote_input_->inject_remote_state(pressed);
   if (pressed && !maintained) {
@@ -2449,6 +2421,10 @@ void CFXSyncComponent::handle_state_ack_(PeerState &peer,
       break;
     }
   }
+  if (!has_pending && this->ack_warning_active_) {
+    ESP_LOGI(TAG, "CFX Sync follower ACK health recovered");
+    this->ack_warning_active_ = false;
+  }
   if (!this->has_peer_send_warning_() && !has_pending &&
       this->consecutive_send_failures_ < MAX_CONSECUTIVE_SEND_FAILURES) {
     this->state_retry_attempts_ = 0;
@@ -2480,20 +2456,28 @@ void CFXSyncComponent::check_ack_health_() {
   }
 
   if (missing == 0) {
+    if (this->ack_warning_active_) {
+      ESP_LOGI(TAG, "CFX Sync follower ACK health recovered");
+      this->ack_warning_active_ = false;
+    }
     return;
   }
-  if (this->last_ack_warning_log_ms_ == 0 ||
-      now - this->last_ack_warning_log_ms_ >= 5000) {
+  if (!this->ack_warning_active_) {
     ESP_LOGW(TAG, "CFX Sync follower ACK missing from %u peer(s)",
              static_cast<unsigned>(missing));
-    this->last_ack_warning_log_ms_ = now;
+    this->ack_warning_active_ = true;
   }
   this->status_set_warning();
 }
 
 void CFXSyncComponent::handle_send_result_(esp_err_t result) {
   if (result == ESP_OK) {
+    const bool recovered =
+        this->consecutive_send_failures_ >= MAX_CONSECUTIVE_SEND_FAILURES;
     this->consecutive_send_failures_ = 0;
+    if (recovered) {
+      ESP_LOGI(TAG, "CFX Sync ESP-NOW send health recovered");
+    }
     bool has_pending = false;
     for (const auto &peer : this->peers_) {
       if (this->peer_accepts_leader_state_(peer) &&
@@ -2513,15 +2497,12 @@ void CFXSyncComponent::handle_send_result_(esp_err_t result) {
   if (this->consecutive_send_failures_ < UINT8_MAX) {
     this->consecutive_send_failures_++;
   }
-  const uint32_t now = millis();
-  if (this->last_send_failure_log_ms_ == 0 ||
-      now - this->last_send_failure_log_ms_ >= 5000) {
-    ESP_LOGW(TAG, "ESP-NOW send failed: %s", esp_err_to_name(result));
-    this->last_send_failure_log_ms_ = now;
-  }
   if (this->role_ == CFXSyncRole::LEADER &&
-      this->consecutive_send_failures_ >=
+      this->consecutive_send_failures_ ==
           MAX_CONSECUTIVE_SEND_FAILURES) {
+    ESP_LOGW(TAG, "CFX Sync ESP-NOW send health degraded after %u failures: %s",
+             static_cast<unsigned>(MAX_CONSECUTIVE_SEND_FAILURES),
+             esp_err_to_name(result));
     this->status_set_warning();
   }
 }
@@ -2529,7 +2510,14 @@ void CFXSyncComponent::handle_send_result_(esp_err_t result) {
 void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
                                                 esp_err_t result) {
   if (result == ESP_OK) {
+    const bool recovered =
+        peer.consecutive_send_failures >= MAX_CONSECUTIVE_SEND_FAILURES;
     peer.consecutive_send_failures = 0;
+    if (recovered) {
+      char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+      format_mac_addr_upper(peer.mac.data(), peer_buf);
+      ESP_LOGI(TAG, "CFX Sync peer %s send health recovered", peer_buf);
+    }
     bool has_pending = false;
     for (const auto &candidate : this->peers_) {
       if (this->peer_accepts_leader_state_(candidate) &&
@@ -2551,19 +2539,15 @@ void CFXSyncComponent::handle_peer_send_result_(PeerState &peer,
   if (peer.consecutive_send_failures < UINT8_MAX) {
     peer.consecutive_send_failures++;
   }
-  const uint32_t now = millis();
-  peer.tx_suspended_until_ms = now + PEER_SEND_COOLDOWN_MS;
-  if (peer.last_send_failure_log_ms == 0 ||
-      now - peer.last_send_failure_log_ms >= 5000) {
+  peer.tx_suspended_until_ms = millis() + PEER_SEND_COOLDOWN_MS;
+  if (this->role_ == CFXSyncRole::LEADER &&
+      peer.consecutive_send_failures == MAX_CONSECUTIVE_SEND_FAILURES) {
     char peer_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
     format_mac_addr_upper(peer.mac.data(), peer_buf);
-    ESP_LOGW(TAG, "ESP-NOW send to peer %s failed: %s", peer_buf,
+    ESP_LOGW(TAG,
+             "CFX Sync peer %s send health degraded after %u failures: %s",
+             peer_buf, static_cast<unsigned>(MAX_CONSECUTIVE_SEND_FAILURES),
              esp_err_to_name(result));
-    peer.last_send_failure_log_ms = now;
-  }
-  if (this->role_ == CFXSyncRole::LEADER &&
-      peer.consecutive_send_failures >=
-          MAX_CONSECUTIVE_SEND_FAILURES) {
     this->status_set_warning();
   }
 }
@@ -2652,8 +2636,8 @@ void CFXSyncComponent::handle_decode_failure_(
 void CFXSyncComponent::log_rejection_(const char *message) {
   const uint32_t now = millis();
   if (this->last_rejection_log_ms_ == 0 ||
-      now - this->last_rejection_log_ms_ >= 5000) {
-    ESP_LOGV(TAG, "%s", message);
+      now - this->last_rejection_log_ms_ >= 30000) {
+    ESP_LOGD(TAG, "%s", message);
     this->last_rejection_log_ms_ = now;
   }
 }

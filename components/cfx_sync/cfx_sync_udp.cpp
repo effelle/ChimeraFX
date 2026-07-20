@@ -101,7 +101,7 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
       return;
     }
     if (packet_size > static_cast<int>(CFX_SYNC_SHARED_TRANSPORT_MTU)) {
-      ESP_LOGV(TAG, "Dropped oversized UDP datagram: bytes=%d maximum=%u",
+      ESP_LOGD(TAG, "Dropped oversized UDP datagram: bytes=%d maximum=%u",
                packet_size,
                static_cast<unsigned>(CFX_SYNC_SHARED_TRANSPORT_MTU));
       this->udp_.flush();
@@ -126,7 +126,7 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
                    reinterpret_cast<sockaddr *>(&addr), &addr_len);
     if (received < 0) {
       if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        ESP_LOGV(TAG, "UDP receive failed: errno=%d", errno);
+        ESP_LOGD(TAG, "UDP receive failed: errno=%d", errno);
       }
       return;
     }
@@ -135,7 +135,7 @@ void CFXSyncUDPTransport::poll(CFXSyncBus *bus) {
     }
     if (received >
         static_cast<ssize_t>(CFX_SYNC_SHARED_TRANSPORT_MTU)) {
-      ESP_LOGV(TAG, "Dropped oversized UDP datagram: bytes>=%u maximum=%u",
+      ESP_LOGD(TAG, "Dropped oversized UDP datagram: bytes>=%u maximum=%u",
                static_cast<unsigned>(received),
                static_cast<unsigned>(CFX_SYNC_SHARED_TRANSPORT_MTU));
       continue;

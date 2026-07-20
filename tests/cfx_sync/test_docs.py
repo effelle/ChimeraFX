@@ -88,6 +88,13 @@ class CFXSyncDocsTests(unittest.TestCase):
         )
         self.assertIn("`cfx_sync` over UDP", installation)
 
+    def test_docs_explain_sync_logging_policy(self):
+        text = CFX_SYNC_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("## Logging And Diagnostics", text)
+        self.assertIn("Healthy sync traffic stays quiet.", text)
+        self.assertIn("`dump_config()`", text)
+
 
 if __name__ == "__main__":
     unittest.main()
