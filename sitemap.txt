@@ -1,0 +1,10 @@
+https://effelle.github.io/ChimeraFX/
+https://effelle.github.io/ChimeraFX/Controls/
+https://effelle.github.io/ChimeraFX/Effect-Presets/
+https://effelle.github.io/ChimeraFX/Effects-Library/
+https://effelle.github.io/ChimeraFX/Installation/
+https://effelle.github.io/ChimeraFX/Power-Monitor/
+https://effelle.github.io/ChimeraFX/The-Story/
+https://effelle.github.io/ChimeraFX/Troubleshooting/
+https://effelle.github.io/ChimeraFX/cfx_light/
+https://effelle.github.io/ChimeraFX/cfx_sequence/

@@ -1,0 +1,1821 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://effelle.github.io/ChimeraFX/cfx_light/">
+      
+      
+        <link rel="prev" href="../Installation/">
+      
+      
+        <link rel="next" href="../Power-Monitor/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/ChimeraFX_mono_white_vector.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>ChimeraFX Light - ChimeraFX</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chimerafx-light-platform-cfx_light" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ChimeraFX" class="md-header__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
+      
+  <img src="../assets/ChimeraFX_rgb_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ChimeraFX
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ChimeraFX Light
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="purple"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/effelle/ChimeraFX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ChimeraFX
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ChimeraFX" class="md-nav__button md-logo" aria-label="ChimeraFX" data-md-component="logo">
+      
+  <img src="../assets/ChimeraFX_rgb_logo.png" alt="logo">
+
+    </a>
+    ChimeraFX
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/effelle/ChimeraFX" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ChimeraFX
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ChimeraFX Light
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ChimeraFX Light
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-use-cfx_light" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why use cfx_light?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-wire-nrz-strips-ws281x-sk6812-ws2811" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1-Wire NRZ Strips (WS281x, SK6812, WS2811)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-wire-spi-strips-apa102-sk9822" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2-Wire SPI Strips (APA102, SK9822)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#boot-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot Defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switching-the-led-power-supply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Switching the LED Power Supply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#segments-multi-zone-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segments (Multi-Zone Control)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overriding-and-customizing-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overriding and Customizing Effects
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-esp32-s3-parallel-driver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: ESP32-S3 Parallel Driver
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-architecture-performance-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Architecture &amp; Performance Limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware Architecture &amp; Performance Limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-read-these-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Read These Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-s3-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32-S3 Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-classic-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32 Classic Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-c3-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32-C3 Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Power-Monitor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Power Monitor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Controls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Effects-Library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Effect-Presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cfx_sequence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Sequencer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cfx_magic_buttons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Magic Buttons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cfx_sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ChimeraFX Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../The-Story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Story
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://www.buymeacoffee.com/effelle" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buy Me a Coffee!
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-use-cfx_light" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why use cfx_light?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-wire-nrz-strips-ws281x-sk6812-ws2811" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1-Wire NRZ Strips (WS281x, SK6812, WS2811)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-wire-spi-strips-apa102-sk9822" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2-Wire SPI Strips (APA102, SK9822)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#boot-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot Defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switching-the-led-power-supply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Switching the LED Power Supply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#segments-multi-zone-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segments (Multi-Zone Control)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overriding-and-customizing-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overriding and Customizing Effects
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-esp32-s3-parallel-driver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: ESP32-S3 Parallel Driver
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-architecture-performance-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Architecture &amp; Performance Limits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware Architecture &amp; Performance Limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-read-these-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Read These Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-s3-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32-S3 Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-classic-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32 Classic Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32-c3-test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32-C3 Test Matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="chimerafx-light-platform-cfx_light">ChimeraFX Light Platform (<code>cfx_light</code>)</h1>
+<p>The ChimeraFX Light Platform (<code>cfx_light</code>) is a custom ESPHome light component specifically designed to be the output layer for ChimeraFX. It is an asynchronous LED driver built directly on native ESP-IDF peripherals for maximum performance.</p>
+<h2 id="why-use-cfx_light">Why use <code>cfx_light</code>?</h2>
+<ol>
+<li><strong>Auto-injection (<code>all_effects</code>)</strong>: By default, <code>cfx_light</code> automatically parses and injects all ChimeraFX effects into your device at compile time. No more <code>!include</code> macros or huge YAML effect lists.</li>
+<li><strong>Chipset-aware intelligence</strong>: It natively understands strip timing, byte order, and RGB/RGBW protocol widths.</li>
+<li><strong>Optimized RMT allocation</strong>: Automatically chooses safe memory bounds for your specific ESP32 variant.</li>
+<li><strong>Automatic RGBW handling</strong>: Selecting <code>SK6812</code> automatically configures the 4-byte protocol and GRBW formatting.</li>
+<li><strong>Parallel Output (ESP32-S3)</strong>: Dense 1-wire installations can use grouped parallel lanes to run thousands of LEDs at high framerates.</li>
+</ol>
+<hr />
+<h2 id="quick-start-configuration">Quick Start Configuration</h2>
+<p>A ChimeraFX node must use one LED transport family at a time: <strong>RMT-only</strong>, <strong>SPI-only</strong>, or <strong>parallel-only</strong>. Mixed entries are rejected at compile time.</p>
+<h3 id="1-wire-nrz-strips-ws281x-sk6812-ws2811">1-Wire NRZ Strips (WS281x, SK6812, WS2811)</h3>
+<p><div class="highlight"><pre><span></span><code><span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip</span><span class="nv"> </span><span class="s">RMT&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip_rmt</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WS2812X</span>
+</code></pre></div>
+<em>Note: If your strip uses standard 800 kbps timing but isn't explicitly supported, <code>WS2812X</code> is a reliable drop-in.</em></p>
+<h3 id="2-wire-spi-strips-apa102-sk9822">2-Wire SPI Strips (APA102, SK9822)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip</span><span class="nv"> </span><span class="s">SPI&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip_spi</span>
+<span class="w">    </span><span class="nt">data_pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO23</span>
+<span class="w">    </span><span class="nt">clock_pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO18</span>
+<span class="w">    </span><span class="nt">spi_speed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10MHz</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SK9822</span>
+</code></pre></div>
+<h2 id="configuration-variables">Configuration Variables</h2>
+<h3 id="required-parameters">Required Parameters</h3>
+<ul>
+<li><strong>name</strong> (<em>string</em>): The name of the light in Home Assistant.</li>
+<li><strong>id</strong> (<em>ID</em>): The ID of the light component.</li>
+<li><strong>chipset</strong> (<em>string</em>): The type of LED strip you are using.</li>
+<li><em>1-Wire:</em> <code>WS2812X</code>, <code>SK6812</code> (RGBW), <code>WS2811</code>.</li>
+<li><em>2-Wire:</em> <code>APA102</code>, <code>SK9822</code>.</li>
+<li><strong>num_leds</strong> (<em>int</em>): The number of visible, controllable LEDs. <em>(Note: If <code>sacrificial_pixel</code> is true, do not count it here).</em></li>
+<li><strong>pin</strong> (<em>Pin</em>): The GPIO data pin (Required for 1-wire strips).</li>
+<li><strong>data_pin</strong> / <strong>clock_pin</strong> (<em>Pin</em>): The GPIO data and clock pins (Required for 2-wire SPI strips).</li>
+</ul>
+<h3 id="optional-parameters">Optional Parameters</h3>
+<ul>
+<li><strong>all_effects</strong> (<em>boolean</em>, default: <code>true</code>): Register all effects automatically. Set to <code>false</code> to manually register only selected effects.</li>
+<li><strong>rgb_order</strong> (<em>string</em>): Override byte order (<code>RGB</code>, <code>RBG</code>, <code>GRB</code>, <code>GBR</code>, <code>BGR</code>, <code>BRG</code>). Auto-set by chipset.</li>
+<li><strong>is_rgbw</strong> (<em>boolean</em>): Explicitly declare the strip as 4-byte RGBW. Auto-set if chipset is <code>SK6812</code>.</li>
+<li><strong>is_wrgb</strong> (<em>boolean</em>, default: <code>false</code>): Sets the white byte position to the front of the data packet. Required for some rare SK6812 variant clones.</li>
+<li><strong>sacrificial_pixel</strong> (<em>boolean</em>, default: <code>false</code>): RMT-only option. Transmits one extra black pixel before logical LED <code>0</code> to boost data signals on long wire runs.</li>
+<li><strong>spi_speed</strong> (<em>Frequency</em>): SPI clock speed for 2-wire strips.</li>
+<li><strong>rmt_symbols</strong> (<em>int</em>, default: <code>0</code>): Manual RMT symbol allocation. Leave at <code>0</code> for dynamic safe allocation. On ESP32 Classic, auto mode intentionally caps each RMT light at <code>128</code> symbols for the lowest-latency stable path; set this manually if a tested install should use more of the 512-symbol hardware pool.</li>
+<li><strong>default_transition_length</strong> (<em>Time</em>, default: <code>0s</code>): Standard ESPHome transition duration for solid-color mode and eligible effects.</li>
+<li><strong>power_supply</strong> (<em>ID</em>): Optional ESPHome <code>power_supply</code> used by this physical LED output. When its timing options are omitted, ChimeraFX uses <code>enable_time: 100ms</code> and <code>keep_on_time: 5s</code>.</li>
+<li><strong>controls</strong> (<em>boolean</em>, default: <code>true</code>): Automatically generate ChimeraFX control entities for this light.</li>
+<li><strong>ctrl_exclude</strong> (<em>list[int]</em>): Exclude specific auto-generated control groups by ID. See <a href="../Controls/">Controls</a>.</li>
+</ul>
+<h4 id="boot-defaults">Boot Defaults</h4>
+<ul>
+<li><strong>set_brightness</strong> (<em>percentage</em>): Default brightness when turned on.</li>
+<li><strong>set_color</strong> (<em>list[int]</em>): Default color when turned on as <code>[r, g, b]</code> or <code>[r, g, b, w]</code> (0-100%).</li>
+<li><strong>set_intro</strong> / <strong>set_outro</strong> (<em>int</em>): Force a global intro/outro animation for eligible effects.</li>
+<li><strong>set_inout_dur</strong> (<em>Time</em>): Duration for intros and outros.</li>
+</ul>
+<hr />
+<h2 id="switching-the-led-power-supply">Switching the LED Power Supply</h2>
+<p>This optional section is only for installations that need to switch the LED power supply or relay on and off with the strip.</p>
+<p><code>cfx_light</code> can use ESPHome's standard <a href="https://esphome.io/components/power_supply/"><code>power_supply</code></a> component to turn the LED power supply on only when the strip needs it.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">power_supply</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_power</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">number</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO18</span>
+<span class="w">      </span><span class="nt">inverted</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LED</span><span class="nv"> </span><span class="s">Strip&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_strip</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WS2812X</span>
+<span class="w">    </span><span class="nt">power_supply</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_power</span>
+</code></pre></div>
+<p><code>cfx_light</code> turns the supply on before sending LED data and keeps it on through transitions, effects, intros, and outros. It releases the supply only after the final LED frame has finished.</p>
+<p>For a power supply referenced by <code>cfx_light</code>, ChimeraFX supplies two practical timing defaults when you omit them:</p>
+<ul>
+<li><code>enable_time</code> defaults to <code>100ms</code>, giving the relay or power supply time to become ready before LED data is sent.</li>
+<li><code>keep_on_time</code> defaults to <code>5s</code>, preventing rapid relay cycling when the light is switched again shortly after turning off.</li>
+</ul>
+<p>You can override either value in the normal ESPHome <code>power_supply</code> configuration when your hardware needs different timing:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">power_supply</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">led_power</span>
+<span class="w">    </span><span class="nt">enable_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">250ms</span>
+<span class="w">    </span><span class="nt">keep_on_time</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">number</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO18</span>
+<span class="w">      </span><span class="nt">inverted</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>These helper defaults apply only to power supplies referenced by <code>cfx_light</code>. Other ESPHome power-supply configurations keep their native behavior.</p>
+<ul>
+<li>Segments share the single power request of their physical strip automatically.</li>
+<li>Multiple <code>cfx_light</code> outputs may reference the same <code>power_supply</code> ID. ESPHome keeps it enabled until every attached output has released it.</li>
+</ul>
+<p>Use a correctly rated relay, MOSFET, or power-supply enable input for the load. Set an inverted pin under <code>pin:</code> if your control hardware is active-low. Avoid <code>enable_on_boot: true</code> unless the supply should remain enabled continuously.</p>
+<hr />
+<h2 id="segments-multi-zone-control">Segments (Multi-Zone Control)</h2>
+<p>You can divide a single physical LED strip into up to <strong>4 independent logical segments</strong>. Each segment appears in Home Assistant as a separate light entity, allowing different effects on different parts of the same strip.</p>
+<ul>
+<li><strong>Master Light</strong>: Acts as global power and brightness control. Turning off the master turns off all segments.</li>
+<li><strong>Segment Lights</strong>: Have the full suite of effects and controls and operate independently.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Main</span><span class="nv"> </span><span class="s">TV</span><span class="nv"> </span><span class="s">Strip&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tv_strip</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO16</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WS2812X</span>
+
+<span class="w">    </span><span class="nt">segments</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tv_left</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TV</span><span class="nv"> </span><span class="s">Left</span><span class="nv"> </span><span class="s">Side&quot;</span>
+<span class="w">        </span><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">      </span><span class="c1"># Inclusive</span>
+<span class="w">        </span><span class="nt">stop</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">40</span><span class="w">      </span><span class="c1"># Exclusive</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tv_top</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TV</span><span class="nv"> </span><span class="s">Top&quot;</span>
+<span class="w">        </span><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">40</span>
+<span class="w">        </span><span class="nt">stop</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80</span>
+<span class="w">        </span><span class="nt">mirror</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># Reverses calculations for this segment</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tv_right</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TV</span><span class="nv"> </span><span class="s">Right</span><span class="nv"> </span><span class="s">Side&quot;</span>
+<span class="w">        </span><span class="nt">start</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80</span>
+<span class="w">        </span><span class="nt">stop</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+</code></pre></div>
+<hr />
+<h2 id="overriding-and-customizing-effects">Overriding and Customizing Effects</h2>
+<p>While <code>all_effects: true</code> loads everything, you can define your own defaults (like forcing a specific palette or speed) by manually defining an <code>addressable_cfx</code> effect.</p>
+<ul>
+<li><strong>To override:</strong> Use the exact same name as the default effect.</li>
+<li><strong>To create a preset:</strong> Use a new name.</li>
+</ul>
+<p><div class="highlight"><pre><span></span><code><span class="w">    </span><span class="nt">effects</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Aurora&quot;</span><span class="w"> </span><span class="c1"># Overrides default Aurora</span>
+<span class="w">          </span><span class="nt">effect_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">38</span>
+<span class="w">          </span><span class="nt">set_palette</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">          </span><span class="nt">set_speed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addressable_cfx</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Aurora</span><span class="nv"> </span><span class="s">Fast&quot;</span><span class="w"> </span><span class="c1"># Creates a new custom preset</span>
+<span class="w">          </span><span class="nt">effect_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">38</span>
+<span class="w">          </span><span class="nt">set_palette</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">          </span><span class="nt">set_speed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span>
+</code></pre></div>
+<em>Effect IDs can be found in the <a href="../Effects-Library/">Effects Library</a>.</em></p>
+<hr />
+<h2 id="advanced-esp32-s3-parallel-driver">Advanced: ESP32-S3 Parallel Driver</h2>
+<p>For high-density 1-wire layouts on the ESP32-S3, you can use the parallel driver. Multiple strips are rendered as "lanes" and transmitted simultaneously, drastically improving refresh rates.</p>
+<ul>
+<li><strong>Limits:</strong> Up to 4 lanes per group, up to 4 segments per lane, and max 2 groups per ESP32-S3.</li>
+<li><strong>Chipset groups:</strong> <code>SK6812</code> and <code>WS2812X</code> are supported, but chipsets cannot be mixed inside a single group. Use separate groups when you need both.</li>
+<li><strong>Best fit:</strong> Large RGBW/RGB strip layouts where several lanes should refresh together.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">light</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;S3</span><span class="nv"> </span><span class="s">Lane</span><span class="nv"> </span><span class="s">1&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lane_1</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO14</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">600</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SK6812</span>
+<span class="w">    </span><span class="nt">parallel_group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span><span class="w">   </span><span class="c1"># Assigns this to the &quot;main&quot; parallel group</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cfx_light</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;S3</span><span class="nv"> </span><span class="s">Lane</span><span class="nv"> </span><span class="s">2&quot;</span>
+<span class="w">    </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lane_2</span>
+<span class="w">    </span><span class="nt">pin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GPIO9</span>
+<span class="w">    </span><span class="nt">num_leds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">600</span>
+<span class="w">    </span><span class="nt">chipset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SK6812</span>
+<span class="w">    </span><span class="nt">parallel_group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span><span class="w">   </span><span class="c1"># Shares transmission with Lane 1</span>
+</code></pre></div>
+<p><strong>Reserved GPIOs:</strong> The parallel driver automatically reserves two free output GPIOs for internal control (<code>parallel_strobe_pin</code> and <code>parallel_dc_pin</code>). Check your compile log to see which pins were claimed, or manually define them if you need strict pin control. Do not connect LEDs to these internal pins!</p>
+<hr />
+<h2 id="hardware-architecture-performance-limits">Hardware Architecture &amp; Performance Limits</h2>
+<p><code>cfx_light</code> is highly optimized:</p>
+<ul>
+<li>
+<p><strong>ESP-IDF Native</strong>: Drives the RMT peripheral directly, bypassing framework overhead.</p>
+</li>
+<li>
+<p><strong>ESP32-S3 Preferred</strong>: For large arrays (&gt;800 LEDs), the ESP32-S3 using the parallel backend is strongly recommended. 40 meters of 60 LED/m strip can run at 30+ FPS.</p>
+</li>
+<li>
+<p><strong>ESP32 Classic Restored</strong>: Classic ESP32 remains a strong RMT/SPI target, especially when you need several ordinary RMT outputs.</p>
+</li>
+<li>
+<p><strong>ESP32-C3 Experimental</strong>: C3 support remains experimental for segmented RMT and is not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.</p>
+</li>
+</ul>
+<p>Rules of thumb:</p>
+<ul>
+<li>Choose <strong>S3 parallel</strong> for dense 1-wire installations with 3-4 lanes or many segments.</li>
+<li>Choose <strong>SPI</strong> when the strip supports it and you want the highest LED count per output.</li>
+<li>Choose <strong>Classic RMT</strong> for reliable multi-output 1-wire nodes where the LED count is moderate.</li>
+<li>Treat <strong>C3 RMT</strong> as experimental for segmented layouts. Use it only for simple or low-segment installs, and do not choose it for 4-segment builds.</li>
+</ul>
+<details class="abstract">
+<summary>Click here to view the detailed Performance Test Matrices</summary>
+<h3 id="how-to-read-these-results">How to Read These Results</h3>
+<ul>
+<li><strong>Stress Tests, Not Averages:</strong> The numbers below represent the suggested maximum limits of the hardware. A device is intentionally pushed to find the maximum number of LEDs you can run while maintaining a <em>minimum</em> of ~30 FPS and keeping the device stable.</li>
+<li><strong>Higher FPS:</strong> These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to <strong>~60 FPS</strong>.</li>
+<li><strong>Benchmark Details:</strong> Every test ran for at least 20 minutes using the <code>Energy</code> effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.</li>
+<li><strong>Strip Type:</strong> The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run often <strong>10-15%</strong> faster in dense multi-output tests, and up to <strong>~25-30%</strong> faster in single-channel wire-bound cases because each frame carries less pixel data.</li>
+<li><strong>Segment Sizing:</strong> In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that <strong>this is not a limitation</strong>. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Result labels</p>
+<p><code>PASS</code> means Heap WiFi &gt;= 75kB.</p>
+<p><code>PASS / BT WARN</code> means 55kB &lt;= Heap WiFi &lt; 75kB. Wi-Fi is still in the safe zone, but Bluetooth may not have enough free heap for reliable operation. See <a href="../Troubleshooting/#memory-management-stability">Memory Management &amp; Stability</a> for the heap floor logic.</p>
+</div>
+<ul>
+<li><strong>FPS:</strong> shown as <code>Render / Led</code>.</li>
+</ul>
+<h3 id="esp32-s3-test-matrix">ESP32-S3 Test Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Setup</th>
+<th>LEDs</th>
+<th>Heap</th>
+<th>FPS</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parallel, 1 lane, no segments</td>
+<td>820/lane, 820 total</td>
+<td>76kB</td>
+<td>30.6 / 30.6</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Parallel, 1 lane, 4x200</td>
+<td>800/lane, 800 total</td>
+<td>68kB</td>
+<td>31.4 / 31.4</td>
+<td>PASS / BT WARN</td>
+</tr>
+<tr>
+<td>RMT-GDMA, 1 lane, no segments</td>
+<td>620/lane, 620 total</td>
+<td>230kB</td>
+<td>59.0 / 30.9</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT-GDMA, 1 lane, 4x135</td>
+<td>540/lane, 540 total</td>
+<td>213kB</td>
+<td>53.0 / 31.4</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Parallel, 2 lanes, no segments</td>
+<td>750/lane, 1500 total</td>
+<td>76kB</td>
+<td>33.4 / 33.5</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Parallel, 2 lanes, 8x175</td>
+<td>700/lane, 1400 total</td>
+<td>63kB</td>
+<td>35.8 / 35.8</td>
+<td>PASS / BT WARN</td>
+</tr>
+<tr>
+<td>RMT, 2 lanes, no segments</td>
+<td>680/lane, 1360 total</td>
+<td>213kB</td>
+<td>58.6 / 31.6</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 2 lanes, 4x154</td>
+<td>616/lane, 1232 total</td>
+<td>182kB</td>
+<td>43.9 / 31.7</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Parallel, 3 lanes, no segments</td>
+<td>720/lane, 2880 total</td>
+<td>72kB</td>
+<td>34.8 / 34.8</td>
+<td>PASS / BT WARN</td>
+</tr>
+<tr>
+<td>Parallel, 3 lanes, 12x170</td>
+<td>680/lane, 2040 total</td>
+<td>100kB</td>
+<td>31.5 / 31.4</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Parallel, 4 lanes, no segments</td>
+<td>650/lane, 2600 total</td>
+<td>71kB</td>
+<td>38.5 / 38.6</td>
+<td>PASS / BT WARN</td>
+</tr>
+<tr>
+<td>Parallel, 4 lanes, 16x160</td>
+<td>640/lane, 2560 total</td>
+<td>82kB</td>
+<td>33.1 / 33.1</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, no segments</td>
+<td>2000/lane, 2000 total</td>
+<td>166kB</td>
+<td>51.3 / 51.2</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, 4x500</td>
+<td>2000/lane, 2000 total</td>
+<td>134kB</td>
+<td>45.7 / 45.7</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 2 lanes, no segments</td>
+<td>2000/lane, 4000 total</td>
+<td>225kB</td>
+<td>58.3 / 58.8</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 2 lanes, 4x500</td>
+<td>2000/lane, 4000 total</td>
+<td>152kB</td>
+<td>45.2 / 45.4</td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="esp32-classic-test-matrix">ESP32 Classic Test Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Setup</th>
+<th>LEDs</th>
+<th>Heap</th>
+<th>FPS</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RMT, 1 lane, no segments</td>
+<td>740/lane, 740 total</td>
+<td>157kB</td>
+<td>32.3 / 32.2</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 1 lane, 4x175</td>
+<td>700/lane, 700 total</td>
+<td>145kB</td>
+<td>34.6 / 36.6</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 2 lanes, no segments</td>
+<td>700/lane, 1400 total</td>
+<td>142kB</td>
+<td>34.4 / 33.8</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 2 lanes, 8x165</td>
+<td>660/lane, 1320 total</td>
+<td>117kB</td>
+<td>34.6 / 38.7</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 3 lanes, no segments</td>
+<td>680/lane, 2040 total</td>
+<td>126kB</td>
+<td>35.7 / 32.5</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 3 lanes, 12x160</td>
+<td>640/lane, 1920 total</td>
+<td>89kB</td>
+<td>35.7 / 35.6</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 4 lanes, no segments</td>
+<td>670/lane, 3080 total</td>
+<td>109kB</td>
+<td>36.0 / 36.6</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 4 lanes, 16x135</td>
+<td>540/lane, 2160 total</td>
+<td>64kB</td>
+<td>41.2 / 43.2</td>
+<td>PASS / BT WARN</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, no segments</td>
+<td>2000/lane, 2000 total</td>
+<td>220kB</td>
+<td>58.4 / 58.0</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, 4x500</td>
+<td>2000/lane, 2000 total</td>
+<td>207kB</td>
+<td>58.8 / 58.9</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 2 lanes, no segments</td>
+<td>2000/lane, 4000 total</td>
+<td>193kB</td>
+<td>58.8 / 58.9</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 2 lanes, 8x500</td>
+<td>2000/lane, 4000 total</td>
+<td>168kB</td>
+<td>59.3 / 60.0</td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="esp32-c3-test-matrix">ESP32-C3 Test Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Setup</th>
+<th>LEDs</th>
+<th>Heap</th>
+<th>FPS</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RMT, 1 lane, no segments</td>
+<td>720/lane, 720 total</td>
+<td>177kB</td>
+<td>32.5 / 32.1</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>RMT, 1 lane, 4x165</td>
+<td>660/lane, 660 total</td>
+<td>163kB</td>
+<td>33.1 / 38.1</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, no segments</td>
+<td>2000/lane, 2000 total</td>
+<td>166kB</td>
+<td>51.3 / 51.2</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SPI, 1 lane, 4x500</td>
+<td>2000/lane, 2000 total</td>
+<td>152kB</td>
+<td>45.2 / 45.4</td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table>
+<p><em>Notes:</em></p>
+<ul>
+<li><em>SPI driver is currently in BETA.</em></li>
+<li><em>GDMA means General Direct Memory Access, preventing main CPU bog down.</em></li>
+</ul>
+</details>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/effelle/ChimeraFX" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://www.buymeacoffee.com/effelle" target="_blank" rel="noopener" title="www.buymeacoffee.com" class="md-social__link">
+      <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Buy Me A Coffee</title><path d="M20.216 6.415l-.132-.666c-.119-.598-.388-1.163-1.001-1.379-.197-.069-.42-.098-.57-.241-.152-.143-.196-.366-.231-.572-.065-.378-.125-.756-.192-1.133-.057-.325-.102-.69-.25-.987-.195-.4-.597-.634-.996-.788a5.723 5.723 0 00-.626-.194c-1-.263-2.05-.36-3.077-.416a25.834 25.834 0 00-3.7.062c-.915.083-1.88.184-2.75.5-.318.116-.646.256-.888.501-.297.302-.393.77-.177 1.146.154.267.415.456.692.58.36.162.737.284 1.123.366 1.075.238 2.189.331 3.287.37 1.218.05 2.437.01 3.65-.118.299-.033.598-.073.896-.119.352-.054.578-.513.474-.834-.124-.383-.457-.531-.834-.473-.466.074-.96.108-1.382.146-1.177.08-2.358.082-3.536.006a22.228 22.228 0 01-1.157-.107c-.086-.01-.18-.025-.258-.036-.243-.036-.484-.08-.724-.13-.111-.027-.111-.185 0-.212h.005c.277-.06.557-.108.838-.147h.002c.131-.009.263-.032.394-.048a25.076 25.076 0 013.426-.12c.674.019 1.347.067 2.017.144l.228.031c.267.04.533.088.798.145.392.085.895.113 1.07.542.055.137.08.288.111.431l.319 1.484a.237.237 0 01-.199.284h-.003c-.037.006-.075.01-.112.015a36.704 36.704 0 01-4.743.295 37.059 37.059 0 01-4.699-.304c-.14-.017-.293-.042-.417-.06-.326-.048-.649-.108-.973-.161-.393-.065-.768-.032-1.123.161-.29.16-.527.404-.675.701-.154.316-.199.66-.267 1-.069.34-.176.707-.135 1.056.087.753.613 1.365 1.37 1.502a39.69 39.69 0 0011.343.376.483.483 0 01.535.53l-.071.697-1.018 9.907c-.041.41-.047.832-.125 1.237-.122.637-.553 1.028-1.182 1.171-.577.131-1.165.2-1.756.205-.656.004-1.31-.025-1.966-.022-.699.004-1.556-.06-2.095-.58-.475-.458-.54-1.174-.605-1.793l-.731-7.013-.322-3.094c-.037-.351-.286-.695-.678-.678-.336.015-.718.3-.678.679l.228 2.185.949 9.112c.147 1.344 1.174 2.068 2.446 2.272.742.12 1.503.144 2.257.156.966.016 1.942.053 2.892-.122 1.408-.258 2.465-1.198 2.616-2.657.34-3.332.683-6.663 1.024-9.995l.215-2.087a.484.484 0 01.39-.426c.402-.078.787-.212 1.074-.518.455-.488.546-1.124.385-1.766zm-1.478.772c-.145.137-.363.201-.578.233-2.416.359-4.866.54-7.308.46-1.748-.06-3.477-.254-5.207-.498-.17-.024-.353-.055-.47-.18-.22-.236-.111-.71-.054-.995.052-.26.152-.609.463-.646.484-.057 1.046.148 1.526.22.577.088 1.156.159 1.737.212 2.48.226 5.002.19 7.472-.14.45-.06.899-.13 1.345-.21.399-.072.84-.206 1.08.206.166.281.188.657.162.974a.544.544 0 01-.169.364zm-6.159 3.9c-.862.37-1.84.788-3.109.788a5.884 5.884 0 01-1.569-.217l.877 9.004c.065.78.717 1.38 1.5 1.38 0 0 1.243.065 1.658.065.447 0 1.786-.065 1.786-.065.783 0 1.434-.6 1.499-1.38l.94-9.95a3.996 3.996 0 00-1.322-.238c-.826 0-1.491.284-2.26.613z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../assets/js/lazy_accordion.js"></script>
+      
+    
+  </body>
+</html>
