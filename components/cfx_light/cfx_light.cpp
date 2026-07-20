@@ -1248,7 +1248,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            " late_ms=%" PRIu32 "/%" PRIu32
            " collect_flush_us=%" PRIu32 "/%" PRIu32
            " refresh_us=%" PRIu32 "/%" PRIu32
-           " next_due=%" PRId32 "ms heap=%ukB",
+           " next_due=%" PRId32 "ms heap=%" PRIu32 "kB",
            light_name, active_mask, this->segment_coord_owned_mask_,
            this->segment_coord_dormant_mask_,
            this->segment_mono_idle_dormant_mask_, this->seg_last_flush_mask_,
@@ -1265,7 +1265,7 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            this->seg_coord_max_due_late_ms_, avg_collect_flush_us,
            this->seg_coord_max_collect_flush_us_, avg_refresh_dt_us,
            this->seg_coord_max_refresh_dt_us_, due_in_ms,
-           esp_get_free_heap_size() / 1024);
+           static_cast<uint32_t>(esp_get_free_heap_size() / 1024U));
 
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;

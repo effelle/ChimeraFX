@@ -11,6 +11,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -613,7 +614,7 @@ struct FrameDiagnostics {
 
     ESP_LOGI("chimera_fx",
              "[%s] FX:%s(%u) | RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | "
-             "Jitter: %.0f%% | Heap: %ukB [ACTV]",
+             "Jitter: %.0f%% | Heap: %" PRIu32 "kB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              pending_mode_name_ ? pending_mode_name_ : "?",
              pending_mode_id_, fps, led_fps_text, avg_frame_ms, jitter_pct,
@@ -651,7 +652,8 @@ struct FrameDiagnostics {
     format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
 
     ESP_LOGI("chimera_fx",
-             "[%s] RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
+             "[%s] RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | "
+             "Jitter: %.0f%% | Heap: %" PRIu32 "kB [IDLE]",
              effect_name ? effect_name : "?",
              fps, led_fps_text, avg_frame_ms, jitter_pct, free_heap_kb);
   }
@@ -669,7 +671,8 @@ struct FrameDiagnostics {
     free_heap = esp_get_free_heap_size();
 #endif
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | RenderFPS:hold | LedFPS:sleep | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+             "[%s] FX:%s(%u) | RenderFPS:hold | LedFPS:sleep | Time:- | "
+             "Jitter:- | Heap: %" PRIu32 "kB [IDLE]",
              effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
              mode_id, free_heap / 1024);
 

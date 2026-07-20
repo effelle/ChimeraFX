@@ -18,6 +18,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
 
+#include <cinttypes>
 #include <string>
 
 namespace esphome {
@@ -249,8 +250,11 @@ public:
   }
 
   void dump_config() override {
-    ESP_LOGCONFIG("cfx_vseg", "  Virtual Segment '%s': LEDs %u-%u (%d pixels)",
-                  seg_id_.c_str(), start_, stop_, this->size());
+    ESP_LOGCONFIG("cfx_vseg",
+                  "  Virtual Segment '%s': LEDs %u-%u (%" PRId32
+                  " pixels)",
+                  seg_id_.c_str(), static_cast<unsigned>(start_),
+                  static_cast<unsigned>(stop_), this->size());
   }
 
   // --- Segment identity ---

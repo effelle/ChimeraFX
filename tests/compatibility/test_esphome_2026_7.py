@@ -11,6 +11,11 @@ EFFECT_SOURCE = (
 SYNC_BUS_HEADER = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.h"
 SYNC_BUS_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync_bus.cpp"
 SYNC_SOURCE = ROOT / "components" / "cfx_sync" / "cfx_sync.cpp"
+UTILS_HEADER = ROOT / "components" / "cfx_effect" / "cfx_utils.h"
+LIGHT_SOURCE = ROOT / "components" / "cfx_light" / "cfx_light.cpp"
+VIRTUAL_SEGMENT_HEADER = (
+    ROOT / "components" / "cfx_light" / "cfx_virtual_segment_light.h"
+)
 INSTALL_DOCS = ROOT / "docs" / "Installation.md"
 README = ROOT / "README.md"
 
@@ -57,6 +62,15 @@ class ESPHome20267CompatibilityTests(unittest.TestCase):
             "packet.has_brightness && apply_visual_state &&",
             source,
         )
+
+    def test_diagnostic_integer_formats_are_width_portable(self):
+        utils = UTILS_HEADER.read_text(encoding="utf-8")
+        light = LIGHT_SOURCE.read_text(encoding="utf-8")
+        segment = VIRTUAL_SEGMENT_HEADER.read_text(encoding="utf-8")
+        self.assertNotIn("Heap: %ukB", utils)
+        self.assertNotIn("heap=%ukB", light)
+        self.assertIn('Heap: %" PRIu32 "kB', utils)
+        self.assertIn('(%" PRId32', segment)
 
     def test_documented_minimum_version_is_2026_7(self):
         installation = INSTALL_DOCS.read_text(encoding="utf-8")
