@@ -50,9 +50,11 @@ light:
 ```yaml
 power_supply:
   - id: led_power
-    pin: GPIO17
     enable_time: 100ms
     keep_on_time: 5s
+    pin:
+      number: GPIO18
+      inverted: true
 
 light:
   - platform: cfx_light
