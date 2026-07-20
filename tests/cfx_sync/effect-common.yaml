@@ -1,0 +1,11 @@
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components:
+      - cfx_sync
+      - cfx_light
+      - cfx_effect
+      - cfx_effect_registry
+
+logger:

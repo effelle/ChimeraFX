@@ -9,7 +9,7 @@
 ```yaml
 external_components:
   - source: github://effelle/ChimeraFX@main
-    components: [cfx_effect]
+    components: [cfx_effect, cfx_effect_registry]
 ```
 
 See [README.md](README.md) for full documentation.

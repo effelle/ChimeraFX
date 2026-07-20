@@ -1,0 +1,14 @@
+substitutions:
+  sync_role: leader
+
+packages:
+  common: !include common.yaml
+
+esphome:
+  name: cfx-sync-leader-arduino
+  min_version: 2026.5.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino

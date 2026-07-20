@@ -8,10 +8,12 @@
  */
 
 #include "cfx_light.h"
+#include "cfx_master_sync.h"
 #include "cfx_power_manager.h"
 #include "cfx_virtual_segment_light.h"
 #include "cfx_transmit_barrier.h"
 #include "../cfx_effect/cfx_control.h"
+#include "../cfx_effect/CFXRunner.h"
 #include "../cfx_effect/cfx_scheduler.h"
 #include "../cfx_effect/cfx_utils.h"
 #include "../cfx_effect/cfx_effect_stub.h"
@@ -29,6 +31,7 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
@@ -70,6 +73,14 @@ static uint32_t g_last_rmt_launch_us = 0;
 static uint32_t g_rmt_launch_seq = 0;
 static volatile uint32_t g_rmt_dma_active_count = 0;
 static volatile uint32_t g_spi_dma_active_count = 0;
+
+static bool cfx_unicore_build_() {
+#ifdef CONFIG_FREERTOS_UNICORE
+  return true;
+#else
+  return false;
+#endif
+}
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 static const uint8_t PARALLEL_SYMBOL_SAMPLES = 3;
@@ -222,7 +233,7 @@ static CFXParallelGroupRuntime *parallel_group_for_output_(
   return parallel_group_at_(output->get_parallel_group_index());
 }
 
-static uint8_t parallel_configured_group_count_() {
+[[maybe_unused]] static uint8_t parallel_configured_group_count_() {
   uint8_t count = 0;
   for (uint8_t i = 0; i < PARALLEL_MAX_GROUPS; i++) {
     if (g_parallel_groups[i].configured) {
@@ -424,7 +435,9 @@ static esp_err_t parallel_classic_configure_i2s_(CFXParallelGroupRuntime *group)
 }
 #endif
 
-static bool parallel_pin_used_(uint8_t pin, const uint8_t *pins, uint8_t count) {
+[[maybe_unused]] static bool parallel_pin_used_(uint8_t pin,
+                                               const uint8_t *pins,
+                                               uint8_t count) {
   for (uint8_t i = 0; i < count; i++) {
     if (pins[i] == pin) {
       return true;
@@ -499,7 +512,8 @@ static bool IRAM_ATTR parallel_tx_done_cb_(esp_lcd_panel_io_handle_t,
 }
 #endif
 
-static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
+[[maybe_unused]] static uint32_t
+rmt_non_dma_symbols(uint32_t configured_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return configured_symbols < 128u ? 128u : configured_symbols;
 #else
@@ -507,7 +521,8 @@ static uint32_t rmt_non_dma_symbols(uint32_t configured_symbols) {
 #endif
 }
 
-static size_t rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
+[[maybe_unused]] static size_t
+rmt_encoder_min_chunk_size(uint32_t mem_block_symbols) {
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
     defined(CONFIG_IDF_TARGET_ESP32P4)
   // C3/S3/P4 RMT blocks are small, and waking the simple encoder every byte
@@ -665,6 +680,9 @@ void CFXLightOutput::release_outro_callback_storage_() {
 }
 
 void CFXLightOutput::add_outro_callback(OutroCallback cb) {
+  if (this->outro_cbs_.empty()) {
+    this->outro_last_frame_ms_ = 0;
+  }
   this->outro_cbs_.push_back(cb);
   this->update_high_frequency_loop_request_();
 }
@@ -799,13 +817,20 @@ uint32_t CFXLightOutput::get_rmt_wire_frame_floor_us() const {
 
 uint32_t CFXLightOutput::get_effective_rmt_update_interval_ms(
     uint32_t requested_ms) const {
-  if (!this->is_rmt_transport()) {
-    return requested_ms;
-  }
-
   uint32_t effective_ms = requested_ms;
   if (effective_ms != 0 && effective_ms < 17) {
     effective_ms = 17;
+  }
+
+  if (!this->is_rmt_transport()) {
+    if (this->max_refresh_rate_.has_value()) {
+      const uint32_t max_refresh_ms =
+          (*this->max_refresh_rate_ + 999u) / 1000u;
+      if (max_refresh_ms > effective_ms) {
+        effective_ms = max_refresh_ms;
+      }
+    }
+    return effective_ms;
   }
 
   const uint32_t wire_floor_us = this->get_rmt_wire_frame_floor_us();
@@ -843,8 +868,12 @@ void CFXLightOutput::record_parallel_completed_led_frames_() {
   while (g_parallel_group.led_recorded_done_count < done_count) {
     g_parallel_group.led_recorded_done_count++;
     for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-      if (g_parallel_group.outputs[lane] != nullptr) {
-        g_parallel_group.outputs[lane]->record_led_frame_();
+      auto *lane_output = g_parallel_group.outputs[lane];
+      if (lane_output != nullptr) {
+        lane_output->record_led_frame_();
+        if (lane_output->power_manager_ != nullptr) {
+          lane_output->power_manager_->record_output_frame(lane_output);
+        }
       }
     }
   }
@@ -1161,7 +1190,10 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
       this->seg_coord_epochs_ == 0 &&
       this->seg_coord_epoch_dt_count_ == 0 &&
       this->seg_coord_collect_flush_count_ == 0 &&
-      this->seg_coord_refresh_dt_count_ == 0) {
+      this->seg_coord_refresh_dt_count_ == 0 &&
+      this->seg_deferred_flushes_ == 0 &&
+      this->seg_deferred_flush_skips_ == 0 &&
+      !this->seg_deferred_flush_pending_) {
     this->seg_batch_diag_last_log_ms_ = now_ms;
     return;
   }
@@ -1208,19 +1240,20 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
   const uint32_t avg_refresh_dt_us = static_cast<uint32_t>(
       this->seg_coord_total_refresh_dt_us_ / refresh_dt_count);
 
-  ESP_LOGV(TAG,
+  ESP_LOGD(TAG,
            "CFX seg_coord[%s] active=0x%02x owned=0x%02x dormant=0x%02x "
            "idle=0x%02x last=0x%02x/%u epochs=%" PRIu32
            " segs=%" PRIu32 " avg=%" PRIu32
            " partial=%" PRIu32 " missed=%" PRIu32
            " max_missing=%" PRIu32 " clean=%" PRIu32
            " apply_skip=%" PRIu32 " write_skip=%" PRIu32
+           " defer=%" PRIu32 "/%" PRIu32 " pending=%d"
            " max_contrib=%" PRIu32 " refresh_defers=%" PRIu64
            " epoch_us=%" PRIu32 "/%" PRIu32
            " late_ms=%" PRIu32 "/%" PRIu32
            " collect_flush_us=%" PRIu32 "/%" PRIu32
            " refresh_us=%" PRIu32 "/%" PRIu32
-           " next_due=%" PRId32 "ms heap=%ukB",
+           " next_due=%" PRId32 "ms heap=%" PRIu32 "kB",
            light_name, active_mask, this->segment_coord_owned_mask_,
            this->segment_coord_dormant_mask_,
            this->segment_mono_idle_dormant_mask_, this->seg_last_flush_mask_,
@@ -1229,19 +1262,23 @@ void CFXLightOutput::log_segment_coordinator_diag_() {
            this->seg_partial_frame_suppressed_, this->seg_missed_epoch_count_,
            this->perf_diag_max_partial_missing_,
            this->seg_clean_epoch_suppressed_, this->seg_coord_apply_skips_,
-           this->seg_coord_write_skips_, this->perf_diag_max_seg_contrib_,
+           this->seg_coord_write_skips_, this->seg_deferred_flushes_,
+           this->seg_deferred_flush_skips_, this->seg_deferred_flush_pending_,
+           this->perf_diag_max_seg_contrib_,
            this->perf_diag_total_refresh_defers_, avg_epoch_dt_us,
            this->seg_coord_max_epoch_dt_us_, avg_due_late_ms,
            this->seg_coord_max_due_late_ms_, avg_collect_flush_us,
            this->seg_coord_max_collect_flush_us_, avg_refresh_dt_us,
            this->seg_coord_max_refresh_dt_us_, due_in_ms,
-           esp_get_free_heap_size() / 1024);
+           static_cast<uint32_t>(esp_get_free_heap_size() / 1024U));
 
   this->seg_partial_frame_suppressed_ = 0;
   this->seg_missed_epoch_count_ = 0;
   this->seg_clean_epoch_suppressed_ = 0;
   this->seg_coord_apply_skips_ = 0;
   this->seg_coord_write_skips_ = 0;
+  this->seg_deferred_flushes_ = 0;
+  this->seg_deferred_flush_skips_ = 0;
   this->seg_coord_epochs_ = 0;
   this->seg_coord_rendered_segments_ = 0;
   this->seg_coord_epoch_dt_count_ = 0;
@@ -1494,7 +1531,8 @@ resolve_perf_diag_effect(CFXLightOutput *output) {
   return nullptr;
 }
 
-static bool segment_participates_in_barrier(light::LightState *state) {
+bool CFXLightOutput::segment_participates_in_barrier_(
+    light::LightState *state) const {
   if (state == nullptr) {
     return false;
   }
@@ -1629,10 +1667,9 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
   if (master_should_sleep &&
       (!this->master_mono_idle_dormant_ ||
        this->master_light_state_->is_in_loop_state())) {
-    const bool entering_idle = !this->master_mono_idle_dormant_;
     auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr) {
-      effect->log_mono_idle_sleep(entering_idle);
+    if (effect != nullptr && !this->master_mono_idle_dormant_) {
+      effect->log_mono_idle_hold(true);
     }
     if (!this->master_mono_idle_dormant_) {
       this->master_mono_idle_sleep_ms_ = esphome::millis();
@@ -1641,11 +1678,6 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     chimera_fx::LightStateProxy::clear_pending_write(this->master_light_state_);
     this->master_light_state_->disable_loop();
     this->master_mono_idle_dormant_ = true;
-  } else if (master_should_sleep && this->master_mono_idle_dormant_) {
-    auto *effect = resolve_active_cfx_effect(this->master_light_state_);
-    if (effect != nullptr) {
-      effect->log_mono_idle_sleep();
-    }
   } else if (!master_should_sleep && this->master_mono_idle_dormant_) {
     this->master_light_state_->enable_loop();
     this->master_mono_idle_dormant_ = false;
@@ -1661,19 +1693,15 @@ void CFXLightOutput::apply_mono_idle_loop_state_(uint8_t segment_idle_mask) {
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool now_idle = (segment_idle_mask & bit) != 0;
     const bool was_idle = (previous_segment_idle_mask & bit) != 0;
-    auto *effect = seg_state != nullptr
-                       ? resolve_active_cfx_effect(seg_state)
-                       : nullptr;
     if (now_idle && !was_idle) {
+      auto *effect = seg_state != nullptr
+                         ? resolve_active_cfx_effect(seg_state)
+                         : nullptr;
       if (effect != nullptr) {
-        effect->log_mono_idle_sleep(true);
+        effect->log_mono_idle_hold(true);
       }
       this->segment_mono_idle_sleep_ms_[i] = now_ms;
       this->mono_idle_sleep_count_++;
-    } else if (now_idle && was_idle) {
-      if (effect != nullptr) {
-        effect->log_mono_idle_sleep();
-      }
     } else if (!now_idle && was_idle) {
       this->segment_mono_idle_sleep_ms_[i] = 0;
       this->mono_idle_wake_count_++;
@@ -1699,13 +1727,8 @@ void CFXLightOutput::apply_segment_coordination_loop_state_(
     const uint8_t bit = static_cast<uint8_t>(1u << i);
     const bool should_sleep = (owned_mask & bit) != 0;
     const bool is_sleeping = (this->segment_coord_dormant_mask_ & bit) != 0;
-    auto *effect = resolve_active_cfx_effect(seg_state);
-    const bool keep_probe_awake =
-        should_sleep && seg_state->is_in_loop_state() && effect != nullptr &&
-        effect->has_pending_mono_idle_probe();
 
-    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state()) &&
-        !keep_probe_awake) {
+    if (should_sleep && (!is_sleeping || seg_state->is_in_loop_state())) {
       chimera_fx::LightStateProxy::clear_pending_write(seg_state);
       seg_state->disable_loop();
       next_dormant_mask |= bit;
@@ -1768,8 +1791,14 @@ void CFXLightOutput::clear_segment_runtime_slot_(size_t index) {
   this->segment_runtime_slots_[index] = CFXSegmentRuntimeSlot{};
 }
 
-bool CFXLightOutput::has_active_parent_owned_segments_() const {
-  if (this->has_outro()) {
+void CFXLightOutput::clear_segment_idle_diag_() {
+  this->seg_partial_frame_suppressed_ = 0;
+  this->seg_missed_epoch_count_ = 0;
+  this->perf_diag_max_partial_missing_ = 0;
+}
+
+bool CFXLightOutput::has_active_parent_owned_segments_(bool include_outro) const {
+  if (this->has_outro() && !include_outro) {
     return false;
   }
   for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
@@ -1917,9 +1946,9 @@ void CFXLightOutput::unregister_parent_owned_segment(
   this->refresh_segment_coordination_mask_();
 }
 
-void CFXLightOutput::refresh_segment_coordination_mask_() {
+void CFXLightOutput::refresh_segment_coordination_mask_(bool include_outro) {
   uint8_t mask = 0;
-  if (this->has_segments() && !this->has_outro()) {
+  if (this->has_segments() && (!this->has_outro() || include_outro)) {
     for (size_t i = 0; i < MAX_CFX_SEGMENTS; i++) {
       const auto &slot = this->segment_runtime_slots_[i];
       if (!slot.active || slot.state == nullptr || slot.effect == nullptr ||
@@ -1943,7 +1972,7 @@ void CFXLightOutput::refresh_segment_coordination_mask_() {
 
 bool CFXLightOutput::segment_coordinator_owns(light::LightState *state) {
   if (this->segment_coord_schedule_dirty_) {
-    this->refresh_segment_coordination_mask_();
+    this->refresh_segment_coordination_mask_(this->has_outro());
   }
   const int slot_index = this->find_segment_runtime_slot_(state);
   return slot_index >= 0 &&
@@ -1977,14 +2006,21 @@ void CFXLightOutput::mark_parent_owned_segment_dirty(light::LightState *state) {
 bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
                                                         uint8_t &count,
                                                         uint64_t now,
-                                                        bool force_due) {
+                                                        bool force_due,
+                                                        bool allow_outro) {
   mask = 0;
   count = 0;
   const uint64_t scheduled_due = this->segment_coord_next_due_ms_;
-  if (!this->has_segments() || this->has_outro()) {
+  if (!this->has_segments() || (this->has_outro() && !allow_outro)) {
     this->apply_segment_coordination_loop_state_(0);
     this->apply_master_segment_coordination_loop_state_();
     this->apply_mono_idle_loop_state_(0);
+    if (!this->has_segments()) {
+      this->clear_segment_idle_diag_();
+    }
+    return false;
+  }
+  if (!force_due && this->seg_deferred_flush_pending_) {
     return false;
   }
 
@@ -1995,14 +2031,15 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     return false;
   }
   uint64_t next_due = 0;
-  this->refresh_segment_coordination_mask_();
+  this->refresh_segment_coordination_mask_(allow_outro);
   const uint8_t segment_idle_mask =
-      this->collect_clean_mono_idle_segment_mask_();
+      allow_outro ? 0 : this->collect_clean_mono_idle_segment_mask_();
   this->apply_mono_idle_loop_state_(segment_idle_mask);
   this->apply_master_segment_coordination_loop_state_();
   if (this->segment_coord_owned_mask_ == 0) {
     this->segment_coord_schedule_dirty_ = false;
     this->segment_coord_next_due_ms_ = 0;
+    this->clear_segment_idle_diag_();
     return false;
   }
 
@@ -2020,7 +2057,14 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
     if ((this->segment_coord_owned_mask_ & static_cast<uint8_t>(1u << i)) == 0) {
       continue;
     }
-    const uint32_t interval = slot.effect->get_effective_update_interval();
+    uint32_t interval = slot.effect->get_effective_update_interval();
+    if (this->rmt_c3_stability_cushion_) {
+      const uint32_t c3_floor_us = this->get_segmented_rmt_refresh_floor_us_();
+      const uint32_t c3_floor_ms = (c3_floor_us + 999u) / 1000u;
+      if (c3_floor_ms > interval) {
+        interval = c3_floor_ms;
+      }
+    }
     if (slot.due_at == 0) {
       slot.due_at = now;
     }
@@ -2087,10 +2131,12 @@ bool CFXLightOutput::collect_segment_coordinator_epoch_(uint8_t &mask,
 
 bool CFXLightOutput::render_segment_coordinator_epoch_(uint8_t &mask,
                                                        uint8_t &count,
-                                                       bool force_due) {
+                                                       bool force_due,
+                                                       bool allow_outro) {
   const uint64_t now = static_cast<uint64_t>(esphome::millis());
   this->seg_coord_collect_start_us_ = micros();
-  if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due)) {
+  if (!this->collect_segment_coordinator_epoch_(mask, count, now, force_due,
+                                               allow_outro)) {
     this->seg_coord_collect_start_us_ = 0;
     return false;
   }
@@ -2208,9 +2254,7 @@ bool CFXLightOutput::service_parallel_segment_group_coordinator_() {
 
   if (!group_due) {
     // All lanes are idle (segment_coord_owned_mask_ == 0 everywhere).
-    // Still service the idle state so log_mono_idle_sleep() fires correctly,
-    // mirroring what render_segment_coordinator_epoch_() does at the non-parallel
-    // early-exit path (line ~1675).
+    // Still service idle entry/wake state without emitting periodic sleep logs.
     for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
       auto *output = g_parallel_group.outputs[lane];
       if (output == nullptr || !output->has_segments() || output->has_outro()) {
@@ -2380,6 +2424,62 @@ void CFXLightOutput::flush_segment_coordinator_epoch_(uint8_t mask,
   this->finalize_segment_coordinator_epoch_(mask, count, true);
 }
 
+void CFXLightOutput::schedule_segment_deferred_flush_(
+    uint8_t mask, uint8_t count, uint32_t remaining_us) {
+  if (!this->is_rmt_transport() || !this->has_segments() || mask == 0 ||
+      count == 0) {
+    this->schedule_show();
+    return;
+  }
+  if (this->seg_deferred_flush_pending_) {
+    this->seg_deferred_flush_skips_++;
+    return;
+  }
+
+  this->seg_deferred_flush_pending_ = true;
+  this->seg_deferred_flush_mask_ = mask;
+  this->seg_deferred_flush_count_ = count;
+  this->seg_deferred_flushes_++;
+
+  uint32_t delay_ms = (remaining_us + 999u) / 1000u;
+  if (delay_ms == 0) {
+    delay_ms = 1;
+  }
+  const uint32_t hash =
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this)) ^ 0xCF17u;
+  esphome::App.scheduler.set_timeout(this, hash, delay_ms, [this]() {
+    if (!this->seg_deferred_flush_pending_) {
+      return;
+    }
+    const uint8_t mask = this->seg_deferred_flush_mask_;
+    const uint8_t count = this->seg_deferred_flush_count_;
+    this->seg_deferred_flush_pending_ = false;
+    this->seg_deferred_flush_mask_ = 0;
+    this->seg_deferred_flush_count_ = 0;
+    this->flush_parent_owned_segment_epoch_direct_(mask, count);
+  });
+}
+
+uint32_t CFXLightOutput::get_segmented_rmt_refresh_floor_us_() const {
+  if (!this->is_rmt_transport() || !this->has_segments()) {
+    return 0;
+  }
+  uint32_t floor_us = 16666u;
+  if (this->rmt_c3_stability_cushion_) {
+    const size_t segment_count = this->segment_light_states_.size();
+    if (segment_count >= 4) {
+      floor_us = 18500u;
+    } else if (segment_count >= 3) {
+      floor_us = 17600u;
+    }
+  }
+  if (this->max_refresh_rate_.has_value() &&
+      *this->max_refresh_rate_ > floor_us) {
+    floor_us = *this->max_refresh_rate_;
+  }
+  return floor_us;
+}
+
 void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
                                                               uint8_t count) {
   if (mask == 0 || count == 0) {
@@ -2396,7 +2496,7 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
     esphome::App.feed_wdt();
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+      if (!this->should_scrub_segment_(seg_state)) {
         continue;
       }
       const auto &def = this->segment_defs_[i];
@@ -2411,17 +2511,28 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
   this->status_clear_warning();
 
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  const uint32_t segmented_rmt_floor_us =
+      this->get_segmented_rmt_refresh_floor_us_();
+  const uint32_t refresh_floor_us =
+      segmented_rmt_floor_us != 0
+          ? segmented_rmt_floor_us
+          : (this->max_refresh_rate_.has_value() ? *this->max_refresh_rate_ : 0);
+  const uint32_t since_refresh_us = now - this->last_refresh_;
+  if (refresh_floor_us != 0 && since_refresh_us < refresh_floor_us) {
     this->perf_diag_total_refresh_defers_++;
     if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
       this->perf_diag_max_refresh_defers_ =
           static_cast<uint32_t>(this->perf_diag_total_refresh_defers_);
     }
     this->seg_coord_collect_start_us_ = 0;
-    this->schedule_show();
+    this->schedule_segment_deferred_flush_(
+        mask, count, refresh_floor_us - since_refresh_us);
     return;
   }
+
+  this->seg_deferred_flush_pending_ = false;
+  this->seg_deferred_flush_mask_ = 0;
+  this->seg_deferred_flush_count_ = 0;
 
   if (this->seg_coord_collect_start_us_ != 0) {
     const uint32_t collect_flush_us = now - this->seg_coord_collect_start_us_;
@@ -2468,6 +2579,8 @@ void CFXLightOutput::flush_parent_owned_segment_epoch_direct_(uint8_t mask,
     }
   }
   this->log_segment_coordinator_diag_();
+  this->seg_last_flush_count_ = 0;
+  this->seg_last_flush_mask_ = 0;
 }
 
 // --- Core Control Loop & Initialization ---
@@ -2509,7 +2622,78 @@ void CFXLightOutput::on_shutdown() {
     this->force_parallel_shutdown_blackout_();
   }
   this->high_freq_loop_requester_.stop();
+#ifdef USE_POWER_SUPPLY
+  this->power_supply_release_pending_ = false;
+  if (this->power_supply_requested_) {
+    this->power_supply_requester_.unrequest();
+    this->power_supply_requested_ = false;
+  }
+#endif
 }
+
+#ifdef USE_POWER_SUPPLY
+bool CFXLightOutput::has_power_demand_() const {
+  if (this->has_outro()) {
+    return true;
+  }
+  auto state_needs_power = [](const light::LightState *state) {
+    return state != nullptr &&
+           (state->remote_values.is_on() ||
+            state->current_values.get_state() > 0.0f);
+  };
+  if (state_needs_power(this->master_light_state_)) {
+    return true;
+  }
+  for (const auto *state : this->segment_light_states_) {
+    if (state_needs_power(state)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CFXLightOutput::power_transmit_in_flight_() const {
+  if (this->rmt_tx_in_flight_ || this->spi_tx_in_flight_) {
+    return true;
+  }
+  if (this->transport_ == TRANSPORT_PARALLEL) {
+    const auto *group = parallel_group_for_output_(this);
+    return group != nullptr && group->tx_in_flight_count > 0;
+  }
+  return false;
+}
+
+void CFXLightOutput::request_power_supply_() {
+  if (!this->has_power_supply_ || this->power_supply_requested_) {
+    return;
+  }
+  this->power_supply_requester_.request();
+  this->power_supply_requested_ = true;
+  this->power_supply_release_pending_ = false;
+}
+
+void CFXLightOutput::schedule_power_supply_release_() {
+  if (this->power_supply_requested_ && !this->has_power_demand_()) {
+    this->power_supply_release_pending_ = true;
+  }
+}
+
+void CFXLightOutput::service_power_supply_release_() {
+  if (!this->power_supply_release_pending_) {
+    return;
+  }
+  if (this->has_power_demand_()) {
+    this->power_supply_release_pending_ = false;
+    return;
+  }
+  if (this->power_transmit_in_flight_()) {
+    return;
+  }
+  this->power_supply_requester_.unrequest();
+  this->power_supply_requested_ = false;
+  this->power_supply_release_pending_ = false;
+}
+#endif
 
 // --- Timing Configuration ---
 
@@ -2565,11 +2749,10 @@ void CFXLightOutput::configure_timing_() {
 // --- RMT Encoder Callback (ESP-IDF >= 5.3) ---
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-static size_t IRAM_ATTR HOT encoder_callback(const void *data, size_t size,
-                                             size_t symbols_written,
-                                             size_t symbols_free,
-                                             rmt_symbol_word_t *symbols,
-                                             bool *done, void *arg) {
+[[maybe_unused]] static size_t IRAM_ATTR HOT
+encoder_callback(const void *data, size_t size, size_t symbols_written,
+                 size_t symbols_free, rmt_symbol_word_t *symbols, bool *done,
+                 void *arg) {
   auto *params = static_cast<LedParams *>(arg);
   const auto *bytes = static_cast<const uint8_t *>(data);
   size_t index = symbols_written / RMT_SYMBOLS_PER_BYTE;
@@ -2796,6 +2979,16 @@ void CFXLightOutput::setup() {
     return;
   }
 
+  if (this->state_parent_ != nullptr) {
+    chimera_fx::CFXRunner::prewarmGamma(
+        this->state_parent_->get_gamma_correct());
+  }
+  for (auto *seg_state : this->segment_light_states_) {
+    if (seg_state != nullptr) {
+      chimera_fx::CFXRunner::prewarmGamma(seg_state->get_gamma_correct());
+    }
+  }
+
   // Transport-specific hardware init
   if (this->transport_ == TRANSPORT_SPI) {
     this->setup_spi_();
@@ -2841,6 +3034,8 @@ void CFXLightOutput::setup() {
         this->master_listener_);
     this->prev_master_state_ =
         this->master_light_state_->remote_values.is_on();
+    this->prev_master_brightness_ =
+        this->master_light_state_->remote_values.get_brightness();
     this->prev_master_defaults_state_ =
         this->master_light_state_->remote_values.is_on();
   }
@@ -2874,8 +3069,8 @@ void CFXLightOutput::setup() {
              static_cast<unsigned>(this->get_pixel_stride_()));
   } else {
     ESP_LOGI(TAG,
-             "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%u, "
-             "mem_block_symbols=%u, physical_leds=%" PRIu32 ")",
+             "CFXLight ready: %u visible LEDs on GPIO%u (%s, rmt_symbols=%" PRIu32
+             ", mem_block_symbols=%" PRIu32 ", physical_leds=%" PRIu32 ")",
              this->num_leds_, this->pin_,
              this->rmt_dma_enabled_ ? rmt_dma_backend_label() : "non-DMA",
              this->rmt_symbols_, this->rmt_mem_block_symbols_,
@@ -2978,7 +3173,8 @@ void CFXLightOutput::setup_rmt_() {
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32
                ": pin=%u GDMA skipped (%s) "
-               "mem_block_symbols=%u rmt_symbols=%u hw_tx_slots=%d",
+               "mem_block_symbols=%u rmt_symbols=%" PRIu32
+               " hw_tx_slots=%d",
                this->rmt_alloc_index_, this->pin_, skip_dma_reason,
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
@@ -3000,7 +3196,7 @@ void CFXLightOutput::setup_rmt_() {
       channel.mem_block_symbols = 48;
       ESP_LOGI(TAG,
                "RMT alloc #%" PRIu32 ": pin=%u %s=true mem_block_symbols=%u "
-               "rmt_symbols=%u hw_tx_slots=%d",
+               "rmt_symbols=%" PRIu32 " hw_tx_slots=%d",
                this->rmt_alloc_index_, this->pin_, rmt_dma_backend_label(),
                (unsigned)channel.mem_block_symbols, this->rmt_symbols_,
                SOC_RMT_TX_CANDIDATES_PER_GROUP);
@@ -3012,7 +3208,7 @@ void CFXLightOutput::setup_rmt_() {
         ESP_LOGW(TAG,
                  "RMT %s unavailable for pin=%u (alloc #%" PRIu32
                  " of %d hw slots, err=%d) - falling back to non-DMA "
-                 "(mem_block_symbols=%u). "
+                 "(mem_block_symbols=%" PRIu32 "). "
                  "Check for other RMT consumers (remote_transmitter, "
                  "neopixelbus, status_led, ir_transmitter).",
                  rmt_dma_backend_label(), this->pin_, this->rmt_alloc_index_,
@@ -3032,7 +3228,7 @@ void CFXLightOutput::setup_rmt_() {
         this->rmt_mem_block_symbols_ = channel.mem_block_symbols;
         ESP_LOGI(TAG,
                  "RMT alloc #%" PRIu32
-                 ": pin=%u non-DMA fallback OK mem_block_symbols=%u",
+                 ": pin=%u non-DMA fallback OK mem_block_symbols=%" PRIu32,
                  this->rmt_alloc_index_, this->pin_,
                  this->rmt_mem_block_symbols_);
       }
@@ -3207,7 +3403,7 @@ void CFXLightOutput::setup_parallel_() {
         g_parallel_group.chunk_frame_size + PARALLEL_CANARY_BYTES;
     g_parallel_group.buffer_count = PARALLEL_TX_BUFFER_COUNT;
 #else
-    // S3/C3: Triple-buffered for <= 200 LEDs to guarantee smooth 16ms/60FPS target,
+    // S3/C3: Triple-buffered for <= 200 LEDs to guarantee smooth ~60 FPS target,
     // double-buffered <= 400 LEDs to optimize heap, and single-buffered above 400.
     if (this->num_leds_ <= 200) {
       g_parallel_group.buffer_count = 3;
@@ -5223,8 +5419,12 @@ void CFXLightOutput::flush_parallel_() {
              diag_buf_at_encode[2], diag_buf_at_encode[3]);
   }
   for (uint8_t lane = 0; lane < g_parallel_group.lane_count; lane++) {
-    if (g_parallel_group.outputs[lane] != nullptr) {
-      g_parallel_group.outputs[lane]->record_led_frame_();
+    auto *lane_output = g_parallel_group.outputs[lane];
+    if (lane_output != nullptr) {
+      lane_output->record_led_frame_();
+      if (lane_output->power_manager_ != nullptr) {
+        lane_output->power_manager_->record_output_frame(lane_output);
+      }
     }
   }
   this->perf_diag_flush_count_++;
@@ -5456,7 +5656,7 @@ static bool parallel_group_has_active_rendering_(
   return false;
 }
 
-static uint8_t active_parallel_group_mask_() {
+[[maybe_unused]] static uint8_t active_parallel_group_mask_() {
   uint8_t active_mask = 0;
   for (uint8_t gi = 0; gi < PARALLEL_MAX_GROUPS; gi++) {
     auto &group = g_parallel_groups[gi];
@@ -5473,8 +5673,10 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
   }
 
   // Governor: request high-frequency loop only while transport/service work is
-  // pending. Active effects alone can monopolize the main loop on dense nodes.
-  if (this->has_outro() || this->rmt_flush_pending_ ||
+  // pending. On single-core ESP32 variants (C3/S2/H2), active effects and
+  // long outro phases share the same core with API, WiFi, OTA, and sensors, so
+  // keep the persistent high-frequency request for concrete flush work only.
+  if ((!cfx_unicore_build_() && this->has_outro()) || this->rmt_flush_pending_ ||
       this->seg_flush_pending_) {
     return true;
   }
@@ -5482,7 +5684,8 @@ bool CFXLightOutput::should_request_high_frequency_loop_() {
   // SPI and Classic RMT need active-effect cadence restoration under ESPHome
   // 2026.5+. Parallel remains governed by pending group work to preserve the
   // validated S3 behavior and avoid monopolizing dense parallel nodes.
-  if ((this->is_spi_transport() || this->is_rmt_transport()) &&
+  if (!cfx_unicore_build_() &&
+      (this->is_spi_transport() || this->is_rmt_transport()) &&
       has_active_rendering_cfx_effect(this)) {
     return true;
   }
@@ -5512,7 +5715,7 @@ void CFXLightOutput::update_high_frequency_loop_request_() {
   }
 }
 
-static bool parallel_shared_whole_group_mode_enabled_() {
+[[maybe_unused]] static bool parallel_shared_whole_group_mode_enabled_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
     return false;
@@ -5532,7 +5735,7 @@ static bool parallel_shared_whole_group_mode_enabled_() {
 #endif
 }
 
-static bool parallel_group_active_outputs_are_segmented_(
+[[maybe_unused]] static bool parallel_group_active_outputs_are_segmented_(
     CFXParallelGroupRuntime &group) {
   bool has_active = false;
   for (uint8_t lane = 0; lane < group.lane_count; lane++) {
@@ -5548,7 +5751,7 @@ static bool parallel_group_active_outputs_are_segmented_(
   return has_active;
 }
 
-static bool parallel_shared_segment_group_mode_enabled_() {
+[[maybe_unused]] static bool parallel_shared_segment_group_mode_enabled_() {
 #if !defined(CONFIG_IDF_TARGET_ESP32) && defined(CFX_PARALLEL_I80_ENABLED)
   if (!g_parallel_i80.ready || parallel_configured_group_count_() < 2) {
     return false;
@@ -5811,7 +6014,8 @@ bool CFXLightOutput::wait_for_rmt_tx_(uint32_t timeout_ms, const char *context) 
       if (wait_us > this->perf_diag_max_wait_us_) {
         this->perf_diag_max_wait_us_ = wait_us;
       }
-      ESP_LOGW(TAG, "RMT TX wait timeout (%u ms) during %s (waits=%" PRIu32
+      ESP_LOGW(TAG, "RMT TX wait timeout (%" PRIu32
+               " ms) during %s (waits=%" PRIu32
                ", timeouts=%" PRIu32 ")",
                timeout_ms, context, this->rmt_wait_count_,
                this->rmt_wait_timeout_count_);
@@ -5867,8 +6071,8 @@ bool CFXLightOutput::wait_for_spi_tx_(uint32_t timeout_ms, const char *context) 
   if (err == ESP_ERR_TIMEOUT) {
     this->spi_wait_timeout_count_++;
     ESP_LOGW(TAG,
-             "SPI TX wait timeout during %s (% " PRIu32 " ms, waits=% " PRIu32
-             ", timeouts=% " PRIu32 ", queue_err=% " PRIu32 ")",
+             "SPI TX wait timeout during %s (%" PRIu32 " ms, waits=%" PRIu32
+             ", timeouts=%" PRIu32 ", queue_err=%" PRIu32 ")",
              context, timeout_ms, this->spi_wait_count_,
              this->spi_wait_timeout_count_, this->spi_queue_error_count_);
   } else {
@@ -5973,6 +6177,11 @@ void CFXLightOutput::on_master_update() {
   if (this->master_light_state_ == nullptr) {
     return;
   }
+#ifdef USE_POWER_SUPPLY
+  if (this->master_light_state_->remote_values.is_on()) {
+    this->request_power_supply_();
+  }
+#endif
   this->wake_mono_idle_light_state_(this->master_light_state_);
 
   this->maybe_apply_turn_on_defaults_(this->master_light_state_,
@@ -5995,7 +6204,13 @@ void CFXLightOutput::on_master_update() {
       this->master_light_state_->remote_values.get_brightness();
 
   bool master_state_changed = (master_on != this->prev_master_state_);
+  bool master_brightness_changed =
+      master_on && cfx_light::master_brightness_changed(
+                       this->prev_master_brightness_, master_brightness);
   this->prev_master_state_ = master_on;
+  if (master_on) {
+    this->prev_master_brightness_ = master_brightness;
+  }
 
   // TOP-DOWN SYNC
   for (auto *seg_state : this->segment_light_states_) {
@@ -6006,17 +6221,13 @@ void CFXLightOutput::on_master_update() {
     // Only update brightness if the segment is currently ON (or is becoming ON)
     bool is_seg_on =
         state_changed ? master_on : seg_state->remote_values.is_on();
-    bool bright_changed = master_on && is_seg_on &&
+    bool bright_changed = master_brightness_changed && is_seg_on &&
                           std::abs(seg_state->remote_values.get_brightness() -
                                    master_brightness) > 0.01f;
 
     if (state_changed || bright_changed) {
       this->wake_mono_idle_light_state_(seg_state);
       auto call = seg_state->make_call();
-      // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer which
-      // paints RGB white directly into the pixel buffer during transitions.
-      // CFX effects handle their own visual transitions (intros/outros).
-      call.set_transition_length(0);
       if (state_changed)
         call.set_state(master_on);
       if (bright_changed)
@@ -6035,6 +6246,14 @@ void CFXLightOutput::on_segment_update() {
   if (this->segment_light_states_.empty()) {
     return;
   }
+#ifdef USE_POWER_SUPPLY
+  for (const auto *state : this->segment_light_states_) {
+    if (state != nullptr && state->remote_values.is_on()) {
+      this->request_power_supply_();
+      break;
+    }
+  }
+#endif
   if (this->has_active_parent_owned_segments_()) {
     this->refresh_parent_owned_segment_slots_();
   }
@@ -6053,28 +6272,41 @@ void CFXLightOutput::on_segment_update() {
     this->wake_mono_idle_light_state_(seg_state);
   }
 
-  bool master_on = this->master_light_state_->remote_values.is_on();
-
   // BOTTOM-UP SYNC (A segment changed)
-  bool is_any_segment_on = false;
+  SegmentBrightnessAggregate brightness;
   for (auto *s : this->segment_light_states_) {
-    if (s->remote_values.is_on()) {
-      is_any_segment_on = true;
-      break;
-    }
+    brightness.add(s->remote_values.is_on(),
+                   s->remote_values.get_brightness());
   }
 
-  if (master_on != is_any_segment_on) {
+  bool master_on = this->master_light_state_->remote_values.is_on();
+  float master_brightness =
+      this->master_light_state_->remote_values.get_brightness();
+  bool is_any_segment_on = brightness.any_on();
+  float aggregate_brightness = brightness.average(master_brightness);
+  bool state_changed = master_on != is_any_segment_on;
+  bool brightness_changed =
+      is_any_segment_on && cfx_light::master_brightness_changed(
+                               master_brightness, aggregate_brightness);
+
+  if (state_changed || brightness_changed) {
     // Bottom-up sync for all transports (RMT, SPI, and Parallel).
-    // The master reflects the aggregate ON/OFF state of the segments.
+    // The master reflects aggregate segment state and active brightness.
     this->wake_mono_idle_light_state_(this->master_light_state_);
-    // We are commanding the master to change state.
-    // Update prev_master_state_ so that unexpected/deferred incoming Master
-    // listener callbacks don't overreact and force all segments ON!
+    // Update tracked values before the guarded call so deferred listener
+    // callbacks cannot reinterpret this reflection as a new master command.
     this->prev_master_state_ = is_any_segment_on;
+    if (is_any_segment_on) {
+      this->prev_master_brightness_ = aggregate_brightness;
+    }
 
     auto call = this->master_light_state_->make_call();
-    call.set_state(is_any_segment_on);
+    if (state_changed) {
+      call.set_state(is_any_segment_on);
+    }
+    if (brightness_changed) {
+      call.set_brightness(aggregate_brightness);
+    }
     // BUG 11 FIX: Suppress ESPHome's AddressableLightTransformer.
     // The master has no effect_active_ flag, so the transformer iterates
     // ALL parent pixels and paints RGB white — contaminating segment buffers.
@@ -6112,6 +6344,13 @@ void CFXLightOutput::loop() {
   this->service_parallel_group_flush_();
   this->service_parallel_shared_group_flush_();
   if (!this->outro_cbs_.empty()) {
+    const uint32_t now_ms = esphome::millis();
+    if (this->outro_last_frame_ms_ != 0 &&
+        (now_ms - this->outro_last_frame_ms_) < FRAMETIME) {
+      goto segment_flush_done;
+    }
+    this->outro_last_frame_ms_ = now_ms;
+
     // Light is technically 'Off' so we must restore full local brightness
     // so our pixel buffers aren't multiplied by 0 implicitly.
     this->correction_.set_local_brightness(255);
@@ -6125,10 +6364,23 @@ void CFXLightOutput::loop() {
       }
     }
 
-    // Force direct DMA flush of the frame!
-    // We cannot use schedule_show() here because ESPHome's LightState loop
-    // is disabled when the light is turned off, meaning it will never poll us.
-    this->write_state(nullptr);
+    uint8_t outro_segment_mask = 0;
+    uint8_t outro_segment_count = 0;
+    if (this->render_segment_coordinator_epoch_(outro_segment_mask,
+                                                outro_segment_count, false,
+                                                true)) {
+      this->finalize_segment_coordinator_epoch_(outro_segment_mask,
+                                                outro_segment_count, false);
+    }
+
+    if (!this->outro_cbs_.empty()) {
+      // Force direct DMA flush of the frame. We cannot use schedule_show()
+      // here because ESPHome's LightState loop is disabled when the light is
+      // turned off, meaning it will never poll us.
+      this->outro_parent_flush_allowed_ = true;
+      this->write_state(nullptr);
+      this->outro_parent_flush_allowed_ = false;
+    }
 
     if (this->outro_cbs_.empty()) {
       // Outro finished. Black out only the pixels that belong to segments
@@ -6153,9 +6405,13 @@ void CFXLightOutput::loop() {
           (*this)[i] = Color::BLACK;
         }
       }
+      this->outro_parent_flush_allowed_ = true;
       this->write_state(nullptr);
+      this->outro_parent_flush_allowed_ = false;
+      this->outro_last_frame_ms_ = 0;
       this->release_outro_callback_storage_();
     }
+    goto segment_flush_done;
   }
 
   if (this->service_segment_render_coordinator_()) {
@@ -6171,7 +6427,14 @@ void CFXLightOutput::loop() {
     uint8_t active_count = 0;
     uint8_t ready_count = 0;
     for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
-      if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+      if (!this->segment_participates_in_barrier_(
+              this->segment_light_states_[i])) {
+        continue;
+      }
+      const uint8_t bit = static_cast<uint8_t>(1u << i);
+      if ((this->segment_coord_owned_mask_ & bit) != 0 &&
+          this->seg_request_generation_[i] ==
+              this->seg_flushed_generation_[i]) {
         continue;
       }
       active_count++;
@@ -6187,6 +6450,13 @@ void CFXLightOutput::loop() {
       wait_target_ms = (active_count >= 2 && ready_count + 1 >= active_count)
                            ? 2
                            : 3;
+    }
+    if (cfx_unicore_build_() && this->is_rmt_transport() &&
+        segment_count >= 3 && active_count > ready_count) {
+      // C3-class single-core RMT can need a full frame budget for 4+ segment
+      // intros/outros to converge under WiFi/API pressure. Prefer a lower FPS
+      // over presenting visibly mixed segment phases.
+      wait_target_ms = 17;
     }
     uint32_t elapsed = esphome::millis() - this->seg_flush_first_ms_;
     if (elapsed >= wait_target_ms) {
@@ -6207,6 +6477,7 @@ void CFXLightOutput::loop() {
         this->seg_flush_dirty_mask_ = 0;
         this->seg_flush_pending_ = false;
         this->seg_flush_first_ms_ = 0;
+        this->seg_coord_collect_start_us_ = 0;
         this->log_segment_coordinator_diag_();
         goto segment_flush_done;
       }
@@ -6220,6 +6491,7 @@ void CFXLightOutput::loop() {
       this->seg_flush_first_ms_ = 0;
       if (dirty_mask == 0) {
         this->seg_clean_epoch_suppressed_++;
+        this->seg_coord_collect_start_us_ = 0;
         this->log_segment_coordinator_diag_();
         goto segment_flush_done;
       }
@@ -6228,6 +6500,9 @@ void CFXLightOutput::loop() {
   }
 
 segment_flush_done:
+#ifdef USE_POWER_SUPPLY
+  this->service_power_supply_release_();
+#endif
   this->update_high_frequency_loop_request_();
 #ifdef USE_CFX_EVENTS
   chimera_fx::CFXEventManager::get().flush_pending();
@@ -6277,6 +6552,14 @@ uint8_t CFXLightOutput::get_power_transmit_scale_() const {
     return 255;
   }
   return this->power_manager_->get_transmit_scale();
+}
+
+void CFXLightOutput::request_power_reduction_refresh() {
+  if (this->has_segments() && !this->has_outro()) {
+    this->write_state(nullptr);
+    return;
+  }
+  this->schedule_show();
 }
 
 void CFXLightOutput::apply_power_scale_to_buffer_(uint8_t *data,
@@ -6360,7 +6643,7 @@ void CFXLightOutput::scrub_inactive_segments_() {
         std::min(this->segment_light_states_.size(), this->segment_defs_.size());
     for (size_t i = 0; i < count; i++) {
       auto *seg_state = this->segment_light_states_[i];
-      if (seg_state == nullptr || seg_state->remote_values.is_on()) {
+      if (!this->should_scrub_segment_(seg_state)) {
         continue;
       }
       const auto &def = this->segment_defs_[i];
@@ -6371,6 +6654,12 @@ void CFXLightOutput::scrub_inactive_segments_() {
       }
     }
   }
+}
+
+bool CFXLightOutput::should_scrub_segment_(
+    light::LightState *state) const {
+  return state != nullptr && !state->remote_values.is_on() &&
+         !state->is_transformer_active();
 }
 
 // --- Update State (Handles Brightness & Solid Colors) ---
@@ -6455,6 +6744,7 @@ void CFXLightOutput::update_state(light::LightState *state) {
 // artifacts on segments with misaligned update_interval_ phases.
 void CFXLightOutput::request_segment_flush(light::LightState *state) {
   if (active_cfx_effect_is_clean_mono_idle(state)) {
+    this->clear_segment_idle_diag_();
     this->seg_clean_epoch_suppressed_++;
     this->log_segment_coordinator_diag_();
     return;
@@ -6496,7 +6786,8 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
   uint8_t active_count = 0;
   uint8_t ready_count = 0;
   for (size_t i = 0; i < segment_count && i < MAX_CFX_SEGMENTS; i++) {
-    if (!segment_participates_in_barrier(this->segment_light_states_[i])) {
+    if (!this->segment_participates_in_barrier_(
+            this->segment_light_states_[i])) {
       continue;
     }
     active_count++;
@@ -6528,12 +6819,35 @@ void CFXLightOutput::request_segment_flush(light::LightState *state) {
   this->write_state(nullptr);
 }
 
+void CFXLightOutput::request_segment_solid_repaint_flush(
+    light::LightState *state) {
+  if (state == nullptr || this->has_outro()) {
+    return;
+  }
+
+  for (size_t i = 0;
+       i < this->segment_light_states_.size() && i < MAX_CFX_SEGMENTS; i++) {
+    if (this->segment_light_states_[i] != state) {
+      continue;
+    }
+
+    const uint8_t mask = static_cast<uint8_t>(1u << i);
+    this->flush_parent_owned_segment_epoch_direct_(mask, 1);
+    return;
+  }
+}
+
 // --- Write State (Fire-and-Forget DMA) ---
 
 // P3: Called by CFXTransmitBarrier when all registered outputs are ready.
 // Encapsulates the transport-specific DMA fire sequence so the barrier can
 // trigger it on any output without knowing its transport type.
 void CFXLightOutput::commit_transmit_() {
+#ifdef USE_POWER_SUPPLY
+  if (this->has_power_demand_()) {
+    this->request_power_supply_();
+  }
+#endif
   if (this->transport_ == TRANSPORT_SPI) {
     esphome::App.feed_wdt();
     this->flush_spi_();
@@ -6561,6 +6875,9 @@ void CFXLightOutput::commit_transmit_() {
     g_rmt_launch_seq++;
     this->flush_rmt_();
   }
+#ifdef USE_POWER_SUPPLY
+  this->schedule_power_supply_release_();
+#endif
 }
 
 void CFXLightOutput::write_state(light::LightState *state) {
@@ -6581,6 +6898,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
       ((state != nullptr && active_cfx_effect_is_clean_mono_idle(state)) ||
        (state == nullptr && this->seg_last_flush_mask_ == 0 &&
         all_active_cfx_effects_clean_mono_idle(this)))) {
+    this->clear_segment_idle_diag_();
     this->seg_clean_epoch_suppressed_++;
     this->log_segment_coordinator_diag_();
     
@@ -6599,20 +6917,21 @@ void CFXLightOutput::write_state(light::LightState *state) {
   // go through the segment-driven flush path (write_state(nullptr)) instead.
   // Non-segmented lights and outro DMA (nullptr calls) pass through unchanged.
   if (state != nullptr && this->has_segments()) {
-    // CFX: Even though the master buffer is muted, we must validate its
-    // idle output so the effect can transition to IDLE state and sleep.
-    mark_committed_mono_idle_outputs(this);
+    // Master/segment state writes are muted here; no transport frame is sent.
+    // Leave dirty mono-idle outputs dirty so the next segment epoch can commit
+    // the final intro/hold frame before the idle suppressor goes to sleep.
     return; // Master muted — segments own the pixel buffer
   }
   if (state != nullptr && !this->outro_cbs_.empty()) {
     return; // Block Master during outro on non-segmented lights
   }
   if (state == nullptr && this->is_spi_transport() &&
-      this->has_active_parent_owned_segments_() && !this->has_outro()) {
-    // Parent-coordinated SPI segments flush through
-    // flush_parent_owned_segment_epoch_direct_(). A generic nullptr write can
+      this->has_active_parent_owned_segments_(this->has_outro()) &&
+      (!this->has_outro() || !this->outro_parent_flush_allowed_)) {
+    // Parent-coordinated SPI segments flush through the segment coordinator or
+    // the single intentional outro parent flush. A generic nullptr write can
     // still be queued by ESPHome/legacy segment paths in the same visual frame,
-    // causing a second identical SPI DMA frame and inflated LedFPS.
+    // causing extra SPI DMA frames and inflated LedFPS.
     this->note_segment_coord_write_skip();
     return;
   }
@@ -6628,9 +6947,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     esphome::App.feed_wdt();
     for (size_t i = 0; i < this->segment_light_states_.size(); i++) {
       auto *seg_state = this->segment_light_states_[i];
-      // CFX-032: scrub on remote_values only; current_values may lag
-      // by a frame with 0ms transitions, leaving stale lit pixels.
-      if (!seg_state->remote_values.is_on()) {
+      if (this->should_scrub_segment_(seg_state)) {
         const auto &def = this->segment_defs_[i];
         for (int p = def.start; p < def.stop; p++) {
           if (p < this->size()) {
@@ -6660,8 +6977,13 @@ void CFXLightOutput::write_state(light::LightState *state) {
 
   // Protect from refreshing too often
   uint32_t now = micros();
-  if (*this->max_refresh_rate_ != 0 &&
-      (now - this->last_refresh_) < *this->max_refresh_rate_) {
+  const uint32_t segmented_rmt_floor_us =
+      this->get_segmented_rmt_refresh_floor_us_();
+  const uint32_t refresh_floor_us =
+      segmented_rmt_floor_us != 0
+          ? segmented_rmt_floor_us
+          : (this->max_refresh_rate_.has_value() ? *this->max_refresh_rate_ : 0);
+  if (refresh_floor_us != 0 && (now - this->last_refresh_) < refresh_floor_us) {
     this->perf_diag_total_refresh_defers_++;
     if (this->perf_diag_total_refresh_defers_ > this->perf_diag_max_refresh_defers_) {
       this->perf_diag_max_refresh_defers_ =
@@ -6771,7 +7093,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
     // Waiting for peer RMT outputs can phase-lock independent segment parents
     // into a slower cadence, especially on Classic ESP32 non-DMA RMT.
     this->commit_transmit_();
-    mark_committed_mono_idle_outputs(this);
+    this->mark_segment_coordinator_epoch_committed_(this->seg_last_flush_mask_);
     this->log_segment_coordinator_diag_();
     goto record_write_perf;
   }
@@ -6825,8 +7147,6 @@ record_write_perf:
       this->perf_diag_max_gate_defers_ = this->perf_diag_pending_gate_defers_;
     }
     this->perf_diag_pending_gate_defers_ = 0;
-    this->seg_last_flush_count_ = 0;
-    this->seg_last_flush_mask_ = 0;
 
     const uint32_t now_ms = esphome::millis();
     if (this->perf_diag_last_log_ms_ == 0) {
@@ -6845,6 +7165,8 @@ record_write_perf:
       this->perf_diag_last_log_ms_ = now_ms;
     }
   }
+  this->seg_last_flush_count_ = 0;
+  this->seg_last_flush_mask_ = 0;
   this->update_high_frequency_loop_request_();
 }
 
@@ -7047,6 +7369,16 @@ void CFXLightOutput::flush_spi_() {
 
   const uint32_t timeout_ms = this->get_spi_frame_timeout_ms_();
   const uint32_t flush_start_us = micros();
+  if (this->has_active_parent_owned_segments_(this->has_outro()) &&
+      this->perf_diag_last_spi_flush_start_us_ != 0) {
+    constexpr uint32_t SPI_SEGMENT_DUPLICATE_WINDOW_US =
+        (FRAMETIME * 1000u * 3u) / 4u;
+    if ((flush_start_us - this->perf_diag_last_spi_flush_start_us_) <
+        SPI_SEGMENT_DUPLICATE_WINDOW_US) {
+      this->note_segment_coord_write_skip();
+      return;
+    }
+  }
   this->perf_diag_flush_count_++;
   if (this->perf_diag_last_spi_flush_start_us_ != 0) {
     const uint32_t interval_us =
@@ -7232,7 +7564,8 @@ light::ESPColorView CFXLightOutput::get_view_internal(int32_t index) const {
     if (!this->unsafe_view_logged_) {
       ESP_LOGW(TAG,
                "Unsafe pixel view redirected to dummy pixel "
-               "(pin=%u, idx=%d, size=%d, buf=%p, effect=%p, failed=%d)",
+               "(pin=%u, idx=%" PRId32 ", size=%" PRId32
+               ", buf=%p, effect=%p, failed=%d)",
                this->pin_, index, this->size(), this->buf_,
                this->effect_data_, this->is_failed());
       this->unsafe_view_logged_ = true;
@@ -7414,6 +7747,10 @@ void CFXLightOutput::dump_config() {
   }
 
   // Segment layout
+#ifdef USE_POWER_SUPPLY
+  ESP_LOGCONFIG(TAG, "  Power Supply: %s",
+                this->has_power_supply_ ? "configured" : "none");
+#endif
   if (!this->segment_defs_.empty()) {
     ESP_LOGCONFIG(TAG, "  Segments: %u", this->segment_defs_.size());
     for (size_t i = 0; i < this->segment_defs_.size(); i++) {

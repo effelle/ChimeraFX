@@ -15,6 +15,7 @@
 #include "esp_system.h"
 #include <algorithm> // For std::min, std::max
 #include <array>
+#include <cinttypes>
 #include <cmath>     // For powf
 #include <cstdint>
 #include <vector>
@@ -56,6 +57,38 @@ static const uint8_t CFX_DEFAULT_GAMMA_LUT[256] CFX_PROGMEM = {
     197, 198, 200, 201, 202, 203, 204, 206, 207, 208, 209, 210, 212, 213, 214, 215,
     216, 218, 219, 220, 221, 222, 224, 225, 226, 227, 229, 230, 231, 232, 233, 235,
     236, 237, 238, 240, 241, 242, 243, 245, 246, 247, 248, 250, 251, 252, 253, 255};
+
+struct CFXGammaCacheEntry {
+  bool valid{false};
+  float gamma{CFX_DEFAULT_GAMMA};
+  uint8_t lut[256]{};
+};
+
+static CFXGammaCacheEntry g_gamma_lut_cache[4];
+
+static void build_gamma_lut_(uint8_t *dest, float gamma) {
+  const float power = 3.5f / gamma;
+  for (int i = 0; i < 256; i++) {
+    dest[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+  }
+}
+
+static const uint8_t *get_cached_gamma_lut_(float gamma) {
+  for (auto &entry : g_gamma_lut_cache) {
+    if (entry.valid && fabsf(entry.gamma - gamma) <= 0.01f) {
+      return entry.lut;
+    }
+  }
+  for (auto &entry : g_gamma_lut_cache) {
+    if (!entry.valid) {
+      build_gamma_lut_(entry.lut, gamma);
+      entry.gamma = gamma;
+      entry.valid = true;
+      return entry.lut;
+    }
+  }
+  return nullptr;
+}
 
 // Forward declarations
 uint16_t mode_running_lights(void);
@@ -128,6 +161,8 @@ CFXRunner::CFXRunner(esphome::light::AddressableLight *light) {
 void CFXRunner::setGamma(float g) {
   if (g < 0.1f)
     g = 1.0f; // Safety
+  if (_lut != nullptr && fabsf(_gamma - g) <= 0.01f)
+    return;
   _gamma = g;
 
   if (g > (CFX_DEFAULT_GAMMA - 0.01f) && g < (CFX_DEFAULT_GAMMA + 0.01f)) {
@@ -136,6 +171,16 @@ void CFXRunner::setGamma(float g) {
       _dynamic_lut = nullptr;
     }
     _lut = CFX_DEFAULT_GAMMA_LUT;
+    return;
+  }
+
+  const uint8_t *cached_lut = get_cached_gamma_lut_(g);
+  if (cached_lut != nullptr) {
+    if (_dynamic_lut != nullptr) {
+      free(_dynamic_lut);
+      _dynamic_lut = nullptr;
+    }
+    _lut = cached_lut;
     return;
   }
 
@@ -149,15 +194,17 @@ void CFXRunner::setGamma(float g) {
     }
   }
   _lut = _dynamic_lut;
+  build_gamma_lut_(_dynamic_lut, _gamma);
+}
 
-  // The power we need to raise input by to get x^3.5 output (Compromise for
-  // Aurora vs Plasma) If Gamma=3.5 -> p=1.0 If Gamma=1.0 -> p=3.5 ->
-  // (x^3.5)^1.0 = x^3.5
-  float power = 3.5f / _gamma;
-
-  for (int i = 0; i < 256; i++) {
-    _dynamic_lut[i] = (uint8_t)(powf((float)i / 255.0f, power) * 255.0f);
+void CFXRunner::prewarmGamma(float g) {
+  if (g < 0.1f)
+    g = 1.0f;
+  if (g > (CFX_DEFAULT_GAMMA - 0.01f) &&
+      g < (CFX_DEFAULT_GAMMA + 0.01f)) {
+    return;
   }
+  get_cached_gamma_lut_(g);
 }
 
 // Adjust a "floor" brightness value (e.g. Breath effect minimum)
@@ -487,7 +534,7 @@ static CRGBW color_add(CRGBW c1, CRGBW c2) {
 }
 
 // Scale color by fadeAmount/256 (for fade effects)
-static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
+[[maybe_unused]] static CRGBW color_fade(CRGBW c, uint8_t fadeAmount) {
   return CRGBW(
       ((uint16_t)c.r * fadeAmount) >> 8, ((uint16_t)c.g * fadeAmount) >> 8,
       ((uint16_t)c.b * fadeAmount) >> 8, ((uint16_t)c.w * fadeAmount) >> 8);
@@ -791,7 +838,7 @@ void CFXRunner::generateRandomPalette() {
   if (entropy == 0) {
     entropy = 0xA5A5A5A5u;
   }
-  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%u", entropy);
+  DEBUGFX_PRINTF("Generating Smart Palette: Entropy=%" PRIu32, entropy);
 
   const uint8_t base_hue = static_cast<uint8_t>(entropy >> 24);
   const uint8_t style = static_cast<uint8_t>((entropy >> 5) % 5u);
@@ -979,7 +1026,7 @@ struct AuroraWave {
 
 // Separator effect — blinks red 3 times then self-terminates.
 // Visual feedback that tells the user "that was a category divider, not an effect".
-// Uses _segment.call (increments every frame at ~16ms) with 15 frames per half-cycle
+// Uses _segment.call (increments every frame at ~17ms) with 15 frames per half-cycle
 // → ~240ms per half/cycle, 3 blinks = ~1.4s total.
 #define SEP_FRAMES_PER_HALF 15
 uint16_t mode_separator(void) {
@@ -1517,9 +1564,9 @@ static CRGB pacifica_cache_color(uint8_t cache_id, uint8_t index) {
 
 // Helper: WLED-EXACT wave layer function
 // This matches WLED's pacifica_one_layer() precisely
-static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
-                                    uint16_t cistart, uint16_t wavescale,
-                                    uint8_t bri, uint16_t ioff) {
+[[maybe_unused]] static void pacifica_one_layer_wled(
+    CRGB &c, uint16_t i, uint8_t cache_id, uint16_t cistart,
+    uint16_t wavescale, uint8_t bri, uint16_t ioff) {
   // WLED EXACT: unsigned ci = cistart;
   unsigned ci = cistart;
   // WLED EXACT: unsigned waveangle = ioff;
@@ -1558,8 +1605,8 @@ static void pacifica_one_layer_wled(CRGB &c, uint16_t i, uint8_t cache_id,
 }
 
 // Helper: Add whitecaps to peaks (WLED exact)
-static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
-                                   uint8_t basethreshold) {
+[[maybe_unused]] static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
+                                                    uint8_t basethreshold) {
   uint8_t threshold = scale8(sin8(wave), 20) + basethreshold;
   uint8_t l = c.getAverageLight();
   if (l > threshold) {
@@ -1572,7 +1619,7 @@ static void pacifica_add_whitecaps(CRGB &c, uint16_t wave,
 }
 
 // Helper: Deepen colors (darken valleys) and ensure blue tint
-static void pacifica_deepen_colors(CRGB &c) {
+[[maybe_unused]] static void pacifica_deepen_colors(CRGB &c) {
   c.b = scale8(c.b, 145);
   c.g = scale8(c.g, 200);
   // ESPHome gamma 2.8 crushes low values. Boost floor to ensure visible
@@ -1586,7 +1633,7 @@ static void pacifica_deepen_colors(CRGB &c) {
 // Helper: Deepen colors with TEAL preservation (less aggressive darkening)
 // This version maintains the teal appearance instead of crushing to deep
 // blue
-static void pacifica_deepen_colors_teal(CRGB &c) {
+[[maybe_unused]] static void pacifica_deepen_colors_teal(CRGB &c) {
   // Relaxed scaling - don't crush colors as much
   c.b = scale8(c.b, 200); // Was 145, now less aggressive
   c.g = scale8(c.g, 220); // Was 200, now less aggressive
@@ -1599,9 +1646,9 @@ static void pacifica_deepen_colors_teal(CRGB &c) {
 // Helper: Add one wave layer with pre-computed waveangle (intensity-zoomed)
 // This version accepts a pre-calculated waveangle instead of computing from
 // intensity
-static void pacifica_one_layer_zoomed(CRGB &c, uint16_t i, uint8_t cache_id,
-                                      uint16_t cistart, uint16_t wavescale,
-                                      uint8_t bri, uint16_t waveangle) {
+[[maybe_unused]] static void pacifica_one_layer_zoomed(
+    CRGB &c, uint16_t i, uint8_t cache_id, uint16_t cistart,
+    uint16_t wavescale, uint8_t bri, uint16_t waveangle) {
   uint16_t ci = cistart;
   uint16_t wavescale_half = (wavescale >> 1) + 20;
 
@@ -2316,7 +2363,7 @@ uint16_t mode_dissolve(void) {
   // Progress tracking: report fill progress only during FILLING phase (state==0)
   // so milestones are not re-fired in reverse during DISSOLVING.
   if ((instance->_segment.aux0 & 0x03) == 0) {
-    if (pixel_count >= 0 && pixel_count < (uint16_t)len)
+    if (pixel_count < (uint16_t)len)
       instance->current_leading_pixel = (int32_t)pixel_count;
   }
 
@@ -5458,7 +5505,7 @@ uint16_t mode_dropping_time(void) {
         instance->_segment.setPixelColor(pos, color_blend(dropColor, 0, 150));
       }
       // Draw ripple at water level exactly
-      if (state->filledPixels < len && state->filledPixels >= 0) {
+      if (state->filledPixels < len) {
         uint32_t cur = instance->_segment.getPixelColor(state->filledPixels);
         instance->_segment.setPixelColor(state->filledPixels,
                                          color_blend(cur, dropColor, 200));
@@ -5522,7 +5569,7 @@ uint16_t mode_dropping_time(void) {
               }
             }
           } else if (state->dummyDrops[i].colIndex > 2) { // Splash Ripple
-            if (state->filledPixels < len && state->filledPixels >= 0) {
+            if (state->filledPixels < len) {
               uint32_t cur =
                   instance->_segment.getPixelColor(state->filledPixels);
               instance->_segment.setPixelColor(state->filledPixels,

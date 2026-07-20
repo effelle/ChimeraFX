@@ -2,14 +2,18 @@
 
 ## Prerequisites
 
-*   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.3.0**
+*   **ESPHome Version**: The minimum version to run ChimeraFX for ESPHome is **2026.7.0**
 *   **Supported Hardware**:
       *   **ESP32 (Classic)**: Fully supported and still a strong choice for ordinary RMT and SPI nodes, especially when you need several moderate 1-wire outputs.
       *   **ESP32-S3**: Fully supported and the preferred target for dense 1-wire installations. Use the parallel backend for high LED counts, multi-lane SK6812/WS2812X layouts, or heavily segmented strips.
-      *   **ESP32-C3**: Supported for compact single-output layouts. The C3 is single-core and timing-sensitive, so validate your heaviest effect before pushing the upper LED limits.
+      *   **ESP32-C3**: Experimental for segmented RMT and not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
       *   **Other ESP32 variants** (S2, P4, C6, H2, etc.): Untested. Dual-core variants are expected to work; single-core variants are not recommended for the same reasons as the C3. Community reports welcome.
-      *   **ESP8266 (and variants)**: **NOT SUPPORTED**. Although ESPHome can target the ESP8266, it lacks the FPU and RAM required by the ChimeraFX rendering engine — it will not compile. Please upgrade to an ESP32. Seriously.
+      *   **ESP8266 (and variants)**: Not supported for `cfx_light` or ChimeraFX effects because it lacks the FPU and RAM required by the rendering engine. It can still use `cfx_sync` over UDP as a follower, satellite, or controller for a normal ESPHome light. ESP8266 cannot be a ChimeraFX sync leader.
 *   **Framework**: Both **ESP-IDF** and **Arduino** are fully supported.
+
+ESPHome 2026.7 uses the native ESP-IDF build toolchain by default on ESP32, including when the Arduino framework is selected. This is the recommended path for ChimeraFX, and the normal `framework: type: esp-idf` configuration below is all you need. Do not add a `toolchain:` option unless you intentionally want to override ESPHome's default.
+
+ESPHome 2026.7 also treats an explicit brightness of `0` as OFF. ChimeraFX already sends ON/OFF separately and preserves the last non-zero brightness. No ChimeraFX YAML change is needed. Only custom lambdas that deliberately set brightness to `0` should be reviewed: a later bare turn-on will use 100% unless that turn-on also provides a brightness.
 
 ---
 
@@ -43,6 +47,10 @@ external_components:
     refresh: always
 ```
 
+Do not add a `components:` list for the normal GitHub install. If you keep an
+old allow-list, ESPHome will only import those named components; using
+`cfx_button:` then requires `cfx_button` to be present in that list.
+
 ⚠️ **About `refresh: always`**
 
 Setting to `always` forces ESPHome to download the absolute latest version of the code every time you compile. 
@@ -57,15 +65,20 @@ Once you have a working setup, it is safer to remove `refresh: always` or pin to
 
 If you are developing, need to modify the code locally, or prefer not to rely on the GitHub repository, you can manually copy the component to your ESPHome config directory:
 
-1.  Download the `components/` folder from the repository.
-2.  Place it in your ESPHome config directory (e.g., `config/components/cfx_effect`).
+1.  Download the repository's `components/` folder.
+2.  Copy its contents into your ESPHome config directory so the component folders live at paths such as `config/components/cfx_light` and `config/components/cfx_effect`.
 3.  Point your configuration to the local folder:
 
 ```yaml
 external_components:
   - source: components
-    components: [cfx_effect]
+    components: [cfx_light, cfx_effect, cfx_effect_registry, cfx_sequence, cfx_power, cfx_button]
 ```
+
+If you use a local or manual allow-list, include every ChimeraFX component you
+use and their shared support components. In particular, `cfx_effect` requires
+`cfx_effect_registry`. Omitting an entry from this list makes ESPHome report
+`Component not found` even when the folder exists.
 
 ---
 ## Complete Minimal Example

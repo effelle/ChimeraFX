@@ -13,6 +13,9 @@
 #include "esphome/components/light/light_output.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/light/light_transformer.h"
+#ifdef USE_POWER_SUPPLY
+#include "esphome/components/power_supply/power_supply.h"
+#endif
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
@@ -230,6 +233,7 @@ public:
   // Counter-based: fires write_state(nullptr) only when ALL N segments have
   // reported their render complete, preventing premature DMA on partial frames.
   void request_segment_flush(light::LightState *state = nullptr);
+  void request_segment_solid_repaint_flush(light::LightState *state);
 
   // Segment flush coalescing state (Fix-2: one DMA call per frame)
   bool     seg_flush_pending_{false};
@@ -268,6 +272,12 @@ public:
   // Config setters (called by light.py codegen)
   void set_pin(uint8_t pin) { this->pin_ = pin; }
   void set_num_leds(uint16_t num_leds) { this->num_leds_ = num_leds; }
+#ifdef USE_POWER_SUPPLY
+  void set_power_supply(power_supply::PowerSupply *supply) {
+    this->power_supply_requester_.set_parent(supply);
+    this->has_power_supply_ = supply != nullptr;
+  }
+#endif
   void set_chipset(ChimeraChipset chipset) { this->chipset_ = chipset; }
   void set_rgb_order(RGBOrder order) { this->rgb_order_ = order; }
   void set_is_rgbw(bool is_rgbw) { this->is_rgbw_ = is_rgbw; }
@@ -377,6 +387,7 @@ public:
   void set_power_manager(CFXPowerManager *manager) {
     this->power_manager_ = manager;
   }
+  void request_power_reduction_refresh();
   float estimate_power_current_ma(const CFXPowerModel &model,
                                   float dynamic_scale = 1.0f) const;
 
@@ -503,32 +514,47 @@ protected:
   void maybe_apply_turn_on_defaults_(light::LightState *state, bool &prev_on_state);
   void repaint_force_white_solid_(bool state);
   void release_outro_callback_storage_();
+#ifdef USE_POWER_SUPPLY
+  bool has_power_demand_() const;
+  bool power_transmit_in_flight_() const;
+  void request_power_supply_();
+  void schedule_power_supply_release_();
+  void service_power_supply_release_();
+#endif
   void paint_low_ram_warning_(light::LightState *state, bool on);
   void restore_low_ram_warning_color_(light::LightState *state);
+  bool should_scrub_segment_(light::LightState *state) const;
   int find_segment_runtime_slot_(light::LightState *state) const;
   void clear_segment_runtime_slot_(size_t index);
-  bool has_active_parent_owned_segments_() const;
+  void clear_segment_idle_diag_();
+  bool has_active_parent_owned_segments_(bool include_outro = false) const;
   void refresh_parent_owned_segment_slot_(CFXSegmentRuntimeSlot &slot);
   void refresh_parent_owned_segment_slots_();
-  void refresh_segment_coordination_mask_();
+  void refresh_segment_coordination_mask_(bool include_outro = false);
   void invalidate_segment_coord_schedule_();
   void apply_segment_coordination_loop_state_(uint8_t owned_mask);
   void apply_master_segment_coordination_loop_state_();
   uint8_t collect_clean_mono_idle_segment_mask_() const;
   void apply_mono_idle_loop_state_(uint8_t segment_idle_mask);
   void wake_mono_idle_light_state_(light::LightState *state);
+  bool segment_participates_in_barrier_(light::LightState *state) const;
   bool service_segment_render_coordinator_();
   bool service_parallel_segment_group_coordinator_();
   bool collect_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
                                           uint64_t now,
-                                          bool force_due = false);
+                                          bool force_due = false,
+                                          bool allow_outro = false);
   bool render_segment_coordinator_epoch_(uint8_t &mask, uint8_t &count,
-                                         bool force_due = false);
+                                         bool force_due = false,
+                                         bool allow_outro = false);
   void finalize_segment_coordinator_epoch_(uint8_t mask, uint8_t count,
                                            bool transmit);
   void mark_segment_coordinator_epoch_committed_(uint8_t mask);
   void flush_segment_coordinator_epoch_(uint8_t mask, uint8_t count);
   void flush_parent_owned_segment_epoch_direct_(uint8_t mask, uint8_t count);
+  void schedule_segment_deferred_flush_(uint8_t mask, uint8_t count,
+                                        uint32_t remaining_us);
+  uint32_t get_segmented_rmt_refresh_floor_us_() const;
   // P2: non-blocking poll for previous RMT TX — mirrors wait_for_spi_tx_().
   // Returns true when the frame is done (fast path: flag already clear).
   // Spins in 100µs slices up to timeout_ms, then returns false.
@@ -569,6 +595,8 @@ protected:
   // Callbacks used to execute Outro animations after ESPHome turns the light
   // off
   std::vector<OutroCallback> outro_cbs_;
+  uint32_t outro_last_frame_ms_{0};
+  bool outro_parent_flush_allowed_{false};
 
   // Per-pixel effect data (used by AddressableLight)
   uint8_t *effect_data_{nullptr};
@@ -654,6 +682,12 @@ protected:
   uint32_t spi_last_flush_ms_{0};
 
   CFXPowerManager *power_manager_{nullptr};
+#ifdef USE_POWER_SUPPLY
+  power_supply::PowerSupplyRequester power_supply_requester_{};
+  bool has_power_supply_{false};
+  bool power_supply_requested_{false};
+  bool power_supply_release_pending_{false};
+#endif
 
   // Refresh rate limiting
   uint32_t last_refresh_{0};
@@ -697,6 +731,7 @@ protected:
   bool is_syncing_{false};
   bool applying_turn_on_defaults_{false};
   bool prev_master_state_{false};
+  float prev_master_brightness_{1.0f};
   bool prev_master_defaults_state_{false};
 
   uint8_t tracked_brightness_{0};
@@ -787,6 +822,11 @@ protected:
   uint32_t seg_coord_refresh_dt_count_{0};
   uint32_t seg_coord_max_refresh_dt_us_{0};
   uint64_t seg_coord_total_refresh_dt_us_{0};
+  bool seg_deferred_flush_pending_{false};
+  uint8_t seg_deferred_flush_mask_{0};
+  uint8_t seg_deferred_flush_count_{0};
+  uint32_t seg_deferred_flushes_{0};
+  uint32_t seg_deferred_flush_skips_{0};
   uint16_t seg_generation_counter_{0};
   uint16_t seg_request_generation_[MAX_CFX_SEGMENTS]{};
   uint16_t seg_flushed_generation_[MAX_CFX_SEGMENTS]{};

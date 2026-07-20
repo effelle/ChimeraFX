@@ -45,7 +45,7 @@ struct CRGBW {
 #define DEFAULT_INTENSITY 128
 #define DEFAULT_COLOR 0xFFAA00
 
-#define FRAMETIME 15
+#define FRAMETIME 17
 
 #define NO_OPTIONS (uint16_t)0x0000
 #define REVERSE (uint16_t)0x0002
@@ -286,6 +286,7 @@ public:
   bool sequence_owns_mirror_{false};
 
   void setGamma(float g);
+  static void prewarmGamma(float g);
   inline uint8_t applyGamma(uint8_t val) { return _lut ? _lut[val] : val; }
   uint8_t shiftFloor(uint8_t val);
   uint8_t getFadeFactor(uint8_t factor);
@@ -302,7 +303,11 @@ public:
 
   void setDebug(bool state) { diagnostics.enabled = state; }
   bool getDebug() const { return diagnostics.enabled; }
-  void setName(const char *name) { _name = name; }
+  void setName(const char *name) {
+    const char *safe_name = name != nullptr ? name : "";
+    if (_name != safe_name)
+      _name = safe_name;
+  }
   void setPaletteSeedSalt(uint32_t salt) {
     if (palette_seed_salt_ == salt)
       return;

@@ -16,6 +16,7 @@
 #include "esphome/core/hal.h" // For millis_64()
 #include "esphome/core/log.h"
 #include <algorithm>
+#include <cinttypes>
 #include <span>
 
 #include "cfx_event_manager.h"
@@ -955,10 +956,12 @@ void CFXAddressableLightEffect::start() {
         out->trigger_low_ram_warning(this->get_light_state());
       }
       ESP_LOGW("cfx_heap",
-               "[%s] Heap too low to start effect (%u B free, %u B floor) — "
+               "[%s] Heap too low to start effect (%" PRIu32
+               " B free, %" PRIu32 " B floor) — "
                "showing a red 5s warning and forcing the impacted light OFF. "
                "Free RAM before adding more lights/segments.",
-               this->get_name().c_str(), free_heap, CFX_HEAP_FLOOR);
+               this->get_name().c_str(), free_heap,
+               static_cast<uint32_t>(CFX_HEAP_FLOOR));
       return;
     }
   }
@@ -1034,11 +1037,13 @@ void CFXAddressableLightEffect::start() {
   }
 
 #ifdef USE_CFX_EVENTS
-  // Derive act_->strip_tag early — needed by both cfx_begin and cfx_start
-  // events.
+  // Resolve act_->strip_tag early — needed by both cfx_begin and cfx_start
+  // events. Prefer the codegen-provided ChimeraFX event tag because ESPHome's
+  // object id normalization can differ from the tag registered for events.
   {
-    auto *ls = this->get_light_state();
-    if (ls != nullptr) {
+    if (!this->configured_strip_tag_.empty()) {
+      act_->strip_tag = this->configured_strip_tag_;
+    } else if (auto *ls = this->get_light_state(); ls != nullptr) {
       char id_buf[128] = {};
       ls->get_object_id_to(std::span(id_buf));
       act_->strip_tag = std::string(id_buf, strnlen(id_buf, sizeof(id_buf)));
@@ -1270,7 +1275,8 @@ void CFXAddressableLightEffect::start() {
   SPIDiagCensus diag_census = collect_spi_diag_census();
   if (diag_out != nullptr && diag_out->is_spi_transport()) {
     ESP_LOGI("chimera_fx",
-             "CFX spi_effect_start[%s] effect_id=%u update_interval=%ums",
+             "CFX spi_effect_start[%s] effect_id=%u update_interval=%" PRIu32
+             "ms",
              act_->cached_runner_name.c_str(), this->effect_id_,
              this->update_interval_);
     ESP_LOGV(
@@ -1495,7 +1501,7 @@ void CFXAddressableLightEffect::start() {
       std::string pal_name = "";
       select::Select *palette_sel =
           (c && c->get_palette()) ? c->get_palette() : this->local_palette_();
-      if (palette_sel && palette_sel->has_state()) {
+      if (select_has_state(palette_sel)) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = palette_sel->current_option().c_str();
         if (opt != nullptr)
@@ -1566,7 +1572,7 @@ void CFXAddressableLightEffect::start() {
       act_->active_intro_mode = preset.intro_mode;
     } else {
       // 2. YAML/runtime presets override the live UI selectors.
-      if (intro_sel != nullptr && intro_sel->has_state()) {
+      if (select_has_state(intro_sel)) {
         // audit 2.2: c_str() directly on the reference — no std::string copy
         const char *opt = intro_sel->current_option().c_str();
         std::string s = opt ? opt : "";
@@ -1861,7 +1867,7 @@ void CFXAddressableLightEffect::stop() {
         act_->active_outro_mode = preset.outro_mode;
       } else {
         // 2. YAML/runtime presets override the live UI selectors.
-      if (out_eff != nullptr && out_eff->has_state()) {
+        if (select_has_state(out_eff)) {
           std::string raw_opt_s(out_eff->current_option());
           const char *raw_opt = raw_opt_s.c_str();
           std::string s = raw_opt ? raw_opt : "";
@@ -2797,7 +2803,8 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
          this->act_->spi_diag_apply_logs == 6)) {
       ESP_LOGV(
           "cfx_seq",
-          "SPI diag heartbeat[%u]: effect=%s act=%p dt=%ums totals(e=%u,se=%u) "
+          "SPI diag heartbeat[%u]: effect=%s act=%p dt=%" PRIu32
+          "ms totals(e=%u,se=%u) "
           "active(e=%u,se=%u,spi=%u) bound=%u runners=%u",
           static_cast<unsigned>(this->act_->spi_diag_heartbeat_logs),
           this->act_->cached_runner_name.c_str(), this->act_, delta_ms,
@@ -2922,9 +2929,20 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
   const bool runner_debug_active = debug_active && !capture_idle_probe;
   const bool measure_apply_cost = apply_perf_enabled || capture_idle_probe;
   const uint32_t apply_start_us = measure_apply_cost ? cfx_micros() : 0;
+  uint32_t apply_sync_us = 0;
   uint32_t apply_dispatch_us = 0;
+  uint32_t apply_intro_us = 0;
+  uint32_t apply_state_us = 0;
   uint32_t apply_post_us = 0;
+  uint32_t apply_sync_force_us = 0;
+  uint32_t apply_sync_light_us = 0;
+  uint32_t apply_sync_runner_us = 0;
+  uint32_t apply_sync_controls_us = 0;
+  uint32_t apply_sync_gamma_us = 0;
+  uint32_t apply_sync_brightness_us = 0;
+  uint32_t apply_sync_idle_us = 0;
 
+  uint32_t sync_section_start_us = apply_perf_enabled ? cfx_micros() : 0;
   bool force_white_requested =
       this->has_force_white_preset_()
           ? this->force_white_preset_val_()
@@ -2936,6 +2954,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
                                     : this->get_palette_index_();
   act_->active_force_white = this->resolve_force_white_active_(
       force_white_requested, force_white_palette);
+  if (apply_perf_enabled) {
+    apply_sync_force_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // Use the name cached in start() — avoids heap allocation every frame
   // (audit 1.1).
@@ -2987,6 +3009,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       null_state_log = millis_64();
     }
   }
+  if (apply_perf_enabled) {
+    apply_sync_light_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   if (!act_->segment_runners.empty()) {
     for (auto *r : act_->segment_runners) {
@@ -3008,10 +3034,18 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       act_->runner->setName(runner_name.c_str());
     act_->runner->setColor(color);
   }
+  if (apply_perf_enabled) {
+    apply_sync_runner_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // Update controls via Controller or Local entities (Crucial for
   // Speed/Intensity)
   this->run_controls_();
+  if (apply_perf_enabled) {
+    apply_sync_controls_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // === Dynamic Gamma Update ===
   // Sync the Runner's gamma LUT with the light's current gamma setting.
@@ -3028,6 +3062,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (abs(act_->runner->_gamma - current_gamma) > 0.01f) {
       act_->runner->setGamma(current_gamma);
     }
+  }
+  if (apply_perf_enabled) {
+    apply_sync_gamma_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
   }
 
   // (Lazy Binding removed — binding happens in cfx_sequence::start())
@@ -3082,6 +3120,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       this->get_monochromatic_preset_(this->effect_id_).is_active;
   const bool supports_idle_output =
       is_mono_preset || this->effect_id_ == FX_MODE_STATIC;
+  if (apply_perf_enabled) {
+    apply_sync_brightness_us = cfx_micros() - sync_section_start_us;
+    sync_section_start_us = cfx_micros();
+  }
 
   // ── CFX-045: Monochromatic idle suppression ──────────────────────────────
   // Phase 1 — intro/outro skip (existing behaviour, preserved as-is).
@@ -3184,6 +3226,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
       skip_service = true;
     }
+  }
+  if (apply_perf_enabled) {
+    apply_sync_idle_us = cfx_micros() - sync_section_start_us;
+    apply_sync_us = cfx_micros() - apply_start_us;
   }
 
   if (!skip_service) {
@@ -3296,7 +3342,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #endif
     }
   }
-  const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
+  const uint32_t state_start_us = measure_apply_cost ? cfx_micros() : 0;
 
 #ifdef USE_CFX_SEQUENCE
   // CFX-run: Check effect_complete_ regardless of skip_service so that
@@ -3352,6 +3398,7 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 #else
       true) {
 #endif
+    const uint32_t intro_start_us = apply_perf_enabled ? cfx_micros() : 0;
     // Run intro on ALL segments (swap-on-service pattern)
     // This acts as a mask on top of the already-rendered main effect.
     if (!act_->segment_runners.empty()) {
@@ -3364,6 +3411,9 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
       chimera_fx::InstanceGuard intro_guard(
           act_->runner); // CFX-004: scoped single-runner
       this->run_intro(it, current_color);
+    }
+    if (apply_perf_enabled) {
+      apply_intro_us += cfx_micros() - intro_start_us;
     }
 
     // CFX-035b: Fire progress-based milestones from the intro for monochromatic
@@ -3675,6 +3725,12 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
 
   // (Duplicate completion handler removed — handled in service loop above)
 
+  if (measure_apply_cost) {
+    apply_state_us = cfx_micros() - state_start_us;
+  }
+
+  const uint32_t post_start_us = measure_apply_cost ? cfx_micros() : 0;
+
   // CFX-032: Scrub OFF segments before DMA fires.
   // The effect writes into the full strip buffer without knowing which
   // segments are OFF. If it bleeds into an OFF segment's pixel range,
@@ -3715,8 +3771,10 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     apply_post_us = cfx_micros() - post_start_us;
     const uint32_t apply_total_us = cfx_micros() - apply_start_us;
     const uint32_t apply_prep_us =
-        (apply_total_us > (apply_dispatch_us + apply_post_us))
-            ? (apply_total_us - apply_dispatch_us - apply_post_us)
+        (apply_total_us > (apply_sync_us + apply_dispatch_us + apply_state_us +
+                           apply_post_us))
+            ? (apply_total_us - apply_sync_us - apply_dispatch_us -
+               apply_state_us - apply_post_us)
             : 0;
 
     if (capture_idle_probe) {
@@ -3728,7 +3786,17 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     if (apply_perf_enabled) {
       act_->perf_apply_total_us += apply_total_us;
       act_->perf_apply_prep_us += apply_prep_us;
+      act_->perf_apply_sync_us += apply_sync_us;
+      act_->perf_apply_sync_force_us += apply_sync_force_us;
+      act_->perf_apply_sync_light_us += apply_sync_light_us;
+      act_->perf_apply_sync_runner_us += apply_sync_runner_us;
+      act_->perf_apply_sync_controls_us += apply_sync_controls_us;
+      act_->perf_apply_sync_gamma_us += apply_sync_gamma_us;
+      act_->perf_apply_sync_brightness_us += apply_sync_brightness_us;
+      act_->perf_apply_sync_idle_us += apply_sync_idle_us;
       act_->perf_apply_dispatch_us += apply_dispatch_us;
+      act_->perf_apply_intro_us += apply_intro_us;
+      act_->perf_apply_state_us += apply_state_us;
       act_->perf_apply_post_us += apply_post_us;
       act_->perf_apply_count++;
 
@@ -3736,8 +3804,28 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_apply_max_total_us = apply_total_us;
       if (apply_prep_us > act_->perf_apply_max_prep_us)
         act_->perf_apply_max_prep_us = apply_prep_us;
+      if (apply_sync_us > act_->perf_apply_max_sync_us)
+        act_->perf_apply_max_sync_us = apply_sync_us;
+      if (apply_sync_force_us > act_->perf_apply_max_sync_force_us)
+        act_->perf_apply_max_sync_force_us = apply_sync_force_us;
+      if (apply_sync_light_us > act_->perf_apply_max_sync_light_us)
+        act_->perf_apply_max_sync_light_us = apply_sync_light_us;
+      if (apply_sync_runner_us > act_->perf_apply_max_sync_runner_us)
+        act_->perf_apply_max_sync_runner_us = apply_sync_runner_us;
+      if (apply_sync_controls_us > act_->perf_apply_max_sync_controls_us)
+        act_->perf_apply_max_sync_controls_us = apply_sync_controls_us;
+      if (apply_sync_gamma_us > act_->perf_apply_max_sync_gamma_us)
+        act_->perf_apply_max_sync_gamma_us = apply_sync_gamma_us;
+      if (apply_sync_brightness_us > act_->perf_apply_max_sync_brightness_us)
+        act_->perf_apply_max_sync_brightness_us = apply_sync_brightness_us;
+      if (apply_sync_idle_us > act_->perf_apply_max_sync_idle_us)
+        act_->perf_apply_max_sync_idle_us = apply_sync_idle_us;
       if (apply_dispatch_us > act_->perf_apply_max_dispatch_us)
         act_->perf_apply_max_dispatch_us = apply_dispatch_us;
+      if (apply_intro_us > act_->perf_apply_max_intro_us)
+        act_->perf_apply_max_intro_us = apply_intro_us;
+      if (apply_state_us > act_->perf_apply_max_state_us)
+        act_->perf_apply_max_state_us = apply_state_us;
       if (apply_post_us > act_->perf_apply_max_post_us)
         act_->perf_apply_max_post_us = apply_post_us;
 
@@ -3746,15 +3834,87 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
         act_->perf_log_ms = now_ms;
       } else if ((now_ms - act_->perf_log_ms) >= 2000 &&
                  act_->perf_apply_count > 0) {
+        const uint32_t count =
+            act_->perf_apply_count > 0 ? act_->perf_apply_count : 1;
+        ESP_LOGD("chimera_fx",
+                 "CFX apply_perf[%s] n=%" PRIu32
+                 " total_us=%" PRIu32 "/%" PRIu32
+                 " prep=%" PRIu32 "/%" PRIu32
+                 " sync=%" PRIu32 "/%" PRIu32
+                 " sync_detail force=%" PRIu32 "/%" PRIu32
+                 " light=%" PRIu32 "/%" PRIu32
+                 " runner=%" PRIu32 "/%" PRIu32
+                 " controls=%" PRIu32 "/%" PRIu32
+                 " gamma=%" PRIu32 "/%" PRIu32
+                 " bri=%" PRIu32 "/%" PRIu32
+                 " idle=%" PRIu32 "/%" PRIu32
+                 " dispatch=%" PRIu32 "/%" PRIu32
+                 " intro=%" PRIu32 "/%" PRIu32
+                 " state=%" PRIu32 "/%" PRIu32
+                 " post=%" PRIu32 "/%" PRIu32
+                 " intro_active=%u mode=%u mono_idle=%u fsm=%u",
+                 runner_name.c_str(), act_->perf_apply_count,
+                 static_cast<uint32_t>(act_->perf_apply_total_us / count),
+                 act_->perf_apply_max_total_us,
+                 static_cast<uint32_t>(act_->perf_apply_prep_us / count),
+                 act_->perf_apply_max_prep_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_us / count),
+                 act_->perf_apply_max_sync_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_force_us / count),
+                 act_->perf_apply_max_sync_force_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_light_us / count),
+                 act_->perf_apply_max_sync_light_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_runner_us / count),
+                 act_->perf_apply_max_sync_runner_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_controls_us / count),
+                 act_->perf_apply_max_sync_controls_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_gamma_us / count),
+                 act_->perf_apply_max_sync_gamma_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_brightness_us / count),
+                 act_->perf_apply_max_sync_brightness_us,
+                 static_cast<uint32_t>(act_->perf_apply_sync_idle_us / count),
+                 act_->perf_apply_max_sync_idle_us,
+                 static_cast<uint32_t>(act_->perf_apply_dispatch_us / count),
+                 act_->perf_apply_max_dispatch_us,
+                 static_cast<uint32_t>(act_->perf_apply_intro_us / count),
+                 act_->perf_apply_max_intro_us,
+                 static_cast<uint32_t>(act_->perf_apply_state_us / count),
+                 act_->perf_apply_max_state_us,
+                 static_cast<uint32_t>(act_->perf_apply_post_us / count),
+                 act_->perf_apply_max_post_us,
+                 static_cast<unsigned>(act_->intro_active),
+                 static_cast<unsigned>(act_->active_intro_mode),
+                 static_cast<unsigned>(act_->mono_idle),
+                 static_cast<unsigned>(act_->state));
         act_->perf_log_ms = now_ms;
         act_->perf_apply_count = 0;
         act_->perf_apply_total_us = 0;
         act_->perf_apply_prep_us = 0;
+        act_->perf_apply_sync_us = 0;
+        act_->perf_apply_sync_force_us = 0;
+        act_->perf_apply_sync_light_us = 0;
+        act_->perf_apply_sync_runner_us = 0;
+        act_->perf_apply_sync_controls_us = 0;
+        act_->perf_apply_sync_gamma_us = 0;
+        act_->perf_apply_sync_brightness_us = 0;
+        act_->perf_apply_sync_idle_us = 0;
         act_->perf_apply_dispatch_us = 0;
+        act_->perf_apply_intro_us = 0;
+        act_->perf_apply_state_us = 0;
         act_->perf_apply_post_us = 0;
         act_->perf_apply_max_total_us = 0;
         act_->perf_apply_max_prep_us = 0;
+        act_->perf_apply_max_sync_us = 0;
+        act_->perf_apply_max_sync_force_us = 0;
+        act_->perf_apply_max_sync_light_us = 0;
+        act_->perf_apply_max_sync_runner_us = 0;
+        act_->perf_apply_max_sync_controls_us = 0;
+        act_->perf_apply_max_sync_gamma_us = 0;
+        act_->perf_apply_max_sync_brightness_us = 0;
+        act_->perf_apply_max_sync_idle_us = 0;
         act_->perf_apply_max_dispatch_us = 0;
+        act_->perf_apply_max_intro_us = 0;
+        act_->perf_apply_max_state_us = 0;
         act_->perf_apply_max_post_us = 0;
       }
     }
@@ -4512,7 +4672,7 @@ void CFXAddressableLightEffect::run_controls_() {
         intensity_num->state != act_->autotune_expected_intensity)
       manual_override = true;
 
-    if (is_currently_target && palette_sel && palette_sel->has_state() &&
+    if (is_currently_target && select_has_state(palette_sel) &&
         palette_sel->current_option() != act_->autotune_expected_palette)
       manual_override = true;
 
@@ -4523,7 +4683,7 @@ void CFXAddressableLightEffect::run_controls_() {
   }
 
   // --- Visualizer: Dynamic Palette Sync ---
-  if (!this->is_virtual_segment_ && palette_sel && palette_sel->has_state()) {
+  if (!this->is_virtual_segment_ && select_has_state(palette_sel)) {
     // audit 2.2: c_str() directly on the reference — no std::string copy
     const char *opt = palette_sel->current_option().c_str();
     std::string current_pal = opt ? opt : "";
@@ -4545,7 +4705,7 @@ void CFXAddressableLightEffect::run_controls_() {
           this->get_light_state()->get_output());
       if (out != nullptr) {
         std::string pal_name = "";
-        if (palette_sel && palette_sel->has_state()) {
+        if (select_has_state(palette_sel)) {
           // audit 2.2: c_str() directly on the reference — no std::string copy
           const char *opt = palette_sel->current_option().c_str();
           if (opt != nullptr)
@@ -4568,7 +4728,7 @@ void CFXAddressableLightEffect::run_controls_() {
     // Helper lambda for Palette Index Lookup
     // New indices: 0=Default, 1=Aurora, 2=Forest, 3=Ocean, 4=Rainbow, etc.
     auto get_pal_idx = [this](select::Select *sel) -> uint8_t {
-      if (!sel || !sel->has_state())
+      if (!select_has_state(sel))
         return 0;
       // audit 2.2: avoid copying current_option() into a new std::string
       const char *opt = sel->current_option().c_str();
@@ -4827,7 +4987,7 @@ void CFXAddressableLightEffect::run_controls_() {
                 if (seg_c->get_mirror() && seg_c->get_mirror()->has_state())
                   r_mirror = seg_c->get_mirror()->state;
 
-                if (seg_c->get_palette() && seg_c->get_palette()->has_state()) {
+                if (select_has_state(seg_c->get_palette())) {
                   // audit 2.2: check non-empty via c_str() directly —
                   // no intermediate std::string copy needed.
                   const char *opt_ptr =
@@ -5466,30 +5626,35 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
 
     // 3. Render Shimmering Fluid Mass (Coherent Waves)
     int floor_level = (int)act_->hydraulics_fluid_level;
-    float vel_glow = 0.15f * (abs(act_->hydraulics_fluid_velocity) / target_l);
-    float wave_time = now_ms * 0.005f;
+    int vel_glow_b = (int)(38.0f * fabsf(act_->hydraulics_fluid_velocity) /
+                           (target_l > 0.0f ? target_l : 1.0f));
+    if (vel_glow_b > 64)
+      vel_glow_b = 64;
+    const uint8_t wave_t1 = (uint8_t)((now_ms * 5u) & 0xFFu);
+    const uint8_t wave_t2 = (uint8_t)((now_ms * 13u / 10u) & 0xFFu);
 
     for (int i = 0; i < floor_level; i++) {
       if (i < seg_len) {
-        // Overlapping Sine Waves create a flowing "liquid" texture
-        float wave1 = sinf(i * 0.5f - wave_time);
-        float wave2 = sinf(i * 0.8f - (wave_time * 1.3f));
-        float liquid_noise = (wave1 + wave2) * 0.15f;
-
-        float brightness =
-            0.7f + liquid_noise + vel_glow; // v4.1 Match White Peak
+        // Overlapping integer sine waves create a flowing liquid texture.
+        // Avoid per-pixel sinf() here: ESP32-C3 has no FPU, and this intro
+        // often runs while another segment effect is active.
+        const int wave1 =
+            (int)cfx::sin8((uint8_t)(i * 10u - wave_t1)) - 128;
+        const int wave2 =
+            (int)cfx::sin8((uint8_t)(i * 16u - wave_t2)) - 128;
+        int brightness = 179 + ((wave1 + wave2) * 38 / 128) + vel_glow_b;
 
         // The "Froth" (Water is brighter/turbulent at the leading edge)
         float dist_to_head = act_->hydraulics_fluid_level - i;
         if (dist_to_head < 5.0f) {
-          brightness += (5.0f - dist_to_head) * 0.15f;
+          brightness += (int)((5.0f - dist_to_head) * 38.0f);
         }
 
-        if (brightness > 1.0f)
-          brightness = 1.0f;
-        if (brightness < 0.1f)
-          brightness = 0.1f;
-        uint8_t b = (uint8_t)(255 * brightness);
+        if (brightness > 255)
+          brightness = 255;
+        if (brightness < 26)
+          brightness = 26;
+        uint8_t b = (uint8_t)brightness;
         uint8_t r = b, g = b, b_val = b, w = b;
         if (act_->active_force_white)
           cfx::apply_force_white(r, g, b_val, w);
@@ -6463,9 +6628,10 @@ void CFXAddressableLightEffect::run_intro(light::AddressableLight &it,
       uint32_t phase_dur = duration - p3_end;
       if (phase_dur == 0)
         phase_dur = 1;
-      brightness = (uint8_t)(210u + (phase_t * 45u / phase_dur));
-      if (brightness > 255u)
-        brightness = 255u;
+      const uint32_t ramp_brightness =
+          210u + (phase_t * 45u / phase_dur);
+      brightness = static_cast<uint8_t>(
+          std::min<uint32_t>(ramp_brightness, 255u));
     }
 
     // ── 3. Apply brightness to full strip ────────────────────────────────────
@@ -7991,12 +8157,11 @@ bool CFXAddressableLightEffect::run_outro_frame(light::AddressableLight &it,
         period = 1;
       uint8_t t = (uint8_t)((phase_t % period) * 255u / period);
       uint8_t base_b = (uint8_t)(255u - (uint32_t)(norm * 50.0f));
-      brightness = (uint8_t)((int)base_b - (int)amp +
-                             (int)(((uint16_t)cfx::sin8(t) * amp * 2u) >> 8));
-      if ((int)brightness > 255)
-        brightness = 255;
-      if ((int)brightness < 0)
-        brightness = 0;
+      const int pulse_brightness =
+          static_cast<int>(base_b) - static_cast<int>(amp) +
+          static_cast<int>(((uint16_t)cfx::sin8(t) * amp * 2u) >> 8);
+      brightness =
+          static_cast<uint8_t>(std::clamp(pulse_brightness, 0, 255));
     } else if (elapsed < p3_end) {
       // ── Phase 3: Collapse — sparse final flares, mostly dark ──────────────
       const uint32_t SLOT_MS = 40;
@@ -8709,7 +8874,7 @@ bool CFXAddressableLightEffect::evaluate_mono_idle_() {
   return saw_runner;
 }
 
-void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
+void CFXAddressableLightEffect::log_mono_idle_hold(bool force) {
   if (act_ == nullptr || !act_->mono_idle ||
       !this->mono_idle_logging_enabled()) {
     return;
@@ -8717,32 +8882,23 @@ void CFXAddressableLightEffect::log_mono_idle_sleep(bool force) {
   const char *light_name =
       act_->cached_runner_name.empty() ? nullptr
                                        : act_->cached_runner_name.c_str();
-  const uint32_t idle_sample_count =
-      (act_->idle_probe_valid && act_->idle_probe_total_us > 0) ? 1u
-                                                                : act_->idle_frame_count;
-  const uint64_t idle_sample_total_us =
-      (act_->idle_probe_valid && act_->idle_probe_total_us > 0)
-          ? static_cast<uint64_t>(act_->idle_probe_total_us)
-          : act_->idle_total_frame_us;
 
   if (act_->runner != nullptr) {
-    act_->runner->diagnostics.idle_sleep_log(
+    act_->runner->diagnostics.idle_hold_log(
         light_name, act_->runner->getModeName(), act_->runner->getMode(),
-        idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-        act_->idle_jitter_count, resolve_led_fps(this), force);
+        force);
   }
 
   for (size_t i = 0; i < act_->segment_runners.size(); i++) {
     auto *runner = act_->segment_runners[i];
     if (runner != nullptr) {
       const char *seg_name = light_name;
-      if (i < act_->cached_segment_names.size() && !act_->cached_segment_names[i].empty()) {
+      if (i < act_->cached_segment_names.size() &&
+          !act_->cached_segment_names[i].empty()) {
         seg_name = act_->cached_segment_names[i].c_str();
       }
-      runner->diagnostics.idle_sleep_log(
-          seg_name, runner->getModeName(), runner->getMode(),
-          idle_sample_count, act_->idle_period_start_ms, idle_sample_total_us,
-          act_->idle_jitter_count, resolve_led_fps(this), force);
+      runner->diagnostics.idle_hold_log(
+          seg_name, runner->getModeName(), runner->getMode(), force);
     }
   }
 }

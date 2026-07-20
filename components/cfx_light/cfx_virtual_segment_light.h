@@ -12,11 +12,13 @@
 
 #include "../cfx_effect/cfx_utils.h"
 #include "cfx_light.h"
+#include "cfx_light_color.h"
 #include "esphome/components/light/addressable_light.h"
 #include "esphome/components/select/select.h"
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
 
+#include <cinttypes>
 #include <string>
 
 namespace esphome {
@@ -111,7 +113,7 @@ public:
     float bri = val.get_brightness() * val.get_state();
     if (state->is_transformer_active() && bri > 0.0f)
       return;
-    Color c = light::color_from_light_color_values(val);
+    Color c = mode_aware_color(val);
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
@@ -137,6 +139,7 @@ public:
     // Suppress flush while parent has an outro in progress.
     if (parent_->has_outro())
       return;
+    this->apply_force_white_to_transition_buffer_();
     if (parent_->segment_coordinator_owns(this->state_parent_)) {
       parent_->note_segment_coord_write_skip();
       return;
@@ -172,7 +175,7 @@ public:
   }
   switch_::Switch *get_force_white_switch() const { return force_white_sw_; }
 
-  void repaint_force_white_current_state() {
+  void repaint_force_white_current_state(bool force_white_active) {
     if (parent_->has_outro())
       return;
 
@@ -190,17 +193,26 @@ public:
     auto val = state->current_values;
     float bri = val.get_brightness() * val.get_state();
 
-    Color c = light::color_from_light_color_values(val);
+    Color source = light::color_from_light_color_values(val);
+    Color c = source;
+    if (force_white_active) {
+      this->retained_force_white_color_ = source;
+      this->retained_force_white_color_valid_ = true;
+    } else if (this->retained_force_white_color_valid_) {
+      c = this->retained_force_white_color_;
+      this->retained_force_white_color_valid_ = false;
+    }
+
     c.r = (uint8_t)(c.r * bri);
     c.g = (uint8_t)(c.g * bri);
     c.b = (uint8_t)(c.b * bri);
     c.w = (uint8_t)(c.w * bri);
 
-    if (this->is_force_white_active_())
+    if (force_white_active)
       cfx::apply_force_white(c.r, c.g, c.b, c.w);
 
     this->all() = c;
-    parent_->request_segment_flush(this->state_parent_);
+    parent_->request_segment_solid_repaint_flush(this->state_parent_);
   }
 
   light::LightTraits get_traits() override {
@@ -238,8 +250,11 @@ public:
   }
 
   void dump_config() override {
-    ESP_LOGCONFIG("cfx_vseg", "  Virtual Segment '%s': LEDs %u-%u (%d pixels)",
-                  seg_id_.c_str(), start_, stop_, this->size());
+    ESP_LOGCONFIG("cfx_vseg",
+                  "  Virtual Segment '%s': LEDs %u-%u (%" PRId32
+                  " pixels)",
+                  seg_id_.c_str(), static_cast<unsigned>(start_),
+                  static_cast<unsigned>(stop_), this->size());
   }
 
   // --- Segment identity ---
@@ -250,6 +265,25 @@ public:
   CFXLightOutput *get_parent() const { return parent_; }
 
 protected:
+  void apply_force_white_to_transition_buffer_() {
+    auto *state = this->state_parent_;
+    if (state == nullptr || !this->is_force_white_active_() ||
+        this->is_effect_active()) {
+      return;
+    }
+
+    auto *master = parent_->get_master_light_state();
+    if (master != nullptr && master->get_effect_name() != "None") {
+      return;
+    }
+
+    for (auto led : this->all()) {
+      Color c = led.get();
+      cfx::apply_force_white(c.r, c.g, c.b, c.w);
+      led.set_rgbw(c.r, c.g, c.b, c.w);
+    }
+  }
+
   void maybe_apply_turn_on_defaults_() {
     if (this->state_parent_ == nullptr) {
       return;
@@ -291,6 +325,8 @@ protected:
   uint16_t stop_;
   std::string seg_id_;
   switch_::Switch *force_white_sw_{nullptr};
+  Color retained_force_white_color_{};
+  bool retained_force_white_color_valid_{false};
   TurnOnDefaultsListener *turn_on_defaults_listener_{nullptr};
   bool applying_turn_on_defaults_{false};
   bool prev_remote_on_{false};

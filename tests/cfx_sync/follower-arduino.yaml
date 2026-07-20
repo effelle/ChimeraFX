@@ -1,0 +1,14 @@
+substitutions:
+  sync_role: follower
+
+packages:
+  common: !include common.yaml
+
+esphome:
+  name: cfx-sync-follower-arduino
+  min_version: 2026.5.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino

@@ -1,0 +1,52 @@
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [cfx_sync, cfx_effect_registry]
+
+logger:
+
+output:
+  - platform: ledc
+    id: sync_output
+    pin: GPIO4
+  - platform: ledc
+    id: sync_output_b
+    pin: GPIO5
+  - platform: ledc
+    id: sync_output_c
+    pin: GPIO18
+
+light:
+  - platform: monochromatic
+    id: sync_light
+    name: "Sync Test Light"
+    output: sync_output
+  - platform: monochromatic
+    id: sync_light_b
+    name: "Sync Test Light B"
+    output: sync_output_b
+  - platform: monochromatic
+    id: sync_light_c
+    name: "Sync Test Light C"
+    output: sync_output_c
+
+cfx_sync:
+  id: room_sync
+  role: follower
+  lights:
+    - sync_light
+    - sync_light_b
+    - sync_light_c
+  group: living_room
+  key: "living-room-2026"
+  heartbeat: 30s
+
+esphome:
+  name: cfx-sync-follower-multilight
+  min_version: 2026.5.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf

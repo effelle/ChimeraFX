@@ -11,6 +11,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -613,7 +614,7 @@ struct FrameDiagnostics {
 
     ESP_LOGI("chimera_fx",
              "[%s] FX:%s(%u) | RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | "
-             "Jitter: %.0f%% | Heap: %ukB [ACTV]",
+             "Jitter: %.0f%% | Heap: %" PRIu32 "kB [ACTV]",
              pending_name_ ? pending_name_ : "?",
              pending_mode_name_ ? pending_mode_name_ : "?",
              pending_mode_id_, fps, led_fps_text, avg_frame_ms, jitter_pct,
@@ -651,21 +652,15 @@ struct FrameDiagnostics {
     format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
 
     ESP_LOGI("chimera_fx",
-             "[%s] RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | Jitter: %.0f%% | Heap: %ukB [IDLE]",
+             "[%s] RenderFPS:%.1f | LedFPS:%s | Time: %.1fms | "
+             "Jitter: %.0f%% | Heap: %" PRIu32 "kB [IDLE]",
              effect_name ? effect_name : "?",
              fps, led_fps_text, avg_frame_ms, jitter_pct, free_heap_kb);
   }
 
-  void idle_sleep_log(const char *effect_name, const char *mode_name,
-                      uint8_t mode_id, uint32_t frame_count_in,
-                      uint32_t period_start_ms, uint64_t total_frame_us_in,
-                      uint32_t jitter_count_in, float led_fps = -1.0f,
-                      bool force = false) {
-    (void) frame_count_in;
-    (void) period_start_ms;
-    (void) total_frame_us_in;
-    (void) jitter_count_in;
-
+  void idle_hold_log(const char *effect_name, const char *mode_name,
+                     uint8_t mode_id, bool force = false) {
+    if (!enabled) return;
     uint32_t now_ms = cfx_millis();
     if (!force && now_ms - last_log_time < LOG_INTERVAL_MS) return;
 
@@ -675,16 +670,15 @@ struct FrameDiagnostics {
 #else
     free_heap = esp_get_free_heap_size();
 #endif
-    uint32_t free_heap_kb = free_heap / 1024;
-    char led_fps_text[16];
-    format_led_fps(led_fps, led_fps_text, sizeof(led_fps_text));
     ESP_LOGI("chimera_fx",
-             "[%s] FX:%s(%u) | RenderFPS:- | LedFPS:%s | Time:- | Jitter:- | Heap: %ukB [IDLE]",
+             "[%s] FX:%s(%u) | RenderFPS:hold | LedFPS:sleep | Time:- | "
+             "Jitter:- | Heap: %" PRIu32 "kB [IDLE]",
              effect_name ? effect_name : "?", mode_name ? mode_name : "Static",
-             mode_id, led_fps_text, free_heap_kb);
+             mode_id, free_heap / 1024);
 
     last_log_time = now_ms;
   }
+
 };
 
 // Global diagnostics instance for each effect that needs it

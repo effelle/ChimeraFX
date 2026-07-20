@@ -29,12 +29,15 @@ That’s it! You already have everything you need to run ChimeraFX!
 
 The documentation includes everything you need:
 - [Installation & Quick Start](https://effelle.github.io/ChimeraFX/Installation/)
+- [Magic Buttons](https://effelle.github.io/ChimeraFX/cfx_magic_buttons/)
 - [The Sequencer Guide](https://effelle.github.io/ChimeraFX/cfx_sequence/)
 - [Visual Effects Gallery](https://effelle.github.io/ChimeraFX/Effects-Library/)
 
 ---
 
 ### Key Features
+
+* **Magic Buttons** - Bind physical ESPHome buttons to on-device dimming, CCT sweeping, hue or palette selection, and effect selection without lambdas or extra Home Assistant entities.
 
 * **Zero YAML Overhead** — Pure C++ implementation for maximum ESP32 frame rates.
 * **Dual Framework Support** — Runs as a proper native component under both ESP-IDF and Arduino.
@@ -64,7 +67,7 @@ This project is **not** a full WLED replacement. Choose the right tool for your 
 
 ### Platform Compatibility
 
-> ⚠️**[IMPORTANT]** Minimum Requirement: ChimeraFX requires ESPHome **2026.3.0 or later** to leverage the latest C++ performance optimizations and core event loop improvements.
+> ⚠️**[IMPORTANT]** Minimum Requirement: ChimeraFX requires ESPHome **2026.7.0 or later**. ESPHome's native ESP-IDF build toolchain is the recommended default on ESP32.
 
 - **Framework:** **ESP-IDF** and **Arduino**
 - **Recommended target:** **ESP32-S3**. The native parallel driver unlocks the S3 as the strongest validated target for dense 1-wire LED installs.

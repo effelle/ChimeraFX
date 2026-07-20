@@ -41,8 +41,6 @@ light:
     chipset: SK9822
 ```
 
----
-
 ## Configuration Variables
 
 ### Required Parameters
@@ -64,6 +62,7 @@ light:
 * **spi_speed** (*Frequency*): SPI clock speed for 2-wire strips.
 * **rmt_symbols** (*int*, default: `0`): Manual RMT symbol allocation. Leave at `0` for dynamic safe allocation. On ESP32 Classic, auto mode intentionally caps each RMT light at `128` symbols for the lowest-latency stable path; set this manually if a tested install should use more of the 512-symbol hardware pool.
 * **default_transition_length** (*Time*, default: `0s`): Standard ESPHome transition duration for solid-color mode and eligible effects.
+* **power_supply** (*ID*): Optional ESPHome `power_supply` used by this physical LED output. When its timing options are omitted, ChimeraFX uses `enable_time: 100ms` and `keep_on_time: 5s`.
 * **controls** (*boolean*, default: `true`): Automatically generate ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md).
 
@@ -72,6 +71,57 @@ light:
 * **set_color** (*list[int]*): Default color when turned on as `[r, g, b]` or `[r, g, b, w]` (0-100%).
 * **set_intro** / **set_outro** (*int*): Force a global intro/outro animation for eligible effects.
 * **set_inout_dur** (*Time*): Duration for intros and outros.
+
+---
+
+## Switching the LED Power Supply
+
+This optional section is only for installations that need to switch the LED power supply or relay on and off with the strip.
+
+`cfx_light` can use ESPHome's standard [`power_supply`](https://esphome.io/components/power_supply/) component to turn the LED power supply on only when the strip needs it.
+
+```yaml
+power_supply:
+  - id: led_power
+    pin:
+      number: GPIO18
+      inverted: true
+
+light:
+  - platform: cfx_light
+    name: "LED Strip"
+    id: led_strip
+    pin: GPIO16
+    num_leds: 120
+    chipset: WS2812X
+    power_supply: led_power
+```
+
+`cfx_light` turns the supply on before sending LED data and keeps it on through transitions, effects, intros, and outros. It releases the supply only after the final LED frame has finished.
+
+For a power supply referenced by `cfx_light`, ChimeraFX supplies two practical timing defaults when you omit them:
+
+* `enable_time` defaults to `100ms`, giving the relay or power supply time to become ready before LED data is sent.
+* `keep_on_time` defaults to `5s`, preventing rapid relay cycling when the light is switched again shortly after turning off.
+
+You can override either value in the normal ESPHome `power_supply` configuration when your hardware needs different timing:
+
+```yaml
+power_supply:
+  - id: led_power
+    enable_time: 250ms
+    keep_on_time: 10s
+    pin:
+      number: GPIO18
+      inverted: true
+```
+
+These helper defaults apply only to power supplies referenced by `cfx_light`. Other ESPHome power-supply configurations keep their native behavior.
+
+* Segments share the single power request of their physical strip automatically.
+* Multiple `cfx_light` outputs may reference the same `power_supply` ID. ESPHome keeps it enabled until every attached output has released it.
+
+Use a correctly rated relay, MOSFET, or power-supply enable input for the load. Set an inverted pin under `pin:` if your control hardware is active-low. Avoid `enable_on_boot: true` unless the supply should remain enabled continuously.
 
 ---
 
@@ -175,14 +225,14 @@ light:
 
 * **ESP32 Classic Restored**: Classic ESP32 remains a strong RMT/SPI target, especially when you need several ordinary RMT outputs.
 
-* **ESP32-C3 Timing-sensitive**: The C3 can drive useful single-output layouts, but its single core and limited RMT symbols make heavy effects more sensitive near the upper LED limits.
+* **ESP32-C3 Experimental**: C3 support remains experimental for segmented RMT and is not recommended for new builds. Use it only for simple or low-segment layouts; avoid 4-segment builds.
 
 Rules of thumb:
 
 * Choose **S3 parallel** for dense 1-wire installations with 3-4 lanes or many segments.
 * Choose **SPI** when the strip supports it and you want the highest LED count per output.
 * Choose **Classic RMT** for reliable multi-output 1-wire nodes where the LED count is moderate.
-* Treat **C3 RMT** as a compact single-output option, then test your heaviest effect before pushing the LED count.
+* Treat **C3 RMT** as experimental for segmented layouts. Use it only for simple or low-segment installs, and do not choose it for 4-segment builds.
 
 ??? abstract "Click here to view the detailed Performance Test Matrices"
 
@@ -191,7 +241,7 @@ Rules of thumb:
     * **Stress Tests, Not Averages:** The numbers below represent the suggested maximum limits of the hardware. A device is intentionally pushed to find the maximum number of LEDs you can run while maintaining a *minimum* of ~30 FPS and keeping the device stable.
     * **Higher FPS:** These are not the best performances you can get! By simply reducing the number of LEDs to normal room-scale amounts, performance will scale up smoothly to **~60 FPS**.
     * **Benchmark Details:** Every test ran for at least 20 minutes using the `Energy` effect, chosen because it represents one of the heaviest mathematical loads in the library. This guarantees real-world stability for even the most demanding setups.
-    * **Strip Type:** The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run roughly **10-15% faster** because each frame carries less pixel data.
+    * **Strip Type:** The matrix was measured with SK-class RGBW strips. Simpler 3-byte WS-class RGB strips can reduce heap pressure and may run often **10-15%** faster in dense multi-output tests, and up to **~25-30%** faster in single-channel wire-bound cases because each frame carries less pixel data.
     * **Segment Sizing:** In the tables below, segmented lights were tested using equal-sized segments (e.g., 4x200 or 8x175). Please note that **this is not a limitation**. You can customize your segments to any size; equal sizes were used purely to establish a consistent testing baseline.
     !!! note "Result labels"
         `PASS` means Heap WiFi >= 75kB.

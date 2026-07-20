@@ -38,7 +38,7 @@ I tried using `addressable_lambda` to recreate WLED's magic, but it got messy fa
     ```yaml
       - addressable_lambda:
           name: "Aurora"
-          update_interval: 16ms
+          update_interval: 17ms
           lambda: |-
             // --- Configuration ---
             static const int MAX_WAVES = 40;

@@ -73,11 +73,7 @@ void CFXPowerManager::loop() {
             std::max(target, this->current_reduction_percent_ - max_step);
       }
     }
-    for (auto &entry : this->outputs_) {
-      if (entry.output != nullptr) {
-        entry.output->schedule_show();
-      }
-    }
+    this->refresh_outputs_();
   } else {
     this->ramp_last_ms_ = 0;
   }
@@ -229,6 +225,7 @@ void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
     this->auto_user_override_percent_ = normalized;
     this->update_effective_reduction_();
     this->publish_reduction_state_();
+    this->refresh_outputs_();
     ESP_LOGI(TAG_POWER, "Temporary power reduction override: %u%%",
              normalized);
     return;
@@ -244,6 +241,9 @@ void CFXPowerManager::set_target_reduction_percent(float value, bool persist) {
     this->pref_.save(&normalized);
   }
   this->publish_reduction_state_();
+  if (this->reduction_enabled_) {
+    this->refresh_outputs_();
+  }
   ESP_LOGI(TAG_POWER, "Power reduction target: %u%%", normalized);
 }
 
@@ -453,6 +453,7 @@ void CFXPowerManager::set_auto_reduction_percent_(uint8_t value) {
     this->auto_restore_pending_ = false;
     this->update_effective_reduction_();
     this->publish_reduction_state_();
+    this->refresh_outputs_();
     ESP_LOGI(TAG_POWER, "Auto power reduction released; restored %u%%",
              this->manual_reduction_percent_);
     return;
@@ -470,6 +471,7 @@ void CFXPowerManager::set_auto_reduction_percent_(uint8_t value) {
   this->auto_reduction_percent_ = normalized;
   this->update_effective_reduction_();
   this->publish_reduction_state_();
+  this->refresh_outputs_();
   ESP_LOGI(TAG_POWER, "Auto power reduction: %u%%", normalized);
 }
 
@@ -478,6 +480,14 @@ void CFXPowerManager::update_effective_reduction_() {
       std::max(std::max(this->manual_reduction_percent_,
                         this->auto_reduction_percent_),
                this->auto_user_override_percent_);
+}
+
+void CFXPowerManager::refresh_outputs_() {
+  for (auto &entry : this->outputs_) {
+    if (entry.output != nullptr) {
+      entry.output->request_power_reduction_refresh();
+    }
+  }
 }
 
 void CFXPowerManager::publish_reduction_state_() {

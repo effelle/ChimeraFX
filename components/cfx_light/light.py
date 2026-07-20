@@ -12,10 +12,17 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 22
+CFX_LIGHT_SCHEMA_REV = 25
 
 import esphome.codegen as cg
-from esphome.components import light, event, sensor, select, text_sensor
+from esphome.components import (
+    event,
+    light,
+    power_supply,
+    select,
+    sensor,
+    text_sensor,
+)
 import esphome.config_validation as cv
 import esphome.core as core
 import logging
@@ -29,17 +36,20 @@ from esphome.const import (
     CONF_CHIPSET,
     CONF_COLOR_MODE,
     CONF_EFFECTS,
+    CONF_ENABLE_TIME,
     CONF_GREEN,
     CONF_ICON,
     CONF_ID,
     CONF_INITIAL_STATE,
     CONF_IS_RGBW,
+    CONF_KEEP_ON_TIME,
     CONF_MAX_REFRESH_RATE,
     CONF_NAME,
     CONF_NUM_LEDS,
     CONF_NUMBER,
     CONF_OUTPUT_ID,
     CONF_PIN,
+    CONF_POWER_SUPPLY,
     CONF_RED,
     CONF_UPDATE_INTERVAL,
     CONF_WHITE,
@@ -84,6 +94,9 @@ CONF_REDUCTION = "reduction"
 CONF_AUTO = "auto"
 CONF_SAFE_HOLD_TIME = "safe_hold_time"
 
+CFX_POWER_SUPPLY_DEFAULT_ENABLE_TIME = "100ms"
+CFX_POWER_SUPPLY_DEFAULT_KEEP_ON_TIME = "5s"
+
 # Segment configuration keys (Phase 1)
 CONF_SEGMENTS = "segments"
 CONF_SEGMENT_ID = "id"
@@ -106,6 +119,68 @@ CODEOWNERS = ["@effelle"]
 DEPENDENCIES = ["esp32"]
 AUTO_LOAD = ["event", "cfx_effect", "sensor", "select", "text_sensor"]
 _LOGGER = logging.getLogger(__name__)
+
+
+def _cfx_slugify(name: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+
+
+def _cfx_event_tag(config_id, name: str) -> str:
+    if name:
+        return _cfx_slugify(str(name))
+    return str(getattr(config_id, "id", config_id))
+
+
+def _config_id_name(value):
+    value = getattr(value, "id", value)
+    return None if value is None else str(value)
+
+
+def _config_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _apply_cfx_power_supply_defaults(cfx_lights, power_supplies, raw_config):
+    referenced_ids = {
+        _config_id_name(lconf.get(CONF_POWER_SUPPLY))
+        for lconf in cfx_lights
+        if CONF_POWER_SUPPLY in lconf
+    }
+    referenced_ids.discard(None)
+    if not referenced_ids or not isinstance(raw_config, dict):
+        return
+
+    raw_fields_by_id = {}
+    for raw_supply in _config_list(raw_config.get(CONF_POWER_SUPPLY)):
+        if not isinstance(raw_supply, dict):
+            continue
+        supply_id = _config_id_name(raw_supply.get(CONF_ID))
+        if supply_id is not None:
+            raw_fields_by_id[supply_id] = set(raw_supply)
+
+    for supply in _config_list(power_supplies):
+        if not isinstance(supply, dict):
+            continue
+        supply_id = _config_id_name(supply.get(CONF_ID))
+        if supply_id not in referenced_ids:
+            continue
+
+        # The validated config already contains ESPHome's schema defaults. Use
+        # the raw config only to distinguish omitted fields from user choices.
+        explicit_fields = raw_fields_by_id.get(supply_id)
+        if explicit_fields is None:
+            continue
+        if CONF_ENABLE_TIME not in explicit_fields:
+            supply[CONF_ENABLE_TIME] = cv.positive_time_period_milliseconds(
+                CFX_POWER_SUPPLY_DEFAULT_ENABLE_TIME
+            )
+        if CONF_KEEP_ON_TIME not in explicit_fields:
+            supply[CONF_KEEP_ON_TIME] = cv.positive_time_period_milliseconds(
+                CFX_POWER_SUPPLY_DEFAULT_KEEP_ON_TIME
+            )
+
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
 CFXLightOutput = cfx_light_ns.class_(
@@ -966,6 +1041,15 @@ def _final_validate(config):
     cfx_lights = [
         lconf for lconf in all_lights if lconf.get("platform", "") == "cfx_light"
     ]
+    try:
+        power_supplies = fconf.get_config_for_path([CONF_POWER_SUPPLY])
+    except KeyError:
+        power_supplies = []
+    _apply_cfx_power_supply_defaults(
+        cfx_lights,
+        power_supplies,
+        getattr(CORE, "raw_config", {}),
+    )
     variant = _get_esp32_variant()
     limits = _get_cfx_light_limits(variant)
     spi_count = sum(1 for lconf in cfx_lights if _is_spi_cfx_light(lconf))
@@ -1208,13 +1292,15 @@ def _inject_all_effects(config):
     the CFX_EFFECTS Python registry in cfx_effect/__init__.py.
     User-defined effects with the same name take priority (overrides)."""
     chipset = str(config.get(CONF_CHIPSET, "")).upper()
-    light_update_interval = _rmt_wire_floor_update_interval(config) or (
-        "14ms"
-        if chipset in SPI_CHIPSETS or config.get(CONF_PARALLEL_GROUP)
-        else None
-    )
+    light_update_interval = _rmt_wire_floor_update_interval(config)
+    if light_update_interval is None:
+        if chipset in SPI_CHIPSETS:
+            light_update_interval = "17ms"
+        elif config.get(CONF_PARALLEL_GROUP):
+            light_update_interval = "14ms"
 
     user_effects = list(config.get(CONF_EFFECTS, []))
+    strip_tag = _cfx_event_tag(config.get(CONF_ID), config.get(CONF_NAME, ""))
 
     for eff in user_effects:
         if not isinstance(eff, dict):
@@ -1222,6 +1308,8 @@ def _inject_all_effects(config):
         eff_cfx = eff.get("addressable_cfx")
         if isinstance(eff_cfx, dict) and light_update_interval is not None:
             eff_cfx.setdefault(CONF_UPDATE_INTERVAL, light_update_interval)
+        if isinstance(eff_cfx, dict) and strip_tag:
+            eff_cfx.setdefault("_cfx_strip_tag", strip_tag)
 
     if not config.get(CONF_ALL_EFFECTS, True):
         config[CONF_EFFECTS] = user_effects
@@ -1273,6 +1361,8 @@ def _inject_all_effects(config):
         if name in user_names:
             continue
         effect_data = {"effect_id": eid, CONF_NAME: name}
+        if strip_tag:
+            effect_data["_cfx_strip_tag"] = strip_tag
         if light_update_interval is not None:
             effect_data[CONF_UPDATE_INTERVAL] = light_update_interval
         if cat != "sep" and eid not in [158, 159, 161]:
@@ -1338,6 +1428,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SACRIFICIAL_PIXEL, default=False): cv.boolean,
             cv.Optional(CONF_VISUALIZER_IP): cv.string,
             cv.Optional(CONF_VISUALIZER_PORT, default=7777): cv.port,
+            cv.Optional(CONF_POWER_SUPPLY): cv.use_id(power_supply.PowerSupply),
             # Auto-controls (cfx_control entities generated from cfx_light)
             cv.Optional("controls", default=True): cv.boolean,
             cv.Optional("ctrl_exclude", default=[]): cv.ensure_list(cv.int_range(min=1, max=9)),
@@ -1848,6 +1939,9 @@ async def to_code(config):
 
     # --- Hardware configuration (always) ---
     cg.add(var.set_num_leds(config[CONF_NUM_LEDS]))
+    if CONF_POWER_SUPPLY in config:
+        supply = await cg.get_variable(config[CONF_POWER_SUPPLY])
+        cg.add(var.set_power_supply(supply))
     cg.add(var.set_sacrificial_pixel(config[CONF_SACRIFICIAL_PIXEL]))
     chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
@@ -2148,6 +2242,12 @@ async def to_code(config):
         )
         singleton_var = cg.new_Pvariable(singleton_id, "CFX Segment Singleton")
         cg.add(singleton_var.set_virtual_segment(True))
+        seg_tag = _cfx_event_tag(
+            seg[CONF_SEGMENT_ID],
+            seg.get(CONF_SEGMENT_NAME, ""),
+        )
+        if seg_tag:
+            cg.add(singleton_var.set_strip_tag(seg_tag))
 
         # Ensure the stub header is included in the generated C++ output
         cg.add_global(
@@ -2188,10 +2288,6 @@ async def to_code(config):
         cg.add(var.add_segment_light_state(light_state))
 
     # --- Phase 3: Event Entity Setup (CFX-037) ---
-    import re
-    def _cfx_slugify(name: str) -> str:
-        return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
-        
     import esphome.core as core
     progress_step = 10
     milestones = list(range(progress_step, 101, progress_step))
@@ -2206,12 +2302,12 @@ async def to_code(config):
         for seg in segments:
             seg_id_obj = seg[CONF_SEGMENT_ID]
             seg_name = seg.get(CONF_SEGMENT_NAME, "")
-            seg_tag = _cfx_slugify(str(seg_name)) if seg_name else str(seg_id_obj.id)
+            seg_tag = _cfx_event_tag(seg_id_obj, seg_name)
             tags_to_register.append(seg_tag)
     else:
         parent_obj = config[CONF_ID]
         parent_name = config.get(CONF_NAME, "")
-        parent_tag = _cfx_slugify(str(parent_name)) if parent_name else str(parent_obj.id)
+        parent_tag = _cfx_event_tag(parent_obj, parent_name)
         tags_to_register.append(parent_tag)
         
     for tag in tags_to_register:

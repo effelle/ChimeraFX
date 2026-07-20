@@ -202,11 +202,31 @@ public:
     uint32_t perf_apply_count{0};
     uint32_t perf_apply_max_total_us{0};
     uint32_t perf_apply_max_prep_us{0};
+    uint32_t perf_apply_max_sync_us{0};
+    uint32_t perf_apply_max_sync_force_us{0};
+    uint32_t perf_apply_max_sync_light_us{0};
+    uint32_t perf_apply_max_sync_runner_us{0};
+    uint32_t perf_apply_max_sync_controls_us{0};
+    uint32_t perf_apply_max_sync_gamma_us{0};
+    uint32_t perf_apply_max_sync_brightness_us{0};
+    uint32_t perf_apply_max_sync_idle_us{0};
     uint32_t perf_apply_max_dispatch_us{0};
+    uint32_t perf_apply_max_intro_us{0};
+    uint32_t perf_apply_max_state_us{0};
     uint32_t perf_apply_max_post_us{0};
     uint64_t perf_apply_total_us{0};
     uint64_t perf_apply_prep_us{0};
+    uint64_t perf_apply_sync_us{0};
+    uint64_t perf_apply_sync_force_us{0};
+    uint64_t perf_apply_sync_light_us{0};
+    uint64_t perf_apply_sync_runner_us{0};
+    uint64_t perf_apply_sync_controls_us{0};
+    uint64_t perf_apply_sync_gamma_us{0};
+    uint64_t perf_apply_sync_brightness_us{0};
+    uint64_t perf_apply_sync_idle_us{0};
     uint64_t perf_apply_dispatch_us{0};
+    uint64_t perf_apply_intro_us{0};
+    uint64_t perf_apply_state_us{0};
     uint64_t perf_apply_post_us{0};
   };
 
@@ -682,7 +702,7 @@ public:
       }
     }
   }
-  void log_mono_idle_sleep(bool force = false);
+  void log_mono_idle_hold(bool force = false);
   void mark_mono_output_dirty() {
     if (act_ != nullptr && act_->mono_idle) {
       act_->mono_output_dirty = true;
@@ -704,7 +724,11 @@ public:
   static const std::vector<CfxOnReachTrigger *> empty_reach_triggers_;
 
 
-  void set_strip_tag(const std::string &tag) { if (act_) act_->strip_tag = tag; }
+  void set_strip_tag(const std::string &tag) {
+    this->configured_strip_tag_ = tag;
+    if (act_)
+      act_->strip_tag = tag;
+  }
 
   void set_is_sequence_outro(bool v) { if (act_) act_->is_sequence_outro = v; }
   void set_suppress_positional_events(bool v) {
@@ -739,6 +763,7 @@ public:
   // controller_ is set at codegen time via set_controller(), before start()
   // is ever called. Copied into act_->controller on each start().
   CFXControl *controller_{nullptr};
+  std::string configured_strip_tag_{};
 
 
 

@@ -934,8 +934,9 @@ void CFXSequence::start() {
   // Update Select UI to reflect the active sequence.
   // Pool-owned sequences (cfx_run) are not in the select option list — skip.
   if (CFXSequenceSelect::instance != nullptr && !this->is_pool_owned_) {
-    if (!CFXSequenceSelect::instance->has_state() ||
-        CFXSequenceSelect::instance->current_option() != this->name_) {
+    const auto active_index = CFXSequenceSelect::instance->active_index();
+    const std::string current(CFXSequenceSelect::instance->current_option());
+    if (!active_index.has_value() || current != this->name_) {
       CFXSequenceSelect::instance->publish_state_silent(this->name_);
     }
   }
@@ -1122,12 +1123,13 @@ void CFXSequence::finalize_teardown_() {
     }
   }
 
-  if (!this->is_pool_owned_ &&
-      CFXSequenceSelect::instance != nullptr &&
-      CFXSequenceSelect::instance->has_state()) {
-    const std::string &current = CFXSequenceSelect::instance->current_option();
-    if (!current.empty() && this->name_ == current) {
-      CFXSequenceSelect::instance->publish_state_silent("None");
+  if (!this->is_pool_owned_ && CFXSequenceSelect::instance != nullptr) {
+    const auto active_index = CFXSequenceSelect::instance->active_index();
+    if (active_index.has_value()) {
+      const std::string current(CFXSequenceSelect::instance->current_option());
+      if (!current.empty() && this->name_ == current) {
+        CFXSequenceSelect::instance->publish_state_silent("None");
+      }
     }
   }
 
