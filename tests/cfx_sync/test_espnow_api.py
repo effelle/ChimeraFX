@@ -4340,9 +4340,10 @@ class ESPNowAPITests(unittest.TestCase):
     def test_shared_transport_hook_is_versioned_and_fixed_capacity(self):
         transport = TRANSPORT_HEADER.read_text(encoding="utf-8")
         header = BUS_HEADER.read_text(encoding="utf-8")
+        source = BUS_SOURCE.read_text(encoding="utf-8")
 
         self.assertIn(
-            "CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 1", transport
+            "CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 2", transport
         )
         self.assertIn("enum class CFXSyncReceivePath", transport)
         self.assertIn("class CFXSyncSharedTransportConsumer", transport)
@@ -4354,6 +4355,10 @@ class ESPNowAPITests(unittest.TestCase):
             "bool unregister_shared_transport_consumer(", header
         )
         self.assertIn("CFX_SYNC_SHARED_TRANSPORT_MTU = 250", transport)
+        self.assertIn("uint32_t recovery_generation() const", header)
+        self.assertIn("uint32_t recovery_generation_{0}", header)
+        self.assertIn("this->recovery_generation_++", source)
+        self.assertIn("Shared transport recovery generation=", source)
         self.assertIn("valid only for the duration of the callback", transport)
         self.assertRegex(
             header,

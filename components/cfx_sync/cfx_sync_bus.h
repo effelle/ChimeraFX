@@ -51,6 +51,9 @@ class CFXSyncBus
   bool has_active_group() const { return this->group_count_ != 0; }
   bool is_udp_ready() const { return this->udp_.is_ready(); }
   uint16_t udp_port() const { return this->udp_port_; }
+  uint32_t recovery_generation() const {
+    return this->recovery_generation_;
+  }
 
 #ifdef USE_ESPNOW
   void set_espnow(espnow::ESPNowComponent *espnow) {
@@ -128,6 +131,7 @@ class CFXSyncBus
 
   CFXSyncUDPTransport udp_;
   uint16_t udp_port_{0};
+  uint32_t recovery_generation_{0};
 
 #ifdef USE_ESPNOW
   espnow::ESPNowComponent *espnow_{nullptr};

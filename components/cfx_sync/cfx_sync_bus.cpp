@@ -9,6 +9,7 @@
 #ifdef USE_ESPNOW
 #include <esp_err.h>
 #endif
+#include <cinttypes>
 #include <cstring>
 
 namespace esphome {
@@ -235,11 +236,17 @@ void CFXSyncBus::disable_espnow() {
 }
 
 void CFXSyncBus::enable_espnow() {
-  if (this->espnow_ == nullptr) {
+  if (this->espnow_ == nullptr || this->espnow_enabled_) {
     return;
   }
   this->espnow_->enable();
   this->espnow_enabled_ = true;
+  this->recovery_generation_++;
+  if (this->recovery_generation_ == 0) {
+    this->recovery_generation_ = 1;
+  }
+  ESP_LOGV(TAG, "Shared transport recovery generation=%" PRIu32,
+           this->recovery_generation_);
 }
 
 bool CFXSyncBus::on_receive(const espnow::ESPNowRecvInfo &info,

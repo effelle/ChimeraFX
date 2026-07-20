@@ -512,13 +512,16 @@ Keep these rules in mind:
   safest choice for normal configurations.
 - ChimeraFX UDP uses its internal shared port `39580`. It is not a YAML option.
 - The two components may use different groups and keys. ChimeraFX continues to
-  authenticate its own CFX packets. Synchrocast's `key` is currently reserved
-  until its authenticated wire codec is implemented.
+  authenticate its own `CFXS` packets, while Synchrocast uses its key to
+  authenticate its separate `SCST` packets.
 - Merely adding the Synchrocast repository does nothing. Sharing is enabled
   only when a `synchrocast:` block is also configured on that device.
 
-Synchrocast is currently an early development skeleton. Check its repository
-status before relying on its domains in a finished installation.
+ChimeraFX shared-transport API v2 publishes a monotonic recovery generation
+after a completed ESP-NOW rearm. Synchrocast reads that generation and refreshes
+its own semantic state without polling the Wi-Fi channel or touching the radio.
+This keeps ChimeraFX as the sole physical transport owner while Synchrocast
+remains the sole owner of its general synchronization protocol.
 
 ## ESP-NOW And Mesh Wi-Fi
 

@@ -13,7 +13,7 @@
 namespace esphome {
 namespace cfx_sync {
 
-static constexpr uint8_t CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 1;
+static constexpr uint8_t CFX_SYNC_SHARED_TRANSPORT_API_VERSION = 2;
 static constexpr size_t CFX_SYNC_SHARED_TRANSPORT_MTU = 250;
 
 enum class CFXSyncTransportKind : uint8_t { ESPNOW = 0, UDP = 1 };
