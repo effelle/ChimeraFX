@@ -50,8 +50,6 @@ light:
 ```yaml
 power_supply:
   - id: led_power
-    enable_time: 100ms
-    keep_on_time: 5s
     pin:
       number: GPIO18
       inverted: true
@@ -68,8 +66,25 @@ light:
 
 That is all the ChimeraFX configuration you need. `cfx_light` turns the supply on before sending LED data and keeps it on through transitions, effects, intros, and outros. It releases the supply only after the final LED frame has finished.
 
-* `enable_time` gives the relay or power supply time to become ready before LED data is sent.
-* `keep_on_time` prevents rapid relay cycling when the light is switched again shortly after turning off.
+For a power supply referenced by `cfx_light`, ChimeraFX supplies two practical timing defaults when you omit them:
+
+* `enable_time` defaults to `100ms`, giving the relay or power supply time to become ready before LED data is sent.
+* `keep_on_time` defaults to `5s`, preventing rapid relay cycling when the light is switched again shortly after turning off.
+
+You can override either value in the normal ESPHome `power_supply` configuration when your hardware needs different timing:
+
+```yaml
+power_supply:
+  - id: led_power
+    enable_time: 250ms
+    keep_on_time: 10s
+    pin:
+      number: GPIO18
+      inverted: true
+```
+
+These helper defaults apply only to power supplies referenced by `cfx_light`. Other ESPHome power-supply configurations keep their native behavior.
+
 * Segments share the single power request of their physical strip automatically.
 * Multiple `cfx_light` outputs may reference the same `power_supply` ID. ESPHome keeps it enabled until every attached output has released it.
 
@@ -98,7 +113,7 @@ Use a correctly rated relay, MOSFET, or power-supply enable input for the load. 
 * **spi_speed** (*Frequency*): SPI clock speed for 2-wire strips.
 * **rmt_symbols** (*int*, default: `0`): Manual RMT symbol allocation. Leave at `0` for dynamic safe allocation. On ESP32 Classic, auto mode intentionally caps each RMT light at `128` symbols for the lowest-latency stable path; set this manually if a tested install should use more of the 512-symbol hardware pool.
 * **default_transition_length** (*Time*, default: `0s`): Standard ESPHome transition duration for solid-color mode and eligible effects.
-* **power_supply** (*ID*): Optional ESPHome `power_supply` used by this physical LED output.
+* **power_supply** (*ID*): Optional ESPHome `power_supply` used by this physical LED output. When its timing options are omitted, ChimeraFX uses `enable_time: 100ms` and `keep_on_time: 5s`.
 * **controls** (*boolean*, default: `true`): Automatically generate ChimeraFX control entities for this light.
 * **ctrl_exclude** (*list[int]*): Exclude specific auto-generated control groups by ID. See [Controls](Controls.md).
 

@@ -12,7 +12,7 @@ Drop-in replacement for esp32_rmt_led_strip with:
 
 # Component schema revision. Keep this near the top so ESPHome external-component
 # caches see a Python-side change when validation behavior must be refreshed.
-CFX_LIGHT_SCHEMA_REV = 24
+CFX_LIGHT_SCHEMA_REV = 25
 
 import esphome.codegen as cg
 from esphome.components import (
@@ -36,11 +36,13 @@ from esphome.const import (
     CONF_CHIPSET,
     CONF_COLOR_MODE,
     CONF_EFFECTS,
+    CONF_ENABLE_TIME,
     CONF_GREEN,
     CONF_ICON,
     CONF_ID,
     CONF_INITIAL_STATE,
     CONF_IS_RGBW,
+    CONF_KEEP_ON_TIME,
     CONF_MAX_REFRESH_RATE,
     CONF_NAME,
     CONF_NUM_LEDS,
@@ -92,6 +94,9 @@ CONF_REDUCTION = "reduction"
 CONF_AUTO = "auto"
 CONF_SAFE_HOLD_TIME = "safe_hold_time"
 
+CFX_POWER_SUPPLY_DEFAULT_ENABLE_TIME = "100ms"
+CFX_POWER_SUPPLY_DEFAULT_KEEP_ON_TIME = "5s"
+
 # Segment configuration keys (Phase 1)
 CONF_SEGMENTS = "segments"
 CONF_SEGMENT_ID = "id"
@@ -124,6 +129,57 @@ def _cfx_event_tag(config_id, name: str) -> str:
     if name:
         return _cfx_slugify(str(name))
     return str(getattr(config_id, "id", config_id))
+
+
+def _config_id_name(value):
+    value = getattr(value, "id", value)
+    return None if value is None else str(value)
+
+
+def _config_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _apply_cfx_power_supply_defaults(cfx_lights, power_supplies, raw_config):
+    referenced_ids = {
+        _config_id_name(lconf.get(CONF_POWER_SUPPLY))
+        for lconf in cfx_lights
+        if CONF_POWER_SUPPLY in lconf
+    }
+    referenced_ids.discard(None)
+    if not referenced_ids or not isinstance(raw_config, dict):
+        return
+
+    raw_fields_by_id = {}
+    for raw_supply in _config_list(raw_config.get(CONF_POWER_SUPPLY)):
+        if not isinstance(raw_supply, dict):
+            continue
+        supply_id = _config_id_name(raw_supply.get(CONF_ID))
+        if supply_id is not None:
+            raw_fields_by_id[supply_id] = set(raw_supply)
+
+    for supply in _config_list(power_supplies):
+        if not isinstance(supply, dict):
+            continue
+        supply_id = _config_id_name(supply.get(CONF_ID))
+        if supply_id not in referenced_ids:
+            continue
+
+        # The validated config already contains ESPHome's schema defaults. Use
+        # the raw config only to distinguish omitted fields from user choices.
+        explicit_fields = raw_fields_by_id.get(supply_id)
+        if explicit_fields is None:
+            continue
+        if CONF_ENABLE_TIME not in explicit_fields:
+            supply[CONF_ENABLE_TIME] = cv.positive_time_period_milliseconds(
+                CFX_POWER_SUPPLY_DEFAULT_ENABLE_TIME
+            )
+        if CONF_KEEP_ON_TIME not in explicit_fields:
+            supply[CONF_KEEP_ON_TIME] = cv.positive_time_period_milliseconds(
+                CFX_POWER_SUPPLY_DEFAULT_KEEP_ON_TIME
+            )
 
 
 cfx_light_ns = cg.esphome_ns.namespace("cfx_light")
@@ -985,6 +1041,15 @@ def _final_validate(config):
     cfx_lights = [
         lconf for lconf in all_lights if lconf.get("platform", "") == "cfx_light"
     ]
+    try:
+        power_supplies = fconf.get_config_for_path([CONF_POWER_SUPPLY])
+    except KeyError:
+        power_supplies = []
+    _apply_cfx_power_supply_defaults(
+        cfx_lights,
+        power_supplies,
+        getattr(CORE, "raw_config", {}),
+    )
     variant = _get_esp32_variant()
     limits = _get_cfx_light_limits(variant)
     spi_count = sum(1 for lconf in cfx_lights if _is_spi_cfx_light(lconf))
