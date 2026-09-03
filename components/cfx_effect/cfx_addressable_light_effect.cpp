@@ -1783,6 +1783,27 @@ void CFXAddressableLightEffect::start() {
       }
     }
   }
+
+  act_->power_fade_active = false;
+  if (is_fresh_turn_on && !act_->intro_active && allow_default_transition) {
+    select::Select *outro_sel = (c && c->get_outro_effect())
+                                      ? c->get_outro_effect()
+                                      : this->local_outro_effect_();
+    const bool has_authored_outro =
+        (select_has_state(outro_sel) && outro_sel->current_option() != "None") ||
+        (this->has_outro_preset_() &&
+         this->outro_preset_val_() != INTRO_MODE_NONE);
+    auto *power_state = this->get_light_state();
+    if (!has_authored_outro && power_state != nullptr) {
+      const uint32_t duration_ms =
+          power_state->get_default_transition_length();
+      if (duration_ms > 0) {
+        act_->power_fade_active = true;
+        act_->power_fade_start_time = millis_64();
+        act_->power_fade_duration_ms = duration_ms;
+      }
+    }
+  }
   if (!act_->intro_active) {
     this->fire_start_lifecycle_if_needed_();
   }
@@ -3130,6 +3151,21 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           act_->state != OUTRO_RUNNING) {
         bri *= bri_state->current_values.get_state();
       }
+    }
+  }
+
+  if (act_->power_fade_active) {
+    const uint64_t elapsed = millis_64() - act_->power_fade_start_time;
+    const float linear = act_->power_fade_duration_ms == 0
+                             ? 1.0f
+                             : std::min(1.0f, static_cast<float>(elapsed) /
+                                                   act_->power_fade_duration_ms);
+    // Match ESPHome LightTransformer's quintic ease-in-out curve.
+    const float eased = linear * linear * linear *
+                        (linear * (linear * 6.0f - 15.0f) + 10.0f);
+    bri *= eased;
+    if (linear >= 1.0f) {
+      act_->power_fade_active = false;
     }
   }
 

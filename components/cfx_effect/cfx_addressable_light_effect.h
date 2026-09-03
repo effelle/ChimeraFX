@@ -88,6 +88,12 @@ public:
     uint64_t intro_start_time{0};
     uint32_t active_intro_duration_ms{2000};
 
+    // Native default_transition_length cannot accompany effect activation in
+    // ESPHome. This is a separate power-state brightness ramp, never an intro.
+    bool power_fade_active{false};
+    uint64_t power_fade_start_time{0};
+    uint32_t power_fade_duration_ms{0};
+
     bool outro_active{false};
     uint8_t active_outro_mode{0};
     uint32_t active_outro_duration_ms{2000};
