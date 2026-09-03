@@ -6164,6 +6164,12 @@ void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
   const bool preserve_transition =
       active_cfx_effect != nullptr &&
       active_cfx_effect->uses_default_transition();
+  if (preserve_transition) {
+    // The defaults correction runs after ESPHome selected the effect. Reassert
+    // the ON target so this call keeps the pending power-on fade instead of
+    // replacing it with a color-only correction transition.
+    call.set_state(true);
+  }
   this->turn_on_defaults_.apply(call, this->has_white_channel(),
                                 !preserve_transition);
   this->applying_turn_on_defaults_ = true;
