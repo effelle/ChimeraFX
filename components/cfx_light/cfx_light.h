@@ -116,31 +116,40 @@ struct CFXTurnOnDefaults {
       return;
     }
 
-    float max_rgb = this->red;
-    if (this->green > max_rgb) {
-      max_rgb = this->green;
+    float red = this->red;
+    float green = this->green;
+    float blue = this->blue;
+    float max_rgb = red;
+    if (green > max_rgb) {
+      max_rgb = green;
     }
-    if (this->blue > max_rgb) {
-      max_rgb = this->blue;
+    if (blue > max_rgb) {
+      max_rgb = blue;
     }
 
     const bool white_only =
         allow_white && this->color_has_white && max_rgb == 0.0f;
-    if (white_only) {
-      // ESPHome normalizes RGB channels in RGB_WHITE mode. That turns an
-      // intentional [0, 0, 0, W] default into full RGB plus W. Use the
-      // native WHITE mode for a white-only request so the zero RGB channels
-      // remain zero.
-      call.set_color_mode(light::ColorMode::WHITE);
-    } else if (allow_white && this->color_has_white) {
+    if (white_only && this->white > 0.0f) {
+      // ESPHome promotes an all-zero RGB triplet to white during RGBW
+      // normalization. A 1% neutral RGB floor keeps the RGBW pathway valid;
+      // color_brightness below limits the physical RGB output to that floor.
+      constexpr float RGBW_ZERO_FLOOR = 0.01f;
+      red = RGBW_ZERO_FLOOR;
+      green = RGBW_ZERO_FLOOR;
+      blue = RGBW_ZERO_FLOOR;
+      max_rgb = RGBW_ZERO_FLOOR;
+    }
+
+    if (allow_white && this->color_has_white && max_rgb > 0.0f) {
       // RGBW stores RGB as a normalized color ratio and a separate RGB
       // brightness. Preserve the configured channel levels by moving the
       // RGB maximum into color_brightness instead of letting normalization
       // promote it to 100% alongside the white channel.
       call.set_color_mode(light::ColorMode::RGB_WHITE);
-      call.set_rgb(this->red / max_rgb, this->green / max_rgb,
-                   this->blue / max_rgb);
+      call.set_rgb(red / max_rgb, green / max_rgb, blue / max_rgb);
       call.set_color_brightness(max_rgb);
+    } else if (white_only) {
+      call.set_color_mode(light::ColorMode::WHITE);
     } else {
       call.set_color_mode(light::ColorMode::RGB);
       call.set_rgb(this->red, this->green, this->blue);
