@@ -845,6 +845,10 @@ bool CFXAddressableLightEffect::is_architectural_effect_id_(uint8_t effect_id) {
 }
 
 bool CFXAddressableLightEffect::allow_default_transition_() const {
+  if (this->act_ != nullptr && this->act_->intro_active &&
+      this->act_->active_intro_mode != INTRO_NONE) {
+    return false;
+  }
   if (this->effect_id_ == 158 || this->effect_id_ == 159 ||
       this->effect_id_ == 185) {
     return false;
@@ -1061,7 +1065,7 @@ void CFXAddressableLightEffect::start() {
     this->trigger_on_begin();
   }
 
-  const bool allow_default_transition = this->allow_default_transition_();
+  bool allow_default_transition = this->allow_default_transition_();
 
   // Effects with authored power choreography keep suppressing the native
   // ESPHome transition path. Eligible effects preserve the configured default
@@ -1633,16 +1637,6 @@ void CFXAddressableLightEffect::start() {
       }
     }
 
-    if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active &&
-        this->allow_default_transition_()) {
-      auto *intro_state = this->get_light_state();
-      if (intro_state != nullptr &&
-          intro_state->get_default_transition_length() > 0) {
-        act_->active_intro_mode = INTRO_MODE_FADE;
-        act_->active_intro_uses_live_frame_fade = true;
-      }
-    }
-
     // 10. Intro Duration Priority Chain (Calculated ONCE during start)
     uint32_t duration_ms = 2000; // Final Default: 2.0s
     number::Number *dur_num = this->local_inout_duration_();
@@ -1762,6 +1756,27 @@ void CFXAddressableLightEffect::start() {
 
     if (act_->active_intro_mode == INTRO_MODE_NONE && !preset.is_active) {
       act_->intro_active = false;
+    }
+  }
+
+  // A configured intro owns the power-on choreography. Ordinary effect
+  // startup must leave default_transition_length on the LightState so the
+  // native ESPHome transformer handles the ON transition.
+  if (act_->intro_active && act_->active_intro_mode != INTRO_NONE) {
+    allow_default_transition = false;
+    if (auto *intro_state = this->get_light_state()) {
+      uint32_t default_transition_ms =
+          intro_state->get_default_transition_length();
+      if (default_transition_ms > 0) {
+        if (act_->saved_transition_length == 0) {
+          act_->saved_transition_length = default_transition_ms;
+        }
+        intro_state->set_default_transition_length(0);
+      }
+      intro_state->current_values = intro_state->remote_values;
+      if (chimera_fx::LightStateProxy::has_active_transformer(intro_state)) {
+        chimera_fx::LightStateProxy::stop_state_transformer(intro_state);
+      }
     }
   }
   if (!act_->intro_active) {
