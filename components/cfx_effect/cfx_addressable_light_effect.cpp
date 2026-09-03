@@ -408,9 +408,12 @@ void CFXAddressableLightEffect::apply_startup_light_presets_() {
     if (!target_on) {
       call.set_state(true);
     }
-    if (!this->allow_default_transition_()) {
-      call.set_transition_length(0);
-    }
+    // This is a second light call made after ESPHome accepted the power-on
+    // request. Carry the transition explicitly so preset reconciliation cannot
+    // replace that active transformer with an immediate color update.
+    call.set_transition_length(this->allow_default_transition_()
+                                   ? scheduled_state->get_default_transition_length()
+                                   : 0);
     if (this->has_brightness_preset_()) {
       call.set_brightness(this->brightness_preset_val_());
     }

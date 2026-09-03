@@ -6162,6 +6162,11 @@ void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
   const bool preserve_transition =
       active_cfx_effect != nullptr &&
       active_cfx_effect->uses_default_transition();
+  if (preserve_transition) {
+    // The default-color correction follows the user's ON call. Reapply the
+    // configured duration explicitly so this nested call continues the fade.
+    call.set_transition_length(state->get_default_transition_length());
+  }
   this->turn_on_defaults_.apply(call, this->has_white_channel(),
                                 !preserve_transition);
   this->applying_turn_on_defaults_ = true;
