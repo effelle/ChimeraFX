@@ -365,11 +365,6 @@ public:
   void set_default_transition_length(uint32_t ms) {
     this->default_transition_length_ms_ = ms;
   }
-  void set_effect_brightness(float brightness) {
-    const uint8_t value = light::to_uint8_scale(clamp(brightness, 0.0f, 1.0f));
-    this->tracked_brightness_ = value;
-    this->correction_.set_local_brightness(value);
-  }
   void wake_mono_idle(light::LightState *state) {
     this->mark_parent_owned_segment_dirty(state);
     this->wake_mono_idle_light_state_(state);

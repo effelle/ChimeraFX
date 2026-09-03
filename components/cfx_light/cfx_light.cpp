@@ -666,10 +666,8 @@ void CFXLightOutput::repaint_force_white_solid_(bool state) {
 
 std::unique_ptr<light::LightTransformer>
 CFXLightOutput::create_default_transition() {
-  // For CFXLight, default_transition_length is only meant for plain
-  // solid-color mode. Using the generic LightTransitionTransformer gives a
-  // true LightColorValues brightness ramp instead of relying on ESPHome's
-  // addressable buffer-decay transition path.
+  // Use a true LightColorValues brightness ramp for solid mode and eligible
+  // effects. Authored effect intros explicitly stop this transformer.
   return make_unique<light::LightTransitionTransformer>();
 }
 
