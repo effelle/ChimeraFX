@@ -116,19 +116,33 @@ struct CFXTurnOnDefaults {
       return;
     }
 
+    float max_rgb = this->red;
+    if (this->green > max_rgb) {
+      max_rgb = this->green;
+    }
+    if (this->blue > max_rgb) {
+      max_rgb = this->blue;
+    }
+
     const bool white_only =
-        allow_white && this->color_has_white && this->red == 0.0f &&
-        this->green == 0.0f && this->blue == 0.0f;
+        allow_white && this->color_has_white && max_rgb == 0.0f;
     if (white_only) {
       // ESPHome normalizes RGB channels in RGB_WHITE mode. That turns an
       // intentional [0, 0, 0, W] default into full RGB plus W. Use the
       // native WHITE mode for a white-only request so the zero RGB channels
       // remain zero.
       call.set_color_mode(light::ColorMode::WHITE);
+    } else if (allow_white && this->color_has_white) {
+      // RGBW stores RGB as a normalized color ratio and a separate RGB
+      // brightness. Preserve the configured channel levels by moving the
+      // RGB maximum into color_brightness instead of letting normalization
+      // promote it to 100% alongside the white channel.
+      call.set_color_mode(light::ColorMode::RGB_WHITE);
+      call.set_rgb(this->red / max_rgb, this->green / max_rgb,
+                   this->blue / max_rgb);
+      call.set_color_brightness(max_rgb);
     } else {
-      call.set_color_mode(
-          allow_white && this->color_has_white ? light::ColorMode::RGB_WHITE
-                                               : light::ColorMode::RGB);
+      call.set_color_mode(light::ColorMode::RGB);
       call.set_rgb(this->red, this->green, this->blue);
     }
     if (allow_white && this->color_has_white) {

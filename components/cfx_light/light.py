@@ -1905,6 +1905,15 @@ async def _register_power_output(var, config):
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID])
+    chipset_name = config[CONF_CHIPSET]
+    is_spi = chipset_name in SPI_CHIPSETS
+    is_parallel = bool(config.get(CONF_PARALLEL_GROUP))
+    # LightState setup and restore consult the output traits. Set the channel
+    # layout before registering the LightState so RGBW/WRGB capabilities are
+    # visible from the first ESPHome light-core call.
+    is_rgbw = config.get(CONF_IS_RGBW, chipset_name in RGBW_CHIPSETS)
+    cg.add(var.set_is_rgbw(is_rgbw))
+    cg.add(var.set_is_wrgb(config[CONF_IS_WRGB]))
     _LOGGER.debug(
         "CFXLight codegen: light_id=%s output_id=%s name=%s chipset=%s pin=%s",
         config[CONF_ID],
@@ -1943,11 +1952,7 @@ async def to_code(config):
         supply = await cg.get_variable(config[CONF_POWER_SUPPLY])
         cg.add(var.set_power_supply(supply))
     cg.add(var.set_sacrificial_pixel(config[CONF_SACRIFICIAL_PIXEL]))
-    chipset_name = config[CONF_CHIPSET]
     cg.add(var.set_chipset(CHIPSETS[chipset_name]))
-    
-    is_spi = chipset_name in SPI_CHIPSETS
-    is_parallel = bool(config.get(CONF_PARALLEL_GROUP))
     
     # Re-enable ESP-IDF's SPI and RMT drivers unconditionally
     # because cfx_light.h includes both <driver/spi_master.h> and <driver/rmt_tx.h>
@@ -2028,16 +2033,6 @@ async def to_code(config):
     else:
         cg.add(var.set_transport(cfx_light_ns.enum("CFXTransport").TRANSPORT_RMT))
         cg.add(var.set_pin(config[CONF_PIN][CONF_NUMBER]))
-
-    # RGBW: explicit override > auto-detect from chipset
-    if CONF_IS_RGBW in config:
-        is_rgbw = config[CONF_IS_RGBW]
-    else:
-        is_rgbw = chipset_name in RGBW_CHIPSETS
-    cg.add(var.set_is_rgbw(is_rgbw))
-
-    # wrgb explicitly required by some variants
-    cg.add(var.set_is_wrgb(config[CONF_IS_WRGB]))
 
     if CONF_SET_BRIGHTNESS in config:
         cg.add(var.set_turn_on_brightness(config[CONF_SET_BRIGHTNESS]))
