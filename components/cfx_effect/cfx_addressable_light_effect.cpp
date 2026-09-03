@@ -3169,6 +3169,14 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+  // Non-segmented runners do not bake global_brightness_ into their pixels;
+  // apply the power-state fade through the same output gate used by ESPHome's
+  // AddressableLight transformer.
+  if (!this->is_virtual_segment_ && diag_out != nullptr &&
+      act_->power_fade_duration_ms > 0) {
+    diag_out->set_effect_brightness(bri);
+  }
+
   // Main CFX effect Running — Multi-Segment Swap-on-Service
   // MUST RUN before intro/outro masks!
   bool is_mono_preset =
