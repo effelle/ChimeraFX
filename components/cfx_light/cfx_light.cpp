@@ -6158,17 +6158,13 @@ void CFXLightOutput::maybe_apply_turn_on_defaults_(light::LightState *state,
   }
 
   auto call = state->make_call();
-  auto *active_cfx_effect = resolve_active_cfx_effect(state);
-  const bool preserve_transition =
-      active_cfx_effect != nullptr &&
-      active_cfx_effect->uses_default_transition();
-  if (preserve_transition) {
-    // The default-color correction follows the user's ON call. Reapply the
-    // configured duration explicitly so this nested call continues the fade.
-    call.set_transition_length(state->get_default_transition_length());
-  }
-  this->turn_on_defaults_.apply(call, this->has_white_channel(),
-                                !preserve_transition);
+  // This listener runs while LightCall::publish_state() is still handling the
+  // user's ON request, before the active effect can be resolved reliably.
+  // The current duration is the authoritative policy: authored effects have
+  // already changed it to 0 ms; ordinary lights and eligible effects retain
+  // their configured default.
+  call.set_transition_length(state->get_default_transition_length());
+  this->turn_on_defaults_.apply(call, this->has_white_channel(), false);
   this->applying_turn_on_defaults_ = true;
   call.perform();
   this->applying_turn_on_defaults_ = false;
