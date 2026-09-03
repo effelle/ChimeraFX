@@ -846,7 +846,7 @@ bool CFXAddressableLightEffect::is_architectural_effect_id_(uint8_t effect_id) {
 
 bool CFXAddressableLightEffect::allow_default_transition_() const {
   if (this->act_ != nullptr && this->act_->intro_active &&
-      this->act_->active_intro_mode != INTRO_NONE) {
+      this->act_->active_intro_mode != INTRO_MODE_NONE) {
     return false;
   }
   if (this->effect_id_ == 158 || this->effect_id_ == 159 ||
@@ -1065,6 +1065,10 @@ void CFXAddressableLightEffect::start() {
     this->trigger_on_begin();
   }
 
+  // Clear the previous effect's authored intro mode before deciding whether
+  // this start should retain the native LightState transition.
+  act_->active_intro_mode = INTRO_MODE_NONE;
+  act_->active_intro_uses_live_frame_fade = false;
   bool allow_default_transition = this->allow_default_transition_();
 
   // Effects with authored power choreography keep suppressing the native
@@ -1553,7 +1557,7 @@ void CFXAddressableLightEffect::start() {
   }
 
   // Resolve Intro Mode (Now reflecting Presets!)
-  act_->active_intro_mode = INTRO_NONE;
+  act_->active_intro_mode = INTRO_MODE_NONE;
   act_->active_intro_uses_live_frame_fade = false;
   select::Select *intro_sel = (c && c->get_intro_effect())
                                   ? c->get_intro_effect()
@@ -1762,7 +1766,7 @@ void CFXAddressableLightEffect::start() {
   // A configured intro owns the power-on choreography. Ordinary effect
   // startup must leave default_transition_length on the LightState so the
   // native ESPHome transformer handles the ON transition.
-  if (act_->intro_active && act_->active_intro_mode != INTRO_NONE) {
+  if (act_->intro_active && act_->active_intro_mode != INTRO_MODE_NONE) {
     allow_default_transition = false;
     if (auto *intro_state = this->get_light_state()) {
       uint32_t default_transition_ms =
