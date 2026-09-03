@@ -3133,6 +3133,23 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
     }
   }
 
+  // Whole-strip effects normally use the output brightness gate. During an
+  // eligible native transition the gate updates after apply(), so bake the
+  // current transition value into this frame instead. Virtual segments always
+  // bake brightness and retain their existing per-segment path.
+  if (act_->runner != nullptr && !this->is_virtual_segment_) {
+    const bool bake_native_transition =
+        this->allow_default_transition_() && bri_state != nullptr &&
+        chimera_fx::LightStateProxy::has_active_transformer(bri_state);
+    act_->runner->setBakeBrightness(bake_native_transition);
+    if (!bake_native_transition) {
+      auto *output = this->get_diag_output();
+      if (output != nullptr) {
+        output->set_effect_brightness(bri);
+      }
+    }
+  }
+
   // Main CFX effect Running — Multi-Segment Swap-on-Service
   // MUST RUN before intro/outro masks!
   bool is_mono_preset =
@@ -3270,8 +3287,11 @@ void CFXAddressableLightEffect::apply(light::AddressableLight &it,
           auto *seg_state = cfx_out->get_segment_light_states()[i];
           if (seg_state != nullptr) {
             float inner_state_bri = seg_state->current_values.get_brightness();
-            // CFX-066 Fallback
-            if (inner_state_bri == 0.0f && seg_state->remote_values.is_on()) {
+            // Restore an unset brightness only after a native fade has ended.
+            if (inner_state_bri == 0.0f && seg_state->remote_values.is_on() &&
+                (!this->allow_default_transition_() ||
+                 !chimera_fx::LightStateProxy::has_active_transformer(
+                     seg_state))) {
               inner_state_bri = 1.0f;
             }
             seg_bri *= inner_state_bri;

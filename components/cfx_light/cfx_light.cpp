@@ -6693,11 +6693,20 @@ void CFXLightOutput::update_state(light::LightState *state) {
       active_cfx_effect != nullptr &&
       active_cfx_effect->uses_default_transition();
   if (this->is_effect_active()) {
-    const auto &gate_values =
-        effect_uses_default_transition ? state->current_values
-                                       : state->remote_values;
-    max_brightness = light::to_uint8_scale(gate_values.get_brightness() *
-                                           gate_values.get_state());
+    const bool effect_native_transition =
+        effect_uses_default_transition &&
+        chimera_fx::LightStateProxy::has_active_transformer(state);
+    if (effect_native_transition) {
+      // The effect renderer bakes the in-progress brightness into this frame.
+      // Keep the output gate open so that transition is not applied twice.
+      max_brightness = 255;
+    } else {
+      const auto &gate_values =
+          effect_uses_default_transition ? state->current_values
+                                         : state->remote_values;
+      max_brightness = light::to_uint8_scale(gate_values.get_brightness() *
+                                             gate_values.get_state());
+    }
     if (max_brightness == 0 && state->remote_values.is_on() &&
         !chimera_fx::LightStateProxy::has_active_transformer(state)) {
       max_brightness = 255;
