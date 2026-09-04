@@ -6555,7 +6555,12 @@ uint8_t CFXLightOutput::get_power_transmit_scale_() const {
 
 void CFXLightOutput::request_power_reduction_refresh() {
   if (this->has_segments() && !this->has_outro()) {
+    // A steady monochromatic segment can suppress nullptr writes because its
+    // pixels are already rendered. A limiter change still needs that buffer
+    // retransmitted with the new transport scale.
+    this->power_reduction_refresh_pending_ = true;
     this->write_state(nullptr);
+    this->power_reduction_refresh_pending_ = false;
     return;
   }
   this->schedule_show();
@@ -6903,6 +6908,7 @@ void CFXLightOutput::write_state(light::LightState *state) {
   this->perf_diag_last_flush_tx_us_ = 0;
 
   if (!this->has_outro() &&
+      !this->power_reduction_refresh_pending_ &&
       ((state != nullptr && active_cfx_effect_is_clean_mono_idle(state)) ||
        (state == nullptr && this->seg_last_flush_mask_ == 0 &&
         all_active_cfx_effects_clean_mono_idle(this)))) {

@@ -733,6 +733,7 @@ protected:
   // Refresh rate limiting
   uint32_t last_refresh_{0};
   optional<uint32_t> max_refresh_rate_{};
+  bool power_reduction_refresh_pending_{false};
 
   // Visualizer
   int socket_fd_{-1};
