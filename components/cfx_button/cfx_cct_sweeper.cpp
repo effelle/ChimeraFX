@@ -22,7 +22,7 @@ static uint8_t to_u8_(float value) {
   return static_cast<uint8_t>((value * 255.0f) + 0.5f);
 }
 
-static const char *color_mode_name(light::ColorMode mode) {
+static const char *__attribute__((unused)) color_mode_name(light::ColorMode mode) {
   switch (mode) {
     case light::ColorMode::WHITE:
       return "WHITE";
@@ -35,7 +35,7 @@ static const char *color_mode_name(light::ColorMode mode) {
   }
 }
 
-static const char *endpoint_name(CCTEndpoint endpoint) {
+static const char *__attribute__((unused)) endpoint_name(CCTEndpoint endpoint) {
   switch (endpoint) {
     case CCTEndpoint::NATIVE:
       return "native";
@@ -47,7 +47,7 @@ static const char *endpoint_name(CCTEndpoint endpoint) {
   }
 }
 
-static const char *short_action_name(CCTShortPressAction action) {
+static const char *__attribute__((unused)) short_action_name(CCTShortPressAction action) {
   switch (action) {
     case CCTShortPressAction::RESTORE_RETAINED:
       return "restore_retained";
