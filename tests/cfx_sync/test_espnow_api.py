@@ -2858,7 +2858,7 @@ class ESPNowAPITests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertIn(
-            "void schedule_state_ack_(const uint8_t *destination,\n"
+            "void schedule_state_ack_(const CFXSyncSource &destination,\n"
             "                           const CFXSyncPacket &packet,\n"
             "                           CFXSyncAckResult result);",
             header,
@@ -2872,32 +2872,34 @@ class ESPNowAPITests(unittest.TestCase):
                 r"const bool applied = this->apply_remote_state_\(packet\);"
                 r".*?"
                 r"\s*this->schedule_state_ack_"
-                r"\(source\.espnow_mac_or_null\(\), packet,\s*"
+                r"\(source, packet,\s*"
                 r"CFXSyncAckResult::APPLIED\);",
                 re.DOTALL,
             ),
         )
 
-    def test_state_ack_is_broadcast_after_jitter(self):
+    def test_state_ack_returns_to_the_originating_transport_after_jitter(self):
         source = SOURCE.read_text(encoding="utf-8")
 
         self.assertRegex(
             source,
             re.compile(
                 r"void CFXSyncComponent::schedule_state_ack_"
-                r"\(\s*const uint8_t \*destination,\s*"
+                r"\(\s*const CFXSyncSource &destination,\s*"
                 r"const CFXSyncPacket &packet,\s*"
                 r"CFXSyncAckResult result\).*?"
-                r"\(void\) destination;.*?"
                 r"const uint32_t delay_ms\s*=\s*ACK_JITTER_MIN_MS \+"
                 r"\s*\(esp_random\(\) % \(ACK_JITTER_SPREAD_MS \+ 1\)\);.*?"
                 r"this->set_timeout\(\s*\"state-ack\",\s*delay_ms,\s*"
-                r"\[this, acked_boot_id, acked_sequence, result\]\(\) \{.*?"
+                r"\[this, destination, acked_boot_id, acked_sequence, result\]\(\) \{.*?"
                 r"CFXSyncPacketCodec::encode_state_ack\("
                 r"\s*this->group_hash_,\s*this->boot_id_,\s*"
                 r"this->next_sequence_\(\),\s*"
                 r"acked_boot_id,\s*acked_sequence,\s*result,\s*"
                 r"this->key_,\s*ack\).*?"
+                r"destination\.transport == CFXSyncTransportKind::UDP.*?"
+                r"this->send_udp_packet_to_\(destination\.ipv4, destination\.port, ack\);.*?"
+                r"destination\.espnow_mac_or_null\(\).*?"
                 r"this->send_packet_to_\(BROADCAST_MAC, ack\);",
                 re.DOTALL,
             ),
@@ -2909,7 +2911,7 @@ class ESPNowAPITests(unittest.TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(ack_body)
-        self.assertNotIn("this->send_packet_to_(mac, ack);", ack_body.group(0))
+        self.assertIn("this->send_packet_to_(peer, ack);", ack_body.group(0))
 
     def test_broadcast_state_is_retried_until_current_state_is_acked(self):
         header = HEADER.read_text(encoding="utf-8")
@@ -3416,7 +3418,7 @@ class ESPNowAPITests(unittest.TestCase):
                 r"if \(!this->accept_sequence_\(\*peer, packet\.boot_id, packet\.sequence\)\) \{"
                 r".*?packet\.type == CFXSyncPacketType::STATE.*?"
                 r"packet\.sequence == peer->rx_sequence.*?"
-                r"this->schedule_state_ack_\(source\.espnow_mac_or_null\(\), packet,"
+                r"this->schedule_state_ack_\(source, packet,"
                 r"\s*CFXSyncAckResult::APPLIED\);",
                 re.DOTALL,
             ),

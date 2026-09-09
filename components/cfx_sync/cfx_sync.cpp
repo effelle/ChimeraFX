@@ -785,7 +785,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
         peer->has_rx_sequence &&
         packet.boot_id == peer->rx_boot_id &&
         packet.sequence == peer->rx_sequence) {
-      this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
+      this->schedule_state_ack_(source, packet,
                                 CFXSyncAckResult::APPLIED);
       return true;
     }
@@ -837,7 +837,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
         this->has_observed_state_ = true;
       }
     }
-    this->schedule_state_ack_(source.espnow_mac_or_null(), packet,
+    this->schedule_state_ack_(source, packet,
                               CFXSyncAckResult::APPLIED);
   }
   return true;
@@ -1104,35 +1104,52 @@ bool CFXSyncComponent::send_satellite_state_packet_(
   return this->send_packet_to_(BROADCAST_MAC, packet) || sent;
 }
 
-bool CFXSyncComponent::send_state_ack_(const uint8_t *destination,
+bool CFXSyncComponent::send_state_ack_(const CFXSyncSource &destination,
                                        const CFXSyncPacket &packet,
                                        CFXSyncAckResult result) {
-  (void) destination;
-
   std::vector<uint8_t> ack;
   if (!CFXSyncPacketCodec::encode_state_ack(
           this->group_hash_, this->boot_id_, this->next_sequence_(),
           packet.boot_id, packet.sequence, result, this->key_, ack)) {
     return false;
   }
+  if (destination.transport == CFXSyncTransportKind::UDP &&
+      destination.identity_valid) {
+    return this->send_udp_packet_to_(destination.ipv4, destination.port, ack);
+  }
+  if (const auto *mac = destination.espnow_mac_or_null(); mac != nullptr) {
+    std::array<uint8_t, 6> peer{};
+    std::copy(mac, mac + peer.size(), peer.begin());
+    return this->send_packet_to_(peer, ack);
+  }
   return this->send_packet_to_(BROADCAST_MAC, ack);
 }
 
-void CFXSyncComponent::schedule_state_ack_(const uint8_t *destination,
+void CFXSyncComponent::schedule_state_ack_(const CFXSyncSource &destination,
                                            const CFXSyncPacket &packet,
                                            CFXSyncAckResult result) {
-  (void) destination;
   const uint32_t acked_boot_id = packet.boot_id;
   const uint32_t acked_sequence = packet.sequence;
   const uint32_t delay_ms =
       ACK_JITTER_MIN_MS + (esp_random() % (ACK_JITTER_SPREAD_MS + 1));
   this->set_timeout(
       "state-ack", delay_ms,
-      [this, acked_boot_id, acked_sequence, result]() {
+      [this, destination, acked_boot_id, acked_sequence, result]() {
         std::vector<uint8_t> ack;
         if (!CFXSyncPacketCodec::encode_state_ack(
                 this->group_hash_, this->boot_id_, this->next_sequence_(),
                 acked_boot_id, acked_sequence, result, this->key_, ack)) {
+          return;
+        }
+        if (destination.transport == CFXSyncTransportKind::UDP &&
+            destination.identity_valid) {
+          this->send_udp_packet_to_(destination.ipv4, destination.port, ack);
+          return;
+        }
+        if (const auto *mac = destination.espnow_mac_or_null(); mac != nullptr) {
+          std::array<uint8_t, 6> peer{};
+          std::copy(mac, mac + peer.size(), peer.begin());
+          this->send_packet_to_(peer, ack);
           return;
         }
         this->send_packet_to_(BROADCAST_MAC, ack);

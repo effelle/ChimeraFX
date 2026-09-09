@@ -325,10 +325,10 @@ class CFXSyncComponent : public Component {
                            const CFXSyncEffectState &effect,
                            const CFXSyncControlState &controls);
 #endif
-  bool send_state_ack_(const uint8_t *destination,
+  bool send_state_ack_(const CFXSyncSource &destination,
                        const CFXSyncPacket &packet,
                        CFXSyncAckResult result);
-  void schedule_state_ack_(const uint8_t *destination,
+  void schedule_state_ack_(const CFXSyncSource &destination,
                            const CFXSyncPacket &packet,
                            CFXSyncAckResult result);
   bool send_sync_request_();
