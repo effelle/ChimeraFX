@@ -207,7 +207,8 @@ void CFXButton::emit_sync_command_(CFXButtonInputAction action,
   if (event != CFXButtonEvent::PRESS && event != CFXButtonEvent::RELEASE) {
     return;
   }
-  if ((this->sync_kind_ == CFXButtonSyncKind::HUE ||
+  if ((this->sync_kind_ == CFXButtonSyncKind::DIMMER ||
+       this->sync_kind_ == CFXButtonSyncKind::HUE ||
        this->sync_kind_ == CFXButtonSyncKind::CCT ||
        this->sync_kind_ == CFXButtonSyncKind::EFFECT) &&
       action == CFXButtonInputAction::PRIMARY) {

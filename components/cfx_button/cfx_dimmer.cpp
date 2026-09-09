@@ -601,8 +601,15 @@ void CFXDimmer::emit_sync_power_(bool power) {
   cfx_button::CFXButtonSyncCommand command;
   command.kind = cfx_button::CFXButtonSyncKind::DIMMER;
   command.pressed = true;
-  command.has_power = true;
-  command.power = power;
+  if (this->lights_.empty()) {
+    // A controller-only dimmer has no local state to decide whether the
+    // remote light is currently on. Use one authoritative toggle per short
+    // press instead of emitting a guessed absolute power state.
+    command.toggle = true;
+  } else {
+    command.has_power = true;
+    command.power = power;
+  }
   for (auto &callback : this->sync_command_callbacks_) {
     callback(command);
   }
