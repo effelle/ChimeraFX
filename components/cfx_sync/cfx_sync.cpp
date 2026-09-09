@@ -828,6 +828,7 @@ bool CFXSyncComponent::handle_decoded_packet_(
        packet.has_controls || packet.has_color_temperature ||
        packet.has_cold_warm_white)) {
     this->has_valid_state_ = true;
+    ESP_LOGD(TAG, "Accepted leader STATE; startup recovery is satisfied");
     this->clear_warning_if_set_();
     const bool applied = this->apply_remote_state_(packet);
     if (this->role_ == CFXSyncRole::SATELLITE && applied) {
@@ -2942,6 +2943,7 @@ void CFXSyncComponent::schedule_follower_recovery_attempt_(
   this->set_timeout(name, delay_ms, [this]() {
     if (this->sync_enabled_ && !this->has_valid_state_ &&
         this->boot_radio_ready_()) {
+      ESP_LOGD(TAG, "Requesting startup STATE because no leader state was accepted");
       this->send_sync_request_to_(BROADCAST_MAC);
     }
   });

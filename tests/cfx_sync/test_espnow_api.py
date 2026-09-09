@@ -1950,7 +1950,8 @@ class ESPNowAPITests(unittest.TestCase):
                 r"base_delay_ms \+"
                 r"\s*\(esp_random\(\) % \(RECOVERY_JITTER_SPREAD_MS \+ 1\)\).*?"
                 r"this->set_timeout\(name, delay_ms.*?"
-                r"!this->has_valid_state_ && this->boot_radio_ready_\(\).*?"
+                r"!this->has_valid_state_ &&\s*this->boot_radio_ready_\(\).*?"
+                r"Requesting startup STATE because no leader state was accepted.*?"
                 r"this->send_sync_request_to_\(BROADCAST_MAC\);",
                 re.DOTALL,
             ),
@@ -2869,6 +2870,8 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
+                r"this->has_valid_state_ = true;.*?"
+                r"Accepted leader STATE; startup recovery is satisfied.*?"
                 r"const bool applied = this->apply_remote_state_\(packet\);"
                 r".*?"
                 r"\s*this->schedule_state_ack_"
