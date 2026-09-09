@@ -1951,7 +1951,6 @@ class ESPNowAPITests(unittest.TestCase):
                 r"\s*\(esp_random\(\) % \(RECOVERY_JITTER_SPREAD_MS \+ 1\)\).*?"
                 r"this->set_timeout\(name, delay_ms.*?"
                 r"!this->has_valid_state_ &&\s*this->boot_radio_ready_\(\).*?"
-                r"Requesting startup STATE because no leader state was accepted.*?"
                 r"this->send_sync_request_to_\(BROADCAST_MAC\);",
                 re.DOTALL,
             ),
@@ -2871,7 +2870,6 @@ class ESPNowAPITests(unittest.TestCase):
             re.compile(
                 r"packet\.type == CFXSyncPacketType::STATE &&.*?"
                 r"this->has_valid_state_ = true;.*?"
-                r"Accepted leader STATE; startup recovery is satisfied.*?"
                 r"const bool applied = this->apply_remote_state_\(packet\);"
                 r".*?"
                 r"\s*this->schedule_state_ack_"
@@ -3439,7 +3437,10 @@ class ESPNowAPITests(unittest.TestCase):
         apply_light_source = apply_light_body.group(0)
 
         self.assertIn("apply_remote_state_", source)
-        self.assertIn("if (packet.has_power)", apply_light_source)
+        self.assertIn(
+            "if (packet.has_power && light->remote_values.is_on() != packet.power)",
+            apply_light_source,
+        )
         self.assertIn(
             "if (packet.has_brightness && apply_visual_state &&",
             apply_light_source,
