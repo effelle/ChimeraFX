@@ -4003,6 +4003,29 @@ class ESPNowAPITests(unittest.TestCase):
             "this->emit_sync_ramp_(frozen_total / frozen_count, 0, false);",
             dimmer_source,
         )
+        self.assertIn("bool remote_target_on_{false};", dimmer_header)
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"if \(this->lights_\.empty\(\)\) \{.*?"
+                r"this->ramp_start_brightness_\.push_back\(start\);.*?"
+                r"this->emit_sync_ramp_\(target, this->ramp_end_ms_ - now, true\);",
+                re.DOTALL,
+            ),
+            "controller-only dimmers need a virtual target so a long press "
+            "emits the same resolved ramp as a local dimmer",
+        )
+        self.assertRegex(
+            dimmer_source,
+            re.compile(
+                r"void CFXDimmer::freeze_ramp_\(uint32_t now\).*?"
+                r"if \(this->lights_\.empty\(\)\) \{.*?"
+                r"this->emit_sync_ramp_\(current, 0, false\);",
+                re.DOTALL,
+            ),
+            "controller-only dimmers must stop the leader ramp at the "
+            "brightness reached when the button is released",
+        )
         self.assertIn("controller->add_sync_command_callback", button_header)
         self.assertIn("this->dimmer_controller_->has_lights()", button_source)
 

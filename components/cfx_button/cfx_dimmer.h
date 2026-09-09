@@ -104,6 +104,10 @@ class CFXDimmer : public Component {
   uint32_t ignore_press_until_ms_{0};
   float min_brightness_{0.15f};
   float max_brightness_{1.0f};
+  // Controller-only dimmers track their own resolved commands because they
+  // have no local LightState to provide power and brightness feedback.
+  float remote_brightness_{1.0f};
+  bool remote_target_on_{false};
   bool next_direction_up_{false};
   bool pressed_{false};
   bool ramping_{false};

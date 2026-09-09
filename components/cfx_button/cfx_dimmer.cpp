@@ -182,6 +182,16 @@ void CFXDimmer::start_ramp_(uint32_t now, bool forced_direction_up,
   this->ramp_durations_ms_.clear();
   this->ramp_manual_.clear();
   const float target = this->ramp_target_brightness_();
+  if (this->lights_.empty()) {
+    // A controller-only dimmer has no local LightState to ramp. Keep one
+    // virtual target so the leader receives a complete ramp and stop pair.
+    const float start = this->clamp_brightness_(this->remote_brightness_);
+    const uint32_t duration = this->ramp_duration_ms_(start, target);
+    this->ramp_start_brightness_.push_back(start);
+    this->ramp_durations_ms_.push_back(duration);
+    this->ramp_manual_.push_back(false);
+    this->ramp_end_ms_ = now + duration;
+  }
   for (auto *state : this->lights_) {
     const float start = this->target_start_brightness_(state);
     const uint32_t duration = this->ramp_duration_ms_(start, target);
@@ -255,6 +265,9 @@ void CFXDimmer::finish_ramp_() {
   this->ramp_finished_ = true;
   const float target = this->ramp_target_brightness_();
   this->emit_sync_ramp_(target, 0, false);
+  if (this->lights_.empty()) {
+    this->remote_brightness_ = target;
+  }
   for (auto *state : this->lights_) {
     this->apply_brightness_(state, target, 0);
   }
@@ -265,6 +278,17 @@ void CFXDimmer::finish_ramp_() {
 
 void CFXDimmer::freeze_ramp_(uint32_t now) {
   if (!this->ramping_) {
+    return;
+  }
+  if (this->lights_.empty()) {
+    const float current = this->ramp_current_brightness_(0, now);
+    this->emit_sync_ramp_(current, 0, false);
+    this->remote_brightness_ = current;
+    this->ramping_ = false;
+    this->ramp_finished_ = true;
+    this->ramp_start_brightness_.clear();
+    this->ramp_durations_ms_.clear();
+    this->ramp_manual_.clear();
     return;
   }
   std::vector<float> frozen_brightness;
@@ -442,6 +466,9 @@ void CFXDimmer::turn_off_targets_() {
 }
 
 bool CFXDimmer::any_target_on_() const {
+  if (this->lights_.empty()) {
+    return this->remote_target_on_;
+  }
   for (auto *state : this->lights_) {
     if (state != nullptr && state->remote_values.is_on()) {
       return true;
@@ -451,6 +478,10 @@ bool CFXDimmer::any_target_on_() const {
 }
 
 float CFXDimmer::average_target_brightness_() const {
+  if (this->lights_.empty()) {
+    return this->remote_target_on_ ? this->remote_brightness_
+                                   : this->min_brightness_;
+  }
   float total = 0.0f;
   size_t count = 0;
   for (auto *state : this->lights_) {
@@ -605,6 +636,10 @@ void CFXDimmer::emit_sync_power_(bool power) {
     // A controller-only dimmer has no local state to decide whether the
     // remote light is currently on. Use one authoritative toggle per short
     // press instead of emitting a guessed absolute power state.
+    this->remote_target_on_ = power;
+    if (power) {
+      this->remote_brightness_ = this->max_brightness_;
+    }
     command.toggle = true;
   } else {
     command.has_power = true;
