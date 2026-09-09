@@ -3811,13 +3811,16 @@ class ESPNowAPITests(unittest.TestCase):
             source,
             re.compile(
                 r"bool CFXSyncComponent::predict_leader_state_from_command_\(.*?"
+                r"constexpr uint16_t VISUAL_COMMANDS =.*?"
+                r"if \(\(packet\.command_mask & VISUAL_COMMANDS\) == 0\) \{\s*"
+                r"return false;\s*\}.*?"
                 r"COMMAND_COLD_WARM_WHITE.*?"
                 r"COMMAND_COLOR_TEMPERATURE.*?"
                 r"return has_action;",
                 re.DOTALL,
             ),
-            "CCT prediction must use the same guarded authoritative fanout "
-            "as brightness commands",
+            "only explicit visual commands may predict a leader state; "
+            "power-only commands must wait for the leader's resolved state",
         )
         self.assertIn("timing.has_transition || timing.has_ramp", source)
         self.assertNotIn("defer_to_leader_apply", source)

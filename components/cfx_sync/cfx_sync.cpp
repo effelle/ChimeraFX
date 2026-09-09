@@ -1685,6 +1685,21 @@ bool CFXSyncComponent::predict_leader_state_from_command_(
     return false;
   }
 
+  // A power-only command cannot describe a visual target. Sending a snapshot
+  // before the leader resolves its turn-on state would replay stale color
+  // channels over followers that intentionally choose their own startup
+  // color. Let the leader publish the resolved state in that case.
+  constexpr uint16_t VISUAL_COMMANDS =
+      CFXSyncPacketCodec::COMMAND_BRIGHTNESS |
+      CFXSyncPacketCodec::COMMAND_RGB |
+      CFXSyncPacketCodec::COMMAND_WHITE |
+      CFXSyncPacketCodec::COMMAND_COLOR_BRIGHTNESS |
+      CFXSyncPacketCodec::COMMAND_COLOR_TEMPERATURE |
+      CFXSyncPacketCodec::COMMAND_COLD_WARM_WHITE;
+  if ((packet.command_mask & VISUAL_COMMANDS) == 0) {
+    return false;
+  }
+
   bool has_action = false;
   if ((packet.command_mask & CFXSyncPacketCodec::COMMAND_TOGGLE) != 0) {
     snapshot.power = !leader->remote_values.is_on();
