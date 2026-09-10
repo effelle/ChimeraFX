@@ -48,6 +48,7 @@
 #include <esp_lcd_panel_io.h>
 #endif
 #include <esp_system.h>
+#include <new>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #include <esp_clk_tree.h>
@@ -2871,6 +2872,7 @@ static esp_err_t cfx_rmt_led_encoder_del(rmt_encoder_t *encoder) {
   if (led_encoder->reset_encoder != nullptr) {
     rmt_del_encoder(led_encoder->reset_encoder);
   }
+  led_encoder->~CFXRMTLedEncoder();
   free(led_encoder);
   return ESP_OK;
 }
@@ -2886,7 +2888,7 @@ static esp_err_t cfx_rmt_new_led_encoder(const LedParams &params,
   if (led_encoder == nullptr) {
     return ESP_ERR_NO_MEM;
   }
-  memset(led_encoder, 0, sizeof(CFXRMTLedEncoder));
+  new (led_encoder) CFXRMTLedEncoder{};
 
   led_encoder->base.encode = cfx_rmt_led_encode;
   led_encoder->base.reset = cfx_rmt_led_encoder_reset;
